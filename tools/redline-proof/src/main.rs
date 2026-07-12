@@ -915,6 +915,350 @@ fn ci_commands(repo: &Repo, worktree: &Path) -> Result<Vec<Vec<String>>> {
         .collect())
 }
 
+const TESTING_ARTIFACT_FIELDS: [&str; 17] = [
+    "name",
+    "source_repo",
+    "source_commit",
+    "source_tree_checksum_sha256",
+    "product_version",
+    "release_tag",
+    "tag_revision",
+    "artifact",
+    "artifact_sha256",
+    "checksum_sha256",
+    "binary_sha256",
+    "release_manifest",
+    "release_manifest_sha256",
+    "build_command",
+    "build_log",
+    "build_log_sha256",
+    "transport",
+];
+
+#[derive(Clone, Debug)]
+struct TestingArtifact {
+    source_commit: String,
+    source_tree_checksum_sha256: String,
+    product_version: String,
+    release_tag: String,
+    tag_revision: i64,
+    artifact_name: String,
+    artifact_path: PathBuf,
+    artifact_sha256: String,
+    checksum_path: PathBuf,
+    checksum_sha256: String,
+    binary_sha256: String,
+    manifest_path: PathBuf,
+    manifest_sha256: String,
+    build_log: PathBuf,
+    build_log_sha256: String,
+}
+
+impl TestingArtifact {
+    fn receipt_json(&self, receipt_base: &Path) -> Result<JsonValue> {
+        Ok(json!({
+            "name": "redline-testing-release",
+            "source_repo": "redline-testing",
+            "source_commit": self.source_commit,
+            "source_tree_checksum_sha256": self.source_tree_checksum_sha256,
+            "product_version": self.product_version,
+            "release_tag": self.release_tag,
+            "tag_revision": self.tag_revision,
+            "artifact": self.artifact_name,
+            "artifact_sha256": self.artifact_sha256,
+            "checksum_sha256": self.checksum_sha256,
+            "binary_sha256": self.binary_sha256,
+            "release_manifest": "release-manifest.json",
+            "release_manifest_sha256": self.manifest_sha256,
+            "build_command": ["bash", "scripts/ci-local.sh", "release"],
+            "build_log": recorded_path(&self.build_log, receipt_base)?,
+            "build_log_sha256": self.build_log_sha256,
+            "transport": "file",
+        }))
+    }
+}
+
+fn configure_family_child(command: &mut Command) -> &mut Command {
+    command
+        .env_remove("RUSTUP_TOOLCHAIN")
+        .env("REDLINE_STRICT_TOOLS", "1")
+        .env("CI", "true")
+}
+
+fn file_url(path: &Path) -> Result<String> {
+    let absolute = absolute_path(path)?;
+    let value = absolute.to_str().ok_or_else(|| {
+        error(format!(
+            "local artifact path is not UTF-8: {}",
+            absolute.display()
+        ))
+    })?;
+    Ok(format!("file://{value}"))
+}
+
+fn configure_redline_core_artifact(
+    command: &mut Command,
+    artifact: &TestingArtifact,
+) -> Result<()> {
+    for key in [
+        "CI_REDLINE_TESTING_LOCAL_BIN",
+        "CI_REDLINE_TESTING_LOCAL_SOURCE",
+        "CI_REDLINE_TESTING_INSTALL_ROOT",
+        "CI_REDLINE_TESTING_BIN",
+        "REDLINE_TESTING_BIN",
+    ] {
+        command.env_remove(key);
+    }
+    let base = artifact
+        .artifact_path
+        .parent()
+        .ok_or_else(|| error("staged redline-testing artifact has no parent"))?;
+    command.envs([
+        (
+            "CI_REDLINE_TESTING_VERSION",
+            artifact.product_version.as_str(),
+        ),
+        (
+            "CI_REDLINE_TESTING_REQUESTED_VERSION",
+            artifact.product_version.as_str(),
+        ),
+        (
+            "CI_REDLINE_TESTING_RELEASE_TAG",
+            artifact.release_tag.as_str(),
+        ),
+        (
+            "CI_REDLINE_TESTING_ARTIFACT",
+            artifact.artifact_name.as_str(),
+        ),
+        ("CI_REDLINE_TESTING_BASE_URL", file_url(base)?.as_str()),
+        (
+            "CI_REDLINE_TESTING_URL",
+            file_url(&artifact.artifact_path)?.as_str(),
+        ),
+        (
+            "CI_REDLINE_TESTING_SHA256_URL",
+            file_url(&artifact.checksum_path)?.as_str(),
+        ),
+        (
+            "CI_REDLINE_TESTING_RELEASE_MANIFEST_URL",
+            file_url(&artifact.manifest_path)?.as_str(),
+        ),
+        (
+            "CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256",
+            artifact.artifact_sha256.as_str(),
+        ),
+        (
+            "CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256",
+            artifact.binary_sha256.as_str(),
+        ),
+        (
+            "CI_REDLINE_TESTING_RELEASE_MANIFEST_SHA256",
+            artifact.manifest_sha256.as_str(),
+        ),
+        ("CI_REDLINE_TESTING_REQUIRE_ATTESTATION", "0"),
+    ]);
+    Ok(())
+}
+
+fn manifest_string<'a>(value: &'a JsonValue, field: &str) -> Result<&'a str> {
+    value
+        .get(field)
+        .and_then(JsonValue::as_str)
+        .filter(|found| !found.is_empty())
+        .ok_or_else(|| error(format!("redline-testing release manifest lacks {field}")))
+}
+
+fn verify_testing_package(
+    repo: &Repo,
+    commit: &str,
+    worktree: &Path,
+) -> Result<(PathBuf, PathBuf, PathBuf, String)> {
+    let package = format!("redline-testing-{}-linux-x86_64", repo.product_version);
+    let artifact = worktree.join("dist").join(format!("{package}.tar.gz"));
+    let checksum = worktree
+        .join("dist")
+        .join(format!("{package}.tar.gz.sha256"));
+    let manifest = worktree.join("dist/release-manifest.json");
+    for path in [&artifact, &checksum, &manifest] {
+        if !path.is_file() {
+            return Err(error(format!(
+                "redline-testing release build omitted {}",
+                path.display()
+            )));
+        }
+    }
+    let artifact_sha256 = sha256_file(&artifact)?;
+    let sidecar = fs::read_to_string(&checksum)?;
+    let fields = sidecar.split_whitespace().collect::<Vec<_>>();
+    let expected_sidecar_name = format!("dist/{package}.tar.gz");
+    if fields.len() != 2 || fields[0] != artifact_sha256 || fields[1] != expected_sidecar_name {
+        return Err(error(
+            "redline-testing release checksum sidecar is not bound to the staged artifact",
+        ));
+    }
+    let value = read_json(&manifest)?;
+    if manifest_string(&value, "name")? != "redline-testing"
+        || manifest_string(&value, "version")? != repo.product_version
+        || manifest_string(&value, "release_commit")? != commit
+        || manifest_string(&value, "release_tag")? != repo.current_tag
+        || value.get("tag_revision").and_then(JsonValue::as_i64) != Some(repo.tag_revision)
+    {
+        return Err(error(
+            "redline-testing release manifest differs from the reviewed manifest identity",
+        ));
+    }
+    let binary_sha256 = manifest_string(&value, "binary_sha256")?;
+    if !is_sha256(binary_sha256) {
+        return Err(error(
+            "redline-testing release manifest binary_sha256 is invalid",
+        ));
+    }
+    let binary = worktree
+        .join("dist")
+        .join(&package)
+        .join("bin/redline-testing");
+    if !binary.is_file() || sha256_file(&binary)? != binary_sha256 {
+        return Err(error(
+            "redline-testing release manifest binary hash differs from the built binary",
+        ));
+    }
+    let hashes = value
+        .get("artifact_hashes")
+        .and_then(JsonValue::as_object)
+        .ok_or_else(|| error("redline-testing release manifest lacks artifact_hashes"))?;
+    if hashes.is_empty()
+        || hashes
+            .values()
+            .any(|hash| !hash.as_str().map(is_sha256).unwrap_or(false))
+    {
+        return Err(error(
+            "redline-testing release manifest artifact_hashes are empty or invalid",
+        ));
+    }
+    Ok((artifact, checksum, manifest, binary_sha256.to_owned()))
+}
+
+fn stage_testing_artifact(
+    manifest: &Manifest,
+    states: &BTreeMap<String, JsonValue>,
+    temporary: &Path,
+    log_dir: &Path,
+) -> Result<TestingArtifact> {
+    let repo = manifest
+        .repos
+        .iter()
+        .find(|repo| repo.name == "redline-testing")
+        .ok_or_else(|| error("manifest lacks redline-testing"))?;
+    let state = states
+        .get(&repo.name)
+        .ok_or_else(|| error("missing reviewed redline-testing state"))?;
+    let commit = state
+        .get("commit")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| error("reviewed redline-testing state lacks commit"))?;
+    let source = manifest.repo_root(repo);
+    let worktree = temporary.join("redline-testing-artifact-source");
+    let staging = temporary.join("redline-testing-artifact");
+    let log_path = log_dir.join("redline-testing-artifact.log");
+    let command = ["bash", "scripts/ci-local.sh", "release"];
+    let mut worktree_added = false;
+    let attempt = (|| -> Result<TestingArtifact> {
+        command_output(
+            Command::new("git")
+                .arg("-C")
+                .arg(&source)
+                .args(["worktree", "add", "--detach"])
+                .arg(&worktree)
+                .arg(commit),
+        )?;
+        worktree_added = true;
+        let mut log = File::create(&log_path)?;
+        writeln!(log, "$ {}", command.join(" "))?;
+        log.flush()?;
+        let stdout = log.try_clone()?;
+        let stderr = log.try_clone()?;
+        let mut process = Command::new(command[0]);
+        configure_family_child(&mut process);
+        let result = process
+            .args(&command[1..])
+            .current_dir(&worktree)
+            .env("REDLINE_TESTING_RELEASE_TAG", &repo.current_tag)
+            .stdout(Stdio::from(stdout))
+            .stderr(Stdio::from(stderr))
+            .status()?;
+        if !result.success() {
+            return Err(error(format!(
+                "redline-testing artifact build exited {:?}",
+                result.code()
+            )));
+        }
+        let (artifact, checksum, release_manifest, binary_sha256) =
+            verify_testing_package(repo, commit, &worktree)?;
+        fs::create_dir_all(&staging)?;
+        let artifact_path = staging.join(
+            artifact
+                .file_name()
+                .ok_or_else(|| error("redline-testing artifact lacks filename"))?,
+        );
+        let checksum_path = staging.join(
+            checksum
+                .file_name()
+                .ok_or_else(|| error("redline-testing checksum lacks filename"))?,
+        );
+        let manifest_path = staging.join("release-manifest.json");
+        fs::copy(&artifact, &artifact_path)?;
+        fs::copy(&checksum, &checksum_path)?;
+        fs::copy(&release_manifest, &manifest_path)?;
+        let artifact_sha256 = sha256_file(&artifact_path)?;
+        if artifact_sha256 != sha256_file(&artifact)? {
+            return Err(error("staged redline-testing artifact changed during copy"));
+        }
+        Ok(TestingArtifact {
+            source_commit: commit.to_owned(),
+            source_tree_checksum_sha256: git_tree_checksum(&source, commit)?,
+            product_version: repo.product_version.clone(),
+            release_tag: repo.current_tag.clone(),
+            tag_revision: repo.tag_revision,
+            artifact_name: artifact_path
+                .file_name()
+                .and_then(|value| value.to_str())
+                .ok_or_else(|| error("staged redline-testing artifact filename is not UTF-8"))?
+                .to_owned(),
+            artifact_path,
+            artifact_sha256,
+            checksum_sha256: sha256_file(&checksum_path)?,
+            checksum_path,
+            binary_sha256,
+            manifest_sha256: sha256_file(&manifest_path)?,
+            manifest_path,
+            build_log_sha256: sha256_file(&log_path)?,
+            build_log: log_path,
+        })
+    })();
+    let cleanup = if worktree_added {
+        command_output(
+            Command::new("git")
+                .arg("-C")
+                .arg(&source)
+                .args(["worktree", "remove", "--force"])
+                .arg(&worktree),
+        )
+        .map(|_| ())
+    } else {
+        Ok(())
+    };
+    match (attempt, cleanup) {
+        (Ok(artifact), Ok(())) => Ok(artifact),
+        (Err(value), Ok(())) => Err(value),
+        (Ok(_), Err(cleanup)) => Err(error(format!(
+            "redline-testing artifact worktree cleanup failed: {cleanup}"
+        ))),
+        (Err(value), Err(cleanup)) => Err(error(format!(
+            "{value}; redline-testing artifact worktree cleanup failed: {cleanup}"
+        ))),
+    }
+}
+
 fn merge_json(base: &JsonValue, additions: &[(&str, JsonValue)]) -> Result<JsonValue> {
     let mut map = base
         .as_object()
@@ -972,6 +1316,7 @@ fn family_ci(manifest_path: &Path, receipt: &Path) -> Result<()> {
                         json!(repo.release_checksum_sha256),
                     ),
                     ("protection_policy", json!(repo.protection_policy)),
+                    ("dependency_artifacts", json!([])),
                     ("commands", json!([])),
                     ("log", JsonValue::Null),
                     ("log_sha256", JsonValue::Null),
@@ -996,95 +1341,143 @@ fn family_ci(manifest_path: &Path, receipt: &Path) -> Result<()> {
     } else {
         let temporary = env::temp_dir().join(format!("redline-family-ci-{}", unique_suffix()));
         fs::create_dir_all(&temporary)?;
-        for repo in &manifest.repos {
-            let state = states
-                .get(&repo.name)
-                .ok_or_else(|| error("missing reviewed state"))?;
-            let source = manifest.repo_root(repo);
-            let worktree = temporary.join(&repo.name);
-            let log_path = log_dir.join(format!("{}.log", repo.name));
-            let mut commands = Vec::new();
-            let mut status = "fail";
-            let mut failure: Option<String> = None;
-            let mut worktree_added = false;
-            let attempt = (|| -> Result<()> {
-                let commit = state
-                    .get("commit")
-                    .and_then(JsonValue::as_str)
-                    .ok_or_else(|| error("missing state commit"))?;
-                command_output(
-                    Command::new("git")
-                        .arg("-C")
-                        .arg(&source)
-                        .args(["worktree", "add", "--detach"])
-                        .arg(&worktree)
-                        .arg(commit),
-                )?;
-                worktree_added = true;
-                commands = ci_commands(repo, &worktree)?;
-                let mut log = File::create(&log_path)?;
-                for command in &commands {
-                    writeln!(log, "$ {}", command.join(" "))?;
-                    log.flush()?;
-                    let stdout = log.try_clone()?;
-                    let stderr = log.try_clone()?;
-                    let result = Command::new(&command[0])
-                        .args(&command[1..])
-                        .current_dir(&worktree)
-                        .env("REDLINE_STRICT_TOOLS", "1")
-                        .env("CI", "true")
-                        .stdout(Stdio::from(stdout))
-                        .stderr(Stdio::from(stderr))
-                        .status()?;
-                    if !result.success() {
-                        return Err(error(format!(
-                            "CI command exited {:?}: {}",
-                            result.code(),
-                            command.join(" ")
-                        )));
+        let artifact = match stage_testing_artifact(&manifest, &states, &temporary, &log_dir) {
+            Ok(value) => Some(value),
+            Err(value) => {
+                for repo in &manifest.repos {
+                    let state = states
+                        .get(&repo.name)
+                        .ok_or_else(|| error("missing reviewed state"))?;
+                    let failure = if repo.name == "redline-testing" {
+                        format!("redline-testing artifact preparation failed: {value}")
+                    } else {
+                        "blocked because reviewed redline-testing artifact preparation failed"
+                            .to_owned()
+                    };
+                    rows.push(merge_json(
+                        state,
+                        &[
+                            ("dependency_artifacts", json!([])),
+                            ("commands", json!([])),
+                            ("log", JsonValue::Null),
+                            ("log_sha256", JsonValue::Null),
+                            (
+                                "status",
+                                json!(if repo.name == "redline-testing" {
+                                    "fail"
+                                } else {
+                                    "blocked"
+                                }),
+                            ),
+                            ("failure", json!(failure)),
+                        ],
+                    )?);
+                }
+                None
+            }
+        };
+        if let Some(artifact) = artifact {
+            for repo in &manifest.repos {
+                let state = states
+                    .get(&repo.name)
+                    .ok_or_else(|| error("missing reviewed state"))?;
+                let source = manifest.repo_root(repo);
+                let worktree = temporary.join(&repo.name);
+                let log_path = log_dir.join(format!("{}.log", repo.name));
+                let mut commands = Vec::new();
+                let mut status = "fail";
+                let mut failure: Option<String> = None;
+                let mut worktree_added = false;
+                let attempt = (|| -> Result<()> {
+                    let commit = state
+                        .get("commit")
+                        .and_then(JsonValue::as_str)
+                        .ok_or_else(|| error("missing state commit"))?;
+                    command_output(
+                        Command::new("git")
+                            .arg("-C")
+                            .arg(&source)
+                            .args(["worktree", "add", "--detach"])
+                            .arg(&worktree)
+                            .arg(commit),
+                    )?;
+                    worktree_added = true;
+                    commands = ci_commands(repo, &worktree)?;
+                    let mut log = File::create(&log_path)?;
+                    for command in &commands {
+                        writeln!(log, "$ {}", command.join(" "))?;
+                        log.flush()?;
+                        let stdout = log.try_clone()?;
+                        let stderr = log.try_clone()?;
+                        let mut process = Command::new(&command[0]);
+                        configure_family_child(&mut process);
+                        if repo.name == "redline-core" {
+                            configure_redline_core_artifact(&mut process, &artifact)?;
+                        }
+                        let result = process
+                            .args(&command[1..])
+                            .current_dir(&worktree)
+                            .stdout(Stdio::from(stdout))
+                            .stderr(Stdio::from(stderr))
+                            .status()?;
+                        if !result.success() {
+                            return Err(error(format!(
+                                "CI command exited {:?}: {}",
+                                result.code(),
+                                command.join(" ")
+                            )));
+                        }
+                    }
+                    status = "pass";
+                    Ok(())
+                })();
+                if let Err(value) = attempt {
+                    failure = Some(value.to_string());
+                    if !log_path.exists() {
+                        fs::write(&log_path, format!("family-ci failure: {value}\n"))?;
                     }
                 }
-                status = "pass";
-                Ok(())
-            })();
-            if let Err(value) = attempt {
-                failure = Some(value.to_string());
-                if !log_path.exists() {
-                    fs::write(&log_path, format!("family-ci failure: {value}\n"))?;
+                if worktree_added {
+                    let cleanup = Command::new("git")
+                        .arg("-C")
+                        .arg(&source)
+                        .args(["worktree", "remove", "--force"])
+                        .arg(&worktree)
+                        .output()?;
+                    if !cleanup.status.success() {
+                        status = "fail";
+                        let detail = String::from_utf8_lossy(if cleanup.stderr.is_empty() {
+                            &cleanup.stdout
+                        } else {
+                            &cleanup.stderr
+                        });
+                        let message =
+                            format!("detached worktree cleanup failed: {}", detail.trim());
+                        failure = Some(match failure {
+                            Some(old) => format!("{old}; {message}"),
+                            None => message,
+                        });
+                    }
                 }
+                let log_record =
+                    recorded_path(&log_path, receipt.parent().unwrap_or(Path::new(".")))?;
+                let dependency_artifacts = if repo.name == "redline-core" {
+                    json!([artifact.receipt_json(receipt.parent().unwrap_or(Path::new(".")))?])
+                } else {
+                    json!([])
+                };
+                rows.push(merge_json(
+                    state,
+                    &[
+                        ("dependency_artifacts", dependency_artifacts),
+                        ("commands", json!(commands)),
+                        ("log", json!(log_record)),
+                        ("log_sha256", json!(sha256_file(&log_path)?)),
+                        ("status", json!(status)),
+                        ("failure", json!(failure)),
+                    ],
+                )?);
             }
-            if worktree_added {
-                let cleanup = Command::new("git")
-                    .arg("-C")
-                    .arg(&source)
-                    .args(["worktree", "remove", "--force"])
-                    .arg(&worktree)
-                    .output()?;
-                if !cleanup.status.success() {
-                    status = "fail";
-                    let detail = String::from_utf8_lossy(if cleanup.stderr.is_empty() {
-                        &cleanup.stdout
-                    } else {
-                        &cleanup.stderr
-                    });
-                    let message = format!("detached worktree cleanup failed: {}", detail.trim());
-                    failure = Some(match failure {
-                        Some(old) => format!("{old}; {message}"),
-                        None => message,
-                    });
-                }
-            }
-            let log_record = recorded_path(&log_path, receipt.parent().unwrap_or(Path::new(".")))?;
-            rows.push(merge_json(
-                state,
-                &[
-                    ("commands", json!(commands)),
-                    ("log", json!(log_record)),
-                    ("log_sha256", json!(sha256_file(&log_path)?)),
-                    ("status", json!(status)),
-                    ("failure", json!(failure)),
-                ],
-            )?);
         }
         let _ = fs::remove_dir_all(&temporary);
     }
@@ -1181,7 +1574,7 @@ const FAMILY_RECEIPT_FIELDS: [&str; 9] = [
     "status",
     "repositories",
 ];
-const FAMILY_ROW_FIELDS: [&str; 20] = [
+const FAMILY_ROW_FIELDS: [&str; 21] = [
     "name",
     "path",
     "branch",
@@ -1197,6 +1590,7 @@ const FAMILY_ROW_FIELDS: [&str; 20] = [
     "protection_policy",
     "tag_state",
     "tag_metadata",
+    "dependency_artifacts",
     "commands",
     "log",
     "log_sha256",
@@ -1216,6 +1610,85 @@ const CONSUMER_FIELDS: [&str; 11] = [
     "proof_lock_id",
     "family_ci_receipt_sha256",
 ];
+
+fn validate_testing_artifact_receipt(
+    value: &JsonValue,
+    repo: &Repo,
+    commit: &str,
+    receipt_base: &Path,
+) -> Result<()> {
+    reject_unknown_fields(
+        value,
+        &TESTING_ARTIFACT_FIELDS,
+        "redline-testing dependency artifact",
+    )?;
+    let expected_artifact = format!(
+        "redline-testing-{}-linux-x86_64.tar.gz",
+        repo.product_version
+    );
+    let strings = [
+        ("name", "redline-testing-release"),
+        ("source_repo", "redline-testing"),
+        ("source_commit", commit),
+        (
+            "source_tree_checksum_sha256",
+            repo.release_checksum_sha256.as_str(),
+        ),
+        ("product_version", repo.product_version.as_str()),
+        ("release_tag", repo.current_tag.as_str()),
+        ("artifact", expected_artifact.as_str()),
+        ("release_manifest", "release-manifest.json"),
+        ("transport", "file"),
+    ];
+    for (field, expected) in strings {
+        if value.get(field).and_then(JsonValue::as_str) != Some(expected) {
+            return Err(error(format!(
+                "redline-core dependency artifact {field} differs from reviewed redline-testing"
+            )));
+        }
+    }
+    if value.get("tag_revision").and_then(JsonValue::as_i64) != Some(repo.tag_revision) {
+        return Err(error(
+            "redline-core dependency artifact tag_revision differs from reviewed redline-testing",
+        ));
+    }
+    for field in [
+        "artifact_sha256",
+        "checksum_sha256",
+        "binary_sha256",
+        "release_manifest_sha256",
+        "build_log_sha256",
+    ] {
+        if !value
+            .get(field)
+            .and_then(JsonValue::as_str)
+            .map(is_sha256)
+            .unwrap_or(false)
+        {
+            return Err(error(format!(
+                "redline-core dependency artifact {field} is invalid"
+            )));
+        }
+    }
+    if value.get("build_command") != Some(&json!(["bash", "scripts/ci-local.sh", "release"])) {
+        return Err(error(
+            "redline-core dependency artifact build command is not governed",
+        ));
+    }
+    let log = resolve_recorded_path(
+        value.get("build_log").unwrap_or(&JsonValue::Null),
+        receipt_base,
+        "redline-testing artifact build_log",
+    )?;
+    if !log.is_file()
+        || value.get("build_log_sha256").and_then(JsonValue::as_str) != Some(&sha256_file(&log)?)
+    {
+        return Err(error(
+            "redline-testing artifact build log is missing or tampered",
+        ));
+    }
+    Ok(())
+}
 
 fn validate_family_receipt(
     manifest_path: &Path,
@@ -1274,6 +1747,18 @@ fn validate_family_receipt(
     if rows.len() != manifest.repos.len() {
         return Err(error("family CI receipt repository count is invalid"));
     }
+    let testing_repo = manifest
+        .repos
+        .iter()
+        .find(|repo| repo.name == "redline-testing")
+        .ok_or_else(|| error("manifest lacks redline-testing"))?;
+    let testing_commit = rows
+        .iter()
+        .find(|row| row.get("name").and_then(JsonValue::as_str) == Some("redline-testing"))
+        .and_then(|row| row.get("commit"))
+        .and_then(JsonValue::as_str)
+        .filter(|commit| is_sha1(commit))
+        .ok_or_else(|| error("family CI receipt lacks reviewed redline-testing commit"))?;
     let mut seen = BTreeSet::new();
     for row in rows {
         reject_unknown_fields(row, &FAMILY_ROW_FIELDS, "family CI repository entry")?;
@@ -1337,6 +1822,27 @@ fn validate_family_receipt(
         if row.get("commands") != Some(&json!(ci_commands(repo, &manifest.repo_root(repo))?)) {
             return Err(error(format!(
                 "{name}: family CI command list differs from the governed lane"
+            )));
+        }
+        let dependencies = row
+            .get("dependency_artifacts")
+            .and_then(JsonValue::as_array)
+            .ok_or_else(|| error(format!("{name}: dependency_artifacts must be an array")))?;
+        if name == "redline-core" {
+            if dependencies.len() != 1 {
+                return Err(error(
+                    "redline-core family CI must bind one redline-testing release artifact",
+                ));
+            }
+            validate_testing_artifact_receipt(
+                &dependencies[0],
+                testing_repo,
+                testing_commit,
+                receipt.parent().unwrap_or(Path::new(".")),
+            )?;
+        } else if !dependencies.is_empty() {
+            return Err(error(format!(
+                "{name}: unexpected family CI dependency artifact"
             )));
         }
         match row.get("tag_state").and_then(JsonValue::as_str) {
@@ -2859,6 +3365,168 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    fn testing_repo() -> Repo {
+        Repo {
+            name: "redline-testing".to_owned(),
+            path: PathBuf::from("../redline-split/redline-testing"),
+            github_slug: "neverhuman/redline-testing".to_owned(),
+            remote: format!("{LOCAL_JERYU_BASE}jeryu/redline-testing.git"),
+            product_version: "1.0.1".to_owned(),
+            tag_revision: 1,
+            current_tag: "redline-testing-v1.0.1-jain.1".to_owned(),
+            release_commit: "a".repeat(40),
+            release_checksum_sha256: "b".repeat(64),
+            protection_policy: RELEASE_PROTECTION_POLICY.to_owned(),
+            required_check: "redline-testing/required".to_owned(),
+            default_branch: "main".to_owned(),
+        }
+    }
+
+    fn command_env(command: &Command, name: &str) -> Option<Option<String>> {
+        command
+            .get_envs()
+            .find(|(key, _)| *key == name)
+            .map(|(_, value)| value.map(|raw| raw.to_string_lossy().into_owned()))
+    }
+
+    fn testing_artifact(root: &Path) -> TestingArtifact {
+        let staging = root.join("redline-testing-artifact");
+        fs::create_dir_all(&staging).unwrap();
+        let artifact_path = staging.join("redline-testing-1.0.1-linux-x86_64.tar.gz");
+        let checksum_path = staging.join("redline-testing-1.0.1-linux-x86_64.tar.gz.sha256");
+        let manifest_path = staging.join("release-manifest.json");
+        let build_log = root.join("redline-testing-artifact.log");
+        fs::write(&artifact_path, b"artifact").unwrap();
+        fs::write(&checksum_path, b"checksum").unwrap();
+        fs::write(&manifest_path, b"manifest").unwrap();
+        fs::write(&build_log, b"build log").unwrap();
+        TestingArtifact {
+            source_commit: "a".repeat(40),
+            source_tree_checksum_sha256: "b".repeat(64),
+            product_version: "1.0.1".to_owned(),
+            release_tag: "redline-testing-v1.0.1-jain.1".to_owned(),
+            tag_revision: 1,
+            artifact_name: "redline-testing-1.0.1-linux-x86_64.tar.gz".to_owned(),
+            artifact_path,
+            artifact_sha256: "c".repeat(64),
+            checksum_path,
+            checksum_sha256: "d".repeat(64),
+            binary_sha256: "e".repeat(64),
+            manifest_path,
+            manifest_sha256: "f".repeat(64),
+            build_log_sha256: sha256_file(&build_log).unwrap(),
+            build_log,
+        }
+    }
+
+    #[test]
+    fn family_child_scrubs_control_toolchain_override() {
+        let mut command = Command::new("true");
+        configure_family_child(&mut command);
+        assert_eq!(command_env(&command, "RUSTUP_TOOLCHAIN"), Some(None));
+        assert_eq!(
+            command_env(&command, "REDLINE_STRICT_TOOLS"),
+            Some(Some("1".to_owned()))
+        );
+        assert_eq!(command_env(&command, "CI"), Some(Some("true".to_owned())));
+    }
+
+    #[test]
+    fn redline_core_uses_only_hash_bound_local_testing_artifact() {
+        let root = TestDir::new("artifact-env");
+        let artifact = testing_artifact(root.path());
+        let mut command = Command::new("true");
+        configure_redline_core_artifact(&mut command, &artifact).unwrap();
+        assert_eq!(
+            command_env(&command, "CI_REDLINE_TESTING_URL"),
+            Some(Some(file_url(&artifact.artifact_path).unwrap()))
+        );
+        assert_eq!(
+            command_env(&command, "CI_REDLINE_TESTING_SHA256_URL"),
+            Some(Some(file_url(&artifact.checksum_path).unwrap()))
+        );
+        assert_eq!(
+            command_env(&command, "CI_REDLINE_TESTING_RELEASE_MANIFEST_URL"),
+            Some(Some(file_url(&artifact.manifest_path).unwrap()))
+        );
+        assert_eq!(
+            command_env(&command, "CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256"),
+            Some(Some(artifact.artifact_sha256.clone()))
+        );
+        assert_eq!(
+            command_env(&command, "CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256"),
+            Some(Some(artifact.binary_sha256.clone()))
+        );
+        assert_eq!(
+            command_env(&command, "CI_REDLINE_TESTING_LOCAL_BIN"),
+            Some(None)
+        );
+    }
+
+    #[test]
+    fn dependency_receipt_is_bound_to_reviewed_testing_commit_and_log() {
+        let root = TestDir::new("artifact-receipt");
+        let artifact = testing_artifact(root.path());
+        let repo = testing_repo();
+        let value = artifact.receipt_json(root.path()).unwrap();
+        validate_testing_artifact_receipt(&value, &repo, &repo.release_commit, root.path())
+            .unwrap();
+        let mut tampered = value;
+        tampered["source_commit"] = json!("9".repeat(40));
+        assert!(validate_testing_artifact_receipt(
+            &tampered,
+            &repo,
+            &repo.release_commit,
+            root.path()
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("source_commit"));
+    }
+
+    #[test]
+    fn testing_package_verification_rejects_manifest_commit_drift() {
+        let root = TestDir::new("testing-package");
+        let repo = testing_repo();
+        let package = "redline-testing-1.0.1-linux-x86_64";
+        let dist = root.path().join("dist");
+        let package_dir = dist.join(package);
+        fs::create_dir_all(package_dir.join("bin")).unwrap();
+        let artifact = dist.join(format!("{package}.tar.gz"));
+        let checksum = dist.join(format!("{package}.tar.gz.sha256"));
+        let manifest = dist.join("release-manifest.json");
+        fs::write(&artifact, b"release archive").unwrap();
+        let artifact_sha256 = sha256_file(&artifact).unwrap();
+        fs::write(
+            &checksum,
+            format!("{artifact_sha256}  dist/{package}.tar.gz\n"),
+        )
+        .unwrap();
+        let binary = package_dir.join("bin/redline-testing");
+        fs::write(&binary, b"release binary").unwrap();
+        let binary_sha256 = sha256_file(&binary).unwrap();
+        let valid = json!({
+            "name": "redline-testing",
+            "version": repo.product_version,
+            "release_commit": repo.release_commit,
+            "release_tag": repo.current_tag,
+            "tag_revision": repo.tag_revision,
+            "binary_sha256": binary_sha256,
+            "artifact_hashes": {"corpus/example.json": "f".repeat(64)},
+        });
+        fs::write(&manifest, serde_json::to_vec(&valid).unwrap()).unwrap();
+        verify_testing_package(&repo, &repo.release_commit, root.path()).unwrap();
+        let mut drifted = valid;
+        drifted["release_commit"] = json!("9".repeat(40));
+        fs::write(&manifest, serde_json::to_vec(&drifted).unwrap()).unwrap();
+        assert!(
+            verify_testing_package(&repo, &repo.release_commit, root.path())
+                .unwrap_err()
+                .to_string()
+                .contains("reviewed manifest identity")
+        );
     }
 
     #[test]

@@ -61,6 +61,11 @@ detached worktree and writes a JSON receipt, per-repository logs, and a
 reviewed head is an immutable-tag conflict; a tag may be absent during this CI
 step, but `proof-refresh` requires it locally and on Jeryu.
 
+The runner removes the control plane's Rust toolchain override from every child
+command. It also builds Redline Testing from its reviewed commit and feeds Core
+only the staged `file://` release package, checksum, and manifest. The Core row
+binds that package, binary, manifest, source commit, and build log by SHA-256.
+
 Jain and Jeryu each provide a fresh checksummed JSON object with exactly these
 fields (replace the values with their reviewed consumer check output):
 

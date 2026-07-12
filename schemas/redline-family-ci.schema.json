@@ -20,7 +20,7 @@
       "maxItems": 4,
       "items": {
         "type": "object",
-        "required": ["name", "required_check", "product_version", "tag_revision", "tag", "release_commit", "release_checksum_sha256", "protection_policy", "commands", "status", "failure"],
+        "required": ["name", "required_check", "product_version", "tag_revision", "tag", "release_commit", "release_checksum_sha256", "protection_policy", "dependency_artifacts", "commands", "status", "failure"],
         "properties": {
           "name": {"enum": ["redline", "redline-core", "redline-testing", "redline-web"]},
           "path": {"type": "string"},
@@ -37,6 +37,34 @@
           "protection_policy": {"const": "immutable-main-v1"},
           "tag_state": {"enum": ["absent", "verified"]},
           "tag_metadata": {"type": ["object", "null"]},
+          "dependency_artifacts": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "source_repo", "source_commit", "source_tree_checksum_sha256", "product_version", "release_tag", "tag_revision", "artifact", "artifact_sha256", "checksum_sha256", "binary_sha256", "release_manifest", "release_manifest_sha256", "build_command", "build_log", "build_log_sha256", "transport"],
+              "properties": {
+                "name": {"const": "redline-testing-release"},
+                "source_repo": {"const": "redline-testing"},
+                "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+                "source_tree_checksum_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "product_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+                "release_tag": {"type": "string", "minLength": 1},
+                "tag_revision": {"type": "integer", "minimum": 1},
+                "artifact": {"type": "string", "pattern": "^redline-testing-[0-9]+\\.[0-9]+\\.[0-9]+-linux-x86_64\\.tar\\.gz$"},
+                "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "checksum_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "binary_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "release_manifest": {"const": "release-manifest.json"},
+                "release_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "build_command": {"const": ["bash", "scripts/ci-local.sh", "release"]},
+                "build_log": {"type": "string", "minLength": 1},
+                "build_log_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "transport": {"const": "file"}
+              }
+            }
+          },
           "commands": {"type": "array"},
           "log": {"type": ["string", "null"]},
           "log_sha256": {"type": ["string", "null"]},

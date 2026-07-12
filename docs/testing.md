@@ -20,6 +20,10 @@ protection-policy metadata first.
 equal its local-Jeryu forge head, and either have no proposed tag yet or have an
 immutable tag already bound to that exact commit. It executes the complete
 child lanes in detached worktrees and writes checksummed JSON plus raw logs.
+Child commands use each repository's pinned toolchain, never the control
+plane's `RUSTUP_TOOLCHAIN` override. Before Core CI, the runner builds the exact
+reviewed Redline Testing release package locally, verifies its commit, manifest,
+binary, and hashes, and records that binding under Core's dependency artifacts.
 
 Common repair signatures:
 
