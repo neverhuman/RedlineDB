@@ -8,9 +8,11 @@ just required
 just score
 ```
 
-`fast` checks shell syntax and Python compilation. `required` adds shellcheck
-when available, materializer tests, manifest parsing, and local-Jeryu policy
-validation. `score` runs Jankurai with the committed baseline ratchet.
+`fast` checks shell syntax, Rust control-plane tests, and the exact Python
+parity boundary. `required` adds shellcheck when available, materializer tests,
+manifest parsing, local-Jeryu policy validation, and fails on any Python file or
+interpreter invocation that is not bound to named Rust parity evidence. `score`
+runs Jankurai with the committed baseline ratchet.
 
 For family-level proof, run each changed member repo's `just required` and
 `just score` from its own checkout, then post statuses through
