@@ -8,6 +8,10 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 cd "$repo_root"
 
+# scripts/release-package.sh copies from target/release, so keep this lane's
+# release build output inside the repo even when host-ci provides a shared cache.
+export CARGO_TARGET_DIR="$repo_root/target"
+
 # Pre-flight: keep `.jankurai/audit-policy.toml` and `agent/audit-policy.toml`
 # in sync. The two are read by different tooling layers; drift silently
 # changes the active audit policy from what's documented in .jankurai/.
