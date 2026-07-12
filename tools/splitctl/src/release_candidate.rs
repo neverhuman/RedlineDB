@@ -47,6 +47,7 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let manifest_sha256 = sha256_bytes(&manifest_bytes);
     let manifest: toml::Value = std::str::from_utf8(&manifest_bytes)?.parse()?;
     validate_candidate_header(&manifest)?;
+    validate_rollout_dependencies(&manifest)?;
     let mut repositories = fleet_repositories(&manifest, &options.manifest)?;
     repositories.retain(|repo| selected(&options, repo));
     repositories.sort_by(|left, right| (left.wave, &left.name).cmp(&(right.wave, &right.name)));
@@ -533,6 +534,105 @@ fn validate_candidate_header(manifest: &toml::Value) -> Result<(), Box<dyn std::
         return Err(
             "manifest must declare release 8.0.0, candidate, formal_ga=false, sagemaker=N/A".into(),
         );
+    }
+    Ok(())
+}
+
+fn validate_rollout_dependencies(manifest: &toml::Value) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repositories = std::collections::BTreeMap::new();
+    for key in ["repo", "infrastructure_repo"] {
+        for entry in manifest
+            .get(key)
+            .and_then(toml::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let name = entry
+                .get("name")
+                .and_then(toml::Value::as_str)
+                .ok_or_else(|| format!("{key} entry is missing name"))?;
+            let wave = entry
+                .get("rollout_wave")
+                .and_then(toml::Value::as_integer)
+                .and_then(|value| u64::try_from(value).ok())
+                .ok_or_else(|| format!("{name} is missing a valid rollout_wave"))?;
+            let pending = entry
+                .get("release_commit")
+                .and_then(toml::Value::as_str)
+                .is_some_and(|commit| commit == PENDING);
+            if repositories
+                .insert(name.to_owned(), (wave, pending))
+                .is_some()
+            {
+                return Err(format!("duplicate release repository {name}").into());
+            }
+        }
+    }
+
+    let external_repositories = manifest
+        .get("external_dependencies")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(toml::map::Map::values)
+        .filter_map(|dependency| dependency.get("repository"))
+        .filter_map(toml::Value::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+
+    for entry in manifest
+        .get("repo")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let name = entry.get("name").and_then(toml::Value::as_str).unwrap();
+        let (wave, pending) = repositories[name];
+        let dependencies = entry
+            .get("cross_repo_deps")
+            .and_then(toml::Value::as_array)
+            .ok_or_else(|| format!("{name} is missing cross_repo_deps"))?;
+        for dependency in dependencies {
+            let dependency = dependency
+                .as_str()
+                .ok_or_else(|| format!("{name} has a non-string cross_repo_deps entry"))?;
+            if let Some((dependency_wave, dependency_pending)) = repositories.get(dependency) {
+                if pending && *dependency_pending && *dependency_wave >= wave {
+                    return Err(format!(
+                        "{name} wave {wave} requires unresolved {dependency} wave {dependency_wave}; unresolved dependencies must be in an earlier wave"
+                    )
+                    .into());
+                }
+            } else if !external_repositories.contains(dependency) {
+                return Err(format!("{name} references unknown dependency {dependency}").into());
+            }
+        }
+    }
+
+    for entry in manifest
+        .get("infrastructure_repo")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let name = entry.get("name").and_then(toml::Value::as_str).unwrap();
+        let (wave, pending) = repositories[name];
+        let dependants = entry
+            .get("dependency_edges")
+            .and_then(toml::Value::as_array)
+            .ok_or_else(|| format!("{name} is missing dependency_edges"))?;
+        for dependant in dependants {
+            let dependant = dependant
+                .as_str()
+                .ok_or_else(|| format!("{name} has a non-string dependency_edges entry"))?;
+            let (dependant_wave, dependant_pending) = repositories
+                .get(dependant)
+                .ok_or_else(|| format!("{name} references unknown dependant {dependant}"))?;
+            if pending && *dependant_pending && *dependant_wave <= wave {
+                return Err(format!(
+                    "{dependant} wave {dependant_wave} requires unresolved {name} wave {wave}; infrastructure dependants must be in a later wave"
+                )
+                .into());
+            }
+        }
     }
     Ok(())
 }
@@ -1246,6 +1346,75 @@ sagemaker = "passed"
         .parse()
         .unwrap();
         assert!(validate_candidate_header(&invalid).is_err());
+    }
+
+    #[test]
+    fn rollout_dependencies_are_ordered_and_known() {
+        let valid: toml::Value = r#"
+[external_dependencies.redline]
+repository = "redline-core"
+
+[[infrastructure_repo]]
+name = "smartcluster"
+rollout_wave = 5
+release_commit = "PENDING"
+dependency_edges = ["web"]
+
+[[repo]]
+name = "llm"
+rollout_wave = 4
+release_commit = "PENDING"
+cross_repo_deps = []
+
+[[repo]]
+name = "agent"
+rollout_wave = 5
+release_commit = "PENDING"
+cross_repo_deps = ["llm", "redline-core"]
+
+[[repo]]
+name = "web"
+rollout_wave = 6
+release_commit = "PENDING"
+cross_repo_deps = ["agent"]
+
+[[repo]]
+name = "released-contracts"
+rollout_wave = 1
+release_commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+cross_repo_deps = ["web"]
+"#
+        .parse()
+        .unwrap();
+        validate_rollout_dependencies(&valid).unwrap();
+
+        let same_wave: toml::Value = r#"
+[[repo]]
+name = "llm"
+rollout_wave = 4
+release_commit = "PENDING"
+cross_repo_deps = []
+
+[[repo]]
+name = "agent"
+rollout_wave = 4
+release_commit = "PENDING"
+cross_repo_deps = ["llm"]
+"#
+        .parse()
+        .unwrap();
+        assert!(validate_rollout_dependencies(&same_wave).is_err());
+
+        let unknown: toml::Value = r#"
+[[repo]]
+name = "agent"
+rollout_wave = 5
+release_commit = "PENDING"
+cross_repo_deps = ["typo"]
+"#
+        .parse()
+        .unwrap();
+        assert!(validate_rollout_dependencies(&unknown).is_err());
     }
 
     #[test]
