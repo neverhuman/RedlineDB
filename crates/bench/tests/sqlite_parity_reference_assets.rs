@@ -228,3 +228,16 @@ fn runtime_and_release_use_canonical_sources() {
         fs::read_to_string(root.join("contracts/c-abi/sqlite3.h")).expect("read sqlite3 shim");
     assert!(sqlite_header.contains("#include \"redlinedb.h\""));
 }
+
+#[test]
+fn release_packaging_honors_cargo_target_dir() {
+    let root = workspace_root();
+    let release_build =
+        fs::read_to_string(root.join("ops/ci/release-build.sh")).expect("read release build");
+
+    assert!(release_build.contains("TARGET_DIR=\"${CARGO_TARGET_DIR:-target}\""));
+    assert!(release_build.contains("RELEASE_DIR=\"${TARGET_DIR}/${TARGET}/release\""));
+    assert!(release_build.contains("cp \"${RELEASE_DIR}/redlinedb-cli\""));
+    assert!(release_build.contains("cp \"${RELEASE_DIR}/libredlinedb.a\""));
+    assert!(!release_build.contains("\"target/${TARGET}/release/"));
+}
