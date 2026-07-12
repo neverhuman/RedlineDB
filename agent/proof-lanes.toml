@@ -1,0 +1,4 @@
+[[lane]]
+name = "evidence-processor"
+command = "rtk cargo test -p redlinedb-bench --bin evidence_processor --locked"
+purpose = "validate external Redline Testing evidence and pinned suite identities in Rust"

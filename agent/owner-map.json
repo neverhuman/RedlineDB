@@ -1,0 +1,9 @@
+{
+  "workspace": "redline-core",
+  "owners": {
+    ".gitignore": "control-plane",
+    ".jankurai/": "control-plane",
+    "agent/": "control-plane",
+    "crates/bench/src/bin/evidence_processor.rs": "tools"
+  }
+}

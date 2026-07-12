@@ -1,0 +1,21 @@
+{
+  "workspace": "redline-core",
+  "tests": {
+    ".gitignore": {
+      "command": "rtk cargo test -p redlinedb-bench --bin evidence_processor --locked",
+      "purpose": "verify canonical proof policy files remain bounded and tracked"
+    },
+    ".jankurai/": {
+      "command": "rtk cargo test -p redlinedb-bench --bin evidence_processor --locked",
+      "purpose": "verify the mirrored proof policy and Rust evidence contract remain compatible"
+    },
+    "agent/": {
+      "command": "rtk cargo test -p redlinedb-bench --bin evidence_processor --locked",
+      "purpose": "verify canonical proof routing and the Rust evidence contract remain compatible"
+    },
+    "crates/bench/src/bin/evidence_processor.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --bin evidence_processor --locked",
+      "purpose": "prove official evidence schema, hash-map, runner-digest, and pinned suite validation in Rust"
+    }
+  }
+}

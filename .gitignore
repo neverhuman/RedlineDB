@@ -40,6 +40,9 @@
 !.jankurai/ux-qa.toml
 agent/*
 !agent/audit-policy.toml
+!agent/owner-map.json
+!agent/proof-lanes.toml
+!agent/test-map.json
 :memory:/
 FUCKIT.md
 
