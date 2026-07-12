@@ -6667,7 +6667,7 @@ fn companion_package(repo: &str) -> Option<&str> {
 
 fn render_companion_required(package: &str) -> String {
     format!(
-        "#!/usr/bin/env bash\nset -euo pipefail\n\nbash ops/ci/check.sh\ncargo clippy --locked -p {package} --all-targets\ncargo test --locked -p {package} --jobs \"[object Object]\"\nprintf 'required ok: {package}\\n'\n"
+        "#!/usr/bin/env bash\nset -euo pipefail\n\nbash ops/ci/check.sh\ncargo clippy --locked -p {package} --all-targets\ncargo test --locked -p {package} --jobs \"${{JAIN_CI_JOBS:-8}}\"\nprintf 'required ok: {package}\\n'\n"
     )
 }
 
@@ -7679,6 +7679,7 @@ current_tag = "jain-v8.0.0-split.0"
             let lane = render_companion_required(package);
             assert!(lane.contains(&format!("cargo clippy --locked -p {package}")));
             assert!(lane.contains(&format!("cargo test --locked -p {package}")));
+            assert!(lane.contains("--jobs \"${JAIN_CI_JOBS:-8}\""));
             assert!(lane.contains(&format!("required ok: {package}")));
             assert!(!lane.contains("jain-llm"));
             assert!(!lane.contains("--skip"));
