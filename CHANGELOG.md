@@ -7,3 +7,5 @@
 - Added rollback-safe lock/receipt writes and Rust safety tests.
 - Kept cutover ineligible until exact reviewed tags and fresh Jain/Jeryu
   consumer evidence exist.
+- Advanced the canonical Redline core identity to the immutable `.jain.3`
+  durability repair after reviewed reopen regression coverage.

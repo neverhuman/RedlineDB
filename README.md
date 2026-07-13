@@ -78,7 +78,7 @@ fields (replace the values with their reviewed consumer check output):
   "status": "pass",
   "source_commit": "0123456789abcdef0123456789abcdef01234567",
   "required_check": "jain-split/redline-consumer",
-  "engine_tag": "redline-core-v4.1.0-jain.2",
+  "engine_tag": "redline-core-v4.1.0-jain.3",
   "engine_commit": "<family-ci redline-core commit>",
   "proof_lock_id": "redline-proof/v2/4.1.0/<family-ci redline-core commit>",
   "family_ci_receipt_sha256": "<family-ci receipt SHA256>"

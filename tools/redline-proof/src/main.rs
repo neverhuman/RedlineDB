@@ -346,7 +346,8 @@ fn toml_integer(table: &toml::value::Table, key: &str, context: &str) -> Result<
 
 fn expected_repo_release(name: &str) -> Option<(&'static str, i64)> {
     match name {
-        "redline" | "redline-core" => Some(("4.1.0", 2)),
+        "redline" => Some(("4.1.0", 2)),
+        "redline-core" => Some(("4.1.0", 3)),
         "redline-testing" => Some(("1.0.1", 1)),
         "redline-web" => Some(("0.1.0", 1)),
         _ => None,
@@ -3553,7 +3554,7 @@ mod tests {
         );
         assert_eq!(
             identities.get("redline-core"),
-            Some(&("4.1.0", 2, "redline-core-v4.1.0-jain.2"))
+            Some(&("4.1.0", 3, "redline-core-v4.1.0-jain.3"))
         );
         assert_eq!(
             identities.get("redline-testing"),
