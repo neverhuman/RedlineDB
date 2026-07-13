@@ -373,7 +373,13 @@ fn open_database_at(
     }
 
     let sql_options = crate::sql_options(options);
-    let db = if create {
+    // `OpenOptions::create` means "create when absent", not "replace an
+    // existing image". `normalize_path` creates a missing directory before
+    // the path lock is acquired, so decide from the directory contents while
+    // holding that lock. A non-empty directory must go through recovery and
+    // fail closed if its durable image is incomplete or corrupt.
+    let create_new = create && fs::read_dir(&path)?.next().transpose()?.is_none();
+    let db = if create_new {
         redlinedb_sql::Database::create(&path, sql_options)?
     } else {
         redlinedb_sql::Database::open(&path, sql_options)?
