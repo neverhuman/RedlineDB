@@ -26,6 +26,7 @@
     "AGENTS.md": "control-plane",
     "agent/": "control-plane",
     ".jankurai/": "control-plane",
-    ".jeryu/": "control-plane"
+    ".jeryu/": "control-plane",
+    ".cargo/": "control-plane"
   }
 }

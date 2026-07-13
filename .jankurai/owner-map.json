@@ -19,7 +19,8 @@
     ],
     "control-plane": [
       "AGENTS.md",
-      ".jankurai/**"
+      ".jankurai/**",
+      ".cargo/**"
     ]
   }
 }

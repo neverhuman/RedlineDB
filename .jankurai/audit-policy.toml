@@ -127,6 +127,7 @@ disabled_rules = [
 excluded_paths = [
   # CI keeps Cargo state inside the detached checkout. These are downloaded
   # third-party caches, not Redline Testing source or release evidence.
+  ".cargo/",
   ".cargo/registry/",
   ".cargo/git/",
   ".cargo/advisory-db/",

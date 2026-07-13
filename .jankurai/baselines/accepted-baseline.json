@@ -1,15 +1,15 @@
 {
-  "report_fingerprint": "sha256:325b29ca4ac3b2179e474db1298c4a7562aad5f4cb2783d1419dca31afcd214e",
-  "input_fingerprint": "sha256:b6c415f8a9b47ce9eaf454ffb45b58d779d6605f455c01646fa615f397b0f69e",
-  "policy_fingerprint": "sha256:bbfa52a7e8fe3de62556be0aaacc5daefe63b828ff51e66bf95865e46ccdef31",
+  "report_fingerprint": "sha256:4dbb07d28d807f3352f79acc8680ae71e441641275b986db463b46c6e3b21040",
+  "input_fingerprint": "sha256:270250188be5a26063602c884268518df55c4a4236cb3caee682e5bf4e6f15c8",
+  "policy_fingerprint": "sha256:aa9e9260f253b02f374d03d29f585e9238f7b42e8d5b1922e592539df0fafd97",
   "manifest_fingerprints": {
-    "owner_map": "sha256:8d39a13708028d517b9fbf06199d73ad69e02ca83a93d56de36c8d4c69abee9d",
+    "owner_map": "sha256:1ac4bc3f1863c2ec3d6d0e10ad085099ef902119fcfbcbd93dabefab2e0ccf22",
     "test_map": "sha256:ec2c90858943dce35b6c7c9a549e956bfd849b7e368d1ec319207201d2cc5f1f",
     "boundaries": "sha256:67b057b21a2bed89255281afc269b8887eda7f2f5327b3792b5026a29a2ce144",
     "proof_lanes": "sha256:64a0c7f6a6ac5ecfdfc0d80caf3ace89ed5ff3606acb68a1199dd40bc1066c4b"
   },
   "dirty_worktree": true,
-  "generated_at": "1783895334",
+  "generated_at": "1783904596",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -23,9 +23,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1783895334",
-  "started_at": "1783895334",
-  "elapsed_ms": 718,
+  "run_id": "1783904596",
+  "started_at": "1783904596",
+  "elapsed_ms": 748,
   "scope": {
     "mode": "full",
     "paths": []
@@ -33,7 +33,7 @@
   "score": 86,
   "raw_score": 86,
   "decision": {
-    "status": "advisory",
+    "status": "pass",
     "minimum_score": 85,
     "passed": true,
     "hard_findings": 0,
@@ -52,7 +52,7 @@
     }
   },
   "git": {
-    "head": "028c678",
+    "head": "68a427c",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -63,7 +63,7 @@
     "minimum_score": 85,
     "fail_on": [],
     "advisory_on": [],
-    "mode": "advisory",
+    "mode": "standard",
     "standard_version": "0.9.0",
     "auditor_version": "1.6.10",
     "schema_version": "1.9.0",
@@ -305,9 +305,13 @@
         "jankurai audit lane found in CI",
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
-        "Rust property/integration tests present or no Rust surface"
+        "Rust property/integration tests present or no Rust surface",
+        "proofbind artifact found: surfaces=7 missing=7 high_or_critical_missing=7 verdict=review"
       ],
-      "notes": []
+      "notes": [
+        "proofbind reports 7 unresolved obligation(s)",
+        "proofbind reports 7 missing high/critical semantic proof obligation(s)"
+      ]
     },
     {
       "name": "Security and supply-chain posture",
@@ -989,14 +993,30 @@
     },
     "missing": []
   },
-  "security_evidence": {},
+  "security_evidence": {
+    "artifact": {
+      "path": "target/jankurai/security/evidence.json",
+      "envelope_exit_code": 0,
+      "elapsed_ms": 6809,
+      "wrapper_strict": true,
+      "profile": "ci",
+      "commands_ran": 1,
+      "commands_skipped": 0,
+      "commands_failed": 0,
+      "required_commands_skipped": 0,
+      "required_commands_failed": 0,
+      "blocking_commands": [],
+      "generated_at": "1783904564",
+      "git_head": "68a427c65cffa1a5b6745aaf996e320462ccac3a"
+    }
+  },
   "boundaries": {
     "reclassifications": []
   },
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-12T22:28:53.745199948+00:00",
+    "generated_at": "2026-07-13T01:03:15.436406798+00:00",
     "repo": ".",
     "auditor_version": "1.6.10",
     "status": "review",
