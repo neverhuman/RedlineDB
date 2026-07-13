@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# redline-core PR-CI gate — the authoritative local jeryu check.
-# Delegates to the canonical fast lane (preflight + the full test shard set),
-# then runs an advisory jankurai audit. Independent of the other redline repos:
-# green here means redline-core is green.
+# redline-core PR-CI gate — the authoritative local Jeryu check.
+# Runs the canonical fast lane, fail-closed supply-chain checks, dependency
+# review, and the complete Jankurai ratchet. Independent of the other Redline
+# repositories: green here means every Core-owned required gate is green.
 set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
@@ -10,16 +10,10 @@ cd "$repo_root"
 # Canonical pre-merge gate (preflight checks + full test shards).
 bash ops/ci/fast.sh
 
-# Advisory jankurai audit (pinned 1.6.x binary; never the stale ~/.local shadow).
-mkdir -p target/jankurai
-JANKURAI="${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}"
-[ -x "$JANKURAI" ] || JANKURAI="$(command -v jankurai || true)"
-if [ -n "${JANKURAI:-}" ] && [ -x "$JANKURAI" ]; then
-  rm -f target/jankurai/audit-state.json
-  "$JANKURAI" audit . --mode advisory \
-    --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md \
-    --no-score-history --policy agent/audit-policy.toml || true
-  echo "jankurai score written to target/jankurai/repo-score.md"
-fi
+# All security and policy tools are required. Missing tools or upstream proof
+# sources fail this protected check instead of being treated as advisory.
+bash ops/ci/security.sh
+bash ops/ci/dependency-review.sh
+bash ops/ci/jankurai-audit.sh
 
 echo "==> redline-core PR-CI: OK"
