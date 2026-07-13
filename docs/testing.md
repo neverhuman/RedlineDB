@@ -10,10 +10,11 @@ entrypoint runs `ops/ci/quality-gates.sh`, so the single protected required
 status is published only after required, security, pinned score, and release
 readiness all pass on the exact detached commit. It accepts the narrower
 `security`, `score`, and `release-readiness` lanes for targeted repair reruns.
-Because the compatibility lock intentionally lives outside this repository, a
-detached runner must set `REDLINE_SPLIT_MIRROR_LOCK` to the reviewed mirror; the
-entrypoint fails before any success publication when neither that variable nor
-the normal sibling path is available.
+Because the compatibility lock and four child checkouts intentionally live
+outside this repository, a detached runner must set `REDLINE_SPLIT_CONTAINER`
+to the reviewed family container. The entrypoint links that container only into
+the temporary runner parent and fails before any success publication when
+neither the variable nor the normal sibling path is available.
 
 The required lane uses `./redlinectl control-validate`, which validates the
 canonical manifest and control-plane lock without requiring sibling checkouts.
