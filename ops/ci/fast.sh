@@ -12,8 +12,7 @@
 #   CI_FAST_STAGE=core bash ops/ci/fast.sh
 #   bash ops/ci/fast.sh                # run preflight + all test shards
 #
-# Soft-gate rationale: see .jankurai/ci-soft-gate-ledger.toml (none — every
-# command in this lane is hard-gated by design).
+# Every command in this lane is hard-gated by design.
 
 set -euo pipefail
 

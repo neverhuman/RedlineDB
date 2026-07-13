@@ -20,7 +20,7 @@ set -euo pipefail
 # local proof lane and the CI proof lane agree on the artifact.
 
 readonly CI_RUST_TOOLCHAIN="${CI_RUST_TOOLCHAIN:-1.95.0}"
-readonly CI_CARGO_DENY_VERSION="${CI_CARGO_DENY_VERSION:-0.18.0}"
+readonly CI_CARGO_DENY_VERSION="${CI_CARGO_DENY_VERSION:-0.19.8}"
 readonly CI_GITLEAKS_VERSION="${CI_GITLEAKS_VERSION:-8.21.2}"
 readonly CI_GITLEAKS_ASSET="${CI_GITLEAKS_ASSET:-gitleaks_${CI_GITLEAKS_VERSION}_linux_x64.tar.gz}"
 readonly CI_GITLEAKS_RELEASE_BASE_URL="${CI_GITLEAKS_RELEASE_BASE_URL:-https://github.com/gitleaks/gitleaks/releases/download/v${CI_GITLEAKS_VERSION}}"
@@ -717,40 +717,6 @@ ci_install_gitleaks() {
     printf 'gitleaks release asset verified: %s\n' "$CI_GITLEAKS_ASSET_URL"
     printf 'gitleaks installed: %s (%s)\n' "$(command -v gitleaks)" "$version_output"
     rm -rf "$tmp_dir"
-}
-
-# ---- Soft-gate runner -------------------------------------------------------
-# Run a command but never propagate its non-zero exit; instead log a
-# machine-grep-able marker line. This is the mechanism that replaces
-# `continue-on-error: true` in the workflow YAML: the soft-gate semantics
-# live here, the workflow YAML is hard-gated end-to-end.
-#
-# Every call MUST cite an entry in .jankurai/ci-soft-gate-ledger.toml so the
-# soft gate is auditable. The ledger entry name is passed as the first
-# argument and stamped into the log marker.
-#
-# Usage:
-#   ci_soft_gate "ledger-entry-name" "/path/to/log" -- cmd arg arg ...
-ci_soft_gate() {
-    local entry="$1"
-    local log_path="$2"
-    shift 2
-    if [ "${1:-}" = "--" ]; then
-        shift
-    fi
-    mkdir -p "$(dirname "$log_path")"
-    local rc=0
-    "$@" >>"$log_path" 2>&1 || rc=$?
-    if [ "$rc" -eq 0 ]; then
-        printf 'soft-gate=%s status=passed exit=0\n' "$entry" | tee -a "$log_path"
-    else
-        printf 'soft-gate=%s status=soft-failed exit=%d ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
-            "$entry" "$rc" | tee -a "$log_path" >&2
-    fi
-    # Always return 0: soft-gate semantics. The ledger row + log marker
-    # are the auditable evidence that this failure was non-blocking by
-    # design.
-    return 0
 }
 
 # Verify the pinned upstream tag resolves to the exact commit we expect

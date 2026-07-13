@@ -35,7 +35,7 @@ jobs:
     # Inline jankurai tool-adoption CI evidence steps. Each `run: jankurai
     # ...` step is the canonical CI evidence entry for its tool-adoption
     # manifest row (see .jankurai/tool-adoption.toml). jankurai is installed
-    # from the pinned v1.5.1 release binary in ops/ci/lib.sh and is a hard
+    # from the pinned source revision in ops/ci/lib.sh and is a hard
     # dependency for this job.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
@@ -56,7 +56,7 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked --version 0.18.0
+        run: cargo install cargo-deny --locked --version 0.19.8
       - name: Install gitleaks
         run: |
           set -euo pipefail
@@ -138,11 +138,19 @@ jobs:
               echo "jankurai language test clone resolved to $resolved_rev, expected $CI_JANKURAI_REV" >&2
               exit 1
             fi
+            rc=0
             ( cd .jankurai/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
-              > >(tee target/jankurai/language-bad-behavior.log) 2>&1
+              > >(tee target/jankurai/language-bad-behavior.log) 2>&1 || rc=$?
+            if [ "$rc" -eq 0 ]; then
+              echo 'status: upstream-tests-passed' | tee -a target/jankurai/language-bad-behavior.log
+            else
+              echo 'status: upstream-tests-failed' | tee -a target/jankurai/language-bad-behavior.log
+            fi
+            exit "$rc"
           else
-            printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
+            printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\n' \
               | tee target/jankurai/language-bad-behavior.log
+            exit 1
           fi
       - name: jankurai staged-gate (PR changed files)
         # Mirrors tools/jankurai-hooks/pre-commit but compares against the
@@ -225,7 +233,7 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked --version 0.18.0
+        run: cargo install cargo-deny --locked --version 0.19.8
       - name: Install gitleaks
         run: |
           set -euo pipefail
@@ -241,24 +249,15 @@ jobs:
             | tar -xz -C /usr/local/bin syft
       # Thin dispatcher: all supply-chain logic lives in ops/ci/security.sh
       # so CI and local (`scripts/ci-local.sh security`, `just security`)
-      # run identical commands. Cargo-deny is soft-gated INSIDE the script
-      # (see .jankurai/ci-soft-gate-ledger.toml#cargo-deny-check); cargo-audit
-      # and gitleaks remain hard gates. actionlint and syft are soft-gated
-      # (see ledger entries actionlint-workflow-lint, syft-sbom).
+      # run identical hard-gated commands and preserve their evidence logs.
       - name: security lane (ops/ci/security.sh)
         run: bash ops/ci/security.sh
 
   dependency-review:
-    # SBOM-like dependency review on PRs. Compares base vs head
-    # manifests for newly-introduced vulnerable or non-allowlisted
-    # licenses. PR-only; non-PR runs short-circuit cleanly.
+    # Reproducible full-graph dependency review on PRs. Rejects vulnerable,
+    # banned, non-allowlisted, or untrusted dependencies under deny.toml.
     #
-    # Hard gate end-to-end. The dependency-review action itself stays in
-    # the workflow YAML (it can only execute inside Actions), but its
-    # exit is intercepted by ops/ci/dependency-review.sh which decides
-    # whether to fail the lane. The workflow step always runs the
-    # script, and the soft-gate semantics live there (see
-    # .jankurai/ci-soft-gate-ledger.toml#dependency-review-action).
+    # Hard gate end-to-end through the reproducible cargo-deny equivalent.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -271,6 +270,6 @@ jobs:
         with:
           toolchain: 1.95.0
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked --version 0.18.0
+        run: cargo install cargo-deny --locked --version 0.19.8
       - name: dependency-review lane (ops/ci/dependency-review.sh)
         run: bash ops/ci/dependency-review.sh

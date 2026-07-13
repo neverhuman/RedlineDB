@@ -176,8 +176,7 @@ step_ux_qa() {
 # .jankurai/language-bad-behavior.log.
 #
 # Hard gate: the workflow YAML carries NO `continue-on-error: true` for
-# this step. Soft-gate semantics (upstream-clone-failed -> exit 0) live
-# here, and we ALWAYS write a machine-grep-able
+# this step, and clone or test failure propagates. We ALWAYS write a machine-grep-able
 # `status: upstream-{clone-failed|tests-passed|tests-failed}` line.
 step_language_bad_behavior() {
     local upstream_dir=".jankurai/jankurai-src"
@@ -210,10 +209,10 @@ step_language_bad_behavior() {
         return "$rc"
     fi
 
-    printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior-local ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
+    printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\n' \
         | tee "$LOG_DIR/language-bad-behavior.log"
     cleanup_jankurai_upstream_scratch
-    return 0
+    return 1
 }
 
 main() {
