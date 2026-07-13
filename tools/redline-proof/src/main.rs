@@ -2075,6 +2075,7 @@ fn waived_consumers(value: &toml::Value) -> BTreeMap<String, String> {
         .collect()
 }
 
+#[allow(clippy::too_many_arguments)]
 fn render_lock(
     family_receipt_path: &Path,
     family_digest: &str,
