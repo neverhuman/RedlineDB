@@ -22,6 +22,8 @@ shellcheck -S error "${sh_files[@]}"
 say 'Rust: format, tests, canonical manifest, source coverage, and local-Jeryu policy'
 cargo fmt -- --check
 cargo test --locked
+cargo fmt --manifest-path ops/ci/redline-consumer/Cargo.toml -- --check
+cargo test --locked --manifest-path ops/ci/redline-consumer/Cargo.toml
 cargo run --locked --quiet -- validate-manifest --manifest repos.manifest.toml --check-paths --check-derived
 cargo run --locked --quiet -- source-coverage --manifest repos.manifest.toml
 cargo run --locked --quiet -- validate-local-jeryu --manifest repos.manifest.toml

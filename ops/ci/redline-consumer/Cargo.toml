@@ -1,0 +1,11 @@
+[package]
+name = "jain-redline-consumer-contract"
+version = "8.0.0"
+edition = "2021"
+rust-version = "1.96"
+publish = false
+
+[dependencies]
+redlinedb = { git = "http://127.0.0.1:8787/git/jeryu/redline-core.git", tag = "redline-core-v4.1.0-jain.3" }
+
+[workspace]

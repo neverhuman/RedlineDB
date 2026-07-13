@@ -102,6 +102,9 @@ preflight:
 artifact-support:
   ./ops/ci/artifact_support.sh
 
+redline-consumer-test:
+  cargo test --locked --manifest-path ops/ci/redline-consumer/Cargo.toml
+
 release-preflight:
   cargo run --locked --quiet -- release-preflight --manifest repos.manifest.toml --json target/release-preflight.json
 
