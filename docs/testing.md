@@ -5,6 +5,12 @@ and structural lock validation. Run `just security` for fail-closed secret,
 dependency, workflow, and SBOM checks. Run `just score` for the pinned audit
 and the Rust score/hard-finding/cap gate.
 
+The local Jeryu host runner enters through `scripts/ci-local.sh required`. That
+entrypoint runs `ops/ci/quality-gates.sh`, so the single protected required
+status is published only after required, security, pinned score, and release
+readiness all pass on the exact detached commit. It accepts the narrower
+`security`, `score`, and `release-readiness` lanes for targeted repair reruns.
+
 The required lane uses `./redlinectl control-validate`, which validates the
 canonical manifest and control-plane lock without requiring sibling checkouts.
 Mirror identity, live family checkout, and hub-engine guards remain in

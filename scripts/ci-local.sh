@@ -8,7 +8,7 @@ case "${1:-validate}" in
     exec cargo test --locked --manifest-path "$repo_root/Cargo.toml"
     ;;
   required)
-    exec bash "$repo_root/ops/ci/required.sh"
+    exec bash "$repo_root/ops/ci/quality-gates.sh"
     ;;
   family-ci) exec "$repo_root/redlinectl" family-ci ;;
   test) exec cargo test --locked --manifest-path "$repo_root/Cargo.toml" ;;
