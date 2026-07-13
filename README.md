@@ -9,10 +9,15 @@ receipts; no production promotion is claimed.
 With Rust 1.96.0 and the pinned local security tools installed, run:
 
 ```bash
+just required
 just check
 just security
 just score
 ```
+
+Use [`docs/architecture.md`](docs/architecture.md) for control-plane boundaries,
+[`docs/testing.md`](docs/testing.md) for proof routing and rerun commands, and
+[`docs/release.md`](docs/release.md) for the gated release and rollback sequence.
 
 `redline-split-ops` owns the nested Redline family manifest, lock verification,
 clone/update delegation, bounded family CI, and diagnostics. The four child

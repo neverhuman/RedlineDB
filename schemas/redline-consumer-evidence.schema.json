@@ -2,6 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jain.local/schemas/redline-consumer-evidence.schema.json",
   "title": "Redline consumer evidence",
+  "description": "Fail-closed 18-field evidence contract binding each Jain or Jeryu consumer test log to the exact Redline family receipt, engine identity, manifests, policies, source commit, and producer version.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schema_version", "consumer", "family", "generated_at", "status", "source_commit", "required_check", "engine_tag", "engine_commit", "proof_lock_id", "family_ci_receipt_sha256", "manifest_sha256", "policy_sha256", "consumer_manifest_sha256", "consumer_policy_sha256", "test_log", "test_log_sha256", "tool_version"],
