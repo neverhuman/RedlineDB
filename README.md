@@ -81,12 +81,21 @@ fields (replace the values with their reviewed consumer check output):
   "engine_tag": "redline-core-v4.1.0-jain.3",
   "engine_commit": "<family-ci redline-core commit>",
   "proof_lock_id": "redline-proof/v2/4.1.0/<family-ci redline-core commit>",
-  "family_ci_receipt_sha256": "<family-ci receipt SHA256>"
+  "family_ci_receipt_sha256": "<family-ci receipt SHA256>",
+  "manifest_sha256": "<canonical Redline manifest SHA256>",
+  "policy_sha256": "<canonical Redline policy SHA256>",
+  "consumer_manifest_sha256": "<consumer manifest SHA256>",
+  "consumer_policy_sha256": "<consumer CI policy SHA256>",
+  "test_log": "redline-consumer-jain-split.test.log",
+  "test_log_sha256": "<fresh consumer test-log SHA256>",
+  "tool_version": "jain-redline-consumer/v1"
 }
 ```
 
 The Jeryu receipt uses `consumer: "jeryu-split"` and required check
-`jeryu-split/redline-consumer`. Each evidence file must have a standard
+`jeryu-split/redline-consumer`, plus tool version
+`jeryu-redline-consumer/v1`. The manifest, policy, and fresh test-log hashes are
+binding inputs rather than descriptive metadata. Each evidence file must have a standard
 `<file>.sha256` sidecar containing `<digest>  <basename>`. Evidence older than
 24 hours, future-dated evidence, unknown fields, manual booleans, mismatched
 commits, stale logs, or changed checksums are rejected.

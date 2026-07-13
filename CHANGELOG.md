@@ -9,3 +9,5 @@
   consumer evidence exist.
 - Advanced the canonical Redline core identity to the immutable `.jain.3`
   durability repair after reviewed reopen regression coverage.
+- Bound both consumer receipts to the canonical manifest and policy, each
+  consumer's manifest and CI policy, and a fresh checksummed test log.

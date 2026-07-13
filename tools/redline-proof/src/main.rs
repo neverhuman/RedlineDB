@@ -6,7 +6,7 @@ use std::{
     env, fs,
     fs::{File, OpenOptions},
     io::{self, Write},
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::{Command, Output, Stdio},
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -1598,7 +1598,7 @@ const FAMILY_ROW_FIELDS: [&str; 21] = [
     "status",
     "failure",
 ];
-const CONSUMER_FIELDS: [&str; 11] = [
+const CONSUMER_FIELDS: [&str; 18] = [
     "schema_version",
     "consumer",
     "family",
@@ -1610,6 +1610,13 @@ const CONSUMER_FIELDS: [&str; 11] = [
     "engine_commit",
     "proof_lock_id",
     "family_ci_receipt_sha256",
+    "manifest_sha256",
+    "policy_sha256",
+    "consumer_manifest_sha256",
+    "consumer_policy_sha256",
+    "test_log",
+    "test_log_sha256",
+    "tool_version",
 ];
 
 fn validate_testing_artifact_receipt(
@@ -1913,6 +1920,8 @@ struct EvidenceBinding<'a> {
     engine_tag: &'a str,
     engine_commit: &'a str,
     expected_proof: &'a str,
+    manifest_digest: &'a str,
+    policy_digest: &'a str,
 }
 
 fn validate_consumer_evidence(
@@ -1957,6 +1966,8 @@ fn validate_consumer_evidence(
         ("engine_commit", binding.engine_commit),
         ("proof_lock_id", binding.expected_proof),
         ("family_ci_receipt_sha256", binding.family_digest),
+        ("manifest_sha256", binding.manifest_digest),
+        ("policy_sha256", binding.policy_digest),
     ];
     for (field, expected) in checks {
         if value.get(field).and_then(JsonValue::as_str) != Some(expected) {
@@ -1964,6 +1975,68 @@ fn validate_consumer_evidence(
                 "{consumer}: evidence {field} differs from the reviewed Redline proof"
             )));
         }
+    }
+    for field in [
+        "consumer_manifest_sha256",
+        "consumer_policy_sha256",
+        "test_log_sha256",
+    ] {
+        let digest = value.get(field).and_then(JsonValue::as_str).unwrap_or("");
+        if !is_sha256(digest) {
+            return Err(error(format!(
+                "{consumer}: evidence {field} is not a SHA-256 digest"
+            )));
+        }
+    }
+    let expected_tool = match consumer {
+        "jain-split" => "jain-redline-consumer/v1",
+        "jeryu-split" => "jeryu-redline-consumer/v1",
+        _ => return Err(error(format!("unsupported Redline consumer: {consumer}"))),
+    };
+    if value.get("tool_version").and_then(JsonValue::as_str) != Some(expected_tool) {
+        return Err(error(format!(
+            "{consumer}: evidence tool_version must be {expected_tool}"
+        )));
+    }
+    let test_log_record = value
+        .get("test_log")
+        .and_then(JsonValue::as_str)
+        .unwrap_or("");
+    let test_log_relative = Path::new(test_log_record);
+    if test_log_record.is_empty()
+        || test_log_relative.is_absolute()
+        || test_log_relative
+            .components()
+            .any(|part| !matches!(part, Component::Normal(_)))
+        || test_log_relative.components().count() != 1
+    {
+        return Err(error(format!(
+            "{consumer}: evidence test_log must be one relative file name"
+        )));
+    }
+    let test_log = path
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join(test_log_relative);
+    let metadata = fs::symlink_metadata(&test_log).map_err(|_| {
+        error(format!(
+            "{consumer}: evidence test log is missing: {}",
+            test_log.display()
+        ))
+    })?;
+    if !metadata.file_type().is_file() || metadata.len() == 0 {
+        return Err(error(format!(
+            "{consumer}: evidence test log must be a non-empty regular file"
+        )));
+    }
+    let expected_test_digest = value
+        .get("test_log_sha256")
+        .and_then(JsonValue::as_str)
+        .unwrap_or("");
+    if sha256_file(&test_log)? != expected_test_digest {
+        return Err(error(format!(
+            "{consumer}: evidence test log checksum does not match"
+        )));
     }
     Ok((value, digest))
 }
@@ -2269,6 +2342,13 @@ fn proof_refresh(
         ));
     }
     let now = Utc::now();
+    let manifest_digest = sha256_file(manifest_path)?;
+    let policy_digest = sha256_file(
+        &manifest_path
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join("agent/audit-policy.toml"),
+    )?;
     let (family_receipt, family_digest) =
         validate_family_receipt(manifest_path, family_receipt_path, now)?;
     let tag_rows = checked_tag_rows(manifest_path, &family_receipt)?;
@@ -2306,6 +2386,8 @@ fn proof_refresh(
                 engine_tag: &engine_tag,
                 engine_commit: &engine_commit,
                 expected_proof: &lock_id,
+                manifest_digest: &manifest_digest,
+                policy_digest: &policy_digest,
             },
         )?;
         consumers.insert(consumer.to_owned(), (path.clone(), value, digest));
@@ -2729,6 +2811,13 @@ fn cutover_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()
             .unwrap_or(&JsonValue::Null),
         "family CI generated_at",
     )?;
+    let manifest_digest = sha256_file(manifest_path)?;
+    let policy_digest = sha256_file(
+        &manifest_path
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join("agent/audit-policy.toml"),
+    )?;
     let mut consumers = BTreeMap::new();
     for row in rows {
         let table = row
@@ -2756,6 +2845,8 @@ fn cutover_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()
                 engine_tag: &core.repo.current_tag,
                 engine_commit,
                 expected_proof: &expected_id,
+                manifest_digest: &manifest_digest,
+                policy_digest: &policy_digest,
             },
         )?;
         if table.get("sha256").and_then(toml::Value::as_str) != Some(&digest) {
@@ -3662,10 +3753,67 @@ mod tests {
                 engine_tag: "redline-core-v4.1.0-jain.2",
                 engine_commit: "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
                 expected_proof: "redline-proof/v2/4.1.0/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+                manifest_digest: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                policy_digest: "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
             },
         )
         .unwrap_err();
         assert!(found.to_string().contains("manual boolean"));
+    }
+
+    #[test]
+    fn consumer_evidence_binds_manifests_policy_and_fresh_test_log() {
+        let root = TestDir::new("consumer-bindings");
+        let evidence_path = root.path().join("jain.json");
+        let test_log = root.path().join("jain-consumer.test.log");
+        fs::write(&test_log, b"test result: ok. 1 passed; 0 failed\n").unwrap();
+        let test_log_digest = sha256_file(&test_log).unwrap();
+        let now = Utc::now();
+        let manifest_digest = "a".repeat(64);
+        let policy_digest = "b".repeat(64);
+        let family_digest = "c".repeat(64);
+        let engine_commit = "d".repeat(40);
+        let proof_lock_id = proof_id("4.1.0", &engine_commit);
+        let payload = json!({
+            "schema_version": CONSUMER_SCHEMA,
+            "consumer": "jain-split",
+            "family": FAMILY,
+            "generated_at": format_time(now),
+            "status": "pass",
+            "source_commit": "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+            "required_check": "jain-split/redline-consumer",
+            "engine_tag": "redline-core-v4.1.0-jain.3",
+            "engine_commit": engine_commit,
+            "proof_lock_id": proof_lock_id,
+            "family_ci_receipt_sha256": family_digest,
+            "manifest_sha256": manifest_digest,
+            "policy_sha256": policy_digest,
+            "consumer_manifest_sha256": "f".repeat(64),
+            "consumer_policy_sha256": "1".repeat(64),
+            "test_log": "jain-consumer.test.log",
+            "test_log_sha256": test_log_digest,
+            "tool_version": "jain-redline-consumer/v1",
+        });
+        write_checksummed_json(&evidence_path, &payload).unwrap();
+        let binding = EvidenceBinding {
+            now,
+            family_generated: now,
+            family_digest: &family_digest,
+            engine_tag: "redline-core-v4.1.0-jain.3",
+            engine_commit: &engine_commit,
+            expected_proof: &proof_lock_id,
+            manifest_digest: &manifest_digest,
+            policy_digest: &policy_digest,
+        };
+
+        validate_consumer_evidence(&evidence_path, "jain-split", &binding).unwrap();
+        fs::write(&test_log, b"tampered\n").unwrap();
+        assert!(
+            validate_consumer_evidence(&evidence_path, "jain-split", &binding)
+                .unwrap_err()
+                .to_string()
+                .contains("test log checksum")
+        );
     }
 
     #[test]
