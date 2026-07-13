@@ -17,7 +17,7 @@ case "${1:-validate}" in
       fi
       ln -s -- "$family_source" "$family_container"
     fi
-    export GIT_CONFIG_GLOBAL=/dev/null
+    unset GIT_CONFIG_GLOBAL
     exec bash "$repo_root/ops/ci/quality-gates.sh"
     ;;
   family-ci) exec "$repo_root/redlinectl" family-ci ;;

@@ -15,9 +15,10 @@ outside this repository, a detached runner must set `REDLINE_SPLIT_CONTAINER`
 to the reviewed family container. The entrypoint links that container only into
 the temporary runner parent and fails before any success publication when
 neither the variable nor the normal sibling path is available.
-The required entrypoint also uses an empty global Git configuration so a parent
-runner's mirror-cache rewrites cannot disguise canonical local-Jeryu remote
-identity during release readiness.
+The required entrypoint removes a parent runner's temporary global Git-config
+override before release readiness. This prevents mirror-cache rewrites from
+disguising canonical local-Jeryu remote identity while retaining the operator's
+supported local-forge credential helper.
 
 The required lane uses `./redlinectl control-validate`, which validates the
 canonical manifest and control-plane lock without requiring sibling checkouts.
