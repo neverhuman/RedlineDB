@@ -8,6 +8,10 @@ case "${1:-validate}" in
     exec cargo test --locked --manifest-path "$repo_root/Cargo.toml"
     ;;
   required)
+    if [[ ! -f "$repo_root/../redline-split/redline.lock.toml" && -z "${REDLINE_SPLIT_MIRROR_LOCK:-}" ]]; then
+      printf '%s\n' 'detached required CI needs REDLINE_SPLIT_MIRROR_LOCK pointing to the compatibility mirror' >&2
+      exit 2
+    fi
     exec bash "$repo_root/ops/ci/quality-gates.sh"
     ;;
   family-ci) exec "$repo_root/redlinectl" family-ci ;;
