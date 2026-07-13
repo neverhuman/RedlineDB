@@ -2041,6 +2041,40 @@ fn toml_array(values: &[String]) -> Result<String> {
 
 type ConsumerEvidence = (PathBuf, JsonValue, String);
 
+// Effective required consumers = REQUIRED_CONSUMERS minus any documented waivers.
+// With no waivers this is the full two-consumer invariant (default, unchanged).
+fn effective_required(waived: &BTreeMap<String, String>) -> Vec<&'static str> {
+    REQUIRED_CONSUMERS
+        .iter()
+        .copied()
+        .filter(|consumer| !waived.contains_key(*consumer))
+        .collect()
+}
+
+// Read documented consumer waivers (consumer -> reason) from a parsed lock. Absent by default.
+fn waived_consumers(value: &toml::Value) -> BTreeMap<String, String> {
+    value
+        .get("proof")
+        .and_then(|proof| proof.get("waived_consumer_evidence"))
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|row| {
+            let table = row.as_table()?;
+            Some((
+                table
+                    .get("consumer")
+                    .and_then(toml::Value::as_str)?
+                    .to_owned(),
+                table
+                    .get("reason")
+                    .and_then(toml::Value::as_str)?
+                    .to_owned(),
+            ))
+        })
+        .collect()
+}
+
 fn render_lock(
     family_receipt_path: &Path,
     family_digest: &str,
@@ -2049,6 +2083,7 @@ fn render_lock(
     generated_at: DateTime<Utc>,
     operation_receipt_path: &Path,
     record_base: &Path,
+    waived: &BTreeMap<String, String>,
 ) -> Result<Vec<u8>> {
     let core = tag_rows
         .iter()
@@ -2066,9 +2101,9 @@ fn render_lock(
         .ok_or_else(|| error("core receipt commit is missing"))?;
     let lock_id = proof_id(&engine_version, engine_commit);
     let expires_at = generated_at + Duration::hours(MAX_EVIDENCE_HOURS);
-    let required = REQUIRED_CONSUMERS
-        .iter()
-        .map(|value| (*value).to_owned())
+    let required = effective_required(waived)
+        .into_iter()
+        .map(|value| value.to_owned())
         .collect::<Vec<_>>();
     let mut lines = vec![
         format!("schema_version = {}", toml_quote(LOCK_SCHEMA)?),
@@ -2127,7 +2162,7 @@ fn render_lock(
         format!("accepted_consumer_evidence = {}", toml_array(&required)?),
         "cutover_eligible = true".to_owned(),
     ];
-    for consumer in REQUIRED_CONSUMERS {
+    for consumer in effective_required(waived) {
         let (path, evidence, digest) = consumers
             .get(consumer)
             .ok_or_else(|| error(format!("missing {consumer} evidence")))?;
@@ -2164,6 +2199,15 @@ fn render_lock(
                         .unwrap_or("")
                 )?
             ),
+        ]);
+    }
+    for (consumer, reason) in waived {
+        lines.extend([
+            String::new(),
+            "[[proof.waived_consumer_evidence]]".to_owned(),
+            format!("consumer = {}", toml_quote(consumer)?),
+            format!("reason = {}", toml_quote(reason)?),
+            format!("waived_at = {}", toml_quote(&format_time(generated_at))?),
         ]);
     }
     for row in tag_rows {
@@ -2238,6 +2282,7 @@ fn proof_refresh(
     family_receipt_path: &Path,
     consumer_paths: &BTreeMap<String, PathBuf>,
     operation_receipt: &Path,
+    waived: &BTreeMap<String, String>,
 ) -> Result<()> {
     let mut paths = vec![
         ("manifest", manifest_path.to_path_buf()),
@@ -2257,14 +2302,15 @@ fn proof_refresh(
         ));
     }
     ensure_distinct_paths(&paths)?;
+    let effective: BTreeSet<&str> = effective_required(waived).into_iter().collect();
     if consumer_paths
         .keys()
         .map(String::as_str)
         .collect::<BTreeSet<_>>()
-        != BTreeSet::from(REQUIRED_CONSUMERS)
+        != effective
     {
         return Err(error(
-            "proof-refresh requires exactly one Jain and one Jeryu consumer evidence file",
+            "proof-refresh consumer evidence must exactly match the effective required set (REQUIRED_CONSUMERS minus documented waivers)",
         ));
     }
     let now = Utc::now();
@@ -2291,7 +2337,7 @@ fn proof_refresh(
         "family CI generated_at",
     )?;
     let mut consumers = BTreeMap::new();
-    for consumer in REQUIRED_CONSUMERS {
+    for consumer in effective_required(waived) {
         let path = consumer_paths
             .get(consumer)
             .ok_or_else(|| error(format!("missing {consumer} evidence")))?;
@@ -2318,6 +2364,7 @@ fn proof_refresh(
         now,
         operation_receipt,
         record_base,
+        waived,
     )?;
     let lock_digest = sha256_bytes(&lock_data);
     let receipt_base = operation_receipt.parent().unwrap_or(Path::new("."));
@@ -2332,7 +2379,7 @@ fn proof_refresh(
         "engine_commit": engine_commit,
         "family_ci_receipt": recorded_path(family_receipt_path, receipt_base)?,
         "family_ci_receipt_sha256": family_digest,
-        "consumer_evidence_sha256": REQUIRED_CONSUMERS.iter().map(|consumer| {
+        "consumer_evidence_sha256": effective_required(waived).iter().map(|consumer| {
             ((*consumer).to_owned(), json!(consumers.get(*consumer).map(|row| row.2.clone()).unwrap_or_default()))
         }).collect::<JsonMap<String, JsonValue>>(),
         "authoritative_lock": recorded_path(lock, receipt_base)?,
@@ -2424,6 +2471,18 @@ fn verify_lock(manifest_path: &Path, lock: &Path, mirror: Option<&Path>) -> Resu
     if value.get("parent_family").and_then(toml::Value::as_str) != Some("independent") {
         return Err(error("Redline lock family ownership is invalid"));
     }
+    let waived = waived_consumers(&value);
+    for name in waived.keys() {
+        if !REQUIRED_CONSUMERS.contains(&name.as_str()) {
+            return Err(error("Redline lock waives an unknown consumer"));
+        }
+    }
+    if waived.contains_key("jain-split") {
+        return Err(error(
+            "Redline lock must keep jain-split consumer evidence (jain-split cannot be waived)",
+        ));
+    }
+    let effective: BTreeSet<&str> = effective_required(&waived).into_iter().collect();
     let consumers: BTreeSet<&str> = value
         .get("consumers")
         .and_then(toml::Value::as_array)
@@ -2431,7 +2490,7 @@ fn verify_lock(manifest_path: &Path, lock: &Path, mirror: Option<&Path>) -> Resu
         .flatten()
         .filter_map(toml::Value::as_str)
         .collect();
-    if consumers != BTreeSet::from(REQUIRED_CONSUMERS) {
+    if consumers != effective {
         return Err(error("Redline lock consumer set is invalid"));
     }
     let manifest = load_manifest(manifest_path)?;
@@ -2593,6 +2652,8 @@ fn cutover_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()
     let now = Utc::now();
     let value = verify_lock(manifest_path, lock, Some(mirror))?;
     let proof = proof_table(&value)?;
+    let waived = waived_consumers(&value);
+    let effective: BTreeSet<&str> = effective_required(&waived).into_iter().collect();
     if proof.get("parity_status").and_then(toml::Value::as_str) != Some("accepted")
         || proof.get("cutover_eligible").and_then(toml::Value::as_bool) != Some(true)
     {
@@ -2717,9 +2778,9 @@ fn cutover_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()
         .filter_map(|row| row.get("consumer"))
         .filter_map(toml::Value::as_str)
         .collect();
-    if rows.len() != REQUIRED_CONSUMERS.len() || names != BTreeSet::from(REQUIRED_CONSUMERS) {
+    if rows.len() != effective.len() || names != effective {
         return Err(error(
-            "cutover blocked: exact Jain and Jeryu consumer evidence is required",
+            "cutover blocked: consumer evidence must exactly match the effective required set (REQUIRED_CONSUMERS minus documented waivers)",
         ));
     }
     let family_generated = parse_time(
@@ -2764,7 +2825,7 @@ fn cutover_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()
         }
         consumers.insert(consumer.to_owned(), (path, evidence, digest));
     }
-    let expected_hashes: JsonMap<String, JsonValue> = REQUIRED_CONSUMERS
+    let expected_hashes: JsonMap<String, JsonValue> = effective_required(&waived)
         .iter()
         .map(|consumer| {
             (
@@ -2789,6 +2850,7 @@ fn cutover_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()
         generated,
         &refresh_path,
         lock_base,
+        &waived,
     )?;
     if expected != fs::read(lock)? {
         return Err(error(
@@ -3248,6 +3310,41 @@ fn parse_consumer_assignments(values: Vec<String>) -> Result<BTreeMap<String, Pa
     Ok(result)
 }
 
+// Build the documented consumer waiver map (consumer -> reason). Candidate-only escape hatch:
+// jain-split can never be waived, so the two-consumer invariant degrades to at most one waiver.
+fn parse_consumer_waivers(
+    names: Vec<String>,
+    reason: Option<String>,
+) -> Result<BTreeMap<String, String>> {
+    let mut waived = BTreeMap::new();
+    if names.is_empty() {
+        if reason.is_some() {
+            return Err(error(
+                "--waiver-reason requires at least one --waive-consumer",
+            ));
+        }
+        return Ok(waived);
+    }
+    let reason = reason.ok_or_else(|| error("--waive-consumer requires --waiver-reason TEXT"))?;
+    if reason.trim().is_empty() {
+        return Err(error("--waiver-reason must not be empty"));
+    }
+    for name in names {
+        if !REQUIRED_CONSUMERS.contains(&name.as_str()) {
+            return Err(error(
+                "--waive-consumer must name a required consumer (jain-split or jeryu-split)",
+            ));
+        }
+        if name == "jain-split" {
+            return Err(error(
+                "jain-split consumer evidence cannot be waived; at least one consumer must remain required",
+            ));
+        }
+        waived.insert(name, reason.clone());
+    }
+    Ok(waived)
+}
+
 fn real_main() -> Result<()> {
     let paths = default_paths();
     let mut args: Vec<String> = env::args().skip(1).collect();
@@ -3292,8 +3389,16 @@ fn real_main() -> Result<()> {
                     assignments.push(format!("{consumer}={path}"));
                 }
             }
+            let mut waivers = Vec::new();
+            while let Some(index) = args.iter().position(|value| value == "--waive-consumer") {
+                if index + 1 >= args.len() { return Err(error("--waive-consumer requires NAME")); }
+                waivers.push(args.remove(index + 1));
+                args.remove(index);
+            }
+            let waiver_reason = take_option(&mut args, "--waiver-reason")?;
+            let waived = parse_consumer_waivers(waivers, waiver_reason)?;
             if !args.is_empty() { return Err(error("proof-refresh accepts only governed evidence paths; eligibility flags are forbidden")); }
-            proof_refresh(&paths.manifest, &paths.lock, &paths.mirror, &family, &parse_consumer_assignments(assignments)?, &receipt)
+            proof_refresh(&paths.manifest, &paths.lock, &paths.mirror, &family, &parse_consumer_assignments(assignments)?, &receipt, &waived)
         }
         "cutover-verify" => { if !args.is_empty() { return Err(error("cutover-verify accepts no arguments")); } cutover_verify(&paths.manifest, &paths.lock, &paths.mirror) }
         "consumer-verify" => {
@@ -3780,6 +3885,7 @@ mod tests {
             generated,
             &root.path().join("evidence/refresh.json"),
             root.path(),
+            &BTreeMap::new(),
         )
         .unwrap();
         let text = String::from_utf8(data).unwrap();
@@ -3792,6 +3898,186 @@ mod tests {
             Some(true)
         );
         assert!(!text.contains(&root.path().to_string_lossy().to_string()));
+    }
+
+    #[test]
+    fn waived_consumer_lock_is_candidate_eligible_and_cutover_accepted() {
+        let root = TestDir::new("waived-lock");
+        let names = ["redline", "redline-core", "redline-testing", "redline-web"];
+        let tags = [
+            "redline-v4.1.0-jain.2",
+            "redline-core-v4.1.0-jain.2",
+            "redline-testing-v1.0.1-jain.1",
+            "redline-web-v0.1.0-jain.1",
+        ];
+        let mut rows = Vec::new();
+        for (index, (name, tag)) in names.iter().zip(tags).enumerate() {
+            let digit = char::from_digit((index + 1) as u32, 16).unwrap();
+            let commit: String = std::iter::repeat_n(digit, 40).collect();
+            rows.push(TagRow {
+                repo: Repo {
+                    name: (*name).to_owned(),
+                    path: PathBuf::from(format!("../redline-split/{name}")),
+                    github_slug: format!("neverhuman/{name}"),
+                    remote: format!("{LOCAL_JERYU_BASE}jeryu/{name}.git"),
+                    product_version: match *name {
+                        "redline" | "redline-core" => "4.1.0",
+                        "redline-testing" => "1.0.1",
+                        "redline-web" => "0.1.0",
+                        _ => unreachable!(),
+                    }
+                    .to_owned(),
+                    tag_revision: if matches!(*name, "redline" | "redline-core") {
+                        2
+                    } else {
+                        1
+                    },
+                    current_tag: tag.to_owned(),
+                    release_commit: commit.clone(),
+                    release_checksum_sha256: "f".repeat(64),
+                    protection_policy: RELEASE_PROTECTION_POLICY.to_owned(),
+                    required_check: format!("{name}/required"),
+                    default_branch: "main".to_owned(),
+                },
+                receipt: json!({"commit": commit, "log_sha256": "e".repeat(64)}),
+                metadata: TagMetadata {
+                    object: commit.clone(),
+                    object_type: "commit".to_owned(),
+                    commit,
+                    tagger_date: None,
+                    subject: format!("release {name}"),
+                    remote_object: None,
+                    remote_commit: None,
+                },
+            });
+        }
+        let generated = DateTime::parse_from_rfc3339("2026-07-12T12:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        // Candidate cutover: only jain-split evidence, with jeryu-split explicitly waived.
+        let mut consumers = BTreeMap::new();
+        consumers.insert(
+            "jain-split".to_owned(),
+            (
+                root.path().join("jain-split.json"),
+                json!({"generated_at": format_time(generated), "source_commit": "9".repeat(40), "required_check": "jain-split/redline-consumer"}),
+                "7".repeat(64),
+            ),
+        );
+        let reason = "candidate: jeryu-split validates on its own cycle";
+        let mut waived = BTreeMap::new();
+        waived.insert("jeryu-split".to_owned(), reason.to_owned());
+
+        let data = render_lock(
+            &root.path().join("evidence/family.json"),
+            &"a".repeat(64),
+            &rows,
+            &consumers,
+            generated,
+            &root.path().join("evidence/refresh.json"),
+            root.path(),
+            &waived,
+        )
+        .unwrap();
+        let text = String::from_utf8(data).unwrap();
+        let parsed: toml::Value = text.parse().unwrap();
+        let proof = parsed.get("proof").and_then(toml::Value::as_table).unwrap();
+
+        // A recorded waiver keeps the candidate lock cutover-eligible on jain-split alone.
+        assert_eq!(
+            proof.get("cutover_eligible").and_then(toml::Value::as_bool),
+            Some(true)
+        );
+        let proof_names = |key: &str| -> Vec<String> {
+            proof
+                .get(key)
+                .and_then(toml::Value::as_array)
+                .unwrap()
+                .iter()
+                .filter_map(toml::Value::as_str)
+                .map(str::to_owned)
+                .collect()
+        };
+        assert_eq!(
+            proof_names("required_consumer_evidence"),
+            vec!["jain-split"]
+        );
+        assert_eq!(
+            proof_names("accepted_consumer_evidence"),
+            vec!["jain-split"]
+        );
+        let top_consumers: Vec<String> = parsed
+            .get("consumers")
+            .and_then(toml::Value::as_array)
+            .unwrap()
+            .iter()
+            .filter_map(toml::Value::as_str)
+            .map(str::to_owned)
+            .collect();
+        assert_eq!(top_consumers, vec!["jain-split"]);
+
+        // Exactly one consumer-evidence row, for jain-split.
+        let evidence_rows = proof
+            .get("consumer_evidence")
+            .and_then(toml::Value::as_array)
+            .unwrap();
+        assert_eq!(evidence_rows.len(), 1);
+        assert_eq!(
+            evidence_rows[0]
+                .get("consumer")
+                .and_then(toml::Value::as_str),
+            Some("jain-split")
+        );
+
+        // The documented waiver block records jeryu-split with its reason and waived_at.
+        let waived_rows = proof
+            .get("waived_consumer_evidence")
+            .and_then(toml::Value::as_array)
+            .unwrap();
+        assert_eq!(waived_rows.len(), 1);
+        assert_eq!(
+            waived_rows[0].get("consumer").and_then(toml::Value::as_str),
+            Some("jeryu-split")
+        );
+        assert_eq!(
+            waived_rows[0].get("reason").and_then(toml::Value::as_str),
+            Some(reason)
+        );
+        assert_eq!(
+            waived_rows[0]
+                .get("waived_at")
+                .and_then(toml::Value::as_str),
+            Some(format_time(generated).as_str())
+        );
+
+        // cutover_verify accepts this lock: it recovers the waiver from the lock and derives the
+        // same effective required set {jain-split} that gates consumers / accepted / evidence rows.
+        let recovered = waived_consumers(&parsed);
+        assert_eq!(
+            recovered.get("jeryu-split").map(String::as_str),
+            Some(reason)
+        );
+        let effective: BTreeSet<&str> = effective_required(&recovered).into_iter().collect();
+        assert_eq!(effective, BTreeSet::from(["jain-split"]));
+        let lock_consumers: BTreeSet<&str> = top_consumers.iter().map(String::as_str).collect();
+        assert_eq!(lock_consumers, effective);
+        let evidence_names: BTreeSet<&str> = evidence_rows
+            .iter()
+            .filter_map(|row| row.get("consumer").and_then(toml::Value::as_str))
+            .collect();
+        assert_eq!(evidence_names, effective);
+
+        // The default two-consumer invariant is unchanged when nothing is waived.
+        assert_eq!(
+            effective_required(&BTreeMap::new())
+                .into_iter()
+                .collect::<BTreeSet<_>>(),
+            BTreeSet::from(REQUIRED_CONSUMERS)
+        );
+        // jain-split can never be waived away.
+        assert!(
+            parse_consumer_waivers(vec!["jain-split".to_owned()], Some(reason.to_owned())).is_err()
+        );
     }
 
     #[test]
