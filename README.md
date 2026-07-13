@@ -1,5 +1,7 @@
 # Redline split operations
 
+[![jankurai score](https://img.shields.io/badge/jankurai-ratcheted-blue)](agent/jankurai-baseline.json)
+
 [Agent entrypoint](AGENTS.md) · Candidate status: CI and cutover evidence are
 reported by the protected `redline-split-ops/required` lane and checksummed
 receipts; no production promotion is claimed.
@@ -17,7 +19,8 @@ just score
 
 Use [`docs/architecture.md`](docs/architecture.md) for control-plane boundaries,
 [`docs/testing.md`](docs/testing.md) for proof routing and rerun commands, and
-[`docs/release.md`](docs/release.md) for the gated release and rollback sequence.
+[`docs/release-process.md`](docs/release-process.md) for the gated release and
+rollback sequence.
 
 `redline-split-ops` owns the nested Redline family manifest, lock verification,
 clone/update delegation, bounded family CI, and diagnostics. The four child
@@ -119,3 +122,9 @@ proof-lock identity, tag metadata, and `cutover_eligible` value, then safely
 replaces the authoritative lock and its compatibility mirror with identical
 bytes. `cutover-verify` reconstructs the lock from the still-fresh receipts and
 live immutable tag readback; a manual lock edit cannot make cutover pass.
+
+Reviewed cutover inputs live under `release-evidence/<release>/`, alongside
+their checksum sidecars and the family-CI logs named by the receipt. The proof
+lock records paths relative to this repository so a clean reviewed checkout can
+reconstruct the decision. Temporary or ignored evidence paths are not valid
+release inputs.

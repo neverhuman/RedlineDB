@@ -6,9 +6,10 @@ dependency, workflow, and SBOM checks. Run `just score` for the pinned audit
 and the Rust score/hard-finding/cap gate.
 
 The required lane uses `./redlinectl control-validate`, which validates the
-canonical manifest, lock, mirror, and receipt schemas without requiring sibling
-checkouts. Live family checkout and hub-engine guards remain in
-`./redlinectl validate` and `./redlinectl family-ci`.
+canonical manifest and control-plane lock without requiring sibling checkouts.
+Mirror identity, live family checkout, and hub-engine guards remain in
+`./redlinectl lock-verify`, `./redlinectl validate`, and
+`./redlinectl family-ci`.
 
 An explicitly ineligible historical lock may retain its prior immutable tags
 while the canonical manifest advances to reviewed corrective identities. It
@@ -35,5 +36,12 @@ Common repair signatures:
 - `proof is not derived as eligible`: obtain fresh family and consumer
   evidence; never edit the lock boolean.
 
-The Rust command errors include the failing repository, field, or path and the
-next exact lane is recorded in `agent/test-map.json`.
+## Agent-readable repair contract
+
+Every Rust command error is rendered as stable, named fields: `purpose`,
+`reason`, `common_fixes`, `repair_hint`, and `docs_url`. The reason includes the
+failing repository, field, or path when one is available. The repair hint sends
+operators to the exact owning lane recorded in `agent/test-map.json`; common
+fixes require producer regeneration, immutable-tag preservation, and clean
+forge-equal release verification. These fields are diagnostic only and never
+relax a failed gate.

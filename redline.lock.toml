@@ -3,48 +3,101 @@ family = "redline-split"
 parent_family = "independent"
 engine_package = "redlinedb"
 engine_version = "4.1.0"
-engine_tag = "redline-core-v4.1.0-jain.1"
-engine_commit = "9c72c26fac280ebf861eef43aa406c04ecbcf024"
-parity_harness_commit = "e87cf01ab9386e0f49b7523343119b2532a6e717"
-proof_lock_id = "redline-proof/v2/4.1.0/9c72c26fac280ebf861eef43aa406c04ecbcf024"
+engine_tag = "redline-core-v4.1.0-jain.3"
+engine_commit = "7137a1ee2d04be4eb6931d99ff78b8a52c827900"
+parity_harness_commit = "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea"
+proof_lock_id = "redline-proof/v2/4.1.0/7137a1ee2d04be4eb6931d99ff78b8a52c827900"
 consumers = ["jain-split", "jeryu-split"]
 
 [proof]
-parity_status = "historical-only-until-refreshed"
-accepted_core_evidence_sha256 = "8e811b14306795b82f8422d7a1522e1cddd026ce8b5a96e1987c91c4c43f2ccf"
-accepted_testing_manifest_sha256 = "ba9dcfb87e63436456498ab956c646c77759307ef354ea464dcbda33dd2456d3"
+parity_status = "accepted"
+generated_at = "2026-07-13T13:10:26Z"
+fresh_until = "2026-07-14T13:10:26Z"
+family_ci_receipt = "release-evidence/8.0.0/redline-family-ci-jain3-final.json"
+family_ci_receipt_sha256 = "d8fdc0cba2d7d02f8be272435304b7a94f6a7ddb36e59e414dda776aa182b41d"
+proof_refresh_receipt = "release-evidence/8.0.0/redline-proof-refresh-jain3.json"
+accepted_core_evidence_sha256 = "aff39201db5e6d47cd35f3b614e9e4c9ea7b5d551b2f29ec201c4ead66a7659b"
+accepted_testing_manifest_sha256 = "344a02924857765d45c2f5317c5a92e016fa976d71c11a0207051e30d6c588ba"
 required_consumer_evidence = ["jain-split", "jeryu-split"]
-accepted_consumer_evidence = []
-cutover_eligible = false
+accepted_consumer_evidence = ["jain-split", "jeryu-split"]
+cutover_eligible = true
+
+[[proof.consumer_evidence]]
+consumer = "jain-split"
+path = "release-evidence/8.0.0/jain-consumer.json"
+sha256 = "1ca22268f30c013d7137e85ff2e6ce1e607c08b9916ad56554c1c9e4c084e899"
+generated_at = "2026-07-13T13:04:10Z"
+source_commit = "1c80c91cb62176a6ffab62d7a62a57b8fcb712b0"
+required_check = "jain-split/redline-consumer"
+
+[[proof.consumer_evidence]]
+consumer = "jeryu-split"
+path = "release-evidence/8.0.0/jeryu-consumer.json"
+sha256 = "9303876207c678b86acba4905b25828e6344bcc2a29a95b2e97d4ab5b5ed6c7b"
+generated_at = "2026-07-13T10:58:29Z"
+source_commit = "16db27cfd41e26e44ebe641b253080389b21d8d9"
+required_check = "jeryu-split/redline-consumer"
 
 [[repo]]
 name = "redline"
-tag = "redline-v4.1.0-jain.1"
-commit = "c944e796f5a4fc725bd91420eebaec947c611515"
+product_version = "4.1.0"
+tag_revision = 2
+tag = "redline-v4.1.0-jain.2"
+commit = "cdb1c5a4d4629ff555cfca9d8994c818e070c571"
+checksum_sha256 = "13c0ed0f2bf25cd4eb99cd141155a67b0c01c10564e9557d076d071a0eb1bd82"
 github = "https://github.com/neverhuman/RedlineDB.git"
 jeryu = "http://127.0.0.1:8787/git/jeryu/redlineDB.git"
 required_check = "redline/required"
+protection_policy = "immutable-main-v1"
+tag_object = "cdb1c5a4d4629ff555cfca9d8994c818e070c571"
+tag_object_type = "commit"
+tag_subject = "release(redline): bind corrective hub version"
+remote_tag_verified = true
 
 [[repo]]
 name = "redline-core"
-tag = "redline-core-v4.1.0-jain.1"
-commit = "9c72c26fac280ebf861eef43aa406c04ecbcf024"
+product_version = "4.1.0"
+tag_revision = 3
+tag = "redline-core-v4.1.0-jain.3"
+commit = "7137a1ee2d04be4eb6931d99ff78b8a52c827900"
+checksum_sha256 = "baec7cb2c084ffa5c3f10770ff62e8cadf869d7e19e21db849effd47e0871d83"
 github = "https://github.com/neverhuman/redline-core.git"
 jeryu = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
 required_check = "redline-core/required"
+protection_policy = "immutable-main-v1"
+tag_object = "7137a1ee2d04be4eb6931d99ff78b8a52c827900"
+tag_object_type = "commit"
+tag_subject = "ci(proof): align release controls with current Jankurai"
+remote_tag_verified = true
 
 [[repo]]
 name = "redline-testing"
-tag = "redline-testing-v1.0.1-jain.0"
-commit = "e87cf01ab9386e0f49b7523343119b2532a6e717"
+product_version = "1.0.1"
+tag_revision = 1
+tag = "redline-testing-v1.0.1-jain.1"
+commit = "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea"
+checksum_sha256 = "825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac"
 github = "https://github.com/neverhuman/redline-testing.git"
 jeryu = "http://127.0.0.1:8787/git/jeryu/redline-testing.git"
 required_check = "redline-testing/required"
+protection_policy = "immutable-main-v1"
+tag_object = "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea"
+tag_object_type = "commit"
+tag_subject = "release(testing): bind xtask package identity to v1.0.1"
+remote_tag_verified = true
 
 [[repo]]
 name = "redline-web"
-tag = "redline-web-v0.1.0-jain.0"
-commit = "7b893f0d75df8d0ccf45855584d09c03576a0450"
+product_version = "0.1.0"
+tag_revision = 1
+tag = "redline-web-v0.1.0-jain.1"
+commit = "09fd93be10238cd85abc164b0b01cf0f681ea304"
+checksum_sha256 = "27fef5fd44ad897dbaa244963312b6861e0c54b951ddb4f645f715fbf417c8a9"
 github = "https://github.com/neverhuman/redline-web.git"
 jeryu = "http://127.0.0.1:8787/git/jeryu/redline-web.git"
 required_check = "redline-web/required"
+protection_policy = "immutable-main-v1"
+tag_object = "09fd93be10238cd85abc164b0b01cf0f681ea304"
+tag_object_type = "commit"
+tag_subject = "release(redline-web): finish Rust-only corrective candidate"
+remote_tag_verified = true

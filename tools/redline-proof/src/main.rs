@@ -28,17 +28,23 @@ const REQUIRED_CONSUMERS: [&str; 2] = ["jain-split", "jeryu-split"];
 
 #[derive(Debug)]
 struct RepairError {
+    purpose: &'static str,
     reason: String,
     docs_url: &'static str,
     repair_hint: &'static str,
+    common_fixes: &'static [&'static str],
 }
 
 impl std::fmt::Display for RepairError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             formatter,
-            "{}; repair_hint={}; docs_url={}",
-            self.reason, self.repair_hint, self.docs_url
+            "purpose={}; reason={}; common_fixes={}; repair_hint={}; docs_url={}",
+            self.purpose,
+            self.reason,
+            self.common_fixes.join(" | "),
+            self.repair_hint,
+            self.docs_url
         )
     }
 }
@@ -47,9 +53,15 @@ impl std::error::Error for RepairError {}
 
 fn error(message: impl Into<String>) -> Box<dyn std::error::Error> {
     Box::new(RepairError {
+        purpose: "validate Redline release evidence and derived controls",
         reason: message.into(),
         docs_url: "docs/testing.md",
         repair_hint: "rerun the owning command from agent/test-map.json",
+        common_fixes: &[
+            "regenerate the producer receipt and checksum together",
+            "preserve immutable tags and stop on identity mismatch",
+            "use a clean forge-equal main checkout for release verification",
+        ],
     })
 }
 
@@ -3437,6 +3449,16 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repair_errors_render_an_agent_readable_contract() {
+        let rendered = error("evidence checksum mismatch").to_string();
+        assert!(rendered.contains("purpose=validate Redline release evidence and derived controls"));
+        assert!(rendered.contains("reason=evidence checksum mismatch"));
+        assert!(rendered.contains("common_fixes=regenerate the producer receipt"));
+        assert!(rendered.contains("repair_hint=rerun the owning command"));
+        assert!(rendered.contains("docs_url=docs/testing.md"));
+    }
 
     struct TestDir(PathBuf);
 

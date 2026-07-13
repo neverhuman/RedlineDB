@@ -21,9 +21,10 @@ SHA256 must be exact and must match the reviewed main commit and immutable tag.
 The reviewed Core identity for `.jain.3` is commit
 `7137a1ee2d04be4eb6931d99ff78b8a52c827900` with release-tree SHA-256
 `baec7cb2c084ffa5c3f10770ff62e8cadf869d7e19e21db849effd47e0871d83`.
-The tag stays absent until the rebound control manifest and fresh family CI pass.
-Both Jain and Jeryu consumer receipts are mandatory; proof refresh has no waiver
-or single-consumer acceptance path.
+The immutable tag was created only after the rebound control manifest and fresh
+family CI passed and now resolves that exact commit on local Jeryu. Both Jain
+and Jeryu consumer receipts are mandatory; proof refresh has no waiver or
+single-consumer acceptance path.
 
 This control plane is stateless, so backups are not applicable; the durable
 truth is reviewed Git history plus checksummed receipts. Monitoring is the
