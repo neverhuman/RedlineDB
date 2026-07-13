@@ -86,7 +86,7 @@ jobs:
         run: jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md
       - name: Jankurai score and hard-finding gate
         run: |
-          jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml --repair-queue-jsonl target/jankurai/repair-queue.jsonl
+          jankurai audit . --full --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml --repair-queue-jsonl target/jankurai/repair-queue.jsonl
           install -m 0644 target/jankurai/repo-score.json .jankurai/repo-score.json
           install -m 0644 target/jankurai/repo-score.md .jankurai/repo-score.md
           ./redlinectl audit-verify target/jankurai/repo-score.json
