@@ -3,7 +3,7 @@
 This doc names the cross-crate edges in the workspace and records
 which edges are allowed, which are forbidden, and how to verify
 each edge stays clean. The machine-readable form is
-`.jankurai/boundaries.toml`; this doc is the human-readable companion.
+`agent/boundaries.toml`; this doc is the human-readable companion.
 
 ## Allowed edges (top → bottom)
 
@@ -17,7 +17,7 @@ redlinedb-bench ─► {redlinedb, redlinedb-kernel, redlinedb-sql, redlinedb-ff
 Each arrow is a one-way Cargo dependency declared in the
 corresponding crate's `Cargo.toml`. Reverse arrows are forbidden;
 the workspace `cargo build` enforces this via the type system,
-and `.jankurai/boundaries.toml` annotates the policy intent so audits
+and `agent/boundaries.toml` annotates the policy intent so audits
 can detect new violations.
 
 ## Boundary rules
@@ -34,7 +34,7 @@ can detect new violations.
    `docs/language-bad-behavior.md` for the `compat → sqlite3_api`
    convention). The C header at
    `crates/ffi/include/redlinedb.h` is listed in
-   `.jankurai/generated-zones.toml` as an authored ABI surface.
+   `agent/generated-zones.toml` as an authored ABI surface.
 4. **Bench reaches in, nothing reaches out**: `crates/bench/`
    may depend on any product crate. No product crate may depend
    on `crates/bench/`.
@@ -61,7 +61,7 @@ the resulting `DomainError`.
 
 ## Generated and exception zones
 
-- `.jankurai/generated-zones.toml` — paths the audit must not flag as
+- `agent/generated-zones.toml` — paths the audit must not flag as
   product source (e.g. the C header).
 - `docs/exceptions/` — per-file justifications for paths that
   cannot follow the default rule, with owner, proof lane,

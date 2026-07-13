@@ -64,7 +64,6 @@ excluded_paths = [
   ".jankurai/jankurai.sarif",
   ".jankurai/security/",
   ".jankurai/accepted-baseline.json",
-  ".jankurai/boundaries.toml",
   ".jankurai/standard-version.toml",
   # UX QA config is control-plane metadata; it is not evidence that this repo
   # has a rendered web product surface.

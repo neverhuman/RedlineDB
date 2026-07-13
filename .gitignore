@@ -17,7 +17,6 @@
 !.jankurai/audit-policy.toml
 !.jankurai/baselines/
 !.jankurai/baselines/main.repo-score.json
-!.jankurai/boundaries.toml
 !.jankurai/ci-soft-gate-ledger.toml
 !.jankurai/cost-budget.toml
 !.jankurai/debt-map.json
@@ -40,6 +39,8 @@
 !.jankurai/ux-qa.toml
 agent/*
 !agent/audit-policy.toml
+!agent/boundaries.toml
+!agent/generated-zones.toml
 !agent/owner-map.json
 !agent/proof-lanes.toml
 !agent/test-map.json

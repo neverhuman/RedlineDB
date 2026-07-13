@@ -36,8 +36,10 @@ entries under `Unreleased` and the release commit promotes them.
 
 Ordered steps. Each step is gated by the previous one passing.
 
-1. **Pre-flight**: `just check` (fast + score + security + rust-map +
-   rust-witness + rust-diagnose). All must exit zero.
+1. **Pre-flight**: `just required`, the exact protected PR lane (fast tests,
+   security, full-graph dependency review, and Jankurai ratchet), followed by
+   `just check` (fast + score + security + rust-map + rust-witness +
+   rust-diagnose). Every command must exit zero; none is advisory or soft-gated.
 2. **Bump**: `cargo set-version --workspace X.Y.Z` + edit
    `CHANGELOG.md` (`Unreleased` → `## [X.Y.Z] - YYYY-MM-DD`).
 3. **Commit + push the bump**:
@@ -98,10 +100,11 @@ Ordered steps. Each step is gated by the previous one passing.
 
 The audit/security gate lives in
 [`.github/workflows/jankurai.yml`](../.github/workflows/jankurai.yml).
-The `security` job runs `cargo audit`, `cargo deny check`, and
-`gitleaks detect`; it is a required check on every PR and push to
-`main`. The `dependency-review` step (PR-only) compares the base and
-head manifests for vulnerable adds. The audit job uploads
+The protected `required` lane runs `cargo audit`, `cargo deny check`,
+`gitleaks detect`, Syft SBOM generation, actionlint, full-graph dependency
+review, and the Jankurai ratchet; every stage is a hard gate. The reproducible
+dependency-review script validates advisories, bans, licenses, and sources
+against the complete locked Cargo graph. The audit job uploads
 `.jankurai/repo-score.json` + the SARIF security feed. Sample runs are
 linked from the Actions tab of the repository — pick any green run on
 a release tag for permalink evidence.
@@ -122,10 +125,9 @@ Release artifacts MUST ship:
 - **Signed tag** — `git tag -s vX.Y.Z` (gpg or sigstore-style). The
   repo `SECURITY.md` lists the maintainer key fingerprint; verifiers
   run `git tag -v vX.Y.Z`.
-- **Dependency review** — the GitHub
-  `actions/dependency-review-action` step in
-  `.github/workflows/jankurai.yml` fails the PR if a high-severity
-  advisory is newly introduced.
+- **Dependency review** — `ops/ci/dependency-review.sh` runs cargo-deny over
+  advisories, bans, licenses, and sources for the full locked dependency graph.
+  A policy violation fails the protected lane.
 
 ## Rollback runbook
 

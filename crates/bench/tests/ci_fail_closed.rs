@@ -43,6 +43,7 @@ fn release_security_surfaces_have_no_active_soft_gate() {
         "ops/ci/dependency-review.sh",
         "ops/ci/jankurai-audit.sh",
         "ops/ci/lib.sh",
+        "tools/security-lane.sh",
     ] {
         assert!(
             !read(path).contains("ci_soft_gate"),
@@ -62,4 +63,53 @@ fn release_security_surfaces_have_no_active_soft_gate() {
         "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json"
     ));
     assert!(!workflow.contains("cargo-deny --locked --version 0.18.0"));
+
+    let security_marker = read("tools/security-lane.sh");
+    assert!(security_marker.contains("bash \"$ROOT/ops/ci/security.sh\""));
+    assert!(security_marker.contains("bash \"$ROOT/ops/ci/dependency-review.sh\""));
+    assert!(!security_marker.contains("soft-gated"));
+    assert!(!security_marker.contains("ci-soft-gate-ledger"));
+}
+
+#[test]
+fn operator_surfaces_route_to_the_protected_release_contract() {
+    let justfile = read("justfile");
+    assert!(justfile.contains("\nrequired:\n"));
+    assert!(justfile.contains("./scripts/ci-local.sh required"));
+
+    let readme = read("README.md");
+    for route in [
+        "`just required`",
+        "docs/architecture.md",
+        "docs/testing.md",
+        "docs/release.md",
+    ] {
+        assert!(
+            readme.contains(route),
+            "README must route operators to {route}"
+        );
+    }
+
+    let release = read("docs/release.md");
+    assert!(release.contains("full-graph dependency review"));
+    assert!(release.contains("none is advisory or soft-gated"));
+
+    assert!(repository_root().join("agent/boundaries.toml").is_file());
+    assert!(!repository_root().join(".jankurai/boundaries.toml").exists());
+    assert_eq!(
+        read("agent/generated-zones.toml"),
+        read(".jankurai/generated-zones.toml"),
+        "current and compatibility generated-zone manifests must be byte-identical"
+    );
+    for path in [
+        ".jankurai/JANKURAI_STANDARD.md",
+        "docs/architecture.md",
+        "docs/architecture/ENGINEERING_SPEC.md",
+        "docs/boundaries.md",
+    ] {
+        assert!(
+            !read(path).contains(".jankurai/boundaries.toml"),
+            "{path} must route to the canonical agent boundary manifest"
+        );
+    }
 }

@@ -26,7 +26,7 @@ under `crates/` depends on `crates/bench`.
 ## Layering rule
 
 Higher layers may depend on lower layers; lower layers must not
-reach upward. The audit enforces this via `.jankurai/boundaries.toml`
+reach upward. The audit enforces this via `agent/boundaries.toml`
 and `docs/boundaries.md`. Domain types (`DomainError`,
 `storage::PageId`, vector types) live in the lowest layer so every
 layer above can produce structured failures without a backward
