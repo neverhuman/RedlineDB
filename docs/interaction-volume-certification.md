@@ -1,9 +1,11 @@
 # Interaction-volume certification
 
 This document is the current contract for the Redline, SQLite, and PostgreSQL
-interaction-volume certificate. It is a bounded, closed-loop comparison of the
-checked-in seeded workload. It does not establish an envelope for untested
-arrival rates, bursts, payloads, concurrency, or customer data volumes.
+interaction-volume harness. Smoke exercises one checked-in, closed-loop seeded
+workload, but it is not competitive evidence and authorizes no bounded-win,
+release, or customer-load claim. The latest smoke trails both reference engines.
+It does not establish an envelope for untested arrival rates, bursts, payloads,
+concurrency, or customer data volumes.
 
 ## Commands
 
@@ -15,28 +17,27 @@ REDLINEDB_CERT_ALLOW_IMAGE_PULL=1 rtk just interaction-volume-smoke
 rtk just interaction-volume-smoke
 ```
 
-The daily profile is CI-only. GitLab invokes the runtime boundary directly:
+The daily profile is currently disabled and must fail closed:
 
 ```sh
 bash ops/ci/interaction-volume-ci-entrypoint.sh daily
 ```
 
-That boundary accepts only a scheduled job for the canonical
-`jeryu/redline-core` project on its protected `main` branch. It binds the exact
-job name, checked-out commit, server/project/pipeline URLs, and nonzero
-pipeline/job/project/runner IDs from the live CI environment. Direct execution,
-web or merge-request pipelines, unprotected refs, and fork project identities
-fail before Docker is contacted. The entrypoint and Rust certificate each
-authenticate `CI_JOB_TOKEN` against GitLab's `GET /api/v4/job` endpoint and
-require that server-authenticated job, pipeline, project, runner, source, ref,
-and commit identity to match. Fabricating CI-shaped environment variables is
-therefore insufficient. It writes `trigger-evidence.json`; running
-`rtk just interaction-volume-daily` outside that environment fails closed.
+The release authority is host-native local Jeryu, not caller-supplied GitLab
+environment variables. This repository has no checked-in canonical HTTPS
+origin, CA identity, signing key, or verifier for a host-CI/Jeryu exact-head
+attestation. The trigger contract therefore has `daily_enabled=false`, no
+permitted source, and null authority identities; both the shell boundary and
+Rust reject trigger receipts before using any caller URL. The GitLab daily job
+is disabled. A future owner must add reviewed control-plane plumbing that binds
+repository, exact source SHA, required check name/result, runner identity,
+issue/expiry times, a non-replay nonce, payload digest, and signature to a
+checked-in authority. Until then there is no runnable or passing daily lane.
 
 ## Runtime identity
 
-The Docker daemon service is pinned in `.gitlab-ci.yml` and the trigger contract
-to:
+The Docker daemon used by the GitLab smoke mechanics job is pinned in
+`.gitlab-ci.yml` and the trigger contract to:
 
 ```text
 sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce
@@ -83,19 +84,21 @@ allocated 512 MiB file on the same durable filesystem. The process also has a
 stop threshold, and a 32 MiB reserve.
 
 Redline accounts every file below its database root. SQLite accounts its
-database and optional WAL. For the eligible owned-container path, PostgreSQL
-recursively accounts the complete `PGDATA` tree from inside the exact
-evidence-bound container, including global catalogs, transaction state,
-temporary files, and `pg_wal`. The container root is read-only, its Docker log
-driver is disabled. The Docker-reported writable layer is measured on every
-sample, must stay at or below 1 MiB, and is added to the same data-plus-WAL cap.
-Thus the persistent database-byte cap covers all customer-data growth; it
-deliberately does not claim Docker control-plane metadata or the two bounded
-in-memory tmpfs mounts. Service-managed PostgreSQL exposes only a
-server-reported default-tablespace-plus-WAL subset and can never authorize a
-comparison. Missing required paths, observations, negative sizes, and
-arithmetic overflow fail; they never become zero-byte observations. These sizes
-are safety bounds only and never rank engines.
+database and optional WAL. For the owned-container path, PostgreSQL recursively
+measures apparent bytes below `PGDATA` from inside the exact evidence-bound
+container, including the visible global catalogs, transaction state, temporary
+files, and `pg_wal`. The container root is read-only and its Docker log driver
+is disabled. Docker `SizeRw` is measured on every sample, must remain at or
+below 1 MiB, and is added to the same safety cap. This scope is named
+`recursive_pgdata_apparent_bytes_plus_docker_size_rw`. It is not a complete
+PostgreSQL process, cluster, container, host, or persistent-footprint measure:
+it excludes process memory, network buffers, bounded tmpfs mounts, image layers,
+Docker daemon metadata, and files no longer reachable below `PGDATA`.
+Service-managed PostgreSQL exposes only a server-reported
+default-tablespace-plus-WAL subset and can never authorize a comparison.
+Missing observations, negative sizes, and arithmetic overflow fail; they never
+become zero-byte observations. All engine byte values are safety bounds only
+and never rank engines or support a cross-engine footprint claim.
 
 The release comparison requires all three roots and the reserve to resolve to
 one non-memory host mount. Service-managed or unmatched storage can demonstrate
@@ -106,7 +109,10 @@ mechanics only.
 The smoke CI lane runs both timeout and external-SIGTERM cases only after
 PostgreSQL is the active engine and owns a live benchmark schema. Cleanup must
 stop the Rust child, remove every benchmark schema, remove the owned container,
-and remove the runtime directory. `cleanup.json` records each assertion.
+and remove the runtime directory. `cleanup.json` records each assertion. After
+cleanup, the EXIT boundary atomically adds the exact `cleanup.json` SHA-256 to
+`manifest.json` and fails an otherwise successful run if that binding cannot be
+written and verified.
 
 Additional executable cases reject stale container evidence, endpoint
 substitution, and a PostgreSQL baseline that already exceeds the aggregate
@@ -118,14 +124,14 @@ daily job.
 `attempt.json` is written before the first engine run and `progress.json` is
 refreshed atomically through every lifecycle phase. Completed runs are stored in
 `raw-runs.json`; `manifest.json` binds its digest, the running binary, checked-out
-source, live PostgreSQL observation, storage contract, and runtime trigger.
+source, live PostgreSQL observation, storage contract, and the post-run cleanup
+receipt.
 
-Smoke must report `mechanics_passed=true`, `status=informational_pass`, and
-`release_eligible=false`. Release mode additionally requires the exact
-checked-in daily profile, clean source, live owned-container provenance, shared
-durable storage, a runtime-bound CI receipt, complete integrity/read checks, and
-all fixed comparison criteria. The only bounded comparison boolean is
-`bounded_reference_win_eligible`.
+Smoke completion reports `mechanics_passed=true`, `status=smoke_complete`,
+`release_eligible=false`, and `bounded_reference_win_eligible=false`. It remains
+noncompetitive even when mechanics pass. Release mode is blocked until the
+authoritative host-CI/Jeryu attestation plumbing above exists; no current
+receipt may claim a daily pass.
 
 Receipts are retained below `target/ci/interaction-volume/<case>/`. GitLab keeps
 smoke artifacts for 14 days and daily artifacts for 90 days.

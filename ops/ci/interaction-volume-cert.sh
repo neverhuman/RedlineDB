@@ -85,32 +85,37 @@ jq -e '
 
 trigger_contract='ops/ci/interaction-volume-trigger-contract.json'
 jq -e --arg profile_sha "$approved_profile_sha256" '
-  .schema_version == "redline.interaction-volume-trigger/v3" and
+  .schema_version == "redline.interaction-volume-trigger/v4" and
   .contract_id == "interaction-volume-daily-v1" and
-  .authoritative_ci == ".gitlab-ci.yml" and
+  .authoritative_ci == "host-native-jeryu-required" and
+  (.daily_enabled | not) and
+  (.daily_blocker | type == "string" and length > 0) and
   .daily_job == "interaction-volume-daily" and
   .required_smoke_job == "interaction-volume-smoke" and
   .canonical_project_path == "jeryu/redline-core" and
   .canonical_branch == "main" and
-  .permitted_daily_sources == ["schedule"] and
+  .permitted_daily_sources == [] and
   .resource_group == "redline-heavy-benchmark" and
   .retry == 0 and
   (.interruptible | not) and
   .canonical_profile_sha256 == $profile_sha and
   .ci_entrypoint == "ops/ci/interaction-volume-ci-entrypoint.sh" and
-  .job_token_attestation_endpoint == "/api/v4/job" and
+  .attestation_authority.kind == "host_ci_jeryu_exact_head" and
+  .attestation_authority.required_schema_version == "redline.host-ci-jeryu-attestation/v1" and
+  .attestation_authority.canonical_https_origin == null and
+  .attestation_authority.ca_bundle == null and
+  .attestation_authority.ca_bundle_sha256 == null and
+  .attestation_authority.signature_key_id == null and
   .docker_service_digest == "sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce" and
   .runtime_trigger_receipt == "trigger-evidence.json" and
   .artifact_retention_days == 90 and
   .interruption_receipt_tests == ["postgres_timeout", "postgres_sigterm"] and
-  .adversarial_tests == ["stale_container", "endpoint_mismatch", "postgres_storage_overshoot"]
+  .adversarial_tests == ["fake_ci_responder", "stale_container", "endpoint_mismatch", "postgres_storage_overshoot"]
 ' "$trigger_contract" >/dev/null
 if [ "$mode" = daily ]; then
-  trigger_evidence_input="${REDLINEDB_INTERACTION_TRIGGER_EVIDENCE_FILE:-}"
-  if [ -z "$trigger_evidence_input" ] || [ ! -s "$trigger_evidence_input" ]; then
-    printf 'daily release requires runtime CI trigger evidence from the CI entrypoint\n' >&2
-    exit 2
-  fi
+  printf 'daily certification blocked: %s\n' \
+    "$(jq -r '.daily_blocker' "$trigger_contract")" >&2
+  exit 2
 fi
 
 postgres_digest='sha256:786dab398303b8ce7cb76b407bb21ef2e4dfbbbd4c6abcf3d29b3130467ffdbc'
@@ -230,9 +235,31 @@ cleanup() {
       container_id:$container_id,container_removed:$container_removed,
       runtime_removed:$runtime_removed}' >"$receipt_dir/.cleanup.json.tmp"
   mv "$receipt_dir/.cleanup.json.tmp" "$receipt_dir/cleanup.json"
+  manifest_cleanup_bound=true
+  cleanup_sha="$(sha256sum "$receipt_dir/cleanup.json" | awk '{print $1}')"
+  if [ -s "$receipt_dir/manifest.json" ]; then
+    if jq --arg cleanup_sha "$cleanup_sha" \
+      '.cleanup_receipt = "cleanup.json" | .cleanup_receipt_sha256 = $cleanup_sha' \
+      "$receipt_dir/manifest.json" >"$receipt_dir/.manifest.json.tmp" && \
+      mv "$receipt_dir/.manifest.json.tmp" "$receipt_dir/manifest.json" && \
+      jq -e --arg cleanup_sha "$cleanup_sha" '
+        .schema_version == "redline.interaction-volume-cert/v4" and
+        .cleanup_receipt == "cleanup.json" and
+        .cleanup_receipt_sha256 == $cleanup_sha
+      ' "$receipt_dir/manifest.json" >/dev/null
+    then
+      :
+    else
+      manifest_cleanup_bound=false
+      rm -f "$receipt_dir/.manifest.json.tmp"
+    fi
+  elif [ -z "$adversarial_case" ] && [ -z "$interruption_case" ]; then
+    manifest_cleanup_bound=false
+  fi
   if [ "$original_status" -eq 0 ] && \
     { [ "$child_stopped" != true ] || [ "$schema_cleanup_verified" != true ] || \
-      [ "$container_removed" != true ] || [ "$runtime_removed" != true ]; }; then
+      [ "$container_removed" != true ] || [ "$runtime_removed" != true ] || \
+      [ "$manifest_cleanup_bound" != true ]; }; then
     original_status=1
   fi
   exit "$original_status"
@@ -272,10 +299,6 @@ trap 'handle_signal 143 external_sigterm' TERM
 
 rm -rf "$receipt_dir" "$scratch_dir"
 mkdir -p "$receipt_dir" "$scratch_dir/dbs"
-if [ "$mode" = daily ]; then
-  cp "$trigger_evidence_input" "$scratch_dir/trigger-evidence.json"
-  ci_trigger_json="$(jq -c . "$scratch_dir/trigger-evidence.json")"
-fi
 postgres_data_root="$scratch_dir/postgres-data"
 if [ "$mode" = daily ]; then
   cert_hard_storage_bytes=2147483648
@@ -764,7 +787,7 @@ jq -e '. as $root | (($root.runs | length) > 0) and all($root.runs[]; .plan_inte
   "$receipt_dir/raw-runs.json" >/dev/null
 jq -e 'all(.runs[];
   if .engine == "postgres" then
-    .engine_stats.storage_accounting_scope == "complete_pgdata_plus_writable_layer"
+    .engine_stats.storage_accounting_scope == "recursive_pgdata_apparent_bytes_plus_docker_size_rw"
   else true end
 )' "$receipt_dir/raw-runs.json" >/dev/null
 jq -e 'all(.runs[];
@@ -791,7 +814,9 @@ if find "$scratch_dir/dbs" -type f -print -quit 2>/dev/null | grep -q .; then
 fi
 
 if [ "$mode" = smoke ]; then
-  jq -e '.status == "informational_pass" and .mechanics_passed and (.release_eligible | not)' \
+  jq -e '.status == "smoke_complete" and .mechanics_passed and
+    (.release_eligible | not) and (.bounded_reference_win_eligible | not) and
+    (.claim_scope | contains("no competitive, bounded-win, release, or customer-load claim"))' \
     "$receipt_dir/manifest.json" >/dev/null
 else
   jq -e --arg profile_sha "$approved_profile_sha256" '

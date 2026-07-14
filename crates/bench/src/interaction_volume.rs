@@ -1,8 +1,8 @@
-//! Identical-workload Redline/SQLite/PostgreSQL release certificate.
+//! Identical-workload Redline/SQLite/PostgreSQL interaction-volume harness.
 //!
 //! This lane is deliberately separate from SQLite compatibility evidence. It models the bounded
 //! Jain session/event interaction shape, preserves every per-run sample, observes storage after
-//! work has stopped, and refuses to emit a passing envelope unless all three real engines run.
+//! work has stopped, and refuses to authorize a claim unless all three real engines run.
 
 use std::fs::{self, OpenOptions};
 use std::io::Write;
@@ -34,7 +34,7 @@ use model::*;
 use oracle::*;
 use receipt::*;
 
-const SCHEMA_VERSION: &str = "redline.interaction-volume-cert/v3";
+const SCHEMA_VERSION: &str = "redline.interaction-volume-cert/v4";
 const POSTGRES_URL_ENV: &str = "REDLINEDB_BENCH_POSTGRES_URL";
 const PINNED_POSTGRES_IMAGE_DIGEST: &str =
     "sha256:786dab398303b8ce7cb76b407bb21ef2e4dfbbbd4c6abcf3d29b3130467ffdbc";
@@ -198,17 +198,17 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
             Some(reason.clone()),
             None,
         )?;
-        write_failed_attempt(
-            args.mode,
-            &args.out_dir,
-            &environment,
-            &config,
-            &runs,
+        write_failed_attempt(FailedAttempt {
+            mode: args.mode,
+            out_dir: &args.out_dir,
+            environment: &environment,
+            config: &config,
+            runs: &runs,
             approved_profile_sha256,
-            &execution_evidence,
+            execution_evidence: &execution_evidence,
             attempt_receipt_sha256,
-            reason.clone(),
-        )?;
+            reason: reason.clone(),
+        })?;
         bail!(reason);
     }
     let database_root = args.out_dir.join("dbs");
@@ -246,20 +246,25 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
                     execution_order_position,
                 });
                 progress.write("in_progress", "run_start", None, None)?;
-                let result = run_engine(
+                let planned_run = PlannedRun {
                     engine,
-                    &config,
                     threads,
                     repetition,
                     execution_order_position,
-                    &plan,
-                    &plan_sha256,
-                    &run_dir,
-                    &postgres_url,
-                    idle_observation_secs,
+                    plan_sha256: plan_sha256.clone(),
                     delayed_growth_soak,
-                    execution_evidence.storage_comparison_eligible,
-                    &progress,
+                };
+                let result = run_engine(
+                    &planned_run,
+                    &plan,
+                    &run_dir,
+                    EngineRunContext {
+                        config: &config,
+                        postgres_url: &postgres_url,
+                        idle_observation_secs,
+                        shared_storage_contract: execution_evidence.storage_comparison_eligible,
+                        progress,
+                    },
                 );
                 match result {
                     Ok(run) => {
@@ -285,17 +290,17 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
                             repetition
                         );
                         progress.write("failed", "run_failed", Some(reason.clone()), None)?;
-                        write_failed_attempt(
-                            args.mode,
-                            &args.out_dir,
-                            &environment,
-                            &config,
-                            &runs,
-                            approved_profile_sha256.clone(),
-                            &execution_evidence,
-                            attempt_receipt_sha256.clone(),
-                            reason.clone(),
-                        )?;
+                        write_failed_attempt(FailedAttempt {
+                            mode: args.mode,
+                            out_dir: &args.out_dir,
+                            environment: &environment,
+                            config: &config,
+                            runs: &runs,
+                            approved_profile_sha256: approved_profile_sha256.clone(),
+                            execution_evidence: &execution_evidence,
+                            attempt_receipt_sha256: attempt_receipt_sha256.clone(),
+                            reason: reason.clone(),
+                        })?;
                         return Err(error).with_context(|| reason);
                     }
                 }
@@ -398,14 +403,18 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
         status: match (args.mode, release_eligible) {
             (CertMode::Release, true) => "pass",
             (CertMode::Release, false) => "fail",
-            (CertMode::Smoke, _) if mechanics_passed => "informational_pass",
-            (CertMode::Smoke, _) => "informational_fail",
+            (CertMode::Smoke, _) if mechanics_passed => "smoke_complete",
+            (CertMode::Smoke, _) => "smoke_failed",
         }
         .to_owned(),
         mechanics_passed,
         release_eligible,
         bounded_reference_win_eligible: release_eligible,
-        claim_scope: "exact seeded closed-loop Jain interaction points only; not a general database or untested customer-load claim".to_owned(),
+        claim_scope: match args.mode {
+            CertMode::Release => "exact seeded closed-loop Jain interaction points only; not a general database or untested customer-load claim",
+            CertMode::Smoke => "mechanics and integrity exercise only; no competitive, bounded-win, release, or customer-load claim is authorized",
+        }
+        .to_owned(),
         canonical_profile,
         approved_profile_sha256,
         postgres_image_digest,
@@ -420,6 +429,8 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
         artifact_sha256,
         attempt_receipt: "attempt.json".to_owned(),
         attempt_receipt_sha256,
+        cleanup_receipt: None,
+        cleanup_receipt_sha256: None,
         failure_reasons,
         environment,
         config: config.clone(),
@@ -447,7 +458,7 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
             delayed_growth_soak_secs: config.soak_observation_secs,
         }),
         reference_cleanup_verified,
-        storage_claim_scope: "all engines must share one durable host mount for a release comparison; engine byte accounting remains an absolute safety bound only and never ranks performance".to_owned(),
+        storage_claim_scope: "PostgreSQL measures recursive PGDATA apparent bytes plus Docker SizeRw; this is an absolute safety scope, not a complete PostgreSQL, container, host, or cross-engine footprint comparison".to_owned(),
     };
     atomic_write_json(&args.out_dir.join("manifest.json"), &manifest)?;
     let final_progress =
@@ -468,7 +479,7 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
         || (args.mode == CertMode::Smoke && !manifest.mechanics_passed)
     {
         bail!(
-            "three-engine certificate failed; inspect {}/manifest.json",
+            "interaction-volume run failed; inspect {}/manifest.json",
             args.out_dir.display()
         );
     }
@@ -743,22 +754,29 @@ fn deterministic_payload(rng: &mut ChaCha8Rng, bytes: usize) -> String {
         .collect()
 }
 
-#[allow(clippy::too_many_arguments)]
-fn run_engine(
-    label: EngineLabel,
-    config: &CertConfig,
-    threads: usize,
-    repetition: usize,
-    execution_order_position: usize,
-    plan: &[Vec<Interaction>],
-    plan_sha256: &str,
-    run_dir: &Path,
-    postgres_url: &str,
+struct EngineRunContext<'a> {
+    config: &'a CertConfig,
+    postgres_url: &'a str,
     idle_observation_secs: u64,
-    delayed_growth_soak: bool,
     shared_storage_contract: bool,
-    progress: &ProgressTracker<'_>,
+    progress: ProgressTracker<'a>,
+}
+
+fn run_engine(
+    planned: &PlannedRun,
+    plan: &[Vec<Interaction>],
+    run_dir: &Path,
+    context: EngineRunContext<'_>,
 ) -> Result<EngineRun> {
+    let EngineRunContext {
+        config,
+        postgres_url,
+        idle_observation_secs,
+        shared_storage_contract,
+        progress,
+    } = context;
+    let label = planned.engine;
+    let threads = planned.threads;
     progress.ensure_within_deadline("engine setup")?;
     if run_dir.exists() {
         fs::remove_dir_all(run_dir)?;
@@ -780,7 +798,7 @@ fn run_engine(
             &*engine,
             &warmup,
             config.max_data_bytes,
-            progress,
+            &progress,
             "warmup",
             config,
         )?;
@@ -799,22 +817,23 @@ fn run_engine(
         Some(storage_before.clone()),
     )?;
     let expected_integrity = expected_integrity(plan, config.sessions)?;
-    let (
+    let execution = execute_plan(
+        &*engine,
+        plan,
+        config.max_data_bytes,
+        &progress,
+        "timed_workload",
+        config,
+    )?;
+    let WorkerResult {
         metrics,
         retry_attempts,
         latency_sample_us,
         failure_samples,
         verification,
-        workload_storage_samples,
-        elapsed,
-    ) = execute_plan(
-        &*engine,
-        plan,
-        config.max_data_bytes,
-        progress,
-        "timed_workload",
-        config,
-    )?;
+    } = execution.worker;
+    let workload_storage_samples = execution.workload_storage_samples;
+    let elapsed = execution.elapsed;
     let workload_complete = workload_storage_samples
         .last()
         .cloned()
@@ -853,7 +872,7 @@ fn run_engine(
         idle_observation_secs,
         storage_after_checkpoint.clone(),
         config.max_data_bytes,
-        progress,
+        &progress,
     )?;
     if let Some(sample) = idle_storage_samples.last().cloned() {
         lifecycle_storage_samples.push(PhaseStorageSample {
@@ -944,9 +963,9 @@ fn run_engine(
         engine: label,
         engine_version: version,
         threads,
-        repetition,
-        execution_order_position,
-        plan_sha256: plan_sha256.to_owned(),
+        repetition: planned.repetition,
+        execution_order_position: planned.execution_order_position,
+        plan_sha256: planned.plan_sha256.clone(),
         attempted_operations: (config.operations_per_thread * threads) as u64,
         metrics: summary,
         retry_attempts,
@@ -961,7 +980,7 @@ fn run_engine(
         idle_storage_samples,
         lifecycle_storage_samples,
         storage_semantics: storage_semantics(label, config.max_data_bytes, shared_storage_contract),
-        delayed_growth_soak,
+        delayed_growth_soak: planned.delayed_growth_soak,
         idle_growth_bytes,
         expected_integrity,
         integrity_before_reopen,
@@ -1063,6 +1082,12 @@ fn setup_interaction_schema(engine: &dyn BenchEngine, sessions: usize) -> Result
     conn.commit()
 }
 
+struct PlanExecution {
+    worker: WorkerResult,
+    workload_storage_samples: Vec<StorageSample>,
+    elapsed: Duration,
+}
+
 fn execute_plan(
     engine: &dyn BenchEngine,
     plan: &[Vec<Interaction>],
@@ -1070,15 +1095,7 @@ fn execute_plan(
     progress: &ProgressTracker<'_>,
     lifecycle_phase: &str,
     config: &CertConfig,
-) -> Result<(
-    Metrics,
-    u64,
-    Vec<u64>,
-    Vec<String>,
-    InteractionVerification,
-    Vec<StorageSample>,
-    Duration,
-)> {
+) -> Result<PlanExecution> {
     if plan.is_empty() {
         bail!("interaction plan must contain at least one worker");
     }
@@ -1270,15 +1287,17 @@ fn execute_plan(
     }
     failure_samples.truncate(32);
     debug_assert!(latency_sample_us.len() <= MAX_LATENCY_SAMPLES);
-    Ok((
-        metrics,
-        retry_attempts,
-        latency_sample_us,
-        failure_samples,
-        verification,
+    Ok(PlanExecution {
+        worker: WorkerResult {
+            metrics,
+            retry_attempts,
+            latency_sample_us,
+            failure_samples,
+            verification,
+        },
         workload_storage_samples,
         elapsed,
-    ))
+    })
 }
 
 fn classify_failure(error: &anyhow::Error) -> FailureKind {

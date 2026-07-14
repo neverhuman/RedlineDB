@@ -243,9 +243,9 @@ impl BenchEngine for PostgresEngine {
                 "service_reported_default_tablespace_plus_wal",
             )
         } else {
-            // The owned container has a read-only root and no log driver. Count the complete
-            // PGDATA bind recursively from inside that exact evidence-bound container so global
-            // catalogs, transaction state, temp files, and every WAL file share one hard cap.
+            // The owned container has a read-only root and no log driver. Recursively count
+            // apparent bytes below PGDATA inside that exact evidence-bound container, then add
+            // Docker SizeRw. This is a safety scope, not a complete process/container footprint.
             let container_id = std::env::var(CONTAINER_ID_ENV)
                 .context("owned PostgreSQL snapshot lacks its evidence-bound container id")?;
             validate_container_id(&container_id)?;
@@ -260,10 +260,14 @@ impl BenchEngine for PostgresEngine {
             }
             let data_bytes = total_bytes
                 .checked_sub(wal_bytes)
-                .context("PostgreSQL WAL bytes exceeded the complete PGDATA footprint")?
+                .context("PostgreSQL WAL bytes exceeded recursive PGDATA apparent bytes")?
                 .checked_add(writable_layer_bytes)
-                .context("PostgreSQL persistent-byte accounting overflowed")?;
-            (data_bytes, wal_bytes, "complete_pgdata_plus_writable_layer")
+                .context("PostgreSQL measured safety-scope bytes overflowed")?;
+            (
+                data_bytes,
+                wal_bytes,
+                "recursive_pgdata_apparent_bytes_plus_docker_size_rw",
+            )
         };
         let version: String = client.query_one("SHOW server_version", &[])?.get(0);
         let synchronous_commit: String = client.query_one("SHOW synchronous_commit", &[])?.get(0);

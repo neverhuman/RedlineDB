@@ -37,7 +37,7 @@ readable repair receipts.
 | `beyond-sqlite-manifest`             | Verifies the beyond-SQLite backlog ranking, source tips, owners, and proof-lane routing.               |
 | `beyond-postgres-reference`          | Runs the beyond-SQLite manifest and Postgres oracle tests against PostgreSQL 16. Starts a Docker container locally when `REDLINEDB_POSTGRES_URL` is unset. |
 | `interaction-volume-smoke`           | Runs a fast identical-plan Redline/SQLite/PostgreSQL mechanics and integrity check. Informational only; never authorizes a release or performance claim. |
-| `interaction-volume-daily`           | Runs the immutable digest-bound seven-repetition profile, exact concurrency points, complete owned-PostgreSQL persistent-byte watchdog, and five-minute Redline delayed-growth soak. Only the token-authenticated canonical scheduled CI job is eligible; raw receipts are retained. |
+| `interaction-volume-daily`           | Disabled fail-closed. The repo lacks a checked-in canonical HTTPS/CA/signing identity and host-CI/Jeryu exact-head attestation verifier. No caller-supplied GitLab URL or token can authorize it. |
 | `ffi-check`                          | Targeted `redlinedb-ffi` compile proof.                                                               |
 | `ffi-test`                           | Targeted `redlinedb-ffi` test proof.                                                                   |
 | `cli-check`                          | Targeted `redlinedb-cli` compile proof.                                                               |
@@ -116,9 +116,9 @@ exports `REDLINEDB_POSTGRES_URL`, runs `beyond_sqlite_manifest` and
 `beyond_postgres_reference`, then removes the container. Set
 `REDLINEDB_POSTGRES_KEEP=1` to keep the local container for debugging.
 
-The current Redline/SQLite/PostgreSQL comparison commands, bounded claims,
-runtime identity checks, read oracles, storage limits, cleanup contract, and
-receipt requirements are documented in
+The current Redline/SQLite/PostgreSQL mechanics command, disabled daily blocker,
+runtime identity checks, read oracles, scoped storage limits, cleanup binding,
+and receipt requirements are documented in
 [`interaction-volume-certification.md`](interaction-volume-certification.md).
 
 To reproduce the PR-side jankurai failure mode before pushing, commit the

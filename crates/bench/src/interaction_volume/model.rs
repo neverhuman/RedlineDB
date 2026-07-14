@@ -191,6 +191,8 @@ pub struct CertManifest {
     pub artifact_sha256: String,
     pub attempt_receipt: String,
     pub attempt_receipt_sha256: String,
+    pub cleanup_receipt: Option<String>,
+    pub cleanup_receipt_sha256: Option<String>,
     pub failure_reasons: Vec<String>,
     pub environment: RunEnvironment,
     pub config: CertConfig,

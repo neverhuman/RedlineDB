@@ -121,7 +121,7 @@ impl<'a> ProgressTracker<'a> {
                 completed_runs: self.completed_runs.len(),
                 planned_runs: self.planned_runs,
                 active_engine: self.active_point.as_ref().map(|point| point.engine),
-                active_point: self.active_point.clone(),
+                active_point: self.active_point,
                 lifecycle_phase: lifecycle_phase.to_owned(),
                 heartbeat_unix_ms: unix_millis(),
                 deadline_unix_ms: self.deadline_unix_ms,
@@ -242,18 +242,30 @@ pub(super) fn current_executable_sha256() -> Result<String> {
         .with_context(|| format!("hash certification executable {}", executable.display()))
 }
 
-#[allow(clippy::too_many_arguments)]
-pub(super) fn write_failed_attempt(
-    mode: CertMode,
-    out_dir: &Path,
-    environment: &RunEnvironment,
-    config: &CertConfig,
-    runs: &[EngineRun],
-    approved_profile_sha256: Option<String>,
-    execution_evidence: &ValidatedEvidence,
-    attempt_receipt_sha256: String,
-    reason: String,
-) -> Result<()> {
+pub(super) struct FailedAttempt<'a> {
+    pub mode: CertMode,
+    pub out_dir: &'a Path,
+    pub environment: &'a RunEnvironment,
+    pub config: &'a CertConfig,
+    pub runs: &'a [EngineRun],
+    pub approved_profile_sha256: Option<String>,
+    pub execution_evidence: &'a ValidatedEvidence,
+    pub attempt_receipt_sha256: String,
+    pub reason: String,
+}
+
+pub(super) fn write_failed_attempt(attempt: FailedAttempt<'_>) -> Result<()> {
+    let FailedAttempt {
+        mode,
+        out_dir,
+        environment,
+        config,
+        runs,
+        approved_profile_sha256,
+        execution_evidence,
+        attempt_receipt_sha256,
+        reason,
+    } = attempt;
     let raw = RawReceipt {
         schema_version: SCHEMA_VERSION.to_owned(),
         environment: environment.clone(),
@@ -290,6 +302,8 @@ pub(super) fn write_failed_attempt(
         artifact_sha256: current_executable_sha256()?,
         attempt_receipt: "attempt.json".to_owned(),
         attempt_receipt_sha256,
+        cleanup_receipt: None,
+        cleanup_receipt_sha256: None,
         failure_reasons: vec![reason],
         environment: environment.clone(),
         config: config.clone(),

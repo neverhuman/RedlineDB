@@ -346,7 +346,7 @@ release-smoke:
     - apt-get update -qq
     - >-
       DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends
-      build-essential ca-certificates clang curl mold zlib1g-dev jq util-linux docker.io
+      build-essential ca-certificates clang curl mold zlib1g-dev jq util-linux docker.io netcat-openbsd
     - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
     - 'for n in $(seq 1 60); do docker info >/dev/null 2>&1 && break; [ "$n" -lt 60 ] || exit 1; sleep 1; done'
 
@@ -989,8 +989,6 @@ interaction-volume-daily:
   retry: 0
   resource_group: redline-heavy-benchmark
   rules:
-    - if: '$CI_PIPELINE_SOURCE == "schedule" && $CI_PROJECT_PATH == "jeryu/redline-core" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_COMMIT_REF_PROTECTED == "true"'
-      when: on_success
     - when: never
   script: [bash ops/ci/interaction-volume-ci-entrypoint.sh daily]
   artifacts:

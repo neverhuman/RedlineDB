@@ -149,7 +149,7 @@ fn attempt_plan_covers_every_engine_and_one_delayed_growth_soak() {
 }
 
 #[test]
-fn gitlab_daily_certificate_is_pinned_serialized_and_not_retried() {
+fn daily_is_serialized_but_blocked_without_checked_in_jeryu_authority() {
     fn job_block<'a>(yaml: &'a str, name: &str) -> &'a str {
         let marker = format!("{name}:");
         let start = yaml
@@ -205,9 +205,8 @@ fn gitlab_daily_certificate_is_pinned_serialized_and_not_retried() {
     assert!(!daily.contains("REDLINEDB_POSTGRES_CERT_CI_SERVICE"));
     assert!(daily.contains("interaction-volume-ci-entrypoint.sh daily"));
     assert!(daily.contains("expire_in: 90 days"));
-    assert!(daily.contains("CI_PIPELINE_SOURCE == \"schedule\""));
-    assert!(daily.contains("CI_PROJECT_PATH == \"jeryu/redline-core\""));
-    assert!(daily.contains("CI_COMMIT_REF_PROTECTED == \"true\""));
+    assert!(daily.contains("- when: never"));
+    assert!(!daily.contains("CI_PIPELINE_SOURCE == \"schedule\""));
     assert!(!daily.contains("when: manual"));
 
     let wrapper = include_str!("../../../../ops/ci/interaction-volume-cert.sh");
@@ -222,15 +221,20 @@ fn gitlab_daily_certificate_is_pinned_serialized_and_not_retried() {
     ))
     .unwrap();
     assert_eq!(trigger["daily_job"], "interaction-volume-daily");
+    assert_eq!(trigger["daily_enabled"], false);
+    assert_eq!(trigger["authoritative_ci"], "host-native-jeryu-required");
     assert_eq!(trigger["canonical_project_path"], "jeryu/redline-core");
     assert_eq!(trigger["canonical_branch"], "main");
-    assert_eq!(
-        trigger["permitted_daily_sources"],
-        serde_json::json!(["schedule"])
-    );
+    assert_eq!(trigger["permitted_daily_sources"], serde_json::json!([]));
     assert_eq!(trigger["artifact_retention_days"], 90);
     assert_eq!(trigger["runtime_trigger_receipt"], "trigger-evidence.json");
-    assert_eq!(trigger["job_token_attestation_endpoint"], "/api/v4/job");
+    assert_eq!(
+        trigger["attestation_authority"]["kind"],
+        "host_ci_jeryu_exact_head"
+    );
+    assert!(trigger["attestation_authority"]["canonical_https_origin"].is_null());
+    assert!(trigger["attestation_authority"]["ca_bundle_sha256"].is_null());
+    assert!(trigger["attestation_authority"]["signature_key_id"].is_null());
     assert_eq!(
         trigger["interruption_receipt_tests"],
         serde_json::json!(["postgres_timeout", "postgres_sigterm"])
