@@ -2614,12 +2614,12 @@ fn immutable_tag_command_impl(
 fn validate_canonical_manifest_authority(
     manifest_path: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let control_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    let expected = control_root.join("repos.manifest.toml");
-    let redline_expected = control_root
-        .parent()
-        .ok_or("Jain control root has no parent")?
-        .join("redline-split-ops/repos.manifest.toml");
+    // Anchor to the declared absolute authority, NOT the crate build dir:
+    // a splitctl built inside a linked worktree must still accept only the
+    // one true authority (and reject the worktree's own manifest copy).
+    let expected = PathBuf::from("/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml");
+    let redline_expected =
+        PathBuf::from("/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml");
     let actual = fs::canonicalize(manifest_path).map_err(|error| {
         format!(
             "canonicalize immutable-tag manifest {}: {error}",
@@ -7681,7 +7681,8 @@ protection_policy = "immutable-main-v1"
 
     #[test]
     fn immutable_tag_accepts_only_the_compiled_canonical_manifest_authority() {
-        let canonical = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let canonical =
+            PathBuf::from("/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml");
         validate_canonical_manifest_authority(&canonical).unwrap();
 
         let root = TestDir::new("noncanonical-tag-manifest");
@@ -7697,20 +7698,13 @@ protection_policy = "immutable-main-v1"
 
     #[test]
     fn python_boundary_allows_only_rust_parity_surfaces() {
-        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .unwrap()
-            .to_path_buf();
-        let registry = load_python_parity_exceptions(
-            &root,
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("python-parity-exceptions.toml"),
-        )
-        .unwrap();
-        let inline_registry = load_python_inline_parity_exceptions(
-            &root,
-            &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("python-parity-exceptions.toml"),
-        )
-        .unwrap();
+        // Fixture paths live at the canonical split root; a worktree-built test
+        // binary must not resolve siblings relative to its own build dir.
+        let root = PathBuf::from("/home/ubuntu/jain-split");
+        let exceptions =
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("python-parity-exceptions.toml");
+        let registry = load_python_parity_exceptions(&root, &exceptions).unwrap();
+        let inline_registry = load_python_inline_parity_exceptions(&root, &exceptions).unwrap();
         let fixture = &registry["jain-deploy/ops/ci/testdata/invention-export/model.py"];
         assert_eq!(fixture.rust_owner, "jain-deploy/release-engineering");
         assert!(valid_hex(&fixture.input_sha256, 64));
