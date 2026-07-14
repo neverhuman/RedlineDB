@@ -47,6 +47,387 @@ jain_native_library_path() {
   esac
 }
 
+# Extract the native materializer and its authority from the exact control-plane
+# commit. Mutable working-tree copies are deliberately not executable inputs.
+# On success, the three JAIN_NATIVE_* variables below name the verified bundle.
+jain_extract_native_materializer() {
+  local ops_root="${1:?control-plane root is required}"
+  local destination="${2:?materializer destination is required}"
+  local reviewed_remote="${3:?reviewed control-plane remote is required}"
+  local commit path expected actual remote reviewed_commit
+  local -a paths=(
+    ops/ci/native-materializer.sh
+    ops/ci/native-sources.lock.json
+    ops/ci/native-sources.lock.json.sha256
+  )
+
+  case "$destination" in
+    /*) ;;
+    *)
+      printf 'native materializer destination must be absolute: %s\n' "$destination" >&2
+      return 1
+      ;;
+  esac
+  commit="$(git -C "$ops_root" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" || {
+    printf 'cannot resolve exact control-plane commit: %s\n' "$ops_root" >&2
+    return 1
+  }
+  remote="$(git -C "$ops_root" remote get-url origin 2>/dev/null)" || {
+    printf 'control-plane origin is unavailable: %s\n' "$ops_root" >&2
+    return 1
+  }
+  [[ "$remote" == "$reviewed_remote" ]] || {
+    printf 'control-plane origin does not match reviewed authority: %s != %s\n' \
+      "$remote" "$reviewed_remote" >&2
+    return 1
+  }
+  reviewed_commit="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    git ls-remote --exit-code "$reviewed_remote" refs/heads/main 2>/dev/null | cut -f1)" || {
+    printf 'cannot read reviewed control-plane main from origin\n' >&2
+    return 1
+  }
+  [[ "$commit" == "$reviewed_commit" ]] || {
+    printf 'control-plane materializer commit is not reviewed origin/main: %s != %s\n' \
+      "$commit" "$reviewed_commit" >&2
+    return 1
+  }
+  for path in "${paths[@]}"; do
+    git -C "$ops_root" cat-file -e "$commit:$path" 2>/dev/null || {
+      printf 'reviewed control-plane commit lacks native input: %s\n' "$path" >&2
+      return 1
+    }
+    if [[ -n "$(git -C "$ops_root" status --porcelain=v1 --untracked-files=all -- "$path")" ]]; then
+      printf 'mutable control-plane native input is not allowed: %s\n' "$path" >&2
+      return 1
+    fi
+  done
+
+  mkdir -p "$destination"
+  for path in "${paths[@]}"; do
+    git -C "$ops_root" show "$commit:$path" >"$destination/${path##*/}" || return 1
+  done
+  (
+    cd "$destination"
+    sha256sum -c native-sources.lock.json.sha256 >/dev/null
+  ) || {
+    printf 'native source authority sidecar verification failed\n' >&2
+    return 1
+  }
+  expected="$(jq -er \
+    '.materializer.path == "ops/ci/native-materializer.sh"
+     and (.materializer.sha256 | test("^[0-9a-f]{64}$"))
+     | select(.)' "$destination/native-sources.lock.json" >/dev/null && \
+    jq -er '.materializer.sha256' "$destination/native-sources.lock.json")" || {
+    printf 'native source authority has an invalid materializer binding\n' >&2
+    return 1
+  }
+  actual="$(sha256sum -- "$destination/native-materializer.sh" | cut -d' ' -f1)"
+  [[ "$actual" == "$expected" ]] || {
+    printf 'reviewed native materializer digest mismatch: expected %s, got %s\n' \
+      "$expected" "$actual" >&2
+    return 1
+  }
+  chmod 0555 "$destination/native-materializer.sh"
+  chmod 0444 "$destination/native-sources.lock.json" \
+    "$destination/native-sources.lock.json.sha256"
+  JAIN_NATIVE_CONTROL_COMMIT="$commit"
+  JAIN_NATIVE_MATERIALIZER="$destination/native-materializer.sh"
+  JAIN_NATIVE_AUTHORITY="$destination/native-sources.lock.json"
+  export JAIN_NATIVE_CONTROL_COMMIT JAIN_NATIVE_MATERIALIZER JAIN_NATIVE_AUTHORITY
+}
+
+jain_native_source_root() {
+  local input="${1:?native source root is required}"
+  if [[ -d "$input/vendor/catboost" ]]; then
+    printf '%s\n' "$input/vendor"
+  elif [[ -d "$input/catboost" ]]; then
+    printf '%s\n' "$input"
+  else
+    printf 'native source root must contain catboost/, xgboost/, and lightgbm/: %s\n' \
+      "$input" >&2
+    return 1
+  fi
+}
+
+# Create clean detached worktrees at the authority revisions. The canonical
+# source checkout may contain build/pruning changes; none are read. Git object,
+# tree, and SHA-256 tree-manifest identities are verified before checkout.
+jain_stage_native_source_worktrees() {
+  local authority="${1:?native source authority is required}"
+  local source_input="${2:?native source root is required}"
+  local staged_root="${3:?staged native source root is required}"
+  local source_root learner revision tree manifest actual
+  local sub_count index sub_path sub_revision sub_tree sub_manifest
+  local -a learners=()
+
+  source_root="$(jain_native_source_root "$source_input")" || return 1
+  case "$staged_root" in
+    /*) ;;
+    *)
+      printf 'staged native source root must be absolute: %s\n' "$staged_root" >&2
+      return 1
+      ;;
+  esac
+  [[ ! -e "$staged_root" ]] || {
+    printf 'staged native source root already exists: %s\n' "$staged_root" >&2
+    return 1
+  }
+  mkdir -p "$staged_root"
+  mapfile -t learners < <(jq -er '.learners[].name' "$authority")
+  [[ "${#learners[@]}" -eq 3 ]] || return 1
+
+  for learner in "${learners[@]}"; do
+    revision="$(jq -er --arg learner "$learner" \
+      '.learners[] | select(.name == $learner) | .revision' "$authority")" || return 1
+    tree="$(jq -er --arg learner "$learner" \
+      '.learners[] | select(.name == $learner) | .git_tree' "$authority")" || return 1
+    manifest="$(jq -er --arg learner "$learner" \
+      '.learners[] | select(.name == $learner) | .tree_manifest_sha256' \
+      "$authority")" || return 1
+    [[ -d "$source_root/$learner" ]] || {
+      printf 'native source repository is missing: %s\n' "$source_root/$learner" >&2
+      jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+      return 1
+    }
+    actual="$(git -C "$source_root/$learner" rev-parse --verify 'HEAD^{commit}' 2>/dev/null || true)"
+    [[ "$actual" == "$revision" ]] || {
+      printf '%s native object source revision mismatch: expected %s, got %s\n' \
+        "$learner" "$revision" "${actual:-unresolved}" >&2
+      jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+      return 1
+    }
+    actual="$(git -C "$source_root/$learner" rev-parse --verify "$revision^{tree}" 2>/dev/null || true)"
+    [[ "$actual" == "$tree" ]] || {
+      printf '%s native object source tree mismatch\n' "$learner" >&2
+      jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+      return 1
+    }
+    actual="$(git -C "$source_root/$learner" ls-tree -r --full-tree "$revision" \
+      | sha256sum | cut -d' ' -f1)"
+    [[ "$actual" == "$manifest" ]] || {
+      printf '%s native object source manifest mismatch\n' "$learner" >&2
+      jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+      return 1
+    }
+    git -C "$source_root/$learner" worktree add --quiet --detach \
+      "$staged_root/$learner" "$revision" || {
+      jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+      return 1
+    }
+    sub_count="$(jq -er --arg learner "$learner" \
+      '.learners[] | select(.name == $learner) | (.submodules // []) | length' \
+      "$authority")" || return 1
+    for ((index = 0; index < sub_count; index++)); do
+      sub_path="$(jq -er --arg learner "$learner" --argjson index "$index" \
+        '.learners[] | select(.name == $learner) | .submodules[$index].path' \
+        "$authority")" || return 1
+      sub_revision="$(jq -er --arg learner "$learner" --argjson index "$index" \
+        '.learners[] | select(.name == $learner) | .submodules[$index].revision' \
+        "$authority")" || return 1
+      sub_tree="$(jq -er --arg learner "$learner" --argjson index "$index" \
+        '.learners[] | select(.name == $learner) | .submodules[$index].git_tree' \
+        "$authority")" || return 1
+      sub_manifest="$(jq -er --arg learner "$learner" --argjson index "$index" \
+        '.learners[] | select(.name == $learner) | .submodules[$index].tree_manifest_sha256' \
+        "$authority")" || return 1
+      [[ -d "$source_root/$learner/$sub_path" ]] || {
+        printf '%s pinned submodule object source is missing: %s\n' \
+          "$learner" "$sub_path" >&2
+        jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+        return 1
+      }
+      actual="$(git -C "$source_root/$learner/$sub_path" \
+        rev-parse --verify 'HEAD^{commit}' 2>/dev/null || true)"
+      [[ "$actual" == "$sub_revision" ]] || {
+        printf '%s pinned submodule revision mismatch: %s\n' "$learner" "$sub_path" >&2
+        jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+        return 1
+      }
+      actual="$(git -C "$source_root/$learner/$sub_path" \
+        rev-parse --verify "$sub_revision^{tree}" 2>/dev/null || true)"
+      [[ "$actual" == "$sub_tree" ]] || {
+        printf '%s pinned submodule tree mismatch: %s\n' "$learner" "$sub_path" >&2
+        jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+        return 1
+      }
+      actual="$(git -C "$source_root/$learner/$sub_path" \
+        ls-tree -r --full-tree "$sub_revision" | sha256sum | cut -d' ' -f1)"
+      [[ "$actual" == "$sub_manifest" ]] || {
+        printf '%s pinned submodule manifest mismatch: %s\n' "$learner" "$sub_path" >&2
+        jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+        return 1
+      }
+      mkdir -p "$(dirname "$staged_root/$learner/$sub_path")"
+      git -C "$source_root/$learner/$sub_path" worktree add --quiet --detach \
+        "$staged_root/$learner/$sub_path" "$sub_revision" || {
+        jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+        return 1
+      }
+    done
+  done
+}
+
+jain_cleanup_native_source_worktrees() {
+  local authority="${1:?native source authority is required}"
+  local source_input="${2:?native source root is required}"
+  local staged_root="${3:?staged native source root is required}"
+  local source_root learner sub_count index sub_path
+  local -a learners=()
+  source_root="$(jain_native_source_root "$source_input" 2>/dev/null || printf '%s' "$source_input")"
+  mapfile -t learners < <(jq -r '.learners[]?.name' "$authority" 2>/dev/null)
+  for learner in "${learners[@]}"; do
+    [[ -d "$source_root/$learner" ]] || continue
+    sub_count="$(jq -r --arg learner "$learner" \
+      '.learners[] | select(.name == $learner) | (.submodules // []) | length' \
+      "$authority" 2>/dev/null || printf '0')"
+    for ((index = sub_count - 1; index >= 0; index--)); do
+      sub_path="$(jq -r --arg learner "$learner" --argjson index "$index" \
+        '.learners[] | select(.name == $learner) | .submodules[$index].path' \
+        "$authority" 2>/dev/null || true)"
+      [[ -n "$sub_path" && -d "$source_root/$learner/$sub_path" ]] || continue
+      git -C "$source_root/$learner/$sub_path" worktree remove --force \
+        "$staged_root/$learner/$sub_path" >/dev/null 2>&1 || true
+    done
+    git -C "$source_root/$learner" worktree remove --force \
+      "$staged_root/$learner" >/dev/null 2>&1 || true
+  done
+  rm -rf -- "$staged_root"
+}
+
+jain_write_sha256_sidecar() {
+  local file="${1:?file is required}"
+  (
+    cd "$(dirname "$file")" || exit 1
+    sha256sum "$(basename "$file")" >"$(basename "$file").sha256"
+  )
+}
+
+jain_verify_sha256_sidecar() {
+  local file="${1:?file is required}"
+  [[ -f "$file" && -f "$file.sha256" ]] || return 1
+  (
+    cd "$(dirname "$file")" || exit 1
+    sha256sum -c "$(basename "$file").sha256" >/dev/null
+  )
+}
+
+jain_verify_native_evidence() {
+  local evidence_dir="${1:?native evidence directory is required}"
+  local expected_sha="${2:-}" expected_check="${3:-}"
+  local file
+  for file in materialization.log native-vendor-manifest.json \
+    native-sources.lock.json native-materializer.sh receipt.json; do
+    jain_verify_sha256_sidecar "$evidence_dir/$file" || return 1
+  done
+  jq -e --arg expected_sha "$expected_sha" --arg expected_check "$expected_check" \
+    'select(.schema_version == "jain.host-native-materialization/v1")
+     | select(($expected_sha == "" or .head_sha == $expected_sha)
+       and ($expected_check == "" or .required_check == $expected_check))
+     | select(.head_sha | test("^[0-9a-f]{40}$"))
+     | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
+     | select(.status == "pass")' "$evidence_dir/receipt.json" >/dev/null || return 1
+  jq -e \
+    --arg log "$(sha256sum -- "$evidence_dir/materialization.log" | cut -d' ' -f1)" \
+    --arg manifest "$(sha256sum -- "$evidence_dir/native-vendor-manifest.json" | cut -d' ' -f1)" \
+    --arg authority "$(sha256sum -- "$evidence_dir/native-sources.lock.json" | cut -d' ' -f1)" \
+    --arg materializer "$(sha256sum -- "$evidence_dir/native-materializer.sh" | cut -d' ' -f1)" \
+    '.log_sha256 == $log
+     and .native_vendor_manifest_sha256 == $manifest
+     and .authority.sha256 == $authority
+     and .materializer.sha256 == $materializer' \
+    "$evidence_dir/receipt.json" >/dev/null
+}
+
+jain_verify_native_evidence_binding() {
+  local evidence_dir="${1:?native evidence directory is required}"
+  local expected_receipt_sha="${2:?native receipt digest is required}"
+  local expected_head="${3:-}" expected_check="${4:-}"
+  [[ "$expected_receipt_sha" =~ ^[0-9a-f]{64}$ ]] || return 1
+  jain_verify_native_evidence "$evidence_dir" "$expected_head" "$expected_check" || return 1
+  [[ "$(sha256sum -- "$evidence_dir/receipt.json" | cut -d' ' -f1)" == \
+    "$expected_receipt_sha" ]]
+}
+
+# Persist all native inputs, output manifest, and log outside the disposable
+# host-CI tree. The receipt digest is later included in the exact-SHA status.
+jain_persist_native_evidence() {
+  local vendor_root="${1:?native vendor root is required}"
+  local log="${2:?native materialization log is required}"
+  local evidence_root="${3:?native evidence root is required}"
+  local ephemeral_root="${4:?ephemeral CI root is required}"
+  local owner="${5:?owner is required}" repo="${6:?repository is required}"
+  local head_sha="${7:?head SHA is required}" check="${8:?required check is required}"
+  local control_commit="${9:?control-plane commit is required}"
+  local authority="${10:?native authority is required}"
+  local materializer="${11:?native materializer is required}"
+  local check_slug attempt parent staging destination recorded_at file
+
+  [[ "$head_sha" =~ ^[0-9a-f]{40}$ && "$control_commit" =~ ^[0-9a-f]{40}$ ]] || return 1
+  [[ "$owner" =~ ^[A-Za-z0-9_.-]+$ && "$repo" =~ ^[A-Za-z0-9_.-]+$ ]] || return 1
+  case "$evidence_root" in
+    /*) ;;
+    *)
+      printf 'native evidence root must be absolute: %s\n' "$evidence_root" >&2
+      return 1
+      ;;
+  esac
+  case "$evidence_root/" in
+    "$ephemeral_root/"*)
+      printf 'native evidence root must survive ephemeral cleanup: %s\n' "$evidence_root" >&2
+      return 1
+      ;;
+  esac
+  [[ -s "$log" && -s "$vendor_root/receipts/manifest.json" ]] || return 1
+  check_slug="${check//[^A-Za-z0-9_.-]/_}"
+  attempt="${JAIN_CI_ATTEMPT_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+  [[ "$attempt" =~ ^[A-Za-z0-9_.-]+$ ]] || return 1
+  parent="$evidence_root/$owner/$repo/$head_sha/$check_slug"
+  destination="$parent/$attempt"
+  mkdir -p "$parent"
+  [[ ! -e "$destination" ]] || return 1
+  staging="$(mktemp -d "$parent/.staging.XXXXXX")"
+  cp -- "$log" "$staging/materialization.log"
+  cp -- "$vendor_root/receipts/manifest.json" "$staging/native-vendor-manifest.json"
+  cp -- "$authority" "$staging/native-sources.lock.json"
+  cp -- "$materializer" "$staging/native-materializer.sh"
+  recorded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  jq -n --arg owner "$owner" --arg repo "$repo" --arg head_sha "$head_sha" \
+    --arg required_check "$check" --arg recorded_at "$recorded_at" \
+    --arg control_commit "$control_commit" \
+    --arg log_sha256 "$(sha256sum -- "$staging/materialization.log" | cut -d' ' -f1)" \
+    --arg manifest_sha256 "$(sha256sum -- "$staging/native-vendor-manifest.json" | cut -d' ' -f1)" \
+    --arg authority_sha256 "$(sha256sum -- "$staging/native-sources.lock.json" | cut -d' ' -f1)" \
+    --arg materializer_sha256 "$(sha256sum -- "$staging/native-materializer.sh" | cut -d' ' -f1)" \
+    --slurpfile manifest "$staging/native-vendor-manifest.json" \
+    '{schema_version:"jain.host-native-materialization/v1",recorded_at:$recorded_at,
+      owner:$owner,repository:$repo,head_sha:$head_sha,required_check:$required_check,
+      status:"pass",control_plane_commit:$control_commit,
+      authority:{file:"native-sources.lock.json",sha256:$authority_sha256},
+      materializer:{file:"native-materializer.sh",sha256:$materializer_sha256},
+      log_file:"materialization.log",log_sha256:$log_sha256,
+      native_vendor_manifest_file:"native-vendor-manifest.json",
+      native_vendor_manifest_sha256:$manifest_sha256,
+      native_vendor_manifest:$manifest[0]}' >"$staging/receipt.json"
+  for file in materialization.log native-vendor-manifest.json \
+    native-sources.lock.json native-materializer.sh receipt.json; do
+    jain_write_sha256_sidecar "$staging/$file" || {
+      rm -rf -- "$staging"
+      return 1
+    }
+  done
+  jain_verify_native_evidence "$staging" "$head_sha" "$check" || {
+    rm -rf -- "$staging"
+    return 1
+  }
+  mv -- "$staging" "$destination"
+  jain_verify_native_evidence "$destination" "$head_sha" "$check" || return 1
+  JAIN_NATIVE_EVIDENCE_DIR="$destination"
+  JAIN_NATIVE_EVIDENCE_SHA256="$(sha256sum -- "$destination/receipt.json" | cut -d' ' -f1)"
+  jain_verify_native_evidence_binding "$destination" "$JAIN_NATIVE_EVIDENCE_SHA256" \
+    "$head_sha" "$check" || return 1
+  export JAIN_NATIVE_EVIDENCE_DIR JAIN_NATIVE_EVIDENCE_SHA256
+}
+
 jain_prepare_native_runtime() {
   local vendor_root="${1:?native vendor root is required}"
   local learner dir

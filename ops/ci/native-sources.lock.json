@@ -1,0 +1,96 @@
+{
+  "schema_version": "jain.native-source-authority/v1",
+  "materializer": {
+    "path": "ops/ci/native-materializer.sh",
+    "sha256": "7d7f436b5692b87d8e9d78614687ba9c0dc28f5ce46be1c350456cec34727fc2"
+  },
+  "learners": [
+    {
+      "name": "catboost",
+      "revision": "b1bd2a6d77219e82a1acfcedfccb8e6f6c1ee084",
+      "git_tree": "7da64b65183cd767998e63c63c56cd529229267d",
+      "tree_manifest_sha256": "9f93a73f6e0956fefe1ac0e2e2b7da125ce67a85237c62c100bd198e8f1214a1",
+      "source_content_sha256": "fc15842475e38443b9525b979ed6102190a7ba55c9ff44c5a2e95f2a55081ba2",
+      "required_files": [
+        "CMakeLists.txt",
+        "build/toolchains/clang.toolchain",
+        "catboost/libs/train_interface/CMakeLists.linux-x86_64.txt"
+      ],
+      "submodules": []
+    },
+    {
+      "name": "xgboost",
+      "revision": "62e7923619352c4079b24303b367134486b1c84f",
+      "git_tree": "5056140ec7fae172d6d14798bab0294684071ccf",
+      "tree_manifest_sha256": "4f84c6324779e395488917f102e01fbce3e2f1cb4842af77d70ba39369b2cd1a",
+      "source_content_sha256": "eb389dee816598baac4e119d8197a12a24dec3e6aa14a293eddbd7129809e09c",
+      "required_files": [
+        "CMakeLists.txt",
+        "include/xgboost/c_api.h"
+      ],
+      "submodules": [
+        {
+          "path": "dmlc-core",
+          "revision": "13341857549852a9a86b1894b5ba84c6276ab381",
+          "git_tree": "8b4f5726292c4d48873c01c9a7322fb46b718abd",
+          "tree_manifest_sha256": "bb64e17443304326bf4da89c5b10be85ea42ef73a955b71b5dffebfb167a1c41"
+        },
+        {
+          "path": "gputreeshap",
+          "revision": "787259b412c18ab8d5f24bf2b8bd6a59ff8208f3",
+          "git_tree": "81ea28d0d7a25dd3e7a7767133b58aa280b6bbec",
+          "tree_manifest_sha256": "b3d877f6d8fe7947fd4b43a4dffe8af8e63467e5340714aa47c8e883c79f098b"
+        }
+      ]
+    },
+    {
+      "name": "lightgbm",
+      "revision": "d02a01ac6f51d36c9e62388243bcb75c3b1b1774",
+      "git_tree": "d2cca7c9da1bbe184be03acf824d0bde358bfae0",
+      "tree_manifest_sha256": "b73f847f108fc97ba4ad355f1157cf7513859b07bf105c181a20b46aad24191a",
+      "source_content_sha256": "4ccc68f7829796fa10fecd0e6c3e5106d5f783af086e9f2190a607dae21e17ac",
+      "required_files": [
+        "CMakeLists.txt",
+        "include/LightGBM/c_api.h"
+      ],
+      "submodules": [
+        {
+          "path": "external_libs/compute",
+          "revision": "36350b7de849300bd3d72a05d8bf890ca405a014",
+          "git_tree": "a40d50dee005bb158145c2dd9470162123ab50f6",
+          "tree_manifest_sha256": "1e5b9b2531e0b37111175928ff872b7bf87a61d4202b3152b8c75d3dbeeab793"
+        },
+        {
+          "path": "external_libs/eigen",
+          "revision": "3147391d946bb4b6c68edd901f2add6ac1f31f8c",
+          "git_tree": "228ffa5204a0035e58a3e57798dcf23eda0134f2",
+          "tree_manifest_sha256": "7f9d1ff10c74be3c65a1b24447e30a8a46990fa025cf8371fcec1f6d409ad1fb"
+        },
+        {
+          "path": "external_libs/fast_double_parser",
+          "revision": "252029ddac664370bdda3f0761675785d92a1573",
+          "git_tree": "ec8bfd651aba891959ef71546d97dd1e90cae8d4",
+          "tree_manifest_sha256": "10b316448ba461ac319033d3c97592b13f7d27909eeeb989e1646ec2031406ab"
+        },
+        {
+          "path": "external_libs/fast_double_parser/benchmarks/dependencies/abseil-cpp",
+          "revision": "d936052d32a5b7ca08b0199a6724724aea432309",
+          "git_tree": "f14866c5460c73ba3ba3812941a0426ad51496cd",
+          "tree_manifest_sha256": "a488479ffddf9b8f3d65f4b3cfa294b586f2d03b71a3e86a8e3dd291d4e9df74"
+        },
+        {
+          "path": "external_libs/fast_double_parser/benchmarks/dependencies/double-conversion",
+          "revision": "f4cb2384efa55dee0e6652f8674b05763441ab09",
+          "git_tree": "fa50e95f47d9d4b1b13334a1d707a6faa5caea22",
+          "tree_manifest_sha256": "a5c9924afa2976746ba97fe581b8f4689d63174e7eea7dd4c5c165553ee03338"
+        },
+        {
+          "path": "external_libs/fmt",
+          "revision": "8303d140a1a11f19b982a9f664bbe59a1ccda3f4",
+          "git_tree": "21f558cd4a653dc66523cb6297a98c81656e85c7",
+          "tree_manifest_sha256": "e1deea6d8adbe3a54e15a7ef68c853278a6a8c48ddea30645a39f3913ae037cd"
+        }
+      ]
+    }
+  ]
+}

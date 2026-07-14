@@ -37,14 +37,22 @@ jeryu_token() {
   [ -r "$f" ] && tr -d '\n' < "$f"
 }
 post_check() {
-  local conclusion="$1" token
+  local conclusion="$1" token description
   token="$(jeryu_token)"
   if [ -z "$token" ]; then say "no merge token; cannot post required status"; return 1; fi
+  if [ -n "${JAIN_NATIVE_EVIDENCE_DIR:-}" ]; then
+    jain_verify_native_evidence_binding "$JAIN_NATIVE_EVIDENCE_DIR" \
+      "${JAIN_NATIVE_EVIDENCE_SHA256:-}" "$SHA" "$CHECK" || {
+      say "native evidence failed verification before status publication"
+      return 1
+    }
+  fi
   # A check-run is the human-facing run record.
   curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/check-runs" \
     -H "Authorization: Bearer $token" \
     -H 'content-type: application/json' \
-    -d "{\"name\":\"$CHECK\",\"head_sha\":\"$SHA\",\"status\":\"completed\",\"conclusion\":\"$conclusion\"}" \
+    -d "$(jq -cn --arg name "$CHECK" --arg sha "$SHA" --arg conclusion "$conclusion" \
+      '{name:$name,head_sha:$sha,status:"completed",conclusion:$conclusion}')" \
     >/dev/null || return 1
   say "posted check-run $CHECK=$conclusion on ${SHA:0:8}"
   # Branch protection gates on a COMMIT STATUS (required_status_checks.contexts), which is a
@@ -52,10 +60,16 @@ post_check() {
   # The status must be keyed on the FULL head sha the PR records (short shas do not match).
   local status_state="failure"
   [ "$conclusion" = "success" ] && status_state="success"
+  description="$CHECK via split-host-ci"
+  if [ -n "${JAIN_NATIVE_EVIDENCE_SHA256:-}" ]; then
+    description="$CHECK native-receipt=$JAIN_NATIVE_EVIDENCE_SHA256"
+  fi
   curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/statuses/$SHA" \
     -H "Authorization: Bearer $token" \
     -H 'content-type: application/json' \
-    -d "{\"state\":\"$status_state\",\"context\":\"$CHECK\",\"description\":\"$CHECK via split-host-ci\"}" \
+    -d "$(jq -cn --arg state "$status_state" --arg context "$CHECK" \
+      --arg description "$description" \
+      '{state:$state,context:$context,description:$description}')" \
     >/dev/null || return 1
   say "posted status $CHECK=$status_state on ${SHA:0:8}"
 }
@@ -96,6 +110,7 @@ run_release_cargo_commands() {
 }
 
 [ -e "$REPO_PATH/.git" ] || { echo "not a git repo: $REPO_PATH" >&2; exit 2; }
+command -v jq >/dev/null 2>&1 || { echo "host CI requires jq" >&2; exit 2; }
 curl -fsS "$JAIN_BASE/health" >/dev/null || { echo "forge not healthy" >&2; exit 2; }
 [ -n "$(jeryu_token)" ] || { echo "forge status credential is unavailable" >&2; exit 2; }
 
@@ -122,11 +137,19 @@ git -C "$REPO_PATH" cat-file -e "$SHA^{commit}" 2>/dev/null || { echo "sha $SHA 
 tmp="$(mktemp -d /tmp/split-host-ci.XXXXXX)"
 wt="$tmp/$REPO"
 native_vendor="$tmp/native-vendor"
-native_source_root="${JAIN_NATIVE_SOURCE_ROOT:-}"
+native_source_input="${JAIN_NATIVE_SOURCE_ROOT:-$SPLIT_ROOT/vendor}"
+native_source_root="$tmp/native-source"
+native_bundle="$tmp/native-materializer"
+native_authority=""
+native_materializer=""
 native_learners=()
 mapfile -t native_learners < <(jain_native_learners_for_repo "$REPO")
 cleanup() {
   git -C "$REPO_PATH" worktree remove -f "$wt" >/dev/null 2>&1 || true
+  if [ -n "$native_authority" ] && [ -f "$native_authority" ]; then
+    jain_cleanup_native_source_worktrees \
+      "$native_authority" "$native_source_input" "$native_source_root"
+  fi
   rm -rf "$tmp" >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -135,24 +158,43 @@ git -C "$REPO_PATH" worktree add -f --detach "$wt" "$SHA" >/dev/null 2>&1 \
   || { post_check failure; echo "worktree checkout failed" >&2; exit 1; }
 
 # Release Cargo policy may enable native learners even when the repository's
-# merge lane does not. Materialize one pinned private tree and export absolute
-# source/build roots before any required/release subprocess. Final library
-# directories are not pre-created; post-build checks inspect exact non-empty
-# learner outputs.
+# merge lane does not. Extract the materializer from the exact reviewed
+# control-plane commit, stage clean worktrees from authority-bound Git objects,
+# and preserve a checksummed receipt outside this disposable checkout.
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
-  native_bootstrap="$SPLIT_ROOT/jain-deploy/scripts/vendor-all.sh"
-  [ -x "$native_bootstrap" ] || {
-    echo "release CI native-vendor bootstrap missing: $native_bootstrap" >&2
+  command -v jq >/dev/null 2>&1 || {
+    echo "release CI native materialization requires jq" >&2
     exit 2
   }
-  unset JAIN_NATIVE_SOURCE_ROOT JAIN_VENDOR_ROOT
-  bootstrap_args=(env "JAIN_VENDOR_ROOT=$native_vendor")
-  [ -z "$native_source_root" ] || bootstrap_args+=("JAIN_NATIVE_SOURCE_ROOT=$native_source_root")
-  "${bootstrap_args[@]}" bash "$native_bootstrap" >"$tmp/native-vendor.log" 2>&1 || {
-    cat "$tmp/native-vendor.log" >&2
-    echo "release CI native-vendor bootstrap failed" >&2
+  jain_extract_native_materializer "$OPS_ROOT" "$native_bundle" \
+    "http://127.0.0.1:8787/git/veox/jain-split-ops.git" || {
+    echo "release CI exact native materializer extraction failed" >&2
     exit 1
   }
+  native_authority="$JAIN_NATIVE_AUTHORITY"
+  native_materializer="$JAIN_NATIVE_MATERIALIZER"
+  jain_stage_native_source_worktrees \
+    "$native_authority" "$native_source_input" "$native_source_root" || {
+    echo "release CI exact native source staging failed" >&2
+    exit 1
+  }
+  unset JAIN_NATIVE_SOURCE_ROOT JAIN_VENDOR_ROOT
+  "$native_materializer" --authority "$native_authority" \
+    --source-root "$native_source_root" --vendor-root "$native_vendor" \
+    >"$tmp/native-vendor.log" 2>&1 || {
+    cat "$tmp/native-vendor.log" >&2
+    echo "release CI exact native materialization failed" >&2
+    exit 1
+  }
+  jain_persist_native_evidence \
+    "$native_vendor" "$tmp/native-vendor.log" \
+    "${JAIN_NATIVE_EVIDENCE_ROOT:-$SPLIT_ROOT/target/host-ci-evidence/native-materialization}" \
+    "$tmp" "$OWNER" "$REPO" "$SHA" "$CHECK" \
+    "$JAIN_NATIVE_CONTROL_COMMIT" "$native_authority" "$native_materializer" || {
+    echo "release CI native materialization evidence persistence failed" >&2
+    exit 1
+  }
+  say "native materialization receipt: $JAIN_NATIVE_EVIDENCE_DIR/receipt.json ($JAIN_NATIVE_EVIDENCE_SHA256)"
   mkdir -p "$wt/target"
   ln -s "$native_vendor" "$wt/target/native-vendor"
   jain_prepare_native_runtime "$native_vendor" || {
