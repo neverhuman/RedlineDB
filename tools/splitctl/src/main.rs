@@ -7681,8 +7681,7 @@ protection_policy = "immutable-main-v1"
 
     #[test]
     fn immutable_tag_accepts_only_the_compiled_canonical_manifest_authority() {
-        let canonical =
-            PathBuf::from("/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml");
+        let canonical = PathBuf::from("/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml");
         validate_canonical_manifest_authority(&canonical).unwrap();
 
         let root = TestDir::new("noncanonical-tag-manifest");
