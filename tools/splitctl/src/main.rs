@@ -5393,6 +5393,14 @@ fn python_parity_invocation_allowed(
     })
 }
 
+fn canonical_preflight_manifest_failures(data: &toml::Value, manifest: &Path) -> Vec<String> {
+    validate_manifest_data(data, manifest, false)
+        .err()
+        .map(|error| error.to_string())
+        .into_iter()
+        .collect()
+}
+
 fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut manifest = root.join("repos.manifest.toml");
@@ -5405,8 +5413,8 @@ fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             value => return Err(format!("unknown preflight argument: {value}").into()),
         }
     }
-
     let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+    let canonical_manifest_failures = canonical_preflight_manifest_failures(&data, &manifest);
     let split_root =
         PathBuf::from(string(&data, "split_root").ok_or("manifest missing split_root")?);
     let repos = manifest_repos(&data)?;
@@ -5559,7 +5567,7 @@ fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         }));
     }
 
-    let mut manifest_failures = Vec::new();
+    let mut manifest_failures = canonical_manifest_failures;
     if string(&data, "release_version").as_deref() != Some("8.0.0") {
         manifest_failures.push("release_version must be 8.0.0".to_owned());
     }
@@ -8235,6 +8243,24 @@ name = "two"
         assert_eq!(
             string(&portal_data, "canonical_manifest_sha256"),
             Some(manifest_sha256(&manifest).unwrap())
+        );
+    }
+
+    #[test]
+    fn release_preflight_routes_authority_through_canonical_validation() {
+        let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let mut data: toml::Value = fs::read_to_string(&manifest).unwrap().parse().unwrap();
+        data.as_table_mut().unwrap().insert(
+            "status".to_owned(),
+            toml::Value::String("formal-ga".to_owned()),
+        );
+
+        let failures = canonical_preflight_manifest_failures(&data, &manifest);
+        assert!(
+            failures
+                .iter()
+                .any(|failure| failure.contains("status must be candidate")),
+            "canonical release metadata failure was not propagated: {failures:?}"
         );
     }
 }
