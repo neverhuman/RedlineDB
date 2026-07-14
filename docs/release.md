@@ -21,7 +21,8 @@ the product mirror. Following the protected control-plane merge,
 `proof-refresh --reconcile-successor` may atomically update only the exact
 checksummed predecessor mirror. Fresh family CI, the immutable successor tag,
 both consumer receipts, and normal proof refresh are still required before
-cutover.
+cutover. The protected reconciled receipt proves mirror equality while
+continuing to report `cutover_eligible=false`.
 
 The authorized corrective family identities are
 `redline-core-v4.1.0-jain.4`, `redline-v4.1.0-jain.2`,

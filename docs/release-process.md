@@ -18,7 +18,9 @@ Jain 8.0.0 but does not itself push images, change routes, or promote production
    `proof-refresh --reconcile-successor --receipt
    release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json` to
    update the mirror atomically, then submit that exact `reconciled` operation
-   receipt through protected review.
+   receipt through protected review. That review must pass
+   `successor-receipt-verify`, the checksum sidecar, `review-lock-verify`, and
+   the governed required/Jankurai gates without an exception or cap waiver.
 2. Run `bash ops/ci/quality-gates.sh` on the exact reviewed control commit.
 3. Run `just family-ci` with all child repositories clean, on `main`, and equal
    to local Jeryu. Preserve the receipt, checksum sidecar, and named logs.

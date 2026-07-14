@@ -49,6 +49,17 @@ both copies transactionally, and emits a `reconciled` receipt. Unrelated drift
 is rejected. Both receipt variants use `redline.proof-successor/v1` and have
 checksum sidecars.
 
+For the current successor, verify the protected artifact with:
+
+```bash
+./redlinectl successor-receipt-verify \
+  release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json
+./redlinectl review-lock-verify
+```
+
+These checks prove synchronization only; the receipt must continue to report
+`cutover_eligible=false` until normal two-consumer proof refresh completes.
+
 `just family-ci` is intentionally stronger: every child must be clean `main`,
 equal its local-Jeryu forge head, and either have no proposed tag yet or have an
 immutable tag already bound to that exact commit. It executes the complete

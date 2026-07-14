@@ -14,5 +14,7 @@ Use `./redlinectl doctor`, `./redlinectl validate`, and
 
 Operational boundaries are documented in `docs/architecture.md`; exact test,
 security, receipt, and repair commands are in `docs/testing.md`; cutover and
-rollback rules are in `docs/release.md`. New control-plane implementation and
-tests are Rust. Python belongs only in genuine cross-language parity harnesses.
+rollback rules are in `docs/release.md`. Generated evidence ownership is in
+`docs/generated-zones.md`, and audit acceptance is in
+`docs/audit-rubric.md`. New control-plane implementation and tests are Rust.
+Python belongs only in genuine cross-language parity harnesses.

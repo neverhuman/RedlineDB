@@ -142,6 +142,8 @@ bytes are the tool's exact manifest-bound rendering; operational `validate`,
 `lock-verify`, and `cutover-verify` remain strict and fail on the split state.
 `successor-receipt-verify` checksum-verifies the closed receipt fields, both
 canonical lock paths, predecessor/prepared digests, and exact engine identities.
+Generated-evidence ownership and merge-audit acceptance are documented in
+`docs/generated-zones.md` and `docs/audit-rubric.md`.
 After merge, reconcile once:
 
 ```bash

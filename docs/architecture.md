@@ -9,3 +9,9 @@ The container is deliberately not a Git repository and is not a Cargo
 workspace. `redline-split-ops` is a standalone Rust operational package, not a
 workspace or Redline product member. A copied Jain checkout can relocate the entire workspace by setting
 `REDLINE_SPLIT_ROOT`; no child path is derived from a fixed home directory.
+
+A Core successor crosses that boundary in two protected states. Preparation
+writes only the authoritative ineligible lock; reconciliation copies those
+exact reviewed bytes to the compatibility mirror and records a checksummed
+receipt. Neither state permits cutover. Family CI, the immutable tag, and two
+independent consumer proofs remain separate downstream authorities.
