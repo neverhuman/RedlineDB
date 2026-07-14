@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1784067858`
-- Started at: `1784067858`
-- Elapsed: `24693` ms
+- Run ID: `1784071715`
+- Started at: `1784071715`
+- Elapsed: `24609` ms
 - Scope: `full`
 - Raw score: `88`
 - Final score: `88`
@@ -70,15 +70,15 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`170` files=`456`
+- Status: `review` hard=`0` warning=`171` files=`456`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`303` tokens=`960` bytes=`8810`
+- Duplicate volume: lines=`304` tokens=`964` bytes=`8835`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
   - warning classes include same-body different-name units and token/block duplication
   - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
-  - showing the top 50 classes and omitting 120 lower-ranked classes
+  - showing the top 50 classes and omitting 121 lower-ranked classes
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
@@ -99,7 +99,7 @@
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 21 | `crates/cli/src/shellzero.rs:217-223, crates/redlinedb-lite/src/shellzero.rs:216-222` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 20 | `crates/sql/src/exec/agg/select.rs:9-15, crates/sql/src/planner/access/projection.rs:94-100` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 12 | `crates/sql/src/exec/policy.rs:32-38, crates/sql/src/exec/policy.rs:57-63` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/bench/src/interaction_volume/tests.rs:488-490, crates/bench/src/interaction_volume/tests.rs:492-494, crates/bench/src/interaction_volume/tests.rs:496-498, crates/bench/src/interaction_volume/tests.rs:500-502` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/bench/src/interaction_volume/tests.rs:492-494, crates/bench/src/interaction_volume/tests.rs:496-498, crates/bench/src/interaction_volume/tests.rs:500-502, crates/bench/src/interaction_volume/tests.rs:504-506` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser.rs:629-630, crates/sql/src/parser.rs:810-811, crates/sql/src/parser.rs:898-899, crates/sql/src/parser.rs:1107-1108, crates/sql/src/parser.rs:3055-3056, crates/sql/src/parser.rs:3119-3120` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 15 | `crates/sql/src/exec/mod.rs:1578-1583, crates/sql/src/exec/mod.rs:1593-1598` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 5 | 13 | `crates/sql/src/exec/agg/select.rs:103-108, crates/sql/src/planner/access/projection.rs:171-176` | `same-name semantic unit copied across multiple files` |
@@ -112,7 +112,7 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/sql/src/exec/expr/program.rs:970-971, crates/sql/src/exec/expr/program.rs:1027-1028, crates/sql/src/exec/expr/program.rs:1042-1043, crates/sql/src/exec/expr/program.rs:1096-1097, crates/sql/src/json/scalar.rs:539-540` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:102-104, crates/kernel/src/storage/control.rs:156-158, crates/kernel/src/storage/tx_status_checkpoint.rs:156-158` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 5 | `crates/redlinedb/src/connection.rs:154-158, crates/redlinedb/src/connection.rs:169-173` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `crates/bench/src/interaction_volume/evidence.rs:744-745, crates/bench/src/interaction_volume/evidence.rs:759-760, crates/bench/src/sqlite_parity/report_gen/io.rs:209-210, crates/cli/src/dot/control.rs:558-559, crates/cli/src/render.rs:1120-1121` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `crates/bench/src/interaction_volume/evidence.rs:563-564, crates/bench/src/interaction_volume/evidence.rs:578-579, crates/bench/src/sqlite_parity/report_gen/io.rs:209-210, crates/cli/src/dot/control.rs:558-559, crates/cli/src/render.rs:1120-1121` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111, crates/kernel/src/storage/numa.rs:47-49` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 16 | `crates/sql/src/exec/expr/scalar/value.rs:556-559, crates/sql/src/exec/expr/scalar/value.rs:710-713` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/statement.rs:937-938, crates/sql/src/statement.rs:945-946, crates/sql/src/statement.rs:953-954, crates/sql/src/statement.rs:960-961` | `same body appears under different names across files` |
@@ -238,7 +238,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-3. `medium` `proof` `ops/ci/interaction-volume-adversarial-test.sh:43`
+3. `medium` `proof` `ops/ci/interaction-volume-adversarial-test.sh:83`
    Rule: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP`
    Check: `HLT-027-HUMAN-REVIEW-EVIDENCE-GAP:proof` `soft` confidence `0.88`
    Route: TLR `Repair`, lane `audit`, owner `bench-harness`
@@ -247,8 +247,8 @@ No audited runtime boundary reclassifications declared.
    Reason: proof and review claims need receipts
    Fix: attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries
    Rerun: `just score`
-   Fingerprint: `sha256:375460ef69b44f4061aaa942668ea17e1f5ef8a28a4ffbe9e694f95b44636543`
-   Evidence: assert_daily_trigger_rejected fabricated_canonical_job \
+   Fingerprint: `sha256:86f93428a94ce8dca0e0f961a4d67d8098ba07c938781e51bb37217881f2bbe1`
+   Evidence: CI_API_V4_URL="http://127.0.0.1:${fake_port}/api/v4" CI_JOB_TOKEN=fabricated-token
 
 ## Policy
 

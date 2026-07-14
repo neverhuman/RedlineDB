@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:1ffbd51fe808c46a92a8e73ba338eb68248ba5652fddb4201bea5db52b309200",
-  "input_fingerprint": "sha256:56f0304602f2fe7002d32dca5cbe947e163fd9aa7846d7ff95ee06233d56c53e",
+  "report_fingerprint": "sha256:06db03b1992ca7c5a218614024b142a3de0708e6a4ba5fd6c37fc6bea4886390",
+  "input_fingerprint": "sha256:c0d5940cd927be57b41fe1669516cea1986dfce1f3a97a74ba14bf5ee61c910d",
   "policy_fingerprint": "sha256:f3702d5b24c5e4efdf85b7f92a200f6cf6d974930a5dcb38c1d1970599ba67d2",
   "manifest_fingerprints": {
     "owner_map": "sha256:5bc290f8d63325f42d75d140b3b43815a5c214885ae878809a19c61168bb5faf",
@@ -10,7 +10,7 @@
     "proof_lanes": "sha256:b05f61700db5b2916d6cbfba406b62fffd1d3f86c64817d0790b06a36cde1099"
   },
   "dirty_worktree": true,
-  "generated_at": "1784067858",
+  "generated_at": "1784071715",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -24,9 +24,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784067858",
-  "started_at": "1784067858",
-  "elapsed_ms": 24693,
+  "run_id": "1784071715",
+  "started_at": "1784071715",
+  "elapsed_ms": 24609,
   "scope": {
     "mode": "full",
     "paths": []
@@ -53,7 +53,7 @@
     }
   },
   "git": {
-    "head": "5b97f4a",
+    "head": "955df6c",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -331,11 +331,11 @@
         "rendered UX QA lane present or no web surface",
         "DOM geometry UX QA runtime found",
         "Rust property/integration tests present or no Rust surface",
-        "proofbind artifact found: surfaces=86 missing=86 high_or_critical_missing=30 verdict=review"
+        "proofbind artifact found: surfaces=101 missing=101 high_or_critical_missing=37 verdict=review"
       ],
       "notes": [
-        "proofbind reports 86 unresolved obligation(s)",
-        "proofbind reports 30 missing high/critical semantic proof obligation(s)"
+        "proofbind reports 101 unresolved obligation(s)",
+        "proofbind reports 37 missing high/critical semantic proof obligation(s)"
       ]
     },
     {
@@ -351,7 +351,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 4114",
+        "rust bad-behavior advisory signals: 4113",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -368,8 +368,8 @@
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 170 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 4114",
+        "copy-code advisory classes found: 171 (advisory only, no score impact)",
+        "rust bad-behavior advisory signals: 4113",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
@@ -1058,7 +1058,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-14T22:23:54.262207400+00:00",
+    "generated_at": "2026-07-14T23:28:11.085933077+00:00",
     "repo": ".",
     "auditor_version": "1.6.10",
     "status": "review",
@@ -1101,15 +1101,15 @@
       "active_files": 456,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 170,
+      "warning_classes": 171,
       "hard_instances": 0,
-      "warning_instances": 468,
-      "duplicate_lines": 303,
-      "duplicate_tokens": 960,
-      "duplicate_bytes": 8810,
-      "total_redundant_lines": 525,
-      "total_redundant_tokens": 1481,
-      "total_redundant_bytes": 14194
+      "warning_instances": 471,
+      "duplicate_lines": 304,
+      "duplicate_tokens": 964,
+      "duplicate_bytes": 8835,
+      "total_redundant_lines": 527,
+      "total_redundant_tokens": 1486,
+      "total_redundant_bytes": 14229
     },
     "classes": [
       {
@@ -2278,29 +2278,29 @@
           {
             "path": "crates/bench/src/interaction_volume/tests.rs",
             "language": "rust",
-            "start_line": 488,
-            "end_line": 490,
-            "unit_name": "begin_immediate"
-          },
-          {
-            "path": "crates/bench/src/interaction_volume/tests.rs",
-            "language": "rust",
             "start_line": 492,
             "end_line": 494,
-            "unit_name": "commit"
+            "unit_name": "begin_immediate"
           },
           {
             "path": "crates/bench/src/interaction_volume/tests.rs",
             "language": "rust",
             "start_line": 496,
             "end_line": 498,
-            "unit_name": "rollback"
+            "unit_name": "commit"
           },
           {
             "path": "crates/bench/src/interaction_volume/tests.rs",
             "language": "rust",
             "start_line": 500,
             "end_line": 502,
+            "unit_name": "rollback"
+          },
+          {
+            "path": "crates/bench/src/interaction_volume/tests.rs",
+            "language": "rust",
+            "start_line": 504,
+            "end_line": 506,
             "unit_name": "set_busy_timeout"
           }
         ]
@@ -2812,15 +2812,15 @@
           {
             "path": "crates/bench/src/interaction_volume/evidence.rs",
             "language": "rust",
-            "start_line": 744,
-            "end_line": 745,
+            "start_line": 563,
+            "end_line": 564,
             "unit_name": "json_string"
           },
           {
             "path": "crates/bench/src/interaction_volume/evidence.rs",
             "language": "rust",
-            "start_line": 759,
-            "end_line": 760,
+            "start_line": 578,
+            "end_line": 579,
             "unit_name": "required_evidence"
           },
           {
@@ -3638,7 +3638,7 @@
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 120 lower-ranked classes"
+      "showing the top 50 classes and omitting 121 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3972,20 +3972,20 @@
       "problem": "human review or proof claim lacks reproducible evidence",
       "agent_fix": "attach raw CI logs, review receipts, and replayable commands instead of accepting claims or summaries",
       "evidence": [
-        "assert_daily_trigger_rejected fabricated_canonical_job \\"
+        "CI_API_V4_URL=\"http://127.0.0.1:${fake_port}/api/v4\" CI_JOB_TOKEN=fabricated-token"
       ],
       "check_id": "HLT-027-HUMAN-REVIEW-EVIDENCE-GAP:proof",
       "hardness": "soft",
       "confidence": 0.88,
       "evidence_kind": "receipt",
       "rerun_command": "just score",
-      "fingerprint": "sha256:375460ef69b44f4061aaa942668ea17e1f5ef8a28a4ffbe9e694f95b44636543",
+      "fingerprint": "sha256:86f93428a94ce8dca0e0f961a4d67d8098ba07c938781e51bb37217881f2bbe1",
       "rule_id": "HLT-027-HUMAN-REVIEW-EVIDENCE-GAP",
       "tlr": "Repair",
       "lane": "audit",
       "docs_url": "docs/testing.md",
       "owner": "bench-harness",
-      "line": 43,
+      "line": 83,
       "matched_term": "review evidence",
       "reason": "proof and review claims need receipts"
     }
