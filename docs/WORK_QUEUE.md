@@ -18,10 +18,38 @@ for v8.0.0: consume current auditor receipts, cite
 
 Merged-main SHAs feed the batched manifest binds (Claude). Post the merged SHA in your Report.
 
+## STATUS BOARD (ClaudeMaster updates this — check before claiming)
+| Ticket | Status | Notes |
+|---|---|---|
+| WQ-1 veox dual-home | **DONE/VERIFIED (ClaudeMaster)** | 27/27 mirrored+registered+protected; see report |
+| WQ-2 math #11 | OPEN | ready to claim |
+| WQ-3 starforge #7 | OPEN | ready to claim — gates model-bundle + WQ-8(b) |
+| WQ-4 core head | OPEN | ready to claim — gates WQ-5(c) |
+| WQ-5 web consolidate | OPEN | claimable now; (c) waits on WQ-4 merged SHA |
+| WQ-6 fleet identity | OPEN | claimable now; portal LAST on signal |
+| WQ-7 contracts | OPEN | ready to claim |
+| WQ-8 deploy image | OPEN | claimable now; (b) verify after WQ-3 |
+| WQ-9 harness | CLAIMED Codex2 | |
+| WQ-10 naming RFC | CLAIMED Codex1 | inventory: docs/naming-inventory-20260714.md |
+| PR-A (control plane #13) | ClaudeMaster | CI rerun pending (host rg PATH issue) |
+
+**LIVE STATE NOTES (2026-07-14 ~02:5x UTC):**
+- `veox/*` namespace is LIVE on the forge: all 27 jain repos mirrored (head+tag parity
+  verified), registered (API count 27), branch protection applied (1 approval +
+  `<name>/required` + linear history + enforce_admins).
+- Merges STILL happen on `jeryu/<repo>` PRs for now (WQ-2..8 as written). ClaudeMaster
+  delta re-mirrors jeryu→veox AFTER your merges, then flips manifest+origins (PR-B),
+  then binds, then runs the single full deploy.sh.
+- veox owner credentials: account `veox` exists; ClaudeMaster holds the token
+  (~/.jeryu/secrets/veox-owner-token). Workers do NOT need it (work on jeryu/*).
+- Control-plane PR #13 (jeryu/jain-split-ops, head 018b418) carries: contract-drift=32,
+  sync-derived trigger fix, vendor bootstrap, jain.3 redline pin, web/cli release
+  matrices. Until it merges, run splitctl from branch `claude/v8-release-fixes-20260714`.
+
 ---
 
 ## WQ-1 — veox/* forge dual-home for the 27 jain repos
-Status: OPEN
+Status: DONE — ClaudeMaster — 2026-07-14T02:55Z (VERIFIED)
 Scope: local forge only (`http://127.0.0.1:8787`, data-dir `/home/ubuntu/.local/share/jeryu`);
 NO manifest edits, NO local-checkout origin changes (Claude does those after).
 Task: create owner namespace `veox` and, for each of the 27 jain repos (25 `[[repo]]` +
@@ -36,7 +64,13 @@ Verify (paste for 3 sample repos + assert-all summary):
 jeryu/<name> source (head+tag parity), for all 27; `curl -fsS -H "authorization: Bearer
 $(cat ~/.jeryu/secrets/merge-token)" http://127.0.0.1:8787/api/v1/repos | jq '[.repositories[]
 | select(.id.owner=="veox")] | length'` → 27.
-Report:
+Report: (ClaudeMaster) Mechanism: `jeryu-mirror import-local --owner veox` (built from
+~/jeryu-split/jeryu-core, bin target/release/jeryu-mirror) from staged copies of the jeryu/*
+bares; 16 registered live, 11 needed an offline re-import (service stopped — sqlite
+contention), now 27/27: ref parity `diff ls-remote` identical for all 27;
+`/api/v1/repos` veox count = 27; `protection-apply` 27/27 ok. veox account + PAT minted
+(signup → session+csrf `x-jeryu-csrf` → /api/v1/auth/tokens). Residual: delta re-mirror
+after WQ-2..8 merges (ClaudeMaster); jeryu/* frozen, nothing deleted.
 
 ## WQ-2 — Adopt + land jain-math split.2 identity (PR #11)
 Status: OPEN
@@ -49,7 +83,7 @@ merged main == fast-forward of #11; paste merged main SHA.
 Report:
 
 ## WQ-3 — Adopt + land jain-starforge split.2 (PR #7 = governed JOPE model-bundle)
-Status: OPEN
+Status: CLAIMED — Codex — 2026-07-14T02:52:37Z
 Scope: jain-starforge only. Base: PR #7 head `e75276edb6f90d082620a4351c8982bab7324c51`.
 Task: verify the six LFS weights against `ops/ci/required.sh` sha256 pins AND the 5 model-bundle
 files against `artifacts/model-bundle.v1.json` (sha256sum each); required lane at exact head;
@@ -116,7 +150,7 @@ Verify: per repo — green check list + merged main SHA (table).
 Report:
 
 ## WQ-7 — jain-contracts split.2 proof head
-Status: OPEN
+Status: CLAIMED — Codex1 — 2026-07-14T02:42Z
 Scope: jain-contracts only. Its main moved to `ac58ea2` ("restore v8 split.2 proof gates") with
 6 dirty files in the checkout. Task: inspect the 6 dirty files — if release-relevant, land via
 reviewed PR; else park on a branch `park/contracts-dirty-20260714` and reset checkout clean.
@@ -125,7 +159,7 @@ Verify: dirty-file disposition list, green checks, final main SHA.
 Report:
 
 ## WQ-8 — jain-deploy: veox/jain image identity + model-bundle staging readiness
-Status: OPEN
+Status: CLAIMED — Codex — 2026-07-14T02:53:13Z
 Scope: jain-deploy only (its 20-file dirty checkout: park anything not adopted on
 `park/deploy-dirty-20260714`). Base main `dd80c57` + adopt
 `/tmp/codex-jain-deploy-image-proof-20260714` (branch codex/v8-image-authority-proof-20260714)
@@ -159,7 +193,7 @@ paste the studies block.
 Report:
 
 ## WQ-10 — Naming RFC draft (post-release wave; non-blocking)
-Status: OPEN
+Status: DONE — Codex1 — 2026-07-14T02:39Z
 Scope: NEW file `jain-split-ops/docs/naming-rfc-v1.md` only.
 Task: from the naming inventory (appendix B pointer), draft the RFC: veox/* owner rationale;
 scrub of github_slug/neverhuman; image `veox/jain`; portal `veox/jain-portal` (kills the
@@ -171,6 +205,18 @@ battle-gpu=GPU kernel factory; sagemaker-residue cleanup; jain-tui duplicate fea
 Owner decides post-GO.
 Verify: file exists, covers all listed items, ends with a decision matrix for the owner.
 Report:
+
+- Added only `docs/naming-rfc-v1.md` (202 lines). It covers the veox namespace and
+  `veox/jain-portal`, active `github_slug = "neverhuman/<repo>"` retirement, `veox/jain`
+  image identity, Redline spelling/lock follow-up, package-prefix policy, all requested
+  opaque-codename purposes, SageMaker residue, the duplicate `feat-cli` ownership, and an
+  owner decision matrix.
+- Verification:
+  `test -s docs/naming-rfc-v1.md` → pass.
+  Required-term scan for `veox/`, `jain-portal`, all seven opaque codenames, `sagemaker`,
+  `feat-cli`, `redline-central`, `github_slug`, `neverhuman`, and `Owner decision matrix`
+  → pass (13 terms).
+  `git diff --check -- docs/naming-rfc-v1.md docs/WORK_QUEUE.md` → pass.
 
 ---
 

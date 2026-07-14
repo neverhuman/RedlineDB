@@ -12,8 +12,8 @@ use std::{
 
 const RELEASE_VERSION: &str = "8.0.0";
 const LOCAL_JERYU_BASE: &str = "http://127.0.0.1:8787";
-const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
-const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
+const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/veox/";
+const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/veox/";
 const RELEASE_PROTECTION_POLICY: &str = "immutable-main-v1";
 
 #[derive(Debug, Clone)]
@@ -230,7 +230,6 @@ fn manifest_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
         let name = string(repo, "name").ok_or("repo missing name")?;
         let repo_path = PathBuf::from(string(repo, "path").ok_or("repo missing path")?);
         for field in [
-            "github_slug",
             "jeryu_slug",
             "profile",
             "default_branch",
@@ -257,7 +256,7 @@ fn manifest_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
         rows.push((
             name,
             repo_path,
-            string(repo, "github_slug").unwrap(),
+            string(repo, "jeryu_slug").unwrap(),
             string(repo, "jeryu_slug").unwrap(),
             string(repo, "required_check").unwrap(),
         ));
@@ -1539,7 +1538,6 @@ fn validate_manifest_data(
             ));
         }
         for field in [
-            "github_slug",
             "jeryu_slug",
             "remote",
             "profile",
@@ -1632,8 +1630,8 @@ fn validate_manifest_data(
     } else if let Some(raw) = smartcluster {
         for (key, expected) in [
             ("kind", "required-infrastructure"),
-            ("forge_owner", "jain-split"),
-            ("forge_slug", "jain-split/jain-smartcluster"),
+            ("forge_owner", "veox"),
+            ("forge_slug", "veox/jain-smartcluster"),
             ("required_check", "jain-smartcluster/required"),
             ("default_branch", "main"),
         ] {
@@ -5446,10 +5444,10 @@ fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if raw.get("kind").and_then(toml::Value::as_str) == Some("required-infrastructure") {
-            if string(raw, "forge_owner").as_deref() != Some("jain-split") {
-                failures.push("infrastructure forge_owner must be jain-split".to_owned());
+            if string(raw, "forge_owner").as_deref() != Some("veox") {
+                failures.push("infrastructure forge_owner must be veox".to_owned());
             }
-            if string(raw, "forge_slug").as_deref() != Some("jain-split/jain-smartcluster") {
+            if string(raw, "forge_slug").as_deref() != Some("veox/jain-smartcluster") {
                 failures.push("infrastructure forge_slug does not match the manifest".to_owned());
             }
             if raw.get("family_registered").and_then(toml::Value::as_bool) != Some(true) {
@@ -6147,10 +6145,11 @@ fn check_cargo_sources(
             if !line.contains("git") {
                 continue;
             }
-            if line.contains(FAMILY_REMOTE_PREFIX)
-                || line.contains(INFRA_REMOTE_PREFIX)
-                || line.contains("http://127.0.0.1:8787/git/jeryu/redline-core/")
-            {
+            // Local-forge-only: any owner namespace on the local forge is a valid
+            // internal source. veox/* is canonical; jeryu/* (and the old
+            // jain-split/* infra home) remain frozen aliases until the naming-RFC
+            // wave rewrites dependency URLs. External hosts stay rejected.
+            if line.contains("http://127.0.0.1:8787/git/") {
                 continue;
             }
             if line.contains("git =") || line.starts_with("source = \"git+") {
@@ -8010,7 +8009,7 @@ control_plane = "{}/redline-split-ops"
 name = "jain-smartcluster"
 path = "{}/jain-smartcluster"
 profile = "rust-workspace"
-remote = "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git"
+remote = "http://127.0.0.1:8787/git/veox/jain-smartcluster.git"
 required_check = "jain-smartcluster/required"
 default_branch = "main"
 immutable_tag = "jain-smartcluster-v8.0.0-split.0"
