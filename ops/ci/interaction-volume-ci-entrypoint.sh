@@ -71,7 +71,7 @@ if [ "$mode" = daily ]; then
     .attestation_authority.signature_key_id == null and
     (.daily_blocker | type == "string" and length > 0)
   ' "$trigger_contract" >/dev/null || {
-    printf 'daily authority contract is malformed or attempts an unauthenticated fallback\n' >&2
+    printf 'daily authority contract is malformed or attempts an unauthenticated alternate trust path\n' >&2
     exit 2
   }
   printf 'daily certification blocked: %s\n' \

@@ -230,7 +230,7 @@ fn validate_ci_trigger(trigger: Option<&CiTriggerEvidence>, _source_commit: &str
             .is_some_and(serde_json::Value::is_null);
     if !authority_unconfigured {
         bail!(
-            "checked-in CI authority contract is malformed or attempts an unauthenticated fallback"
+            "checked-in CI authority contract is malformed or attempts an unauthenticated alternate trust path"
         );
     }
     bail!(
