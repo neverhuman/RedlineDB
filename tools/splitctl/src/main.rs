@@ -167,6 +167,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("jeryu-local") => jeryu_local(args.collect())?,
         Some("manifest") => manifest_command(args.collect())?,
         Some("managed-repos") => managed_repos_command(args.collect())?,
+        Some("release-inventory") => release_inventory(args.collect())?,
         Some("release-cargo-commands") => release_cargo_commands_command(args.collect())?,
         Some("run-release-cargo-commands") => {
             run_release_cargo_commands_command(args.collect())?
@@ -191,7 +192,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-candidate [--plan] [--repo NAME]... [--from-wave N] [--through-wave N] [--force] [--no-tags] [--no-atomicsoul] | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --manifest PATH --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | defer-worktree --repo PATH --destination PATH --expected-head SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--receipt PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-inventory [--manifest PATH] [--json PATH] [--patch-dir PATH] | release-candidate [--plan] [--repo NAME]... [--from-wave N] [--through-wave N] [--force] [--no-tags] [--no-atomicsoul] | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --manifest PATH --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | defer-worktree --repo PATH --destination PATH --expected-head SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--receipt PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -327,6 +328,225 @@ fn managed_repo_json(repo: &ManagedRepo) -> JsonValue {
         "family": repo.family,
         "family_registered": repo.family_registered,
     })
+}
+
+fn release_inventory(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut manifest = root.join("repos.manifest.toml");
+    let mut output = root.join("docs/release-evidence/8.0.0/orchestrator/release-inventory.json");
+    let mut patch_dir = output
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("release-inventory-patches");
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--json" => output = PathBuf::from(iter.next().ok_or("--json needs a path")?),
+            "--patch-dir" => {
+                patch_dir = PathBuf::from(iter.next().ok_or("--patch-dir needs a path")?)
+            }
+            value => return Err(format!("unknown release-inventory argument: {value}").into()),
+        }
+    }
+
+    let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+    let manifest_sha256 = manifest_sha256(&manifest)?;
+    let managed = managed_repositories(&data, &manifest)?;
+    let mut errors = Vec::new();
+    let mut rows = Vec::new();
+    fs::create_dir_all(&patch_dir)?;
+
+    for repo in managed {
+        let mut failures = Vec::new();
+        let path = &repo.path;
+        let status =
+            git_query_with_status(path, &["status", "--porcelain=v1", "--untracked-files=all"])
+                .unwrap_or_default();
+        let branch = git_query(path, &["branch", "--show-current"]);
+        let head = git_query(path, &["rev-parse", "HEAD"]);
+        let worktree =
+            git_query_with_status(path, &["worktree", "list", "--porcelain"]).unwrap_or_default();
+        let all_refs = git_query_with_status(
+            path,
+            &[
+                "for-each-ref",
+                "--format=%(refname) %(objectname)",
+                "refs/heads",
+                "refs/tags",
+                "refs/remotes/origin",
+            ],
+        )
+        .unwrap_or_default();
+        let backup_refs = git_query_with_status(
+            path,
+            &[
+                "for-each-ref",
+                "--format=%(refname) %(objectname)",
+                "refs/backup",
+            ],
+        )
+        .unwrap_or_default();
+
+        let mut unpushed_refs = Vec::new();
+        for line in all_refs.lines() {
+            let Some((reference, local_commit)) = line.split_once(' ') else {
+                continue;
+            };
+            if !reference.starts_with("refs/heads/") {
+                continue;
+            }
+            let branch_name = reference.trim_start_matches("refs/heads/");
+            let remote_ref = format!("refs/heads/{branch_name}");
+            let forge_commit = git_query(path, &["ls-remote", "origin", &remote_ref])
+                .and_then(|value| value.split_whitespace().next().map(str::to_owned));
+            unpushed_refs.push(json!({
+                "ref": reference,
+                "commit": local_commit,
+                "forge_ref": remote_ref,
+                "forge_commit": forge_commit,
+                "unpushed": forge_commit.as_deref() != Some(local_commit),
+            }));
+        }
+
+        let patch_rows = [
+            (
+                "staged",
+                git_query_with_status(path, &["diff", "--cached", "--binary"]),
+            ),
+            (
+                "unstaged",
+                git_query_with_status(path, &["diff", "--binary"]),
+            ),
+        ]
+        .into_iter()
+        .map(|(kind, patch)| {
+            let bytes = patch.unwrap_or_default().into_bytes();
+            let patch_path =
+                patch_dir.join(format!("{}-{kind}.patch", inventory_component(&repo.name)));
+            let result = write_atomic_bytes(&patch_path, &bytes);
+            if let Err(error) = result {
+                failures.push(format!("unable to write {kind} patch: {error}"));
+            }
+            json!({
+                "kind": kind,
+                "path": patch_path,
+                "bytes": bytes.len(),
+                "sha256": sha256_bytes(&bytes),
+            })
+        })
+        .collect::<Vec<_>>();
+
+        let mut untracked = Vec::new();
+        for line in status.lines().filter(|line| line.starts_with("?? ")) {
+            let relative = line[3..].trim();
+            let file = path.join(relative);
+            match fs::read(&file) {
+                Ok(bytes) => untracked.push(json!({
+                    "path": relative,
+                    "bytes": bytes.len(),
+                    "sha256": sha256_bytes(&bytes),
+                })),
+                Err(error) => failures.push(format!(
+                    "unable to hash untracked file {}: {error}",
+                    file.display()
+                )),
+            }
+        }
+
+        if !path.join(".git").exists() {
+            failures.push("missing git checkout".to_owned());
+        }
+        if head.is_none() {
+            failures.push("unable to resolve HEAD".to_owned());
+        }
+        if !failures.is_empty() {
+            errors.extend(
+                failures
+                    .iter()
+                    .map(|failure| format!("{}: {failure}", repo.name)),
+            );
+        }
+        rows.push(json!({
+            "name": repo.name,
+            "kind": repo.kind,
+            "family": repo.family,
+            "path": path,
+            "remote": repo.remote,
+            "required_check": repo.required_check,
+            "expected_branch": repo.branch,
+            "branch": branch,
+            "head": head,
+            "worktree_status": worktree,
+            "status": status,
+            "dirty": !status.is_empty(),
+            "all_local_refs": all_refs.lines().collect::<Vec<_>>(),
+            "local_branch_refs": unpushed_refs,
+            "backup_refs": backup_refs.lines().collect::<Vec<_>>(),
+            "patches": patch_rows,
+            "untracked_files": untracked,
+            "status_result": if failures.is_empty() { "pass" } else { "fail" },
+            "failures": failures,
+        }));
+    }
+
+    let mut report = receipt_header(
+        "jain.release-inventory/v1",
+        "splitctl release-inventory",
+        false,
+    );
+    report["manifest"] = json!(manifest);
+    report["manifest_sha256"] = json!(manifest_sha256);
+    report["authority"] = json!("/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml");
+    report["backup_ref_namespace"] = json!("refs/backup/release-candidate-<timestamp>/");
+    report["patch_directory"] = json!(patch_dir);
+    report["repositories"] = json!(rows);
+    report["repository_count"] = json!(rows.len());
+    report["deferred_repositories"] = json!([
+        {
+            "name": "jain-python",
+            "status": "deferred",
+            "reason": "explicitly outside the canonical Jain release workspace and not in required_repos"
+        }
+    ]);
+    report["status"] = json!(if errors.is_empty() { "pass" } else { "fail" });
+    if !errors.is_empty() {
+        report["errors"] = json!(errors);
+    }
+    write_json_receipt(&output, &report)?;
+    let receipt_bytes = fs::read(&output)?;
+    let receipt_name = output
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or("release inventory output must have a UTF-8 file name")?;
+    let sidecar = output.with_extension("json.sha256");
+    write_atomic_bytes(
+        &sidecar,
+        format!("{}  {receipt_name}\n", sha256_bytes(&receipt_bytes)).as_bytes(),
+    )?;
+    println!(
+        "release inventory {}: {} repositories; report {}",
+        report["status"],
+        rows.len(),
+        output.display()
+    );
+    if report["status"] == "pass" {
+        Ok(())
+    } else {
+        Err("release inventory collection failed".into())
+    }
+}
+
+fn inventory_component(name: &str) -> String {
+    name.chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                character
+            } else {
+                '-'
+            }
+        })
+        .collect()
 }
 
 fn release_cargo_commands_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {

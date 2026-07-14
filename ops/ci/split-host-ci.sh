@@ -79,6 +79,8 @@ git -C "$REPO_PATH" cat-file -e "$SHA^{commit}" 2>/dev/null || { echo "sha $SHA 
 
 tmp="$(mktemp -d /tmp/split-host-ci.XXXXXX)"
 wt="$tmp/$REPO"
+native_vendor="$tmp/native-vendor"
+native_source_root="${JAIN_NATIVE_SOURCE_ROOT:-}"
 cleanup() {
   git -C "$REPO_PATH" worktree remove -f "$wt" >/dev/null 2>&1 || true
   rm -rf "$tmp" >/dev/null 2>&1 || true
@@ -87,6 +89,29 @@ trap cleanup EXIT
 
 git -C "$REPO_PATH" worktree add -f --detach "$wt" "$SHA" >/dev/null 2>&1 \
   || { post_check failure; echo "worktree checkout failed" >&2; exit 1; }
+
+# Release Cargo policy may enable native learner features even when the
+# repository's merge lane does not. Materialize one private, pinned tree for
+# the whole detached run, then expose it through the worktree's relative Cargo
+# configuration. The bootstrap discovers sibling ../vendor when no explicit
+# source root was supplied; there is deliberately no monorepo fallback.
+if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
+  native_bootstrap="$SPLIT_ROOT/jain-deploy/scripts/vendor-all.sh"
+  [ -x "$native_bootstrap" ] || {
+    echo "release CI native-vendor bootstrap missing: $native_bootstrap" >&2
+    exit 2
+  }
+  unset JAIN_NATIVE_SOURCE_ROOT JAIN_VENDOR_ROOT
+  bootstrap_args=(env "JAIN_VENDOR_ROOT=$native_vendor")
+  [ -z "$native_source_root" ] || bootstrap_args+=("JAIN_NATIVE_SOURCE_ROOT=$native_source_root")
+  "${bootstrap_args[@]}" bash "$native_bootstrap" >"$tmp/native-vendor.log" 2>&1 || {
+    cat "$tmp/native-vendor.log" >&2
+    echo "release CI native-vendor bootstrap failed" >&2
+    exit 1
+  }
+  mkdir -p "$wt/target"
+  ln -s "$native_vendor" "$wt/target/native-vendor"
+fi
 
 # Independence by default: NO sibling repos are linked, so a repo's required lane
 # must resolve cross-repo deps from its committed vendor-crates/ (offline). Only
@@ -171,7 +196,15 @@ if (cd "$wt" && bash scripts/ci-local.sh required) >"$log" 2>&1; then
         exit 1
       }
     fi
-    for lane in security score contract-drift artifact-support; do
+    release_lanes=(security score contract-drift artifact-support)
+    # These repositories own release-critical proof that is intentionally
+    # stricter than the common contract. Never let the generic lanes hide it.
+    if [ "$REPO" = "jain-smartcluster" ]; then
+      release_lanes+=(release)
+    elif [ "$REPO" = "jain-deploy" ]; then
+      release_lanes+=(container-policy image-resilience invention-export-clean atomicsoul-dry-run-test)
+    fi
+    for lane in "${release_lanes[@]}"; do
       if (cd "$wt" && bash scripts/ci-local.sh "$lane") >>"$log" 2>&1; then
         continue
       fi

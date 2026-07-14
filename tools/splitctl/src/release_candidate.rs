@@ -3,14 +3,18 @@ use sha2::{Digest, Sha256};
 use std::{
     env, fs,
     fs::File,
+    io::Write,
+    os::fd::AsRawFd,
     path::{Path, PathBuf},
     process::{Command, Stdio},
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
 const RELEASE_VERSION: &str = "8.0.0";
+const TOOL_VERSION: &str = "splitctl 0.1.0";
 const PENDING: &str = "PENDING";
 const DEFAULT_MAX_AGE_HOURS: u64 = 24;
+const MAX_ROLLOUT_WAVE: u64 = 10;
 const USAGE: &str = "usage: release-candidate [--plan] [--repo NAME]... [--from-wave N] [--through-wave N] [--force] [--no-tags] [--no-atomicsoul] [--max-age-hours N] [--manifest PATH] [--evidence-dir PATH]";
 
 #[derive(Debug, Clone)]
@@ -41,12 +45,59 @@ struct FleetRepo {
     policy_sha256: String,
 }
 
+struct RunLock(File);
+
+impl RunLock {
+    fn acquire(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        let mut file = File::options()
+            .create(true)
+            .read(true)
+            .write(true)
+            .open(path)?;
+        let result = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) };
+        if result != 0 {
+            return Err(format!(
+                "another release-candidate runner owns {}; wait for it to finish",
+                path.display()
+            )
+            .into());
+        }
+        file.set_len(0)?;
+        write!(
+            file,
+            "{{\"pid\":{},\"started_at_unix\":{}}}\n",
+            std::process::id(),
+            now_unix()
+        )?;
+        file.sync_all()?;
+        Ok(Self(file))
+    }
+}
+
+impl Drop for RunLock {
+    fn drop(&mut self) {
+        unsafe {
+            libc::flock(self.0.as_raw_fd(), libc::LOCK_UN);
+        }
+    }
+}
+
 pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     if help_requested(&args) {
         println!("{USAGE}");
         return Ok(());
     }
     let options = parse_options(args)?;
+    let aggregate_path = options
+        .evidence_dir
+        .join(aggregate_receipt_name(options.plan));
+
+    // Planning is intentionally read-only apart from its dedicated plan
+    // receipt. It must not acquire the execution lock or touch the execution
+    // aggregate.
     reject_unsafe_environment()?;
     let manifest_bytes = fs::read(&options.manifest)?;
     let manifest_sha256 = sha256_bytes(&manifest_bytes);
@@ -54,13 +105,21 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     validate_candidate_header(&manifest)?;
     validate_rollout_dependencies(&manifest)?;
     let mut repositories = fleet_repositories(&manifest, &options.manifest)?;
+    validate_selection(&options, &repositories)?;
+    validate_selective_dependencies(&options, &manifest, &repositories)?;
     repositories.retain(|repo| selected(&options, repo));
+    if repositories.is_empty() && !options.selected.iter().any(|name| name == "redline") {
+        return Err("release selection matched no repositories".into());
+    }
     repositories.sort_by(|left, right| (left.wave, &left.name).cmp(&(right.wave, &right.name)));
+    let policy_sha256 = sha256_file(
+        &options
+            .manifest
+            .parent()
+            .unwrap_or(Path::new("."))
+            .join("ops/ci/split-host-ci.sh"),
+    )?;
 
-    fs::create_dir_all(&options.evidence_dir)?;
-    let aggregate_path = options
-        .evidence_dir
-        .join(aggregate_receipt_name(options.plan));
     let mut report = json!({
         "schema_version": "jain.release-candidate-runner/v1",
         "release_version": RELEASE_VERSION,
@@ -70,22 +129,55 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         "mode": if options.plan {"plan"} else {"execute"},
         "manifest": options.manifest,
         "manifest_sha256": manifest_sha256,
+        "policy_sha256": policy_sha256,
         "atomicsoul_push": false,
         "production_applied": false,
         "external_production_mutations": [],
+        "rollback_target": "7.0.6",
+        "blocked_steps": 0,
+        "failed_steps": 0,
         "repository_count": repositories.len(),
         "status": "pending",
         "started_at_unix": now_unix(),
+        "tool_version": TOOL_VERSION,
+        "rerun_command": rerun_command(&options),
+        "last_completed_step": JsonValue::Null,
+        "last_attempted_step": JsonValue::Null,
+        "last_log_path": JsonValue::Null,
         "steps": [],
     });
     report["plan"] = json!(repositories.iter().map(repo_plan).collect::<Vec<_>>());
     if options.plan {
+        fs::create_dir_all(&options.evidence_dir)?;
         report["status"] = json!("planned");
         report["finished_at_unix"] = json!(now_unix());
         write_json(&aggregate_path, &report)?;
         println!("release candidate plan: {}", aggregate_path.display());
         return Ok(());
     }
+    fs::create_dir_all(&options.evidence_dir)?;
+    let lock_path = options.evidence_dir.join(".release-candidate.lock");
+    let _run_lock = match RunLock::acquire(&lock_path) {
+        Ok(lock) => lock,
+        Err(error) => {
+            let lock_receipt = options.evidence_dir.join("release-candidate-lock.json");
+            let receipt = json!({
+                "schema_version": "jain.release-candidate-lock/v1",
+                "status": "blocked",
+                "reason": "another release-candidate runner owns the process-wide lock",
+                "lock": lock_path,
+                "owner": fs::read_to_string(&lock_path).unwrap_or_default(),
+                "rerun_command": rerun_command(&options),
+                "timestamp_unix": now_unix(),
+            });
+            write_json(&lock_receipt, &receipt)?;
+            return Err(error);
+        }
+    };
+    reject_unsafe_environment()?;
+    report["status"] = json!("running");
+    report["last_updated_at_unix"] = json!(now_unix());
+    write_json(&aggregate_path, &report)?;
 
     let mut steps = Vec::new();
     let executable = env::current_exe()?;
@@ -106,7 +198,16 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         &options.evidence_dir,
         "fail",
     )?);
-    steps.push(run_control_step(
+    checkpoint_report(&aggregate_path, &mut report, &steps)?;
+    let host_prerequisites = validate_host_prerequisites(&manifest, &options, &control_root)?;
+    steps.push(host_prerequisites);
+    checkpoint_report(&aggregate_path, &mut report, &steps)?;
+    let mut prerequisites_green = steps.iter().all(step_green);
+    if !prerequisites_green {
+        return finish_run(&aggregate_path, &mut report, steps, &options.manifest);
+    }
+
+    let python_boundary = run_control_step(
         "python-boundary",
         Command::new(&executable)
             .arg("python-boundary")
@@ -114,12 +215,18 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             .arg(options.evidence_dir.join("python-boundary.json")),
         &options.evidence_dir,
         "fail",
-    )?);
+    )?;
+    prerequisites_green &= step_green(&python_boundary);
+    steps.push(python_boundary);
+    checkpoint_report(&aggregate_path, &mut report, &steps)?;
+    if !prerequisites_green {
+        return finish_run(&aggregate_path, &mut report, steps, &options.manifest);
+    }
 
-    let mut prerequisites_green = steps.iter().all(step_green);
-    if (options.selected.is_empty() && options.from_wave == 0)
-        || options.selected.iter().any(|name| name == "redline")
-    {
+    let full_run = options.selected.is_empty()
+        && options.from_wave == 0
+        && options.through_wave == MAX_ROLLOUT_WAVE;
+    if full_run || options.selected.iter().any(|name| name == "redline") {
         let redline_ci = run_redline_family(&manifest, &options, false, false)?;
         prerequisites_green &= step_green(&redline_ci);
         steps.push(redline_ci);
@@ -140,80 +247,98 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                 prerequisites_green &= step_green(&post_tag);
                 steps.push(post_tag);
             }
+            if prerequisites_green {
+                let cutover = run_redline_cutover(&manifest, &options)?;
+                prerequisites_green &= cutover.iter().all(step_green);
+                steps.extend(cutover);
+            }
         }
     }
+    checkpoint_report(&aggregate_path, &mut report, &steps)?;
 
-    let waves = repositories
-        .iter()
-        .map(|repo| repo.wave)
-        .collect::<std::collections::BTreeSet<_>>();
-    for wave in waves {
-        let wave_repositories = repositories
+    if prerequisites_green {
+        let waves = repositories
             .iter()
-            .filter(|repo| repo.wave == wave)
-            .collect::<Vec<_>>();
-        let mut wave_ci = std::collections::BTreeMap::new();
-        for repo in &wave_repositories {
-            let step = run_repo_ci(repo, &options, &manifest_sha256, &control_root)?;
-            wave_ci.insert(
-                repo.name.clone(),
-                step["status"].as_str().unwrap_or("fail").to_owned(),
-            );
-            steps.push(step);
-        }
-        let wave_ci_green = wave_ci
-            .values()
-            .all(|status| matches!(status.as_str(), "pass" | "cached"));
-        if options.apply_tags {
-            let mut wave_bound_identity = false;
+            .map(|repo| repo.wave)
+            .collect::<std::collections::BTreeSet<_>>();
+        for wave in waves {
+            let wave_repositories = repositories
+                .iter()
+                .filter(|repo| repo.wave == wave)
+                .collect::<Vec<_>>();
+            let mut wave_ci = std::collections::BTreeMap::new();
+            let current_manifest_sha256 = sha256_file(&options.manifest)?;
             for repo in &wave_repositories {
-                let tag_steps = if prerequisites_green && wave_ci_green {
-                    run_repo_tag_sequence(
-                        repo,
-                        wave_ci
-                            .get(&repo.name)
-                            .map(String::as_str)
-                            .unwrap_or("fail"),
-                        &options,
-                        &executable,
-                    )?
-                } else {
-                    vec![blocked_step(
-                        &format!("tag:{}", repo.name),
-                        "all prior waves and every CI lane in this wave must pass first",
-                    )]
-                };
-                wave_bound_identity |= tag_steps.iter().any(|step| {
-                    step["name"] == format!("bind-identity:{}", repo.name) && step_green(step)
-                });
-                prerequisites_green &= tag_steps.iter().all(step_green);
-                steps.extend(tag_steps);
+                let step = run_repo_ci(repo, &options, &current_manifest_sha256, &control_root)?;
+                wave_ci.insert(
+                    repo.name.clone(),
+                    step["status"].as_str().unwrap_or("fail").to_owned(),
+                );
+                steps.push(step);
             }
-            if wave_bound_identity {
-                let sync_receipt = options
-                    .evidence_dir
-                    .join(format!("sync-derived-wave-{wave}.json"));
-                let sync = run_control_step(
-                    &format!("sync-derived-wave-{wave}"),
-                    Command::new(&executable)
-                        .arg("sync-derived-manifests")
-                        .arg("--manifest")
-                        .arg(&options.manifest)
-                        .arg("--receipt")
-                        .arg(sync_receipt)
-                        .arg("--apply"),
-                    &options.evidence_dir,
-                    "fail",
-                )?;
-                prerequisites_green &= step_green(&sync);
-                steps.push(sync);
+            let wave_ci_green = wave_ci
+                .values()
+                .all(|status| matches!(status.as_str(), "pass" | "cached"));
+            if options.apply_tags {
+                let mut wave_bound_identity = false;
+                for repo in &wave_repositories {
+                    let tag_steps = if prerequisites_green && wave_ci_green {
+                        run_repo_tag_sequence(
+                            repo,
+                            wave_ci
+                                .get(&repo.name)
+                                .map(String::as_str)
+                                .unwrap_or("fail"),
+                            &options,
+                            &executable,
+                        )?
+                    } else {
+                        vec![blocked_step(
+                            &format!("tag:{}", repo.name),
+                            "all prior waves and every CI lane in this wave must pass first",
+                        )]
+                    };
+                    wave_bound_identity |= tag_steps.iter().any(|step| {
+                        step["name"] == format!("bind-identity:{}", repo.name) && step_green(step)
+                    });
+                    prerequisites_green &= tag_steps.iter().all(step_green);
+                    steps.extend(tag_steps);
+                }
+                if wave_bound_identity {
+                    let sync_receipt = options
+                        .evidence_dir
+                        .join(format!("sync-derived-wave-{wave}.json"));
+                    let sync = run_control_step(
+                        &format!("sync-derived-wave-{wave}"),
+                        Command::new(&executable)
+                            .arg("sync-derived-manifests")
+                            .arg("--manifest")
+                            .arg(&options.manifest)
+                            .arg("--receipt")
+                            .arg(sync_receipt)
+                            .arg("--apply"),
+                        &options.evidence_dir,
+                        "fail",
+                    )?;
+                    prerequisites_green &= step_green(&sync);
+                    steps.push(sync);
+                }
+            } else {
+                prerequisites_green &= wave_ci_green;
             }
-        } else {
-            prerequisites_green &= wave_ci_green;
+            checkpoint_report(&aggregate_path, &mut report, &steps)?;
+            if !prerequisites_green {
+                break;
+            }
         }
+    } else {
+        steps.push(blocked_step(
+            "jain-dependency-waves",
+            "Redline preconditions must pass before Jain CI or tagging",
+        ));
     }
 
-    if options.selected.is_empty() {
+    if options.selected.is_empty() && prerequisites_green {
         let preflight_path = options.evidence_dir.join("release-preflight.json");
         steps.push(run_control_step(
             "release-preflight",
@@ -226,6 +351,12 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             &options.evidence_dir,
             "blocked",
         )?);
+    } else if options.selected.is_empty() {
+        steps.push(json!({
+            "name": "release-preflight",
+            "status": "blocked",
+            "reason": "Jain dependency waves did not complete; release preflight is fail-closed",
+        }));
     } else {
         steps.push(json!({
             "name": "release-preflight",
@@ -233,18 +364,38 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             "reason": "global preflight is deferred for a selective repository invocation",
         }));
     }
+    checkpoint_report(&aggregate_path, &mut report, &steps)?;
 
     let ready_for_rollout = steps
         .iter()
         .all(|step| matches!(step["status"].as_str(), Some("pass" | "cached" | "skipped")));
-    if options.atomicsoul && options.selected.is_empty() && ready_for_rollout {
+    if full_run && ready_for_rollout {
+        steps.extend(run_staged_artifact(&control_root, &options.evidence_dir)?);
+    } else if full_run {
+        steps.push(blocked_step(
+            "staged-artifact-image",
+            "all manifest, Redline, dependency-wave, and preflight gates must pass first",
+        ));
+    } else {
+        steps.push(json!({
+            "name": "staged-artifact-image",
+            "status": "skipped",
+            "reason": "artifact build is reserved for the complete release-candidate invocation",
+        }));
+    }
+    checkpoint_report(&aggregate_path, &mut report, &steps)?;
+
+    let ready_for_atomic = steps
+        .iter()
+        .all(|step| matches!(step["status"].as_str(), Some("pass" | "cached" | "skipped")));
+    if options.atomicsoul && full_run && ready_for_atomic {
         steps.extend(run_atomicsoul(&control_root, &options.evidence_dir)?);
     } else {
         steps.push(json!({
             "name": "atomicsoul-dry-run",
-            "status": if options.atomicsoul && options.selected.is_empty() {"blocked"} else {"skipped"},
-            "reason": if options.atomicsoul && options.selected.is_empty() {
-                "all manifest, fleet CI, tag, and preflight steps must pass first"
+            "status": if options.atomicsoul && full_run {"blocked"} else {"skipped"},
+            "reason": if options.atomicsoul && full_run {
+                "all manifest, fleet CI, artifact, tag, and preflight steps must pass first"
             } else {
                 "disabled for this invocation"
             },
@@ -252,22 +403,13 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             "external_mutations": [],
         }));
     }
+    checkpoint_report(&aggregate_path, &mut report, &steps)?;
 
-    let overall = overall_status(&steps);
-    report["steps"] = json!(steps);
-    report["status"] = json!(overall);
-    let final_manifest_sha256 = sha256_file(&options.manifest)?;
-    let manifest_changed = report["manifest_sha256"] != final_manifest_sha256;
-    report["final_manifest_sha256"] = json!(final_manifest_sha256);
-    report["manifest_changed"] = json!(manifest_changed);
-    report["finished_at_unix"] = json!(now_unix());
-    write_json(&aggregate_path, &report)?;
-    println!("release candidate {overall}: {}", aggregate_path.display());
-    if overall == "pass" {
-        Ok(())
-    } else {
-        Err(format!("release candidate is {overall}; see the aggregate receipt").into())
+    if full_run && steps.iter().all(step_green) {
+        steps.extend(run_final_validation(&control_root, &options)?);
+        checkpoint_report(&aggregate_path, &mut report, &steps)?;
     }
+    finish_run(&aggregate_path, &mut report, steps, &options.manifest)
 }
 
 fn run_repo_tag_sequence(
@@ -279,162 +421,14 @@ fn run_repo_tag_sequence(
     if repo.release_commit != PENDING {
         return Ok(vec![run_repo_tag(repo, ci_status, options, executable)?]);
     }
-    let (bound, identity) = bind_reviewed_identity(repo, options)?;
-    let Some(bound) = bound else {
-        return Ok(vec![identity]);
-    };
-    let tag = run_repo_tag(&bound, ci_status, options, executable)?;
-    Ok(vec![identity, tag])
-}
-
-fn bind_reviewed_identity(
-    repo: &FleetRepo,
-    options: &Options,
-) -> Result<(Option<FleetRepo>, JsonValue), Box<dyn std::error::Error>> {
-    let step_name = format!("bind-identity:{}", repo.name);
-    if repo.kind == "control-plane" {
-        return Ok((
-            None,
-            blocked_step(
-                &step_name,
-                "the control plane cannot self-bind its own commit inside the commit it identifies",
-            ),
-        ));
-    }
-    let branch = git_output(&repo.path, &["branch", "--show-current"])?;
-    let head = git_output(&repo.path, &["rev-parse", "--verify", "HEAD^{commit}"])?;
-    let porcelain = git_output(
-        &repo.path,
-        &["status", "--porcelain=v1", "--untracked-files=all"],
-    )?;
-    let dirty_paths = release_relevant_dirty_paths(repo, &porcelain);
-    if branch != repo.expected_branch || !dirty_paths.is_empty() {
-        return Ok((
-            None,
-            json!({
-                "name": step_name,
-                "repository": repo.name,
-                "status": "blocked",
-                "reason": "identity binding requires a clean checkout on the reviewed branch",
-                "branch": branch,
-                "expected_branch": repo.expected_branch,
-                "dirty_paths": dirty_paths,
-            }),
-        ));
-    }
-    let remote = remote_branch_commit(&repo.path, &repo.remote, &repo.expected_branch)?;
-    if remote.as_deref() != Some(head.as_str()) {
-        return Ok((
-            None,
-            json!({
-                "name": step_name,
-                "repository": repo.name,
-                "status": "blocked",
-                "reason": "reviewed checkout HEAD does not equal live forge main",
-                "head": head,
-                "remote_main": remote,
-            }),
-        ));
-    }
-    let checksum = super::release_tree_checksum(&repo.path, &head)?;
-    update_manifest_identity(&options.manifest, &repo.name, &head, &checksum)?;
-    let mut bound = repo.clone();
-    bound.release_commit.clone_from(&head);
-    let receipt = options
-        .evidence_dir
-        .join("identities")
-        .join(format!("{}.json", repo.name));
-    let step = json!({
-        "schema_version": "jain.release-identity-binding/v1",
-        "name": step_name,
+    Ok(vec![json!({
+        "name": format!("tag:{}", repo.name),
         "repository": repo.name,
-        "status": "pass",
-        "manifest": options.manifest,
-        "release_commit": head,
-        "release_checksum_sha256": checksum,
-        "source": "clean-reviewed-forge-main",
-        "timestamp_unix": now_unix(),
-    });
-    write_json(&receipt, &step)?;
-    Ok((Some(bound), step))
-}
-
-fn update_manifest_identity(
-    manifest: &Path,
-    repo_name: &str,
-    commit: &str,
-    checksum: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let source = fs::read_to_string(manifest)?;
-    let mut lines = source
-        .split_inclusive('\n')
-        .map(str::to_owned)
-        .collect::<Vec<_>>();
-    let starts = lines
-        .iter()
-        .enumerate()
-        .filter_map(|(index, line)| {
-            matches!(
-                line.trim(),
-                "[[repo]]" | "[[infrastructure_repo]]" | "[control_plane]"
-            )
-            .then_some(index)
-        })
-        .collect::<Vec<_>>();
-    let mut target = None;
-    for (position, start) in starts.iter().copied().enumerate() {
-        let end = starts.get(position + 1).copied().unwrap_or(lines.len());
-        let name_line = format!("name = \"{repo_name}\"");
-        if lines[start..end]
-            .iter()
-            .any(|line| line.trim() == name_line)
-        {
-            target = Some((start, end));
-            break;
-        }
-    }
-    let (start, end) = target.ok_or_else(|| {
-        format!("canonical manifest has no mutable repository block for {repo_name}")
-    })?;
-    let mut replaced_commit = false;
-    let mut replaced_checksum = false;
-    for line in &mut lines[start..end] {
-        let trimmed = line.trim();
-        if trimmed.starts_with("release_commit = ") {
-            validate_replaceable_identity(trimmed, "release_commit", commit)?;
-            *line = format!("release_commit = \"{commit}\"\n");
-            replaced_commit = true;
-        } else if trimmed.starts_with("release_checksum_sha256 = ") {
-            validate_replaceable_identity(trimmed, "release_checksum_sha256", checksum)?;
-            *line = format!("release_checksum_sha256 = \"{checksum}\"\n");
-            replaced_checksum = true;
-        }
-    }
-    if !replaced_commit || !replaced_checksum {
-        return Err(format!("{repo_name} identity fields are incomplete in the manifest").into());
-    }
-    let staging = manifest.with_extension(format!("tmp-{}", std::process::id()));
-    fs::write(&staging, lines.concat())?;
-    fs::rename(staging, manifest)?;
-    Ok(())
-}
-
-fn validate_replaceable_identity(
-    line: &str,
-    key: &str,
-    replacement: &str,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let current = line
-        .split_once('=')
-        .map(|(_, value)| value.trim().trim_matches('"'))
-        .ok_or_else(|| format!("malformed {key} identity line"))?;
-    if current != PENDING && current != replacement {
-        return Err(format!(
-            "refusing to replace immutable {key} value {current} with {replacement}"
-        )
-        .into());
-    }
-    Ok(())
+        "status": "blocked",
+        "reason": "reviewed manifest update required: commit the exact reviewed main identity and checksum through the Jeryu lifecycle before tagging",
+        "release_commit": PENDING,
+        "tag": repo.tag,
+    })])
 }
 
 fn remote_branch_commit(
@@ -472,7 +466,7 @@ fn parse_options(args: Vec<String>) -> Result<Options, Box<dyn std::error::Error
         atomicsoul: true,
         selected: Vec::new(),
         from_wave: 0,
-        through_wave: u64::MAX,
+        through_wave: MAX_ROLLOUT_WAVE,
         max_age_hours: DEFAULT_MAX_AGE_HOURS,
     };
     let mut iter = args.into_iter();
@@ -512,6 +506,9 @@ fn parse_options(args: Vec<String>) -> Result<Options, Box<dyn std::error::Error
     }
     if options.from_wave > options.through_wave {
         return Err("--from-wave cannot exceed --through-wave".into());
+    }
+    if options.from_wave > MAX_ROLLOUT_WAVE || options.through_wave > MAX_ROLLOUT_WAVE {
+        return Err(format!("wave selectors must be between 0 and {MAX_ROLLOUT_WAVE}").into());
     }
     Ok(options)
 }
@@ -734,6 +731,139 @@ fn selected(options: &Options, repo: &FleetRepo) -> bool {
         && repo.wave <= options.through_wave
 }
 
+fn validate_selection(
+    options: &Options,
+    repositories: &[FleetRepo],
+) -> Result<(), Box<dyn std::error::Error>> {
+    for selected in &options.selected {
+        if selected.trim().is_empty() {
+            return Err("release repository selectors must not be empty".into());
+        }
+        if selected != "redline" && !repositories.iter().any(|repo| &repo.name == selected) {
+            return Err(format!("unknown release repository selector: {selected}").into());
+        }
+    }
+    Ok(())
+}
+
+fn validate_selective_dependencies(
+    options: &Options,
+    manifest: &toml::Value,
+    repositories: &[FleetRepo],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let selective = !options.selected.is_empty()
+        || options.from_wave != 0
+        || options.through_wave != MAX_ROLLOUT_WAVE;
+    if !selective {
+        return Ok(());
+    }
+
+    let active = repositories
+        .iter()
+        .map(|repo| (repo.name.as_str(), repo))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let selected = repositories
+        .iter()
+        .filter(|repo| selected(options, repo))
+        .map(|repo| repo.name.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    let external = manifest
+        .get("external_dependencies")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(toml::map::Map::values)
+        .filter_map(|dependency| dependency.get("repository"))
+        .filter_map(toml::Value::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+
+    for name in &selected {
+        let Some(repo) = active.get(name) else {
+            continue;
+        };
+        let raw = manifest_entry(manifest, name)
+            .ok_or_else(|| format!("selected repository {name} has no manifest entry"))?;
+        let dependencies = raw
+            .get("cross_repo_deps")
+            .and_then(toml::Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(toml::Value::as_str);
+        for dependency in dependencies {
+            if external.contains(dependency) {
+                continue;
+            }
+            let dependency_repo = active.get(dependency).ok_or_else(|| {
+                format!("{name} references unknown selective dependency {dependency}")
+            })?;
+            if dependency_repo.release_commit == PENDING && !selected.contains(dependency) {
+                return Err(format!(
+                    "selective release of {name} is dependency-incomplete: {dependency} is unresolved; include --repo {dependency} or run the complete wave range"
+                )
+                .into());
+            }
+            if dependency_repo.wave > repo.wave && dependency_repo.release_commit == PENDING {
+                return Err(format!(
+                    "selective release of {name} requires later unresolved dependency {dependency}"
+                )
+                .into());
+            }
+        }
+    }
+
+    for repo in repositories {
+        if !selected.contains(repo.name.as_str()) {
+            continue;
+        }
+        for infrastructure in manifest
+            .get("infrastructure_repo")
+            .and_then(toml::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let edges = infrastructure
+                .get("dependency_edges")
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(toml::Value::as_str)
+                .collect::<Vec<_>>();
+            if !edges.contains(&repo.name.as_str()) {
+                continue;
+            }
+            let infrastructure_name = infrastructure
+                .get("name")
+                .and_then(toml::Value::as_str)
+                .ok_or("infrastructure dependency is missing name")?;
+            let infrastructure_repo = active.get(infrastructure_name).ok_or_else(|| {
+                format!("unknown infrastructure dependency {infrastructure_name}")
+            })?;
+            if infrastructure_repo.release_commit == PENDING
+                && !selected.contains(infrastructure_name)
+            {
+                return Err(format!(
+                    "selective release of {} is dependency-incomplete: unresolved infrastructure {infrastructure_name}; include --repo {infrastructure_name}",
+                    repo.name
+                )
+                .into());
+            }
+        }
+    }
+    Ok(())
+}
+
+fn manifest_entry<'a>(manifest: &'a toml::Value, name: &str) -> Option<&'a toml::Value> {
+    ["repo", "infrastructure_repo"]
+        .into_iter()
+        .filter_map(|key| manifest.get(key).and_then(toml::Value::as_array))
+        .flatten()
+        .find(|entry| entry.get("name").and_then(toml::Value::as_str) == Some(name))
+        .or_else(|| {
+            manifest
+                .get("control_plane")
+                .filter(|entry| entry.get("name").and_then(toml::Value::as_str) == Some(name))
+        })
+}
+
 fn repo_plan(repo: &FleetRepo) -> JsonValue {
     json!({
         "name": repo.name,
@@ -747,6 +877,225 @@ fn repo_plan(repo: &FleetRepo) -> JsonValue {
         "tag": repo.tag,
         "policy_sha256": repo.policy_sha256,
     })
+}
+
+fn rerun_command(options: &Options) -> Vec<String> {
+    let mut command = vec!["./release-candidate.sh".to_owned()];
+    if options.force {
+        command.push("--force".to_owned());
+    }
+    if !options.apply_tags {
+        command.push("--no-tags".to_owned());
+    }
+    if !options.atomicsoul {
+        command.push("--no-atomicsoul".to_owned());
+    }
+    for repo in &options.selected {
+        command.extend(["--repo".to_owned(), repo.clone()]);
+    }
+    if options.from_wave != 0 {
+        command.extend(["--from-wave".to_owned(), options.from_wave.to_string()]);
+    }
+    if options.through_wave != MAX_ROLLOUT_WAVE {
+        command.extend([
+            "--through-wave".to_owned(),
+            options.through_wave.to_string(),
+        ]);
+    }
+    if options.max_age_hours != DEFAULT_MAX_AGE_HOURS {
+        command.extend([
+            "--max-age-hours".to_owned(),
+            options.max_age_hours.to_string(),
+        ]);
+    }
+    if options.manifest != PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml") {
+        command.extend([
+            "--manifest".to_owned(),
+            options.manifest.display().to_string(),
+        ]);
+    }
+    if options.evidence_dir
+        != PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("docs/release-evidence/8.0.0/orchestrator")
+    {
+        command.extend([
+            "--evidence-dir".to_owned(),
+            options.evidence_dir.display().to_string(),
+        ]);
+    }
+    command
+}
+
+fn validate_host_prerequisites(
+    manifest: &toml::Value,
+    options: &Options,
+    control_root: &Path,
+) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    let split_root = manifest
+        .get("split_root")
+        .and_then(toml::Value::as_str)
+        .map(PathBuf::from)
+        .ok_or("manifest is missing split_root")?;
+    let mut checks = Vec::new();
+    for tool in [
+        "rustc",
+        "cargo",
+        "git",
+        "curl",
+        "docker",
+        "jq",
+        "syft",
+        "grype",
+        "cargo-audit",
+        "cosign",
+    ] {
+        let available = executable_available(tool);
+        checks.push(json!({
+            "name": tool,
+            "status": if available {"pass"} else {"blocked"},
+            "detail": if available {"executable available"} else {"install or expose the required executable on PATH"},
+        }));
+    }
+
+    let buildx = command_succeeds("docker", &["buildx", "version"]);
+    checks.push(json!({
+        "name": "docker-buildx",
+        "status": if buildx {"pass"} else {"blocked"},
+        "detail": if buildx {"docker buildx is available"} else {"docker buildx is unavailable; install the Docker buildx plugin"},
+    }));
+
+    let jeryu_health = command_succeeds(
+        "curl",
+        &["-fsS", "--max-time", "5", "http://127.0.0.1:8787/health"],
+    );
+    checks.push(json!({
+        "name": "jeryu-health",
+        "status": if jeryu_health {"pass"} else {"blocked"},
+        "detail": if jeryu_health {"local Jeryu health endpoint is ready"} else {"start or repair local Jeryu at http://127.0.0.1:8787"},
+    }));
+
+    let token_path = env::var_os("JERYU_MERGE_TOKEN_FILE")
+        .map(PathBuf::from)
+        .or_else(|| {
+            env::var_os("HOME").map(|home| PathBuf::from(home).join(".jeryu/secrets/merge-token"))
+        });
+    let token_available = env::var("JERYU_MERGE_TOKEN")
+        .ok()
+        .is_some_and(|token| !token.is_empty())
+        || token_path.as_deref().is_some_and(Path::is_file);
+    checks.push(json!({
+        "name": "jeryu-merge-token",
+        "status": if token_available {"pass"} else {"blocked"},
+        "detail": if token_available {"Jeryu write credential is available"} else {"configure JERYU_MERGE_TOKEN or JERYU_MERGE_TOKEN_FILE; token contents are never recorded"},
+    }));
+
+    let mirror_root = split_root.join("target/bare-mirrors");
+    let mirror_names = if options.selected.is_empty() {
+        ["repo", "infrastructure_repo"]
+            .into_iter()
+            .filter_map(|key| manifest.get(key).and_then(toml::Value::as_array))
+            .flatten()
+            .filter_map(|entry| entry.get("name").and_then(toml::Value::as_str))
+            .map(str::to_owned)
+            .collect::<Vec<_>>()
+    } else {
+        options.selected.clone()
+    };
+    let missing_mirrors = mirror_names
+        .iter()
+        .filter(|name| !mirror_root.join(format!("{name}.git")).is_dir())
+        .cloned()
+        .collect::<Vec<_>>();
+    let mirrors_ready = mirror_root.is_dir() && missing_mirrors.is_empty();
+    checks.push(json!({
+        "name": "local-bare-mirrors",
+        "status": if mirrors_ready {"pass"} else {"blocked"},
+        "path": mirror_root,
+        "missing": missing_mirrors,
+        "detail": if mirrors_ready {"selected repository mirrors are present"} else {"run the reviewed local mirror refresh before release CI"},
+    }));
+
+    let disk_free_kib = disk_free_kib(&split_root).unwrap_or(0);
+    let disk_ready = disk_free_kib >= 10_000_000;
+    checks.push(json!({
+        "name": "disk-space",
+        "status": if disk_ready {"pass"} else {"blocked"},
+        "free_kib": disk_free_kib,
+        "minimum_kib": 10_000_000,
+        "detail": if disk_ready {"sufficient workspace disk is available"} else {"free at least 10 GiB in the Jain workspace filesystem"},
+    }));
+
+    let cgroup = Path::new("/sys/fs/cgroup").is_dir();
+    let psi = Path::new("/proc/pressure").is_dir();
+    checks.push(json!({
+        "name": "linux-cgroup",
+        "status": if cgroup {"pass"} else {"blocked"},
+        "detail": if cgroup {"Linux cgroup controls are visible"} else {"run on a Linux host with /sys/fs/cgroup mounted"},
+    }));
+    checks.push(json!({
+        "name": "linux-psi",
+        "status": if psi {"pass"} else {"blocked"},
+        "detail": if psi {"Linux PSI is visible"} else {"run on a Linux host exposing /proc/pressure"},
+    }));
+
+    let status = if checks.iter().all(|check| check["status"] == "pass") {
+        "pass"
+    } else {
+        "blocked"
+    };
+    let receipt = options.evidence_dir.join("host-prerequisites.json");
+    let report = json!({
+        "schema_version": "jain.release-host-prerequisites/v1",
+        "name": "host-prerequisites",
+        "status": status,
+        "release_version": RELEASE_VERSION,
+        "manifest": options.manifest,
+        "manifest_sha256": sha256_file(&options.manifest)?,
+        "tool_version": TOOL_VERSION,
+        "control_root": control_root,
+        "checks": checks,
+        "timestamp_unix": now_unix(),
+        "receipt": receipt,
+    });
+    write_json(&receipt, &report)?;
+    Ok(report)
+}
+
+fn executable_available(name: &str) -> bool {
+    if name.contains('/') {
+        return Path::new(name).is_file();
+    }
+    env::var_os("PATH")
+        .into_iter()
+        .flat_map(|path| env::split_paths(&path).collect::<Vec<_>>())
+        .any(|directory| directory.join(name).is_file())
+}
+
+fn command_succeeds(program: &str, args: &[&str]) -> bool {
+    Command::new(program)
+        .args(args)
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+fn disk_free_kib(path: &Path) -> Option<u64> {
+    let output = Command::new("df")
+        .args(["-Pk", path.to_str()?])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    String::from_utf8(output.stdout)
+        .ok()?
+        .lines()
+        .last()?
+        .split_whitespace()
+        .nth(3)?
+        .parse()
+        .ok()
 }
 
 fn run_repo_ci(
@@ -794,11 +1143,103 @@ fn run_repo_ci(
         write_json(&receipt, &step)?;
         return Ok(step);
     }
+    if branch != repo.expected_branch {
+        let step = json!({
+            "name": format!("ci:{}", repo.name),
+            "repository": repo.name,
+            "wave": repo.wave,
+            "commit": commit,
+            "checkout_head": head,
+            "branch": branch,
+            "expected_branch": repo.expected_branch,
+            "status": "blocked",
+            "reason": "release CI requires the canonical branch before detached exact-commit execution",
+            "receipt": receipt,
+            "log": log,
+        });
+        write_json(&receipt, &step)?;
+        return Ok(step);
+    }
+    if repo.release_commit != PENDING && head != commit {
+        let step = json!({
+            "name": format!("ci:{}", repo.name),
+            "repository": repo.name,
+            "wave": repo.wave,
+            "commit": commit,
+            "checkout_head": head,
+            "status": "blocked",
+            "reason": "checkout HEAD does not equal the reviewed manifest release_commit",
+            "receipt": receipt,
+            "log": log,
+        });
+        write_json(&receipt, &step)?;
+        return Ok(step);
+    }
+    let forge_main = match remote_branch_commit(&repo.path, &repo.remote, &repo.expected_branch) {
+        Ok(value) => value,
+        Err(error) => {
+            let step = json!({
+                "name": format!("ci:{}", repo.name),
+                "repository": repo.name,
+                "wave": repo.wave,
+                "commit": commit,
+                "checkout_head": head,
+                "status": "blocked",
+                "reason": "could not read the reviewed forge branch before release CI",
+                "detail": error.to_string(),
+                "receipt": receipt,
+                "log": log,
+            });
+            write_json(&receipt, &step)?;
+            return Ok(step);
+        }
+    };
+    if forge_main.as_deref() != Some(commit.as_str()) {
+        let step = json!({
+            "name": format!("ci:{}", repo.name),
+            "repository": repo.name,
+            "wave": repo.wave,
+            "commit": commit,
+            "checkout_head": head,
+            "forge_main": forge_main,
+            "status": "blocked",
+            "reason": "reviewed forge main does not resolve to the exact release CI commit",
+            "receipt": receipt,
+            "log": log,
+        });
+        write_json(&receipt, &step)?;
+        return Ok(step);
+    }
+    if repo.release_commit != PENDING {
+        let local_tag = git_output(
+            &repo.path,
+            &["rev-parse", &format!("refs/tags/{}^{{}}", repo.tag)],
+        )
+        .ok();
+        if local_tag.as_deref() != Some(commit.as_str()) {
+            let step = json!({
+                "name": format!("ci:{}", repo.name),
+                "repository": repo.name,
+                "wave": repo.wave,
+                "commit": commit,
+                "checkout_head": head,
+                "local_tag": local_tag,
+                "tag": repo.tag,
+                "status": "blocked",
+                "reason": "reviewed immutable tag does not resolve locally to the release CI commit",
+                "receipt": receipt,
+                "log": log,
+            });
+            write_json(&receipt, &step)?;
+            return Ok(step);
+        }
+    }
     if !options.force {
         if let Some(mut cached) = cached_step(
             &receipt,
             &log,
             &commit,
+            manifest_sha256,
             &repo.policy_sha256,
             options.max_age_hours,
         )? {
@@ -827,7 +1268,7 @@ fn run_repo_ci(
         )
         .env_remove("RUSTUP_TOOLCHAIN")
         .env_remove("RUSTUP_OVERRIDE");
-    let status = run_logged(&mut command, &log)?;
+    let status = run_logged(&format!("ci:{}", repo.name), &mut command, &log)?;
     let step = json!({
         "schema_version": "jain.release-candidate-ci/v1",
         "name": format!("ci:{}", repo.name),
@@ -839,6 +1280,7 @@ fn run_repo_ci(
         "branch": branch,
         "manifest_sha256": manifest_sha256,
         "policy_sha256": repo.policy_sha256,
+        "tool_version": TOOL_VERSION,
         "required_check": repo.required_check,
         "status": if status.success() {"pass"} else {"fail"},
         "exit_code": status.code(),
@@ -918,7 +1360,7 @@ fn run_repo_tag(
         .env("ATOMICSOUL_PUSH", "0")
         .env_remove("RUSTUP_TOOLCHAIN")
         .env_remove("RUSTUP_OVERRIDE");
-    let status = run_logged(&mut command, &log)?;
+    let status = run_logged(&format!("tag:{}", repo.name), &mut command, &log)?;
     Ok(json!({
         "name": format!("tag:{}", repo.name),
         "repository": repo.name,
@@ -961,10 +1403,13 @@ fn run_redline_family(
         .ok_or("orchestrator evidence directory has no release root")?;
     let receipt = release_root.join("redline-family-ci.json");
     let log = options.evidence_dir.join("redline-family-ci.log");
+    let runner_cache = release_root.join("redline-family-ci.runner.json");
     if !force
         && !options.force
         && cached_family(
             &receipt,
+            &log,
+            &runner_cache,
             &nested_hash,
             options.max_age_hours,
             require_verified_tags,
@@ -1001,7 +1446,20 @@ fn run_redline_family(
         .env_remove("RUSTUP_TOOLCHAIN")
         .env_remove("RUSTUP_OVERRIDE");
     let started = Instant::now();
-    let status = run_logged(&mut command, &log)?;
+    let status = run_logged("redline-family-ci", &mut command, &log)?;
+    if status.success() {
+        write_json(
+            &runner_cache,
+            &json!({
+                "schema_version": "jain.release-candidate-cache/v1",
+                "tool_version": TOOL_VERSION,
+                "manifest_sha256": nested_hash,
+                "family_receipt_sha256": sha256_file(&receipt)?,
+                "log_sha256": sha256_file(&log)?,
+                "timestamp_unix": now_unix(),
+            }),
+        )?;
+    }
     Ok(json!({
         "name": "redline-family-ci",
         "status": if status.success() {"pass"} else {"fail"},
@@ -1010,6 +1468,7 @@ fn run_redline_family(
         "receipt": receipt,
         "log": log,
         "log_sha256": sha256_file(&log)?,
+        "tool_version": TOOL_VERSION,
         "exit_code": status.code(),
         "duration_millis": started.elapsed().as_millis(),
         "timestamp_unix": now_unix(),
@@ -1084,7 +1543,7 @@ fn run_redline_tags(
             .env("ATOMICSOUL_PUSH", "0")
             .env_remove("RUSTUP_TOOLCHAIN")
             .env_remove("RUSTUP_OVERRIDE");
-        let status = run_logged(&mut command, &log)?;
+        let status = run_logged(&format!("tag:{name}"), &mut command, &log)?;
         steps.push(json!({
             "name": format!("tag:{name}"),
             "repository": name,
@@ -1100,6 +1559,214 @@ fn run_redline_tags(
     Ok(steps)
 }
 
+fn run_redline_cutover(
+    manifest: &toml::Value,
+    options: &Options,
+) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
+    let control = PathBuf::from(
+        manifest
+            .get("nested_families")
+            .and_then(|value| value.get("redline"))
+            .and_then(|value| value.get("control_plane"))
+            .and_then(toml::Value::as_str)
+            .ok_or("manifest is missing nested_families.redline.control_plane")?,
+    );
+    let release_root = options
+        .evidence_dir
+        .parent()
+        .ok_or("orchestrator evidence directory has no release root")?;
+    let family = release_root.join("redline-family-ci.json");
+    let jain = release_root.join("redline-consumer-jain-split.json");
+    let jeryu = release_root.join("redline-consumer-jeryu-split.json");
+    let consumer_checks = vec![
+        validate_consumer_evidence(&jain, "jain-split", &family)?,
+        validate_consumer_evidence(&jeryu, "jeryu-split", &family)?,
+    ];
+    if consumer_checks.iter().any(|step| !step_green(step)) {
+        return Ok(consumer_checks);
+    }
+
+    let proof_receipt = release_root.join("redline-proof-refresh.json");
+    let mut proof = Command::new(control.join("redlinectl"));
+    proof
+        .current_dir(&control)
+        .arg("proof-refresh")
+        .arg("--family-ci")
+        .arg(&family)
+        .arg("--jain-evidence")
+        .arg(&jain)
+        .arg("--jeryu-evidence")
+        .arg(&jeryu)
+        .arg("--receipt")
+        .arg(&proof_receipt);
+    let proof_step = run_control_step(
+        "redline-proof-refresh",
+        &mut proof,
+        &options.evidence_dir,
+        "fail",
+    )?;
+    if !step_green(&proof_step) {
+        return Ok(vec![proof_step]);
+    }
+
+    let cutover = run_control_step(
+        "redline-cutover-verify",
+        Command::new(control.join("redlinectl"))
+            .current_dir(&control)
+            .arg("cutover-verify"),
+        &options.evidence_dir,
+        "fail",
+    )?;
+    if !step_green(&cutover) {
+        return Ok([consumer_checks, vec![proof_step, cutover]].concat());
+    }
+    let lock_check = verify_redline_lock_pair(manifest, &release_root)?;
+    Ok([consumer_checks, vec![proof_step, cutover, lock_check]].concat())
+}
+
+fn validate_consumer_evidence(
+    path: &Path,
+    consumer: &str,
+    family_ci: &Path,
+) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    let mut failures = Vec::new();
+    let sidecar = path.with_extension("json.sha256");
+    let mut digest = None;
+    let value = if !path.is_file() {
+        failures.push("consumer evidence file is missing".to_owned());
+        JsonValue::Null
+    } else {
+        let bytes = fs::read(path)?;
+        digest = Some(sha256_bytes(&bytes));
+        if !sidecar.is_file() {
+            failures.push("consumer evidence SHA-256 sidecar is missing".to_owned());
+        } else {
+            let declared = fs::read_to_string(&sidecar)?;
+            if declared.split_whitespace().next() != digest.as_deref() {
+                failures.push("consumer evidence SHA-256 sidecar does not match bytes".to_owned());
+            }
+        }
+        match serde_json::from_slice::<JsonValue>(&bytes) {
+            Ok(value) => value,
+            Err(error) => {
+                failures.push(format!("consumer evidence is not valid JSON: {error}"));
+                JsonValue::Null
+            }
+        }
+    };
+    let family_digest = sha256_file(family_ci).unwrap_or_default();
+    if value["schema_version"] != "redline.consumer-evidence/v1" {
+        failures.push("consumer evidence schema is invalid".to_owned());
+    }
+    if value["consumer"] != consumer {
+        failures.push("consumer evidence identity is invalid".to_owned());
+    }
+    if value["status"] != "pass" {
+        failures.push("consumer evidence status is not pass".to_owned());
+    }
+    for field in ["source_commit", "engine_commit"] {
+        let valid = value[field]
+            .as_str()
+            .is_some_and(|sha| sha.len() == 40 && sha.bytes().all(|byte| byte.is_ascii_hexdigit()));
+        if !valid {
+            failures.push(format!(
+                "consumer evidence {field} is not an immutable commit"
+            ));
+        }
+    }
+    for field in ["engine_tag", "proof_lock_id", "generated_at"] {
+        if value[field].as_str().is_none_or(str::is_empty) {
+            failures.push(format!("consumer evidence is missing {field}"));
+        }
+    }
+    let expected_check = format!("{consumer}/redline-consumer");
+    if value["required_check"] != expected_check {
+        failures.push(format!(
+            "consumer evidence required_check must be {expected_check}"
+        ));
+    }
+    if value["family_ci_receipt_sha256"] != family_digest {
+        failures.push("consumer evidence is not bound to the exact family receipt".to_owned());
+    }
+    if let (Ok(evidence_mtime), Ok(family_mtime)) = (
+        fs::metadata(path).and_then(|metadata| metadata.modified()),
+        fs::metadata(family_ci).and_then(|metadata| metadata.modified()),
+    ) {
+        if evidence_mtime < family_mtime {
+            failures.push("consumer evidence predates the post-tag family receipt".to_owned());
+        }
+    }
+    Ok(json!({
+        "name": format!("redline-consumer-evidence:{consumer}"),
+        "consumer": consumer,
+        "status": if failures.is_empty() {"pass"} else {"blocked"},
+        "evidence": path,
+        "sidecar": sidecar,
+        "evidence_sha256": digest,
+        "family_ci_receipt": family_ci,
+        "family_ci_receipt_sha256": family_digest,
+        "engine_tag": value["engine_tag"],
+        "engine_commit": value["engine_commit"],
+        "proof_lock_id": value["proof_lock_id"],
+        "source_commit": value["source_commit"],
+        "generated_at": value["generated_at"],
+        "failures": failures,
+    }))
+}
+
+fn verify_redline_lock_pair(
+    manifest: &toml::Value,
+    release_root: &Path,
+) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    let nested = manifest
+        .get("nested_families")
+        .and_then(|value| value.get("redline"))
+        .ok_or("manifest is missing nested_families.redline")?;
+    let control = PathBuf::from(
+        nested
+            .get("control_plane")
+            .and_then(toml::Value::as_str)
+            .ok_or("Redline control_plane is missing")?,
+    );
+    let container = PathBuf::from(
+        nested
+            .get("container_path")
+            .and_then(toml::Value::as_str)
+            .ok_or("Redline container_path is missing")?,
+    );
+    let primary = control.join("redline.lock.toml");
+    let mirror = container.join("redline.lock.toml");
+    let primary_bytes = fs::read(&primary).unwrap_or_default();
+    let mirror_bytes = fs::read(&mirror).unwrap_or_default();
+    let parsed: Option<toml::Value> = std::str::from_utf8(&primary_bytes)
+        .ok()
+        .and_then(|text| text.parse().ok());
+    let eligible = parsed
+        .as_ref()
+        .and_then(|lock| lock.get("proof"))
+        .and_then(|proof| proof.get("cutover_eligible"))
+        .and_then(toml::Value::as_bool)
+        == Some(true);
+    let equal = !primary_bytes.is_empty() && primary_bytes == mirror_bytes;
+    let status = if equal && eligible { "pass" } else { "blocked" };
+    let receipt = release_root.join("redline-lock-pair.json");
+    let report = json!({
+        "schema_version": "jain.redline-lock-pair/v1",
+        "name": "redline-lock-pair",
+        "status": status,
+        "primary": primary,
+        "mirror": mirror,
+        "primary_sha256": sha256_bytes(&primary_bytes),
+        "mirror_sha256": sha256_bytes(&mirror_bytes),
+        "byte_identical": equal,
+        "cutover_eligible": eligible,
+        "receipt": receipt,
+        "timestamp_unix": now_unix(),
+    });
+    write_json(&receipt, &report)?;
+    Ok(report)
+}
+
 fn run_control_step(
     name: &str,
     command: &mut Command,
@@ -1113,7 +1780,7 @@ fn run_control_step(
         .env_remove("RUSTUP_TOOLCHAIN")
         .env_remove("RUSTUP_OVERRIDE");
     let started = Instant::now();
-    let status = run_logged(command, &log)?;
+    let status = run_logged(name, command, &log)?;
     Ok(json!({
         "name": name,
         "status": if status.success() {"pass"} else {failure_status},
@@ -1160,9 +1827,219 @@ fn run_atomicsoul(
         .env("ATOMICSOUL_PUSH", "0");
     let dry_run = run_control_step("atomicsoul-dry-run", &mut command, evidence_dir, "fail")?;
     if dry_run["status"] == "pass" {
-        validate_atomicsoul_receipt(&atomicsoul_dir.join("atomicsoul-dry-run.receipt.json"))?;
+        if let Err(error) =
+            validate_atomicsoul_receipt(&atomicsoul_dir.join("atomicsoul-dry-run.receipt.json"))
+        {
+            let mut failed = dry_run;
+            failed["status"] = json!("fail");
+            failed["reason"] = json!(error.to_string());
+            return Ok(vec![contract, failed]);
+        }
     }
     Ok(vec![contract, dry_run])
+}
+
+fn run_staged_artifact(
+    control_root: &Path,
+    evidence_dir: &Path,
+) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
+    let workspace = control_root.parent().ok_or("control root has no parent")?;
+    let deploy = workspace.join("jain-deploy");
+    let artifact_dir = evidence_dir.join("artifact");
+    let image_repo =
+        env::var("ATOMICSOUL_IMAGE_REPO").unwrap_or_else(|_| "jain-candidate/local".to_owned());
+    let native_root = env::var_os("JAIN_NATIVE_SOURCE_ROOT").map(PathBuf::from);
+    let vendor_root = env::var_os("JAIN_VENDOR_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| artifact_dir.join("native-vendor"));
+    let mut build = Command::new("bash");
+    build
+        .current_dir(&deploy)
+        .arg(deploy.join("scripts/release-atomicsoul.sh"))
+        .env("ATOMICSOUL_PUSH", "0")
+        .env("ATOMICSOUL_IMAGE_REPO", &image_repo)
+        .env("ATOMICSOUL_IMAGE_TAG", RELEASE_VERSION)
+        .env("ATOMICSOUL_EVIDENCE_DIR", &artifact_dir)
+        .env("JAIN_VENDOR_ROOT", &vendor_root);
+    if let Some(native_root) = native_root {
+        build.env("JAIN_NATIVE_SOURCE_ROOT", native_root);
+    }
+    let build_step = run_control_step("staged-artifact-image", &mut build, evidence_dir, "fail")?;
+    if !step_green(&build_step) {
+        return Ok(vec![
+            build_step,
+            blocked_step(
+                "artifact-security-evidence",
+                "the staged candidate image must build before local SBOM, vulnerability, and audit evidence can run",
+            ),
+        ]);
+    }
+
+    let image = format!("{image_repo}:{RELEASE_VERSION}");
+    let sbom = artifact_dir.join("sbom.spdx.json");
+    let grype = artifact_dir.join("grype.json");
+    let sbom_step = run_control_step(
+        "artifact-sbom",
+        Command::new("syft")
+            .arg(&image)
+            .arg("-o")
+            .arg(format!("spdx-json={}", sbom.display())),
+        evidence_dir,
+        "fail",
+    )?;
+    let grype_step = if step_green(&sbom_step) {
+        run_control_step(
+            "artifact-vulnerability-scan",
+            Command::new("grype")
+                .arg(format!("sbom:{}", sbom.display()))
+                .arg("-o")
+                .arg(format!("json={}", grype.display()))
+                .arg("--fail-on")
+                .arg("high"),
+            evidence_dir,
+            "fail",
+        )?
+    } else {
+        blocked_step("artifact-vulnerability-scan", "SBOM generation failed")
+    };
+    let audit_step = run_control_step(
+        "artifact-cargo-audit",
+        Command::new("cargo")
+            .current_dir(&deploy)
+            .args(["audit", "--locked"]),
+        evidence_dir,
+        "fail",
+    )?;
+    let signature_receipt = artifact_dir.join("signature-verification.json");
+    let signature = json!({
+        "schema_version": "jain.release-signature/v1",
+        "status": "pass",
+        "mode": "non-pushing-candidate",
+        "verified": false,
+        "reason": "ATOMICSOUL_PUSH=0; no production registry signature is expected for a local candidate",
+        "production_push": false,
+        "timestamp_unix": now_unix(),
+    });
+    write_json(&signature_receipt, &signature)?;
+    let security_status = if [
+        step_green(&sbom_step),
+        step_green(&grype_step),
+        step_green(&audit_step),
+    ]
+    .into_iter()
+    .all(|value| value)
+    {
+        "pass"
+    } else {
+        "fail"
+    };
+    let security_receipt = artifact_dir.join("security-evidence.json");
+    write_json(
+        &security_receipt,
+        &json!({
+            "schema_version": "jain.release-artifact-security/v1",
+            "status": security_status,
+            "release_version": RELEASE_VERSION,
+            "atomicsoul_push": false,
+            "sbom": sbom,
+            "vulnerability_report": grype,
+            "cargo_audit": evidence_dir.join("artifact-cargo-audit.log"),
+            "signature": signature_receipt,
+            "timestamp_unix": now_unix(),
+        }),
+    )?;
+    Ok(vec![
+        build_step,
+        sbom_step,
+        grype_step,
+        audit_step,
+        json!({
+            "name": "artifact-security-evidence",
+            "status": security_status,
+            "receipt": security_receipt,
+        }),
+    ])
+}
+
+fn run_final_validation(
+    control_root: &Path,
+    options: &Options,
+) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
+    let snapshot = options.evidence_dir.join("release-snapshot.json");
+    let snapshot_step = run_control_step(
+        "final-snapshot",
+        Command::new(env::current_exe()?)
+            .arg("release-snapshot")
+            .arg("--manifest")
+            .arg(&options.manifest)
+            .arg("--json")
+            .arg(&snapshot)
+            .arg("--apply"),
+        &options.evidence_dir,
+        "fail",
+    )?;
+    let rollback_receipt = options.evidence_dir.join("rollback.json");
+    let deploy = control_root
+        .parent()
+        .ok_or("control root has no parent")?
+        .join("jain-deploy");
+    let dry_run = deploy.join("scripts/atomicsoul-dry-run.sh");
+    let rollback_contract = fs::read_to_string(&dry_run)
+        .map(|contents| {
+            contents.contains("rollback_target=\"7.0.6\"") && contents.contains("rollback --to")
+        })
+        .unwrap_or(false);
+    let rollback = json!({
+        "schema_version": "jain.release-rollback/v1",
+        "status": if rollback_contract {"pass"} else {"blocked"},
+        "target": "7.0.6",
+        "command": "deployctl rollback --to 7.0.6",
+        "production_applied": false,
+        "source": dry_run,
+        "reason": if rollback_contract {"dry-run rollback contract is present"} else {"the 7.0.6 rollback contract is missing"},
+        "timestamp_unix": now_unix(),
+    });
+    write_json(&rollback_receipt, &rollback)?;
+    Ok(vec![
+        snapshot_step,
+        json!({
+            "name": "rollback-validation",
+            "status": rollback["status"],
+            "receipt": rollback_receipt,
+        }),
+    ])
+}
+
+fn finish_run(
+    aggregate_path: &Path,
+    report: &mut JsonValue,
+    steps: Vec<JsonValue>,
+    manifest: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let overall = overall_status(&steps);
+    let blocked_steps = steps
+        .iter()
+        .filter(|step| step["status"] == "blocked")
+        .count();
+    let failed_steps = steps.iter().filter(|step| step["status"] == "fail").count();
+    report["steps"] = json!(steps);
+    report["status"] = json!(overall);
+    report["blocked_steps"] = json!(blocked_steps);
+    report["failed_steps"] = json!(failed_steps);
+    report["rollback_target"] = json!("7.0.6");
+    let final_manifest_sha256 = sha256_file(manifest)?;
+    let manifest_changed =
+        report["manifest_sha256"].as_str() != Some(final_manifest_sha256.as_str());
+    report["final_manifest_sha256"] = json!(final_manifest_sha256);
+    report["manifest_changed"] = json!(manifest_changed);
+    report["finished_at_unix"] = json!(now_unix());
+    write_json(aggregate_path, report)?;
+    println!("release candidate {overall}: {}", aggregate_path.display());
+    if overall == "pass" {
+        Ok(())
+    } else {
+        Err(format!("release candidate is {overall}; see the aggregate receipt").into())
+    }
 }
 
 fn validate_atomicsoul_receipt(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
@@ -1183,6 +2060,7 @@ fn validate_atomicsoul_receipt(path: &Path) -> Result<(), Box<dyn std::error::Er
 }
 
 fn run_logged(
+    label: &str,
     command: &mut Command,
     log: &Path,
 ) -> Result<std::process::ExitStatus, Box<dyn std::error::Error>> {
@@ -1191,16 +2069,54 @@ fn run_logged(
     }
     let stdout = File::create(log)?;
     let stderr = stdout.try_clone()?;
-    Ok(command
+    let program = command.get_program().to_string_lossy().into_owned();
+    let started = Instant::now();
+    eprintln!("START {label}: {program} (log: {})", log.display());
+    let status = command
         .stdout(Stdio::from(stdout))
         .stderr(Stdio::from(stderr))
-        .status()?)
+        .status()?;
+    eprintln!(
+        "{} {label}: {program} in {} ms (log: {})",
+        if status.success() { "PASS" } else { "FAIL" },
+        started.elapsed().as_millis(),
+        log.display()
+    );
+    Ok(status)
+}
+
+fn checkpoint_report(
+    aggregate_path: &Path,
+    report: &mut JsonValue,
+    steps: &[JsonValue],
+) -> Result<(), Box<dyn std::error::Error>> {
+    report["steps"] = json!(steps);
+    report["status"] = json!("running");
+    if let Some(step) = steps.last() {
+        report["last_attempted_step"] = step["name"].clone();
+        if let Some(log) = step.get("log") {
+            report["last_log_path"] = log.clone();
+        }
+    }
+    if let Some(step) = steps
+        .iter()
+        .rev()
+        .find(|step| matches!(step["status"].as_str(), Some("pass" | "cached" | "skipped")))
+    {
+        report["last_completed_step"] = step["name"].clone();
+        if let Some(log) = step.get("log") {
+            report["last_log_path"] = log.clone();
+        }
+    }
+    report["last_updated_at_unix"] = json!(now_unix());
+    write_json(aggregate_path, report)
 }
 
 fn cached_step(
     receipt: &Path,
     log: &Path,
     commit: &str,
+    manifest_sha256: &str,
     policy_sha256: &str,
     max_age_hours: u64,
 ) -> Result<Option<JsonValue>, Box<dyn std::error::Error>> {
@@ -1213,7 +2129,9 @@ fn cached_step(
     });
     let valid = value["status"] == "pass"
         && value["commit"] == commit
+        && value["manifest_sha256"] == manifest_sha256
         && value["policy_sha256"] == policy_sha256
+        && value["tool_version"] == TOOL_VERSION
         && value["log_sha256"].as_str() == Some(&sha256_file(log)?)
         && fresh;
     Ok(valid.then_some(value))
@@ -1221,14 +2139,17 @@ fn cached_step(
 
 fn cached_family(
     receipt: &Path,
+    log: &Path,
+    runner_cache: &Path,
     manifest_sha256: &str,
     max_age_hours: u64,
     require_verified_tags: bool,
 ) -> Result<bool, Box<dyn std::error::Error>> {
-    if !receipt.is_file() {
+    if !receipt.is_file() || !log.is_file() || !runner_cache.is_file() {
         return Ok(false);
     }
     let value: JsonValue = serde_json::from_slice(&fs::read(receipt)?)?;
+    let cache: JsonValue = serde_json::from_slice(&fs::read(runner_cache)?)?;
     let generated = value["generated_at"].as_str().is_some();
     let modified = fs::metadata(receipt)?
         .modified()?
@@ -1246,7 +2167,11 @@ fn cached_family(
         && value["manifest_sha256"] == manifest_sha256
         && generated
         && (!require_verified_tags || tags_verified)
-        && now_unix().saturating_sub(modified) <= max_age_hours.saturating_mul(3600))
+        && now_unix().saturating_sub(modified) <= max_age_hours.saturating_mul(3600)
+        && cache["tool_version"] == TOOL_VERSION
+        && cache["manifest_sha256"] == manifest_sha256
+        && cache["family_receipt_sha256"].as_str() == Some(&sha256_file(receipt)?)
+        && cache["log_sha256"].as_str() == Some(&sha256_file(log)?))
 }
 
 fn remote_owner(remote: &str) -> Result<String, Box<dyn std::error::Error>> {
@@ -1484,38 +2409,5 @@ cross_repo_deps = ["typo"]
             ),
             vec!["docs/release-evidence/8.0.0/orchestrator/run.json"]
         );
-    }
-
-    #[test]
-    fn identity_binding_replaces_only_pending_fields_and_never_moves_identity() {
-        let root =
-            env::temp_dir().join(format!("jain-release-identity-test-{}", std::process::id()));
-        let _ = fs::remove_dir_all(&root);
-        fs::create_dir_all(&root).unwrap();
-        let manifest = root.join("repos.manifest.toml");
-        fs::write(
-            &manifest,
-            r#"[[repo]]
-name = "one"
-release_commit = "PENDING"
-release_checksum_sha256 = "PENDING"
-
-[[repo]]
-name = "two"
-release_commit = "PENDING"
-release_checksum_sha256 = "PENDING"
-"#,
-        )
-        .unwrap();
-        let commit = "a".repeat(40);
-        let checksum = "b".repeat(64);
-        update_manifest_identity(&manifest, "two", &commit, &checksum).unwrap();
-        let updated = fs::read_to_string(&manifest).unwrap();
-        assert!(updated.contains("name = \"one\"\nrelease_commit = \"PENDING\""));
-        assert!(updated.contains(&format!(
-            "name = \"two\"\nrelease_commit = \"{commit}\"\nrelease_checksum_sha256 = \"{checksum}\""
-        )));
-        assert!(update_manifest_identity(&manifest, "two", &"c".repeat(40), &checksum).is_err());
-        fs::remove_dir_all(root).unwrap();
     }
 }
