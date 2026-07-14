@@ -2,3 +2,13 @@
 name = "evidence-processor"
 command = "rtk cargo test -p redlinedb-bench --bin evidence_processor --locked"
 purpose = "validate external Redline Testing evidence and pinned suite identities in Rust"
+
+[[lane]]
+name = "interaction-volume-unit"
+command = "rtk cargo test -p redlinedb-bench --locked interaction_volume"
+purpose = "validate immutable profile, bounded plan, integrity, storage, and atomic receipt policy"
+
+[[lane]]
+name = "interaction-volume-script"
+command = "rtk bash -n ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh && rtk shellcheck ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh && rtk jq empty ops/ci/interaction-volume-trigger-contract.json"
+purpose = "validate pinned reference setup, shared storage, interruption receipts, and trigger contract"

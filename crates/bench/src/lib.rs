@@ -7,6 +7,7 @@ mod engine;
 pub mod failpoint_matrix;
 pub mod fuzz;
 mod gates;
+pub mod interaction_volume;
 mod metrics;
 pub mod perf_evidence;
 pub mod process_metrics;

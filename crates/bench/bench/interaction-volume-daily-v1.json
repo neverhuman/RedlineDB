@@ -1,0 +1,19 @@
+{
+  "schema_version": "redline.interaction-volume-profile/v1",
+  "profile_id": "jain-session-event-daily-v1",
+  "approval_policy": "immutable digest plus protected independent review",
+  "config": {
+    "threads": [1, 4, 16],
+    "operations_per_thread": 10000,
+    "repetitions": 7,
+    "sessions": 64,
+    "payload_bytes": 256,
+    "warmup_operations_per_thread": 100,
+    "seed": 7,
+    "durability": "strict",
+    "idle_observation_secs": 5,
+    "soak_observation_secs": 300,
+    "max_idle_growth_bytes": 16777216,
+    "max_data_bytes": 2147483648
+  }
+}

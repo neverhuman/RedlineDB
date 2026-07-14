@@ -36,6 +36,8 @@ readable repair receipts.
 | `sql-test`                           | Targeted `redlinedb-sql` test proof.                                                                   |
 | `beyond-sqlite-manifest`             | Verifies the beyond-SQLite backlog ranking, source tips, owners, and proof-lane routing.               |
 | `beyond-postgres-reference`          | Runs the beyond-SQLite manifest and Postgres oracle tests against PostgreSQL 16. Starts a Docker container locally when `REDLINEDB_POSTGRES_URL` is unset. |
+| `interaction-volume-smoke`           | Runs a fast identical-plan Redline/SQLite/PostgreSQL mechanics and integrity check. Informational only; never authorizes a release or performance claim. |
+| `interaction-volume-daily`           | Runs the immutable digest-bound seven-repetition interaction/volume profile, exact concurrency points, storage watchdog, and five-minute Redline delayed-growth soak. Scheduled CI fails closed and retains raw receipts. |
 | `ffi-check`                          | Targeted `redlinedb-ffi` compile proof.                                                               |
 | `ffi-test`                           | Targeted `redlinedb-ffi` test proof.                                                                   |
 | `cli-check`                          | Targeted `redlinedb-cli` compile proof.                                                               |
@@ -113,6 +115,78 @@ starts `${REDLINEDB_POSTGRES_IMAGE:-postgres:16-alpine}` with database
 exports `REDLINEDB_POSTGRES_URL`, runs `beyond_sqlite_manifest` and
 `beyond_postgres_reference`, then removes the container. Set
 `REDLINEDB_POSTGRES_KEEP=1` to keep the local container for debugging.
+
+The Jain interaction/volume check is separate from official SQLite parity. It
+uses the same seeded operations against all three engines and starts a pinned,
+disposable PostgreSQL 16 instance with checksums and strict durability. Local
+runs are offline by default: preload the literal image digest once, or
+explicitly authorize that one pull:
+
+```
+REDLINEDB_CERT_ALLOW_IMAGE_PULL=1 rtk just interaction-volume-smoke
+rtk just interaction-volume-smoke
+```
+
+The smoke must report `mechanics_passed=true` and
+`release_eligible=false`. The scheduled lane is intentionally heavier:
+
+```
+rtk just interaction-volume-daily
+```
+
+Only the exact canonical daily profile in
+`crates/bench/bench/interaction-volume-daily-v1.json` can set
+`release_eligible=true`. Both the shell lane and Rust binary verify its literal
+SHA-256 before work starts; changing it requires updating two independent
+constants and passing protected independent review. Seed 7, a 2 GiB hard
+storage cap, a lower stop watermark that reserves 16 MiB of headroom, 2 GiB
+per-file `RLIMIT_FSIZE`, and 16 MiB idle growth are fail-closed ceilings, not
+operator-tunable release thresholds.
+
+`attempt.json` is atomically written before the first engine run and
+`progress.json` is atomically refreshed throughout every lifecycle phase. It
+names the active engine and concurrency/repetition point, heartbeat, absolute
+deadline, latest storage sample, and terminal cause. The required smoke job
+also executes real timeout and external-SIGTERM tests and checks the preserved
+receipts. A timeout, signal, crash, custom profile, relaxed threshold, dirty
+checkout, incorrect read/replay result, integrity mismatch, storage watermark,
+or loss to either reference therefore authorizes no claim. Final
+`raw-runs.json` and `manifest.json` are written only after a caught
+completion/failure. Receipts live under `target/ci/interaction-volume/<mode>/`;
+database files and PostgreSQL schemas must be gone when a completed lane
+finishes.
+
+`execution-evidence.json`, the attempt, and the final manifest bind the
+repository-observed commit/dirty state, running binary SHA-256, PostgreSQL OCI
+digest and isolation mode, and storage mount contract. The Rust binary checks
+those facts instead of trusting caller-provided provenance variables.
+
+The storage watchdog samples continuously inside each workload and across
+setup, checkpoint, idle observation, integrity, and reopen. It stops before the
+hard cap. Redline accounts its complete database directory, SQLite its database
+and WAL, and the dedicated PostgreSQL instance its full default tablespace plus
+current WAL-directory bytes. These byte definitions remain safety-only and
+never rank engines. Every
+timed point read validates session identity/state/range, and every replay
+validates row shape, session, event identity/sequence, kind, payload, ordering,
+and row bound; verified operation counts appear in each run receipt.
+
+A release comparison additionally requires Redline, SQLite, and the PostgreSQL
+data directory to use the same non-memory host filesystem. The local/scheduled
+lane bind-mounts PostgreSQL storage beside the two embedded-engine roots and
+records identical mount identities. Service-container smoke storage is marked
+unmatched and can prove mechanics only. The only consumer-facing boolean is
+`bounded_reference_win_eligible`, which applies to the exact seeded closed-loop
+points in the receipt and is not evidence for untested arrival rates, bursts,
+concurrency, payloads, or customer volume.
+
+GitLab's required smoke uses the pinned private PostgreSQL service and remains
+informational. The governed daily job uses the cached digest-pinned image with
+a shared host bind, and its checked-in trigger/retention contract is
+`ops/ci/interaction-volume-trigger-contract.json`. All three heavy benchmark
+jobs share `resource_group=redline-heavy-benchmark`; the daily certificate is
+non-interruptible and has retry disabled, preventing overlapping or silently
+repeated evidence attempts. Daily artifacts are retained for 90 days.
 
 To reproduce the PR-side jankurai failure mode before pushing, commit the
 candidate changes and run:
@@ -284,7 +358,7 @@ chaos workloads, CI jobs that fan out matrices) is bounded by an
 explicit budget, a quota, a stop condition, and a kill-switch.
 
 - **Max wall-clock per bench run.** Aggregate CI cap is
-  `[bench].max_wall_clock_seconds = 1800` (30 minutes). Per-workload
+  `[bench].max_wall_clock_seconds = 7200` (120 minutes). Per-workload
   caps live in each `[[workload]]` block as `max_wall_clock_minutes`
   and bound a single invocation.
 - **Max CI concurrent jobs.** `[bench].max_ci_concurrent_jobs = 4`.

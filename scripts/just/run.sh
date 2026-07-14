@@ -396,6 +396,12 @@ case "$lane" in
   beyond-postgres-reference)
     rtk bash ops/ci/beyond-postgres-reference.sh
     ;;
+  interaction-volume-smoke)
+    rtk bash ops/ci/interaction-volume-cert.sh smoke
+    ;;
+  interaction-volume-daily)
+    rtk bash ops/ci/interaction-volume-cert.sh daily
+    ;;
   ffi-check)
     rtk cargo check -p redlinedb-ffi --locked
     ;;

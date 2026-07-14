@@ -204,6 +204,7 @@ workflow:
   rules:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
     - if: $CI_PIPELINE_SOURCE == "web"
     - if: $CI_PIPELINE_SOURCE == "api"
 
@@ -327,6 +328,36 @@ release-smoke:
 "test:bench":
   <<: *test_crate
   script: [cargo test -p redlinedb-bench --quiet --locked]
+
+interaction-volume-smoke:
+  stage: test
+  tags: [docker-build]
+  needs: []
+  timeout: 45 minutes
+  retry: 0
+  services:
+    - name: docker.io/library/postgres@sha256:786dab398303b8ce7cb76b407bb21ef2e4dfbbbd4c6abcf3d29b3130467ffdbc
+      alias: postgres-cert
+      pull_policy: if-not-present
+  variables:
+    POSTGRES_DB: redline_cert
+    POSTGRES_USER: redline_cert
+    POSTGRES_PASSWORD: redline-cert-local-only
+    POSTGRES_INITDB_ARGS: "--data-checksums"
+    REDLINEDB_POSTGRES_CERT_CI_SERVICE: "1"
+    REDLINEDB_POSTGRES_CERT_SERVICE_DIGEST: "sha256:786dab398303b8ce7cb76b407bb21ef2e4dfbbbd4c6abcf3d29b3130467ffdbc"
+    REDLINEDB_BENCH_POSTGRES_URL: "host=postgres-cert port=5432 user=redline_cert password=redline-cert-local-only dbname=redline_cert connect_timeout=5"
+  script:
+    - bash ops/ci/interaction-volume-cert.sh smoke
+    - bash ops/ci/interaction-volume-interruption-test.sh
+  artifacts:
+    when: always
+    name: "redline-interaction-volume-smoke"
+    paths:
+      - target/ci/interaction-volume/smoke/
+      - target/ci/interaction-volume/smoke-timeout/
+      - target/ci/interaction-volume/smoke-sigterm/
+    expire_in: 14 days
 
 parity:
   stage: parity
@@ -817,6 +848,9 @@ benchmark:
   tags: [docker-build]
   needs: []
   timeout: 240 minutes
+  interruptible: false
+  retry: 0
+  resource_group: redline-heavy-benchmark
   rules:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
       when: on_success
@@ -889,6 +923,9 @@ benchmark-rql:
   tags: [docker-build]
   needs: []
   timeout: 120 minutes
+  interruptible: false
+  retry: 0
+  resource_group: redline-heavy-benchmark
   rules:
     - if: $CI_PIPELINE_SOURCE == "push" && $CI_COMMIT_BRANCH == "main"
       when: on_success
@@ -929,3 +966,30 @@ benchmark-rql:
     paths:
       - target/perf/
     expire_in: 30 days
+
+interaction-volume-daily:
+  stage: benchmark
+  tags: [docker-build]
+  needs: []
+  timeout: 150 minutes
+  interruptible: false
+  retry: 0
+  resource_group: redline-heavy-benchmark
+  variables:
+    REDLINEDB_CERT_ALLOW_IMAGE_PULL: "0"
+    REDLINEDB_INTERACTION_TRIGGER_CONTRACT: "interaction-volume-daily-v1"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: on_success
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: manual
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+      allow_failure: true
+  script: [bash ops/ci/interaction-volume-cert.sh daily]
+  artifacts:
+    when: always
+    name: "redline-interaction-volume-daily-evidence"
+    paths:
+      - target/ci/interaction-volume/daily/
+    expire_in: 90 days

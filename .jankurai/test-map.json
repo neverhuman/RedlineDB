@@ -56,6 +56,18 @@
     "./scripts/bench/xbabe1_run.sh rtk cargo run -p redlinedb-bench -- certify --config crates/bench/bench/gap-cert.toml --out-dir target/bench/xbabe1/gap-cert-strace --seed 7 --repetitions 3 --warmup 1 --with-strace",
     "./scripts/bench/xbabe1_fetch.sh gap-cert-strace"
   ],
+  "interaction-volume-unit": [
+    "rtk cargo test -p redlinedb-bench --locked interaction_volume",
+    "rtk bash -n ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh",
+    "rtk shellcheck ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh",
+    "rtk jq empty ops/ci/interaction-volume-trigger-contract.json"
+  ],
+  "interaction-volume-smoke": [
+    "rtk just interaction-volume-smoke"
+  ],
+  "interaction-volume-daily": [
+    "rtk just interaction-volume-daily"
+  ],
   "security-local": [
     "rtk cargo audit",
     "rtk cargo deny check",
@@ -314,6 +326,26 @@
       "command": "rtk just ffi-abi",
       "purpose": "verify the canonical hand-authored C ABI header without generating local SQLite parity evidence"
     },
+    "crates/bench/bench/interaction-volume-daily-v1.json": {
+      "command": "rtk cargo test -p redlinedb-bench --locked interaction_volume::tests::checked_in_daily_profile_has_the_literal_approved_digest",
+      "purpose": "bind the independently reviewed daily profile bytes, canonical seed, and safety thresholds to the literal Rust digest",
+      "proof_lane": "interaction-volume-unit"
+    },
+    "crates/bench/src/interaction_volume.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --locked interaction_volume",
+      "purpose": "prove the bounded three-engine plan, integrity, comparison, storage, and atomic receipt policy",
+      "proof_lane": "interaction-volume-unit"
+    },
+    "crates/bench/src/interaction_volume/": {
+      "command": "rtk cargo test -p redlinedb-bench --locked interaction_volume",
+      "purpose": "prove split interaction-volume receipt helpers and tests remain bound to the main certificate",
+      "proof_lane": "interaction-volume-unit"
+    },
+    "crates/bench/src/bin/interaction_volume_cert.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --locked interaction_volume",
+      "purpose": "prove the certificate binary entry point builds against the tested fail-closed implementation",
+      "proof_lane": "interaction-volume-unit"
+    },
     "crates/": {
       "command": "just fast",
       "purpose": "verify Rust behavior and audit checks"
@@ -367,6 +399,21 @@
       "command": "just fast",
       "purpose": "run proofs for background‑job cell"
     },
+    "ops/ci/interaction-volume-cert.sh": {
+      "command": "rtk bash -n ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh && rtk shellcheck ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh && rtk jq empty ops/ci/interaction-volume-trigger-contract.json && rtk cargo test -p redlinedb-bench --locked interaction_volume",
+      "purpose": "prove controlled provenance, shared durable storage, pinned PostgreSQL setup, interruption receipts, and final evidence validation",
+      "proof_lane": "interaction-volume-unit"
+    },
+    "ops/ci/interaction-volume-interruption-test.sh": {
+      "command": "rtk bash -n ops/ci/interaction-volume-interruption-test.sh && rtk shellcheck ops/ci/interaction-volume-interruption-test.sh",
+      "purpose": "prove automated timeout and SIGTERM receipt assertions remain valid",
+      "proof_lane": "interaction-volume-unit"
+    },
+    "ops/ci/interaction-volume-trigger-contract.json": {
+      "command": "rtk jq empty ops/ci/interaction-volume-trigger-contract.json && rtk cargo test -p redlinedb-bench --locked interaction_volume",
+      "purpose": "bind authoritative daily triggers, serialization, and artifact retention",
+      "proof_lane": "interaction-volume-unit"
+    },
     "ops/": {
       "command": "just fast",
       "purpose": "verify ops surfaces remain visible to the audit"
@@ -375,6 +422,11 @@
       "command": "rtk bash scripts/ci-local.sh pr-ci",
       "purpose": "verify GitHub CI remains mirrored by the local PR dispatcher and runs the verified redline-testing official gate",
       "proof_lane": "pr-ci"
+    },
+    ".gitlab-ci.yml": {
+      "command": "rtk cargo test -p redlinedb-bench --locked interaction_volume && rtk bash -n ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh && rtk shellcheck ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh",
+      "purpose": "verify required service-smoke plus serialized shared-bind daily benchmark CI remain contract-tested",
+      "proof_lane": "interaction-volume-unit"
     },
     "ops/ci/lib.sh": {
       "command": "rtk bash -n ops/ci/lib.sh && rtk just redline-testing-official",

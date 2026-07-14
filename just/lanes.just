@@ -124,6 +124,12 @@ beyond-sqlite-manifest:
 beyond-postgres-reference:
   ./scripts/just/run.sh beyond-postgres-reference
 
+interaction-volume-smoke:
+  ./scripts/just/run.sh interaction-volume-smoke
+
+interaction-volume-daily:
+  ./scripts/just/run.sh interaction-volume-daily
+
 ffi-check:
   ./scripts/just/run.sh ffi-check
 

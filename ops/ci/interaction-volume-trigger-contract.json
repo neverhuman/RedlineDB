@@ -1,0 +1,14 @@
+{
+  "schema_version": "redline.interaction-volume-trigger/v1",
+  "contract_id": "interaction-volume-daily-v1",
+  "authoritative_ci": ".gitlab-ci.yml",
+  "daily_job": "interaction-volume-daily",
+  "required_smoke_job": "interaction-volume-smoke",
+  "permitted_daily_sources": ["schedule", "web_manual", "merge_request_manual"],
+  "resource_group": "redline-heavy-benchmark",
+  "retry": 0,
+  "interruptible": false,
+  "canonical_profile_sha256": "165ffdffd7bec26f4ef7aa361a02f041a61fb62f8a3f58abc7e447ecf890cbb7",
+  "artifact_retention_days": 90,
+  "interruption_receipt_tests": ["timeout", "sigterm"]
+}

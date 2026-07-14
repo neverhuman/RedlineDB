@@ -20,7 +20,7 @@ kill_switch_env = "REDLINEDB_BENCH_KILL"
 
 [bench]
 # Aggregate caps consumed by the jankurai audit and CI bench gates.
-max_wall_clock_seconds = 1800
+max_wall_clock_seconds = 7200
 max_ci_concurrent_jobs = 4
 
 [dependencies]
@@ -78,6 +78,20 @@ name = "phase11-oltp-gap"
 max_wall_clock_minutes = 30
 max_disk_gb = 20
 max_syscalls = 30_000_000
+owner = "bench-harness"
+
+[[workload]]
+name = "interaction-volume-smoke"
+max_wall_clock_minutes = 5
+max_disk_gb = 3
+max_syscalls = 5_000_000
+owner = "bench-harness"
+
+[[workload]]
+name = "interaction-volume-daily"
+max_wall_clock_minutes = 120
+max_disk_gb = 6
+max_syscalls = 250_000_000
 owner = "bench-harness"
 
 [[workload]]

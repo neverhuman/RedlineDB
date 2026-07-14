@@ -15,6 +15,7 @@ libc = "0.2"
 # thread count against `num_cpus::get()`; reserve a few cores for
 # the OS/parent and saturate the rest like `make -jN`.
 num_cpus = "1"
+postgres = "0.19"
 rand = "0.9"
 rand_chacha = "0.9"
 redlinedb = { path = "../redlinedb" }

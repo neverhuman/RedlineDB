@@ -110,9 +110,11 @@ impl BenchEngine for RedlineEngine {
         // control files, an owner.lock — `file_len(self.path)` only
         // saw one of those. Walk the whole tree so `data_bytes`
         // matches what an operator would see in `du -sh`.
+        let total_bytes = dir_total_bytes(&self.path);
+        let wal_bytes = dir_total_bytes(&self.path.join("wal"));
         Ok(EngineSnapshot {
-            data_bytes: dir_total_bytes(&self.path),
-            wal_bytes: dir_wal_bytes(self.path.parent().unwrap_or(Path::new(".")), "wal", ".wal"),
+            data_bytes: total_bytes.saturating_sub(wal_bytes),
+            wal_bytes,
             engine_stats: serde_json::to_value(stats)?,
             fsyncs_issued: Some(fsyncs),
             fdatasyncs_issued: Some(fdatasyncs),
@@ -236,22 +238,6 @@ pub(crate) fn dir_total_bytes(path: &Path) -> u64 {
         }
     }
     total
-}
-
-fn dir_wal_bytes(dir: &Path, name: &str, ext: &str) -> u64 {
-    let wal_dir = dir.join(name);
-    std::fs::read_dir(&wal_dir)
-        .ok()
-        .into_iter()
-        .flat_map(|entries| entries.flatten())
-        .filter(|entry| {
-            entry
-                .path()
-                .extension()
-                .is_some_and(|value| value == &ext[1..])
-        })
-        .map(|entry| entry.metadata().map(|meta| meta.len()).unwrap_or(0))
-        .sum()
 }
 
 #[cfg(test)]

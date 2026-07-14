@@ -99,6 +99,21 @@ name = "beyond-postgres-reference"
 purpose = "Docker-backed Postgres reference oracle for accepted beyond-SQLite SQL surfaces"
 
 [[lane]]
+command = "rtk cargo test -p redlinedb-bench --locked interaction_volume && rtk bash -n ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh && rtk shellcheck ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh && rtk jq empty ops/ci/interaction-volume-trigger-contract.json"
+name = "interaction-volume-unit"
+purpose = "digest, provenance, read correctness, continuous storage, trigger, and interruption-receipt proof"
+
+[[lane]]
+command = "rtk just interaction-volume-smoke"
+name = "interaction-volume-smoke"
+purpose = "fast real Redline/SQLite/PostgreSQL identical-plan mechanics proof; informational only"
+
+[[lane]]
+command = "rtk just interaction-volume-daily"
+name = "interaction-volume-daily"
+purpose = "serialized immutable-profile daily certificate with raw three-engine evidence"
+
+[[lane]]
 command = "just ffi-abi"
 name = "ffi-abi"
 purpose = "C ABI compatibility proof"
