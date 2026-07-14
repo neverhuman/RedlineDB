@@ -58,8 +58,8 @@
   ],
   "interaction-volume-unit": [
     "rtk cargo test -p redlinedb-bench --locked interaction_volume",
-    "rtk bash -n ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh",
-    "rtk shellcheck ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh",
+    "rtk bash -n ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-ci-entrypoint.sh ops/ci/interaction-volume-interruption-test.sh ops/ci/interaction-volume-adversarial-test.sh",
+    "rtk shellcheck ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-ci-entrypoint.sh ops/ci/interaction-volume-interruption-test.sh ops/ci/interaction-volume-adversarial-test.sh",
     "rtk jq empty ops/ci/interaction-volume-trigger-contract.json"
   ],
   "interaction-volume-smoke": [
@@ -400,13 +400,23 @@
       "purpose": "run proofs for background‑job cell"
     },
     "ops/ci/interaction-volume-cert.sh": {
-      "command": "rtk bash -n ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh && rtk shellcheck ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh && rtk jq empty ops/ci/interaction-volume-trigger-contract.json && rtk cargo test -p redlinedb-bench --locked interaction_volume",
-      "purpose": "prove controlled provenance, shared durable storage, pinned PostgreSQL setup, interruption receipts, and final evidence validation",
+      "command": "rtk bash -n ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-ci-entrypoint.sh ops/ci/interaction-volume-interruption-test.sh ops/ci/interaction-volume-adversarial-test.sh && rtk shellcheck ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-ci-entrypoint.sh ops/ci/interaction-volume-interruption-test.sh ops/ci/interaction-volume-adversarial-test.sh && rtk jq empty ops/ci/interaction-volume-trigger-contract.json && rtk cargo test -p redlinedb-bench --locked interaction_volume",
+      "purpose": "prove live Docker/PG provenance, shared durable storage reserve, runtime trigger binding, adversarial rejection, cleanup receipts, and final evidence validation",
+      "proof_lane": "interaction-volume-unit"
+    },
+    "ops/ci/interaction-volume-ci-entrypoint.sh": {
+      "command": "rtk bash -n ops/ci/interaction-volume-ci-entrypoint.sh && rtk shellcheck ops/ci/interaction-volume-ci-entrypoint.sh && rtk cargo test -p redlinedb-bench --locked interaction_volume",
+      "purpose": "prove the daily job binds live CI source, job, pipeline, commit, Docker client/server, and trigger receipt",
+      "proof_lane": "interaction-volume-unit"
+    },
+    "ops/ci/interaction-volume-adversarial-test.sh": {
+      "command": "rtk bash -n ops/ci/interaction-volume-adversarial-test.sh && rtk shellcheck ops/ci/interaction-volume-adversarial-test.sh",
+      "purpose": "prove stale container, endpoint substitution, and PostgreSQL aggregate-cap overshoot reject and clean up",
       "proof_lane": "interaction-volume-unit"
     },
     "ops/ci/interaction-volume-interruption-test.sh": {
       "command": "rtk bash -n ops/ci/interaction-volume-interruption-test.sh && rtk shellcheck ops/ci/interaction-volume-interruption-test.sh",
-      "purpose": "prove automated timeout and SIGTERM receipt assertions remain valid",
+      "purpose": "prove PostgreSQL-active timeout and SIGTERM remove child, schema, container, and runtime state",
       "proof_lane": "interaction-volume-unit"
     },
     "ops/ci/interaction-volume-trigger-contract.json": {
@@ -424,8 +434,8 @@
       "proof_lane": "pr-ci"
     },
     ".gitlab-ci.yml": {
-      "command": "rtk cargo test -p redlinedb-bench --locked interaction_volume && rtk bash -n ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh && rtk shellcheck ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-interruption-test.sh",
-      "purpose": "verify required service-smoke plus serialized shared-bind daily benchmark CI remain contract-tested",
+      "command": "rtk cargo test -p redlinedb-bench --locked interaction_volume && rtk bash -n ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-ci-entrypoint.sh ops/ci/interaction-volume-interruption-test.sh ops/ci/interaction-volume-adversarial-test.sh && rtk shellcheck ops/ci/interaction-volume-cert.sh ops/ci/interaction-volume-ci-entrypoint.sh ops/ci/interaction-volume-interruption-test.sh ops/ci/interaction-volume-adversarial-test.sh",
+      "purpose": "verify required owned-Docker smoke and runtime-triggered serialized daily benchmark CI remain contract-tested",
       "proof_lane": "interaction-volume-unit"
     },
     "ops/ci/lib.sh": {

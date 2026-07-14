@@ -329,27 +329,37 @@ release-smoke:
   <<: *test_crate
   script: [cargo test -p redlinedb-bench --quiet --locked]
 
-interaction-volume-smoke:
-  stage: test
+.interaction-volume-owned-docker:
+  image: rust:1.95.0
   tags: [docker-build]
+  services:
+    - name: docker.io/library/docker@sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce
+      alias: docker
+      command: ["--tls=false", "--host=tcp://0.0.0.0:2375"]
+      pull_policy: if-not-present
+  variables:
+    GIT_STRATEGY: fetch
+    DOCKER_HOST: "tcp://docker:2375"
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+  before_script:
+    - apt-get update -qq
+    - >-
+      DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends
+      build-essential clang mold zlib1g-dev jq util-linux docker.io
+    - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
+    - 'for n in $(seq 1 60); do docker info >/dev/null 2>&1 && break; [ "$n" -lt 60 ] || exit 1; sleep 1; done'
+
+interaction-volume-smoke:
+  extends: .interaction-volume-owned-docker
+  stage: test
   needs: []
   timeout: 45 minutes
   retry: 0
-  services:
-    - name: docker.io/library/postgres@sha256:786dab398303b8ce7cb76b407bb21ef2e4dfbbbd4c6abcf3d29b3130467ffdbc
-      alias: postgres-cert
-      pull_policy: if-not-present
-  variables:
-    POSTGRES_DB: redline_cert
-    POSTGRES_USER: redline_cert
-    POSTGRES_PASSWORD: redline-cert-local-only
-    POSTGRES_INITDB_ARGS: "--data-checksums"
-    REDLINEDB_POSTGRES_CERT_CI_SERVICE: "1"
-    REDLINEDB_POSTGRES_CERT_SERVICE_DIGEST: "sha256:786dab398303b8ce7cb76b407bb21ef2e4dfbbbd4c6abcf3d29b3130467ffdbc"
-    REDLINEDB_BENCH_POSTGRES_URL: "host=postgres-cert port=5432 user=redline_cert password=redline-cert-local-only dbname=redline_cert connect_timeout=5"
   script:
-    - bash ops/ci/interaction-volume-cert.sh smoke
+    - bash ops/ci/interaction-volume-ci-entrypoint.sh smoke
     - bash ops/ci/interaction-volume-interruption-test.sh
+    - bash ops/ci/interaction-volume-adversarial-test.sh
   artifacts:
     when: always
     name: "redline-interaction-volume-smoke"
@@ -357,6 +367,9 @@ interaction-volume-smoke:
       - target/ci/interaction-volume/smoke/
       - target/ci/interaction-volume/smoke-timeout/
       - target/ci/interaction-volume/smoke-sigterm/
+      - target/ci/interaction-volume/smoke-adversarial-stale_container/
+      - target/ci/interaction-volume/smoke-adversarial-endpoint_mismatch/
+      - target/ci/interaction-volume/smoke-adversarial-postgres_storage_overshoot/
     expire_in: 14 days
 
 parity:
@@ -968,16 +981,13 @@ benchmark-rql:
     expire_in: 30 days
 
 interaction-volume-daily:
+  extends: .interaction-volume-owned-docker
   stage: benchmark
-  tags: [docker-build]
   needs: []
   timeout: 150 minutes
   interruptible: false
   retry: 0
   resource_group: redline-heavy-benchmark
-  variables:
-    REDLINEDB_CERT_ALLOW_IMAGE_PULL: "0"
-    REDLINEDB_INTERACTION_TRIGGER_CONTRACT: "interaction-volume-daily-v1"
   rules:
     - if: $CI_PIPELINE_SOURCE == "schedule"
       when: on_success
@@ -986,7 +996,7 @@ interaction-volume-daily:
     - if: $CI_PIPELINE_SOURCE == "merge_request_event"
       when: manual
       allow_failure: true
-  script: [bash ops/ci/interaction-volume-cert.sh daily]
+  script: [bash ops/ci/interaction-volume-ci-entrypoint.sh daily]
   artifacts:
     when: always
     name: "redline-interaction-volume-daily-evidence"

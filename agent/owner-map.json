@@ -44,6 +44,8 @@
     "justfile": "workspace",
     "metadata/": "redline-testing",
     "ops/ci/interaction-volume-cert.sh": "bench-harness",
+    "ops/ci/interaction-volume-ci-entrypoint.sh": "bench-harness",
+    "ops/ci/interaction-volume-adversarial-test.sh": "bench-harness",
     "ops/ci/interaction-volume-interruption-test.sh": "bench-harness",
     "ops/ci/interaction-volume-trigger-contract.json": "bench-harness",
     "ops/": "ops",

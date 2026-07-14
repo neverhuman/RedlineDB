@@ -133,8 +133,8 @@ impl BenchEngine for SqliteEngine {
         let journal_mode: String = conn.query_row("PRAGMA journal_mode", [], |row| row.get(0))?;
         let synchronous: i64 = conn.query_row("PRAGMA synchronous", [], |row| row.get(0))?;
         Ok(EngineSnapshot {
-            data_bytes: file_len(&self.path),
-            wal_bytes: file_len(&self.path.with_extension("sqlite3-wal")),
+            data_bytes: file_len(&self.path, false)?,
+            wal_bytes: file_len(&self.path.with_extension("sqlite3-wal"), true)?,
             engine_stats: serde_json::json!({
                 "journal_mode": journal_mode,
                 "synchronous": synchronous,

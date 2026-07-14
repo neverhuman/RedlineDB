@@ -5,7 +5,7 @@ mod sqlite;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::time::Duration;
@@ -13,6 +13,7 @@ use std::time::Duration;
 use crate::config::{DurabilityKind, EngineKind, RunSpec};
 
 pub(crate) use postgres::PostgresEngine;
+pub use postgres::{PostgresEndpoint, PostgresLiveIdentity};
 pub use redline::RedlineEngine;
 pub use sqlite::SqliteEngine;
 
@@ -207,12 +208,20 @@ pub(super) fn seeded_blob(seed: usize) -> Vec<u8> {
     format!("value-{seed:08}").into_bytes()
 }
 
-/// Single-file byte count helper shared by the SQLite and
-/// single-file Redline adapters. Returns 0 when the path is missing
-/// or unreadable so callers can sum it into reports without special
-/// cases.
-pub(super) fn file_len(path: &Path) -> u64 {
-    std::fs::metadata(path).map(|meta| meta.len()).unwrap_or(0)
+/// Fail-closed single-file accounting. A required database path must exist;
+/// optional WAL/journal paths may be absent, but every other observation error propagates.
+pub(super) fn file_len(path: &Path, optional: bool) -> Result<u64> {
+    match std::fs::metadata(path) {
+        Ok(meta) if meta.is_file() => Ok(meta.len()),
+        Ok(_) => Err(anyhow!(
+            "storage accounting path is not a file: {}",
+            path.display()
+        )),
+        Err(error) if optional && error.kind() == std::io::ErrorKind::NotFound => Ok(0),
+        Err(error) => {
+            Err(error).with_context(|| format!("account storage file {}", path.display()))
+        }
+    }
 }
 
 /// CLI argument / report token for an `EngineKind`. Used to forward
@@ -222,5 +231,23 @@ pub(crate) fn engine_name(engine: EngineKind) -> &'static str {
     match engine {
         EngineKind::Redline => "redline",
         EngineKind::Sqlite => "sqlite",
+    }
+}
+
+#[cfg(test)]
+mod storage_accounting_tests {
+    use super::file_len;
+    use tempfile::tempdir;
+
+    #[test]
+    fn required_file_errors_and_only_optional_missing_is_zero() {
+        let root = tempdir().unwrap();
+        let missing = root.path().join("missing");
+        assert!(file_len(&missing, false).is_err());
+        assert_eq!(file_len(&missing, true).unwrap(), 0);
+        assert!(file_len(root.path(), false).is_err());
+        let file = root.path().join("database");
+        std::fs::write(&file, [1_u8; 17]).unwrap();
+        assert_eq!(file_len(&file, false).unwrap(), 17);
     }
 }

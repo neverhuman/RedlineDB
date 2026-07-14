@@ -6,6 +6,7 @@ use anyhow::{Context, Result, anyhow, bail};
 use postgres::config::Host;
 use postgres::types::{ToSql, Type};
 use postgres::{Client, Config, NoTls, Row};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sha2::{Digest, Sha256};
 
@@ -14,6 +15,24 @@ use crate::engine::{BenchConn, BenchEngine, CellValue, EngineSnapshot, seeded_bl
 
 const CI_SERVICE_ENV: &str = "REDLINEDB_BENCH_POSTGRES_CI_SERVICE";
 const CI_SERVICE_HOST: &str = "postgres-cert";
+const DIND_SERVICE_ENV: &str = "REDLINEDB_BENCH_POSTGRES_DOCKER_DAEMON_SERVICE";
+const DIND_SERVICE_HOST: &str = "docker";
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PostgresEndpoint {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PostgresLiveIdentity {
+    pub database: String,
+    pub system_identifier: String,
+    pub postmaster_started_at: String,
+    pub server_address: String,
+    pub server_port: u16,
+    pub data_directory: String,
+}
 
 /// PostgreSQL adapter used only by the explicit three-engine interaction/volume certificate.
 /// The regular SQLite-compatibility matrix remains exactly Redline/SQLite and keeps its stable
@@ -88,9 +107,49 @@ impl PostgresEngine {
         validate_local_dedicated_dsn(dsn)?;
         if std::env::var(CI_SERVICE_ENV).as_deref() == Ok("1") {
             Ok("ci_service")
+        } else if std::env::var(DIND_SERVICE_ENV).as_deref() == Ok("1") {
+            Ok("docker_daemon_service")
         } else {
             Ok("loopback")
         }
+    }
+
+    pub(crate) fn endpoint(dsn: &str) -> Result<PostgresEndpoint> {
+        let config = Config::from_str(dsn).context("parse PostgreSQL benchmark DSN")?;
+        if config.get_hosts().len() != 1 {
+            bail!("PostgreSQL benchmark DSN must resolve exactly one host");
+        }
+        let host = match &config.get_hosts()[0] {
+            Host::Tcp(host) => host.clone(),
+            #[cfg(unix)]
+            Host::Unix(_) => bail!("Docker-bound certificate requires a TCP PostgreSQL endpoint"),
+        };
+        let port = config.get_ports().first().copied().unwrap_or(5432);
+        Ok(PostgresEndpoint { host, port })
+    }
+
+    pub(crate) fn live_identity(dsn: &str) -> Result<PostgresLiveIdentity> {
+        validate_local_dedicated_dsn(dsn)?;
+        let mut client = Client::connect(dsn, NoTls).context("connect for live PG identity")?;
+        let _ = validate_dedicated_server(&mut client)?;
+        let row = client.query_one(
+            "SELECT current_database(), system_identifier::text, \
+                    pg_postmaster_start_time()::text, \
+                    COALESCE(inet_server_addr()::text, 'local-unix'), \
+                    COALESCE(inet_server_port(), 0)::int, current_setting('data_directory') \
+             FROM pg_control_system()",
+            &[],
+        )?;
+        let server_port = row.get::<_, i32>(4);
+        Ok(PostgresLiveIdentity {
+            database: row.get(0),
+            system_identifier: row.get(1),
+            postmaster_started_at: row.get(2),
+            server_address: row.get(3),
+            server_port: u16::try_from(server_port)
+                .context("PostgreSQL reported an invalid server port")?,
+            data_directory: row.get(5),
+        })
     }
 
     pub(crate) fn server_version(&self) -> Result<String> {
@@ -165,15 +224,17 @@ impl BenchEngine for PostgresEngine {
         // residue, and temporary relation growth all consume the same absolute safety budget.
         let data_bytes = client
             .query_one("SELECT pg_tablespace_size('pg_default')::bigint", &[])?
-            .get::<_, i64>(0)
-            .max(0) as u64;
+            .get::<_, i64>(0);
+        let data_bytes =
+            u64::try_from(data_bytes).context("PostgreSQL default tablespace size was negative")?;
         let wal_bytes = client
             .query_one(
                 "SELECT COALESCE(SUM(size), 0)::bigint FROM pg_ls_waldir()",
                 &[],
             )?
-            .get::<_, i64>(0)
-            .max(0) as u64;
+            .get::<_, i64>(0);
+        let wal_bytes =
+            u64::try_from(wal_bytes).context("PostgreSQL WAL directory size was negative")?;
         let version: String = client.query_one("SHOW server_version", &[])?.get(0);
         let synchronous_commit: String = client.query_one("SHOW synchronous_commit", &[])?.get(0);
         let full_page_writes: String = client.query_one("SHOW full_page_writes", &[])?.get(0);
@@ -359,8 +420,15 @@ fn validate_local_dedicated_dsn(dsn: &str) -> Result<()> {
     }
     let config = Config::from_str(dsn).context("parse PostgreSQL benchmark DSN")?;
     let ci_service = std::env::var(CI_SERVICE_ENV).as_deref() == Ok("1");
+    let dind_service = std::env::var(DIND_SERVICE_ENV).as_deref() == Ok("1");
     if ci_service && std::env::var("CI").as_deref() != Ok("true") {
         bail!("{CI_SERVICE_ENV}=1 is accepted only inside CI");
+    }
+    if dind_service && std::env::var("CI").as_deref() != Ok("true") {
+        bail!("{DIND_SERVICE_ENV}=1 is accepted only inside CI");
+    }
+    if ci_service && dind_service {
+        bail!("PostgreSQL CI service and Docker-daemon service modes are mutually exclusive");
     }
     if config.get_hosts().is_empty() {
         bail!("PostgreSQL benchmark DSN must name a local host or Unix socket");
@@ -369,6 +437,7 @@ fn validate_local_dedicated_dsn(dsn: &str) -> Result<()> {
         match host {
             Host::Tcp(host) if host == "localhost" => {}
             Host::Tcp(host) if ci_service && host == CI_SERVICE_HOST => {}
+            Host::Tcp(host) if dind_service && host == DIND_SERVICE_HOST => {}
             Host::Tcp(host) => {
                 let address = host.parse::<std::net::IpAddr>().with_context(
                     || "PostgreSQL benchmark host must be localhost or a loopback IP",

@@ -35,6 +35,20 @@ if [ -n "$interruption_case" ]; then
       ;;
   esac
 fi
+adversarial_case="${REDLINEDB_CERT_ADVERSARIAL_TEST_CASE:-}"
+if [ -n "$adversarial_case" ]; then
+  if [ "$mode" != smoke ] || [ "${CI:-}" != true ]; then
+    printf 'adversarial test cases are accepted only for smoke inside CI\n' >&2
+    exit 2
+  fi
+  case "$adversarial_case" in
+    stale_container|endpoint_mismatch|postgres_storage_overshoot) ;;
+    *)
+      printf 'unsupported adversarial test case: %s\n' "$adversarial_case" >&2
+      exit 2
+      ;;
+  esac
+fi
 
 command -v jq >/dev/null 2>&1 || {
   printf 'jq is required to verify certification receipts\n' >&2
@@ -46,6 +60,10 @@ command -v flock >/dev/null 2>&1 || {
 }
 command -v findmnt >/dev/null 2>&1 || {
   printf 'findmnt is required to bind the three-engine storage contract\n' >&2
+  exit 2
+}
+command -v fallocate >/dev/null 2>&1 || {
+  printf 'fallocate is required for the emergency storage reserve\n' >&2
   exit 2
 }
 
@@ -67,23 +85,29 @@ jq -e '
 
 trigger_contract='ops/ci/interaction-volume-trigger-contract.json'
 jq -e --arg profile_sha "$approved_profile_sha256" '
-  .schema_version == "redline.interaction-volume-trigger/v1" and
+  .schema_version == "redline.interaction-volume-trigger/v2" and
   .contract_id == "interaction-volume-daily-v1" and
   .authoritative_ci == ".gitlab-ci.yml" and
   .daily_job == "interaction-volume-daily" and
   .required_smoke_job == "interaction-volume-smoke" and
+  .permitted_daily_sources == ["schedule", "web", "merge_request_event"] and
   .resource_group == "redline-heavy-benchmark" and
   .retry == 0 and
   (.interruptible | not) and
   .canonical_profile_sha256 == $profile_sha and
+  .ci_entrypoint == "ops/ci/interaction-volume-ci-entrypoint.sh" and
+  .docker_service_digest == "sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce" and
+  .runtime_trigger_receipt == "trigger-evidence.json" and
   .artifact_retention_days == 90 and
-  .interruption_receipt_tests == ["timeout", "sigterm"]
+  .interruption_receipt_tests == ["postgres_timeout", "postgres_sigterm"] and
+  .adversarial_tests == ["stale_container", "endpoint_mismatch", "postgres_storage_overshoot"]
 ' "$trigger_contract" >/dev/null
-if [ "$mode" = daily ] && [ "${CI:-}" = true ]; then
-  [ "${REDLINEDB_INTERACTION_TRIGGER_CONTRACT:-}" = interaction-volume-daily-v1 ] || {
-    printf 'CI daily run is missing the checked-in trigger contract binding\n' >&2
+if [ "$mode" = daily ]; then
+  trigger_evidence_input="${REDLINEDB_INTERACTION_TRIGGER_EVIDENCE_FILE:-}"
+  if [ -z "$trigger_evidence_input" ] || [ ! -s "$trigger_evidence_input" ]; then
+    printf 'daily release requires runtime CI trigger evidence from the CI entrypoint\n' >&2
     exit 2
-  }
+  fi
 fi
 
 postgres_digest='sha256:786dab398303b8ce7cb76b407bb21ef2e4dfbbbd4c6abcf3d29b3130467ffdbc'
@@ -100,9 +124,12 @@ storage_same_mount=false
 storage_durable=false
 postgres_bind_mode='service_managed'
 container_name="redline-interaction-cert-${mode}-$$"
+container_run_id="$(printf '%s' "${container_name}-$(date +%s%N)-${RANDOM}" | sha256sum | awk '{print $1}')"
 receipt_name="$mode"
 if [ -n "$interruption_case" ]; then
   receipt_name="${mode}-${interruption_case}"
+elif [ -n "$adversarial_case" ]; then
+  receipt_name="${mode}-adversarial-${adversarial_case}"
 fi
 receipt_dir="target/ci/interaction-volume/${receipt_name}"
 mkdir -p "$(dirname "$receipt_dir")"
@@ -121,11 +148,17 @@ scratch_parent="$(realpath "$scratch_parent")"
 scratch_dir="${scratch_parent%/}/redline-interaction-cert-${receipt_name}-$$"
 container_id=''
 cert_pid=''
+docker_daemon_id=''
+postgres_endpoint_host=''
+postgres_port=''
+reserve_path=''
+reserve_bytes=0
+ci_trigger_json=null
 
 # shellcheck disable=SC2317 # Invoked by traps below.
 preserve_receipts() {
   mkdir -p "$receipt_dir"
-  for receipt in execution-evidence.json attempt.json progress.json raw-runs.json manifest.json; do
+  for receipt in execution-evidence.json attempt.json progress.json raw-runs.json manifest.json trigger-evidence.json cert.stderr.log; do
     if [ -s "$scratch_dir/$receipt" ]; then
       cp "$scratch_dir/$receipt" "$receipt_dir/.${receipt}.tmp"
       mv "$receipt_dir/.${receipt}.tmp" "$receipt_dir/$receipt"
@@ -135,16 +168,69 @@ preserve_receipts() {
 
 # shellcheck disable=SC2317 # Invoked by the EXIT trap below.
 cleanup() {
+  original_status=$?
+  trap - EXIT
+  set +e
+  child_stopped=true
+  schema_cleanup_verified=true
+  container_removed=true
+  runtime_removed=true
   if [ -n "$cert_pid" ]; then
     kill -TERM "$cert_pid" >/dev/null 2>&1 || true
     wait "$cert_pid" >/dev/null 2>&1 || true
+    if kill -0 "$cert_pid" >/dev/null 2>&1; then
+      child_stopped=false
+    fi
   fi
   if [ -n "$container_id" ]; then
+    if docker inspect "$container_id" >/dev/null 2>&1; then
+      if ! schemas="$(docker exec "$container_id" psql -U redline_cert -d redline_cert -Atqc \
+        "SELECT nspname FROM pg_namespace WHERE nspname LIKE 'redline_interaction_%'" 2>/dev/null)"; then
+        schema_cleanup_verified=false
+      else
+        while IFS= read -r schema; do
+          [ -n "$schema" ] || continue
+          if ! grep -Eq '^redline_interaction_[0-9a-f]{20}$' <<<"$schema"; then
+            schema_cleanup_verified=false
+            continue
+          fi
+          docker exec "$container_id" psql -v ON_ERROR_STOP=1 -U redline_cert -d redline_cert \
+            -c "DROP SCHEMA IF EXISTS \"${schema}\" CASCADE" >/dev/null 2>&1 || \
+            schema_cleanup_verified=false
+        done <<<"$schemas"
+        remaining_schemas="$(docker exec "$container_id" psql -U redline_cert -d redline_cert -Atqc \
+          "SELECT COUNT(*) FROM pg_namespace WHERE nspname LIKE 'redline_interaction_%'" 2>/dev/null)"
+        [ "$remaining_schemas" = 0 ] || schema_cleanup_verified=false
+      fi
+    fi
     docker exec -u 0 "$container_id" chown -R "$(id -u):$(id -g)" \
       /var/lib/postgresql/data >/dev/null 2>&1 || true
-    docker rm -f "$container_id" >/dev/null 2>&1 || true
+    docker rm -f "$container_id" >/dev/null 2>&1 || container_removed=false
+    if docker inspect "$container_id" >/dev/null 2>&1; then
+      container_removed=false
+    fi
   fi
   rm -rf "$scratch_dir"
+  [ ! -e "$scratch_dir" ] || runtime_removed=false
+  mkdir -p "$receipt_dir"
+  jq -n \
+    --arg schema 'redline.interaction-volume-cleanup/v1' \
+    --arg container_id "$container_id" \
+    --argjson child_stopped "$child_stopped" \
+    --argjson schema_cleanup_verified "$schema_cleanup_verified" \
+    --argjson container_removed "$container_removed" \
+    --argjson runtime_removed "$runtime_removed" \
+    '{schema_version:$schema,child_stopped:$child_stopped,
+      postgres_schema_cleanup_verified:$schema_cleanup_verified,
+      container_id:$container_id,container_removed:$container_removed,
+      runtime_removed:$runtime_removed}' >"$receipt_dir/.cleanup.json.tmp"
+  mv "$receipt_dir/.cleanup.json.tmp" "$receipt_dir/cleanup.json"
+  if [ "$original_status" -eq 0 ] && \
+    { [ "$child_stopped" != true ] || [ "$schema_cleanup_verified" != true ] || \
+      [ "$container_removed" != true ] || [ "$runtime_removed" != true ]; }; then
+    original_status=1
+  fi
+  exit "$original_status"
 }
 
 # shellcheck disable=SC2317 # Invoked by the INT/TERM traps below.
@@ -181,7 +267,41 @@ trap 'handle_signal 143 external_sigterm' TERM
 
 rm -rf "$receipt_dir" "$scratch_dir"
 mkdir -p "$receipt_dir" "$scratch_dir/dbs"
+if [ "$mode" = daily ]; then
+  cp "$trigger_evidence_input" "$scratch_dir/trigger-evidence.json"
+  ci_trigger_json="$(jq -c . "$scratch_dir/trigger-evidence.json")"
+fi
 postgres_data_root="$scratch_dir/postgres-data"
+if [ "$mode" = daily ]; then
+  cert_hard_storage_bytes=2147483648
+  reserve_bytes=536870912
+  cert_stop_storage_bytes=1610612736
+else
+  cert_hard_storage_bytes=134217728
+  reserve_bytes=33554432
+  cert_stop_storage_bytes=100663296
+fi
+available_bytes="$(df --output=avail -B1 "$scratch_dir" | awk 'NR==2 {print $1}')"
+case "$available_bytes" in
+  ''|*[!0-9]*)
+    printf 'could not observe free bytes for certification storage\n' >&2
+    exit 1
+    ;;
+esac
+required_free_bytes="$((cert_hard_storage_bytes + reserve_bytes))"
+[ "$available_bytes" -gt "$required_free_bytes" ] || {
+  printf 'certification storage has %s free bytes; requires more than %s for cap plus reserve\n' \
+    "$available_bytes" "$required_free_bytes" >&2
+  exit 1
+}
+reserve_path="$scratch_dir/.emergency-storage-reserve"
+fallocate -l "$reserve_bytes" "$reserve_path"
+reserve_allocated_bytes="$(( $(stat -c %b "$reserve_path") * 512 ))"
+[ "$reserve_allocated_bytes" -ge "$reserve_bytes" ] || {
+  printf 'emergency reserve allocated %s bytes, expected %s\n' \
+    "$reserve_allocated_bytes" "$reserve_bytes" >&2
+  exit 1
+}
 
 if [ "$postgres_backend" = ci-service ]; then
   [ "${CI:-}" = true ] || {
@@ -198,12 +318,23 @@ if [ "$postgres_backend" = ci-service ]; then
   }
   export REDLINEDB_BENCH_POSTGRES_ISOLATED=1
   export REDLINEDB_BENCH_POSTGRES_CI_SERVICE=1
+  postgres_endpoint_host='postgres-cert'
+  postgres_port=5432
   postgres_data_root='ci-service:postgres-cert'
   postgres_mount_identity='unobservable-ci-service-mount'
 else
   command -v docker >/dev/null 2>&1 || {
     printf 'docker is required for the isolated local PostgreSQL reference\n' >&2
     exit 2
+  }
+  docker info >/dev/null 2>&1 || {
+    printf 'Docker CLI cannot reach the certification daemon (%s)\n' "${DOCKER_HOST:-local socket}" >&2
+    exit 2
+  }
+  docker_daemon_id="$(docker info --format '{{json .ID}}' | jq -er '.')"
+  [ -n "$docker_daemon_id" ] || {
+    printf 'Docker daemon returned an empty identity\n' >&2
+    exit 1
   }
   if ! docker image inspect "$postgres_image" >/dev/null 2>&1; then
     if [ "${REDLINEDB_CERT_ALLOW_IMAGE_PULL:-0}" != 1 ]; then
@@ -229,9 +360,42 @@ else
   storage_same_mount=true
   postgres_bind_mode='rw'
   mkdir -p "$postgres_data_root"
+  postgres_publish_ip='127.0.0.1'
+  postgres_endpoint_host='127.0.0.1'
+  if [ -n "${DOCKER_HOST:-}" ]; then
+    case "$DOCKER_HOST" in
+      tcp://docker:*)
+        [ "${CI:-}" = true ] || {
+          printf 'Docker daemon service endpoint is accepted only inside CI\n' >&2
+          exit 2
+        }
+        postgres_publish_ip='0.0.0.0'
+        postgres_endpoint_host='docker'
+        postgres_endpoint_scope='docker_daemon_service'
+        export REDLINEDB_BENCH_POSTGRES_DOCKER_DAEMON_SERVICE=1
+        ;;
+      unix://*|npipe://*) ;;
+      *)
+        printf 'unsupported Docker daemon endpoint for certification: %s\n' "$DOCKER_HOST" >&2
+        exit 2
+        ;;
+    esac
+  fi
+  bind_sentinel="$postgres_data_root/.redline-bind-sentinel"
+  printf '%s\n' "$container_run_id" >"$bind_sentinel"
+  docker run --rm --entrypoint sh \
+    --mount "type=bind,src=${postgres_data_root},dst=/var/lib/postgresql/data" \
+    "$postgres_image" -c \
+    'test "$(cat /var/lib/postgresql/data/.redline-bind-sentinel)" = "$1"' \
+    redline-cert "$container_run_id" || {
+      printf 'Docker daemon cannot observe the job storage bind path\n' >&2
+      exit 1
+    }
+  rm -f "$bind_sentinel"
   container_id="$(
     docker run --rm -d \
       --name "$container_name" \
+      --label "redline.interaction-volume.run_id=${container_run_id}" \
       --memory 3g \
       --pids-limit 512 \
       --mount "type=bind,src=${postgres_data_root},dst=/var/lib/postgresql/data" \
@@ -241,7 +405,7 @@ else
       -e POSTGRES_USER=redline_cert \
       -e POSTGRES_PASSWORD=redline-cert-local-only \
       -e POSTGRES_INITDB_ARGS=--data-checksums \
-      -p 127.0.0.1::5432 \
+      -p "${postgres_publish_ip}::5432" \
       --health-cmd 'pg_isready -U redline_cert -d redline_cert' \
       --health-interval 1s \
       --health-timeout 3s \
@@ -249,6 +413,16 @@ else
       --health-start-period 2s \
       "$postgres_image"
   )"
+  case "$container_id" in
+    *[!0-9a-f]*|'')
+      printf 'Docker returned an invalid certification container id: %s\n' "$container_id" >&2
+      exit 1
+      ;;
+  esac
+  [ "${#container_id}" -eq 64 ] || {
+    printf 'Docker container id must be a full 64-character identity\n' >&2
+    exit 1
+  }
 fi
 
 local_device="$(stat -c %d "$scratch_dir/dbs")"
@@ -302,14 +476,14 @@ if [ "$postgres_backend" = docker ]; then
   esac
 
   export REDLINEDB_BENCH_POSTGRES_ISOLATED=1
-  export REDLINEDB_BENCH_POSTGRES_URL="host=127.0.0.1 port=${postgres_port} user=redline_cert password=redline-cert-local-only dbname=redline_cert connect_timeout=5"
+  export REDLINEDB_BENCH_POSTGRES_URL="host=${postgres_endpoint_host} port=${postgres_port} user=redline_cert password=redline-cert-local-only dbname=redline_cert connect_timeout=5"
 fi
 
 if [ "$mode" = daily ]; then
   rtk cargo build --release --locked -p redlinedb-bench --bin interaction_volume_cert
   cert_bin='target/release/interaction_volume_cert'
   cert_timeout=7200
-  cert_max_file_bytes=2147483648
+  cert_max_file_bytes="$cert_stop_storage_bytes"
   cert_args=(
     --mode release
     --out-dir "$scratch_dir"
@@ -319,25 +493,42 @@ else
   rtk cargo build --locked -p redlinedb-bench --bin interaction_volume_cert
   cert_bin='target/debug/interaction_volume_cert'
   cert_timeout=300
-  cert_max_file_bytes=67108864
+  cert_max_file_bytes="$cert_stop_storage_bytes"
+  smoke_threads='1,2'
+  smoke_operations=50
+  smoke_seed=7
+  smoke_max_data_bytes="$cert_hard_storage_bytes"
+  if [ -n "$interruption_case" ]; then
+    smoke_threads=1
+    smoke_operations=20000
+    smoke_seed=8
+  elif [ "$adversarial_case" = postgres_storage_overshoot ]; then
+    smoke_threads=1
+    smoke_operations=50
+    smoke_seed=8
+    smoke_max_data_bytes=33554432
+  fi
   cert_args=(
     --mode smoke
     --out-dir "$scratch_dir"
-    --threads "1,2"
-    --operations-per-thread 50
+    --threads "$smoke_threads"
+    --operations-per-thread "$smoke_operations"
     --repetitions 1
     --sessions 8
     --payload-bytes 64
     --warmup-operations-per-thread 8
+    --seed "$smoke_seed"
     --idle-observation-secs 1
     --soak-observation-secs 2
-    --max-data-bytes 67108864
+    --max-data-bytes "$smoke_max_data_bytes"
     --max-idle-growth-bytes 1048576
   )
 fi
 
 if [ "$interruption_case" = timeout ]; then
-  cert_timeout=8
+  # Leave enough room for live Docker/provenance observation and PostgreSQL schema setup on a
+  # loaded CI runner. The interruption workload is deliberately much longer than this deadline.
+  cert_timeout=30
 fi
 
 source_commit="$(git rev-parse --verify HEAD)"
@@ -366,7 +557,7 @@ if [ "$postgres_backend" = docker ]; then
   evidence_backend='docker_bind'
 fi
 jq -n \
-  --arg schema 'redline.interaction-volume-execution-evidence/v1' \
+  --arg schema 'redline.interaction-volume-execution-evidence/v2' \
   --arg generator 'ops/ci/interaction-volume-cert.sh' \
   --arg source_commit "$source_commit" \
   --argjson source_dirty "$source_dirty" \
@@ -376,6 +567,12 @@ jq -n \
   --argjson digest_verified "$postgres_digest_verified" \
   --arg backend "$evidence_backend" \
   --arg endpoint_scope "$postgres_endpoint_scope" \
+  --arg container_id "$container_id" \
+  --arg container_name "$container_name" \
+  --arg container_run_id "$container_run_id" \
+  --arg docker_daemon_id "$docker_daemon_id" \
+  --arg endpoint_host "$postgres_endpoint_host" \
+  --argjson endpoint_port "$postgres_port" \
   --arg storage_class "$storage_class" \
   --arg local_root "$scratch_dir/dbs" \
   --arg postgres_root "$postgres_data_root" \
@@ -384,6 +581,9 @@ jq -n \
   --argjson same_mount "$storage_same_mount" \
   --argjson durable "$storage_durable" \
   --arg bind_mode "$postgres_bind_mode" \
+  --arg reserve_path "$reserve_path" \
+  --argjson reserve_bytes "$reserve_bytes" \
+  --argjson ci_trigger "$ci_trigger_json" \
   '{
     schema_version:$schema,
     generator:$generator,
@@ -397,7 +597,13 @@ jq -n \
       backend:$backend,
       isolation_verified:true,
       dedicated_instance:true,
-      endpoint_scope:$endpoint_scope
+      endpoint_scope:$endpoint_scope,
+      container_id:($container_id | if length == 0 then null else . end),
+      container_name:($container_name | if $backend == "docker_bind" then . else null end),
+      container_run_id:($container_run_id | if $backend == "docker_bind" then . else null end),
+      docker_daemon_id:($docker_daemon_id | if length == 0 then null else . end),
+      endpoint_host:($endpoint_host | if length == 0 then null else . end),
+      endpoint_port:$endpoint_port
     },
     storage:{
       class:$storage_class,
@@ -407,10 +613,23 @@ jq -n \
       postgres_mount_identity:$postgres_mount,
       same_mount:$same_mount,
       durable:$durable,
-      postgres_bind_mode:$bind_mode
-    }
+      postgres_bind_mode:$bind_mode,
+      emergency_reserve_path:$reserve_path,
+      emergency_reserve_bytes:$reserve_bytes
+    },
+    ci_trigger:$ci_trigger
   }' >"${evidence_file}.tmp"
 mv "${evidence_file}.tmp" "$evidence_file"
+case "$adversarial_case" in
+  stale_container)
+    jq '.postgres.container_id = ("0" * 64)' "$evidence_file" >"${evidence_file}.tmp"
+    mv "${evidence_file}.tmp" "$evidence_file"
+    ;;
+  endpoint_mismatch)
+    jq '.postgres.endpoint_port += 1' "$evidence_file" >"${evidence_file}.tmp"
+    mv "${evidence_file}.tmp" "$evidence_file"
+    ;;
+esac
 deadline_unix_ms="$(( $(date +%s%3N) + cert_timeout * 1000 ))"
 cert_args+=(
   --execution-evidence "$evidence_file"
@@ -423,13 +642,18 @@ set +e
   # bash reports RLIMIT_FSIZE in 1024-byte blocks. This kernel-enforced ceiling
   # remains active even if an engine's own storage snapshot path wedges.
   ulimit -f "$((cert_max_file_bytes / 1024))"
-  exec timeout --signal=TERM --kill-after=30 "$cert_timeout" "$cert_bin" "${cert_args[@]}"
+  exec timeout --signal=TERM --kill-after=30 "$cert_timeout" "$cert_bin" "${cert_args[@]}" \
+    2>"$scratch_dir/cert.stderr.log"
 ) &
 cert_pid=$!
 wait "$cert_pid"
 cert_status=$?
 cert_pid=''
 set -e
+
+if [ -s "$scratch_dir/cert.stderr.log" ]; then
+  cat "$scratch_dir/cert.stderr.log" >&2
+fi
 
 case "$cert_status" in
   124|137)
@@ -438,6 +662,25 @@ case "$cert_status" in
 esac
 
 preserve_receipts
+if [ -n "$adversarial_case" ]; then
+  [ "$cert_status" -ne 0 ] || {
+    printf 'adversarial case %s unexpectedly succeeded\n' "$adversarial_case" >&2
+    exit 1
+  }
+  case "$adversarial_case" in
+    stale_container)
+      grep -F 'No such object' "$receipt_dir/cert.stderr.log" >/dev/null || \
+        grep -F 'controlled docker inspect' "$receipt_dir/cert.stderr.log" >/dev/null
+      ;;
+    endpoint_mismatch)
+      grep -F 'is not the live container endpoint' "$receipt_dir/cert.stderr.log" >/dev/null
+      ;;
+    postgres_storage_overshoot)
+      grep -F 'aggregate storage hard cap exceeded' "$receipt_dir/cert.stderr.log" >/dev/null
+      ;;
+  esac
+  exit 0
+fi
 for receipt in attempt.json progress.json; do
   [ -s "$receipt_dir/$receipt" ] || {
     printf 'certification did not produce pre-run/progress receipt %s\n' "$receipt" >&2
@@ -450,7 +693,12 @@ jq -e --arg postgres_digest "$postgres_digest" \
   (.planned_runs | length) > 0 and
   .postgres_image_digest == $postgres_digest and
   .execution_evidence_sha256 == $evidence_sha and
-  .artifact_sha256 == .execution_evidence.binary_sha256
+  .artifact_sha256 == .execution_evidence.binary_sha256 and
+  (if .execution_evidence.postgres.backend == "docker_bind" then
+     .live_postgres_observation.container_id == .execution_evidence.postgres.container_id and
+     .live_postgres_observation.docker_daemon_id == .execution_evidence.postgres.docker_daemon_id and
+     .live_postgres_observation.emergency_reserve_allocated_bytes >= .storage_contract.emergency_reserve_bytes
+   else .live_postgres_observation == null end)
 ' \
   "$receipt_dir/attempt.json" >/dev/null
 jq -e '
@@ -481,7 +729,11 @@ jq -e --arg postgres_digest "$postgres_digest" \
 jq -e --arg evidence_sha "$(sha256sum "$receipt_dir/execution-evidence.json" | awk '{print $1}')" \
   '.execution_evidence_sha256 == $evidence_sha and
    .artifact_sha256 == .execution_evidence.binary_sha256 and
-   .storage_contract == .execution_evidence.storage' \
+   .storage_contract == .execution_evidence.storage and
+   (if .execution_evidence.postgres.backend == "docker_bind" then
+      .live_postgres_observation.container_id == .execution_evidence.postgres.container_id and
+      .live_postgres_observation.published_host_port == .execution_evidence.postgres.endpoint_port
+    else .live_postgres_observation == null end)' \
   "$receipt_dir/manifest.json" >/dev/null
 jq -e --arg attempt_sha "$(sha256sum "$receipt_dir/attempt.json" | awk '{print $1}')" \
   '.attempt_receipt == "attempt.json" and .attempt_receipt_sha256 == $attempt_sha' \
@@ -524,6 +776,7 @@ else
     .approved_profile_sha256 == $profile_sha and
     .reference_cleanup_verified and
     .provenance_bound and
+    .ci_trigger_bound and
     .storage_comparison_eligible and
     .storage_contract.class == "shared_host_durable_bind" and
     .bounded_reference_win_eligible

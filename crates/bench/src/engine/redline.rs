@@ -6,7 +6,7 @@ use crate::config::RunSpec;
 use crate::engine::{
     BenchConn, BenchEngine, CellValue, EngineSnapshot, apply_durability, seeded_blob,
 };
-use anyhow::{Result, anyhow};
+use anyhow::{Context, Result, anyhow};
 
 pub struct RedlineEngine {
     path: PathBuf,
@@ -110,8 +110,8 @@ impl BenchEngine for RedlineEngine {
         // control files, an owner.lock — `file_len(self.path)` only
         // saw one of those. Walk the whole tree so `data_bytes`
         // matches what an operator would see in `du -sh`.
-        let total_bytes = dir_total_bytes(&self.path);
-        let wal_bytes = dir_total_bytes(&self.path.join("wal"));
+        let total_bytes = dir_total_bytes(&self.path, false)?;
+        let wal_bytes = dir_total_bytes(&self.path.join("wal"), true)?;
         Ok(EngineSnapshot {
             data_bytes: total_bytes.saturating_sub(wal_bytes),
             wal_bytes,
@@ -212,32 +212,38 @@ fn values(params: &[CellValue]) -> Vec<redlinedb::Value> {
 /// snapshot, page file, multiple WAL segments, control files, and
 /// an owner lock. Reporting only the page file under-counted the
 /// actual on-disk footprint by orders of magnitude on long runs;
-/// `walkdir` follows the directory tree (skipping unreadable
-/// entries) and sums every file size.
-pub(crate) fn dir_total_bytes(path: &Path) -> u64 {
-    if let Ok(meta) = std::fs::metadata(path)
-        && meta.is_file()
-    {
-        // Caller passed a leaf file (e.g. the pre-phase11 single-file
-        // flavor); preserve the byte-count semantics so existing tests
-        // keep their numeric expectations.
-        return meta.len();
+/// `walkdir` follows the directory tree and propagates every traversal or metadata error. Missing
+/// paths are accepted only for optional subtrees such as a WAL directory that has not been made.
+pub(crate) fn dir_total_bytes(path: &Path, optional: bool) -> Result<u64> {
+    let root = match std::fs::metadata(path) {
+        Ok(meta) => meta,
+        Err(error) if optional && error.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(error) => {
+            return Err(error).with_context(|| format!("account storage root {}", path.display()));
+        }
+    };
+    if root.is_file() {
+        return Ok(root.len());
+    }
+    if !root.is_dir() {
+        return Err(anyhow!(
+            "storage accounting root is neither file nor directory: {}",
+            path.display()
+        ));
     }
     let mut total = 0_u64;
-    for entry in walkdir::WalkDir::new(path)
-        .follow_links(false)
-        .into_iter()
-        .filter_map(Result::ok)
-    {
-        let meta = match entry.metadata() {
-            Ok(meta) => meta,
-            Err(_) => continue,
-        };
+    for entry in walkdir::WalkDir::new(path).follow_links(false) {
+        let entry = entry.with_context(|| format!("walk storage root {}", path.display()))?;
+        let meta = entry
+            .metadata()
+            .with_context(|| format!("read storage metadata {}", entry.path().display()))?;
         if meta.is_file() {
-            total = total.saturating_add(meta.len());
+            total = total
+                .checked_add(meta.len())
+                .context("storage byte accounting overflowed u64")?;
         }
     }
-    total
+    Ok(total)
 }
 
 #[cfg(test)]
@@ -264,11 +270,19 @@ mod tests {
         fs::write(root.join("owner.lock"), b"pid").expect("lock");
         fs::write(root.join("wal").join("000000000001.wal"), vec![0u8; 4096]).expect("wal seg 1");
         fs::write(root.join("wal").join("000000000002.wal"), vec![0u8; 2048]).expect("wal seg 2");
-        let total = dir_total_bytes(&root);
+        let total = dir_total_bytes(&root, false).unwrap();
         // 1024 + 256 + 64 + 64 + 3 + 4096 + 2048 = 7555
         assert_eq!(total, 1024 + 256 + 64 + 64 + 3 + 4096 + 2048);
         // Sanity: includes the wal segments specifically — used to
         // be missed when only the page file was probed.
         assert!(total > 4096, "wal segments must be included");
+    }
+
+    #[test]
+    fn recursive_accounting_rejects_missing_required_roots() {
+        let tmp = tempdir().expect("tempdir");
+        let missing = tmp.path().join("missing.redline");
+        assert!(dir_total_bytes(&missing, false).is_err());
+        assert_eq!(dir_total_bytes(&missing, true).unwrap(), 0);
     }
 }

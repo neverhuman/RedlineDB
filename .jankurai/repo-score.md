@@ -1,18 +1,18 @@
 # jankurai Repo Score
 
 - Standard: `jankurai`
-- Auditor: `1.6.10`
+- Auditor: `1.6.11`
 - Schema: `1.9.0`
 - Paper edition: `2026.05-ed8`
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1783883222`
-- Started at: `1783883222`
-- Elapsed: `21343` ms
+- Run ID: `1784063068`
+- Started at: `1784063068`
+- Elapsed: `23060` ms
 - Scope: `full`
-- Raw score: `86`
-- Final score: `86`
+- Raw score: `88`
+- Final score: `88`
 - Decision: `advisory`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -70,22 +70,22 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`164` files=`444`
+- Status: `review` hard=`0` warning=`167` files=`456`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`296` tokens=`937` bytes=`8608`
+- Duplicate volume: lines=`300` tokens=`947` bytes=`8714`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
   - warning classes include same-body different-name units and token/block duplication
   - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
-  - showing the top 50 classes and omitting 114 lower-ranked classes
+  - showing the top 50 classes and omitting 117 lower-ranked classes
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
 | `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/json_tv.rs:228-233, crates/sql/src/exec/json_tv.rs:283-288, crates/sql/src/exec/json_tv.rs:399-404, crates/sql/src/exec/json_tv.rs:433-438, crates/sql/src/exec/json_tv.rs:467-472, crates/sql/src/exec/json_tv.rs:504-509, crates/sql/src/exec/json_tv.rs:541-546, crates/sql/src/exec/json_tv.rs:578-583, crates/sql/src/exec/json_tv.rs:616-621, crates/sql/src/exec/pragma_tv.rs:220-225, crates/sql/src/exec/pragma_tv.rs:243-248, crates/sql/src/exec/pragma_tv.rs:282-287, crates/sql/src/exec/pragma_tv.rs:370-375, crates/sql/src/exec/table_valued.rs:77-82` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 13 | 42 | `crates/sql/src/exec/cross_db.rs:203-216, crates/sql/src/exec/cte.rs:181-194, crates/sql/src/exec/view.rs:180-193` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/bench/src/score_policy.rs:180-181, crates/bench/src/score_policy.rs:188-189, crates/kernel/src/catalog/record.rs:152-153, crates/kernel/src/catalog/stats/wire.rs:162-163, crates/kernel/src/catalog/stats/wire.rs:173-174, crates/kernel/src/catalog/store.rs:1029-1030, crates/kernel/src/catalog/store.rs:1039-1040, crates/kernel/src/catalog/store.rs:1049-1050, crates/kernel/src/catalog/store.rs:1059-1060, crates/kernel/src/catalog/store.rs:1069-1070, crates/kernel/src/catalog/store.rs:1092-1093, crates/redlinedb-sqlx/src/bridge/runtime.rs:390-391, crates/redlinedb-sqlx/src/bridge/runtime.rs:487-488, crates/redlinedb/src/value_conv.rs:261-262, crates/sql/src/exec/expr/coerce/binary.rs:396-397, crates/sql/src/exec/expr/coerce/binary.rs:403-404, crates/sql/src/exec/expr/coerce/binary.rs:512-513, crates/sql/src/exec/expr/json_dispatch.rs:765-766, crates/sql/src/exec/index_access.rs:1094-1095, crates/sql/src/exec/json_tv.rs:241-242, crates/sql/src/json/scalar.rs:134-135, crates/sql/src/json/scalar.rs:151-152, crates/sql/src/json/scalar.rs:181-182, crates/sql/src/json/scalar.rs:643-644` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 7 | 16 | `crates/cli/src/render.rs:472-479, crates/cli/src/render.rs:591-598, crates/cli/src/render.rs:652-659, crates/cli/src/render.rs:726-733` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/kernel/src/catalog/record.rs:152-153, crates/kernel/src/catalog/stats/wire.rs:162-163, crates/kernel/src/catalog/stats/wire.rs:173-174, crates/kernel/src/catalog/store.rs:1029-1030, crates/kernel/src/catalog/store.rs:1039-1040, crates/kernel/src/catalog/store.rs:1049-1050, crates/kernel/src/catalog/store.rs:1059-1060, crates/kernel/src/catalog/store.rs:1069-1070, crates/kernel/src/catalog/store.rs:1092-1093, crates/redlinedb-sqlx/src/bridge/runtime.rs:390-391, crates/redlinedb-sqlx/src/bridge/runtime.rs:487-488, crates/redlinedb/src/value_conv.rs:261-262, crates/sql/src/exec/expr/coerce/binary.rs:396-397, crates/sql/src/exec/expr/coerce/binary.rs:403-404, crates/sql/src/exec/expr/coerce/binary.rs:512-513, crates/sql/src/exec/expr/json_dispatch.rs:765-766, crates/sql/src/exec/index_access.rs:1094-1095, crates/sql/src/exec/json_tv.rs:241-242, crates/sql/src/json/scalar.rs:134-135, crates/sql/src/json/scalar.rs:151-152, crates/sql/src/json/scalar.rs:181-182, crates/sql/src/json/scalar.rs:643-644` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/pragma_tv.rs:76-81, crates/sql/src/exec/pragma_tv.rs:108-113, crates/sql/src/exec/pragma_tv.rs:134-139, crates/sql/src/exec/pragma_tv.rs:429-434, crates/sql/src/exec/pragma_tv.rs:463-468` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 16 | 37 | `crates/sql/src/exec/agg/select.rs:85-101, crates/sql/src/planner/access/projection.rs:153-169` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/kernel/src/catalog/store.rs:557-558, crates/sql/src/parser.rs:515-516, crates/sql/src/parser.rs:1821-1822, crates/sql/src/parser.rs:1926-1927, crates/sql/src/parser.rs:2025-2026, crates/sql/src/parser.rs:2501-2502, crates/sql/src/parser.rs:2653-2654, crates/sql/src/parser.rs:2696-2697, crates/sql/src/parser.rs:2841-2842, crates/sql/src/parser.rs:3151-3152, crates/sql/src/parser.rs:3199-3200, crates/sql/src/parser/split.rs:33-34, crates/sql/src/parser/split.rs:171-172` | `same body appears under different names across files` |
@@ -99,6 +99,7 @@
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 21 | `crates/cli/src/shellzero.rs:217-223, crates/redlinedb-lite/src/shellzero.rs:216-222` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 20 | `crates/sql/src/exec/agg/select.rs:9-15, crates/sql/src/planner/access/projection.rs:94-100` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 12 | `crates/sql/src/exec/policy.rs:32-38, crates/sql/src/exec/policy.rs:57-63` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/bench/src/interaction_volume/tests.rs:466-468, crates/bench/src/interaction_volume/tests.rs:470-472, crates/bench/src/interaction_volume/tests.rs:474-476, crates/bench/src/interaction_volume/tests.rs:478-480` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser.rs:629-630, crates/sql/src/parser.rs:810-811, crates/sql/src/parser.rs:898-899, crates/sql/src/parser.rs:1107-1108, crates/sql/src/parser.rs:3055-3056, crates/sql/src/parser.rs:3119-3120` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 15 | `crates/sql/src/exec/mod.rs:1578-1583, crates/sql/src/exec/mod.rs:1593-1598` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 5 | 13 | `crates/sql/src/exec/agg/select.rs:103-108, crates/sql/src/planner/access/projection.rs:171-176` | `same-name semantic unit copied across multiple files` |
@@ -111,6 +112,7 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/sql/src/exec/expr/program.rs:970-971, crates/sql/src/exec/expr/program.rs:1027-1028, crates/sql/src/exec/expr/program.rs:1042-1043, crates/sql/src/exec/expr/program.rs:1096-1097, crates/sql/src/json/scalar.rs:539-540` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/kernel/src/format/page.rs:102-104, crates/kernel/src/storage/control.rs:156-158, crates/kernel/src/storage/tx_status_checkpoint.rs:156-158` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 5 | `crates/redlinedb/src/connection.rs:154-158, crates/redlinedb/src/connection.rs:169-173` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `crates/bench/src/interaction_volume/evidence.rs:542-543, crates/bench/src/interaction_volume/evidence.rs:557-558, crates/bench/src/sqlite_parity/report_gen/io.rs:209-210, crates/cli/src/dot/control.rs:558-559, crates/cli/src/render.rs:1120-1121` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111, crates/kernel/src/storage/numa.rs:47-49` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 16 | `crates/sql/src/exec/expr/scalar/value.rs:556-559, crates/sql/src/exec/expr/scalar/value.rs:710-713` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/statement.rs:937-938, crates/sql/src/statement.rs:945-946, crates/sql/src/statement.rs:953-954, crates/sql/src/statement.rs:960-961` | `same body appears under different names across files` |
@@ -130,22 +132,20 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/cli/src/render.rs:410-411, crates/cli/src/render.rs:430-431, crates/cli/src/render.rs:444-445` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/kernel/src/catalog/ops.rs:1486-1487, crates/sql/src/parser.rs:1645-1646, crates/sql/src/parser/split.rs:164-165` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/sql/src/json/scalar.rs:279-280, crates/sql/src/json/scalar.rs:557-558, crates/sql/src/json/scalar.rs:587-588` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/cli/src/render.rs:641-642, crates/cli/src/render.rs:766-767, crates/cli/src/render.rs:777-778` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/bench/src/sqlite_parity/report_gen/readme.rs:425-426, crates/kernel/src/catalog/ops.rs:1490-1491, crates/kernel/src/catalog/ops.rs:1513-1514` | `same body appears under different names across files` |
 
 ## Dimensions
 
 | Dimension | Weight | Score | Weighted | Evidence |
 | --- | ---: | ---: | ---: | --- |
 | Ownership and navigation surface | 13 | 100 | 13.00 | root `AGENTS.md` present; `CODEOWNERS` present |
-| Contract and boundary integrity | 13 | 88 | 11.44 | contract surface found; generated contract artifacts found |
-| Proof lanes and test routing | 12 | 98 | 11.76 | one-command setup/validation lane found; deterministic fast lane found |
+| Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
+| Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
 | Code shape and semantic surface | 12 | 45 | 5.40 | largest authored code file: crates/sql/src/parser.rs (5270 LOC); code file exceeds 500 LOC |
-| Data truth and workflow safety | 8 | 85 | 6.80 | database surface present; migration directory present |
+| Data truth and workflow safety | 8 | 100 | 8.00 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 88 | 7.04 | observability libraries or patterns found; ops/observability directory present |
-| Context economy and agent instructions | 7 | 91 | 6.37 | root `AGENTS.md` present; root `AGENTS.md` stays short |
-| Jankurai tool adoption and CI replacement | 7 | 100 | 7.00 | control-plane files present; applicable=16 |
+| Context economy and agent instructions | 7 | 100 | 7.00 | root `AGENTS.md` present; root `AGENTS.md` stays short |
+| Jankurai tool adoption and CI replacement | 7 | 80 | 5.60 | control-plane files present; applicable=16 |
 | Python containment and polyglot hygiene | 4 | 100 | 4.00 | no Python files in scope |
 | Build speed signals | 4 | 80 | 3.20 | build acceleration markers found; targeted test/build commands found |
 
@@ -176,7 +176,7 @@
 
 - Control plane present: `true`
 - Applicable tools: `16`
-- Configured: `16`
+- Configured: `0`
 - CI evidence: `16`
 - Artifact verified: `16`
 - Replaced count: `16`
@@ -205,6 +205,13 @@
 | `release-readiness` | `release` | `auto` | `artifact_verified` | `manual launch checklist` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
 | `cost-budget` | `release` | `auto` | `artifact_verified` | `manual spend review` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
 
+## Boundary manifest (ingested)
+
+- Path: `agent/boundaries.toml`
+- Stack: `rust-ts-vite-react-postgres-bounded-python` · version: `0.4.0`
+- Queue path counts — adapter: `2`, event_contract: `1`, generated_type: `1`, client_marker: `7`, streaming_exception: `1`
+- Content fingerprint: `sha256:39f4f2fc80401bd10b3db201e1a8c065a5ba7a77567cf9bd9f3b6069eb40e8be`
+
 ## Boundary Reclassifications
 
 No audited runtime boundary reclassifications declared.
@@ -221,7 +228,27 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:18ea4127df71db067f61d63ceb34a985b4082441cd148efe216323adb654e68e`
    Evidence: largest authored code file: crates/sql/src/parser.rs (5270 LOC), code file exceeds 500 LOC, code file exceeds 1000 LOC, most code files stay under 300 LOC
-2. `medium` `proof` `Justfile`
+2. `medium` `governance` `.jankurai/repo-score.json`
+   Rule: `HLT-045-GENERATED-ZONE-GOVERNANCE`
+   Check: `HLT-045-GENERATED-ZONE-GOVERNANCE:governance` `soft` confidence `0.76`
+   Route: TLR `Contracts/data`, lane `contract`, owner `control-plane`
+   Docs: `agent/JANKURAI_STANDARD.md#generated-zones`
+   Reason: generated zone `.jankurai/repo-score.json` has an uncommitted hand-edit at `.jankurai/repo-score.json` instead of a regeneration
+   Fix: revert the in-place edit to `.jankurai/repo-score.json` and regenerate it from the declared source/command in `agent/generated-zones.toml`; do not patch generated output by hand
+   Rerun: `just fast`
+   Fingerprint: `sha256:d07620f7571aa6c22bff4d9438004092e95982b5fc511469d16bf00da575387f`
+   Evidence: `.jankurai/repo-score.json` was hand-edited inside declared generated zone `.jankurai/repo-score.json`
+3. `medium` `governance` `.jankurai/repo-score.md`
+   Rule: `HLT-045-GENERATED-ZONE-GOVERNANCE`
+   Check: `HLT-045-GENERATED-ZONE-GOVERNANCE:governance` `soft` confidence `0.76`
+   Route: TLR `Contracts/data`, lane `contract`, owner `control-plane`
+   Docs: `agent/JANKURAI_STANDARD.md#generated-zones`
+   Reason: generated zone `.jankurai/repo-score.md` has an uncommitted hand-edit at `.jankurai/repo-score.md` instead of a regeneration
+   Fix: revert the in-place edit to `.jankurai/repo-score.md` and regenerate it from the declared source/command in `agent/generated-zones.toml`; do not patch generated output by hand
+   Rerun: `just fast`
+   Fingerprint: `sha256:b4211b8d5221de05d42f362642c8c690b842ae2b52aea8e07a12c035f4dba31e`
+   Evidence: `.jankurai/repo-score.md` was hand-edited inside declared generated zone `.jankurai/repo-score.md`
+4. `medium` `proof` `Justfile`
    Rule: `HLT-018-PERF-CONCURRENCY-DRIFT`
    Check: `HLT-018-PERF-CONCURRENCY-DRIFT:proof` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `fast`, owner `workspace`
@@ -231,7 +258,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:2f2531223d7f7036c20d44b58cd52e64aa53ffd6cb85e01e541c1feff0c09cb2`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-3. `medium` `copy-code` `crates/bench/src/fuzz/normalize.rs:19`
+5. `medium` `copy-code` `crates/bench/src/fuzz/normalize.rs:19`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -242,7 +269,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
    Fingerprint: `sha256:06abf3e40a8c91cd5bd3a90c2801aa5769be3e9a2c1e83dba0430881ddec8173`
    Evidence: enum `Cell` is defined with diverging shapes in 2 modules (crates/bench/src/fuzz/normalize.rs:19, crates/cli/src/render.rs:10)
-4. `medium` `copy-code` `crates/kernel/src/error.rs:21`
+6. `medium` `copy-code` `crates/kernel/src/error.rs:21`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -253,7 +280,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
    Fingerprint: `sha256:0c9d695968a4c3656809617dc18f78a9c390dfb8bf704adb486db7cd6f8a193f`
    Evidence: enum `Error` is defined with diverging shapes in 2 modules (crates/kernel/src/error.rs:21, crates/sql/src/error.rs:5)
-5. `medium` `copy-code` `crates/kernel/src/json/path_bytecode.rs:27`
+7. `medium` `copy-code` `crates/kernel/src/json/path_bytecode.rs:27`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -264,7 +291,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
    Fingerprint: `sha256:b3bb182f6967fe53e8a9863ef4ed7ac2446a6997b89e3e61cae7832373f73b23`
    Evidence: enum `Op` is defined with diverging shapes in 2 modules (crates/kernel/src/json/path_bytecode.rs:27, crates/sql/src/exec/expr/program.rs:305)
-6. `medium` `copy-code` `crates/redlinedb/src/iter.rs:13`
+8. `medium` `copy-code` `crates/redlinedb/src/iter.rs:13`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -275,7 +302,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
    Fingerprint: `sha256:60c8d0460af256677624e4f982952ee141a6eb69520c6bab4c0b91d073f797c0`
    Evidence: enum `Step` is defined with diverging shapes in 2 modules (crates/redlinedb/src/iter.rs:13, crates/sql/src/statement.rs:733)
-7. `medium` `copy-code` `crates/sql/src/exec/morsel/hash_agg.rs:43`
+9. `medium` `copy-code` `crates/sql/src/exec/morsel/hash_agg.rs:43`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -286,7 +313,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
    Fingerprint: `sha256:1792bb4ccf76315d0f67831b6b9614a39d3305eda161b9a07cf4b4a21f986665`
    Evidence: enum `AggKind` is defined with diverging shapes in 2 modules (crates/sql/src/exec/morsel/hash_agg.rs:43, crates/sql/src/exec/vec/hash_agg.rs:23)
-8. `medium` `copy-code` `crates/sql/src/planner.rs:113`
+10. `medium` `copy-code` `crates/sql/src/planner.rs:113`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -297,7 +324,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
    Fingerprint: `sha256:727b18f3f2599d194006380d54645ddf5dd2248425597bed1813530843f81b7e`
    Evidence: enum `JoinKind` is defined with diverging shapes in 2 modules (crates/sql/src/planner.rs:113, crates/sql/src/statement.rs:491)
-9. `medium` `copy-code` `crates/sql/src/planner.rs:121`
+11. `medium` `copy-code` `crates/sql/src/planner.rs:121`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `tools`
@@ -317,21 +344,25 @@ No audited runtime boundary reclassifications declared.
 
 ## Agent Fix Queue
 
-1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
+1. `medium` `HLT-045-GENERATED-ZONE-GOVERNANCE` `.jankurai/repo-score.json` - revert the in-place edit to `.jankurai/repo-score.json` and regenerate it from the declared source/command in `agent/generated-zones.toml`; do not patch generated output by hand
+   Route: `Contracts/data`/`contract`
+2. `medium` `HLT-045-GENERATED-ZONE-GOVERNANCE` `.jankurai/repo-score.md` - revert the in-place edit to `.jankurai/repo-score.md` and regenerate it from the declared source/command in `agent/generated-zones.toml`; do not patch generated output by hand
+   Route: `Contracts/data`/`contract`
+3. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-2. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
+4. `medium` `HLT-001-DEAD-MARKER` `.` - split large or ambiguous authored code into smaller semantic modules with focused tests
    Route: `Entropy`/`fast`
-3. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/bench/src/fuzz/normalize.rs` - define `Cell` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+5. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/bench/src/fuzz/normalize.rs` - define `Cell` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-4. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/kernel/src/error.rs` - define `Error` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+6. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/kernel/src/error.rs` - define `Error` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-5. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/kernel/src/json/path_bytecode.rs` - define `Op` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+7. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/kernel/src/json/path_bytecode.rs` - define `Op` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-6. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/redlinedb/src/iter.rs` - define `Step` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+8. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/redlinedb/src/iter.rs` - define `Step` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-7. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/exec/morsel/hash_agg.rs` - define `AggKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+9. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/exec/morsel/hash_agg.rs` - define `AggKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-8. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/planner.rs` - define `JoinKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+10. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/planner.rs` - define `JoinKind` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`
-9. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/planner.rs` - define `AccessPath` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+11. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/sql/src/planner.rs` - define `AccessPath` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Route: `Maintainability entropy`/`copy-code`

@@ -188,14 +188,22 @@ fn gitlab_daily_certificate_is_pinned_serialized_and_not_retried() {
         assert!(block.contains("retry: 0"));
     }
     let smoke = job_block(yaml, "interaction-volume-smoke");
-    assert!(smoke.contains(pinned_digest));
-    assert!(smoke.contains("alias: postgres-cert"));
+    assert!(smoke.contains("extends: .interaction-volume-owned-docker"));
+    assert!(smoke.contains("interaction-volume-ci-entrypoint.sh smoke"));
     assert!(smoke.contains("interaction-volume-interruption-test.sh"));
+    assert!(smoke.contains("interaction-volume-adversarial-test.sh"));
+
+    let docker_job = job_block(yaml, ".interaction-volume-owned-docker");
+    assert!(
+        docker_job.contains("aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce")
+    );
+    assert!(docker_job.contains("DOCKER_HOST: \"tcp://docker:2375\""));
+    assert!(docker_job.contains("docker.io"));
 
     let daily = job_block(yaml, "interaction-volume-daily");
     assert!(!daily.contains("services:"));
     assert!(!daily.contains("REDLINEDB_POSTGRES_CERT_CI_SERVICE"));
-    assert!(daily.contains("REDLINEDB_INTERACTION_TRIGGER_CONTRACT"));
+    assert!(daily.contains("interaction-volume-ci-entrypoint.sh daily"));
     assert!(daily.contains("expire_in: 90 days"));
 
     let wrapper = include_str!("../../../../ops/ci/interaction-volume-cert.sh");
@@ -209,6 +217,11 @@ fn gitlab_daily_certificate_is_pinned_serialized_and_not_retried() {
     .unwrap();
     assert_eq!(trigger["daily_job"], "interaction-volume-daily");
     assert_eq!(trigger["artifact_retention_days"], 90);
+    assert_eq!(trigger["runtime_trigger_receipt"], "trigger-evidence.json");
+    assert_eq!(
+        trigger["interruption_receipt_tests"],
+        serde_json::json!(["postgres_timeout", "postgres_sigterm"])
+    );
 }
 
 #[test]
@@ -254,7 +267,7 @@ fn idle_growth_uses_peak_not_only_the_last_sample() {
             wal_bytes: 10,
         },
     ];
-    assert_eq!(idle_growth(&samples), 150);
+    assert_eq!(idle_growth(&samples).unwrap(), 150);
 }
 
 #[test]
@@ -383,9 +396,9 @@ fn redline_and_sqlite_integrity_hash_text_cells_identically() {
     let root = tempdir().unwrap();
     let config = config();
     let operation = Interaction::Append {
-        event_id: "event-text-cell".to_owned(),
+        event_id: "w000-o00000000".to_owned(),
         session_id: 0,
-        sequence: 1,
+        sequence: 0,
         payload: "canonical-payload".to_owned(),
     };
     let expected = expected_integrity(&[vec![operation.clone()]], config.sessions).unwrap();
@@ -404,6 +417,23 @@ fn redline_and_sqlite_integrity_hash_text_cells_identically() {
         let mut connection = engine.connect(0).unwrap();
         let validation = ResultValidation::for_plan(&[vec![operation.clone()]], &config).unwrap();
         execute_interaction(&mut *connection, &operation, &validation).unwrap();
+        assert_eq!(
+            execute_interaction(
+                &mut *connection,
+                &Interaction::ReadSession { session_id: 0 },
+                &validation,
+            )
+            .unwrap()
+            .point_reads,
+            1
+        );
+        let replay = execute_interaction(
+            &mut *connection,
+            &Interaction::ReplayEvents { session_id: 0 },
+            &validation,
+        )
+        .unwrap();
+        assert_eq!((replay.replays, replay.replay_rows), (1, 1));
         drop(connection);
         snapshots.push(interaction_integrity(&*engine).unwrap());
     }
@@ -469,6 +499,7 @@ fn every_timed_read_and_replay_is_content_checked() {
             CellValue::Integer(0),
             CellValue::Integer(1),
             CellValue::Text("training".to_owned()),
+            CellValue::Integer(1),
         ],
         rows: Vec::new(),
     };
@@ -478,7 +509,7 @@ fn every_timed_read_and_replay_is_content_checked() {
             .point_reads,
         1
     );
-    valid_read.row[2] = CellValue::Text("corrupt".to_owned());
+    valid_read.row[3] = CellValue::Integer(0);
     assert!(execute_interaction(&mut valid_read, &read, &validation).is_err());
 
     let valid_replay_row = vec![
@@ -487,6 +518,7 @@ fn every_timed_read_and_replay_is_content_checked() {
         CellValue::Integer(0),
         CellValue::Text("training.progress".to_owned()),
         CellValue::Text("a".repeat(config.payload_bytes)),
+        CellValue::Integer(1),
     ];
     let mut valid_replay = QueryOnlyConn {
         row: Vec::new(),
@@ -496,6 +528,30 @@ fn every_timed_read_and_replay_is_content_checked() {
     assert_eq!((verified.replays, verified.replay_rows), (1, 1));
     valid_replay.rows[0][2] = CellValue::Integer(99);
     assert!(execute_interaction(&mut valid_replay, &replay, &validation).is_err());
+
+    let mut missing_replay = QueryOnlyConn {
+        row: Vec::new(),
+        rows: Vec::new(),
+    };
+    assert!(execute_interaction(&mut missing_replay, &replay, &validation).is_err());
+
+    let mut empty_committed_session = QueryOnlyConn {
+        row: Vec::new(),
+        rows: vec![vec![
+            CellValue::Null,
+            CellValue::Null,
+            CellValue::Null,
+            CellValue::Null,
+            CellValue::Null,
+            CellValue::Integer(0),
+        ]],
+    };
+    assert_eq!(
+        execute_interaction(&mut empty_committed_session, &replay, &validation)
+            .unwrap()
+            .replay_rows,
+        0
+    );
 }
 
 #[test]
@@ -520,6 +576,27 @@ fn storage_watchdog_stops_with_headroom_before_the_hard_cap() {
                 offset_ms: 0,
                 data_bytes: stop,
                 wal_bytes: 0,
+            },
+            hard_limit,
+        )
+        .is_err()
+    );
+    let hard_error = ensure_storage_within_limit(
+        &StorageSample {
+            offset_ms: 0,
+            data_bytes: hard_limit,
+            wal_bytes: 1,
+        },
+        hard_limit,
+    )
+    .unwrap_err();
+    assert!(format!("{hard_error:#}").contains("hard cap exceeded"));
+    assert!(
+        ensure_storage_within_limit(
+            &StorageSample {
+                offset_ms: 0,
+                data_bytes: u64::MAX,
+                wal_bytes: 1,
             },
             hard_limit,
         )
@@ -579,12 +656,18 @@ fn execution_evidence_binds_git_binary_postgres_and_shared_mount() {
         binary_sha256: "b".repeat(64),
         postgres: PostgresExecutionEvidence {
             image_digest: PINNED_POSTGRES_IMAGE_DIGEST.to_owned(),
-            digest_observation: "docker_image_inspect_repo_digest".to_owned(),
-            digest_verified: true,
-            backend: "docker_bind".to_owned(),
+            digest_observation: "ci_service_contract".to_owned(),
+            digest_verified: false,
+            backend: "ci_service".to_owned(),
             isolation_verified: true,
             dedicated_instance: true,
-            endpoint_scope: "loopback".to_owned(),
+            endpoint_scope: "ci_service".to_owned(),
+            container_id: None,
+            container_name: None,
+            container_run_id: None,
+            docker_daemon_id: None,
+            endpoint_host: Some("postgres-cert".to_owned()),
+            endpoint_port: Some(5432),
         },
         storage: StorageContract {
             class: "shared_host_durable_bind".to_owned(),
@@ -595,16 +678,19 @@ fn execution_evidence_binds_git_binary_postgres_and_shared_mount() {
             same_mount: true,
             durable: true,
             postgres_bind_mode: "rw".to_owned(),
+            emergency_reserve_path: None,
+            emergency_reserve_bytes: 0,
         },
+        ci_trigger: None,
     };
     let dir = tempdir().unwrap();
     let path = dir.path().join("evidence.json");
     fs::write(&path, serde_json::to_vec(&document).unwrap()).unwrap();
-    let validated = load_execution_evidence(&path, &"b".repeat(64)).unwrap();
+    let validated = load_execution_evidence(&path, &"b".repeat(64), "unused").unwrap();
     assert!(validated.source_observation_bound);
-    assert!(validated.postgres_provenance_bound);
-    assert!(validated.storage_comparison_eligible);
-    assert!(load_execution_evidence(&path, &"c".repeat(64)).is_err());
+    assert!(!validated.postgres_provenance_bound);
+    assert!(!validated.storage_comparison_eligible);
+    assert!(load_execution_evidence(&path, &"c".repeat(64), "unused").is_err());
 }
 
 #[test]
@@ -617,6 +703,12 @@ fn service_or_memory_storage_can_never_authorize_a_reference_win() {
         isolation_verified: true,
         dedicated_instance: true,
         endpoint_scope: "ci_service".to_owned(),
+        container_id: None,
+        container_name: None,
+        container_run_id: None,
+        docker_daemon_id: None,
+        endpoint_host: Some("postgres-cert".to_owned()),
+        endpoint_port: Some(5432),
     };
     let storage = StorageContract {
         class: "unmatched_ci_service".to_owned(),
@@ -627,6 +719,8 @@ fn service_or_memory_storage_can_never_authorize_a_reference_win() {
         same_mount: false,
         durable: false,
         postgres_bind_mode: "service_managed".to_owned(),
+        emergency_reserve_path: None,
+        emergency_reserve_bytes: 0,
     };
     assert!(!storage.comparison_eligible(&postgres));
 }

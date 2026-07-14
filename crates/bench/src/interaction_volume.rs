@@ -27,16 +27,18 @@ use crate::report::{MetricsSummary, RunEnvironment};
 
 mod evidence;
 mod model;
+mod oracle;
 mod receipt;
 use evidence::*;
 use model::*;
+use oracle::*;
 use receipt::*;
 
-const SCHEMA_VERSION: &str = "redline.interaction-volume-cert/v2";
+const SCHEMA_VERSION: &str = "redline.interaction-volume-cert/v3";
 const POSTGRES_URL_ENV: &str = "REDLINEDB_BENCH_POSTGRES_URL";
 const PINNED_POSTGRES_IMAGE_DIGEST: &str =
     "sha256:786dab398303b8ce7cb76b407bb21ef2e4dfbbbd4c6abcf3d29b3130467ffdbc";
-const STORAGE_POLL_INTERVAL: Duration = Duration::from_millis(100);
+const STORAGE_POLL_INTERVAL: Duration = Duration::from_millis(25);
 const PROGRESS_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(1);
 const MAX_LATENCY_SAMPLES: usize = 4_096;
 const MAX_INTERACTION_ATTEMPTS: usize = 8;
@@ -127,11 +129,12 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
     if args.execution_evidence != args.out_dir.join("execution-evidence.json") {
         bail!("execution evidence must be the wrapper-owned file inside the output directory");
     }
-    let execution_evidence = load_execution_evidence(&args.execution_evidence, &artifact_sha256)?;
     let postgres_url = std::env::var(POSTGRES_URL_ENV)
         .ok()
         .filter(|value| !value.trim().is_empty())
         .context("PostgreSQL is mandatory: set REDLINEDB_BENCH_POSTGRES_URL")?;
+    let execution_evidence =
+        load_execution_evidence(&args.execution_evidence, &artifact_sha256, &postgres_url)?;
     let endpoint_scope = PostgresEngine::endpoint_scope(&postgres_url)?;
     if endpoint_scope != execution_evidence.document.postgres.endpoint_scope {
         bail!(
@@ -161,7 +164,9 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
         postgres_image_digest: postgres_image_digest.clone(),
         execution_evidence: execution_evidence.document.clone(),
         execution_evidence_sha256: execution_evidence.sha256.clone(),
+        live_postgres_observation: execution_evidence.live_postgres.clone(),
         provenance_bound,
+        ci_trigger_bound: execution_evidence.ci_trigger_bound,
         storage_contract: execution_evidence.document.storage.clone(),
         storage_comparison_eligible: execution_evidence.storage_comparison_eligible,
         planned_runs: planned_runs.clone(),
@@ -182,9 +187,10 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
         && (!execution_evidence.source_observation_bound
             || environment.git_dirty != Some(false)
             || !execution_evidence.postgres_provenance_bound
-            || !execution_evidence.storage_comparison_eligible)
+            || !execution_evidence.storage_comparison_eligible
+            || !execution_evidence.ci_trigger_bound)
     {
-        let reason = "release preflight requires clean repository-observed source, a digest-verified dedicated PostgreSQL instance, and one shared durable host bind"
+        let reason = "release preflight requires clean repository-observed source, a live digest-verified owned PostgreSQL container, one shared durable host bind, and runtime CI trigger evidence"
             .to_owned();
         ProgressTracker::matrix(&args.out_dir, planned_runs.len(), &runs, deadline_unix_ms).write(
             "failed",
@@ -301,6 +307,7 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
         schema_version: SCHEMA_VERSION.to_owned(),
         environment: environment.clone(),
         execution_evidence_sha256: execution_evidence.sha256.clone(),
+        live_postgres_observation: execution_evidence.live_postgres.clone(),
         storage_contract: execution_evidence.document.storage.clone(),
         config: config.clone(),
         runs: runs.clone(),
@@ -358,6 +365,12 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
                     .to_owned(),
             );
         }
+        if !execution_evidence.ci_trigger_bound {
+            failure_reasons.push(
+                "release evidence requires a runtime-bound CI schedule/manual trigger receipt"
+                    .to_owned(),
+            );
+        }
     } else {
         failure_reasons.push("smoke mode is informational and cannot authorize release".to_owned());
         if !execution_evidence.storage_comparison_eligible {
@@ -373,7 +386,9 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
     let max_observed_data_bytes = runs
         .iter()
         .flat_map(all_storage_samples)
-        .map(|sample| sample.data_bytes.saturating_add(sample.wal_bytes))
+        .map(storage_total)
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
         .max()
         .unwrap_or(0);
     let config_sha256 = sha256_json(&config)?;
@@ -396,7 +411,9 @@ pub fn run(args: &InteractionVolumeArgs) -> Result<CertManifest> {
         postgres_image_digest,
         execution_evidence: execution_evidence.document.clone(),
         execution_evidence_sha256: execution_evidence.sha256.clone(),
+        live_postgres_observation: execution_evidence.live_postgres.clone(),
         provenance_bound,
+        ci_trigger_bound: execution_evidence.ci_trigger_bound,
         storage_contract: execution_evidence.document.storage.clone(),
         storage_comparison_eligible: execution_evidence.storage_comparison_eligible,
         config_sha256,
@@ -844,7 +861,7 @@ fn run_engine(
             sample,
         });
     }
-    let idle_growth_bytes = idle_growth(&idle_storage_samples);
+    let idle_growth_bytes = idle_growth(&idle_storage_samples)?;
     let before_integrity = checked_storage_sample(
         &*engine,
         elapsed.as_millis() as u64,
@@ -1264,176 +1281,6 @@ fn execute_plan(
     ))
 }
 
-fn execute_interaction(
-    conn: &mut dyn BenchConn,
-    interaction: &Interaction,
-    validation: &ResultValidation,
-) -> Result<InteractionVerification> {
-    match interaction {
-        Interaction::Append {
-            event_id,
-            session_id,
-            sequence,
-            payload,
-        } => {
-            conn.begin_immediate()?;
-            let result = (|| {
-                let inserted = conn.execute(
-                    "INSERT INTO interaction_events(event_id, session_id, seq, kind, payload) \
-                     VALUES (?1, ?2, ?3, 'training.progress', ?4)",
-                    &[
-                        CellValue::Text(event_id.clone()),
-                        CellValue::Integer(*session_id),
-                        CellValue::Integer(*sequence),
-                        CellValue::Text(payload.clone()),
-                    ],
-                )?;
-                if inserted != 1 {
-                    bail!("event append affected {inserted} rows, expected 1");
-                }
-                let updated = conn.execute(
-                    "UPDATE interaction_sessions SET last_seq = last_seq + 1, updated_at = ?1 \
-                     WHERE id = ?2",
-                    &[
-                        CellValue::Integer(*sequence),
-                        CellValue::Integer(*session_id),
-                    ],
-                )?;
-                if updated != 1 {
-                    bail!("session progress update affected {updated} rows, expected 1");
-                }
-                conn.commit()
-            })();
-            if result.is_err() {
-                let _ = conn.rollback();
-            }
-            result.map(|()| InteractionVerification::default())
-        }
-        Interaction::ReadSession { session_id } => {
-            let row = conn.query_row(
-                "SELECT id, last_seq, state FROM interaction_sessions WHERE id = ?1",
-                &[CellValue::Integer(*session_id)],
-            )?;
-            let max_appends = validation.max_appends(*session_id)?;
-            match row.as_slice() {
-                [
-                    CellValue::Integer(id),
-                    CellValue::Integer(last_seq),
-                    CellValue::Text(state),
-                ] if id == session_id
-                    && *last_seq >= 0
-                    && (*last_seq as u64) <= max_appends
-                    && state == "training" => {}
-                other => {
-                    bail!(
-                        "session point read failed correctness gate for session {session_id}: {other:?} (max appends {max_appends})"
-                    );
-                }
-            }
-            Ok(InteractionVerification {
-                point_reads: 1,
-                ..InteractionVerification::default()
-            })
-        }
-        Interaction::ReplayEvents { session_id } => {
-            let rows = conn.query_all(
-                "SELECT event_id, session_id, seq, kind, payload FROM interaction_events \
-                 WHERE session_id = ?1 \
-                 ORDER BY seq DESC LIMIT 20",
-                &[CellValue::Integer(*session_id)],
-            )?;
-            let max_rows = validation.max_appends(*session_id)?.min(20) as usize;
-            if rows.len() > max_rows {
-                bail!(
-                    "session replay returned {} rows, exceeding planned maximum {max_rows}",
-                    rows.len()
-                );
-            }
-            let mut previous_sequence = None;
-            for row in &rows {
-                let [
-                    CellValue::Text(event_id),
-                    CellValue::Integer(row_session),
-                    CellValue::Integer(sequence),
-                    CellValue::Text(kind),
-                    CellValue::Text(payload),
-                ] = row.as_slice()
-                else {
-                    bail!("session replay returned malformed row {row:?}");
-                };
-                let (expected_session, expected_sequence, expected_payload) =
-                    validation.expected_event(event_id)?;
-                if row_session != session_id
-                    || row_session != expected_session
-                    || *sequence < 0
-                    || sequence != expected_sequence
-                    || kind != "training.progress"
-                    || payload != expected_payload
-                    || event_sequence(event_id, validation.operations_per_thread) != Some(*sequence)
-                {
-                    bail!(
-                        "session replay row failed correctness gate for session {session_id}: {row:?}"
-                    );
-                }
-                if previous_sequence.is_some_and(|previous| previous <= *sequence) {
-                    bail!("session replay is not strictly descending by sequence: {rows:?}");
-                }
-                previous_sequence = Some(*sequence);
-            }
-            Ok(InteractionVerification {
-                replays: 1,
-                replay_rows: rows.len() as u64,
-                ..InteractionVerification::default()
-            })
-        }
-    }
-}
-
-fn event_sequence(event_id: &str, operations_per_thread: usize) -> Option<i64> {
-    let (worker, operation) = event_id.strip_prefix('w')?.split_once("-o")?;
-    let worker = worker.parse::<usize>().ok()?;
-    let operation = operation.parse::<usize>().ok()?;
-    if format!("w{worker:03}-o{operation:08}") != event_id || operation >= operations_per_thread {
-        return None;
-    }
-    i64::try_from(
-        worker
-            .checked_mul(operations_per_thread)?
-            .checked_add(operation)?,
-    )
-    .ok()
-}
-
-fn execute_interaction_with_retry(
-    conn: &mut dyn BenchConn,
-    interaction: &Interaction,
-    validation: &ResultValidation,
-) -> Result<(u64, InteractionVerification)> {
-    let started = Instant::now();
-    let mut retries = 0_u64;
-    for attempt in 0..MAX_INTERACTION_ATTEMPTS {
-        match execute_interaction(conn, interaction, validation) {
-            Ok(verification) => return Ok((retries, verification)),
-            Err(error) => {
-                let retryable = matches!(
-                    classify_failure(&error),
-                    FailureKind::Busy | FailureKind::Locked
-                );
-                if !retryable
-                    || attempt + 1 == MAX_INTERACTION_ATTEMPTS
-                    || started.elapsed() >= INTERACTION_RETRY_DEADLINE
-                {
-                    return Err(error);
-                }
-                retries = retries.saturating_add(1);
-                let backoff_ms = 1_u64 << attempt.min(6);
-                std::thread::sleep(Duration::from_millis(backoff_ms));
-            }
-        }
-    }
-    unreachable!("bounded retry loop always returns")
-}
-
 fn classify_failure(error: &anyhow::Error) -> FailureKind {
     let message = format!("{error:#}").to_ascii_lowercase();
     if message.contains("timeout") || message.contains("timed out") {
@@ -1534,13 +1381,21 @@ fn checked_storage_snapshot(
     Ok((sample, snapshot.engine_stats))
 }
 
-fn storage_total(sample: &StorageSample) -> u64 {
-    sample.data_bytes.saturating_add(sample.wal_bytes)
+fn storage_total(sample: &StorageSample) -> Result<u64> {
+    sample
+        .data_bytes
+        .checked_add(sample.wal_bytes)
+        .context("aggregate data+WAL byte accounting overflowed u64")
 }
 
 fn ensure_storage_within_limit(sample: &StorageSample, max_data_bytes: u64) -> Result<()> {
-    let total = storage_total(sample);
+    let total = storage_total(sample)?;
     let stop_threshold = storage_stop_threshold(max_data_bytes);
+    if total > max_data_bytes {
+        bail!(
+            "aggregate storage hard cap exceeded: observed {total} bytes above {max_data_bytes} bytes"
+        );
+    }
     if total >= stop_threshold {
         bail!(
             "storage watchdog stopped at {total} bytes before the hard {max_data_bytes}-byte cap (stop threshold {stop_threshold})"
@@ -1550,8 +1405,11 @@ fn ensure_storage_within_limit(sample: &StorageSample, max_data_bytes: u64) -> R
 }
 
 fn storage_stop_threshold(max_data_bytes: u64) -> u64 {
-    let headroom = (max_data_bytes / 20)
-        .clamp(1024 * 1024, 16 * 1024 * 1024)
+    // Reserve 25% (bounded to 8..=512 MiB) and sample every 25 ms. The reserve is also
+    // physically allocated by the wrapper on the shared filesystem, leaving recovery space even
+    // if a defective engine grows between watchdog samples.
+    let headroom = (max_data_bytes / 4)
+        .clamp(8 * 1024 * 1024, 512 * 1024 * 1024)
         .min(max_data_bytes / 2);
     max_data_bytes.saturating_sub(headroom)
 }
@@ -1638,17 +1496,19 @@ fn all_storage_samples(run: &EngineRun) -> impl Iterator<Item = &StorageSample> 
         )
 }
 
-fn idle_growth(samples: &[StorageSample]) -> u64 {
+fn idle_growth(samples: &[StorageSample]) -> Result<u64> {
     let Some(first) = samples.first() else {
-        return 0;
+        return Ok(0);
     };
-    let baseline = first.data_bytes.saturating_add(first.wal_bytes);
-    samples
+    let baseline = storage_total(first)?;
+    Ok(samples
         .iter()
-        .map(|sample| sample.data_bytes.saturating_add(sample.wal_bytes))
+        .map(storage_total)
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
         .max()
         .unwrap_or(baseline)
-        .saturating_sub(baseline)
+        .saturating_sub(baseline))
 }
 
 fn expected_verification_counts(plan: &[Vec<Interaction>]) -> (u64, u64) {
@@ -1773,10 +1633,21 @@ fn validate_runs(runs: &[EngineRun], config: &CertConfig) -> Vec<String> {
                 config.max_idle_growth_bytes
             ));
         }
-        let max_storage = all_storage_samples(run)
-            .map(storage_total)
-            .max()
-            .unwrap_or(0);
+        let max_storage = all_storage_samples(run).try_fold(0_u64, |maximum, sample| {
+            storage_total(sample).map(|total| maximum.max(total))
+        });
+        let max_storage = match max_storage {
+            Ok(value) => value,
+            Err(error) => {
+                failures.push(format!(
+                    "{} t{} r{} storage accounting failed: {error:#}",
+                    run.engine.as_str(),
+                    run.threads,
+                    run.repetition
+                ));
+                continue;
+            }
+        };
         if max_storage > config.max_data_bytes {
             failures.push(format!(
                 "{} t{} r{} used {} bytes (limit {})",

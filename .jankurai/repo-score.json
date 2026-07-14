@@ -1,16 +1,20 @@
 {
-  "report_fingerprint": "sha256:cbf2a68d9201149cc780e553c9c17dfb62de27db07b7cfb75dcc392d6947703a",
-  "input_fingerprint": "sha256:98845d6031a44e34694d472c124e6141842de79ee9c5e2ab7e8105cb8311adee",
-  "policy_fingerprint": "sha256:e7c7611fb6dc511d7cf461b144e5c3b76087325b45622c209814f5a2288a841c",
+  "report_fingerprint": "sha256:52a5a1c182a3e493cdf40067c8e6c79041d3cbac1a2bdca2423017fd293677e9",
+  "input_fingerprint": "sha256:22e348c597c79c0aee9fd57c5f4f5893aa56e606a67fcfad756e4d3799b6c4a9",
+  "policy_fingerprint": "sha256:f3702d5b24c5e4efdf85b7f92a200f6cf6d974930a5dcb38c1d1970599ba67d2",
   "manifest_fingerprints": {
-    "generated_zones": "sha256:d2bdfa3f1f251b03f2e2399761019ed64c456f0bbbc34dfec620c602d6737811"
+    "owner_map": "sha256:5bc290f8d63325f42d75d140b3b43815a5c214885ae878809a19c61168bb5faf",
+    "test_map": "sha256:7298b81e0999f734e7f03252424d1457246387ba05f03c04d451f2602239796f",
+    "generated_zones": "sha256:943127baefca563db0be7c07de7dc9961a8c7c1e92d1a7fc6d633cf17db64053",
+    "boundaries": "sha256:39f4f2fc80401bd10b3db201e1a8c065a5ba7a77567cf9bd9f3b6069eb40e8be",
+    "proof_lanes": "sha256:b05f61700db5b2916d6cbfba406b62fffd1d3f86c64817d0790b06a36cde1099"
   },
-  "dirty_worktree": false,
-  "generated_at": "1783883222",
+  "dirty_worktree": true,
+  "generated_at": "1784063068",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
-  "auditor_version": "1.6.10",
+  "auditor_version": "1.6.11",
   "schema_version": "1.9.0",
   "paper_edition": "2026.05-ed8",
   "target_stack_id": "rust-ts-vite-react-postgres-bounded-python",
@@ -20,23 +24,23 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1783883222",
-  "started_at": "1783883222",
-  "elapsed_ms": 21343,
+  "run_id": "1784063068",
+  "started_at": "1784063068",
+  "elapsed_ms": 23060,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 86,
-  "raw_score": 86,
+  "score": 88,
+  "raw_score": 88,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
     "hard_findings": 0,
-    "soft_findings": 9,
+    "soft_findings": 11,
     "ratchet": {
-      "baseline_score": 86,
+      "baseline_score": 88,
       "allowed_drop": 0,
       "passed": true,
       "score_delta": 0,
@@ -49,11 +53,11 @@
     }
   },
   "git": {
-    "head": "c805a59",
+    "head": "48d65ce",
     "base": null,
     "changed_files": 0,
     "mode": "full",
-    "dirty_worktree": false
+    "dirty_worktree": true
   },
   "policy": {
     "path": "./agent/audit-policy.toml",
@@ -68,7 +72,7 @@
     ],
     "mode": "advisory",
     "standard_version": "0.9.0",
-    "auditor_version": "1.6.10",
+    "auditor_version": "1.6.11",
     "schema_version": "1.9.0",
     "paper_edition": "2026.05-ed8",
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
@@ -269,6 +273,8 @@
       "evidence": [
         "root `AGENTS.md` present",
         "`CODEOWNERS` present",
+        "owner map present",
+        "test/proof routing map present",
         "local `AGENTS.md` file(s)",
         "reference-profile cell `api` is canonical",
         "reference-profile cell `api` has local AGENTS.md guidance",
@@ -297,12 +303,13 @@
     {
       "name": "Contract and boundary integrity",
       "weight": 13,
-      "score": 88,
-      "weighted_points": 11.44,
+      "score": 98,
+      "weighted_points": 12.74,
       "evidence": [
         "contract surface found",
         "generated contract artifacts found",
         "polyglot boundary layout present",
+        "boundary manifest present",
         "Rust typed boundary helpers found",
         "all contract sources have generated zone entries"
       ],
@@ -311,19 +318,25 @@
     {
       "name": "Proof lanes and test routing",
       "weight": 12,
-      "score": 98,
-      "weighted_points": 11.76,
+      "score": 100,
+      "weighted_points": 12.0,
       "evidence": [
         "one-command setup/validation lane found",
         "deterministic fast lane found",
         "test runner present in automation surface",
         "GitHub workflow files present",
+        "test/proof routing map present",
         "jankurai audit lane found in CI",
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
-        "Rust property/integration tests present or no Rust surface"
+        "DOM geometry UX QA runtime found",
+        "Rust property/integration tests present or no Rust surface",
+        "proofbind artifact found: surfaces=86 missing=86 high_or_critical_missing=30 verdict=review"
       ],
-      "notes": []
+      "notes": [
+        "proofbind reports 86 unresolved obligation(s)",
+        "proofbind reports 30 missing high/critical semantic proof obligation(s)"
+      ]
     },
     {
       "name": "Security and supply-chain posture",
@@ -338,7 +351,7 @@
         "security lane present",
         "canonical security lane wrapper present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 3961",
+        "rust bad-behavior advisory signals: 4107",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "secret scanning command is operational"
@@ -355,8 +368,8 @@
         "code file exceeds 500 LOC",
         "code file exceeds 1000 LOC",
         "most code files stay under 300 LOC",
-        "copy-code advisory classes found: 164 (advisory only, no score impact)",
-        "rust bad-behavior advisory signals: 3961",
+        "copy-code advisory classes found: 167 (advisory only, no score impact)",
+        "rust bad-behavior advisory signals: 4107",
         "ci bad-behavior advisory signals: 3",
         "git bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
@@ -366,12 +379,15 @@
     {
       "name": "Data truth and workflow safety",
       "weight": 8,
-      "score": 85,
-      "weighted_points": 6.8,
+      "score": 100,
+      "weighted_points": 8.0,
       "evidence": [
         "database surface present",
+        "structured db boundary manifest present",
+        "db boundary routes roots, migrations, and constraints",
         "migration directory present",
-        "constraint or RLS language found"
+        "constraint or RLS language found",
+        "db policy docs describe constraints and rollback safety"
       ],
       "notes": []
     },
@@ -395,11 +411,12 @@
     {
       "name": "Context economy and agent instructions",
       "weight": 7,
-      "score": 91,
-      "weighted_points": 6.37,
+      "score": 100,
+      "weighted_points": 7.0,
       "evidence": [
         "root `AGENTS.md` present",
         "root `AGENTS.md` stays short",
+        "machine-readable routing artifacts present",
         "thin IDE/agent adapters are present",
         "local instruction files present",
         "root README routes to the right docs",
@@ -410,16 +427,18 @@
     {
       "name": "Jankurai tool adoption and CI replacement",
       "weight": 7,
-      "score": 100,
-      "weighted_points": 7.0,
+      "score": 80,
+      "weighted_points": 5.6,
       "evidence": [
         "control-plane files present",
         "applicable=16",
-        "configured=16",
+        "configured=0",
         "ci_evidence=16",
         "artifact_verified=16"
       ],
-      "notes": []
+      "notes": [
+        "some applicable tools are not configured"
+      ]
     },
     {
       "name": "Python containment and polyglot hygiene",
@@ -461,7 +480,9 @@
         "benchmark-results/version/25262bf7ae8a6d41b46855c55b5dfaad19f85ea8/suites/phase11-oltp-gap.json"
       ],
       "design_tokens": [],
-      "geometry_runtime": [],
+      "geometry_runtime": [
+        ".jankurai/ux-qa.json"
+      ],
       "layout_stability": [
         "crates/sql/tests/ws_b3b_simd_json_tokenize.rs"
       ],
@@ -473,7 +494,7 @@
   "tool_adoption": {
     "control_plane_present": true,
     "applicable_count": 16,
-    "configured_count": 16,
+    "configured_count": 0,
     "ci_evidence_count": 16,
     "artifact_verified_count": 16,
     "replaced_count": 16,
@@ -490,11 +511,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: .jankurai/repo-score.json, .jankurai/repo-score.md"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -514,11 +536,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: .jankurai/repo-score.json, .jankurai/repo-score.md, target/jankurai/repair-queue.jsonl"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai proof . --changed-from origin/main --out target/jankurai/proof-plan.json --md target/jankurai/proof-plan.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -539,11 +562,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: target/jankurai/proofbind/surface-witness.json, target/jankurai/proofbind/obligations.json"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai proofbind verify . --changed-from origin/main",
         "ci_command": "jankurai proofbind verify . --changed-from origin/main",
         "artifact_paths": [
@@ -563,11 +587,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: target/jankurai/proofmark/proofmark-receipt.json, target/jankurai/proofmark/proof-receipt.json"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json",
         "ci_command": "jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json",
         "artifact_paths": [
@@ -587,11 +612,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: target/jankurai/copy-code.json, target/jankurai/copy-code.md"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
         "ci_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
         "artifact_paths": [
@@ -612,11 +638,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: target/jankurai/security/evidence.json"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai security run . --out target/jankurai/security/evidence.json",
         "ci_command": "jankurai security run . --out target/jankurai/security/evidence.json",
         "artifact_paths": [
@@ -636,11 +663,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: target/jankurai/language-bad-behavior.log"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
         "artifact_paths": [
@@ -660,11 +688,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: target/jankurai/language-bad-behavior.log"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
         "artifact_paths": [
@@ -684,11 +713,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: target/jankurai/language-bad-behavior.log"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "cargo test -p jankurai --test language_bad_behavior",
         "ci_command": "cargo test -p jankurai --test language_bad_behavior",
         "artifact_paths": [
@@ -747,11 +777,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: .jankurai/repo-score.json, .jankurai/repo-score.md"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -770,11 +801,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: target/jankurai/rust/witness-graph.json"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai rust witness build .",
         "ci_command": "jankurai rust witness build .",
         "artifact_paths": [
@@ -833,11 +865,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: .jankurai/repo-score.json, .jankurai/repo-score.md"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -856,11 +889,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: .jankurai/repo-score.json, .jankurai/repo-score.md"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -879,11 +913,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: .jankurai/repo-score.json, .jankurai/repo-score.md"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -902,11 +937,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: .jankurai/repo-score.json, .jankurai/repo-score.md"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -925,11 +961,12 @@
         ],
         "evidence": [
           "mode=auto",
-          "tool-adoption config entry present",
           "CI command found in workflow",
           "artifact uploads found: .jankurai/repo-score.json, .jankurai/repo-score.md"
         ],
-        "missing": [],
+        "missing": [
+          "agent/tool-adoption.toml entry"
+        ],
         "local_command": "jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
         "ci_command": "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md",
         "artifact_paths": [
@@ -996,40 +1033,34 @@
         "release-readiness",
         "cost-budget"
       ],
-      "config_present": true,
-      "configured_count": 16,
-      "configured_tools": [
-        "audit-ci",
-        "proof-routing",
-        "proofbind",
-        "proofmark-rust",
-        "copy-code",
-        "security",
-        "ci-bad-behavior",
-        "git-bad-behavior",
-        "release-bad-behavior",
-        "contract-drift",
-        "rust-witness",
-        "authz-matrix",
-        "input-boundary",
-        "agent-tool-supply",
-        "release-readiness",
-        "cost-budget"
-      ],
+      "config_present": false,
+      "configured_count": 0,
+      "configured_tools": [],
       "control_plane_present": true
     },
     "missing": []
   },
   "security_evidence": {},
   "boundaries": {
+    "artifact": {
+      "path": "agent/boundaries.toml",
+      "content_fingerprint": "sha256:39f4f2fc80401bd10b3db201e1a8c065a5ba7a77567cf9bd9f3b6069eb40e8be",
+      "stack_id": "rust-ts-vite-react-postgres-bounded-python",
+      "stack_version": "0.4.0",
+      "adapter_path_count": 2,
+      "event_contract_path_count": 1,
+      "generated_type_path_count": 1,
+      "client_marker_count": 7,
+      "streaming_exception_count": 1
+    },
     "reclassifications": []
   },
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-12T19:06:41.188763767+00:00",
+    "generated_at": "2026-07-14T21:04:06.382892746+00:00",
     "repo": ".",
-    "auditor_version": "1.6.10",
+    "auditor_version": "1.6.11",
     "status": "review",
     "policy": {
       "active_source_only": true,
@@ -1065,20 +1096,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 3545,
-      "files_considered": 444,
-      "active_files": 444,
+      "files_scanned": 3578,
+      "files_considered": 456,
+      "active_files": 456,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 164,
+      "warning_classes": 167,
       "hard_instances": 0,
-      "warning_instances": 449,
-      "duplicate_lines": 296,
-      "duplicate_tokens": 937,
-      "duplicate_bytes": 8608,
-      "total_redundant_lines": 509,
-      "total_redundant_tokens": 1446,
-      "total_redundant_bytes": 13867
+      "warning_instances": 462,
+      "duplicate_lines": 300,
+      "duplicate_tokens": 947,
+      "duplicate_bytes": 8714,
+      "total_redundant_lines": 522,
+      "total_redundant_tokens": 1468,
+      "total_redundant_bytes": 14098
     },
     "classes": [
       {
@@ -1245,55 +1276,6 @@
         ]
       },
       {
-        "id": "copy-code-body-rust-b36a384c67e1073c",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 7,
-        "duplicate_tokens": 16,
-        "duplicate_bytes": 167,
-        "instance_count": 4,
-        "total_redundant_lines": 21,
-        "total_redundant_tokens": 48,
-        "total_redundant_bytes": 501,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "9dfdb4f77e92d892",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 472,
-            "end_line": 479,
-            "unit_name": "render_column"
-          },
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 591,
-            "end_line": 598,
-            "unit_name": "render_table"
-          },
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 652,
-            "end_line": 659,
-            "unit_name": "render_box"
-          },
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 726,
-            "end_line": 733,
-            "unit_name": "render_markdown"
-          }
-        ]
-      },
-      {
         "id": "copy-code-body-rust-288f2d33c4682e4a",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -1302,16 +1284,30 @@
         "duplicate_lines": 1,
         "duplicate_tokens": 2,
         "duplicate_bytes": 17,
-        "instance_count": 22,
-        "total_redundant_lines": 21,
-        "total_redundant_tokens": 42,
-        "total_redundant_bytes": 357,
+        "instance_count": 24,
+        "total_redundant_lines": 23,
+        "total_redundant_tokens": 46,
+        "total_redundant_bytes": 391,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "6ca9966887b6bb29",
+        "fingerprint": "84bd45f19d5dbdfb",
         "reason": "same body appears under different names across files",
         "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
         "instances": [
+          {
+            "path": "crates/bench/src/score_policy.rs",
+            "language": "rust",
+            "start_line": 180,
+            "end_line": 181,
+            "unit_name": "jq_string"
+          },
+          {
+            "path": "crates/bench/src/score_policy.rs",
+            "language": "rust",
+            "start_line": 188,
+            "end_line": 189,
+            "unit_name": "empty_array_or_missing"
+          },
           {
             "path": "crates/kernel/src/catalog/record.rs",
             "language": "rust",
@@ -1465,6 +1461,55 @@
             "start_line": 643,
             "end_line": 644,
             "unit_name": "arrow_path"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-b36a384c67e1073c",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 7,
+        "duplicate_tokens": 16,
+        "duplicate_bytes": 167,
+        "instance_count": 4,
+        "total_redundant_lines": 21,
+        "total_redundant_tokens": 48,
+        "total_redundant_bytes": 501,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "9dfdb4f77e92d892",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 472,
+            "end_line": 479,
+            "unit_name": "render_column"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 591,
+            "end_line": 598,
+            "unit_name": "render_table"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 652,
+            "end_line": 659,
+            "unit_name": "render_box"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 726,
+            "end_line": 733,
+            "unit_name": "render_markdown"
           }
         ]
       },
@@ -2212,6 +2257,55 @@
         ]
       },
       {
+        "id": "copy-code-body-rust-4300a7f173053755",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 2,
+        "duplicate_tokens": 1,
+        "duplicate_bytes": 20,
+        "instance_count": 4,
+        "total_redundant_lines": 6,
+        "total_redundant_tokens": 3,
+        "total_redundant_bytes": 60,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "eef919715c00bbac",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/bench/src/interaction_volume/tests.rs",
+            "language": "rust",
+            "start_line": 466,
+            "end_line": 468,
+            "unit_name": "begin_immediate"
+          },
+          {
+            "path": "crates/bench/src/interaction_volume/tests.rs",
+            "language": "rust",
+            "start_line": 470,
+            "end_line": 472,
+            "unit_name": "commit"
+          },
+          {
+            "path": "crates/bench/src/interaction_volume/tests.rs",
+            "language": "rust",
+            "start_line": 474,
+            "end_line": 476,
+            "unit_name": "rollback"
+          },
+          {
+            "path": "crates/bench/src/interaction_volume/tests.rs",
+            "language": "rust",
+            "start_line": 478,
+            "end_line": 480,
+            "unit_name": "set_busy_timeout"
+          }
+        ]
+      },
+      {
         "id": "copy-code-body-rust-39f51bfba53487ca",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -2693,6 +2787,62 @@
             "start_line": 169,
             "end_line": 173,
             "unit_name": "query_row_opt"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-ab80b0029566ed53",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 1,
+        "duplicate_bytes": 9,
+        "instance_count": 5,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 4,
+        "total_redundant_bytes": 36,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "f176b30893f1879e",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "crates/bench/src/interaction_volume/evidence.rs",
+            "language": "rust",
+            "start_line": 542,
+            "end_line": 543,
+            "unit_name": "json_string"
+          },
+          {
+            "path": "crates/bench/src/interaction_volume/evidence.rs",
+            "language": "rust",
+            "start_line": 557,
+            "end_line": 558,
+            "unit_name": "required_evidence"
+          },
+          {
+            "path": "crates/bench/src/sqlite_parity/report_gen/io.rs",
+            "language": "rust",
+            "start_line": 209,
+            "end_line": 210,
+            "unit_name": "normalize_git_sha"
+          },
+          {
+            "path": "crates/cli/src/dot/control.rs",
+            "language": "rust",
+            "start_line": 558,
+            "end_line": 559,
+            "unit_name": "escape"
+          },
+          {
+            "path": "crates/cli/src/render.rs",
+            "language": "rust",
+            "start_line": 1120,
+            "end_line": 1121,
+            "unit_name": "escape_html"
           }
         ]
       },
@@ -3482,97 +3632,13 @@
             "unit_name": "json_quote"
           }
         ]
-      },
-      {
-        "id": "copy-code-body-rust-7b5f9a768c847f2c",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 5,
-        "duplicate_bytes": 36,
-        "instance_count": 3,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 10,
-        "total_redundant_bytes": 72,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "b9612b45043f095e",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 641,
-            "end_line": 642,
-            "unit_name": "write_table_row_ascii"
-          },
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 766,
-            "end_line": 767,
-            "unit_name": "write_markdown_row"
-          },
-          {
-            "path": "crates/cli/src/render.rs",
-            "language": "rust",
-            "start_line": 777,
-            "end_line": 778,
-            "unit_name": "write_markdown_separator"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-7d20b3e637063ead",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 5,
-        "duplicate_bytes": 32,
-        "instance_count": 3,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 10,
-        "total_redundant_bytes": 64,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "3f19a210b28208dd",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "crates/bench/src/sqlite_parity/report_gen/readme.rs",
-            "language": "rust",
-            "start_line": 425,
-            "end_line": 426,
-            "unit_name": "shields_segment"
-          },
-          {
-            "path": "crates/kernel/src/catalog/ops.rs",
-            "language": "rust",
-            "start_line": 1490,
-            "end_line": 1491,
-            "unit_name": "render_create_trigger_for_alter"
-          },
-          {
-            "path": "crates/kernel/src/catalog/ops.rs",
-            "language": "rust",
-            "start_line": 1513,
-            "end_line": 1514,
-            "unit_name": "render_create_view_for_alter"
-          }
-        ]
       }
     ],
     "notes": [
       "hard classes are limited to exact active-source file matches and substantial exact same-name units",
       "warning classes include same-body different-name units and token/block duplication",
       "tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set",
-      "showing the top 50 classes and omitting 114 lower-ranked classes"
+      "showing the top 50 classes and omitting 117 lower-ranked classes"
     ]
   },
   "profile_structure": {
@@ -3877,6 +3943,48 @@
     },
     {
       "severity": "medium",
+      "category": "governance",
+      "path": ".jankurai/repo-score.json",
+      "problem": "generated zone `.jankurai/repo-score.json` has an uncommitted hand-edit at `.jankurai/repo-score.json` instead of a regeneration",
+      "agent_fix": "revert the in-place edit to `.jankurai/repo-score.json` and regenerate it from the declared source/command in `agent/generated-zones.toml`; do not patch generated output by hand",
+      "evidence": [
+        "`.jankurai/repo-score.json` was hand-edited inside declared generated zone `.jankurai/repo-score.json`"
+      ],
+      "check_id": "HLT-045-GENERATED-ZONE-GOVERNANCE:governance",
+      "hardness": "soft",
+      "confidence": 0.76,
+      "evidence_kind": "contract-manifest",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:d07620f7571aa6c22bff4d9438004092e95982b5fc511469d16bf00da575387f",
+      "rule_id": "HLT-045-GENERATED-ZONE-GOVERNANCE",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "docs_url": "agent/JANKURAI_STANDARD.md#generated-zones",
+      "owner": "control-plane"
+    },
+    {
+      "severity": "medium",
+      "category": "governance",
+      "path": ".jankurai/repo-score.md",
+      "problem": "generated zone `.jankurai/repo-score.md` has an uncommitted hand-edit at `.jankurai/repo-score.md` instead of a regeneration",
+      "agent_fix": "revert the in-place edit to `.jankurai/repo-score.md` and regenerate it from the declared source/command in `agent/generated-zones.toml`; do not patch generated output by hand",
+      "evidence": [
+        "`.jankurai/repo-score.md` was hand-edited inside declared generated zone `.jankurai/repo-score.md`"
+      ],
+      "check_id": "HLT-045-GENERATED-ZONE-GOVERNANCE:governance",
+      "hardness": "soft",
+      "confidence": 0.76,
+      "evidence_kind": "contract-manifest",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:b4211b8d5221de05d42f362642c8c690b842ae2b52aea8e07a12c035f4dba31e",
+      "rule_id": "HLT-045-GENERATED-ZONE-GOVERNANCE",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "docs_url": "agent/JANKURAI_STANDARD.md#generated-zones",
+      "owner": "control-plane"
+    },
+    {
+      "severity": "medium",
       "category": "proof",
       "path": "Justfile",
       "problem": "`Build speed signals` scored 80 below the standard floor of 85",
@@ -4062,6 +4170,26 @@
     }
   ],
   "agent_fix_queue": [
+    {
+      "path": ".jankurai/repo-score.json",
+      "priority": "medium",
+      "rule_id": "HLT-045-GENERATED-ZONE-GOVERNANCE",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "owner": "control-plane",
+      "task": "revert the in-place edit to `.jankurai/repo-score.json` and regenerate it from the declared source/command in `agent/generated-zones.toml`; do not patch generated output by hand",
+      "why": "generated zone `.jankurai/repo-score.json` has an uncommitted hand-edit at `.jankurai/repo-score.json` instead of a regeneration"
+    },
+    {
+      "path": ".jankurai/repo-score.md",
+      "priority": "medium",
+      "rule_id": "HLT-045-GENERATED-ZONE-GOVERNANCE",
+      "tlr": "Contracts/data",
+      "lane": "contract",
+      "owner": "control-plane",
+      "task": "revert the in-place edit to `.jankurai/repo-score.md` and regenerate it from the declared source/command in `agent/generated-zones.toml`; do not patch generated output by hand",
+      "why": "generated zone `.jankurai/repo-score.md` has an uncommitted hand-edit at `.jankurai/repo-score.md` instead of a regeneration"
+    },
     {
       "path": "Justfile",
       "priority": "medium",

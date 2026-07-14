@@ -18,6 +18,8 @@
 
 set -euo pipefail
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
 # shellcheck source=ops/ci/lib.sh
 . "$(dirname "$0")/lib.sh"
 
@@ -200,7 +202,16 @@ step_language_bad_behavior() {
 
     if [ "${cloned}" -eq 1 ] && [ -d "$upstream_dir" ]; then
         local rc=0
-        ( cd "$upstream_dir" && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
+        (
+            cd "$upstream_dir"
+            # RTK may inject a repository-relative compiler-cache wrapper. Cargo resolves that
+            # value from this upstream checkout, so bind it to the reviewed parent repository
+            # before changing directories.
+            if [ -n "${RUSTC_WRAPPER:-}" ] && [[ "$RUSTC_WRAPPER" != /* ]]; then
+                export RUSTC_WRAPPER="$repo_root/${RUSTC_WRAPPER#./}"
+            fi
+            cargo test -p jankurai --test language_bad_behavior --no-fail-fast
+        ) \
             > >(tee "$LOG_DIR/language-bad-behavior.log") 2>&1 || rc=$?
         printf 'status: %s\n' "$( [ "$rc" -eq 0 ] && echo upstream-tests-passed || echo upstream-tests-failed )" \
             >> "$LOG_DIR/language-bad-behavior.log"
