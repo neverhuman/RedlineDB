@@ -15,6 +15,8 @@ CHECK="${5:-$REPO/required}"
 JAIN_BASE="${JAIN_BASE:-http://127.0.0.1:8787}"
 OPS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
+# shellcheck source=ops/ci/native-runtime.sh
+source "$OPS_ROOT/ops/ci/native-runtime.sh"
 # The split family root (where the sibling repos + target/bare-mirrors live) is an
 # EXPLICIT parameter, not derived from this script's location: this control-plane
 # now lives in its own repo (jain-split-ops/), a sibling of the family members, so
@@ -104,6 +106,8 @@ git -C "$REPO_PATH" cat-file -e "$SHA^{commit}" 2>/dev/null || { echo "sha $SHA 
 
 tmp="$(mktemp -d /tmp/split-host-ci.XXXXXX)"
 wt="$tmp/$REPO"
+native_vendor="$tmp/native-vendor"
+native_source_root="${JAIN_NATIVE_SOURCE_ROOT:-}"
 cleanup() {
   git -C "$REPO_PATH" worktree remove -f "$wt" >/dev/null 2>&1 || true
   rm -rf "$tmp" >/dev/null 2>&1 || true
@@ -112,6 +116,33 @@ trap cleanup EXIT
 
 git -C "$REPO_PATH" worktree add -f --detach "$wt" "$SHA" >/dev/null 2>&1 \
   || { post_check failure; echo "worktree checkout failed" >&2; exit 1; }
+
+# Release Cargo policy may enable native learners even when the repository's
+# merge lane does not. Materialize one pinned private tree, then make the three
+# learner runtime directories available to every required/release subprocess.
+if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
+  native_bootstrap="$SPLIT_ROOT/jain-deploy/scripts/vendor-all.sh"
+  [ -x "$native_bootstrap" ] || {
+    echo "release CI native-vendor bootstrap missing: $native_bootstrap" >&2
+    exit 2
+  }
+  unset JAIN_NATIVE_SOURCE_ROOT JAIN_VENDOR_ROOT
+  bootstrap_args=(env "JAIN_VENDOR_ROOT=$native_vendor")
+  [ -z "$native_source_root" ] || bootstrap_args+=("JAIN_NATIVE_SOURCE_ROOT=$native_source_root")
+  "${bootstrap_args[@]}" bash "$native_bootstrap" >"$tmp/native-vendor.log" 2>&1 || {
+    cat "$tmp/native-vendor.log" >&2
+    echo "release CI native-vendor bootstrap failed" >&2
+    exit 1
+  }
+  mkdir -p "$wt/target"
+  ln -s "$native_vendor" "$wt/target/native-vendor"
+  mapfile -t native_runtime_dirs < <(jain_native_runtime_dirs "$native_vendor")
+  mkdir -p "${native_runtime_dirs[@]}"
+  jain_export_native_runtime_path "$native_vendor" || {
+    echo "release CI native runtime path setup failed" >&2
+    exit 1
+  }
+fi
 
 # Independence by default: NO sibling repos are linked, so a repo's required lane
 # must resolve cross-repo deps from its committed vendor-crates/ (offline). Only
