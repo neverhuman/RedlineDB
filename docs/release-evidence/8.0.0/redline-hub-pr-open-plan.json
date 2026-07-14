@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redlineDB",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Completes the interrupted Python-to-Rust hub conversion, hardens evidence provenance, and binds the authorized 4.1.0-jain.2 corrective identity.",
+      "draft": true,
+      "head": "codex/v8-redline-hub-no-python",
+      "title": "release: complete Rust-only Redline hub"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redlineDB/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783886193
+}

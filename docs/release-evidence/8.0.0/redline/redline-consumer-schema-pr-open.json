@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d"
+    },
+    "body": "Require both Jain and Jeryu consumer evidence to bind the exact Redline manifest and policy, consumer manifest and CI policy, and a fresh checksummed regular-file test log. Reject unknown fields, traversal/symlinks, mismatched hashes, wrong producer versions, stale evidence, and manual eligibility. Adds tamper regression; required 19/19, security/SBOM, and ratchet score 86 pass.",
+    "created_at": "2026-07-13T08:00:22.278842110Z",
+    "draft": true,
+    "head": {
+      "label": "codex/redline-consumer-evidence-binding-20260713",
+      "ref": "codex/redline-consumer-evidence-binding-20260713",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "d9b96a71f6e216c318da52fa3029b3b2066362d8"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/13",
+    "id": "3965f06f-5388-4c77-aaac-f6f23e6da13e",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 13,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "fix(redline-proof): bind consumer test evidence",
+    "updated_at": "2026-07-13T08:00:22.278842110Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/13",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Require both Jain and Jeryu consumer evidence to bind the exact Redline manifest and policy, consumer manifest and CI policy, and a fresh checksummed regular-file test log. Reject unknown fields, traversal/symlinks, mismatched hashes, wrong producer versions, stale evidence, and manual eligibility. Adds tamper regression; required 19/19, security/SBOM, and ratchet score 86 pass.",
+      "draft": true,
+      "head": "codex/redline-consumer-evidence-binding-20260713",
+      "title": "fix(redline-proof): bind consumer test evidence"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-split-ops/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d"
+    },
+    "body": "Require both Jain and Jeryu consumer evidence to bind the exact Redline manifest and policy, consumer manifest and CI policy, and a fresh checksummed regular-file test log. Reject unknown fields, traversal/symlinks, mismatched hashes, wrong producer versions, stale evidence, and manual eligibility. Adds tamper regression; required 19/19, security/SBOM, and ratchet score 86 pass.",
+    "created_at": "2026-07-13T08:00:22.278842110Z",
+    "draft": true,
+    "head": {
+      "label": "codex/redline-consumer-evidence-binding-20260713",
+      "ref": "codex/redline-consumer-evidence-binding-20260713",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "d9b96a71f6e216c318da52fa3029b3b2066362d8"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/13",
+    "id": "3965f06f-5388-4c77-aaac-f6f23e6da13e",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 13,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "fix(redline-proof): bind consumer test evidence",
+    "updated_at": "2026-07-13T08:00:22.278842110Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/13",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783929622
+}

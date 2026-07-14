@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/jain-core",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-core/pulls/9"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-core"
+      },
+      "sha": "77f2a6f7c1ec0099dcc6a3e13d12fb6ebc4c7f3b"
+    },
+    "body": "Mainline v8 candidate with Rust-only contract command. Blocked: Cargo.lock still pins pre-v8 CatBoost and other learner commits; Battle split.0 has package version 0.1.0; Redline immutable tag identity conflicts; jain-redline-store still uses a sibling path. Exact contract test currently fails closed on the stale CatBoost lock. Do not ready/merge/tag until dependency waves are reissued and locks regenerate.",
+    "created_at": "2026-07-12T11:11:34.236552470Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8.0.0-release-review",
+      "ref": "codex/v8.0.0-release-review",
+      "repo": {
+        "full_name": "jeryu/jain-core"
+      },
+      "sha": "68a68a23c705e698d560a0aa31c7df7898b4acd2"
+    },
+    "html_url": "/jeryu/jain-core/pull/9",
+    "id": "43aa1dba-0781-4c2e-b6d5-bed1cdd83b33",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 9,
+    "source_repository": "jeryu/jain-core",
+    "state": "open",
+    "title": "release: prepare jain-core 8.0.0 candidate",
+    "updated_at": "2026-07-13T06:45:18.105084034Z",
+    "url": "/repos/jeryu/jain-core/pulls/9",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783925118
+}

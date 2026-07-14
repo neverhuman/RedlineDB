@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "30083338c73d4f92708f2d812a3612c577fde40d"
+    },
+    "body": "Bind redline-testing-v1.0.1-jain.1 to the merged package identity fix at 4a449d8de05c8a0ced5cb2d29c76e4718a0041ea with tree checksum 825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac. Detached required, security, full Jankurai ratchet, and release-control evidence pass on 242b5c2433aa1d5d877e1828f3bad254ad32df13.",
+    "created_at": "2026-07-13T02:22:24.095030435Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-testing-package-manifest",
+      "ref": "codex/redline-testing-package-manifest",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "242b5c2433aa1d5d877e1828f3bad254ad32df13"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/10",
+    "id": "fdb417f1-a6f7-4aeb-8301-c9158bdbb3ed",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 10,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "release(redline): bind testing package identity fix (retry)",
+    "updated_at": "2026-07-13T02:22:24.095030435Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/10",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Bind redline-testing-v1.0.1-jain.1 to the merged package identity fix at 4a449d8de05c8a0ced5cb2d29c76e4718a0041ea with tree checksum 825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac. Detached required, security, full Jankurai ratchet, and release-control evidence pass on 242b5c2433aa1d5d877e1828f3bad254ad32df13.",
+      "draft": false,
+      "head": "codex/redline-testing-package-manifest",
+      "title": "release(redline): bind testing package identity fix (retry)"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-split-ops/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "30083338c73d4f92708f2d812a3612c577fde40d"
+    },
+    "body": "Bind redline-testing-v1.0.1-jain.1 to the merged package identity fix at 4a449d8de05c8a0ced5cb2d29c76e4718a0041ea with tree checksum 825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac. Detached required, security, full Jankurai ratchet, and release-control evidence pass on 242b5c2433aa1d5d877e1828f3bad254ad32df13.",
+    "created_at": "2026-07-13T02:22:24.095030435Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-testing-package-manifest",
+      "ref": "codex/redline-testing-package-manifest",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "242b5c2433aa1d5d877e1828f3bad254ad32df13"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/10",
+    "id": "fdb417f1-a6f7-4aeb-8301-c9158bdbb3ed",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 10,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "release(redline): bind testing package identity fix (retry)",
+    "updated_at": "2026-07-13T02:22:24.095030435Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/10",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783909344
+}

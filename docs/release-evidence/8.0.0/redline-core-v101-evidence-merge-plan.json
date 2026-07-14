@@ -1,0 +1,14 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-merge",
+  "repository": "jeryu/redline-core",
+  "request": {
+    "body": {},
+    "method": "PUT",
+    "path": "/repos/jeryu/redline-core/pulls/3/merge"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783892974
+}

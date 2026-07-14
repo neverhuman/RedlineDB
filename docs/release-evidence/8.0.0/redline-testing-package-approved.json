@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Set the xtask package and lockfile identity to 1.0.1 so the reviewed redline-testing-v1.0.1-jain.1 tag satisfies the Rust release identity gate. Detached PR, security, Jankurai, audit, and release lanes pass on 4a449d8de05c8a0ced5cb2d29c76e4718a0041ea.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-13T02:06:56.901200604+00:00",
+      "head_sha": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:4a449d8de05c8a0ced5cb2d29c76e4718a0041ea:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "722b3236a216fd5e9b3e8e6a6152ea6618f80d42",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#10",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-package-identity",
+      "head_sha": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 10,
+      "passport_hash": "passport:4a449d8de05c8a0ced5cb2d29c76e4718a0041ea:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
+        "name": "redline-testing",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(testing): bind xtask package identity to v1.0.1",
+      "updated_at": "2026-07-13T02:06:48.427225843+00:00"
+    }
+  },
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact package identity fix; detached required, security, Jankurai, audit, and release evidence passed.",
+      "evidence": null,
+      "expected_head_sha": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-testing/pulls/10/reviews"
+  },
+  "response": {
+    "description": "Set the xtask package and lockfile identity to 1.0.1 so the reviewed redline-testing-v1.0.1-jain.1 tag satisfies the Rust release identity gate. Detached PR, security, Jankurai, audit, and release lanes pass on 4a449d8de05c8a0ced5cb2d29c76e4718a0041ea.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-13T02:06:56.892687050+00:00",
+      "head_sha": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:4a449d8de05c8a0ced5cb2d29c76e4718a0041ea:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "722b3236a216fd5e9b3e8e6a6152ea6618f80d42",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#10",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-package-identity",
+      "head_sha": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 10,
+      "passport_hash": "passport:4a449d8de05c8a0ced5cb2d29c76e4718a0041ea:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
+        "name": "redline-testing",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(testing): bind xtask package identity to v1.0.1",
+      "updated_at": "2026-07-13T02:06:48.427225843+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783908415
+}

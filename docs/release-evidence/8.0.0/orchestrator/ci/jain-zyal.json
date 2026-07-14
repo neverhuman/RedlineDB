@@ -1,0 +1,20 @@
+{
+  "branch": "main",
+  "checkout_head": "7cd8b705a499416581ee07be9edd6cce7df25a5e",
+  "commit": "7cd8b705a499416581ee07be9edd6cce7df25a5e",
+  "duration_millis": 24165,
+  "exit_code": 1,
+  "forge_status_posted": true,
+  "kind": "family",
+  "log": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.0/orchestrator/ci/jain-zyal.log",
+  "log_sha256": "5fff58a9d6f6c6030588a8832147eea0dc468aba64b9ad334e896b31974ff740",
+  "manifest_sha256": "847e78fe217e808fd63e3836ad3866c847231b8c1cde190da38de1572a1c91ce",
+  "name": "ci:jain-zyal",
+  "policy_sha256": "b23f853dabfd920f39157941b40eee17715d3c07fd8bd646c865745ea3ade9fb",
+  "repository": "jain-zyal",
+  "required_check": "jain-zyal/required",
+  "schema_version": "jain.release-candidate-ci/v1",
+  "status": "fail",
+  "timestamp_unix": 1783895438,
+  "wave": 4
+}

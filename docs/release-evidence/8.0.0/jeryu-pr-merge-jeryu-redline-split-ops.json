@@ -6,14 +6,14 @@
   "request": {
     "body": {},
     "method": "PUT",
-    "path": "/repos/jeryu/redline-split-ops/pulls/1/merge"
+    "path": "/repos/jeryu/redline-split-ops/pulls/11/merge"
   },
   "response": {
     "merged": true,
     "message": "Pull Request successfully merged",
-    "sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62"
+    "sha": "df66f6e6de5a200d26d38344c8d3751997646326"
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1783849635
+  "timestamp_unix": 1783920130
 }

@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-cli"
+      },
+      "sha": "a67914aa005f190a99b96f6c90d515a52977d753"
+    },
+    "body": "",
+    "created_at": "2026-07-13T10:45:20.801974484Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8.0.0-release-review",
+      "ref": "codex/v8.0.0-release-review",
+      "repo": {
+        "full_name": "jeryu/jain-cli"
+      },
+      "sha": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3"
+    },
+    "html_url": "/jeryu/jain-cli/pull/7",
+    "id": "e2b9f1c6-fee0-4389-94af-1b25f5c8651b",
+    "merge_commit_sha": null,
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merged": false,
+    "merged_at": null,
+    "number": 7,
+    "source_repository": "jeryu/jain-cli",
+    "state": "open",
+    "title": "release: jain-cli 8.0.0",
+    "updated_at": "2026-07-13T10:45:20.801974484Z",
+    "url": "/repos/jeryu/jain-cli/pulls/7",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-cli",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codex/v8.0.0-release-review",
+      "title": "release: jain-cli 8.0.0"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-cli/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-cli"
+      },
+      "sha": "a67914aa005f190a99b96f6c90d515a52977d753"
+    },
+    "body": "",
+    "created_at": "2026-07-13T10:45:20.801974484Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8.0.0-release-review",
+      "ref": "codex/v8.0.0-release-review",
+      "repo": {
+        "full_name": "jeryu/jain-cli"
+      },
+      "sha": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3"
+    },
+    "html_url": "/jeryu/jain-cli/pull/7",
+    "id": "e2b9f1c6-fee0-4389-94af-1b25f5c8651b",
+    "merge_commit_sha": null,
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merged": false,
+    "merged_at": null,
+    "number": 7,
+    "source_repository": "jeryu/jain-cli",
+    "state": "open",
+    "title": "release: jain-cli 8.0.0",
+    "updated_at": "2026-07-13T10:45:20.801974484Z",
+    "url": "/repos/jeryu/jain-cli/pulls/7",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783939520
+}

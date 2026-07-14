@@ -1,0 +1,22 @@
+{
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-web.git",
+      "mirror_existed": true,
+      "name": "jain-web",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-web",
+      "source_head": "ef625ca5da7da8ebd7f069bbac872bef5bb08004"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-web"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1783940278
+}

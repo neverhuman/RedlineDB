@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/redline-core",
+  "request": {
+    "body": {
+      "body_markdown": "Independent review verified the exact head, protected required status, pinned v1.0.1 suite identities, Rust evidence-processor tests, canonical proof routing, and successful official consumer evidence processing.",
+      "evidence": null,
+      "expected_head_sha": "ac663ffc784fa141c7e9272f4212bfda6a3e72f1",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-core/pulls/3/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783892973
+}

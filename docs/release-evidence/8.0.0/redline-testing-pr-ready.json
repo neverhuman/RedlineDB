@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/redline-testing/pulls/4"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "17b55e1fdbd72c7781ba0932c2a5777e0578a4e6"
+    },
+    "body": "Adds Rust-owned release identity validation for redline-testing-v1.0.1-jain.1; required, security, package, no-Python, and score gates pass.",
+    "created_at": "2026-07-12T20:17:20.210994493Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8-redline-testing-jain1",
+      "ref": "codex/v8-redline-testing-jain1",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "370fafdc76d5bc9f5e6fd91a378086d734fa8d18"
+    },
+    "html_url": "/jeryu/redline-testing/pull/4",
+    "id": "e5b07ec8-d4e7-4b1b-bc56-b80f7e07d462",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 4,
+    "source_repository": "jeryu/redline-testing",
+    "state": "open",
+    "title": "release: bind Redline Testing corrective jain.1 identity",
+    "updated_at": "2026-07-12T20:17:39.459639076Z",
+    "url": "/repos/jeryu/redline-testing/pulls/4",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887459
+}

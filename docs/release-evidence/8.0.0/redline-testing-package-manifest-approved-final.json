@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Bind redline-testing-v1.0.1-jain.1 to the merged package identity fix at 4a449d8de05c8a0ced5cb2d29c76e4718a0041ea with tree checksum 825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac. Includes the minimal clippy allow required by the existing proof-lock renderer; detached control-plane required lane passes on 2192a70c2039ce0c1aa44914f3d12f62997be5aa.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-13T02:19:45.316216393+00:00",
+      "head_sha": "242b5c2433aa1d5d877e1828f3bad254ad32df13",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:242b5c2433aa1d5d877e1828f3bad254ad32df13:Blocked:1:2:0:3",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "30083338c73d4f92708f2d812a3612c577fde40d",
+      "checks": {
+        "failing": 2,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 4
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#9",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-package-manifest",
+      "head_sha": "242b5c2433aa1d5d877e1828f3bad254ad32df13",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "242b5c2433aa1d5d877e1828f3bad254ad32df13",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 9,
+      "passport_hash": "passport:242b5c2433aa1d5d877e1828f3bad254ad32df13:Blocked:1:2:0:3",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 3,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(redline): bind testing package identity fix",
+      "updated_at": "2026-07-13T02:18:13.535085110+00:00"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Re-reviewed exact PR head after required and full Jankurai proof checks passed: score 86, zero hard findings, zero caps.",
+      "evidence": null,
+      "expected_head_sha": "242b5c2433aa1d5d877e1828f3bad254ad32df13",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-split-ops/pulls/9/reviews"
+  },
+  "response": {
+    "description": "Bind redline-testing-v1.0.1-jain.1 to the merged package identity fix at 4a449d8de05c8a0ced5cb2d29c76e4718a0041ea with tree checksum 825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac. Includes the minimal clippy allow required by the existing proof-lock renderer; detached control-plane required lane passes on 2192a70c2039ce0c1aa44914f3d12f62997be5aa.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-13T02:19:45.307658270+00:00",
+      "head_sha": "242b5c2433aa1d5d877e1828f3bad254ad32df13",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:242b5c2433aa1d5d877e1828f3bad254ad32df13:Blocked:1:2:0:3",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "30083338c73d4f92708f2d812a3612c577fde40d",
+      "checks": {
+        "failing": 2,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 4
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#9",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-package-manifest",
+      "head_sha": "242b5c2433aa1d5d877e1828f3bad254ad32df13",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "242b5c2433aa1d5d877e1828f3bad254ad32df13",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 9,
+      "passport_hash": "passport:242b5c2433aa1d5d877e1828f3bad254ad32df13:Blocked:1:2:0:3",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 3,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(redline): bind testing package identity fix",
+      "updated_at": "2026-07-13T02:18:13.535085110+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783909184
+}

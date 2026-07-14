@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-core",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Fix the public Database open-or-create boundary so existing non-empty images recover instead of being recreated. Adds strict-durability checkpoint/reopen regressions for autocommit and explicit commit/rollback flows. Local fast and staged PR gates pass; Jeryu consumer contract passes against this repair.",
+      "draft": true,
+      "head": "codex/redline-durable-reopen-20260713",
+      "title": "fix(storage): preserve durable images on reopen"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-core/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783927409
+}

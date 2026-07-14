@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-web",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Replaces the final interpreter CI surface with isolated locked Rust control tooling and binds redline-web-v0.1.0-jain.1; required, security, score, and boundary gates pass.",
+      "draft": true,
+      "head": "codex/v8-redline-web-rust-only",
+      "title": "release: finish Rust-only Redline Web corrective candidate"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-web/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887630
+}

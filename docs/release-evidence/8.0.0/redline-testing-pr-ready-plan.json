@@ -1,0 +1,16 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/redline-testing/pulls/4"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887459
+}

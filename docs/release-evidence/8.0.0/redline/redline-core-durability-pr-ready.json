@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/redline-core",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/redline-core/pulls/5"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-core"
+      },
+      "sha": "53642c877e6e474b6d5815b7407a7397852f661a"
+    },
+    "body": "Fix the public Database open-or-create boundary so existing non-empty images recover instead of being recreated. Adds strict-durability checkpoint/reopen regressions for autocommit and explicit commit/rollback flows. Local fast and staged PR gates pass; Jeryu consumer contract passes against this repair.",
+    "created_at": "2026-07-13T07:23:40.242861706Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-durable-reopen-20260713",
+      "ref": "codex/redline-durable-reopen-20260713",
+      "repo": {
+        "full_name": "jeryu/redline-core"
+      },
+      "sha": "2f9fbd72317691dada58d8b6ca64241822540e72"
+    },
+    "html_url": "/jeryu/redline-core/pull/5",
+    "id": "2a36fb53-f353-44a6-b1a9-f082d0129930",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 5,
+    "source_repository": "jeryu/redline-core",
+    "state": "open",
+    "title": "fix(storage): preserve durable images on reopen",
+    "updated_at": "2026-07-13T07:43:58.299111489Z",
+    "url": "/repos/jeryu/redline-core/pulls/5",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783928638
+}

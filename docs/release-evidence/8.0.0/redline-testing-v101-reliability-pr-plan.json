@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Fix exact-main Jankurai routing, decode binary corpus output lossily, preserve underlying Rust error detail, and add regression coverage.",
+      "draft": false,
+      "head": "codex/redline-testing-detached-proofbind",
+      "title": "ci: make detached proof and binary output reliable"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-testing/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783892081
+}

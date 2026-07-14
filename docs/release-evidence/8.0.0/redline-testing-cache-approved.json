@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Exclude only hermetic checkout-local Cargo cache data from source secret scanning; first-party source remains fail-closed. Required CI reproduced and passes.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T20:56:12.645825369+00:00",
+      "head_sha": "6b74e6089af5ca1acccb52f3371bf671c7781ba9",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:6b74e6089af5ca1acccb52f3371bf671c7781ba9:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "370fafdc76d5bc9f5e6fd91a378086d734fa8d18",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#5",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-detached-ci",
+      "head_sha": "6b74e6089af5ca1acccb52f3371bf671c7781ba9",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "6b74e6089af5ca1acccb52f3371bf671c7781ba9",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 5,
+      "passport_hash": "passport:6b74e6089af5ca1acccb52f3371bf671c7781ba9:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
+        "name": "redline-testing",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Fix detached CI Cargo cache scanning",
+      "updated_at": "2026-07-12T20:53:59.407541342+00:00"
+    }
+  },
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed hermetic cache exclusion; exact detached required check is green.",
+      "evidence": null,
+      "expected_head_sha": "6b74e6089af5ca1acccb52f3371bf671c7781ba9",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-testing/pulls/5/reviews"
+  },
+  "response": {
+    "description": "Exclude only hermetic checkout-local Cargo cache data from source secret scanning; first-party source remains fail-closed. Required CI reproduced and passes.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T20:56:12.636241231+00:00",
+      "head_sha": "6b74e6089af5ca1acccb52f3371bf671c7781ba9",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:6b74e6089af5ca1acccb52f3371bf671c7781ba9:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "370fafdc76d5bc9f5e6fd91a378086d734fa8d18",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#5",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-detached-ci",
+      "head_sha": "6b74e6089af5ca1acccb52f3371bf671c7781ba9",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "6b74e6089af5ca1acccb52f3371bf671c7781ba9",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 5,
+      "passport_hash": "passport:6b74e6089af5ca1acccb52f3371bf671c7781ba9:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
+        "name": "redline-testing",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Fix detached CI Cargo cache scanning",
+      "updated_at": "2026-07-12T20:53:59.407541342+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783889771
+}

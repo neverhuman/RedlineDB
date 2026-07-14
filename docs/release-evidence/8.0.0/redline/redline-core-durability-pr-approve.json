@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Fix the public Database open-or-create boundary so existing non-empty images recover instead of being recreated. Adds strict-durability checkpoint/reopen regressions for autocommit and explicit commit/rollback flows. Local fast and staged PR gates pass; Jeryu consumer contract passes against this repair.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-13T07:44:00.502153179+00:00",
+      "head_sha": "2f9fbd72317691dada58d8b6ca64241822540e72",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:2f9fbd72317691dada58d8b6ca64241822540e72:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "53642c877e6e474b6d5815b7407a7397852f661a",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "3953a0da-646b-4656-bfbd-92ecf679773d#5",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-durable-reopen-20260713",
+      "head_sha": "2f9fbd72317691dada58d8b6ca64241822540e72",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "2f9fbd72317691dada58d8b6ca64241822540e72",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 5,
+      "passport_hash": "passport:2f9fbd72317691dada58d8b6ca64241822540e72:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "3953a0da-646b-4656-bfbd-92ecf679773d",
+        "name": "redline-core",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "fix(storage): preserve durable images on reopen",
+      "updated_at": "2026-07-13T07:43:58.299111489+00:00"
+    }
+  },
+  "repository": "jeryu/redline-core",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed durability boundary repair; exact required status and consumer reopen regression pass.",
+      "evidence": null,
+      "expected_head_sha": "2f9fbd72317691dada58d8b6ca64241822540e72",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-core/pulls/5/reviews"
+  },
+  "response": {
+    "description": "Fix the public Database open-or-create boundary so existing non-empty images recover instead of being recreated. Adds strict-durability checkpoint/reopen regressions for autocommit and explicit commit/rollback flows. Local fast and staged PR gates pass; Jeryu consumer contract passes against this repair.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-13T07:44:00.492399215+00:00",
+      "head_sha": "2f9fbd72317691dada58d8b6ca64241822540e72",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:2f9fbd72317691dada58d8b6ca64241822540e72:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "53642c877e6e474b6d5815b7407a7397852f661a",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "3953a0da-646b-4656-bfbd-92ecf679773d#5",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-durable-reopen-20260713",
+      "head_sha": "2f9fbd72317691dada58d8b6ca64241822540e72",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "2f9fbd72317691dada58d8b6ca64241822540e72",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 5,
+      "passport_hash": "passport:2f9fbd72317691dada58d8b6ca64241822540e72:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "3953a0da-646b-4656-bfbd-92ecf679773d",
+        "name": "redline-core",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "fix(storage): preserve durable images on reopen",
+      "updated_at": "2026-07-13T07:43:58.299111489+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783928639
+}

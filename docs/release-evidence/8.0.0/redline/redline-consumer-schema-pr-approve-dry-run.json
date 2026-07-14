@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact strict consumer evidence schema SHA and genuine required, security, score, and tamper-test evidence.",
+      "evidence": null,
+      "expected_head_sha": "d9b96a71f6e216c318da52fa3029b3b2066362d8",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-split-ops/pulls/13/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783929814
+}

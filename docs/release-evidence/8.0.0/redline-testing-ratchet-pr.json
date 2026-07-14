@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "028c67857d5b5968b6165f8de492a09311aa0398"
+    },
+    "body": "Make detached Jankurai CI ratcheted and policy-bound, exclude only checkout-local Cargo caches, commit a fresh reviewed baseline, and assert the governed command in Rust. Exact full tool-suite result: score 86, zero hard findings, zero caps.",
+    "created_at": "2026-07-12T22:49:21.948525384Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-testing-ratchet-policy",
+      "ref": "codex/redline-testing-ratchet-policy",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "68a427c65cffa1a5b6745aaf996e320462ccac3a"
+    },
+    "html_url": "/jeryu/redline-testing/pull/8",
+    "id": "21c839a6-f21b-4d5b-b3f0-9e1f9acb333d",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 8,
+    "source_repository": "jeryu/redline-testing",
+    "state": "open",
+    "title": "fix(ci): bind Testing audit to reviewed policy",
+    "updated_at": "2026-07-12T22:49:21.948525384Z",
+    "url": "/repos/jeryu/redline-testing/pulls/8",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Make detached Jankurai CI ratcheted and policy-bound, exclude only checkout-local Cargo caches, commit a fresh reviewed baseline, and assert the governed command in Rust. Exact full tool-suite result: score 86, zero hard findings, zero caps.",
+      "draft": false,
+      "head": "codex/redline-testing-ratchet-policy",
+      "title": "fix(ci): bind Testing audit to reviewed policy"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-testing/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "028c67857d5b5968b6165f8de492a09311aa0398"
+    },
+    "body": "Make detached Jankurai CI ratcheted and policy-bound, exclude only checkout-local Cargo caches, commit a fresh reviewed baseline, and assert the governed command in Rust. Exact full tool-suite result: score 86, zero hard findings, zero caps.",
+    "created_at": "2026-07-12T22:49:21.948525384Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-testing-ratchet-policy",
+      "ref": "codex/redline-testing-ratchet-policy",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "68a427c65cffa1a5b6745aaf996e320462ccac3a"
+    },
+    "html_url": "/jeryu/redline-testing/pull/8",
+    "id": "21c839a6-f21b-4d5b-b3f0-9e1f9acb333d",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 8,
+    "source_repository": "jeryu/redline-testing",
+    "state": "open",
+    "title": "fix(ci): bind Testing audit to reviewed policy",
+    "updated_at": "2026-07-12T22:49:21.948525384Z",
+    "url": "/repos/jeryu/redline-testing/pulls/8",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783896561
+}

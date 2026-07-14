@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed hermetic cache exclusion; exact detached required check is green.",
+      "evidence": null,
+      "expected_head_sha": "6b74e6089af5ca1acccb52f3371bf671c7781ba9",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-testing/pulls/5/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783889766
+}

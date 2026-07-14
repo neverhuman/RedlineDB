@@ -1,0 +1,103 @@
+{
+  "checks": [
+    {
+      "detail": "executable available",
+      "name": "rustc",
+      "status": "pass"
+    },
+    {
+      "detail": "executable available",
+      "name": "cargo",
+      "status": "pass"
+    },
+    {
+      "detail": "executable available",
+      "name": "git",
+      "status": "pass"
+    },
+    {
+      "detail": "executable available",
+      "name": "curl",
+      "status": "pass"
+    },
+    {
+      "detail": "executable available",
+      "name": "docker",
+      "status": "pass"
+    },
+    {
+      "detail": "executable available",
+      "name": "jq",
+      "status": "pass"
+    },
+    {
+      "detail": "executable available",
+      "name": "syft",
+      "status": "pass"
+    },
+    {
+      "detail": "executable available",
+      "name": "grype",
+      "status": "pass"
+    },
+    {
+      "detail": "executable available",
+      "name": "cargo-audit",
+      "status": "pass"
+    },
+    {
+      "detail": "executable available",
+      "name": "cosign",
+      "status": "pass"
+    },
+    {
+      "detail": "docker buildx is available",
+      "name": "docker-buildx",
+      "status": "pass"
+    },
+    {
+      "detail": "local Jeryu health endpoint is ready",
+      "name": "jeryu-health",
+      "status": "pass"
+    },
+    {
+      "detail": "Jeryu write credential is available",
+      "name": "jeryu-merge-token",
+      "status": "pass"
+    },
+    {
+      "detail": "selected repository mirrors are present",
+      "missing": [],
+      "name": "local-bare-mirrors",
+      "path": "/home/ubuntu/jain-split/target/bare-mirrors",
+      "status": "pass"
+    },
+    {
+      "detail": "sufficient workspace disk is available",
+      "free_kib": 1866979476,
+      "minimum_kib": 10000000,
+      "name": "disk-space",
+      "status": "pass"
+    },
+    {
+      "detail": "Linux cgroup controls are visible",
+      "name": "linux-cgroup",
+      "status": "pass"
+    },
+    {
+      "detail": "Linux PSI is visible",
+      "name": "linux-psi",
+      "status": "pass"
+    }
+  ],
+  "control_root": "/home/ubuntu/jain-split/jain-split-ops",
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "manifest_sha256": "f22dfea091a38d47cf94d5dd9208e75ac983285f043af7bfbf1673fd8d6db09c",
+  "name": "host-prerequisites",
+  "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.0/orchestrator/host-prerequisites.json",
+  "release_version": "8.0.0",
+  "schema_version": "jain.release-host-prerequisites/v1",
+  "status": "pass",
+  "timestamp_unix": 1783920602,
+  "tool_version": "splitctl 0.1.0"
+}

@@ -1,0 +1,19 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-merge",
+  "repository": "jeryu/jain-battle-gpu",
+  "request": {
+    "body": {},
+    "method": "PUT",
+    "path": "/repos/jeryu/jain-battle-gpu/pulls/7/merge"
+  },
+  "response": {
+    "merged": true,
+    "message": "Pull Request successfully merged",
+    "sha": "2205df3441f538130a4ce197afb67672596bac74"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783886261
+}

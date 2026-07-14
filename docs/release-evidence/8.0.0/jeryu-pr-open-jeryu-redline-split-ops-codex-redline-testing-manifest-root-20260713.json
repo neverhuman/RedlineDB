@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "30083338c73d4f92708f2d812a3612c577fde40d"
+    },
+    "body": "Transfer only the reviewed Testing manifest correction from the waiver-era history. Binds redline-testing-v1.0.1-jain.1 to 4a449d8de05c8a0ced5cb2d29c76e4718a0041ea with tree checksum 825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac. Required, security, score, control validation, and detached family lanes are being read back from exact commits. Candidate-only; no production mutation.",
+    "created_at": "2026-07-13T04:57:44.982280917Z",
+    "draft": true,
+    "head": {
+      "label": "codex/redline-testing-manifest-root-20260713",
+      "ref": "codex/redline-testing-manifest-root-20260713",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "df66f6e6de5a200d26d38344c8d3751997646326"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/11",
+    "id": "39e70429-d7e5-4fca-9ddc-81a2b9ba62ce",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 11,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "release(redline): bind Testing v1.0.1 Jain.1 from reviewed main",
+    "updated_at": "2026-07-13T04:57:44.982280917Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/11",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Transfer only the reviewed Testing manifest correction from the waiver-era history. Binds redline-testing-v1.0.1-jain.1 to 4a449d8de05c8a0ced5cb2d29c76e4718a0041ea with tree checksum 825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac. Required, security, score, control validation, and detached family lanes are being read back from exact commits. Candidate-only; no production mutation.",
+      "draft": true,
+      "head": "codex/redline-testing-manifest-root-20260713",
+      "title": "release(redline): bind Testing v1.0.1 Jain.1 from reviewed main"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-split-ops/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "30083338c73d4f92708f2d812a3612c577fde40d"
+    },
+    "body": "Transfer only the reviewed Testing manifest correction from the waiver-era history. Binds redline-testing-v1.0.1-jain.1 to 4a449d8de05c8a0ced5cb2d29c76e4718a0041ea with tree checksum 825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac. Required, security, score, control validation, and detached family lanes are being read back from exact commits. Candidate-only; no production mutation.",
+    "created_at": "2026-07-13T04:57:44.982280917Z",
+    "draft": true,
+    "head": {
+      "label": "codex/redline-testing-manifest-root-20260713",
+      "ref": "codex/redline-testing-manifest-root-20260713",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "df66f6e6de5a200d26d38344c8d3751997646326"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/11",
+    "id": "39e70429-d7e5-4fca-9ddc-81a2b9ba62ce",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 11,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "release(redline): bind Testing v1.0.1 Jain.1 from reviewed main",
+    "updated_at": "2026-07-13T04:57:44.982280917Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/11",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783918664
+}

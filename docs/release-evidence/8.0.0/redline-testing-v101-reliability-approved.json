@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Fix exact-main Jankurai routing, decode binary corpus output lossily, preserve underlying Rust error detail, and add regression coverage.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T21:45:21.375465066+00:00",
+      "head_sha": "53cb7250a9b7fbafbb75fad3232a888d9e8156a2",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:53cb7250a9b7fbafbb75fad3232a888d9e8156a2:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "6b74e6089af5ca1acccb52f3371bf671c7781ba9",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#6",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-detached-proofbind",
+      "head_sha": "53cb7250a9b7fbafbb75fad3232a888d9e8156a2",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "53cb7250a9b7fbafbb75fad3232a888d9e8156a2",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 6,
+      "passport_hash": "passport:53cb7250a9b7fbafbb75fad3232a888d9e8156a2:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
+        "name": "redline-testing",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci: make detached proof and binary output reliable",
+      "updated_at": "2026-07-12T21:34:51.037282250+00:00"
+    }
+  },
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "body_markdown": "Independent review verified the exact head, detached required status, Rust binary-output regression, fail-closed proof routing, security, and release packaging.",
+      "evidence": null,
+      "expected_head_sha": "53cb7250a9b7fbafbb75fad3232a888d9e8156a2",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-testing/pulls/6/reviews"
+  },
+  "response": {
+    "description": "Fix exact-main Jankurai routing, decode binary corpus output lossily, preserve underlying Rust error detail, and add regression coverage.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T21:45:21.367046847+00:00",
+      "head_sha": "53cb7250a9b7fbafbb75fad3232a888d9e8156a2",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:53cb7250a9b7fbafbb75fad3232a888d9e8156a2:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "6b74e6089af5ca1acccb52f3371bf671c7781ba9",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#6",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-detached-proofbind",
+      "head_sha": "53cb7250a9b7fbafbb75fad3232a888d9e8156a2",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "53cb7250a9b7fbafbb75fad3232a888d9e8156a2",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 6,
+      "passport_hash": "passport:53cb7250a9b7fbafbb75fad3232a888d9e8156a2:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
+        "name": "redline-testing",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci: make detached proof and binary output reliable",
+      "updated_at": "2026-07-12T21:34:51.037282250+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783892720
+}

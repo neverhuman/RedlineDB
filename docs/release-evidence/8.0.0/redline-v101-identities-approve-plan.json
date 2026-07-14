@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Independent review verified exact Core/Testing heads, archive-tree checksums, protected required status, manifest validation, and Rust family-control tests.",
+      "evidence": null,
+      "expected_head_sha": "d8474afdcb1d3fd3c5a3078479aeb4d41f1136ad",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-split-ops/pulls/6/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783893082
+}

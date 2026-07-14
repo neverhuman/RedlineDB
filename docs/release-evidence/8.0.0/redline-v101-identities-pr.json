@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "704e57b4119e292467044b86e71a9c8f95c57501"
+    },
+    "body": "Bind the exact reviewed Redline Core and Testing commits and archive-tree checksums after their governed CI fixes.",
+    "created_at": "2026-07-12T21:50:51.718623354Z",
+    "draft": false,
+    "head": {
+      "label": "codex/bind-redline-v101-reliability",
+      "ref": "codex/bind-redline-v101-reliability",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "d8474afdcb1d3fd3c5a3078479aeb4d41f1136ad"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/6",
+    "id": "5f041617-5037-4ece-aaf4-585a99bc68dc",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 6,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "release: bind Redline v1.0.1 reliability fixes",
+    "updated_at": "2026-07-12T21:50:51.718623354Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/6",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Bind the exact reviewed Redline Core and Testing commits and archive-tree checksums after their governed CI fixes.",
+      "draft": false,
+      "head": "codex/bind-redline-v101-reliability",
+      "title": "release: bind Redline v1.0.1 reliability fixes"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-split-ops/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "704e57b4119e292467044b86e71a9c8f95c57501"
+    },
+    "body": "Bind the exact reviewed Redline Core and Testing commits and archive-tree checksums after their governed CI fixes.",
+    "created_at": "2026-07-12T21:50:51.718623354Z",
+    "draft": false,
+    "head": {
+      "label": "codex/bind-redline-v101-reliability",
+      "ref": "codex/bind-redline-v101-reliability",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "d8474afdcb1d3fd3c5a3078479aeb4d41f1136ad"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/6",
+    "id": "5f041617-5037-4ece-aaf4-585a99bc68dc",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 6,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "release: bind Redline v1.0.1 reliability fixes",
+    "updated_at": "2026-07-12T21:50:51.718623354Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/6",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783893051
+}

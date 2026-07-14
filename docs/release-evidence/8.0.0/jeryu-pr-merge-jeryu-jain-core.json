@@ -1,0 +1,19 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-merge",
+  "repository": "jeryu/jain-core",
+  "request": {
+    "body": {},
+    "method": "PUT",
+    "path": "/repos/jeryu/jain-core/pulls/11/merge"
+  },
+  "response": {
+    "merged": true,
+    "message": "Pull Request successfully merged",
+    "sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783994951
+}

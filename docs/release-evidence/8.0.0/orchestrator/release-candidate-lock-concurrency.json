@@ -1,0 +1,15 @@
+{
+  "lock": "/tmp/jain-lock-test.eketid/.release-candidate.lock",
+  "owner": "{\"pid\":998931,\"started_at_unix\":1783909817}\n",
+  "reason": "another release-candidate runner owns the process-wide lock",
+  "rerun_command": [
+    "./release-candidate.sh",
+    "--no-tags",
+    "--no-atomicsoul",
+    "--evidence-dir",
+    "/tmp/jain-lock-test.eketid"
+  ],
+  "schema_version": "jain.release-candidate-lock/v1",
+  "status": "blocked",
+  "timestamp_unix": 1783909817
+}

@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Reviewed candidate-only split.2 change: checksummed 11-file bundle, nine verified LFS weights, real-weight extended tests, Jankurai caps=0/hard=0, no production mutation.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T02:05:33.251463084+00:00",
+      "head_sha": "e75276edb6f90d082620a4351c8982bab7324c51",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:e75276edb6f90d082620a4351c8982bab7324c51:Blocked:1:1:0:3",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "8d76be0e4429bdc0413aab5462dd44c929bc062b",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 2,
+        "total": 4
+      },
+      "draft": false,
+      "entity": {
+        "id": "456babe5-8c52-4e63-82cb-6596fb125ce5#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-split2-owner-snapshot-20260714-0025",
+      "head_sha": "e75276edb6f90d082620a4351c8982bab7324c51",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "e75276edb6f90d082620a4351c8982bab7324c51",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 7,
+      "passport_hash": "passport:e75276edb6f90d082620a4351c8982bab7324c51:Blocked:1:1:0:3",
+      "repo": {
+        "host": "jeryu",
+        "id": "456babe5-8c52-4e63-82cb-6596fb125ce5",
+        "name": "jain-starforge",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 3,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat(starforge): ship governed JOPE model bundle",
+      "updated_at": "2026-07-14T01:14:36.807614292+00:00"
+    }
+  },
+  "repository": "jeryu/jain-starforge",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact head after fresh local-forge autonomy neutralization and Jankurai 1.6.11 audit: score 88, hard findings 0, caps 0.",
+      "evidence": null,
+      "expected_head_sha": "e75276edb6f90d082620a4351c8982bab7324c51",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-starforge/pulls/7/reviews"
+  },
+  "response": {
+    "description": "Reviewed candidate-only split.2 change: checksummed 11-file bundle, nine verified LFS weights, real-weight extended tests, Jankurai caps=0/hard=0, no production mutation.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T02:05:33.241519655+00:00",
+      "head_sha": "e75276edb6f90d082620a4351c8982bab7324c51",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:e75276edb6f90d082620a4351c8982bab7324c51:Blocked:1:1:0:3",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "8d76be0e4429bdc0413aab5462dd44c929bc062b",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 2,
+        "total": 4
+      },
+      "draft": false,
+      "entity": {
+        "id": "456babe5-8c52-4e63-82cb-6596fb125ce5#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-split2-owner-snapshot-20260714-0025",
+      "head_sha": "e75276edb6f90d082620a4351c8982bab7324c51",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "e75276edb6f90d082620a4351c8982bab7324c51",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 7,
+      "passport_hash": "passport:e75276edb6f90d082620a4351c8982bab7324c51:Blocked:1:1:0:3",
+      "repo": {
+        "host": "jeryu",
+        "id": "456babe5-8c52-4e63-82cb-6596fb125ce5",
+        "name": "jain-starforge",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 3,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat(starforge): ship governed JOPE model bundle",
+      "updated_at": "2026-07-14T01:14:36.807614292+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783994731
+}

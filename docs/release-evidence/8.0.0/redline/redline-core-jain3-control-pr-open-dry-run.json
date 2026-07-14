@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Advance only the canonical Redline core identity to the reviewed durability repair: redline-core-v4.1.0-jain.3 at 2f9fbd72317691dada58d8b6ca64241822540e72, tree checksum 7057e6800620d86ab89973f91b6bdb35a5d7a7f5b6bedbdf2d8e3e0624cde51b. No waiver or lock change. Required, security, SBOM, and ratchet score gates pass; release readiness remains fail-closed until immutable tag and fresh two-consumer proof.",
+      "draft": true,
+      "head": "codex/redline-core-jain3-manifest-20260713",
+      "title": "release(redline): bind durable core repair identity"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-split-ops/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783928982
+}

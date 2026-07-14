@@ -1,0 +1,41 @@
+{
+  "action": "verified-existing",
+  "after": {
+    "local": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+    "remote": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea"
+  },
+  "before": {
+    "local": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+    "remote": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea"
+  },
+  "commit": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+  "commit_input": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+  "manifest": "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml",
+  "mode": "dry-run",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "Cargo.toml",
+        "name": "redline-testing",
+        "version": "1.0.1"
+      },
+      {
+        "manifest": "xtask/Cargo.toml",
+        "name": "xtask",
+        "version": "1.0.1"
+      }
+    ],
+    "expected_product_version": "1.0.1",
+    "status": "pass",
+    "version_file": null,
+    "workspace_package_version": null
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/redline-testing.git",
+  "remote_main": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+  "repository": "/home/ubuntu/jain-split/redline-split/redline-testing",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "redline-testing-v1.0.1-jain.1",
+  "timestamp_unix": 1783920184
+}

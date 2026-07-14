@@ -1,0 +1,36 @@
+[split-host-ci] governed jobs=8
+[split-host-ci] cross-repo resolution: local bare mirrors (CI cache for local Jeryu tags)
+[split-host-ci] running scripts/ci-local.sh required for jeryu/jain-zyal @ 7cd8b705
+   Compiling cpufeatures v0.2.17
+   Compiling syn v2.0.118
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling serde_derive v1.0.228
+   Compiling jain-zyal v8.0.0 (/tmp/split-host-ci.X0bE7F/jain-zyal)
+    Finished `release` profile [optimized] target(s) in 4.11s
+running release Cargo command: test-all-features
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.02s
+     Running unittests src/lib.rs (/tmp/split-host-ci.X0bE7F/cargo-target/debug/deps/jain_zyal-36668e8765f42c71)
+
+running 6 tests
+test tests::caller_capabilities_fail_closed_and_include_required_tools ... ok
+test tests::cancellation_is_bounded ... ok
+test tests::compiles_and_records_both_hashes ... ok
+test tests::fanout_budget_is_enforced_during_compilation ... ok
+test tests::unsupported_version_fails_closed ... ok
+test tests::completed_steps_emit_content_hashed_evidence_receipts ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+wrote /home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.0/ci/jain-zyal-7cd8b705a499416581ee07be9edd6cce7df25a5e-cargo.json
+jankurai-security-step={"label":"gitleaks","tool":"gitleaks","shell_command":"gitleaks detect --source . --redact --no-banner","status":"ran","advisory":false,"exit_code":0}
+jankurai-security-step={"label":"actionlint","tool":"actionlint","shell_command":"actionlint","status":"ran","advisory":false,"exit_code":0}
+security ok (tabpfn_hits=0, fallback_advisory=0)
+[smart] full scan — --full requested
+score=81 raw=81 caps=1 findings=10
+score check failed: score regression: 81 < baseline 86 (allowed_drop=0);score 81 below enforced absolute floor 85
+[split-host-ci] posted check-run jain-zyal/required=failure on 7cd8b705
+[split-host-ci] posted status jain-zyal/required=failure on 7cd8b705
+[split-host-ci] FAIL release score lane jeryu/jain-zyal @ 7cd8b705

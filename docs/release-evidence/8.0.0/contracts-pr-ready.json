@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/jain-contracts",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-contracts/pulls/8"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-contracts"
+      },
+      "sha": "df5f793371393188cf21ba09dcbf57e3bb629e1f"
+    },
+    "body": "Binds reviewed unchanged schemas to the authorized jain-contracts-v8.0.0-split.1 identity; all contract, security, score, and detached required gates pass.",
+    "created_at": "2026-07-12T20:12:52.880979976Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8.0.0-split.1-release-review",
+      "ref": "codex/v8.0.0-split.1-release-review",
+      "repo": {
+        "full_name": "jeryu/jain-contracts"
+      },
+      "sha": "7a57737229812c3df9d03bdcbd699977cc674ee6"
+    },
+    "html_url": "/jeryu/jain-contracts/pull/8",
+    "id": "4bbba2c3-b973-4e1d-8553-e31f8a046274",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 8,
+    "source_repository": "jeryu/jain-contracts",
+    "state": "open",
+    "title": "release: bind Contracts corrective split.1 identity",
+    "updated_at": "2026-07-12T20:13:15.185441269Z",
+    "url": "/repos/jeryu/jain-contracts/pulls/8",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887195
+}

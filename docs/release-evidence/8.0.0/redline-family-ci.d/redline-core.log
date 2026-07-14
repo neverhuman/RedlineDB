@@ -1,0 +1,210 @@
+$ bash scripts/ci-local.sh all
+ci-local pr-ci: preflight
+warning:   1550 crates/kernel/src/catalog/ops.rs
+warning:   1775 crates/sql/src/exec/mod.rs
+warning:   1935 crates/sql/src/exec/select_top.rs
+warning:   1509 crates/sql/src/json/jsonb.rs
+warning:   1951 crates/sql/src/parser/pragma.rs
+warning:   1770 crates/sql/src/parser/select.rs
+warning:   1696 crates/sql/src/rql.rs
+warning:   1777 crates/sql/tests/rql_native_select.rs
+warning:   1623 tips/evolve/redlinedb_engineered_intelligence_stages(2).diff
+warning:   1705 tips/evolve/redlinedb_stage_genome_patch.diff
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling version_check v0.9.5
+   Compiling object v0.37.3
+   Compiling crossbeam-utils v0.8.21
+   Compiling memchr v2.8.0
+   Compiling smallvec v1.15.1
+   Compiling serde_core v1.0.228
+   Compiling bitflags v2.11.1
+   Compiling getrandom v0.3.4
+   Compiling rustix v1.1.4
+   Compiling crossbeam-epoch v0.9.20
+   Compiling log v0.4.29
+   Compiling parking_lot_core v0.9.12
+   Compiling zmij v1.0.21
+   Compiling rustversion v1.0.22
+   Compiling zerocopy v0.8.48
+   Compiling linux-raw-sys v0.12.1
+   Compiling scopeguard v1.2.0
+   Compiling typenum v1.20.0
+   Compiling utf8parse v0.2.2
+   Compiling once_cell v1.21.4
+   Compiling itoa v1.0.18
+   Compiling hashbrown v0.17.1
+   Compiling rayon-core v1.13.0
+   Compiling equivalent v1.0.2
+   Compiling crc32fast v1.5.0
+   Compiling thiserror v2.0.18
+   Compiling serde_json v1.0.150
+   Compiling serde v1.0.228
+   Compiling regex-syntax v0.8.10
+   Compiling signal-hook v0.3.18
+   Compiling cfg_aliases v0.1.1
+   Compiling libm v0.2.16
+   Compiling bumpalo v3.20.3
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle v1.0.14
+   Compiling either v1.16.0
+   Compiling fastrand v2.4.1
+   Compiling anstyle-query v1.1.5
+   Compiling colorchoice v1.0.5
+   Compiling redlinedb-domain v4.1.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline-core/crates/domain)
+   Compiling clap_lex v1.1.0
+   Compiling strsim v0.11.1
+   Compiling cc v1.2.62
+   Compiling lock_api v0.4.14
+   Compiling anstyle-parse v1.0.0
+   Compiling cpufeatures v0.2.17
+   Compiling endian-type v0.1.2
+   Compiling heck v0.5.0
+   Compiling nix v0.28.0
+   Compiling unicode-width v0.1.14
+   Compiling unicode-segmentation v1.13.2
+   Compiling ryu v1.0.23
+   Compiling home v0.5.12
+   Compiling nibble_vec v0.1.0
+   Compiling generic-array v0.14.7
+   Compiling ahash v0.8.12
+   Compiling anstream v1.0.0
+   Compiling radix_trie v0.2.1
+   Compiling clap_builder v4.6.0
+   Compiling aho-corasick v1.1.4
+   Compiling csv-core v0.1.13
+   Compiling indexmap v2.14.0
+   Compiling crossbeam-queue v0.3.12
+   Compiling arc-swap v1.9.1
+   Compiling syn v2.0.117
+   Compiling crossbeam-deque v0.8.6
+   Compiling stacker v0.1.24
+   Compiling libmimalloc-sys v0.1.49
+   Compiling regex-automata v0.4.14
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling rayon v1.12.0
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling fd-lock v4.0.4
+   Compiling errno v0.3.14
+   Compiling mio v0.8.11
+   Compiling num_cpus v1.17.0
+   Compiling memmap2 v0.9.11
+   Compiling signal-hook-registry v1.4.8
+   Compiling tempfile v3.27.0
+   Compiling parking_lot v0.12.5
+   Compiling csv v1.4.0
+   Compiling signal-hook-mio v0.2.5
+   Compiling crossterm v0.27.0
+   Compiling ar_archive_writer v0.5.1
+   Compiling serde_derive v1.0.228
+   Compiling recursive-proc-macro-impl v0.1.1
+   Compiling thiserror-impl v2.0.18
+   Compiling clap_derive v4.6.1
+   Compiling rustyline v14.0.0
+   Compiling regex v1.12.3
+   Compiling psm v0.1.31
+   Compiling recursive v0.1.1
+   Compiling sqlparser v0.61.0
+   Compiling clap v4.6.1
+   Compiling mimalloc v0.1.52
+   Compiling redlinedb-kernel v4.1.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline-core/crates/kernel)
+   Compiling redlinedb-sql v4.1.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline-core/crates/sql)
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4705:18
+     |
+4705 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4708:22
+     |
+4708 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+
+   Compiling redlinedb v4.1.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline-core/crates/redlinedb)
+   Compiling redlinedb-cli v4.1.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline-core/crates/cli)
+warning: `redlinedb-sql` (lib) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 1m 44s
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling memchr v2.8.0
+   Compiling serde_core v1.0.228
+   Compiling equivalent v1.0.2
+   Compiling once_cell v1.21.4
+   Compiling smallvec v1.15.1
+   Compiling hashbrown v0.17.1
+   Compiling scopeguard v1.2.0
+   Compiling regex-syntax v0.8.10
+   Compiling bitflags v2.11.1
+   Compiling itoa v1.0.18
+   Compiling linux-raw-sys v0.12.1
+   Compiling bumpalo v3.20.3
+   Compiling redlinedb-domain v4.1.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline-core/crates/domain)
+   Compiling log v0.4.29
+   Compiling either v1.16.0
+   Compiling fastrand v2.4.1
+   Compiling crossbeam-utils v0.8.21
+   Compiling zmij v1.0.21
+   Compiling zerocopy v0.8.48
+   Compiling crc32fast v1.5.0
+   Compiling libm v0.2.16
+   Compiling arc-swap v1.9.1
+   Compiling lock_api v0.4.14
+   Compiling thiserror v2.0.18
+   Compiling psm v0.1.31
+   Compiling rustix v1.1.4
+   Compiling crossbeam-epoch v0.9.20
+   Compiling crossbeam-queue v0.3.12
+   Compiling aho-corasick v1.1.4
+   Compiling indexmap v2.14.0
+   Compiling crossbeam-deque v0.8.6
+   Compiling rayon-core v1.13.0
+   Compiling getrandom v0.3.4
+   Compiling stacker v0.1.24
+   Compiling parking_lot_core v0.9.12
+   Compiling rayon v1.12.0
+   Compiling recursive v0.1.1
+   Compiling sqlparser v0.61.0
+   Compiling regex-automata v0.4.14
+   Compiling parking_lot v0.12.5
+   Compiling tempfile v3.27.0
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.150
+   Compiling regex v1.12.3
+   Compiling ahash v0.8.12
+   Compiling redlinedb-kernel v4.1.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline-core/crates/kernel)
+   Compiling redlinedb-sql v4.1.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline-core/crates/sql)
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4705:18
+     |
+4705 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4708:22
+     |
+4708 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+
+warning: `redlinedb-sql` (lib) generated 2 warnings
+   Compiling redlinedb-ffi v4.1.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline-core/crates/ffi)
+    Finished `release` profile [optimized] target(s) in 58.46s

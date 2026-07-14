@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Adds Rust-owned release identity validation for redline-testing-v1.0.1-jain.1; required, security, package, no-Python, and score gates pass.",
+      "draft": true,
+      "head": "codex/v8-redline-testing-jain1",
+      "title": "release: bind Redline Testing corrective jain.1 identity"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-testing/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887440
+}

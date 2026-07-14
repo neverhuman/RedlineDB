@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/jain-battle-gpu",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-battle-gpu/pulls/7"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-battle-gpu"
+      },
+      "sha": "bd36ef5231a9181cbc248e9a41e1643a1562afe5"
+    },
+    "body": "Aligns the package and exact VERSION metadata with the authorized jain-battle-gpu-v8.0.0-split.1 identity; both CUDA policy compile lanes and available tests pass.",
+    "created_at": "2026-07-12T19:56:36.199662682Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8.0.0-release-review",
+      "ref": "codex/v8.0.0-release-review",
+      "repo": {
+        "full_name": "jeryu/jain-battle-gpu"
+      },
+      "sha": "2205df3441f538130a4ce197afb67672596bac74"
+    },
+    "html_url": "/jeryu/jain-battle-gpu/pull/7",
+    "id": "79fe3d87-c227-4cac-954d-653c86501068",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 7,
+    "source_repository": "jeryu/jain-battle-gpu",
+    "state": "open",
+    "title": "release: correct Battle GPU v8 package identity",
+    "updated_at": "2026-07-12T19:57:02.635648709Z",
+    "url": "/repos/jeryu/jain-battle-gpu/pulls/7",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783886215
+}

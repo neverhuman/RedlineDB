@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Rust family runner scrubs inherited toolchains and builds/hash-binds the exact reviewed Redline Testing artifact for Core without unpublished remote releases. Tests and control validation are green.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T20:57:34.725318423+00:00",
+      "head_sha": "c3adf0f1297b4d852898bc01e88bd5227b6e0d1d",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:c3adf0f1297b4d852898bc01e88bd5227b6e0d1d:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "2aa01bf1f0bb55e51ea504fb96bfa43ff20aee80",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#4",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/family-ci-local-testing-artifact",
+      "head_sha": "c3adf0f1297b4d852898bc01e88bd5227b6e0d1d",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "c3adf0f1297b4d852898bc01e88bd5227b6e0d1d",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 4,
+      "passport_hash": "passport:c3adf0f1297b4d852898bc01e88bd5227b6e0d1d:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Make detached Redline family CI self-contained",
+      "updated_at": "2026-07-12T20:57:09.564146230+00:00"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed self-contained detached family runner and exact artifact binding; required check is green.",
+      "evidence": null,
+      "expected_head_sha": "c3adf0f1297b4d852898bc01e88bd5227b6e0d1d",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-split-ops/pulls/4/reviews"
+  },
+  "response": {
+    "description": "Rust family runner scrubs inherited toolchains and builds/hash-binds the exact reviewed Redline Testing artifact for Core without unpublished remote releases. Tests and control validation are green.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T20:57:34.714528079+00:00",
+      "head_sha": "c3adf0f1297b4d852898bc01e88bd5227b6e0d1d",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:c3adf0f1297b4d852898bc01e88bd5227b6e0d1d:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "2aa01bf1f0bb55e51ea504fb96bfa43ff20aee80",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#4",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/family-ci-local-testing-artifact",
+      "head_sha": "c3adf0f1297b4d852898bc01e88bd5227b6e0d1d",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "c3adf0f1297b4d852898bc01e88bd5227b6e0d1d",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 4,
+      "passport_hash": "passport:c3adf0f1297b4d852898bc01e88bd5227b6e0d1d:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Make detached Redline family CI self-contained",
+      "updated_at": "2026-07-12T20:57:09.564146230+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783889853
+}

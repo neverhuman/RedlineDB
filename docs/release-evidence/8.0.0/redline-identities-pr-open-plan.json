@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Replaces family PENDING identities with the exact reviewed commits and deterministic tree checksums for all four corrective Redline tags; the proof lock remains untouched.",
+      "draft": true,
+      "head": "codex/v8-redline-release-identities",
+      "title": "release: bind reviewed Redline family commits"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-split-ops/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887770
+}

@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "68a427c65cffa1a5b6745aaf996e320462ccac3a"
+    },
+    "body": "The strict detached release lane scanned host-generated .cargo cache sentinels as unowned paths, creating 20 hard findings and dropping the ratchet score from 86 to 84. Classify .cargo/ as cache in the mirrored audit policies, route it to the control-plane owner maps, and refresh the machine-generated accepted baseline. Local strict Jankurai is 86 with zero hard findings. Candidate-only; no production writes.",
+    "created_at": "2026-07-13T01:04:11.012737106Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-testing-cargo-cache-audit",
+      "ref": "codex/redline-testing-cargo-cache-audit",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "722b3236a216fd5e9b3e8e6a6152ea6618f80d42"
+    },
+    "html_url": "/jeryu/redline-testing/pull/9",
+    "id": "45d04e21-76c4-4417-a3a9-63c39d9b2609",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 9,
+    "source_repository": "jeryu/redline-testing",
+    "state": "open",
+    "title": "fix(ci): classify detached Cargo caches in audit",
+    "updated_at": "2026-07-13T01:04:11.012737106Z",
+    "url": "/repos/jeryu/redline-testing/pulls/9",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "The strict detached release lane scanned host-generated .cargo cache sentinels as unowned paths, creating 20 hard findings and dropping the ratchet score from 86 to 84. Classify .cargo/ as cache in the mirrored audit policies, route it to the control-plane owner maps, and refresh the machine-generated accepted baseline. Local strict Jankurai is 86 with zero hard findings. Candidate-only; no production writes.",
+      "draft": false,
+      "head": "codex/redline-testing-cargo-cache-audit",
+      "title": "fix(ci): classify detached Cargo caches in audit"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-testing/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "68a427c65cffa1a5b6745aaf996e320462ccac3a"
+    },
+    "body": "The strict detached release lane scanned host-generated .cargo cache sentinels as unowned paths, creating 20 hard findings and dropping the ratchet score from 86 to 84. Classify .cargo/ as cache in the mirrored audit policies, route it to the control-plane owner maps, and refresh the machine-generated accepted baseline. Local strict Jankurai is 86 with zero hard findings. Candidate-only; no production writes.",
+    "created_at": "2026-07-13T01:04:11.012737106Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-testing-cargo-cache-audit",
+      "ref": "codex/redline-testing-cargo-cache-audit",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "722b3236a216fd5e9b3e8e6a6152ea6618f80d42"
+    },
+    "html_url": "/jeryu/redline-testing/pull/9",
+    "id": "45d04e21-76c4-4417-a3a9-63c39d9b2609",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 9,
+    "source_repository": "jeryu/redline-testing",
+    "state": "open",
+    "title": "fix(ci): classify detached Cargo caches in audit",
+    "updated_at": "2026-07-13T01:04:11.012737106Z",
+    "url": "/repos/jeryu/redline-testing/pulls/9",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783904650
+}

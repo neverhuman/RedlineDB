@@ -1,0 +1,232 @@
+diff --git a/AGENTS.md b/AGENTS.md
+index 53819ee..0d977a1 100644
+--- a/AGENTS.md
++++ b/AGENTS.md
+@@ -10,9 +10,9 @@ Before editing, read `README.md`, `agent/owner-map.json`,
+ Keep split `main` clean. Dirty source imports from `/home/ubuntu/jain_small` belong
+ on `import/dirty-*` branches or as explicit patches after baseline checks pass.
+ 
+-Cross-repo Rust dependencies are pinned Git dependencies using
+-`*-v8.0.0-split.0` tags. Only `jain-deploy` may use local sibling path patches
+-for split-family development.
++Cross-repo Rust dependencies are pinned Git dependencies using the exact
++immutable tags declared by the canonical family manifest. Only `jain-deploy`
++may use local sibling path patches for split-family development.
+ 
+ ## Local Jeryu Forge Workflow
+ 
+diff --git a/agent/owner-map.json b/agent/owner-map.json
+index 166622a..f0ceaf2 100644
+--- a/agent/owner-map.json
++++ b/agent/owner-map.json
+@@ -14,12 +14,15 @@
+     ".github/**": "ops",
+     ".gitignore": "workspace",
+     ".gitleaks.toml": "ops",
++    ".gitleaksignore": "ops",
+     ".jankurai/": "audit",
+     ".jankurai/**": "audit",
+     ".jeryu/": "split",
+     ".jeryu/**": "split",
+     "AGENTS.md": "split",
+     "CHANGELOG.md": "release",
++    "CLAUDE.md": "split",
++    "CODEOWNERS": "workspace",
+     "Cargo.lock": "workspace",
+     "Cargo.toml": "workspace",
+     "Justfile": "workspace",
+@@ -35,6 +38,8 @@
+     "contracts/**": "jain-core",
+     "crates/feat-core/": "jain-core",
+     "crates/feat-core/**": "jain-core",
++    "crates/jain-redline-store/": "jain-core",
++    "crates/jain-redline-store/**": "jain-core",
+     "db/": "split",
+     "db/**": "split",
+     "deny.toml": "workspace",
+diff --git a/agent/standard-version.toml b/agent/standard-version.toml
+index 83c59d2..bb92b08 100644
+--- a/agent/standard-version.toml
++++ b/agent/standard-version.toml
+@@ -3,3 +3,4 @@ workspace = "jain-core"
+ version = "jain-core-v8.0.0-split.0"
+ release_authority = "jain-deploy"
+ version_source = "VERSION"
++target_stack = "rust-workspace"
+diff --git a/agent/test-map.json b/agent/test-map.json
+index bb083f9..1c137d1 100644
+--- a/agent/test-map.json
++++ b/agent/test-map.json
+@@ -70,6 +70,11 @@
+       "lane": "security",
+       "purpose": "verify the committed secret-scan policy remains narrow and parseable"
+     },
++    ".gitleaksignore": {
++      "command": "just security",
++      "lane": "security",
++      "purpose": "verify pinned false-positive fingerprints keep the history scan auditable"
++    },
+     ".jankurai/": {
+       "command": "just score",
+       "lane": "score",
+@@ -100,6 +105,16 @@
+       "lane": "check",
+       "purpose": "verify workspace metadata remains parseable"
+     },
++    "CLAUDE.md": {
++      "command": "just score",
++      "lane": "score",
++      "purpose": "verify the thin agent adapter still routes to AGENTS.md"
++    },
++    "CODEOWNERS": {
++      "command": "just score",
++      "lane": "score",
++      "purpose": "verify review ownership remains routed"
++    },
+     "Cargo.lock": {
+       "command": "just required",
+       "lane": "required",
+@@ -175,6 +190,16 @@
+       "lane": "required",
+       "purpose": "verify jain-core Cargo member remains build-addressable"
+     },
++    "crates/jain-redline-store/": {
++      "command": "just required",
++      "lane": "required",
++      "purpose": "verify the pooled Redline storage member remains build-addressable"
++    },
++    "crates/jain-redline-store/**": {
++      "command": "just required",
++      "lane": "required",
++      "purpose": "verify pooled Redline storage behavior remains covered"
++    },
+     "db/": {
+       "command": "just check && just score",
+       "lane": "db",
+diff --git a/crates/feat-core/Cargo.toml b/crates/feat-core/Cargo.toml
+index 9b32913..51ef2a8 100644
+--- a/crates/feat-core/Cargo.toml
++++ b/crates/feat-core/Cargo.toml
+@@ -33,7 +33,7 @@ zip = { version = "8.6", default-features = false, features = ["deflate"] }
+ csv = "1.4"
+ domain = { git = "http://127.0.0.1:8787/git/jeryu/jain-domain.git", tag = "jain-domain-v8.0.0-split.0", package = "domain" }
+ feat-math = { git = "http://127.0.0.1:8787/git/jeryu/jain-math.git", tag = "jain-math-v8.0.0-split.0", package = "feat-math" }
+-battle-gpu = { git = "http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git", tag = "jain-battle-gpu-v8.0.0-split.0", package = "battle-gpu", optional = true, default-features = false }
++battle-gpu = { git = "http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git", tag = "jain-battle-gpu-v8.0.0-split.1", package = "battle-gpu", optional = true, default-features = false }
+ catboost = { git = "http://127.0.0.1:8787/git/jeryu/jain-catboost.git", tag = "jain-catboost-v8.0.0-split.0", package = "catboost", optional = true }
+ xgboost = { git = "http://127.0.0.1:8787/git/jeryu/jain-xgboost.git", tag = "jain-xgboost-v8.0.0-split.0", package = "xgboost", optional = true }
+ lightgbm = { git = "http://127.0.0.1:8787/git/jeryu/jain-lightgbm.git", tag = "jain-lightgbm-v8.0.0-split.0", package = "lightgbm", optional = true }
+diff --git a/crates/feat-core/src/checkpoint.rs b/crates/feat-core/src/checkpoint.rs
+index c2558c9..2c2bd21 100644
+--- a/crates/feat-core/src/checkpoint.rs
++++ b/crates/feat-core/src/checkpoint.rs
+@@ -393,7 +393,7 @@ fn digest_hex(bytes: impl AsRef<[u8]>) -> String {
+ }
+ 
+ fn atomic_write(path: &Path, bytes: &[u8]) -> CheckpointResult<()> {
+-    static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
++    static NEXT_STAGING: AtomicU64 = AtomicU64::new(0);
+     let parent = path
+         .parent()
+         .ok_or_else(|| CheckpointError::Invalid("checkpoint path has no parent".into()))?;
+@@ -402,23 +402,23 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> CheckpointResult<()> {
+         .file_name()
+         .and_then(|name| name.to_str())
+         .ok_or_else(|| CheckpointError::Invalid("checkpoint file name is not UTF-8".into()))?;
+-    let id = NEXT_TEMP.fetch_add(1, Ordering::Relaxed);
+-    let temp = parent.join(format!(".{file_name}.{}.{}.tmp", std::process::id(), id));
++    let id = NEXT_STAGING.fetch_add(1, Ordering::Relaxed);
++    let staging = parent.join(format!(".{file_name}.{}.{}.tmp", std::process::id(), id));
+ 
+     let write_result = (|| -> CheckpointResult<()> {
+         let mut file = OpenOptions::new()
+             .create_new(true)
+             .write(true)
+-            .open(&temp)?;
++            .open(&staging)?;
+         file.write_all(bytes)?;
+         file.sync_all()?;
+         drop(file);
+-        fs::rename(&temp, path)?;
++        fs::rename(&staging, path)?;
+         File::open(parent)?.sync_all()?;
+         Ok(())
+     })();
+     if write_result.is_err() {
+-        let _ = fs::remove_file(&temp);
++        let _ = fs::remove_file(&staging);
+     }
+     write_result
+ }
+diff --git a/crates/jain-redline-store/Cargo.toml b/crates/jain-redline-store/Cargo.toml
+index e5b7d35..203d105 100644
+--- a/crates/jain-redline-store/Cargo.toml
++++ b/crates/jain-redline-store/Cargo.toml
+@@ -6,13 +6,11 @@ license.workspace = true
+ description = "Jain's pooled RedlineDB storage foundation"
+ 
+ [dependencies]
+-# Local family verification uses the checked-in Redline subrepository. Release
+-# manifests resolve the same package from the immutable local-Jeryu tag.
+-redlinedb = { path = "../../../redline-split/redline-core/crates/redlinedb", package = "redlinedb" }
++redlinedb = { git = "http://127.0.0.1:8787/git/jeryu/redline-core.git", tag = "redline-core-v4.1.0-jain.2", package = "redlinedb" }
+ 
+ [package.metadata.redline]
+ release_git = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
+-release_tag = "redline-core-v4.1.0-jain.1"
++release_tag = "redline-core-v4.1.0-jain.2"
+ 
+ [dev-dependencies]
+ tempfile = "3"
+diff --git a/ops/ci/contract-drift.sh b/ops/ci/contract-drift.sh
+index c6e4342..6cfe776 100755
+--- a/ops/ci/contract-drift.sh
++++ b/ops/ci/contract-drift.sh
+@@ -19,5 +19,4 @@ if [[ -f contracts/MIRROR.md && -d "$mirror" && "$(basename "$PWD")" != "jain-co
+   right="$(find "$mirror" -type f ! -name MIRROR.md -printf '%P\n' | sort)"
+   [[ "$left" == "$right" ]] || { printf 'contract mirror file set differs from jain-core/contracts\n' >&2; exit 1; }
+ fi
+-PY
+ printf 'contract drift ok\n'
+diff --git a/ops/dev/local-patches.example.toml b/ops/dev/local-patches.example.toml
+deleted file mode 100644
+index 3564cb6..0000000
+--- a/ops/dev/local-patches.example.toml
++++ /dev/null
+@@ -1,36 +0,0 @@
+-# Copy to .cargo/config.toml for local unpublished sibling work.
+-# Do not commit local patch config from this file.
+-
+-[patch."http://127.0.0.1:8787/git/jeryu/jain-domain.git"]
+-domain = { path = "../jain-domain/crates/domain" }
+-
+-[patch."http://127.0.0.1:8787/git/jeryu/jain-math.git"]
+-feat-math = { path = "../jain-math/crates/feat-math" }
+-
+-[patch."http://127.0.0.1:8787/git/jeryu/jain-catboost.git"]
+-catboost = { path = "../jain-catboost/crates/catboost" }
+-catboost-sys = { path = "../jain-catboost/crates/catboost-sys" }
+-
+-[patch."http://127.0.0.1:8787/git/jeryu/jain-xgboost.git"]
+-xgboost = { path = "../jain-xgboost/crates/xgboost" }
+-
+-[patch."http://127.0.0.1:8787/git/jeryu/jain-lightgbm.git"]
+-lightgbm = { path = "../jain-lightgbm/crates/lightgbm" }
+-
+-[patch."http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git"]
+-battle-gpu = { path = "../jain-battle-gpu/crates/battle-gpu" }
+-
+-[patch."http://127.0.0.1:8787/git/jeryu/jain-starforge.git"]
+-starforge = { path = "../jain-starforge/crates/starforge" }
+-
+-[patch."http://127.0.0.1:8787/git/jeryu/jain-core.git"]
+-feat-core = { path = "../jain-core/crates/feat-core" }
+-
+-[patch."http://127.0.0.1:8787/git/jeryu/jain-report.git"]
+-feat-report = { path = "../jain-report/crates/feat-report" }
+-
+-[patch."http://127.0.0.1:8787/git/jeryu/jain-tui.git"]
+-feat-tui = { path = "../jain-tui/crates/feat-tui" }
+-
+-[patch."http://127.0.0.1:8787/git/jeryu/jain-cli.git"]
+-feat-cli = { path = "../jain-cli/crates/feat-cli" }

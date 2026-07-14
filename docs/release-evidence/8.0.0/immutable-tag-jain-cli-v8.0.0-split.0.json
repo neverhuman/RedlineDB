@@ -1,0 +1,42 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3",
+    "remote": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3",
+  "commit_input": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3",
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-cli.git",
+    "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.0/mirrors/jain-cli-jain-cli-v8.0.0-split.0.json",
+    "status": "pass",
+    "tag_commit": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "crates/feat-cli/Cargo.toml",
+        "name": "feat-cli",
+        "version": "8.0.0"
+      }
+    ],
+    "expected_product_version": "8.0.0",
+    "status": "pass",
+    "version_file": "jain-cli-v8.0.0-split.0",
+    "workspace_package_version": "8.0.0"
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-cli.git",
+  "remote_main": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3",
+  "repository": "/home/ubuntu/jain-split/jain-cli",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-cli-v8.0.0-split.0",
+  "timestamp_unix": 1783939730
+}

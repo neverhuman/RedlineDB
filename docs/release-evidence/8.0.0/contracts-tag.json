@@ -1,0 +1,35 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "7a57737229812c3df9d03bdcbd699977cc674ee6",
+    "remote": "7a57737229812c3df9d03bdcbd699977cc674ee6"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "7a57737229812c3df9d03bdcbd699977cc674ee6",
+  "commit_input": "7a57737229812c3df9d03bdcbd699977cc674ee6",
+  "manifest": "repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-contracts.git",
+    "receipt": "docs/release-evidence/8.0.0/mirrors/jain-contracts-jain-contracts-v8.0.0-split.1.json",
+    "status": "pass",
+    "tag_commit": "7a57737229812c3df9d03bdcbd699977cc674ee6"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [],
+    "expected_product_version": "8.0.0",
+    "status": "pass",
+    "version_file": "jain-contracts-v8.0.0-split.1"
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-contracts.git",
+  "remote_main": "7a57737229812c3df9d03bdcbd699977cc674ee6",
+  "repository": "/home/ubuntu/jain-split/jain-contracts",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-contracts-v8.0.0-split.1",
+  "timestamp_unix": 1783887317
+}

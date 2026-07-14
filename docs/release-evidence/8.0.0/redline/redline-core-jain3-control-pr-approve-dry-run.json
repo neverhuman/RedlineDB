@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact repair identity; required, security, SBOM, and ratchet gates pass. Lock remains intentionally ineligible pending fresh two-consumer proof.",
+      "evidence": null,
+      "expected_head_sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-split-ops/pulls/12/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783929041
+}

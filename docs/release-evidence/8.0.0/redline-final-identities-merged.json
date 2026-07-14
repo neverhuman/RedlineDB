@@ -1,0 +1,19 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-merge",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {},
+    "method": "PUT",
+    "path": "/repos/jeryu/redline-split-ops/pulls/7/merge"
+  },
+  "response": {
+    "merged": true,
+    "message": "Pull Request successfully merged",
+    "sha": "d799ade5c53bf526e4826780111c75dfb87cfc71"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783896937
+}

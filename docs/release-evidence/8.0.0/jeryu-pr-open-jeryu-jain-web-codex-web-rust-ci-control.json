@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "8c091829a3fc2b3f2e276806253f7cf90485636f"
+    },
+    "body": "",
+    "created_at": "2026-07-13T10:57:25.777046059Z",
+    "draft": false,
+    "head": {
+      "label": "codex/web-rust-ci-control",
+      "ref": "codex/web-rust-ci-control",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "ef625ca5da7da8ebd7f069bbac872bef5bb08004"
+    },
+    "html_url": "/jeryu/jain-web/pull/18",
+    "id": "28ceb1e8-4567-4852-9cea-cf91f6524214",
+    "merge_commit_sha": null,
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merged": false,
+    "merged_at": null,
+    "number": 18,
+    "source_repository": "jeryu/jain-web",
+    "state": "open",
+    "title": "release: jain-web 8.0.0",
+    "updated_at": "2026-07-13T10:57:25.777046059Z",
+    "url": "/repos/jeryu/jain-web/pulls/18",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-web",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codex/web-rust-ci-control",
+      "title": "release: jain-web 8.0.0"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-web/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "8c091829a3fc2b3f2e276806253f7cf90485636f"
+    },
+    "body": "",
+    "created_at": "2026-07-13T10:57:25.777046059Z",
+    "draft": false,
+    "head": {
+      "label": "codex/web-rust-ci-control",
+      "ref": "codex/web-rust-ci-control",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "ef625ca5da7da8ebd7f069bbac872bef5bb08004"
+    },
+    "html_url": "/jeryu/jain-web/pull/18",
+    "id": "28ceb1e8-4567-4852-9cea-cf91f6524214",
+    "merge_commit_sha": null,
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merged": false,
+    "merged_at": null,
+    "number": 18,
+    "source_repository": "jeryu/jain-web",
+    "state": "open",
+    "title": "release: jain-web 8.0.0",
+    "updated_at": "2026-07-13T10:57:25.777046059Z",
+    "url": "/repos/jeryu/jain-web/pulls/18",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783940245
+}

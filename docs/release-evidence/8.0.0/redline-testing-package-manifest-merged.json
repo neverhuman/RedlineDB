@@ -1,0 +1,14 @@
+{
+  "error": "local Jeryu request failed: curl: (22) The requested URL returned error: 409",
+  "mode": "apply",
+  "operation": "jeryu-local pr-merge",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {},
+    "method": "PUT",
+    "path": "/repos/jeryu/redline-split-ops/pulls/9/merge"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "fail",
+  "timestamp_unix": 1783908618
+}

@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Candidate-only corrective release with hermetic jail/upload fixtures, deterministic source artifact, pinned RustSec/workflow/SBOM evidence, real coverage, and explicit no-remote/no-publication policy. Rollback target 7.0.6.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T01:45:45.277271938+00:00",
+      "head_sha": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:128636cd00e93d09560b77d4829f9ea3b68afbe7:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "6aedc249bdb30a5cfd5d1ea3cbff9bc03393469d",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "5d7f66a4-d0e0-42c7-8f61-a9e145a1844e#6",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-split1-corrective-20260713",
+      "head_sha": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 6,
+      "passport_hash": "passport:128636cd00e93d09560b77d4829f9ea3b68afbe7:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "5d7f66a4-d0e0-42c7-8f61-a9e145a1844e",
+        "name": "jain-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: re-cut Jain Ops 8.0.0 split.1",
+      "updated_at": "2026-07-13T19:40:34.388927043+00:00"
+    }
+  },
+  "repository": "jeryu/jain-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact head and green required/Jankurai evidence.",
+      "evidence": null,
+      "expected_head_sha": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-ops/pulls/6/reviews"
+  },
+  "response": {
+    "description": "Candidate-only corrective release with hermetic jail/upload fixtures, deterministic source artifact, pinned RustSec/workflow/SBOM evidence, real coverage, and explicit no-remote/no-publication policy. Rollback target 7.0.6.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T01:45:45.265806758+00:00",
+      "head_sha": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:128636cd00e93d09560b77d4829f9ea3b68afbe7:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "6aedc249bdb30a5cfd5d1ea3cbff9bc03393469d",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "5d7f66a4-d0e0-42c7-8f61-a9e145a1844e#6",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-split1-corrective-20260713",
+      "head_sha": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 6,
+      "passport_hash": "passport:128636cd00e93d09560b77d4829f9ea3b68afbe7:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "5d7f66a4-d0e0-42c7-8f61-a9e145a1844e",
+        "name": "jain-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: re-cut Jain Ops 8.0.0 split.1",
+      "updated_at": "2026-07-13T19:40:34.388927043+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783993543
+}

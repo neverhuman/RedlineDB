@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Keep non-product files such as the root composite action from being treated as a product DB surface; preserve genuine SQL and wrong-layer detection.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T01:21:09.937929661+00:00",
+      "head_sha": "f511019045d83023ca0af83b81a2f0bc018405e7",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:f511019045d83023ca0af83b81a2f0bc018405e7:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "bcbb401ede141857cf686c72df1aec55aa4c9f01",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "2a6a9269-a22d-4dde-ae87-32c9f9520c08#2",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/jankurai-auditor-1.6.11-analyzers",
+      "head_sha": "f511019045d83023ca0af83b81a2f0bc018405e7",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "f511019045d83023ca0af83b81a2f0bc018405e7",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 2,
+      "passport_hash": "passport:f511019045d83023ca0af83b81a2f0bc018405e7:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "2a6a9269-a22d-4dde-ae87-32c9f9520c08",
+        "name": "jankurai-tools-analyzers",
+        "owner": "root"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Correct DB scoring for non-product command surfaces",
+      "updated_at": "2026-07-14T01:20:48.649867270+00:00"
+    }
+  },
+  "repository": "root/jankurai-tools-analyzers",
+  "request": {
+    "body": {
+      "body_markdown": null,
+      "evidence": null,
+      "expected_head_sha": "f511019045d83023ca0af83b81a2f0bc018405e7",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/root%2Fjankurai-tools-analyzers/pulls/2/reviews"
+  },
+  "response": {
+    "description": "Keep non-product files such as the root composite action from being treated as a product DB surface; preserve genuine SQL and wrong-layer detection.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T01:21:09.912568766+00:00",
+      "head_sha": "f511019045d83023ca0af83b81a2f0bc018405e7",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:f511019045d83023ca0af83b81a2f0bc018405e7:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "bcbb401ede141857cf686c72df1aec55aa4c9f01",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "2a6a9269-a22d-4dde-ae87-32c9f9520c08#2",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/jankurai-auditor-1.6.11-analyzers",
+      "head_sha": "f511019045d83023ca0af83b81a2f0bc018405e7",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "f511019045d83023ca0af83b81a2f0bc018405e7",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 2,
+      "passport_hash": "passport:f511019045d83023ca0af83b81a2f0bc018405e7:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "2a6a9269-a22d-4dde-ae87-32c9f9520c08",
+        "name": "jankurai-tools-analyzers",
+        "owner": "root"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Correct DB scoring for non-product command surfaces",
+      "updated_at": "2026-07-14T01:20:48.649867270+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783992066
+}

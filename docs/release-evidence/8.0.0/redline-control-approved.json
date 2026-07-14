@@ -1,0 +1,166 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Makes the Redline manifest authoritative for exact product versions, revisions, commits, checksums, remotes, and immutable-main policy without manually editing the proof lock.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-12T19:57:32.551732149+00:00",
+      "head_sha": "1fedfd8c6dc1c77ef7886559ace8253a7b85db8b",
+      "status": "pass"
+    },
+    "passport_hash": "passport:1fedfd8c6dc1c77ef7886559ace8253a7b85db8b:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#2",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-corrective-identities",
+      "head_sha": "1fedfd8c6dc1c77ef7886559ace8253a7b85db8b",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "1fedfd8c6dc1c77ef7886559ace8253a7b85db8b",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 2,
+      "passport_hash": "passport:1fedfd8c6dc1c77ef7886559ace8253a7b85db8b:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: bind corrective Redline family identities",
+      "updated_at": "2026-07-12T19:56:59.424677818+00:00"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Independent release review verified the exact head, detached required status, Rust-only conversion evidence, immutable-main policy, and corrective identity.",
+      "evidence": null,
+      "expected_head_sha": "1fedfd8c6dc1c77ef7886559ace8253a7b85db8b",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-split-ops/pulls/2/reviews"
+  },
+  "response": {
+    "description": "Makes the Redline manifest authoritative for exact product versions, revisions, commits, checksums, remotes, and immutable-main policy without manually editing the proof lock.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-12T19:57:32.541809998+00:00",
+      "head_sha": "1fedfd8c6dc1c77ef7886559ace8253a7b85db8b",
+      "status": "pass"
+    },
+    "passport_hash": "passport:1fedfd8c6dc1c77ef7886559ace8253a7b85db8b:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#2",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-corrective-identities",
+      "head_sha": "1fedfd8c6dc1c77ef7886559ace8253a7b85db8b",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "1fedfd8c6dc1c77ef7886559ace8253a7b85db8b",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 2,
+      "passport_hash": "passport:1fedfd8c6dc1c77ef7886559ace8253a7b85db8b:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: bind corrective Redline family identities",
+      "updated_at": "2026-07-12T19:56:59.424677818+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783886247
+}

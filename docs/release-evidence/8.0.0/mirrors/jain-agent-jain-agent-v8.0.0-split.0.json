@@ -1,0 +1,22 @@
+{
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-agent.git",
+      "mirror_existed": true,
+      "name": "jain-agent",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-agent",
+      "source_head": "8818f70e04d68ae70657f6a3138d6407cbc490fb"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-agent"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1783939727
+}

@@ -1,0 +1,22 @@
+{
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-smartcluster.git",
+      "mirror_existed": true,
+      "name": "jain-smartcluster",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-smartcluster",
+      "source_head": "ec9f7e959a6999eee45a92936c0dc8ce5a2a0014"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-smartcluster"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1783941028
+}

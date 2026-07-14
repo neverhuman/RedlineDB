@@ -1,0 +1,22 @@
+{
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-llm.git",
+      "mirror_existed": true,
+      "name": "jain-llm",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-llm",
+      "source_head": "660b634a55eb9b40b09642abfacd195540d1832e"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-llm"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1783939725
+}

@@ -1,0 +1,484 @@
+$ bash scripts/ci-local.sh required
+redline hub duplicate-engine guard: ok
+
+running 3 tests
+test invocation_detector_covers_interpreters_packages_and_images ... ok
+test source_detector_is_case_insensitive ... ok
+test repository_has_no_python_files_or_invocations ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+   Compiling version_check v0.9.5
+   Compiling typenum v1.20.1
+   Compiling zmij v1.0.21
+   Compiling serde_core v1.0.228
+   Compiling anyhow v1.0.103
+   Compiling serde_json v1.0.150
+   Compiling memchr v2.8.3
+   Compiling cfg-if v1.0.4
+   Compiling itoa v1.0.18
+   Compiling cpufeatures v0.2.17
+   Compiling generic-array v0.14.7
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling redline-evidence-processor v0.1.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline/tools/evidence-processor)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.12s
+     Running unittests src/main.rs (target/evidence-processor/debug/deps/redline_evidence_processor-4b4b5ac0ade55828)
+
+running 29 tests
+test clock::tests::formats_epoch_and_leap_day_in_utc ... ok
+test artifact::tests::rejects_missing_and_invalid_arguments ... ok
+test artifact::tests::builds_all_artifact_documents ... ok
+test perf::tests::rejects_measured_rows_without_case_identity ... ok
+test perf::tests::matches_frozen_summary_statistics ... ok
+test perf::tests::skips_malformed_and_unmeasured_rows ... ok
+test score_ratchet::tests::rejects_non_object_documents ... ok
+test score_ratchet::tests::accepts_improvement_and_reads_decision_fallback ... ok
+test file_hash::tests::hashes_files_incrementally ... ok
+test score_ratchet::tests::reports_every_regression_in_stable_order ... ok
+test score_ratchet::tests::validates_jankurai_acceptance_without_fail_open_defaults ... ok
+test telemetry::tests::computes_inclusive_p95_and_parses_supported_remotes ... ok
+test telemetry::tests::emits_the_frozen_canary_schema_without_extra_fields ... ok
+test telemetry::tests::rejects_invalid_cli_contracts ... ok
+test telemetry::tests::validates_receipt_identity_and_rollback_state ... ok
+test tests::dispatch_rejects_unknown_commands ... ok
+test tests::hash_maps_accept_object_and_array_shapes ... ok
+test tests::hash_normalization_accepts_supported_forms ... ok
+test tests::rejects_ambiguous_normalized_keys ... ok
+test tests::rejects_escaping_paths_and_count_overflow ... ok
+test toolchain::tests::parses_pinned_channel_and_program_versions ... ok
+test toolchain::tests::rejects_missing_duplicate_and_unquoted_channels ... ok
+test w2_manifest::tests::builds_typed_manifest_entry ... ok
+test w2_manifest::tests::rejects_missing_required_arguments ... ok
+test tests::rejects_symlinked_required_evidence ... ok
+test tests::rejects_required_evidence_through_symlinked_parent ... ok
+test tests::processes_a_complete_bound_bundle ... ok
+test tests::rejects_hash_runner_and_count_mismatches ... ok
+test tests::rejects_symlinked_control_inputs_and_output ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+ci-doctor: thin-hub required tool report
+STAT TOOL           DETAIL
+----------------------------------------------------------
+PASS gitleaks       8.21.2
+PASS bash           /usr/bin/bash
+PASS shellcheck     /home/ubuntu/.local/bin/shellcheck
+PASS actionlint     /home/ubuntu/.local/bin/actionlint
+PASS zizmor         /home/ubuntu/.local/bin/zizmor
+PASS jq             /usr/bin/jq
+PASS curl           /usr/bin/curl
+PASS just           /home/ubuntu/.local/bin/just
+PASS rtk            /home/ubuntu/.local/bin/rtk
+PASS rust-toolchain rustc=1.95.0 cargo=1.95.0
+----------------------------------------------------------
+ci-doctor: all required tools present and pinned
+$ bash ops/ci/security.sh
+    Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+      Loaded 1160 security advisories (from /home/ubuntu/.cargo/advisory-db)
+    Updating crates.io index
+    Scanning tools/evidence-processor/Cargo.lock for vulnerabilities (23 crate dependencies)
+soft-gate=cargo-deny-check status=passed exit=0
+[90m6:16AM[0m [32mINF[0m 803 commits scanned.
+[90m6:16AM[0m [32mINF[0m scan completed in 18.2s
+[90m6:16AM[0m [32mINF[0m no leaks found
+soft-gate=syft-sbom status=passed exit=0
+soft-gate=actionlint-workflow-lint status=passed exit=0
+$ bash ops/ci/jankurai-audit.sh
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jankurai.git`
+  Installing jankurai v1.6.10 (http://127.0.0.1:8787/git/jeryu/jankurai.git?rev=3c804453e6c7a6e0e4028d95cc3bccea467277ef#3c804453)
+    Updating crates.io index
+   Compiling quote v1.0.45
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling serde_core v1.0.228
+   Compiling stable_deref_trait v1.2.1
+   Compiling libc v0.2.186
+   Compiling memchr v2.8.0
+   Compiling crossbeam-utils v0.8.21
+   Compiling serde v1.0.228
+   Compiling writeable v0.6.3
+   Compiling version_check v0.9.5
+   Compiling litemap v0.8.2
+   Compiling zmij v1.0.21
+   Compiling serde_json v1.0.149
+   Compiling icu_normalizer_data v2.2.0
+   Compiling log v0.4.29
+   Compiling cfg-if v1.0.4
+   Compiling itoa v1.0.18
+   Compiling utf8_iter v1.0.4
+   Compiling icu_properties_data v2.2.0
+   Compiling typenum v1.20.0
+   Compiling anyhow v1.0.102
+   Compiling cfg_aliases v0.1.1
+   Compiling thiserror v1.0.69
+   Compiling smallvec v1.15.1
+   Compiling winnow v1.0.2
+   Compiling autocfg v1.5.0
+   Compiling regex-syntax v0.8.10
+   Compiling utf8parse v0.2.2
+   Compiling nix v0.28.0
+   Compiling anstyle v1.0.14
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle-query v1.1.5
+   Compiling same-file v1.0.6
+   Compiling anstyle-parse v1.0.0
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling colorchoice v1.0.5
+   Compiling winnow v0.7.15
+   Compiling generic-array v0.14.7
+   Compiling thiserror v2.0.18
+   Compiling rayon-core v1.13.0
+   Compiling walkdir v2.5.0
+   Compiling strsim v0.11.1
+   Compiling portable-atomic v1.13.1
+   Compiling camino v1.2.2
+   Compiling anstream v1.0.0
+   Compiling percent-encoding v2.3.2
+   Compiling num-traits v0.2.19
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling heck v0.5.0
+   Compiling clap_lex v1.1.0
+   Compiling once_cell v1.21.4
+   Compiling aho-corasick v1.1.4
+   Compiling bstr v1.12.1
+   Compiling bitflags v1.3.2
+   Compiling bitflags v2.11.1
+   Compiling clap_builder v4.6.0
+   Compiling form_urlencoded v1.2.2
+   Compiling crossbeam-epoch v0.9.18
+   Compiling crossbeam-channel v0.5.15
+   Compiling cpufeatures v0.2.17
+   Compiling iana-time-zone v0.1.65
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.0
+   Compiling downcast-rs v1.2.1
+   Compiling shell-words v1.1.1
+   Compiling unicode-width v0.2.2
+   Compiling syn v2.0.117
+   Compiling crossbeam-deque v0.8.6
+   Compiling ryu v1.0.23
+   Compiling either v1.15.0
+   Compiling number_prefix v0.4.0
+   Compiling base64 v0.22.1
+   Compiling unsafe-libyaml v0.2.11
+   Compiling chrono v0.4.44
+   Compiling indexmap v2.14.0
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling rayon v1.12.0
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling inotify-sys v0.1.5
+   Compiling filetime v0.2.29
+   Compiling mio v0.8.11
+   Compiling serial2 v0.2.36
+   Compiling console v0.15.11
+   Compiling inotify v0.9.6
+   Compiling regex-automata v0.4.14
+   Compiling notify v6.1.1
+   Compiling indicatif v0.17.11
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling serde_spanned v1.1.1
+   Compiling semver v1.0.28
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling synstructure v0.13.2
+   Compiling globset v0.4.18
+   Compiling regex v1.12.3
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling displaydoc v0.2.5
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v1.0.69
+   Compiling thiserror-impl v2.0.18
+   Compiling clap_derive v4.6.1
+   Compiling ignore v0.4.25
+   Compiling zerofrom v0.1.7
+   Compiling yoke v0.8.2
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling filedescriptor v0.8.3
+   Compiling portable-pty v0.9.0
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling icu_collections v2.2.0
+   Compiling icu_locale_core v2.2.0
+   Compiling clap v4.6.1
+   Compiling icu_provider v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling jankurai-proofbind v0.8.0 (/home/ubuntu/.cargo/git/checkouts/jankurai-e6549eec6e28157b/3c80445/crates/jankurai-proofbind)
+   Compiling cargo-platform v0.1.9
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling jankurai-guard v0.1.0 (/home/ubuntu/.cargo/git/checkouts/jankurai-e6549eec6e28157b/3c80445/crates/jankurai-guard)
+   Compiling cargo_metadata v0.19.2
+   Compiling jankurai-proofmark v0.8.0 (/home/ubuntu/.cargo/git/checkouts/jankurai-e6549eec6e28157b/3c80445/crates/jankurai-proofmark)
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling url v2.5.8
+   Compiling ureq v2.12.1
+   Compiling jankurai v1.6.10 (/home/ubuntu/.cargo/git/checkouts/jankurai-e6549eec6e28157b/3c80445/crates/jankurai)
+    Finished `release` profile [optimized] target(s) in 35.61s
+  Installing /tmp/jankurai-release.xEl0RO/install-root/bin/jankurai
+   Installed package `jankurai v1.6.10 (http://127.0.0.1:8787/git/jeryu/jankurai.git?rev=3c804453e6c7a6e0e4028d95cc3bccea467277ef#3c804453)` (executable `jankurai`)
+warning: be sure to add `/tmp/jankurai-release.xEl0RO/install-root/bin` to your PATH to be able to run the installed binaries
+jankurai runtime schemas verified: /home/ubuntu/.cargo/git/checkouts/jankurai-e6549eec6e28157b/3c80445/schemas
+jankurai source verified: http://127.0.0.1:8787/git/jeryu/jankurai.git v1.6.10 3c804453e6c7a6e0e4028d95cc3bccea467277ef
+jankurai installed: /home/ubuntu/.cargo/bin/jankurai (jankurai 1.6.10)
+jankurai 1.6.10
+[smart] full scan — no prior state
+score history appended ./.jankurai/score-history.jsonl
+score=87 raw=87 caps=0 findings=3
+baseline sourced from origin/main
+[smart] full scan — no prior state
+score history appended ./.jankurai/score-history.jsonl
+score=87 raw=87 caps=0 findings=3
+ok: file:AGENTS.md - present
+ok: file:agent/JANKURAI_STANDARD.md - present
+high: file:agent/owner-map.json - missing required jankurai control file
+high: file:agent/test-map.json - missing required jankurai control file
+high: file:agent/generated-zones.toml - missing required jankurai control file
+high: file:agent/proof-lanes.toml - missing required jankurai control file
+high: file:agent/standard-version.toml - missing required jankurai control file
+ok: file:.jankurai/repo-score.json - present
+ok: file:.jankurai/repo-score.md - present
+ok: file:agent/boundaries.toml - present
+high: file:agent/security-policy.toml - missing required jankurai control file
+ok: file:tools/security-lane.sh - present
+ok: file:db/README.md - present
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+medium: severity-discipline - severity claim should carry Severity-Justified: or Blocker-Type: evidence
+copy-code status=review hard=0 warning=2 classes=2 json=.jankurai/copy-code.json md=.jankurai/copy-code.md
+Cloning into '.jankurai/jankurai-src'...
+Note: switching to '3c804453e6c7a6e0e4028d95cc3bccea467277ef'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling proc-macro2 v1.0.106
+   Compiling serde_core v1.0.228
+   Compiling libc v0.2.186
+   Compiling stable_deref_trait v1.2.1
+   Compiling memchr v2.8.0
+   Compiling crossbeam-utils v0.8.21
+   Compiling cfg-if v1.0.4
+   Compiling serde v1.0.228
+   Compiling zmij v1.0.21
+   Compiling writeable v0.6.3
+   Compiling litemap v0.8.2
+   Compiling version_check v0.9.5
+   Compiling serde_json v1.0.149
+   Compiling utf8_iter v1.0.4
+   Compiling icu_properties_data v2.2.0
+   Compiling itoa v1.0.18
+   Compiling icu_normalizer_data v2.2.0
+   Compiling log v0.4.29
+   Compiling anyhow v1.0.102
+   Compiling typenum v1.20.0
+   Compiling autocfg v1.5.0
+   Compiling thiserror v1.0.69
+   Compiling bitflags v2.11.1
+   Compiling utf8parse v0.2.2
+   Compiling winnow v1.0.2
+   Compiling smallvec v1.15.1
+   Compiling cfg_aliases v0.1.1
+   Compiling regex-syntax v0.8.10
+   Compiling toml_writer v1.1.1+spec-1.1.0
+   Compiling thiserror v2.0.18
+   Compiling anstyle-query v1.1.5
+   Compiling colorchoice v1.0.5
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle v1.0.14
+   Compiling once_cell v1.21.4
+   Compiling winnow v0.7.15
+   Compiling same-file v1.0.6
+   Compiling camino v1.2.2
+   Compiling clap_lex v1.1.0
+   Compiling bitflags v1.3.2
+   Compiling portable-atomic v1.13.1
+   Compiling percent-encoding v2.3.2
+   Compiling heck v0.5.0
+   Compiling rayon-core v1.13.0
+   Compiling strsim v0.11.1
+   Compiling equivalent v1.0.2
+   Compiling unicode-width v0.2.2
+   Compiling nix v0.28.0
+   Compiling anstyle-parse v1.0.0
+   Compiling downcast-rs v1.2.1
+   Compiling shell-words v1.1.1
+   Compiling iana-time-zone v0.1.65
+   Compiling hashbrown v0.17.0
+   Compiling cpufeatures v0.2.17
+   Compiling walkdir v2.5.0
+   Compiling either v1.15.0
+   Compiling unsafe-libyaml v0.2.11
+   Compiling getrandom v0.4.2
+   Compiling ryu v1.0.23
+   Compiling rustix v1.1.4
+   Compiling base64 v0.22.1
+   Compiling number_prefix v0.4.0
+   Compiling form_urlencoded v1.2.2
+   Compiling linux-raw-sys v0.12.1
+   Compiling fastrand v2.4.1
+   Compiling anstream v1.0.0
+   Compiling generic-array v0.14.7
+   Compiling num-traits v0.2.19
+   Compiling toml_parser v1.1.2+spec-1.1.0
+   Compiling clap_builder v4.6.0
+   Compiling aho-corasick v1.1.4
+   Compiling bstr v1.12.1
+   Compiling crossbeam-epoch v0.9.18
+   Compiling crossbeam-channel v0.5.15
+   Compiling indexmap v2.14.0
+   Compiling crossbeam-deque v0.8.6
+   Compiling syn v2.0.117
+   Compiling chrono v0.4.44
+   Compiling rayon v1.12.0
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling inotify-sys v0.1.5
+   Compiling filetime v0.2.29
+   Compiling serial2 v0.2.36
+   Compiling mio v0.8.11
+   Compiling console v0.15.11
+   Compiling regex-automata v0.4.14
+   Compiling inotify v0.9.6
+   Compiling notify v6.1.1
+   Compiling indicatif v0.17.11
+   Compiling tempfile v3.27.0
+   Compiling serde_spanned v1.1.1
+   Compiling toml_datetime v0.7.5+spec-1.1.0
+   Compiling semver v1.0.28
+   Compiling toml v0.9.12+spec-1.1.0
+   Compiling globset v0.4.18
+   Compiling regex v1.12.3
+   Compiling ignore v0.4.25
+   Compiling synstructure v0.13.2
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling displaydoc v0.2.5
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v1.0.69
+   Compiling thiserror-impl v2.0.18
+   Compiling clap_derive v4.6.1
+   Compiling zerofrom v0.1.7
+   Compiling yoke v0.8.2
+   Compiling filedescriptor v0.8.3
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling portable-pty v0.9.0
+   Compiling clap v4.6.1
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling icu_collections v2.2.0
+   Compiling icu_locale_core v2.2.0
+   Compiling icu_provider v2.2.0
+   Compiling jankurai-proofbind v0.8.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline/.jankurai/jankurai-src/crates/jankurai-proofbind)
+   Compiling cargo-platform v0.1.9
+   Compiling jankurai-guard v0.1.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline/.jankurai/jankurai-src/crates/jankurai-guard)
+   Compiling serde_yaml v0.9.34+deprecated
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling cargo_metadata v0.19.2
+   Compiling jankurai-proofmark v0.8.0 (/tmp/redline-family-ci-1603289-1783923347356428072/redline/.jankurai/jankurai-src/crates/jankurai-proofmark)
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling url v2.5.8
+   Compiling ureq v2.12.1
+   Compiling jankurai v1.6.10 (/tmp/redline-family-ci-1603289-1783923347356428072/redline/.jankurai/jankurai-src/crates/jankurai)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 22.46s
+     Running tests/language_bad_behavior.rs (target/debug/deps/language_bad_behavior-6edcff3b30171f4b)
+
+running 34 tests
+test catalog_entries_reference_stable_hlt_rules ... ok
+test ci_fixture_corpus_covers_risky_and_safe_cases ... ok
+test docker_fixture_corpus_covers_risky_and_safe_cases ... ok
+test git_fixture_corpus_covers_risky_and_safe_cases ... ok
+test gittools_fixture_corpus_covers_risky_and_safe_cases ... ok
+test python_fixture_corpus_covers_risky_and_safe_cases ... ok
+test release_fixture_corpus_covers_risky_and_safe_cases ... ok
+test gittools_summary_reports_hard_and_advisory_counts ... ok
+test sql_fixture_corpus_covers_risky_and_safe_cases ... ok
+test release_summary_reports_hard_and_advisory_counts ... ok
+test python_summary_reports_hard_and_advisory_counts ... ok
+test typescript_fixture_corpus_covers_risky_and_safe_cases ... ok
+test sql_summary_reports_hard_and_advisory_counts ... ok
+test language_bad_behavior_lane_and_test_map_are_routed ... ok
+test git_safe_fixtures_emit_no_hlt035_findings ... ok
+test release_risky_fixtures_emit_hlt037_findings ... ok
+test ci_safe_fixtures_emit_no_hlt034_findings ... ok
+test git_risky_fixtures_emit_hlt035_findings ... ok
+test docker_safe_fixtures_emit_no_hlt032_findings ... ok
+test ci_risky_fixtures_emit_hlt034_findings ... ok
+test gittools_surfaces_do_not_double_score_as_generic_git ... ok
+test docker_risky_fixtures_emit_hlt032_findings ... ok
+test sql_risky_fixtures_emit_hlt030_findings ... ok
+test sql_safe_fixtures_emit_no_hlt030_findings ... ok
+test release_safe_fixtures_emit_no_hlt037_findings ... ok
+test python_code_line_matcher_still_flags_unqualified_builtin_calls ... ok
+test typescript_safe_fixtures_emit_no_hlt031_findings ... ok
+test python_code_line_matcher_ignores_qualified_calls_definitions_class_names_and_docstrings ... ok
+test python_safe_fixtures_emit_no_hlt033_findings ... ok
+test gittools_risky_fixtures_emit_hlt036_findings ... ok
+test gittools_safe_fixtures_emit_no_hlt036_findings ... ok
+test python_risky_fixtures_emit_hlt033_findings ... ok
+test typescript_risky_fixtures_emit_hlt031_findings ... ok
+test docs_tips_reference_and_generated_paths_stay_out_of_sql_python_scans ... ok
+
+test result: ok. 34 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
+

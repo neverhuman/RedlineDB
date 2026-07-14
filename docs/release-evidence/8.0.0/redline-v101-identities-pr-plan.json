@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Bind the exact reviewed Redline Core and Testing commits and archive-tree checksums after their governed CI fixes.",
+      "draft": false,
+      "head": "codex/bind-redline-v101-reliability",
+      "title": "release: bind Redline v1.0.1 reliability fixes"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-split-ops/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783893051
+}

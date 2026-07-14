@@ -1,0 +1,22 @@
+{
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-ops.git",
+      "mirror_existed": true,
+      "name": "jain-ops",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-ops",
+      "source_head": "6aedc249bdb30a5cfd5d1ea3cbff9bc03393469d"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-ops"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1783939866
+}

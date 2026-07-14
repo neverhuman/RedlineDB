@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/jain-battle-gpu",
+  "request": {
+    "body": {
+      "body_markdown": "Independent release review verified the exact head, detached required status, Rust-only conversion evidence, immutable-main policy, and corrective identity.",
+      "evidence": null,
+      "expected_head_sha": "2205df3441f538130a4ce197afb67672596bac74",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-battle-gpu/pulls/7/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783886247
+}

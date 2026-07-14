@@ -1,0 +1,12 @@
+{
+  "branch": "codex/v8.0.0-release-review",
+  "checkout_head": "b8ce9bc1823a9b1519b22993909cd735a10fb83d",
+  "commit": "b8ce9bc1823a9b1519b22993909cd735a10fb83d",
+  "log": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.0/orchestrator/ci/jain-core.log",
+  "name": "ci:jain-core",
+  "reason": "working tree is dirty; preserve and commit/review it before detached release CI",
+  "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.0/orchestrator/ci/jain-core.json",
+  "repository": "jain-core",
+  "status": "blocked",
+  "wave": 3
+}

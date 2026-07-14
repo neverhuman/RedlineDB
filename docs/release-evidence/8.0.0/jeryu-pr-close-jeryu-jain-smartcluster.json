@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-close",
+  "repository": "jeryu/jain-smartcluster",
+  "request": {
+    "body": {
+      "state": "closed"
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-smartcluster/pulls/1"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-smartcluster"
+      },
+      "sha": "base"
+    },
+    "body": "",
+    "created_at": "2026-07-13T10:45:29.810286813Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8.0.0-release-review",
+      "ref": "codex/v8.0.0-release-review",
+      "repo": {
+        "full_name": "jeryu/jain-smartcluster"
+      },
+      "sha": "head-2"
+    },
+    "html_url": "/jeryu/jain-smartcluster/pull/1",
+    "id": "240d558d-497c-4d9e-951e-d58ac306c39e",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "closed",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "jeryu/jain-smartcluster",
+    "state": "closed",
+    "title": "release: jain-smartcluster 8.0.0",
+    "updated_at": "2026-07-13T10:51:31.414859500Z",
+    "url": "/repos/jeryu/jain-smartcluster/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783939891
+}

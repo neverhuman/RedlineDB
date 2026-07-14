@@ -1,0 +1,42 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+    "remote": "09fd93be10238cd85abc164b0b01cf0f681ea304"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+  "commit_input": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+  "manifest": "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/redline-split-ops/../target/bare-mirrors/redline-web.git",
+    "receipt": "/home/ubuntu/jain-split/redline-split-ops/../jain-split-ops/docs/release-evidence/8.0.0/mirrors/redline-web-redline-web-v0.1.0-jain.1.json",
+    "status": "pass",
+    "tag_commit": "09fd93be10238cd85abc164b0b01cf0f681ea304"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "apps/api/Cargo.toml",
+        "name": "redline-web-server",
+        "version": "0.1.0"
+      }
+    ],
+    "expected_product_version": "0.1.0",
+    "status": "pass",
+    "version_file": null,
+    "workspace_package_version": null
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/redline-web.git",
+  "remote_main": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+  "repository": "/home/ubuntu/jain-split/redline-split/redline-web",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "redline-web-v0.1.0-jain.1",
+  "timestamp_unix": 1783908056
+}

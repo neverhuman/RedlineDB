@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Bind redline-testing-v1.0.1-jain.1 to the reviewed merged main commit 722b3236a216fd5e9b3e8e6a6152ea6618f80d42 and its git archive tree checksum 8c08d8dd4845005e1f1a1ee43b44aa9bdb481a3fe37d57eb3014d3429758a4d2. Existing tags remain untouched. Candidate-only release evidence; no production writes.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-13T01:10:19.911921337+00:00",
+      "head_sha": "30083338c73d4f92708f2d812a3612c577fde40d",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:30083338c73d4f92708f2d812a3612c577fde40d:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "d799ade5c53bf526e4826780111c75dfb87cfc71",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#8",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-identity-722",
+      "head_sha": "30083338c73d4f92708f2d812a3612c577fde40d",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "30083338c73d4f92708f2d812a3612c577fde40d",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 8,
+      "passport_hash": "passport:30083338c73d4f92708f2d812a3612c577fde40d:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(redline): bind testing jain.1 to merged main",
+      "updated_at": "2026-07-13T01:10:13.127224340+00:00"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed: manifest binds the merged Redline Testing main identity and exact tree checksum; required host CI passed; existing tags remain immutable.",
+      "evidence": null,
+      "expected_head_sha": "30083338c73d4f92708f2d812a3612c577fde40d",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-split-ops/pulls/8/reviews"
+  },
+  "response": {
+    "description": "Bind redline-testing-v1.0.1-jain.1 to the reviewed merged main commit 722b3236a216fd5e9b3e8e6a6152ea6618f80d42 and its git archive tree checksum 8c08d8dd4845005e1f1a1ee43b44aa9bdb481a3fe37d57eb3014d3429758a4d2. Existing tags remain untouched. Candidate-only release evidence; no production writes.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-13T01:10:19.902181634+00:00",
+      "head_sha": "30083338c73d4f92708f2d812a3612c577fde40d",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:30083338c73d4f92708f2d812a3612c577fde40d:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "d799ade5c53bf526e4826780111c75dfb87cfc71",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#8",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-identity-722",
+      "head_sha": "30083338c73d4f92708f2d812a3612c577fde40d",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "30083338c73d4f92708f2d812a3612c577fde40d",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 8,
+      "passport_hash": "passport:30083338c73d4f92708f2d812a3612c577fde40d:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(redline): bind testing jain.1 to merged main",
+      "updated_at": "2026-07-13T01:10:13.127224340+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783905018
+}

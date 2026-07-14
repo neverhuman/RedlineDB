@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Advance only the canonical Redline core identity to the reviewed durability repair: redline-core-v4.1.0-jain.3 at 2f9fbd72317691dada58d8b6ca64241822540e72, tree checksum 7057e6800620d86ab89973f91b6bdb35a5d7a7f5b6bedbdf2d8e3e0624cde51b. No waiver or lock change. Required, security, SBOM, and ratchet score gates pass; release readiness remains fail-closed until immutable tag and fresh two-consumer proof.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-13T07:50:42.258338216+00:00",
+      "head_sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:36d31f225c03b22e5c76c8aa6318f1fb3891860d:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "df66f6e6de5a200d26d38344c8d3751997646326",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#12",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-core-jain3-manifest-20260713",
+      "head_sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 12,
+      "passport_hash": "passport:36d31f225c03b22e5c76c8aa6318f1fb3891860d:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(redline): bind durable core repair identity",
+      "updated_at": "2026-07-13T07:50:39.890635848+00:00"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact repair identity; required, security, SBOM, and ratchet gates pass. Lock remains intentionally ineligible pending fresh two-consumer proof.",
+      "evidence": null,
+      "expected_head_sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-split-ops/pulls/12/reviews"
+  },
+  "response": {
+    "description": "Advance only the canonical Redline core identity to the reviewed durability repair: redline-core-v4.1.0-jain.3 at 2f9fbd72317691dada58d8b6ca64241822540e72, tree checksum 7057e6800620d86ab89973f91b6bdb35a5d7a7f5b6bedbdf2d8e3e0624cde51b. No waiver or lock change. Required, security, SBOM, and ratchet score gates pass; release readiness remains fail-closed until immutable tag and fresh two-consumer proof.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-13T07:50:42.248682103+00:00",
+      "head_sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:36d31f225c03b22e5c76c8aa6318f1fb3891860d:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "df66f6e6de5a200d26d38344c8d3751997646326",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883#12",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-core-jain3-manifest-20260713",
+      "head_sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 12,
+      "passport_hash": "passport:36d31f225c03b22e5c76c8aa6318f1fb3891860d:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "dee767d7-d1e5-4c22-9f61-831e8c3da883",
+        "name": "redline-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(redline): bind durable core repair identity",
+      "updated_at": "2026-07-13T07:50:39.890635848+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783929041
+}

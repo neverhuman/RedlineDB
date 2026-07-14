@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/redline-web",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/redline-web/pulls/2"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-web"
+      },
+      "sha": "208973b6fcfa37c2f4b008acf57070200a0f1b07"
+    },
+    "body": "Replaces the final interpreter CI surface with isolated locked Rust control tooling and binds redline-web-v0.1.0-jain.1; required, security, score, and boundary gates pass.",
+    "created_at": "2026-07-12T20:20:30.154888968Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8-redline-web-rust-only",
+      "ref": "codex/v8-redline-web-rust-only",
+      "repo": {
+        "full_name": "jeryu/redline-web"
+      },
+      "sha": "09fd93be10238cd85abc164b0b01cf0f681ea304"
+    },
+    "html_url": "/jeryu/redline-web/pull/2",
+    "id": "b6322897-ec82-45a2-a209-eaf3861eb5fb",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 2,
+    "source_repository": "jeryu/redline-web",
+    "state": "open",
+    "title": "release: finish Rust-only Redline Web corrective candidate",
+    "updated_at": "2026-07-12T20:20:46.788530234Z",
+    "url": "/repos/jeryu/redline-web/pulls/2",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887646
+}

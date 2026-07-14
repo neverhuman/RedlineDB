@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Replaces the final interpreter CI surface with isolated locked Rust control tooling and binds redline-web-v0.1.0-jain.1; required, security, score, and boundary gates pass.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T20:20:48.875929418+00:00",
+      "head_sha": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:09fd93be10238cd85abc164b0b01cf0f681ea304:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "208973b6fcfa37c2f4b008acf57070200a0f1b07",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "35c71ef8-f25d-4691-b753-6fb77139594b#2",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-web-rust-only",
+      "head_sha": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 2,
+      "passport_hash": "passport:09fd93be10238cd85abc164b0b01cf0f681ea304:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "35c71ef8-f25d-4691-b753-6fb77139594b",
+        "name": "redline-web",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: finish Rust-only Redline Web corrective candidate",
+      "updated_at": "2026-07-12T20:20:46.788530234+00:00"
+    }
+  },
+  "repository": "jeryu/redline-web",
+  "request": {
+    "body": {
+      "body_markdown": "Independent review verified the exact head, isolated Rust release control, language boundary, detached required status, security, and zero-hard-finding score evidence.",
+      "evidence": null,
+      "expected_head_sha": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-web/pulls/2/reviews"
+  },
+  "response": {
+    "description": "Replaces the final interpreter CI surface with isolated locked Rust control tooling and binds redline-web-v0.1.0-jain.1; required, security, score, and boundary gates pass.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T20:20:48.866551403+00:00",
+      "head_sha": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:09fd93be10238cd85abc164b0b01cf0f681ea304:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "208973b6fcfa37c2f4b008acf57070200a0f1b07",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "35c71ef8-f25d-4691-b753-6fb77139594b#2",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-web-rust-only",
+      "head_sha": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 2,
+      "passport_hash": "passport:09fd93be10238cd85abc164b0b01cf0f681ea304:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "35c71ef8-f25d-4691-b753-6fb77139594b",
+        "name": "redline-web",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: finish Rust-only Redline Web corrective candidate",
+      "updated_at": "2026-07-12T20:20:46.788530234+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887647
+}

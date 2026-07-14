@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Reviewed CPU Candle JOPE/Lime contracts and Hyperion CUDA isolation. CPU and CUDA feature checks pass on the exact candidate.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T02:09:11.530111235+00:00",
+      "head_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:fda3a4cbbfb75d581180093f84493a2cbf7223d8:Blocked:1:2:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "68a68a23c705e698d560a0aa31c7df7898b4acd2",
+      "checks": {
+        "failing": 2,
+        "passing": 3,
+        "pending": 0,
+        "skipped": 1,
+        "total": 6
+      },
+      "draft": false,
+      "entity": {
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71#11",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-core-jope-lime-split1-20260713",
+      "head_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 11,
+      "passport_hash": "passport:fda3a4cbbfb75d581180093f84493a2cbf7223d8:Blocked:1:2:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71",
+        "name": "jain-core",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat: add governed JOPE and Lime contracts",
+      "updated_at": "2026-07-13T23:27:30.282866928+00:00"
+    }
+  },
+  "repository": "jeryu/jain-core",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact Lime/Prime head after fresh Jankurai 1.6.11 audit: score 86, hard findings 0, caps 0.",
+      "evidence": null,
+      "expected_head_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-core/pulls/11/reviews"
+  },
+  "response": {
+    "description": "Reviewed CPU Candle JOPE/Lime contracts and Hyperion CUDA isolation. CPU and CUDA feature checks pass on the exact candidate.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T02:09:11.519250560+00:00",
+      "head_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:fda3a4cbbfb75d581180093f84493a2cbf7223d8:Blocked:1:2:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "68a68a23c705e698d560a0aa31c7df7898b4acd2",
+      "checks": {
+        "failing": 2,
+        "passing": 3,
+        "pending": 0,
+        "skipped": 1,
+        "total": 6
+      },
+      "draft": false,
+      "entity": {
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71#11",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-core-jope-lime-split1-20260713",
+      "head_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 11,
+      "passport_hash": "passport:fda3a4cbbfb75d581180093f84493a2cbf7223d8:Blocked:1:2:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71",
+        "name": "jain-core",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat: add governed JOPE and Lime contracts",
+      "updated_at": "2026-07-13T23:27:30.282866928+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783994949
+}

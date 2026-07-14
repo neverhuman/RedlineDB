@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-core",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Promote cargo-deny, dependency review, Syft, actionlint, and Jankurai language tests to hard gates; remove all active soft-gate rows; and explicitly allow only the current permissive dependency licenses. Exact head 065630382072032fd1654d5b687a3fc3b5c43a84, deterministic release-tree checksum 3755e3e062791ba155f668571a21f6578495921074866c7caf679dcc752fd5c7. Full security, dependency review, just fast, score-policy tests, committed-branch staged gate, and pinned upstream language suite pass. No release tag or production mutation.",
+      "draft": true,
+      "head": "codex/redline-hard-security-20260713",
+      "title": "Restore fail-closed Redline release security gates"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-core/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783931772
+}

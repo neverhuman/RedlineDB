@@ -1,79 +1,193 @@
 {
   "allowed": [
     {
+      "comparison": "normalized-semantic",
+      "input_sha256": "e3bf5349e78f09bf31e696830d411d80c04849281346bd3c0db9573757daa49b",
+      "invocation_paths": [],
+      "justification": "Frozen export fixture exercised by the Rust compatibility implementation.",
+      "output_path": "jain-deploy/ops/ci/testdata/invention-export/reference_predictions.txt",
+      "output_sha256": "0b9b9a1cd0b25b3ff3d92ea5e35b973f52cdab18d3f51f95d1a3672f24c8a0e0",
       "path": "jain-deploy/ops/ci/testdata/invention-export/model.py",
-      "purpose": "fixture consumed by Rust export compatibility tests",
-      "rust_evidence": "jain-deploy/ops/ci/testdata/invention-export/model.rs"
+      "rust_evidence": "jain-deploy/ops/ci/testdata/invention-export/model.rs",
+      "rust_owner": "jain-deploy/release-engineering"
     },
     {
-      "path": "jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py",
-      "purpose": "frozen oracle for a Rust model port",
-      "rust_evidence": "jain-model-zoo/reference/ported/tabicl/tests/e2e_parity.rs"
-    },
-    {
-      "path": "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump_oracle.py",
-      "purpose": "frozen oracle for a Rust model port",
-      "rust_evidence": "jain-model-zoo/reference/ported/tabdpt_classifier/src/bin/verify_oracle.rs"
-    },
-    {
-      "path": "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump_oracle.py",
-      "purpose": "frozen oracle for a Rust model port",
-      "rust_evidence": "jain-model-zoo/reference/ported/tabdpt_regressor/src/bin/verify_oracle.rs"
-    },
-    {
-      "path": "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/parity/oracle.py",
-      "purpose": "frozen oracle for a Rust model port",
-      "rust_evidence": "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs"
-    },
-    {
-      "path": "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/parity/oracle.py",
-      "purpose": "frozen oracle for a Rust model port",
-      "rust_evidence": "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs"
-    },
-    {
-      "path": "jain-model-zoo/reference/ported/_nm/parity/regression_oracle.py",
-      "purpose": "frozen oracle for a Rust model port",
-      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs"
-    },
-    {
-      "path": "jain-model-zoo/reference/ported/_nm/parity/oracle.py",
-      "purpose": "frozen oracle for a Rust model port",
-      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs"
-    },
-    {
-      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform1_oracle.py",
-      "purpose": "frozen oracle for a Rust model port",
-      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs"
-    },
-    {
-      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform3_oracle.py",
-      "purpose": "frozen oracle for a Rust model port",
-      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs"
-    },
-    {
-      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform4_oracle.py",
-      "purpose": "frozen oracle for a Rust model port",
-      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs"
-    },
-    {
-      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform2_oracle.py",
-      "purpose": "frozen oracle for a Rust model port",
-      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs"
-    },
-    {
-      "path": "jain-model-zoo/ops/parity/plot_errors.py",
-      "purpose": "Rust model parity report renderer",
-      "rust_evidence": "jain-model-zoo/ops/parity/parity_errors.json"
-    },
-    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "d1ef84935bbad864a8bd36c79658e95349eb29f32ce82216e8883b8f74d2839f",
+      "invocation_paths": [
+        "jain-model-zoo/ops/parity/run.sh"
+      ],
+      "justification": "Frozen cross-model reference driver whose recorded result is consumed by Rust release validation.",
+      "output_path": "jain-model-zoo/ops/parity/parity_errors.json",
+      "output_sha256": "e0cf0965edb49fe6fce0d760330244bd4fbdbe6a8005c891f6a05e43ec7ade58",
       "path": "jain-model-zoo/ops/parity/parity_suite.py",
-      "purpose": "Rust model parity harness",
-      "rust_evidence": "jain-model-zoo/ops/parity/run.sh"
+      "rust_evidence": "jain-model-zoo/tools/model-zoo-ops/src/main.rs",
+      "rust_owner": "jain-model-zoo/model-parity"
+    },
+    {
+      "comparison": "byte-identical",
+      "input_sha256": "f0859005fae4242b0eb88afad33f253fcb17323e9c8acd2140f2242349e3239b",
+      "invocation_paths": [],
+      "justification": "Frozen renderer retained only to explain the checksummed parity report image.",
+      "output_path": "jain-model-zoo/ops/parity/parity_errors.png",
+      "output_sha256": "c7d63fcb5346742961681a36f143859264db8119ed79aced43704c34563cdff1",
+      "path": "jain-model-zoo/ops/parity/plot_errors.py",
+      "rust_evidence": "jain-model-zoo/tools/model-zoo-ops/src/main.rs",
+      "rust_owner": "jain-model-zoo/model-parity"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "78f8d6d05f2b7b8ee0a7e4bb141d5587dbf85a21d6f628b59e022b93853e220f",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath transform oracle bound to committed Rust expected matrices.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs",
+      "output_sha256": "8162dda92170d093883bb3b8ca35c99d1cbf8264774ad535828f4987c8deb0a3",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform1_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "5668e1ad1cb317706b62eda0b8b38d340171b0cec048f47e481998d077f6a08b",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath transform oracle bound to committed Rust expected matrices.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs",
+      "output_sha256": "5c4f892f3a79d0fe26c060d817c1da484131ceb4efd60a32a1b28696bccb0bd5",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform2_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "48352edad011addd7366b19f5191e80accd2670554a52df65cf45c4f22e9a7a1",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath transform oracle bound to committed Rust expected matrices.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs",
+      "output_sha256": "fbe6c82b5b4f312fe3fe98deea6bacc5d87e6dcd6dd59569276c698cb979692b",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform3_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "788be280714fa2c99978cc77313723bd5ff1c47ddb3792b8516c51a868e79d3c",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath transform oracle bound to committed Rust expected matrices.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs",
+      "output_sha256": "7199f0694ba2885656a18ca36fa1886a81741b536c92ba130edb6ac92e5a9eed",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform4_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "1229906a5766c04b38f1e1e159c4770d50309a2e03e31505978a6662e98b8e7f",
+      "invocation_paths": [
+        "jain-model-zoo/reference/ported/_nm/parity/verify_parity.sh",
+        "jain-model-zoo/reference/ported/_nm/parity/verify_parity_apex67.sh"
+      ],
+      "justification": "Frozen NewMath classification oracle bound to committed Rust expected matrices.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs",
+      "output_sha256": "89793636db12c47e700c7642f333e71897d599d60572ebc07f0aec88fb4413ad",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "89963f2fdc511055d0592ec21c3f5bf6492c143103e46240085f4d7d51ebf3d1",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath regression oracle bound to the Rust regression report tests.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs",
+      "output_sha256": "2097bd7fd27c77a7ad473a197b54da67ebb7ac865c9f2fc593e49321be511b5f",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/regression_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "4052fcbc07fc3b82dae53472a6b8cf62c354870bf5690d9c5d4972959362b3aa",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath oracle whose constants are asserted by the named Rust test.",
+      "output_path": "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs",
+      "output_sha256": "8642081ea681c9780e5fa7569f6768d624b6f0410074fc2129d9f9682efa8c46",
+      "path": "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/parity/oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "53abd3b8e51cdb8153c5504bfa098711f5117120d84d8251c6fe202fa4660e9d",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath oracle whose constants are asserted by the named Rust test.",
+      "output_path": "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs",
+      "output_sha256": "a6235b561e6bf93dc1c11b8df964238b66b0b123e923fbb10604e13cd411b751",
+      "path": "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/parity/oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "115bf2fa7847d8b33f6c19fecaacd045e36f18464084cbef310fb0fff6963619",
+      "invocation_paths": [],
+      "justification": "Frozen TabDPT classifier oracle source for the committed probability fixture.",
+      "output_path": "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump/p1.npy",
+      "output_sha256": "5dd1c10c80361c60c4ac02ccc706f120357b622fff5ced610fb2295bb6af7550",
+      "path": "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/tabdpt_classifier/src/bin/verify_oracle.rs",
+      "rust_owner": "jain-model-zoo/tabdpt-classifier-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "eab410657cada0c0490a7438d6e9b27b02ed2f352746f3b8a3e6ced5d31596d4",
+      "invocation_paths": [],
+      "justification": "Frozen TabDPT regressor oracle source for the committed prediction fixture.",
+      "output_path": "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump/yhat.npy",
+      "output_sha256": "b7e3d30e532aaaae40081777bc673e6058b60b195e92cd2b54f65586a06ea5ff",
+      "path": "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/tabdpt_regressor/src/bin/verify_oracle.rs",
+      "rust_owner": "jain-model-zoo/tabdpt-regressor-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "6c5a799f55cde924c4c6e8a9059fd62ca0a4af6e8f18b507c9720ae9cfcd2ff0",
+      "invocation_paths": [],
+      "justification": "Frozen TabICL oracle source for the committed probability fixture.",
+      "output_path": "jain-model-zoo/reference/ported/tabicl/oracle/dump/proba.npy",
+      "output_sha256": "daa40b29b04740e7e77c7adc04b866f3d5b0aac0532e8c537c97d2324eba2116",
+      "path": "jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/tabicl/tests/e2e_parity.rs",
+      "rust_owner": "jain-model-zoo/tabicl-port"
     }
   ],
   "allowed_count": 14,
-  "allowed_runtime_invocation_count": 3,
+  "allowed_runtime_invocation_count": 7,
   "allowed_runtime_invocations": [
+    {
+      "line": 60,
+      "path": "jain-math/crates/feat-math/tests/champion_parity.rs",
+      "text": "if std::process::Command::new(\"python3\")"
+    },
+    {
+      "line": 98,
+      "path": "jain-math/crates/feat-math/tests/champion_parity.rs",
+      "text": "let out = std::process::Command::new(\"python3\")"
+    },
+    {
+      "line": 55,
+      "path": "jain-math/crates/feat-math/tests/golden.rs",
+      "text": "let out = Command::new(\"python3\")"
+    },
+    {
+      "line": 590,
+      "path": "jain-math/crates/feat-math/tests/golden.rs",
+      "text": "let out = Command::new(\"python3\")"
+    },
+    {
+      "line": 16,
+      "path": "jain-model-zoo/ops/parity/run.sh",
+      "text": "exec python3 \"$REPO/ops/parity/parity_suite.py\" \"$@\""
+    },
     {
       "line": 15,
       "path": "jain-model-zoo/reference/ported/_nm/parity/verify_parity.sh",
@@ -83,230 +197,22 @@
       "line": 35,
       "path": "jain-model-zoo/reference/ported/_nm/parity/verify_parity_apex67.sh",
       "text": "python3 \"$PORTED/_nm/parity/oracle.py\" \"$OUT\" \"$DS\" 2>/dev/null | sed 's/^/   /'"
-    },
-    {
-      "line": 16,
-      "path": "jain-model-zoo/ops/parity/run.sh",
-      "text": "exec python3 \"$REPO/ops/parity/parity_suite.py\" \"$@\""
     }
   ],
-  "error": "Python outside the Rust-parity boundary:\nredline-split/redline/scripts/bench/export_benchmark_results.py\nredline-split/redline/scripts/perf/run_subset.py\nredline-split/redline/scripts/perf/diff.py\nredline-split/redline/scripts/perf/build_case_lists.py\nredline-split/redline/paper/scripts/build_figs.py\nredline-split/redline/paper/scripts/check_refs.py\nredline-split/redline/.gitlab-ci.yml:881: - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3\nredline-split/redline/.gitlab-ci.yml:953: - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3\nredline-split/redline/scripts/ci/fix-bench-runner-env.sh:45: python3 - \"$CONFIG\" \"$RUNNER_NAME\" \"$USER_PATH\" \"$USER_CARGO\" \"$USER_RUSTUP\" <<'PY'\nredline-split/redline/scripts/ci/register-bench-runner.sh:97: | python3 -c 'import sys,json; print(json.load(sys.stdin).get(\"token\",\"\"))')\"\nredline-split/redline/scripts/ci/register-bench-runner.sh:139: | python3 -c \"\nredline-split/redline/scripts/ci/fix-bench-runner-dns.sh:61: python3 - \"$GITLAB_RUNNER_CONFIG\" \"$PATCH_SCRIPT\" <<'PY'\nredline-split/redline/scripts/ci/fix-bench-runner-shell.sh:32: python3 - \"$CONFIG\" \"$RUNNER_NAME\" <<'PY'\nredline-split/redline/scripts/bench/dick_head_choas_xbabe1.sh:71: python3 scripts/bench/export_benchmark_results.py\nredline-split/redline/scripts/ci-doctor.sh:121: if ! command -v python3 >/dev/null 2>&1; then\nredline-split/redline/scripts/ci-doctor.sh:122: fail python3 \"missing (expected >=3.10)\"\nredline-split/redline/scripts/ci-doctor.sh:126: actual=\"$(python3 -c 'import sys; print(\"{}.{}.{}\".format(*sys.version_info[:3]))' 2>/dev/null)\"\nredline-split/redline/scripts/ci-doctor.sh:130: pass python3 \"${actual} (>=3.10)\"\nredline-split/redline/scripts/ci-doctor.sh:132: fail python3 \"expected>=3.10 actual=${actual}\"\nredline-split/redline/scripts/generate-metrics-readme.sh:132: python3 <<'PY'\nredline-split/redline/scripts/process-redline-testing-evidence.sh:34: python3 - \"$repo_root\" \"$root\" \"$official_evidence\" \"$processed\" <<'PY'\nredline-split/redline/scripts/perf/pgo.sh:175: python3 scripts/perf/run_subset.py \\\\\nredline-split/redline/scripts/perf/pgo.sh:247: python3 scripts/perf/run_subset.py \\\nredline-split/redline/scripts/perf/profile-one.sh:43: python3 - \"$snapshot\" \"$case_name\" \"$out_dir\" <<'PYEOF'\nredline-split/redline/scripts/perf/stable.sh:51: python3 - <<PY\nredline-split/redline/scripts/perf/gap-closure-verify.sh:77: python3 - \"$BASELINE_RANKED\" \"$NEW_RANKED\" >\"$OUT_DIR/deltas.tsv\" <<'PYEOF'\nredline-split/redline/scripts/perf/build-case-lists.sh:34: python3 \"$(dirname \"$0\")/build_case_lists.py\" \\\nredline-split/redline/scripts/perf/lib.sh:116: python3 \"$(dirname \"${BASH_SOURCE[0]}\")/run_subset.py\" \\\nredline-split/redline/scripts/perf/lib.sh:146: python3 - \"$jsonl\" <<'PYEOF'\nredline-split/redline/scripts/perf/w2-matrix.sh:200: python3 - <<'PY'\nredline-split/redline/just/lanes.just:162: python3 ./scripts/perf/diff.py {{BEFORE}} {{AFTER}}\nredline-split/redline/tools/jankurai-hooks/pre-push-score-ratchet:56: python3 - \"$baseline_json\" \".jankurai/repo-score.json\" <<'PY'\nredline-split/redline/ops/git-hooks/pre-commit:52: python3 - \"$baseline_json\" \".jankurai/repo-score.json\" <<'PY'\nredline-split/redline/ops/ci/artifact_support.sh:118: python3 - \"$out_dir\" \"$entrypoint\" \"$sha\" \"$tree\" \"$generated_at\" \"$workers\" <<'PY'\nredline-split/redline/ops/ci/jankurai-audit.sh:108: if python3 - \"$TARGET_DIR/repo-score.json\" <<'PY'\nredline-split/redline/ops/deploy/telemetry.sh:45: python3 - \"$repo\" \"$sha\" \"$ring_percent\" \"$slug\" \"$store_root\" <<'PY'\njain-contracts/agent/generated-zones.toml:18: command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\"\njain-core/agent/generated-zones.toml:18: command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\"\njain-web/agent/generated-zones.toml:18: command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\"\njain-web/ops/ci/artifact_support.sh:14: python3 - <<'PY_ART'\njain-web/ops/ci/score.sh:35: python3 - <<'PY_SCORE'\njain-web/ops/ci/check.sh:22: python3 -m compileall -q python/ai-service\njain-web/ops/ci/check.sh:25: python3 - <<'PY'\njain-web/ops/ci/check.sh:44: find ops/split -maxdepth 1 -name '*.py' -print0 | xargs -0 -r python3 -m py_compile\njain-web/ops/ci/contract-drift.sh:9: python3 -m json.tool contracts/progress-event.schema.json >/dev/null\njain-web/ops/ci/contract-drift.sh:10: python3 - <<'PY'",
   "mode": "dry-run",
   "operation": "python-boundary",
   "policy": "Python is permitted only for parity testing against Rust implementations",
+  "registry": {
+    "file_exception_count": 14,
+    "inline_exception_count": 2,
+    "path": "/home/ubuntu/jain-split/jain-split-ops/python-parity-exceptions.toml",
+    "sha256": "8fb1865207514ef7ad5fa87d4e6f974c71996a6bbdd6e4bde4bbefc274c09ef6"
+  },
   "schema_version": "jain.rust-parity-python-boundary/v1",
-  "status": "fail",
-  "timestamp_unix": 1783854174,
-  "unexpected": [
-    "redline-split/redline/scripts/bench/export_benchmark_results.py",
-    "redline-split/redline/scripts/perf/run_subset.py",
-    "redline-split/redline/scripts/perf/diff.py",
-    "redline-split/redline/scripts/perf/build_case_lists.py",
-    "redline-split/redline/paper/scripts/build_figs.py",
-    "redline-split/redline/paper/scripts/check_refs.py"
-  ],
-  "unexpected_count": 6,
-  "unexpected_runtime_invocation_count": 40,
-  "unexpected_runtime_invocations": [
-    {
-      "line": 881,
-      "path": "redline-split/redline/.gitlab-ci.yml",
-      "text": "- apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3"
-    },
-    {
-      "line": 953,
-      "path": "redline-split/redline/.gitlab-ci.yml",
-      "text": "- apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3"
-    },
-    {
-      "line": 45,
-      "path": "redline-split/redline/scripts/ci/fix-bench-runner-env.sh",
-      "text": "python3 - \"$CONFIG\" \"$RUNNER_NAME\" \"$USER_PATH\" \"$USER_CARGO\" \"$USER_RUSTUP\" <<'PY'"
-    },
-    {
-      "line": 97,
-      "path": "redline-split/redline/scripts/ci/register-bench-runner.sh",
-      "text": "| python3 -c 'import sys,json; print(json.load(sys.stdin).get(\"token\",\"\"))')\""
-    },
-    {
-      "line": 139,
-      "path": "redline-split/redline/scripts/ci/register-bench-runner.sh",
-      "text": "| python3 -c \""
-    },
-    {
-      "line": 61,
-      "path": "redline-split/redline/scripts/ci/fix-bench-runner-dns.sh",
-      "text": "python3 - \"$GITLAB_RUNNER_CONFIG\" \"$PATCH_SCRIPT\" <<'PY'"
-    },
-    {
-      "line": 32,
-      "path": "redline-split/redline/scripts/ci/fix-bench-runner-shell.sh",
-      "text": "python3 - \"$CONFIG\" \"$RUNNER_NAME\" <<'PY'"
-    },
-    {
-      "line": 71,
-      "path": "redline-split/redline/scripts/bench/dick_head_choas_xbabe1.sh",
-      "text": "python3 scripts/bench/export_benchmark_results.py"
-    },
-    {
-      "line": 121,
-      "path": "redline-split/redline/scripts/ci-doctor.sh",
-      "text": "if ! command -v python3 >/dev/null 2>&1; then"
-    },
-    {
-      "line": 122,
-      "path": "redline-split/redline/scripts/ci-doctor.sh",
-      "text": "fail python3 \"missing (expected >=3.10)\""
-    },
-    {
-      "line": 126,
-      "path": "redline-split/redline/scripts/ci-doctor.sh",
-      "text": "actual=\"$(python3 -c 'import sys; print(\"{}.{}.{}\".format(*sys.version_info[:3]))' 2>/dev/null)\""
-    },
-    {
-      "line": 130,
-      "path": "redline-split/redline/scripts/ci-doctor.sh",
-      "text": "pass python3 \"${actual} (>=3.10)\""
-    },
-    {
-      "line": 132,
-      "path": "redline-split/redline/scripts/ci-doctor.sh",
-      "text": "fail python3 \"expected>=3.10 actual=${actual}\""
-    },
-    {
-      "line": 132,
-      "path": "redline-split/redline/scripts/generate-metrics-readme.sh",
-      "text": "python3 <<'PY'"
-    },
-    {
-      "line": 34,
-      "path": "redline-split/redline/scripts/process-redline-testing-evidence.sh",
-      "text": "python3 - \"$repo_root\" \"$root\" \"$official_evidence\" \"$processed\" <<'PY'"
-    },
-    {
-      "line": 175,
-      "path": "redline-split/redline/scripts/perf/pgo.sh",
-      "text": "python3 scripts/perf/run_subset.py \\\\"
-    },
-    {
-      "line": 247,
-      "path": "redline-split/redline/scripts/perf/pgo.sh",
-      "text": "python3 scripts/perf/run_subset.py \\"
-    },
-    {
-      "line": 43,
-      "path": "redline-split/redline/scripts/perf/profile-one.sh",
-      "text": "python3 - \"$snapshot\" \"$case_name\" \"$out_dir\" <<'PYEOF'"
-    },
-    {
-      "line": 51,
-      "path": "redline-split/redline/scripts/perf/stable.sh",
-      "text": "python3 - <<PY"
-    },
-    {
-      "line": 77,
-      "path": "redline-split/redline/scripts/perf/gap-closure-verify.sh",
-      "text": "python3 - \"$BASELINE_RANKED\" \"$NEW_RANKED\" >\"$OUT_DIR/deltas.tsv\" <<'PYEOF'"
-    },
-    {
-      "line": 34,
-      "path": "redline-split/redline/scripts/perf/build-case-lists.sh",
-      "text": "python3 \"$(dirname \"$0\")/build_case_lists.py\" \\"
-    },
-    {
-      "line": 116,
-      "path": "redline-split/redline/scripts/perf/lib.sh",
-      "text": "python3 \"$(dirname \"${BASH_SOURCE[0]}\")/run_subset.py\" \\"
-    },
-    {
-      "line": 146,
-      "path": "redline-split/redline/scripts/perf/lib.sh",
-      "text": "python3 - \"$jsonl\" <<'PYEOF'"
-    },
-    {
-      "line": 200,
-      "path": "redline-split/redline/scripts/perf/w2-matrix.sh",
-      "text": "python3 - <<'PY'"
-    },
-    {
-      "line": 162,
-      "path": "redline-split/redline/just/lanes.just",
-      "text": "python3 ./scripts/perf/diff.py {{BEFORE}} {{AFTER}}"
-    },
-    {
-      "line": 56,
-      "path": "redline-split/redline/tools/jankurai-hooks/pre-push-score-ratchet",
-      "text": "python3 - \"$baseline_json\" \".jankurai/repo-score.json\" <<'PY'"
-    },
-    {
-      "line": 52,
-      "path": "redline-split/redline/ops/git-hooks/pre-commit",
-      "text": "python3 - \"$baseline_json\" \".jankurai/repo-score.json\" <<'PY'"
-    },
-    {
-      "line": 118,
-      "path": "redline-split/redline/ops/ci/artifact_support.sh",
-      "text": "python3 - \"$out_dir\" \"$entrypoint\" \"$sha\" \"$tree\" \"$generated_at\" \"$workers\" <<'PY'"
-    },
-    {
-      "line": 108,
-      "path": "redline-split/redline/ops/ci/jankurai-audit.sh",
-      "text": "if python3 - \"$TARGET_DIR/repo-score.json\" <<'PY'"
-    },
-    {
-      "line": 45,
-      "path": "redline-split/redline/ops/deploy/telemetry.sh",
-      "text": "python3 - \"$repo\" \"$sha\" \"$ring_percent\" \"$slug\" \"$store_root\" <<'PY'"
-    },
-    {
-      "line": 18,
-      "path": "jain-contracts/agent/generated-zones.toml",
-      "text": "command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\""
-    },
-    {
-      "line": 18,
-      "path": "jain-core/agent/generated-zones.toml",
-      "text": "command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\""
-    },
-    {
-      "line": 18,
-      "path": "jain-web/agent/generated-zones.toml",
-      "text": "command = \"cargo test -p feat-core --test progress_contract && pnpm --dir apps/web test -- src/protocol.contract.test.ts && pytest -q python/ai-service/tests/test_progress.py\""
-    },
-    {
-      "line": 14,
-      "path": "jain-web/ops/ci/artifact_support.sh",
-      "text": "python3 - <<'PY_ART'"
-    },
-    {
-      "line": 35,
-      "path": "jain-web/ops/ci/score.sh",
-      "text": "python3 - <<'PY_SCORE'"
-    },
-    {
-      "line": 22,
-      "path": "jain-web/ops/ci/check.sh",
-      "text": "python3 -m compileall -q python/ai-service"
-    },
-    {
-      "line": 25,
-      "path": "jain-web/ops/ci/check.sh",
-      "text": "python3 - <<'PY'"
-    },
-    {
-      "line": 44,
-      "path": "jain-web/ops/ci/check.sh",
-      "text": "find ops/split -maxdepth 1 -name '*.py' -print0 | xargs -0 -r python3 -m py_compile"
-    },
-    {
-      "line": 9,
-      "path": "jain-web/ops/ci/contract-drift.sh",
-      "text": "python3 -m json.tool contracts/progress-event.schema.json >/dev/null"
-    },
-    {
-      "line": 10,
-      "path": "jain-web/ops/ci/contract-drift.sh",
-      "text": "python3 - <<'PY'"
-    }
-  ]
+  "status": "pass",
+  "timestamp_unix": 1783887695,
+  "unexpected": [],
+  "unexpected_count": 0,
+  "unexpected_runtime_invocation_count": 0,
+  "unexpected_runtime_invocations": []
 }

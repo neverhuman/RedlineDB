@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/redline-split-ops/pulls/2"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62"
+    },
+    "body": "Makes the Redline manifest authoritative for exact product versions, revisions, commits, checksums, remotes, and immutable-main policy without manually editing the proof lock.",
+    "created_at": "2026-07-12T19:56:34.970114660Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8-redline-corrective-identities",
+      "ref": "codex/v8-redline-corrective-identities",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "1fedfd8c6dc1c77ef7886559ace8253a7b85db8b"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/2",
+    "id": "b0c97bb8-65f0-4465-8497-563742009b5a",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 2,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "release: bind corrective Redline family identities",
+    "updated_at": "2026-07-12T19:56:59.424677818Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/2",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783886215
+}

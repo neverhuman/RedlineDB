@@ -8,7 +8,7 @@
       "draft": false
     },
     "method": "PATCH",
-    "path": "/repos/jeryu/redline-split-ops/pulls/1"
+    "path": "/repos/jeryu/redline-split-ops/pulls/11"
   },
   "response": {
     "base": {
@@ -17,32 +17,32 @@
       "repo": {
         "full_name": "jeryu/redline-split-ops"
       },
-      "sha": "base"
+      "sha": "30083338c73d4f92708f2d812a3612c577fde40d"
     },
-    "body": "Reviewable nested-family control-plane repair: declare profiles, Jeryu slugs, immutable tags, and the control-plane entry in the Redline manifest; run the hub guard lane without violating the duplicate-engine invariant.",
-    "created_at": "2026-07-12T05:00:41.035331291Z",
+    "body": "Transfer only the reviewed Testing manifest correction from the waiver-era history. Binds redline-testing-v1.0.1-jain.1 to 4a449d8de05c8a0ced5cb2d29c76e4718a0041ea with tree checksum 825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac. Required, security, score, control validation, and detached family lanes are being read back from exact commits. Candidate-only; no production mutation.",
+    "created_at": "2026-07-13T04:57:44.982280917Z",
     "draft": false,
     "head": {
-      "label": "codex/v8-redline-control-plane",
-      "ref": "codex/v8-redline-control-plane",
+      "label": "codex/redline-testing-manifest-root-20260713",
+      "ref": "codex/redline-testing-manifest-root-20260713",
       "repo": {
         "full_name": "jeryu/redline-split-ops"
       },
-      "sha": "d1b309b2a33e2f3140f8bffb671aac07180ccb62"
+      "sha": "df66f6e6de5a200d26d38344c8d3751997646326"
     },
-    "html_url": "/jeryu/redline-split-ops/pull/1",
-    "id": "a3e90e0e-892d-4472-9443-4cfeb300f684",
+    "html_url": "/jeryu/redline-split-ops/pull/11",
+    "id": "39e70429-d7e5-4fca-9ddc-81a2b9ba62ce",
     "merge_commit_sha": null,
     "mergeable": false,
     "mergeable_state": "blocked",
     "merged": false,
     "merged_at": null,
-    "number": 1,
+    "number": 11,
     "source_repository": "jeryu/redline-split-ops",
     "state": "open",
-    "title": "ci: manage nested Redline family from control plane",
-    "updated_at": "2026-07-12T09:46:34.854473782Z",
-    "url": "/repos/jeryu/redline-split-ops/pulls/1",
+    "title": "release(redline): bind Testing v1.0.1 Jain.1 from reviewed main",
+    "updated_at": "2026-07-13T05:22:08.483603189Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/11",
     "user": {
       "login": "codex",
       "type": "User",
@@ -51,5 +51,5 @@
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1783849594
+  "timestamp_unix": 1783920128
 }

@@ -1,0 +1,86 @@
+{
+  "action": "would-create-local-and-remote",
+  "after": {
+    "local": null,
+    "remote": null
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "df5a9659739b1efd18754cee35a1dada274cb850",
+  "commit_input": "df5a9659739b1efd18754cee35a1dada274cb850",
+  "manifest": "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml",
+  "mode": "dry-run",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "crates/bench/Cargo.toml",
+        "name": "redlinedb-bench",
+        "version": "4.1.0"
+      },
+      {
+        "manifest": "crates/cli/Cargo.toml",
+        "name": "redlinedb-cli",
+        "version": "4.1.0"
+      },
+      {
+        "manifest": "crates/domain/Cargo.toml",
+        "name": "redlinedb-domain",
+        "version": "4.1.0"
+      },
+      {
+        "manifest": "crates/ffi/Cargo.toml",
+        "name": "redlinedb-ffi",
+        "version": "4.1.0"
+      },
+      {
+        "manifest": "crates/kernel/Cargo.toml",
+        "name": "redlinedb-kernel",
+        "version": "4.1.0"
+      },
+      {
+        "manifest": "crates/redlinedb-lite/Cargo.toml",
+        "name": "redlinedb-lite",
+        "version": "4.1.0"
+      },
+      {
+        "manifest": "crates/redlinedb-sqlx/Cargo.toml",
+        "name": "redlinedb-sqlx",
+        "version": "4.1.0"
+      },
+      {
+        "manifest": "crates/redlinedb-tokio/Cargo.toml",
+        "name": "redlinedb-tokio",
+        "version": "4.1.0"
+      },
+      {
+        "manifest": "crates/redlinedb/Cargo.toml",
+        "name": "redlinedb",
+        "version": "4.1.0"
+      },
+      {
+        "manifest": "crates/server/Cargo.toml",
+        "name": "redlinedb-server",
+        "version": "4.1.0"
+      },
+      {
+        "manifest": "crates/sql/Cargo.toml",
+        "name": "redlinedb-sql",
+        "version": "4.1.0"
+      }
+    ],
+    "expected_product_version": "4.1.0",
+    "status": "pass",
+    "version_file": null,
+    "workspace_package_version": null
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/redline-core.git",
+  "remote_main": "df5a9659739b1efd18754cee35a1dada274cb850",
+  "repository": "/home/ubuntu/jain-split/redline-split/redline-core",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "redline-core-v4.1.0-jain.2",
+  "timestamp_unix": 1783888009
+}

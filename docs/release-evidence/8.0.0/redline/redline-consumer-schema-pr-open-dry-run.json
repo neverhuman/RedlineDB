@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Require both Jain and Jeryu consumer evidence to bind the exact Redline manifest and policy, consumer manifest and CI policy, and a fresh checksummed regular-file test log. Reject unknown fields, traversal/symlinks, mismatched hashes, wrong producer versions, stale evidence, and manual eligibility. Adds tamper regression; required 19/19, security/SBOM, and ratchet score 86 pass.",
+      "draft": true,
+      "head": "codex/redline-consumer-evidence-binding-20260713",
+      "title": "fix(redline-proof): bind consumer test evidence"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-split-ops/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783929622
+}

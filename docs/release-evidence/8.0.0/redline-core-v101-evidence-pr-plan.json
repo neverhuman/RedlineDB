@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-core",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Update the Rust evidence processor to validate the pinned v1.0.1 SQLite and RQL suite sizes with regression tests.",
+      "draft": false,
+      "head": "codex/redline-core-testing-v101-evidence",
+      "title": "ci: accept pinned Redline Testing v1.0.1 corpus"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-core/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783892081
+}

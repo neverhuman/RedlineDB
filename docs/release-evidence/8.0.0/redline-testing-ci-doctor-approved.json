@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Restore the executable mode required by the Rust CI wrapper, which invokes scripts/ci-doctor.sh directly through rtk. The exact previously failing audit lane now passes.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T22:19:30.071334959+00:00",
+      "head_sha": "028c67857d5b5968b6165f8de492a09311aa0398",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:028c67857d5b5968b6165f8de492a09311aa0398:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "53cb7250a9b7fbafbb75fad3232a888d9e8156a2",
+      "checks": {
+        "failing": 1,
+        "passing": 0,
+        "pending": 0,
+        "skipped": 0,
+        "total": 1
+      },
+      "draft": false,
+      "entity": {
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-ci-doctor-mode",
+      "head_sha": "028c67857d5b5968b6165f8de492a09311aa0398",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "028c67857d5b5968b6165f8de492a09311aa0398",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 7,
+      "passport_hash": "passport:028c67857d5b5968b6165f8de492a09311aa0398:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
+        "name": "redline-testing",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "fix(ci): preserve doctor executable mode",
+      "updated_at": "2026-07-12T22:19:05.907114088+00:00"
+    }
+  },
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed executable-mode correction and exact audit-lane reproduction.",
+      "evidence": null,
+      "expected_head_sha": "028c67857d5b5968b6165f8de492a09311aa0398",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-testing/pulls/7/reviews"
+  },
+  "response": {
+    "description": "Restore the executable mode required by the Rust CI wrapper, which invokes scripts/ci-doctor.sh directly through rtk. The exact previously failing audit lane now passes.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T22:19:30.061777941+00:00",
+      "head_sha": "028c67857d5b5968b6165f8de492a09311aa0398",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:028c67857d5b5968b6165f8de492a09311aa0398:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "53cb7250a9b7fbafbb75fad3232a888d9e8156a2",
+      "checks": {
+        "failing": 1,
+        "passing": 0,
+        "pending": 0,
+        "skipped": 0,
+        "total": 1
+      },
+      "draft": false,
+      "entity": {
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-testing-ci-doctor-mode",
+      "head_sha": "028c67857d5b5968b6165f8de492a09311aa0398",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "028c67857d5b5968b6165f8de492a09311aa0398",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 7,
+      "passport_hash": "passport:028c67857d5b5968b6165f8de492a09311aa0398:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f48c3fb7-a2bd-47b1-bdc7-16cd9ec6af81",
+        "name": "redline-testing",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "fix(ci): preserve doctor executable mode",
+      "updated_at": "2026-07-12T22:19:05.907114088+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783894768
+}

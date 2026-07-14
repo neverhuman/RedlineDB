@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Makes the Redline manifest authoritative for exact product versions, revisions, commits, checksums, remotes, and immutable-main policy without manually editing the proof lock.",
+      "draft": true,
+      "head": "codex/v8-redline-corrective-identities",
+      "title": "release: bind corrective Redline family identities"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-split-ops/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783886193
+}

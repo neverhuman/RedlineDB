@@ -1,0 +1,11 @@
+{
+  "commit": "2205df3441f538130a4ce197afb67672596bac74",
+  "commit_input": "2205df3441f538130a4ce197afb67672596bac74",
+  "mode": "dry-run",
+  "operation": "release-tree-identity",
+  "release_checksum_sha256": "0daabc7aba0268c43f97028c9c4c8ceb28d137074bc4dc184d5e7ac760d7045d",
+  "repository": "/home/ubuntu/jain-split/jain-battle-gpu",
+  "schema_version": "jain.release-tree-identity/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887249
+}

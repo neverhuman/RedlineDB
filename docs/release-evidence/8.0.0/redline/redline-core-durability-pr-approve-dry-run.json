@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/redline-core",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed durability boundary repair; exact required status and consumer reopen regression pass.",
+      "evidence": null,
+      "expected_head_sha": "2f9fbd72317691dada58d8b6ca64241822540e72",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-core/pulls/5/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783928639
+}

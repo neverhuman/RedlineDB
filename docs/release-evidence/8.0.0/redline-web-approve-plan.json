@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/redline-web",
+  "request": {
+    "body": {
+      "body_markdown": "Independent review verified the exact head, isolated Rust release control, language boundary, detached required status, security, and zero-hard-finding score evidence.",
+      "evidence": null,
+      "expected_head_sha": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-web/pulls/2/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887647
+}

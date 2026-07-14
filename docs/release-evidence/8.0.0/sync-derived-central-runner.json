@@ -1,0 +1,27 @@
+{
+  "canonical_manifest_sha256": "03837b5866b2e2c365bb13bd408e045eb736db5cf080996fdd34987101317bd8",
+  "derived_manifests": [
+    {
+      "action": "updated",
+      "changed": true,
+      "current_sha256": "03e59182b8a516fa80c2faaa4d18c253e9d8503856e2e6d9b4448b9ac7eee014",
+      "expected_sha256": "2be03493bc704c3dfa1f3105d04e5dbbfde361e86810212ad31f82afe49b6663",
+      "path": "/home/ubuntu/jain-split/jain/repos.manifest.toml",
+      "target": "portal"
+    },
+    {
+      "action": "updated",
+      "changed": true,
+      "current_sha256": "03e59182b8a516fa80c2faaa4d18c253e9d8503856e2e6d9b4448b9ac7eee014",
+      "expected_sha256": "2be03493bc704c3dfa1f3105d04e5dbbfde361e86810212ad31f82afe49b6663",
+      "path": "/home/ubuntu/jain-split/jain-deploy/repos.manifest.toml",
+      "target": "deploy"
+    }
+  ],
+  "manifest": "repos.manifest.toml",
+  "mode": "apply",
+  "operation": "sync-derived-manifests",
+  "schema_version": "jain.derived-manifest-sync/v1",
+  "status": "pass",
+  "timestamp_unix": 1783890197
+}

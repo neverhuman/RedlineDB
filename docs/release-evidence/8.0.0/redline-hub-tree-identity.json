@@ -1,0 +1,11 @@
+{
+  "commit": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+  "commit_input": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+  "mode": "dry-run",
+  "operation": "release-tree-identity",
+  "release_checksum_sha256": "13c0ed0f2bf25cd4eb99cd141155a67b0c01c10564e9557d076d071a0eb1bd82",
+  "repository": "/home/ubuntu/jain-split/redline-split/redline",
+  "schema_version": "jain.release-tree-identity/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887249
+}

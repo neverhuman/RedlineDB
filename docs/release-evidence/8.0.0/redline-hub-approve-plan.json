@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/redlineDB",
+  "request": {
+    "body": {
+      "body_markdown": "Independent release review verified the exact head, detached required status, Rust-only conversion evidence, immutable-main policy, and corrective identity.",
+      "evidence": null,
+      "expected_head_sha": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2FredlineDB/pulls/4/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783886247
+}

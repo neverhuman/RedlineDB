@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Set the crate release version to 8.0.0 while retaining the ZYAL 2.6 language contract, replace the copied LLM required lane with the Rust-generated ZYAL lane, and correct changelog identity. Canonical required CI passes.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T22:27:31.461767961+00:00",
+      "head_sha": "7cd8b705a499416581ee07be9edd6cce7df25a5e",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:7cd8b705a499416581ee07be9edd6cce7df25a5e:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "815ba81c7654a8b08b76e91a8197e571f6b7cd08",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "90f3a8ab-83c3-446f-984a-83ca46549f26#2",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8.0.0-release-review-canonical",
+      "head_sha": "7cd8b705a499416581ee07be9edd6cce7df25a5e",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "7cd8b705a499416581ee07be9edd6cce7df25a5e",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 2,
+      "passport_hash": "passport:7cd8b705a499416581ee07be9edd6cce7df25a5e:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "90f3a8ab-83c3-446f-984a-83ca46549f26",
+        "name": "jain-zyal",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(zyal): prepare v8 split candidate",
+      "updated_at": "2026-07-12T22:27:03.610604461+00:00"
+    }
+  },
+  "repository": "jeryu/jain-zyal",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed v8 crate metadata, retained ZYAL 2.6 language contract, and generated package-scoped gates.",
+      "evidence": null,
+      "expected_head_sha": "7cd8b705a499416581ee07be9edd6cce7df25a5e",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-zyal/pulls/2/reviews"
+  },
+  "response": {
+    "description": "Set the crate release version to 8.0.0 while retaining the ZYAL 2.6 language contract, replace the copied LLM required lane with the Rust-generated ZYAL lane, and correct changelog identity. Canonical required CI passes.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T22:27:31.451925683+00:00",
+      "head_sha": "7cd8b705a499416581ee07be9edd6cce7df25a5e",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:7cd8b705a499416581ee07be9edd6cce7df25a5e:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "815ba81c7654a8b08b76e91a8197e571f6b7cd08",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "90f3a8ab-83c3-446f-984a-83ca46549f26#2",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8.0.0-release-review-canonical",
+      "head_sha": "7cd8b705a499416581ee07be9edd6cce7df25a5e",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "7cd8b705a499416581ee07be9edd6cce7df25a5e",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 2,
+      "passport_hash": "passport:7cd8b705a499416581ee07be9edd6cce7df25a5e:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "90f3a8ab-83c3-446f-984a-83ca46549f26",
+        "name": "jain-zyal",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(zyal): prepare v8 split candidate",
+      "updated_at": "2026-07-12T22:27:03.610604461+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783895250
+}

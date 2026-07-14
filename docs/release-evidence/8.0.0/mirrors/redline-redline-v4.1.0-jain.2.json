@@ -1,0 +1,22 @@
+{
+  "manifest": "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "created",
+      "mirror": "/home/ubuntu/jain-split/redline-split-ops/../target/bare-mirrors/redline.git",
+      "mirror_existed": false,
+      "name": "redline",
+      "refs_verified": true,
+      "source": "../redline-split/redline",
+      "source_head": "cdb1c5a4d4629ff555cfca9d8994c818e070c571"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "redline"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1783908026
+}

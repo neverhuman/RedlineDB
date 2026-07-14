@@ -1,0 +1,62 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "ec9f7e959a6999eee45a92936c0dc8ce5a2a0014",
+    "remote": "ec9f7e959a6999eee45a92936c0dc8ce5a2a0014"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "ec9f7e959a6999eee45a92936c0dc8ce5a2a0014",
+  "commit_input": "ec9f7e959a6999eee45a92936c0dc8ce5a2a0014",
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-smartcluster.git",
+    "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.0/mirrors/jain-smartcluster-jain-smartcluster-v8.0.0-split.0.json",
+    "status": "pass",
+    "tag_commit": "ec9f7e959a6999eee45a92936c0dc8ce5a2a0014"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "crates/jain-smartcluster-core/Cargo.toml",
+        "name": "jain-smartcluster-core",
+        "version": "8.0.0"
+      },
+      {
+        "manifest": "crates/jain-smartcluster-daemon/Cargo.toml",
+        "name": "jain-smartcluster-daemon",
+        "version": "8.0.0"
+      },
+      {
+        "manifest": "crates/jain-smartcluster/Cargo.toml",
+        "name": "jain-smartcluster",
+        "version": "8.0.0"
+      },
+      {
+        "manifest": "crates/jain-worker/Cargo.toml",
+        "name": "jain-worker",
+        "version": "8.0.0"
+      },
+      {
+        "manifest": "crates/scq/Cargo.toml",
+        "name": "scq",
+        "version": "8.0.0"
+      }
+    ],
+    "expected_product_version": "8.0.0",
+    "status": "pass",
+    "version_file": "jain-smartcluster-v8.0.0-split.0",
+    "workspace_package_version": "8.0.0"
+  },
+  "remote": "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git",
+  "remote_main": "ec9f7e959a6999eee45a92936c0dc8ce5a2a0014",
+  "repository": "/home/ubuntu/jain-split/jain-smartcluster",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-smartcluster-v8.0.0-split.0",
+  "timestamp_unix": 1783941028
+}

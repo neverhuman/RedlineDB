@@ -1,0 +1,11 @@
+{
+  "commit": "7a57737229812c3df9d03bdcbd699977cc674ee6",
+  "commit_input": "7a57737229812c3df9d03bdcbd699977cc674ee6",
+  "mode": "dry-run",
+  "operation": "release-tree-identity",
+  "release_checksum_sha256": "ff394e8d45fa05f74a0ea37170f190b76c8a7a6cb264f957a8506c729d9d9732",
+  "repository": "/home/ubuntu/jain-split/jain-contracts",
+  "schema_version": "jain.release-tree-identity/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887249
+}

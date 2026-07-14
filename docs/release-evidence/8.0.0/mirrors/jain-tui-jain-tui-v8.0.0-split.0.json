@@ -1,0 +1,22 @@
+{
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-tui.git",
+      "mirror_existed": true,
+      "name": "jain-tui",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-tui",
+      "source_head": "b96010d56b07c54972dd9f2d29f691b2cb1cb375"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-tui"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1783939729
+}

@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-ready",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "draft": false
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/redline-split-ops/pulls/3"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "1fedfd8c6dc1c77ef7886559ace8253a7b85db8b"
+    },
+    "body": "Replaces family PENDING identities with the exact reviewed commits and deterministic tree checksums for all four corrective Redline tags; the proof lock remains untouched.",
+    "created_at": "2026-07-12T20:22:50.682622523Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8-redline-release-identities",
+      "ref": "codex/v8-redline-release-identities",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "2aa01bf1f0bb55e51ea504fb96bfa43ff20aee80"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/3",
+    "id": "7b93913a-18d4-4bba-9486-31941d6d7a23",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 3,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "release: bind reviewed Redline family commits",
+    "updated_at": "2026-07-12T20:23:11.541726187Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/3",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887791
+}

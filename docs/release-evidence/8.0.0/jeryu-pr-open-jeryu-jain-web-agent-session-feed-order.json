@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "1c80c91cb62176a6ffab62d7a62a57b8fcb712b0"
+    },
+    "body": "Preserve chronological ordering of rich session-feed widgets. Changes: exact phase/kind anchors; sequence-ordered persisted replay folding with ephemeral live frames retained; focused unit coverage plus one targeted completed-session DOM-order regression. Validation: web typecheck, Vitest 226, build; Rust feat-web and sqlite migration lanes; just fast and just check; Jankurai audit with no caps or hard findings.",
+    "created_at": "2026-07-13T23:55:23.510517219Z",
+    "draft": true,
+    "head": {
+      "label": "agent/session-feed-order",
+      "ref": "agent/session-feed-order",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "faf56fdd60275fa6d4a825f39823680e778ddf52"
+    },
+    "html_url": "/jeryu/jain-web/pull/21",
+    "id": "2ac377ee-df82-4c3f-b35d-c8d4e7533374",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 21,
+    "source_repository": "jeryu/jain-web",
+    "state": "open",
+    "title": "fix(web): preserve chronological session feed order",
+    "updated_at": "2026-07-13T23:55:23.510517219Z",
+    "url": "/repos/jeryu/jain-web/pulls/21",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-web",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Preserve chronological ordering of rich session-feed widgets. Changes: exact phase/kind anchors; sequence-ordered persisted replay folding with ephemeral live frames retained; focused unit coverage plus one targeted completed-session DOM-order regression. Validation: web typecheck, Vitest 226, build; Rust feat-web and sqlite migration lanes; just fast and just check; Jankurai audit with no caps or hard findings.",
+      "draft": true,
+      "head": "agent/session-feed-order",
+      "title": "fix(web): preserve chronological session feed order"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-web/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "1c80c91cb62176a6ffab62d7a62a57b8fcb712b0"
+    },
+    "body": "Preserve chronological ordering of rich session-feed widgets. Changes: exact phase/kind anchors; sequence-ordered persisted replay folding with ephemeral live frames retained; focused unit coverage plus one targeted completed-session DOM-order regression. Validation: web typecheck, Vitest 226, build; Rust feat-web and sqlite migration lanes; just fast and just check; Jankurai audit with no caps or hard findings.",
+    "created_at": "2026-07-13T23:55:23.510517219Z",
+    "draft": true,
+    "head": {
+      "label": "agent/session-feed-order",
+      "ref": "agent/session-feed-order",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "faf56fdd60275fa6d4a825f39823680e778ddf52"
+    },
+    "html_url": "/jeryu/jain-web/pull/21",
+    "id": "2ac377ee-df82-4c3f-b35d-c8d4e7533374",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 21,
+    "source_repository": "jeryu/jain-web",
+    "state": "open",
+    "title": "fix(web): preserve chronological session feed order",
+    "updated_at": "2026-07-13T23:55:23.510517219Z",
+    "url": "/repos/jeryu/jain-web/pulls/21",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783986923
+}

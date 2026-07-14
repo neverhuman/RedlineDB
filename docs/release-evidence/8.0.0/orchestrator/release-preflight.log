@@ -1,0 +1,2 @@
+preflight fail: 26 repositories; report /home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.0/orchestrator/release-preflight.json
+Error: "split preflight failed"

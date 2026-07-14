@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Deterministic full-v1 ci-smoke demo, SmartCluster/JOPE flow, explicit runtime metadata, contract drift proof, upload startup queuing, and focused Rust/web tests. Keeps runtime binaries out of the PR and preserves feed-order PR #21.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T02:08:55.997559482+00:00",
+      "head_sha": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:6adcda48e5711dcf5934934236be09fcc959ff10:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "1c80c91cb62176a6ffab62d7a62a57b8fcb712b0",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "fd3e3d60-b4f8-40c9-bad8-0fa6eff6376f#23",
+        "kind": "pull_request"
+      },
+      "head_ref": "agent/full-v1-demo",
+      "head_sha": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "6adcda48e5711dcf5934934236be09fcc959ff10",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 23,
+      "passport_hash": "passport:6adcda48e5711dcf5934934236be09fcc959ff10:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "fd3e3d60-b4f8-40c9-bad8-0fa6eff6376f",
+        "name": "jain-web",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat(web): add deterministic full-v1 demo and JOPE flow",
+      "updated_at": "2026-07-14T02:07:44.938496520+00:00"
+    }
+  },
+  "repository": "jeryu/jain-web",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact full-v1 demo head and required CI evidence; deterministic ci-smoke contract and zero-job runtime verified.",
+      "evidence": null,
+      "expected_head_sha": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-web/pulls/23/reviews"
+  },
+  "response": {
+    "description": "Deterministic full-v1 ci-smoke demo, SmartCluster/JOPE flow, explicit runtime metadata, contract drift proof, upload startup queuing, and focused Rust/web tests. Keeps runtime binaries out of the PR and preserves feed-order PR #21.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T02:08:55.987144661+00:00",
+      "head_sha": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:6adcda48e5711dcf5934934236be09fcc959ff10:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "1c80c91cb62176a6ffab62d7a62a57b8fcb712b0",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "fd3e3d60-b4f8-40c9-bad8-0fa6eff6376f#23",
+        "kind": "pull_request"
+      },
+      "head_ref": "agent/full-v1-demo",
+      "head_sha": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "6adcda48e5711dcf5934934236be09fcc959ff10",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 23,
+      "passport_hash": "passport:6adcda48e5711dcf5934934236be09fcc959ff10:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "fd3e3d60-b4f8-40c9-bad8-0fa6eff6376f",
+        "name": "jain-web",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat(web): add deterministic full-v1 demo and JOPE flow",
+      "updated_at": "2026-07-14T02:07:44.938496520+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783994933
+}

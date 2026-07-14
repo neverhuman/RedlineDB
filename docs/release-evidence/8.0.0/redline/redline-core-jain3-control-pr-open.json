@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "df66f6e6de5a200d26d38344c8d3751997646326"
+    },
+    "body": "Advance only the canonical Redline core identity to the reviewed durability repair: redline-core-v4.1.0-jain.3 at 2f9fbd72317691dada58d8b6ca64241822540e72, tree checksum 7057e6800620d86ab89973f91b6bdb35a5d7a7f5b6bedbdf2d8e3e0624cde51b. No waiver or lock change. Required, security, SBOM, and ratchet score gates pass; release readiness remains fail-closed until immutable tag and fresh two-consumer proof.",
+    "created_at": "2026-07-13T07:49:42.860981136Z",
+    "draft": true,
+    "head": {
+      "label": "codex/redline-core-jain3-manifest-20260713",
+      "ref": "codex/redline-core-jain3-manifest-20260713",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/12",
+    "id": "98b8568a-3e7b-471b-8d21-3022aaa5f36c",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 12,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "release(redline): bind durable core repair identity",
+    "updated_at": "2026-07-13T07:49:42.860981136Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/12",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Advance only the canonical Redline core identity to the reviewed durability repair: redline-core-v4.1.0-jain.3 at 2f9fbd72317691dada58d8b6ca64241822540e72, tree checksum 7057e6800620d86ab89973f91b6bdb35a5d7a7f5b6bedbdf2d8e3e0624cde51b. No waiver or lock change. Required, security, SBOM, and ratchet score gates pass; release readiness remains fail-closed until immutable tag and fresh two-consumer proof.",
+      "draft": true,
+      "head": "codex/redline-core-jain3-manifest-20260713",
+      "title": "release(redline): bind durable core repair identity"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-split-ops/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "df66f6e6de5a200d26d38344c8d3751997646326"
+    },
+    "body": "Advance only the canonical Redline core identity to the reviewed durability repair: redline-core-v4.1.0-jain.3 at 2f9fbd72317691dada58d8b6ca64241822540e72, tree checksum 7057e6800620d86ab89973f91b6bdb35a5d7a7f5b6bedbdf2d8e3e0624cde51b. No waiver or lock change. Required, security, SBOM, and ratchet score gates pass; release readiness remains fail-closed until immutable tag and fresh two-consumer proof.",
+    "created_at": "2026-07-13T07:49:42.860981136Z",
+    "draft": true,
+    "head": {
+      "label": "codex/redline-core-jain3-manifest-20260713",
+      "ref": "codex/redline-core-jain3-manifest-20260713",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "36d31f225c03b22e5c76c8aa6318f1fb3891860d"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/12",
+    "id": "98b8568a-3e7b-471b-8d21-3022aaa5f36c",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 12,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "release(redline): bind durable core repair identity",
+    "updated_at": "2026-07-13T07:49:42.860981136Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/12",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783928982
+}

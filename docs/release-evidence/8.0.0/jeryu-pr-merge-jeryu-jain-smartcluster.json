@@ -1,0 +1,14 @@
+{
+  "error": "local Jeryu request failed: curl: (22) The requested URL returned error: 422",
+  "mode": "apply",
+  "operation": "jeryu-local pr-merge",
+  "repository": "jeryu/jain-smartcluster",
+  "request": {
+    "body": {},
+    "method": "PUT",
+    "path": "/repos/jeryu/jain-smartcluster/pulls/3/merge"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "fail",
+  "timestamp_unix": 1783940738
+}

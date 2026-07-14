@@ -1,0 +1,22 @@
+{
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-zyal.git",
+      "mirror_existed": true,
+      "name": "jain-zyal",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-zyal",
+      "source_head": "3aa8b9b7c4cb45163e338649bdcda1b569e6e759"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-zyal"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1783924593
+}

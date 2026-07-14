@@ -1,0 +1,21 @@
+{
+  "action": "would-open",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Exclude only hermetic checkout-local Cargo cache data from source secret scanning; first-party source remains fail-closed. Required CI reproduced and passes.",
+      "draft": false,
+      "head": "codex/redline-testing-detached-ci",
+      "title": "Fix detached CI Cargo cache scanning"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-testing/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783889633
+}

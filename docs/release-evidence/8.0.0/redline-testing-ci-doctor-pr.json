@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "53cb7250a9b7fbafbb75fad3232a888d9e8156a2"
+    },
+    "body": "Restore the executable mode required by the Rust CI wrapper, which invokes scripts/ci-doctor.sh directly through rtk. The exact previously failing audit lane now passes.",
+    "created_at": "2026-07-12T22:19:05.907114088Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-testing-ci-doctor-mode",
+      "ref": "codex/redline-testing-ci-doctor-mode",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "028c67857d5b5968b6165f8de492a09311aa0398"
+    },
+    "html_url": "/jeryu/redline-testing/pull/7",
+    "id": "7bed9dc9-8df8-48d2-8a91-e621288b00de",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 7,
+    "source_repository": "jeryu/redline-testing",
+    "state": "open",
+    "title": "fix(ci): preserve doctor executable mode",
+    "updated_at": "2026-07-12T22:19:05.907114088Z",
+    "url": "/repos/jeryu/redline-testing/pulls/7",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/redline-testing",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Restore the executable mode required by the Rust CI wrapper, which invokes scripts/ci-doctor.sh directly through rtk. The exact previously failing audit lane now passes.",
+      "draft": false,
+      "head": "codex/redline-testing-ci-doctor-mode",
+      "title": "fix(ci): preserve doctor executable mode"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-testing/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "53cb7250a9b7fbafbb75fad3232a888d9e8156a2"
+    },
+    "body": "Restore the executable mode required by the Rust CI wrapper, which invokes scripts/ci-doctor.sh directly through rtk. The exact previously failing audit lane now passes.",
+    "created_at": "2026-07-12T22:19:05.907114088Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-testing-ci-doctor-mode",
+      "ref": "codex/redline-testing-ci-doctor-mode",
+      "repo": {
+        "full_name": "jeryu/redline-testing"
+      },
+      "sha": "028c67857d5b5968b6165f8de492a09311aa0398"
+    },
+    "html_url": "/jeryu/redline-testing/pull/7",
+    "id": "7bed9dc9-8df8-48d2-8a91-e621288b00de",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 7,
+    "source_repository": "jeryu/redline-testing",
+    "state": "open",
+    "title": "fix(ci): preserve doctor executable mode",
+    "updated_at": "2026-07-12T22:19:05.907114088Z",
+    "url": "/repos/jeryu/redline-testing/pulls/7",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783894745
+}

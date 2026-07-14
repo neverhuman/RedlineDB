@@ -1,0 +1,42 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "3aa8b9b7c4cb45163e338649bdcda1b569e6e759",
+    "remote": "3aa8b9b7c4cb45163e338649bdcda1b569e6e759"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "3aa8b9b7c4cb45163e338649bdcda1b569e6e759",
+  "commit_input": "3aa8b9b7c4cb45163e338649bdcda1b569e6e759",
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-zyal.git",
+    "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.0/mirrors/jain-zyal-jain-zyal-v8.0.0-split.0.json",
+    "status": "pass",
+    "tag_commit": "3aa8b9b7c4cb45163e338649bdcda1b569e6e759"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "Cargo.toml",
+        "name": "jain-zyal",
+        "version": "8.0.0"
+      }
+    ],
+    "expected_product_version": "8.0.0",
+    "status": "pass",
+    "version_file": "jain-zyal-v8.0.0-split.0",
+    "workspace_package_version": null
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-zyal.git",
+  "remote_main": "3aa8b9b7c4cb45163e338649bdcda1b569e6e759",
+  "repository": "/home/ubuntu/jain-split/jain-zyal",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-zyal-v8.0.0-split.0",
+  "timestamp_unix": 1783924593
+}

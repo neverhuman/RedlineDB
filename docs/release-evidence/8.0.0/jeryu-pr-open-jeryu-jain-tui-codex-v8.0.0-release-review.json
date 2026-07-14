@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-tui"
+      },
+      "sha": "6a0b1f37025cbfd2a7abdc368af42bcf401b6d75"
+    },
+    "body": "",
+    "created_at": "2026-07-13T10:45:18.663977459Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8.0.0-release-review",
+      "ref": "codex/v8.0.0-release-review",
+      "repo": {
+        "full_name": "jeryu/jain-tui"
+      },
+      "sha": "b96010d56b07c54972dd9f2d29f691b2cb1cb375"
+    },
+    "html_url": "/jeryu/jain-tui/pull/7",
+    "id": "2e5321e5-8751-4bd3-9f79-4f90d2f94fef",
+    "merge_commit_sha": null,
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merged": false,
+    "merged_at": null,
+    "number": 7,
+    "source_repository": "jeryu/jain-tui",
+    "state": "open",
+    "title": "release: jain-tui 8.0.0",
+    "updated_at": "2026-07-13T10:45:18.663977459Z",
+    "url": "/repos/jeryu/jain-tui/pulls/7",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-tui",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codex/v8.0.0-release-review",
+      "title": "release: jain-tui 8.0.0"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-tui/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-tui"
+      },
+      "sha": "6a0b1f37025cbfd2a7abdc368af42bcf401b6d75"
+    },
+    "body": "",
+    "created_at": "2026-07-13T10:45:18.663977459Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8.0.0-release-review",
+      "ref": "codex/v8.0.0-release-review",
+      "repo": {
+        "full_name": "jeryu/jain-tui"
+      },
+      "sha": "b96010d56b07c54972dd9f2d29f691b2cb1cb375"
+    },
+    "html_url": "/jeryu/jain-tui/pull/7",
+    "id": "2e5321e5-8751-4bd3-9f79-4f90d2f94fef",
+    "merge_commit_sha": null,
+    "mergeable": true,
+    "mergeable_state": "clean",
+    "merged": false,
+    "merged_at": null,
+    "number": 7,
+    "source_repository": "jeryu/jain-tui",
+    "state": "open",
+    "title": "release: jain-tui 8.0.0",
+    "updated_at": "2026-07-13T10:45:18.663977459Z",
+    "url": "/repos/jeryu/jain-tui/pulls/7",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783939518
+}

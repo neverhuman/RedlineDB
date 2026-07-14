@@ -1,0 +1,20 @@
+{
+  "branch": "main",
+  "checkout_head": "4eb6f4f7878cdd6e8517a39bd527c250204177a1",
+  "commit": "4eb6f4f7878cdd6e8517a39bd527c250204177a1",
+  "duration_millis": 28387,
+  "exit_code": 1,
+  "forge_status_posted": true,
+  "kind": "family",
+  "log": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.0/orchestrator/ci/jain-jailgun.log",
+  "log_sha256": "c95aced038c34374d04f125dde16d10bda1713338176b34f3cecd154b88bf2f2",
+  "manifest_sha256": "847e78fe217e808fd63e3836ad3866c847231b8c1cde190da38de1572a1c91ce",
+  "name": "ci:jain-jailgun",
+  "policy_sha256": "cf34103db3a29cdfe0f486a834c40dae88746510edc8bef3133a9c36157229f0",
+  "repository": "jain-jailgun",
+  "required_check": "jain-jailgun/required",
+  "schema_version": "jain.release-candidate-ci/v1",
+  "status": "fail",
+  "timestamp_unix": 1783895414,
+  "wave": 4
+}

@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Independent review verified all four exact family commits/checksums against clean reviewed main, detached required status, immutable-main policy, and unchanged proof-managed lock.",
+      "evidence": null,
+      "expected_head_sha": "2aa01bf1f0bb55e51ea504fb96bfa43ff20aee80",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-split-ops/pulls/3/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783887792
+}

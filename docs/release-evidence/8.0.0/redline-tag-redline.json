@@ -1,0 +1,35 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+    "remote": "cdb1c5a4d4629ff555cfca9d8994c818e070c571"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+  "commit_input": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+  "manifest": "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/redline-split-ops/../target/bare-mirrors/redline.git",
+    "receipt": "/home/ubuntu/jain-split/redline-split-ops/../jain-split-ops/docs/release-evidence/8.0.0/mirrors/redline-redline-v4.1.0-jain.2.json",
+    "status": "pass",
+    "tag_commit": "cdb1c5a4d4629ff555cfca9d8994c818e070c571"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [],
+    "expected_product_version": "4.1.0",
+    "status": "pass",
+    "version_file": "4.1.0-jain.2"
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/redlineDB.git",
+  "remote_main": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+  "repository": "/home/ubuntu/jain-split/redline-split/redline",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "redline-v4.1.0-jain.2",
+  "timestamp_unix": 1783908017
+}

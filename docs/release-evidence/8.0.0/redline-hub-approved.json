@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Completes the interrupted Python-to-Rust hub conversion, hardens evidence provenance, and binds the authorized 4.1.0-jain.2 corrective identity.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T19:57:32.551887923+00:00",
+      "head_sha": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:cdb1c5a4d4629ff555cfca9d8994c818e070c571:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "adc8b11a0968c06a1ca673ed719ea966b4067f5f",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "8de59478-17e3-43d9-ae6d-5af04fae6734#4",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-hub-no-python",
+      "head_sha": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 4,
+      "passport_hash": "passport:cdb1c5a4d4629ff555cfca9d8994c818e070c571:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "8de59478-17e3-43d9-ae6d-5af04fae6734",
+        "name": "redlineDB",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: complete Rust-only Redline hub",
+      "updated_at": "2026-07-12T19:56:55.697350373+00:00"
+    }
+  },
+  "repository": "jeryu/redlineDB",
+  "request": {
+    "body": {
+      "body_markdown": "Independent release review verified the exact head, detached required status, Rust-only conversion evidence, immutable-main policy, and corrective identity.",
+      "evidence": null,
+      "expected_head_sha": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2FredlineDB/pulls/4/reviews"
+  },
+  "response": {
+    "description": "Completes the interrupted Python-to-Rust hub conversion, hardens evidence provenance, and binds the authorized 4.1.0-jain.2 corrective identity.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-12T19:57:32.541981633+00:00",
+      "head_sha": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:cdb1c5a4d4629ff555cfca9d8994c818e070c571:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "adc8b11a0968c06a1ca673ed719ea966b4067f5f",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "8de59478-17e3-43d9-ae6d-5af04fae6734#4",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8-redline-hub-no-python",
+      "head_sha": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 4,
+      "passport_hash": "passport:cdb1c5a4d4629ff555cfca9d8994c818e070c571:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "8de59478-17e3-43d9-ae6d-5af04fae6734",
+        "name": "redlineDB",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: complete Rust-only Redline hub",
+      "updated_at": "2026-07-12T19:56:55.697350373+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1783886247
+}
