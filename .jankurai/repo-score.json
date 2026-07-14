@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:b33d5262be12f86def08ed3f4c62a14f53e8c6bcc8e12556c1ad21dfd3803bd0",
-  "input_fingerprint": "sha256:7e537b24a3d9d8739f9a3bcea3e997e3748562acd3ab4c2604a2b1f42f45e5d3",
+  "report_fingerprint": "sha256:5df618d4bb38a07914a36c12534562a9ea91022ad2f82f1429e770a0ee0e481a",
+  "input_fingerprint": "sha256:7cfaf0677566ea9f7f9818cbe75ec69aaa1c7249582931d3f9b0cdacb912c147",
   "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
   "manifest_fingerprints": {
     "owner_map": "sha256:d58fbea9590434205dd7aeb7dbc2064799cbafefa866e33041dbab5e03d8f7b5",
@@ -10,8 +10,8 @@
     "proof_lanes": "sha256:9bfff9225b803a4599f4025ef64ed1915704ed049033f61c86bec94af60e9402",
     "standard_version": "sha256:f33b9715b6109208b44f6931c43f37e8da642dd67ff6faaad77be486954243a4"
   },
-  "dirty_worktree": true,
-  "generated_at": "1784052098",
+  "dirty_worktree": false,
+  "generated_at": "1784052138",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -30,23 +30,23 @@
     "HLT-004-UNMAPPED-PROOF on agent/test-map.json"
   ],
   "repo": ".",
-  "run_id": "1784052098",
-  "started_at": "1784052098",
-  "elapsed_ms": 1995,
+  "run_id": "1784052138",
+  "started_at": "1784052138",
+  "elapsed_ms": 2215,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 91,
-  "raw_score": 91,
+  "score": 93,
+  "raw_score": 93,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
     "hard_findings": 0,
-    "soft_findings": 7,
+    "soft_findings": 6,
     "ratchet": {
-      "baseline_score": 91,
+      "baseline_score": 93,
       "allowed_drop": 0,
       "passed": true,
       "score_delta": 0,
@@ -59,11 +59,11 @@
     }
   },
   "git": {
-    "head": "be6ac5e",
+    "head": "825d4eb",
     "base": null,
     "changed_files": 0,
     "mode": "full",
-    "dirty_worktree": true
+    "dirty_worktree": false
   },
   "policy": {
     "path": "./agent/audit-policy.toml",
@@ -286,12 +286,14 @@
     {
       "name": "Contract and boundary integrity",
       "weight": 13,
-      "score": 75,
-      "weighted_points": 9.75,
+      "score": 95,
+      "weighted_points": 12.35,
       "evidence": [
+        "contract surface found",
         "generated contract artifacts found",
         "boundary manifest present",
         "machine-readable schemas present",
+        "all contract sources have generated zone entries",
         "schema/tooling contract posture is clean"
       ],
       "notes": []
@@ -431,14 +433,18 @@
     "has_rendered_ux_lane": true,
     "missing_categories": [],
     "evidence": {
-      "accessibility": [],
+      "accessibility": [
+        ".jankurai/repo-score.json"
+      ],
       "api_mocks": [],
       "artifact_backed_proof": [],
       "design_tokens": [],
       "geometry_runtime": [],
       "layout_stability": [],
       "playwright_visual": [],
-      "storybook": [],
+      "storybook": [
+        ".jankurai/repo-score.json"
+      ],
       "visual_review": []
     }
   },
@@ -1006,7 +1012,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-14T18:01:37.023932235+00:00",
+    "generated_at": "2026-07-14T18:02:16.654498217+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1044,7 +1050,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 237,
+      "files_scanned": 239,
       "files_considered": 1,
       "active_files": 1,
       "exact_file_classes": 0,
@@ -1499,30 +1505,6 @@
       "owner": "workspace"
     },
     {
-      "severity": "medium",
-      "category": "boundary",
-      "path": "agent/boundaries.toml",
-      "problem": "`Contract and boundary integrity` scored 75 below the standard floor of 85",
-      "agent_fix": "add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams",
-      "evidence": [
-        "generated contract artifacts found",
-        "boundary manifest present",
-        "machine-readable schemas present",
-        "schema/tooling contract posture is clean"
-      ],
-      "check_id": "HLT-007-HANDWRITTEN-CONTRACT:boundary",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "contract-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:993eec07ffbd3370fe6126f0b1f95bf9e6c57a5c7133dc00526a401f4e344e42",
-      "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "docs_url": "docs/audit-rubric.md#known-vibe-coding-insults",
-      "owner": "agent"
-    },
-    {
       "severity": "high",
       "category": "context",
       "path": "agent/owner-map.json",
@@ -1631,16 +1613,6 @@
     }
   ],
   "agent_fix_queue": [
-    {
-      "path": "agent/boundaries.toml",
-      "priority": "medium",
-      "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "owner": "agent",
-      "task": "add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams",
-      "why": "`Contract and boundary integrity` scored 75 below the standard floor of 85"
-    },
     {
       "path": "agent/test-map.json",
       "priority": "high",

@@ -7,12 +7,12 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1784052098`
-- Started at: `1784052098`
-- Elapsed: `1995` ms
+- Run ID: `1784052138`
+- Started at: `1784052138`
+- Elapsed: `2215` ms
 - Scope: `full`
-- Raw score: `91`
-- Final score: `91`
+- Raw score: `93`
+- Final score: `93`
 - Decision: `advisory`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -91,7 +91,7 @@
 | Dimension | Weight | Score | Weighted | Evidence |
 | --- | ---: | ---: | ---: | --- |
 | Ownership and navigation surface | 13 | 93 | 12.09 | root `AGENTS.md` present; owner map present |
-| Contract and boundary integrity | 13 | 75 | 9.75 | generated contract artifacts found; boundary manifest present |
+| Contract and boundary integrity | 13 | 95 | 12.35 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 96 | 11.52 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
 | Code shape and semantic surface | 12 | 90 | 10.80 | no authored adopter product code files in scope |
@@ -181,17 +181,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a256a7390d4b91a5b0a95d6f092e524c8f4080f27fe2b62e28cf0801343d0fef`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-2. `medium` `boundary` `agent/boundaries.toml`
-   Rule: `HLT-007-HANDWRITTEN-CONTRACT`
-   Check: `HLT-007-HANDWRITTEN-CONTRACT:boundary` `soft` confidence `0.76`
-   Route: TLR `Contracts/data`, lane `contract`, owner `agent`
-   Docs: `docs/audit-rubric.md#known-vibe-coding-insults`
-   Reason: `Contract and boundary integrity` scored 75 below the standard floor of 85
-   Fix: add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams
-   Rerun: `just fast`
-   Fingerprint: `sha256:993eec07ffbd3370fe6126f0b1f95bf9e6c57a5c7133dc00526a401f4e344e42`
-   Evidence: generated contract artifacts found, boundary manifest present, machine-readable schemas present, schema/tooling contract posture is clean
-3. `high` `context` `agent/owner-map.json`
+2. `high` `context` `agent/owner-map.json`
    Rule: `HLT-003-OWNERLESS-PATH`
    Check: `HLT-003-OWNERLESS-PATH:context` `hard` confidence `0.88`
    Route: TLR `Context/setup`, lane `fast`, owner `agent`
@@ -201,7 +191,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:e099934217e12134eaaa92e87eca2328dfc9df79a621346b0d4c575144edec3e`
    Evidence: derived-manifests/deploy.toml
-4. `high` `context` `agent/owner-map.json`
+3. `high` `context` `agent/owner-map.json`
    Rule: `HLT-003-OWNERLESS-PATH`
    Check: `HLT-003-OWNERLESS-PATH:context` `hard` confidence `0.88`
    Route: TLR `Context/setup`, lane `fast`, owner `agent`
@@ -211,7 +201,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:3973af6d0d823609bded7648504718dfdb1d236425fa75b8cd36ef62ca4e6295`
    Evidence: derived-manifests/portal.toml
-5. `high` `proof` `agent/test-map.json`
+4. `high` `proof` `agent/test-map.json`
    Rule: `HLT-004-UNMAPPED-PROOF`
    Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
    Route: TLR `Verification`, lane `fast`, owner `agent`
@@ -221,7 +211,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:f2817460e9317fea7f8bc80310858ac5301a4c5f294656d904fc773596c93aac`
    Evidence: derived-manifests/deploy.toml
-6. `high` `proof` `agent/test-map.json`
+5. `high` `proof` `agent/test-map.json`
    Rule: `HLT-004-UNMAPPED-PROOF`
    Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
    Route: TLR `Verification`, lane `fast`, owner `agent`
@@ -231,7 +221,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:72342d081ef724bb3fdbf0204de8d7f25cc934f5b474a41793b55794b1bc0c1c`
    Evidence: derived-manifests/portal.toml
-7. `medium` `test` `agent/coverage-sources.toml`
+6. `medium` `test` `agent/coverage-sources.toml`
    Rule: `HLT-008-FALSE-GREEN-RISK`
    Check: `HLT-008-FALSE-GREEN-RISK:coverage-evidence` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `coverage-audit`, owner `agent`
@@ -251,13 +241,11 @@ No audited runtime boundary reclassifications declared.
 
 ## Agent Fix Queue
 
-1. `medium` `HLT-007-HANDWRITTEN-CONTRACT` `agent/boundaries.toml` - add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams
-   Route: `Contracts/data`/`contract`
-2. `high` `HLT-004-UNMAPPED-PROOF` `agent/test-map.json` - add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
+1. `high` `HLT-004-UNMAPPED-PROOF` `agent/test-map.json` - add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
    Route: `Verification`/`fast`
-3. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
+2. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-4. `medium` `HLT-008-FALSE-GREEN-RISK` `agent/coverage-sources.toml` - run `cargo run -p jankurai -- coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md`
+3. `medium` `HLT-008-FALSE-GREEN-RISK` `agent/coverage-sources.toml` - run `cargo run -p jankurai -- coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md`
    Route: `Verification`/`coverage-audit`
-5. `high` `HLT-003-OWNERLESS-PATH` `agent/owner-map.json` - add the narrowest stable prefix for this path to `agent/owner-map.json`
+4. `high` `HLT-003-OWNERLESS-PATH` `agent/owner-map.json` - add the narrowest stable prefix for this path to `agent/owner-map.json`
    Route: `Context/setup`/`fast`
