@@ -4,21 +4,23 @@ source ops/ci/lib.sh
 cd "$REPO_ROOT"
 
 mkdir -p .jankurai target/jankurai
-rm -f .jankurai/repo-score.json .jankurai/repo-score.md
+next_json="target/jankurai/repo-score.next.json"
+next_md="target/jankurai/repo-score.next.md"
+rm -f "$next_json" "$next_md"
 
 require_tool jankurai
 jankurai audit . \
   --full \
   --mode advisory \
   --policy agent/audit-policy.toml \
-  --json .jankurai/repo-score.json \
-  --md .jankurai/repo-score.md \
+  --json "$next_json" \
+  --md "$next_md" \
   --repair-queue-jsonl target/jankurai/repair-queue.jsonl \
   --no-score-history
 
-score="$(jq -r '.score // 0' .jankurai/repo-score.json)"
+score="$(jq -r '.score // 0' "$next_json")"
 base_score="$(jq -r '.score // 0' agent/jankurai-baseline.json)"
-hard_count="$(jq -r '(.decision.hard_findings // .hard_findings // 0) | if type == "array" then length else . end' .jankurai/repo-score.json)"
+hard_count="$(jq -r '(.decision.hard_findings // .hard_findings // 0) | if type == "array" then length else . end' "$next_json")"
 allowed_drop="$(awk -F= '/allowed_score_drop[[:space:]]*=/{gsub(/[ "\t]/,"",$2); print $2; exit}' agent/audit-policy.toml)"
 allowed_drop="${allowed_drop:-0}"
 floor="$(awk -F= '/minimum_score[[:space:]]*=/{gsub(/[ "\t]/,"",$2); print $2; exit}' agent/audit-policy.toml)"
@@ -37,6 +39,8 @@ if (( ${#errors[@]} )); then
 fi
 printf 'score ok: %s (baseline posture; hard=%s)\n' "$score" "$hard_count"
 
-cp .jankurai/repo-score.json target/jankurai/repo-score.json
-cp .jankurai/repo-score.md target/jankurai/repo-score.md
+cp "$next_json" .jankurai/repo-score.json
+cp "$next_md" .jankurai/repo-score.md
+cp "$next_json" target/jankurai/repo-score.json
+cp "$next_md" target/jankurai/repo-score.md
 printf 'score ok: jain-split-ops\n'

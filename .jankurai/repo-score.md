@@ -7,12 +7,12 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1784050502`
-- Started at: `1784050502`
-- Elapsed: `1851` ms
+- Run ID: `1784052098`
+- Started at: `1784052098`
+- Elapsed: `1995` ms
 - Scope: `full`
-- Raw score: `92`
-- Final score: `92`
+- Raw score: `91`
+- Final score: `91`
 - Decision: `advisory`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -70,9 +70,9 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`5` files=`1`
+- Status: `review` hard=`0` warning=`4` files=`1`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`5` tokens=`23` bytes=`169`
+- Duplicate volume: lines=`4` tokens=`18` bytes=`133`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
@@ -81,17 +81,16 @@
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `tools/splitctl/src/main.rs:632-633, tools/splitctl/src/main.rs:1163-1164, tools/splitctl/src/main.rs:1246-1247, tools/splitctl/src/main.rs:1318-1319, tools/splitctl/src/main.rs:1371-1372, tools/splitctl/src/main.rs:1723-1724, tools/splitctl/src/main.rs:2043-2044, tools/splitctl/src/main.rs:2595-2596, tools/splitctl/src/main.rs:2736-2737, tools/splitctl/src/main.rs:3022-3023` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/splitctl/src/main.rs:1998-1999, tools/splitctl/src/main.rs:2688-2689` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/splitctl/src/main.rs:788-789, tools/splitctl/src/main.rs:1925-1926` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/splitctl/src/main.rs:1449-1450, tools/splitctl/src/main.rs:1599-1600` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/main.rs:2088-2089, tools/splitctl/src/main.rs:2218-2219` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `tools/splitctl/src/main.rs:633-634, tools/splitctl/src/main.rs:1356-1357, tools/splitctl/src/main.rs:1463-1464, tools/splitctl/src/main.rs:1685-1686, tools/splitctl/src/main.rs:1783-1784, tools/splitctl/src/main.rs:1836-1837, tools/splitctl/src/main.rs:2188-2189, tools/splitctl/src/main.rs:2508-2509, tools/splitctl/src/main.rs:3060-3061` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/splitctl/src/main.rs:789-790, tools/splitctl/src/main.rs:2390-2391` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/splitctl/src/main.rs:1914-1915, tools/splitctl/src/main.rs:2064-2065` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/main.rs:2553-2554, tools/splitctl/src/main.rs:2683-2684` | `same body appears under different names across files` |
 
 ## Dimensions
 
 | Dimension | Weight | Score | Weighted | Evidence |
 | --- | ---: | ---: | ---: | --- |
-| Ownership and navigation surface | 13 | 100 | 13.00 | root `AGENTS.md` present; owner map present |
+| Ownership and navigation surface | 13 | 93 | 12.09 | root `AGENTS.md` present; owner map present |
 | Contract and boundary integrity | 13 | 75 | 9.75 | generated contract artifacts found; boundary manifest present |
 | Proof lanes and test routing | 12 | 96 | 11.52 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
@@ -192,7 +191,47 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:993eec07ffbd3370fe6126f0b1f95bf9e6c57a5c7133dc00526a401f4e344e42`
    Evidence: generated contract artifacts found, boundary manifest present, machine-readable schemas present, schema/tooling contract posture is clean
-3. `medium` `test` `agent/coverage-sources.toml`
+3. `high` `context` `agent/owner-map.json`
+   Rule: `HLT-003-OWNERLESS-PATH`
+   Check: `HLT-003-OWNERLESS-PATH:context` `hard` confidence `0.88`
+   Route: TLR `Context/setup`, lane `fast`, owner `agent`
+   Docs: `agent/JANKURAI_STANDARD.md#ownership-boundaries`
+   Reason: path `derived-manifests/deploy.toml` has no owner-map route
+   Fix: add the narrowest stable prefix for this path to `agent/owner-map.json`
+   Rerun: `just fast`
+   Fingerprint: `sha256:e099934217e12134eaaa92e87eca2328dfc9df79a621346b0d4c575144edec3e`
+   Evidence: derived-manifests/deploy.toml
+4. `high` `context` `agent/owner-map.json`
+   Rule: `HLT-003-OWNERLESS-PATH`
+   Check: `HLT-003-OWNERLESS-PATH:context` `hard` confidence `0.88`
+   Route: TLR `Context/setup`, lane `fast`, owner `agent`
+   Docs: `agent/JANKURAI_STANDARD.md#ownership-boundaries`
+   Reason: path `derived-manifests/portal.toml` has no owner-map route
+   Fix: add the narrowest stable prefix for this path to `agent/owner-map.json`
+   Rerun: `just fast`
+   Fingerprint: `sha256:3973af6d0d823609bded7648504718dfdb1d236425fa75b8cd36ef62ca4e6295`
+   Evidence: derived-manifests/portal.toml
+5. `high` `proof` `agent/test-map.json`
+   Rule: `HLT-004-UNMAPPED-PROOF`
+   Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
+   Route: TLR `Verification`, lane `fast`, owner `agent`
+   Docs: `agent/JANKURAI_STANDARD.md#proof-lanes`
+   Reason: path `derived-manifests/deploy.toml` has no test-map proof route
+   Fix: add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
+   Rerun: `just fast`
+   Fingerprint: `sha256:f2817460e9317fea7f8bc80310858ac5301a4c5f294656d904fc773596c93aac`
+   Evidence: derived-manifests/deploy.toml
+6. `high` `proof` `agent/test-map.json`
+   Rule: `HLT-004-UNMAPPED-PROOF`
+   Check: `HLT-004-UNMAPPED-PROOF:proof` `hard` confidence `0.88`
+   Route: TLR `Verification`, lane `fast`, owner `agent`
+   Docs: `agent/JANKURAI_STANDARD.md#proof-lanes`
+   Reason: path `derived-manifests/portal.toml` has no test-map proof route
+   Fix: add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
+   Rerun: `just fast`
+   Fingerprint: `sha256:72342d081ef724bb3fdbf0204de8d7f25cc934f5b474a41793b55794b1bc0c1c`
+   Evidence: derived-manifests/portal.toml
+7. `medium` `test` `agent/coverage-sources.toml`
    Rule: `HLT-008-FALSE-GREEN-RISK`
    Check: `HLT-008-FALSE-GREEN-RISK:coverage-evidence` `soft` confidence `0.76`
    Route: TLR `Verification`, lane `coverage-audit`, owner `agent`
@@ -214,7 +253,11 @@ No audited runtime boundary reclassifications declared.
 
 1. `medium` `HLT-007-HANDWRITTEN-CONTRACT` `agent/boundaries.toml` - add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams
    Route: `Contracts/data`/`contract`
-2. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
+2. `high` `HLT-004-UNMAPPED-PROOF` `agent/test-map.json` - add the narrowest stable prefix and runnable proof command to `agent/test-map.json`
    Route: `Verification`/`fast`
-3. `medium` `HLT-008-FALSE-GREEN-RISK` `agent/coverage-sources.toml` - run `cargo run -p jankurai -- coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md`
+3. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
+   Route: `Verification`/`fast`
+4. `medium` `HLT-008-FALSE-GREEN-RISK` `agent/coverage-sources.toml` - run `cargo run -p jankurai -- coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md`
    Route: `Verification`/`coverage-audit`
+5. `high` `HLT-003-OWNERLESS-PATH` `agent/owner-map.json` - add the narrowest stable prefix for this path to `agent/owner-map.json`
+   Route: `Context/setup`/`fast`
