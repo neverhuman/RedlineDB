@@ -13,13 +13,15 @@ set -uo pipefail
 OWNER="${1:?owner}"; REPO="${2:?repo}"; SHA="${3:?sha}"; REPO_PATH="${4:?repo_path}"
 CHECK="${5:-$REPO/required}"
 JAIN_BASE="${JAIN_BASE:-http://127.0.0.1:8787}"
-ENTRY_OPS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+RUNNER_PATH="$(realpath -e -- "${BASH_SOURCE[0]}")" || exit 2
+REVIEWED_RUNNER_NAME=.split-host-ci-reviewed
 
 # The checkout used to invoke this script is bootstrap-only. Capture its clean
-# commit, create a detached worktree from that Git object, and immediately
-# re-exec the reviewed runner there. No later CI or evidence step reads the
-# mutable invoking checkout.
-if [[ -z "${JAIN_HOST_CI_EXACT_ROOT:-}" ]]; then
+# commit, create a detached worktree from that Git object, and invoke a runner
+# extracted from the same commit. Public entry always takes this path; caller
+# environment cannot select reviewed mode or cleanup paths.
+if [[ "${RUNNER_PATH##*/}" != "$REVIEWED_RUNNER_NAME" ]]; then
+  ENTRY_OPS_ROOT="$(cd "$(dirname "$RUNNER_PATH")/../.." && pwd)"
   bootstrap_commit="$(
     "$ENTRY_OPS_ROOT/ops/ci/host-ci-integrity.sh" "$ENTRY_OPS_ROOT"
   )" || {
@@ -28,10 +30,23 @@ if [[ -z "${JAIN_HOST_CI_EXACT_ROOT:-}" ]]; then
   }
   bootstrap_root="$(mktemp -d /tmp/split-host-ci-bootstrap.XXXXXX)" || exit 2
   bootstrap_exact="$bootstrap_root/control-plane"
+  bootstrap_state="$bootstrap_root/reexec-state.json"
+  reviewed_runner="$bootstrap_root/$REVIEWED_RUNNER_NAME"
   cleanup_failed_bootstrap() {
+    local root_real=""
     git -C "$ENTRY_OPS_ROOT" worktree remove --force \
       "$bootstrap_exact" >/dev/null 2>&1 || true
-    rm -rf -- "$bootstrap_root"
+    root_real="$(realpath -e -- "$bootstrap_root" 2>/dev/null || true)"
+    case "$root_real" in
+      /tmp/split-host-ci-bootstrap.??????)
+        if [[ "$root_real" == "$bootstrap_root" \
+          && ! -L "$bootstrap_root" \
+          && "$(stat -c '%u:%a' -- "$bootstrap_root" 2>/dev/null)" \
+            == "$(id -u):700" ]]; then
+          rm -rf -- "$bootstrap_root"
+        fi
+        ;;
+    esac
   }
   trap cleanup_failed_bootstrap EXIT
   git -C "$ENTRY_OPS_ROOT" worktree add --quiet --detach \
@@ -42,27 +57,81 @@ if [[ -z "${JAIN_HOST_CI_EXACT_ROOT:-}" ]]; then
       | bash -s -- "$bootstrap_exact" "$bootstrap_commit"
   )" || exit 2
   [[ "$exact_commit" == "$bootstrap_commit" ]] || exit 2
-  export JAIN_HOST_CI_SOURCE_ROOT="$ENTRY_OPS_ROOT"
-  export JAIN_HOST_CI_EXACT_ROOT="$bootstrap_exact"
-  export JAIN_HOST_CI_CONTROL_COMMIT="$bootstrap_commit"
-  export JAIN_HOST_CI_BOOTSTRAP_ROOT="$bootstrap_root"
-  exec "$bootstrap_exact/ops/ci/split-host-ci.sh" "$@"
-  exit 2
+  git -C "$ENTRY_OPS_ROOT" show \
+    "$bootstrap_commit:ops/ci/split-host-ci.sh" >"$reviewed_runner" || exit 2
+  [[ "$(sha256sum -- "$reviewed_runner" | cut -d' ' -f1)" == \
+    "$(git -C "$ENTRY_OPS_ROOT" show \
+      "$bootstrap_commit:ops/ci/split-host-ci.sh" | sha256sum | cut -d' ' -f1)" ]] \
+    || exit 2
+  chmod 0500 "$reviewed_runner"
+  seal="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+  [[ "$seal" =~ ^[0-9a-f]{64}$ ]] || exit 2
+  jq -n --arg seal "$seal" --arg source_root "$ENTRY_OPS_ROOT" \
+    --arg exact_root "$bootstrap_exact" --arg commit "$bootstrap_commit" \
+    '{schema_version:"jain.host-ci-reexec/v1",seal:$seal,
+      source_root:$source_root,exact_root:$exact_root,commit:$commit}' \
+    >"$bootstrap_state" || exit 2
+  chmod 0600 "$bootstrap_state"
+  JAIN_HOST_CI_REEXEC_STATE="$bootstrap_state" \
+  JAIN_HOST_CI_REEXEC_SEAL="$seal" \
+    bash "$reviewed_runner" "$@"
+  runner_rc=$?
+  exit "$runner_rc"
 fi
 
-OPS_ROOT="$(realpath -e -- "$JAIN_HOST_CI_EXACT_ROOT")" || exit 2
-SOURCE_OPS_ROOT="${JAIN_HOST_CI_SOURCE_ROOT:?bootstrap source root is required}"
-CONTROL_PLANE_COMMIT="${JAIN_HOST_CI_CONTROL_COMMIT:?control-plane commit is required}"
-BOOTSTRAP_ROOT="${JAIN_HOST_CI_BOOTSTRAP_ROOT:?bootstrap root is required}"
-[[ "$ENTRY_OPS_ROOT" == "$OPS_ROOT" && "$CONTROL_PLANE_COMMIT" =~ ^[0-9a-f]{40}$ ]] \
-  || exit 2
-
-cleanup_bootstrap() {
-  git -C "$SOURCE_OPS_ROOT" worktree remove --force \
-    "$OPS_ROOT" >/dev/null 2>&1 || true
-  rm -rf -- "$BOOTSTRAP_ROOT"
+# Reviewed mode accepts only a sealed state file inside the exact private
+# mktemp directory created above. It never cleans that path; the still-running
+# public parent owns cleanup using its local variables.
+REEXEC_STATE="${JAIN_HOST_CI_REEXEC_STATE:-}"
+REEXEC_SEAL="${JAIN_HOST_CI_REEXEC_SEAL:-}"
+[[ "$REEXEC_STATE" = /* && "$REEXEC_SEAL" =~ ^[0-9a-f]{64}$ \
+  && -f "$REEXEC_STATE" && ! -L "$REEXEC_STATE" ]] || exit 2
+REEXEC_STATE="$(realpath -e -- "$REEXEC_STATE")" || exit 2
+BOOTSTRAP_ROOT="$(dirname "$REEXEC_STATE")"
+case "$BOOTSTRAP_ROOT" in
+  /tmp/split-host-ci-bootstrap.??????) ;;
+  *) exit 2 ;;
+esac
+[[ ! -L "$BOOTSTRAP_ROOT" \
+  && "$(stat -c '%u:%a' -- "$BOOTSTRAP_ROOT" 2>/dev/null)" \
+    == "$(id -u):700" \
+  && "$(stat -c '%u:%a:%h' -- "$REEXEC_STATE" 2>/dev/null)" \
+    == "$(id -u):600:1" \
+  && "$RUNNER_PATH" == "$BOOTSTRAP_ROOT/$REVIEWED_RUNNER_NAME" \
+  && ! -L "$RUNNER_PATH" \
+  && "$(stat -c '%u:%a:%h' -- "$RUNNER_PATH" 2>/dev/null)" \
+    == "$(id -u):500:1" ]] || exit 2
+jq -e --arg seal "$REEXEC_SEAL" \
+  'select(.schema_version == "jain.host-ci-reexec/v1" and .seal == $seal)
+   | select(.source_root | type == "string")
+   | select(.exact_root | type == "string")
+   | select(.commit | test("^[0-9a-f]{40}$"))' \
+  "$REEXEC_STATE" >/dev/null || exit 2
+SOURCE_OPS_ROOT="$(jq -er '.source_root' "$REEXEC_STATE")" || exit 2
+OPS_ROOT="$(jq -er '.exact_root' "$REEXEC_STATE")" || exit 2
+CONTROL_PLANE_COMMIT="$(jq -er '.commit' "$REEXEC_STATE")" || exit 2
+SOURCE_OPS_ROOT="$(realpath -e -- "$SOURCE_OPS_ROOT")" || exit 2
+OPS_ROOT="$(realpath -e -- "$OPS_ROOT")" || exit 2
+jain_git_common_dir() {
+  local root="${1:?Git root is required}" common
+  common="$(git -C "$root" rev-parse --git-common-dir 2>/dev/null)" || return 1
+  case "$common" in
+    /*) realpath -e -- "$common" ;;
+    *) realpath -e -- "$root/$common" ;;
+  esac
 }
-trap cleanup_bootstrap EXIT
+[[ "$OPS_ROOT" == "$BOOTSTRAP_ROOT/control-plane" \
+  && "$SOURCE_OPS_ROOT" != "$OPS_ROOT" \
+  && -f "$OPS_ROOT/.git" && ! -L "$OPS_ROOT/.git" \
+  && "$(jain_git_common_dir "$OPS_ROOT")" \
+    == "$(jain_git_common_dir "$SOURCE_OPS_ROOT")" \
+  && "$(git -C "$OPS_ROOT" rev-parse --verify 'HEAD^{commit}')" \
+    == "$CONTROL_PLANE_COMMIT" ]] || exit 2
+[[ "$(sha256sum -- "$RUNNER_PATH" | cut -d' ' -f1)" == \
+  "$(git -C "$OPS_ROOT" show \
+    "$CONTROL_PLANE_COMMIT:ops/ci/split-host-ci.sh" | sha256sum | cut -d' ' -f1)" ]] \
+  || exit 2
+unset JAIN_HOST_CI_REEXEC_STATE JAIN_HOST_CI_REEXEC_SEAL
 
 verify_exact_control_plane_integrity() {
   local verified
@@ -268,7 +337,6 @@ cleanup() {
       "$native_authority" "$native_source_input" "$native_source_root"
   fi
   rm -rf "$tmp" >/dev/null 2>&1 || true
-  cleanup_bootstrap
 }
 trap cleanup EXIT
 
