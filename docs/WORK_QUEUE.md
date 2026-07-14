@@ -29,7 +29,7 @@ Merged-main SHAs feed the batched manifest binds (Claude). Post the merged SHA i
 | WQ-6 fleet identity | OPEN | claimable now; portal LAST on signal |
 | WQ-7 contracts | OPEN | ready to claim |
 | WQ-8 deploy image | OPEN | claimable now; (b) verify after WQ-3 |
-| WQ-9 harness | CLAIMED Codex2 | |
+| WQ-9 harness | BLOCKED — Codex2 — 2026-07-14T03:54Z | live 127.0.0.1:4180 unavailable during corrected rerun; receipt recorded |
 | WQ-10 naming RFC | CLAIMED Codex1 | inventory: docs/naming-inventory-20260714.md |
 | PR-A (control plane #13) | ClaudeMaster | CI rerun pending (host rg PATH issue) |
 
@@ -180,7 +180,7 @@ flagged it); test outputs; merged main SHA.
 Report:
 
 ## WQ-9 — E2E studies harness (build + first run against a live instance)
-Status: CLAIMED — Codex2 — 2026-07-14T02:34Z
+Status: BLOCKED — Codex2 — 2026-07-14T03:54Z — live 127.0.0.1:4180 became unavailable during rerun
 Scope: NEW files only under `jain-split-ops/docs/release-evidence/8.0.0/e2e-studies/`
 (bin/e2e-studies.sh, bin/gen-dataset.awk, data/, receipts/). No product-repo edits.
 Task: implement per the spec in this file's appendix A (endpoints/asserts/receipt schema —
@@ -191,6 +191,24 @@ engine_observed=legacy (wiring lands in WQ-5).
 Verify: receipt JSON at receipts/<run_id>/receipt.json with verdict=pass (engine=legacy noted),
 paste the studies block.
 Report:
+
+- Deterministic dataset regeneration passed: `awk -v n=240 -v seed=20260714 -f
+  docs/release-evidence/8.0.0/e2e-studies/bin/gen-dataset.awk` reproduced the committed
+  SHA-256 `96668514f960f0720ddf9102013fa121e5f32e6d8993183d5896069e3e6cd06c` and 240 data rows.
+- Harness syntax passed with `bash -n`. The live preflight passed against `127.0.0.1:4180`:
+  health 200/version 8.0.0, runner `real`, execution mode `real`, cluster access `true`, and
+  training enabled `true`. The first live session passed upload, terminal training, phase-6
+  engine evidence (`engine_observed=legacy`), and Chimera/model inspection (manifest present,
+  3 completed Starforge trials, 0 missing weights). The export allowlist was corrected to admit
+  the server-emitted approved `invention/MANIFEST.txt` entry; the 409 auto-start race was also
+  made benign when training is already underway.
+- Corrected rerun receipt:
+  `docs/release-evidence/8.0.0/e2e-studies/receipts/run-530ae0190fd501f7/receipt.json`.
+  Its sidecar matches (`sha256sum -c receipt.json.sha256` → pass), but the receipt is correctly
+  `status=blocked`, `verdict=fail`, with exact blocker `curl: (7) Failed to connect to
+  127.0.0.1 port 4180 after 0 ms: Couldn't connect to server` while polling/training events.
+  A safe recovery check also failed; no server process was present. No pass was fabricated.
+- No product repository, image, deployment, tag, registry, or AtomicSoul state was changed.
 
 ## WQ-10 — Naming RFC draft (post-release wave; non-blocking)
 Status: DONE — Codex1 — 2026-07-14T02:39Z

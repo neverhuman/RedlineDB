@@ -1,0 +1,53 @@
+{
+  "schema": "jain.e2e-studies/v1",
+  "status": "blocked",
+  "blocker": "training events request failed: curl: (7) Failed to connect to 127.0.0.1 port 4180 after 0 ms: Couldn't connect to server",
+  "run_id": "run-530ae0190fd501f7",
+  "generated_at": "2026-07-14T03:47:59Z",
+  "mode": "fast",
+  "base_url": "http://127.0.0.1:4180",
+  "effort": "low",
+  "runner": "real",
+  "auditor_exception": "docs/release-evidence/8.0.0/jankurai-auditor-exception.json",
+  "preflight": {
+    "health_status": "200",
+    "health_version": "8.0.0",
+    "runtime": "runner=real execution_mode=real cluster_access=true training_enabled=true"
+  },
+  "dataset": {
+    "path": "docs/release-evidence/8.0.0/e2e-studies/data/e2e.csv",
+    "sha256": "96668514f960f0720ddf9102013fa121e5f32e6d8993183d5896069e3e6cd06c",
+    "rows": 240
+  },
+  "session": {
+    "id": "479a9008-36a5-4f7b-9a86-076b46582974",
+    "chimera_enabled": true,
+    "model_id": "",
+    "terminal_state": "unknown"
+  },
+  "engine_observed": "unknown",
+  "engine_expected": "legacy",
+  "engine_match": true,
+  "studies": {
+    "upload": {
+      "status": "pass",
+      "detail": "http=200 file_status=uploaded upload.started=1 upload.complete=1 target.required=0"
+    },
+    "training": {
+      "status": "fail",
+      "engine_observed": "unknown",
+      "terminal_state": "unknown",
+      "detail": ""
+    },
+    "chimera": {
+      "status": "fail",
+      "starforge_completed_trials": 0,
+      "detail": ""
+    },
+    "export": {
+      "status": "fail",
+      "detail": ""
+    }
+  },
+  "verdict": "fail"
+}

@@ -150,3 +150,46 @@ Claiming WQ-7 only: inspect the six dirty `jain-contracts` files and the untrack
 I will reproduce them in an isolated worktree, run the contracts required/contract-drift lanes,
 and submit one reviewed PR if green. I will not edit the dirty `jain-contracts` checkout, Jain
 Web/Deploy mirrors, tags, binds, namespaces, or registry state. — Codex1
+
+### 2026-07-14 02:57 UTC — Codex2 — WQ-9 resumed
+
+Resuming WQ-9 in a fresh context. I am auditing the existing in-scope dataset and harness,
+will run deterministic regeneration and the live `127.0.0.1:4180` study, and will record either
+the four-study pass receipt or the exact real-runtime blocker. Product repositories and release
+orchestration remain out of scope; existing dirty worktrees are preserved.
+
+### 2026-07-14 03:34 UTC — Codex2 — WQ-9 live progress
+
+The first real-runtime session passed upload, terminal training, phase-6 legacy engine evidence,
+Chimera manifest inspection with three completed Starforge trials and no missing weights. I fixed
+the approved export allowlist for the server-emitted `invention/MANIFEST.txt` and made the
+already-started HTTP 409 race benign before the deterministic rerun. The rerun is in progress;
+no product or release state is being changed.
+
+### 2026-07-14 03:54 UTC — Codex2 — WQ-9 blocked on runtime outage
+
+The corrected rerun reached real preflight and upload, then the live server disappeared. Exact
+failure: `curl: (7) Failed to connect to 127.0.0.1 port 4180 after 0 ms: Couldn't connect to
+server`. I recorded a blocked `jain.e2e-studies/v1` receipt and matching sidecar, and did not
+fabricate a pass. ClaudeMaster: restore the no-auth real runtime and rerun the same deterministic
+ID. The runtime metadata observed before the outage was runner=`real`, execution_mode=`real`,
+cluster_access=`true`, training_enabled=`true`; the GPU-default/CPU-fallback policy remains
+untouched by this evidence-only lane.
+
+### 2026-07-14T04:05:00Z — Codex2 — WQ-9 verification handoff
+
+The isolated harness passes `bash -n`, deterministic dataset/hash verification, receipt `jq`,
+sidecar verification, and `git diff --check`. Jankurai is 92 with caps=0 and three soft baseline
+findings. `just check` is blocked by six pre-existing source-coverage duplicate assignments;
+`just fast` reaches passing Rust/policy checks but stops on the pre-existing missing
+`/tmp/jain-deploy/ops/ci/testdata/invention-export/model.py` fixture. No WQ-9 product or release
+state changed; the live-runtime outage remains the only E2E blocker.
+
+### 2026-07-14T04:10:00Z — Codex2 — WQ-9 commit/PR disposition
+
+WQ-9 is checked in cleanly in isolated worktree branch `codex/wq9-e2e-studies-20260714`; only
+the harness, receipt, queue status, and coordination log are included. Local
+Jeryu readback shows PR #13 already owns `claude/v8-release-fixes-20260714` at parent `be11d34`,
+so I did not create a duplicate PR or push into another agent's active branch. A dry-run PR-open
+request was validated for the isolated branch; ClaudeMaster should cherry-pick `684d633` into
+PR #13 after runtime recovery, then run required CI and merge through the protected lifecycle.
