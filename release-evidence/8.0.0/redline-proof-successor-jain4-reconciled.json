@@ -1,0 +1,19 @@
+{
+  "authoritative_lock": "../../redline.lock.toml",
+  "compatibility_mirror": "../../../redline-split/redline.lock.toml",
+  "compatibility_mirror_updated": true,
+  "cutover_eligible": false,
+  "family": "redline-split",
+  "generated_at": "2026-07-14T18:55:58Z",
+  "lock_sha256": "a6223759a257baec12d5bcaaa235de70823101e0b3be1898ce58ecec07c620b7",
+  "predecessor_lock_sha256": "7efb22432f47f7e995edefdf0ab28f2bcee39463bad9f697fd707d4a74df56d4",
+  "previous_engine_commit": "7137a1ee2d04be4eb6931d99ff78b8a52c827900",
+  "previous_engine_tag": "redline-core-v4.1.0-jain.3",
+  "previous_proof_lock_id": "redline-proof/v2/4.1.0/7137a1ee2d04be4eb6931d99ff78b8a52c827900",
+  "schema_version": "redline.proof-successor/v1",
+  "status": "pass",
+  "successor_engine_commit": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+  "successor_engine_tag": "redline-core-v4.1.0-jain.4",
+  "successor_manifest_sha256": "55544e8d3e4d50a17e0bfe80fc00d819529d354caf8137564ede68021b96f0c6",
+  "transition_state": "reconciled"
+}
