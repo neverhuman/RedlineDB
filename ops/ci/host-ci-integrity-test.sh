@@ -10,9 +10,12 @@ mkdir -p "$fixture/ops/ci" "$fixture/tools/splitctl/src"
 cp -- "$repo_root/ops/ci/host-ci-integrity.sh" "$fixture/ops/ci/host-ci-integrity.sh"
 for path in \
   Cargo.lock Cargo.toml repos.manifest.toml \
+  ops/ci/host-ci-publisher.sh ops/ci/host-ci-sandbox.sh \
+  ops/ci/host-ci-boundary-preflight.sh \
   ops/ci/native-runtime.sh ops/ci/pinned-advisory.sh \
   ops/ci/pinned-cargo-audit.sh ops/ci/pinned-cargo-deny.sh \
-  ops/ci/split-host-ci.sh tools/splitctl/src/main.rs; do
+  ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh \
+  tools/splitctl/src/main.rs; do
   mkdir -p "$fixture/$(dirname "$path")"
   printf 'fixture %s\n' "$path" >"$fixture/$path"
 done
@@ -23,8 +26,26 @@ git -C "$fixture" config user.email host-ci-fixture@example.invalid
 git -C "$fixture" add .
 git -C "$fixture" commit --quiet -m exact
 fixture_commit="$(git -C "$fixture" rev-parse HEAD)"
+config_exec="$tmp/config-exec.sh"
+config_marker="$tmp/config-exec.marker"
+cat >"$config_exec" <<SCRIPT
+#!/usr/bin/env bash
+printf 'executed\n' >>'$config_marker'
+exit 0
+SCRIPT
+chmod 0700 "$config_exec"
+git -C "$fixture" config core.fsmonitor "$config_exec"
+git -C "$fixture" config diff.external "$config_exec"
+git -C "$fixture" config remote.origin.uploadpack "$config_exec"
 [[ "$("$fixture/ops/ci/host-ci-integrity.sh" \
   "$fixture" "$fixture_commit")" == "$fixture_commit" ]] || exit 1
+[[ ! -e "$config_marker" ]] || {
+  printf 'host CI integrity executed repository-local config\n' >&2
+  exit 1
+}
+git -C "$fixture" config --unset core.fsmonitor
+git -C "$fixture" config --unset diff.external
+git -C "$fixture" config --unset remote.origin.uploadpack
 if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" \
   0123456789abcdef0123456789abcdef01234567 >/dev/null 2>&1; then
   printf 'host CI integrity accepted a different expected commit\n' >&2
@@ -44,6 +65,13 @@ if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null 2>&1; then
   exit 1
 fi
 git -C "$fixture" restore ops/ci/split-host-ci.sh
+
+printf 'dirty publisher\n' >>"$fixture/ops/ci/host-ci-publisher.sh"
+if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null 2>&1; then
+  printf 'host CI integrity accepted a dirty root publisher source\n' >&2
+  exit 1
+fi
+git -C "$fixture" restore ops/ci/host-ci-publisher.sh
 
 printf 'untracked orchestration\n' >"$fixture/ops/ci/unreviewed.sh"
 if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null 2>&1; then

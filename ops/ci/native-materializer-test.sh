@@ -9,7 +9,7 @@ tmp="$(mktemp -d /tmp/jain-native-materializer-test.XXXXXX)"
 durable_root="${JAIN_TEST_DURABLE_ROOT:-$HOME/.cache/jain-native-materializer-test.$$}"
 rm -rf -- "$durable_root"
 mkdir -p "$durable_root"
-trap 'rm -rf "$tmp" "$durable_root"' EXIT
+trap 'chmod -R u+w "$source_root" 2>/dev/null || true; rm -rf "$tmp" "$durable_root"' EXIT
 source_root="$tmp/source"
 run_root="$tmp/run"
 vendor_root="$run_root/vendor"
@@ -158,14 +158,33 @@ grep -Fq 'source revision mismatch' "$tmp/mismatch.log" || {
 git -C "$source_root/xgboost" checkout --quiet --detach "$xgb_expected"
 
 staged_source="$tmp/staged-source"
+source_worktrees_before="$({
+  for learner in catboost xgboost lightgbm; do
+    printf '%s\n' "[$learner]"
+    git -C "$source_root/$learner" worktree list --porcelain
+  done
+})"
+chmod -R a-w "$source_root"
 jain_stage_native_source_worktrees "$authority" "$source_root" "$staged_source"
 for learner in catboost xgboost lightgbm; do
-  [[ -z "$(git -C "$staged_source/$learner" status --porcelain=v1 --untracked-files=all)" ]] \
+  [[ -d "$staged_source/$learner/.git" \
+    && -z "$(git -C "$staged_source/$learner" status --porcelain=v1 --untracked-files=all)" ]] \
     || {
       printf 'exact object staging produced a dirty %s worktree\n' "$learner" >&2
       exit 1
     }
 done
+source_worktrees_after="$({
+  for learner in catboost xgboost lightgbm; do
+    printf '%s\n' "[$learner]"
+    git -C "$source_root/$learner" worktree list --porcelain
+  done
+})"
+[[ "$source_worktrees_after" == "$source_worktrees_before" ]] || {
+  printf 'native staging mutated canonical source worktree metadata\n' >&2
+  exit 1
+}
+chmod -R u+w "$source_root"
 jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_source"
 [[ ! -e "$staged_source" ]] || {
   printf 'native source worktree cleanup left its staging root behind\n' >&2
@@ -211,6 +230,12 @@ git -C "$control" push --quiet -u origin main
 jain_extract_native_materializer \
   "$control" "$tmp/extracted" "$tmp/jeryu/jain-split-ops.git"
 [[ -x "$JAIN_NATIVE_MATERIALIZER" && -s "$JAIN_NATIVE_AUTHORITY" ]] || exit 1
+control_commit="$(git -C "$control" rev-parse HEAD)"
+mv "$tmp/jeryu/jain-split-ops.git" "$tmp/jeryu/jain-split-ops.offline"
+jain_extract_native_materializer "$control" "$tmp/extracted-offline" \
+  "$tmp/jeryu/jain-split-ops.git" "$control_commit" local
+[[ -x "$JAIN_NATIVE_MATERIALIZER" && -s "$JAIN_NATIVE_AUTHORITY" ]] || exit 1
+mv "$tmp/jeryu/jain-split-ops.offline" "$tmp/jeryu/jain-split-ops.git"
 git -C "$control" remote set-url origin "$tmp/veox/jain-split-ops.git"
 if jain_extract_native_materializer "$control" "$tmp/unreviewed" \
   "$tmp/jeryu/jain-split-ops.git" 2>/dev/null; then

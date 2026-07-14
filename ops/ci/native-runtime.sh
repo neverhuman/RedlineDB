@@ -38,7 +38,10 @@ jain_verify_reviewed_control_plane_commit() {
   local ops_root="${1:?control-plane root is required}"
   local expected_commit="${2:?control-plane commit is required}"
   local reviewed_remote="${3:?reviewed control-plane remote is required}"
+  local authority_mode="${4:-remote}"
   local commit remote reviewed_commit
+
+  [[ "$authority_mode" == remote || "$authority_mode" == local ]] || return 1
 
   [[ "$expected_commit" =~ ^[0-9a-f]{40}$ ]] || return 1
   commit="$(git -C "$ops_root" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" || {
@@ -59,6 +62,10 @@ jain_verify_reviewed_control_plane_commit() {
       "$remote" "$reviewed_remote" >&2
     return 1
   }
+  # The untrusted host-CI worker is deliberately network-isolated. It verifies
+  # the exact local origin binding here; the root publisher independently reads
+  # reviewed origin/main after the worker namespace has exited.
+  [[ "$authority_mode" == local ]] && return 0
   reviewed_commit="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
     git ls-remote --exit-code "$reviewed_remote" refs/heads/main 2>/dev/null \
     | cut -f1)" || {
@@ -137,6 +144,7 @@ jain_extract_native_materializer() {
   local destination="${2:?materializer destination is required}"
   local reviewed_remote="${3:?reviewed control-plane remote is required}"
   local expected_commit="${4:-}"
+  local authority_mode="${5:-remote}"
   local commit path expected actual
   local -a paths=(
     ops/ci/native-materializer.sh
@@ -161,7 +169,7 @@ jain_extract_native_materializer() {
     return 1
   fi
   jain_verify_reviewed_control_plane_commit \
-    "$ops_root" "$commit" "$reviewed_remote" || return 1
+    "$ops_root" "$commit" "$reviewed_remote" "$authority_mode" || return 1
   for path in "${paths[@]}"; do
     git -C "$ops_root" cat-file -e "$commit:$path" 2>/dev/null || {
       printf 'reviewed control-plane commit lacks native input: %s\n' "$path" >&2
@@ -220,9 +228,11 @@ jain_native_source_root() {
   fi
 }
 
-# Create clean detached worktrees at the authority revisions. The canonical
-# source checkout may contain build/pruning changes; none are read. Git object,
-# tree, and SHA-256 tree-manifest identities are verified before checkout.
+# Create clean detached shared clones at the authority revisions. Shared object
+# reads keep the large native sources fast without registering worktrees or
+# writing into the canonical source repositories, which are read-only inside
+# host CI. Dirty checkout bytes are never read. Git object, tree, and SHA-256
+# tree-manifest identities are verified before checkout.
 jain_stage_native_source_worktrees() {
   local authority="${1:?native source authority is required}"
   local source_input="${2:?native source root is required}"
@@ -280,8 +290,12 @@ jain_stage_native_source_worktrees() {
       jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
       return 1
     }
-    git -C "$source_root/$learner" worktree add --quiet --detach \
-      "$staged_root/$learner" "$revision" || {
+    git clone --quiet --shared --no-checkout "$source_root/$learner" \
+      "$staged_root/$learner" || {
+      jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+      return 1
+    }
+    git -C "$staged_root/$learner" checkout --quiet --detach "$revision" || {
       jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
       return 1
     }
@@ -329,8 +343,13 @@ jain_stage_native_source_worktrees() {
         return 1
       }
       mkdir -p "$(dirname "$staged_root/$learner/$sub_path")"
-      git -C "$source_root/$learner/$sub_path" worktree add --quiet --detach \
-        "$staged_root/$learner/$sub_path" "$sub_revision" || {
+      git clone --quiet --shared --no-checkout \
+        "$source_root/$learner/$sub_path" "$staged_root/$learner/$sub_path" || {
+        jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+        return 1
+      }
+      git -C "$staged_root/$learner/$sub_path" checkout --quiet --detach \
+        "$sub_revision" || {
         jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
         return 1
       }
@@ -342,26 +361,7 @@ jain_cleanup_native_source_worktrees() {
   local authority="${1:?native source authority is required}"
   local source_input="${2:?native source root is required}"
   local staged_root="${3:?staged native source root is required}"
-  local source_root learner sub_count index sub_path
-  local -a learners=()
-  source_root="$(jain_native_source_root "$source_input" 2>/dev/null || printf '%s' "$source_input")"
-  mapfile -t learners < <(jq -r '.learners[]?.name' "$authority" 2>/dev/null)
-  for learner in "${learners[@]}"; do
-    [[ -d "$source_root/$learner" ]] || continue
-    sub_count="$(jq -r --arg learner "$learner" \
-      '.learners[] | select(.name == $learner) | (.submodules // []) | length' \
-      "$authority" 2>/dev/null || printf '0')"
-    for ((index = sub_count - 1; index >= 0; index--)); do
-      sub_path="$(jq -r --arg learner "$learner" --argjson index "$index" \
-        '.learners[] | select(.name == $learner) | .submodules[$index].path' \
-        "$authority" 2>/dev/null || true)"
-      [[ -n "$sub_path" && -d "$source_root/$learner/$sub_path" ]] || continue
-      git -C "$source_root/$learner/$sub_path" worktree remove --force \
-        "$staged_root/$learner/$sub_path" >/dev/null 2>&1 || true
-    done
-    git -C "$source_root/$learner" worktree remove --force \
-      "$staged_root/$learner" >/dev/null 2>&1 || true
-  done
+  : "$authority" "$source_input"
   rm -rf -- "$staged_root"
 }
 
@@ -374,12 +374,18 @@ jain_write_sha256_sidecar() {
 }
 
 jain_verify_sha256_sidecar() {
-  local file="${1:?file is required}"
-  [[ -f "$file" && -f "$file.sha256" ]] || return 1
-  (
-    cd "$(dirname "$file")" || exit 1
-    sha256sum -c "$(basename "$file").sha256" >/dev/null
-  )
+  local file="${1:?file is required}" expected actual basename
+  [[ -f "$file" && ! -L "$file" \
+    && "$(stat -c '%h' -- "$file" 2>/dev/null)" == 1 \
+    && -f "$file.sha256" && ! -L "$file.sha256" \
+    && "$(stat -c '%h' -- "$file.sha256" 2>/dev/null)" == 1 ]] || return 1
+  basename="$(basename "$file")"
+  expected="$(sed -n -E \
+    "s/^([0-9a-f]{64})  ${basename//./\\.}\$/\\1/p" "$file.sha256")"
+  [[ "$expected" =~ ^[0-9a-f]{64}$ \
+    && "$(wc -l <"$file.sha256")" == 1 ]] || return 1
+  actual="$(sha256sum -- "$file" | cut -d' ' -f1)"
+  [[ "$actual" == "$expected" ]]
 }
 
 jain_control_plane_file_sha256() {
@@ -446,6 +452,7 @@ jain_verify_native_evidence() {
   local control_root="${4:?control-plane root is required}"
   local expected_control_commit="${5:?control-plane commit is required}"
   local file
+  [[ -d "$evidence_dir" && ! -L "$evidence_dir" ]] || return 1
   for file in materialization.log native-vendor-manifest.json \
     native-sources.lock.json native-materializer.sh native-runtime.sh \
     split-host-ci.sh host-ci-integrity.sh receipt.json; do

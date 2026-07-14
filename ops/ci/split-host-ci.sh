@@ -10,277 +10,84 @@
 # Usage: split-host-ci.sh <owner> <repo> <sha> <repo_path> [check_name]
 set -uo pipefail
 
+# Status authority is never accepted from the caller. Even a rejected
+# credential must not survive long enough to reach the reviewed worker.
+if [[ -v JERYU_MERGE_TOKEN || -v JERYU_MERGE_TOKEN_FILE ]]; then
+  unset JERYU_MERGE_TOKEN JERYU_MERGE_TOKEN_FILE
+  printf '[split-host-ci] caller-provided forge credentials are forbidden; use the root publisher\n' >&2
+  exit 2
+fi
+unset JAIN_BASE
+
 OWNER="${1:?owner}"; REPO="${2:?repo}"; SHA="${3:?sha}"; REPO_PATH="${4:?repo_path}"
 CHECK="${5:-$REPO/required}"
-JAIN_BASE="${JAIN_BASE:-http://127.0.0.1:8787}"
 RUNNER_PATH="$(realpath -e -- "${BASH_SOURCE[0]}")" || exit 2
 REVIEWED_RUNNER_NAME=.split-host-ci-reviewed
 
-# The checkout used to invoke this script is bootstrap-only. Capture its clean
-# commit, create a detached worktree from that Git object, and invoke a runner
-# extracted from the same commit. Public entry always takes this path; caller
-# environment cannot select reviewed mode or cleanup paths.
+# Public entry has no publication code. It delegates bootstrap preparation to
+# the reviewed unprivileged parent helper, whose only sudo transition is the
+# one-argument sandbox broker. The root sandbox invokes this file under the
+# reserved reviewed basename for worker mode below.
 if [[ "${RUNNER_PATH##*/}" != "$REVIEWED_RUNNER_NAME" ]]; then
   ENTRY_OPS_ROOT="$(cd "$(dirname "$RUNNER_PATH")/../.." && pwd)"
-  bootstrap_commit="$(
-    "$ENTRY_OPS_ROOT/ops/ci/host-ci-integrity.sh" "$ENTRY_OPS_ROOT"
-  )" || {
-    printf '[split-host-ci] exact control-plane integrity check failed\n' >&2
-    exit 2
-  }
-  bootstrap_root="$(mktemp -d /tmp/split-host-ci-bootstrap.XXXXXX)" || exit 2
-  bootstrap_exact="$bootstrap_root/control-plane"
-  bootstrap_state="$bootstrap_root/reexec-state.json"
-  child_result="$bootstrap_root/child-result.json"
-  child_log="$bootstrap_root/child.log"
-  parent_receipt="$bootstrap_root/parent-receipt.json"
-  reviewed_runner="$bootstrap_root/$REVIEWED_RUNNER_NAME"
-  cleanup_failed_bootstrap() {
-    local root_real=""
-    git -C "$ENTRY_OPS_ROOT" worktree remove --force \
-      "$bootstrap_exact" >/dev/null 2>&1 || true
-    root_real="$(realpath -e -- "$bootstrap_root" 2>/dev/null || true)"
-    case "$root_real" in
-      /tmp/split-host-ci-bootstrap.??????)
-        if [[ "$root_real" == "$bootstrap_root" \
-          && ! -L "$bootstrap_root" \
-          && "$(stat -c '%u:%a' -- "$bootstrap_root" 2>/dev/null)" \
-            == "$(id -u):700" ]]; then
-          rm -rf -- "$bootstrap_root"
-        fi
-        ;;
-    esac
-  }
-  trap cleanup_failed_bootstrap EXIT
-  git -C "$ENTRY_OPS_ROOT" worktree add --quiet --detach \
-    "$bootstrap_exact" "$bootstrap_commit" || exit 2
-  exact_commit="$(
-    git -C "$ENTRY_OPS_ROOT" show \
-      "$bootstrap_commit:ops/ci/host-ci-integrity.sh" \
-      | bash -s -- "$bootstrap_exact" "$bootstrap_commit"
-  )" || exit 2
-  [[ "$exact_commit" == "$bootstrap_commit" ]] || exit 2
-  git -C "$ENTRY_OPS_ROOT" show \
-    "$bootstrap_commit:ops/ci/split-host-ci.sh" >"$reviewed_runner" || exit 2
-  [[ "$(sha256sum -- "$reviewed_runner" | cut -d' ' -f1)" == \
-    "$(git -C "$ENTRY_OPS_ROOT" show \
-      "$bootstrap_commit:ops/ci/split-host-ci.sh" | sha256sum | cut -d' ' -f1)" ]] \
-    || exit 2
-  chmod 0500 "$reviewed_runner"
-  seal="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
-  [[ "$seal" =~ ^[0-9a-f]{64}$ ]] || exit 2
-  if [[ -n "${JERYU_MERGE_TOKEN:-}" ]]; then
-    bootstrap_token="$JERYU_MERGE_TOKEN"
-  else
-    bootstrap_token_file="${JERYU_MERGE_TOKEN_FILE:-$HOME/.jeryu/secrets/merge-token}"
-    [[ -r "$bootstrap_token_file" ]] || {
-      printf '[split-host-ci] forge status credential is unavailable\n' >&2
-      exit 2
-    }
-    bootstrap_token="$(tr -d '\n' <"$bootstrap_token_file")"
-  fi
-  [[ -n "$bootstrap_token" ]] || exit 2
-  curl -fsS "$JAIN_BASE/health" >/dev/null || {
-    printf '[split-host-ci] forge not healthy\n' >&2
-    exit 2
-  }
-  jq -n --arg seal "$seal" --arg source_root "$ENTRY_OPS_ROOT" \
-    --arg exact_root "$bootstrap_exact" --arg commit "$bootstrap_commit" \
-    --arg result_path "$child_result" \
-    '{schema_version:"jain.host-ci-reexec/v1",seal:$seal,
-      source_root:$source_root,exact_root:$exact_root,commit:$commit,
-      result_path:$result_path}' \
-    >"$bootstrap_state" || exit 2
-  chmod 0600 "$bootstrap_state"
-  mkdir -m 0700 "$bootstrap_root/child-home" || exit 2
-  env -u JERYU_MERGE_TOKEN -u JERYU_MERGE_TOKEN_FILE \
-    HOME="$bootstrap_root/child-home" \
-    JERYU_MERGE_TOKEN_FILE=/dev/null \
-    JAIN_HOST_CI_REEXEC_STATE="$bootstrap_state" \
-    JAIN_HOST_CI_REEXEC_SEAL="$seal" \
-    bash "$reviewed_runner" "$@" >"$child_log" 2>&1
-  runner_rc=$?
-  cat "$child_log" >&2
-
-  parent_post_check() {
-    local conclusion="${1:?conclusion is required}"
-    local receipt_sha="${2:-}" state=failure description
-    [[ "$conclusion" == success ]] && state=success
-    curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/check-runs" \
-      -H "Authorization: Bearer $bootstrap_token" \
-      -H 'content-type: application/json' \
-      -d "$(jq -cn --arg name "$CHECK" --arg sha "$SHA" \
-        --arg conclusion "$conclusion" \
-        '{name:$name,head_sha:$sha,status:"completed",conclusion:$conclusion}')" \
-      >/dev/null || return 1
-    description="$CHECK via split-host-ci"
-    [[ -n "$receipt_sha" ]] && description="$CHECK host-receipt=$receipt_sha"
-    curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/statuses/$SHA" \
-      -H "Authorization: Bearer $bootstrap_token" \
-      -H 'content-type: application/json' \
-      -d "$(jq -cn --arg state "$state" --arg context "$CHECK" \
-        --arg description "$description" \
-        '{state:$state,context:$context,description:$description}')" \
-      >/dev/null
-  }
-
-  parent_verify_integrity() {
-    local root="${1:?control-plane root is required}" verified
-    verified="$(
-      git -C "$root" show \
-        "$bootstrap_commit:ops/ci/host-ci-integrity.sh" \
-        | bash -s -- "$root" "$bootstrap_commit"
-    )" || return 1
-    [[ "$verified" == "$bootstrap_commit" ]]
-  }
-
-  if [[ "$runner_rc" != 0 ]]; then
-    parent_post_check failure || \
-      printf '[split-host-ci] failure status publication failed\n' >&2
-    exit 1
-  fi
-  [[ -s "$child_log" && -f "$child_result" && ! -L "$child_result" \
-    && "$(stat -c '%u:%a:%h' -- "$child_result" 2>/dev/null)" \
-      == "$(id -u):600:1" ]] || {
-    printf '[split-host-ci] exact child result is missing or unsafe\n' >&2
-    parent_post_check failure || true
-    exit 1
-  }
-  jq -e --arg owner "$OWNER" --arg repo "$REPO" --arg head_sha "$SHA" \
-    --arg check "$CHECK" --arg commit "$bootstrap_commit" \
-    'select(.schema_version == "jain.host-ci-child-result/v1")
-     | select(.status == "pass" and .conclusion == "success")
-     | select(.owner == $owner and .repository == $repo)
-     | select(.head_sha == $head_sha and .required_check == $check)
-     | select(.control_plane_commit == $commit)
-     | select(.native_evidence_required | type == "boolean")
-     | select(.native_evidence_dir | type == "string")
-     | select(.native_evidence_sha256 | type == "string")' \
-    "$child_result" >/dev/null || {
-    printf '[split-host-ci] exact child result failed validation\n' >&2
-    parent_post_check failure || true
-    exit 1
-  }
-  if ! parent_verify_integrity "$ENTRY_OPS_ROOT" \
-    || ! parent_verify_integrity "$bootstrap_exact" \
-    || [[ "$(sha256sum -- "$RUNNER_PATH" | cut -d' ' -f1)" != \
-      "$(git -C "$ENTRY_OPS_ROOT" show \
-        "$bootstrap_commit:ops/ci/split-host-ci.sh" | sha256sum | cut -d' ' -f1)" ]] \
-    || [[ "$(sha256sum -- "$reviewed_runner" | cut -d' ' -f1)" != \
-      "$(sha256sum -- "$RUNNER_PATH" | cut -d' ' -f1)" ]]; then
-    printf '[split-host-ci] control-plane bytes changed before success publication\n' >&2
-    parent_post_check failure || true
-    exit 1
-  fi
-  native_required="$(jq -er \
-    'if .native_evidence_required then "1" else "0" end' \
-    "$child_result")" || exit 1
-  native_evidence_dir="$(jq -er '.native_evidence_dir' "$child_result")" || exit 1
-  native_evidence_sha="$(jq -er '.native_evidence_sha256' "$child_result")" || exit 1
-  bash -c '
-    set -uo pipefail
-    source "$1"
-    jain_verify_native_check_evidence success "$2" "$3" "$4" \
-      "$5" "$6" "$7" "$8"
-  ' _ "$bootstrap_exact/ops/ci/native-runtime.sh" "$native_required" \
-    "$native_evidence_dir" "$native_evidence_sha" "$SHA" "$CHECK" \
-    "$bootstrap_exact" "$bootstrap_commit" || {
-    printf '[split-host-ci] parent rejected exact native evidence\n' >&2
-    parent_post_check failure || true
-    exit 1
-  }
-  jq -n --arg owner "$OWNER" --arg repo "$REPO" --arg head_sha "$SHA" \
-    --arg check "$CHECK" --arg commit "$bootstrap_commit" \
-    --arg child_result_sha256 "$(sha256sum -- "$child_result" | cut -d' ' -f1)" \
-    --arg child_log_sha256 "$(sha256sum -- "$child_log" | cut -d' ' -f1)" \
-    --arg runner_sha256 "$(sha256sum -- "$reviewed_runner" | cut -d' ' -f1)" \
-    '{schema_version:"jain.host-ci-parent-receipt/v1",status:"pass",
-      owner:$owner,repository:$repo,head_sha:$head_sha,required_check:$check,
-      control_plane_commit:$commit,child_result_sha256:$child_result_sha256,
-      child_log_sha256:$child_log_sha256,runner_sha256:$runner_sha256}' \
-    >"$parent_receipt" || exit 1
-  chmod 0600 "$parent_receipt"
-  parent_receipt_sha="$(sha256sum -- "$parent_receipt" | cut -d' ' -f1)"
-  if ! parent_post_check success "$parent_receipt_sha"; then
-    printf '[split-host-ci] success status publication failed\n' >&2
-    parent_post_check failure || true
-    exit 1
-  fi
-  exit 0
+  exec "$ENTRY_OPS_ROOT/ops/ci/split-host-ci-parent.sh" "$@"
 fi
 
-# Reviewed mode accepts only a sealed state file inside the exact private
-# mktemp directory created above. It never cleans that path; the still-running
-# public parent owns cleanup using its local variables.
+# Reviewed worker mode accepts only the root-owned, read-only authority mount
+# created by host-ci-sandbox. Caller-owned state and checkout paths are invalid.
+
 REEXEC_STATE="${JAIN_HOST_CI_REEXEC_STATE:-}"
-REEXEC_SEAL="${JAIN_HOST_CI_REEXEC_SEAL:-}"
-[[ "$REEXEC_STATE" = /* && "$REEXEC_SEAL" =~ ^[0-9a-f]{64}$ \
-  && -f "$REEXEC_STATE" && ! -L "$REEXEC_STATE" ]] || exit 2
-REEXEC_STATE="$(realpath -e -- "$REEXEC_STATE")" || exit 2
-BOOTSTRAP_ROOT="$(dirname "$REEXEC_STATE")"
-case "$BOOTSTRAP_ROOT" in
-  /tmp/split-host-ci-bootstrap.??????) ;;
-  *) exit 2 ;;
-esac
-[[ ! -L "$BOOTSTRAP_ROOT" \
-  && "$(stat -c '%u:%a' -- "$BOOTSTRAP_ROOT" 2>/dev/null)" \
-    == "$(id -u):700" \
-  && "$(stat -c '%u:%a:%h' -- "$REEXEC_STATE" 2>/dev/null)" \
-    == "$(id -u):600:1" \
-  && "$RUNNER_PATH" == "$BOOTSTRAP_ROOT/$REVIEWED_RUNNER_NAME" \
+[[ "$REEXEC_STATE" == /opt/jain-ci/authority/reexec-state.json \
+  && -f "$REEXEC_STATE" && ! -L "$REEXEC_STATE" \
+  && "$(stat -c '%a:%h' -- "$REEXEC_STATE")" == '444:1' \
+  && "$RUNNER_PATH" == /opt/jain-ci/authority/.split-host-ci-reviewed \
   && ! -L "$RUNNER_PATH" \
-  && "$(stat -c '%u:%a:%h' -- "$RUNNER_PATH" 2>/dev/null)" \
-    == "$(id -u):500:1" ]] || exit 2
-jq -e --arg seal "$REEXEC_SEAL" \
-  'select(.schema_version == "jain.host-ci-reexec/v1" and .seal == $seal)
-   | select(.source_root | type == "string")
-   | select(.exact_root | type == "string")
-   | select(.result_path | type == "string")
-   | select(.commit | test("^[0-9a-f]{40}$"))' \
-  "$REEXEC_STATE" >/dev/null || exit 2
-SOURCE_OPS_ROOT="$(jq -er '.source_root' "$REEXEC_STATE")" || exit 2
-OPS_ROOT="$(jq -er '.exact_root' "$REEXEC_STATE")" || exit 2
+  && "$(stat -c '%a:%h' -- "$RUNNER_PATH")" == '555:1' ]] || exit 2
+jq -e '
+  select(.schema_version == "jain.host-ci-reexec/v2")
+  | select(.source_root == "/opt/jain-ci/authority/control-plane")
+  | select(.exact_root == "/opt/jain-ci/authority/control-plane")
+  | select(.result_path | type == "string" and startswith("/tmp/split-host-ci-bootstrap."))
+  | select(.splitctl_path == "/opt/jain-ci/authority/splitctl")
+  | select(.commit | test("^[0-9a-f]{40}$"))' "$REEXEC_STATE" >/dev/null \
+  || exit 2
+SOURCE_OPS_ROOT="$(realpath -e -- "$(jq -er '.source_root' "$REEXEC_STATE")")" \
+  || exit 2
+OPS_ROOT="$(realpath -e -- "$(jq -er '.exact_root' "$REEXEC_STATE")")" \
+  || exit 2
 CONTROL_PLANE_COMMIT="$(jq -er '.commit' "$REEXEC_STATE")" || exit 2
 CHILD_RESULT_PATH="$(jq -er '.result_path' "$REEXEC_STATE")" || exit 2
-SOURCE_OPS_ROOT="$(realpath -e -- "$SOURCE_OPS_ROOT")" || exit 2
-OPS_ROOT="$(realpath -e -- "$OPS_ROOT")" || exit 2
-jain_git_common_dir() {
-  local root="${1:?Git root is required}" common
-  common="$(git -C "$root" rev-parse --git-common-dir 2>/dev/null)" || return 1
-  case "$common" in
-    /*) realpath -e -- "$common" ;;
-    *) realpath -e -- "$root/$common" ;;
-  esac
-}
-[[ "$OPS_ROOT" == "$BOOTSTRAP_ROOT/control-plane" \
-  && "$CHILD_RESULT_PATH" == "$BOOTSTRAP_ROOT/child-result.json" \
-  && ! -e "$CHILD_RESULT_PATH" \
-  && "$SOURCE_OPS_ROOT" != "$OPS_ROOT" \
-  && -f "$OPS_ROOT/.git" && ! -L "$OPS_ROOT/.git" \
-  && "$(jain_git_common_dir "$OPS_ROOT")" \
-    == "$(jain_git_common_dir "$SOURCE_OPS_ROOT")" \
-  && "$(git -C "$OPS_ROOT" rev-parse --verify 'HEAD^{commit}')" \
-    == "$CONTROL_PLANE_COMMIT" ]] || exit 2
-[[ "$(sha256sum -- "$RUNNER_PATH" | cut -d' ' -f1)" == \
-  "$(git -C "$OPS_ROOT" show \
-    "$CONTROL_PLANE_COMMIT:ops/ci/split-host-ci.sh" | sha256sum | cut -d' ' -f1)" ]] \
+SPLITCTL_BIN="$(realpath -e -- "$(jq -er '.splitctl_path' "$REEXEC_STATE")")" \
   || exit 2
-unset JAIN_HOST_CI_REEXEC_STATE JAIN_HOST_CI_REEXEC_SEAL
+[[ "$SOURCE_OPS_ROOT" == "$OPS_ROOT" \
+  && "$OPS_ROOT" == /opt/jain-ci/authority/control-plane \
+  && -d "$OPS_ROOT/.git" && ! -L "$OPS_ROOT" \
+  && "$SPLITCTL_BIN" == /opt/jain-ci/authority/splitctl \
+  && "$(stat -c '%a:%h' -- "$SPLITCTL_BIN")" == '555:1' \
+  && "$CHILD_RESULT_PATH" \
+    == "${JAIN_HOST_CI_WRITABLE_ROOT:?}/worker-evidence.json" \
+  && ! -e "$CHILD_RESULT_PATH" \
+  && "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -C "$OPS_ROOT" rev-parse --verify 'HEAD^{commit}')" \
+    == "$CONTROL_PLANE_COMMIT" \
+  && "$(sha256sum -- "$RUNNER_PATH" | cut -d' ' -f1)" \
+    == "$(sha256sum -- "$OPS_ROOT/ops/ci/split-host-ci.sh" | cut -d' ' -f1)" ]] \
+  || exit 2
+unset JAIN_HOST_CI_REEXEC_STATE
 
 verify_exact_control_plane_integrity() {
   local verified
   verified="$(
-    git -C "$OPS_ROOT" show \
-      "$CONTROL_PLANE_COMMIT:ops/ci/host-ci-integrity.sh" \
-      | bash -s -- "$OPS_ROOT" "$CONTROL_PLANE_COMMIT"
+    bash "$OPS_ROOT/ops/ci/host-ci-integrity.sh" \
+      "$OPS_ROOT" "$CONTROL_PLANE_COMMIT"
   )" || return 1
   [[ "$verified" == "$CONTROL_PLANE_COMMIT" ]]
 }
-
 verify_exact_control_plane_integrity || {
-  printf '[split-host-ci] detached control-plane integrity check failed\n' >&2
+  printf '[split-host-ci] immutable control-plane integrity check failed\n' >&2
   exit 2
 }
+
 CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
 # shellcheck source=ops/ci/native-runtime.sh
 source "$OPS_ROOT/ops/ci/native-runtime.sh"
@@ -295,28 +102,25 @@ SPLIT_ROOT="${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}"
 [ -d "$SPLIT_ROOT/jain-core" ] || { printf '[split-host-ci] JAIN_SPLIT_ROOT=%s is not a split family root (no jain-core/)\n' "$SPLIT_ROOT" >&2; exit 2; }
 
 say() { printf '[split-host-ci] %s\n' "$*" >&2; }
-# The reviewed child has no status credential and never performs a forge write.
-# It can only return a local result for the still-running public parent to
-# validate against the exact commit before the parent publishes anything.
+# The reviewed worker has no status credential and never performs a forge
+# write. It can return evidence metadata only; the root sandbox derives policy,
+# seals the result, tears down the cgroup, and invokes the one-shot publisher.
 post_check() {
-  local conclusion="${1:?conclusion is required}" required=false result_tmp
-  [[ "${NATIVE_EVIDENCE_REQUIRED:-0}" == 1 ]] && required=true
+  local conclusion="${1:?conclusion is required}" result_tmp
+  [[ "$conclusion" == success ]] || return 0
   result_tmp="$CHILD_RESULT_PATH.tmp.$$"
   jq -n --arg owner "$OWNER" --arg repo "$REPO" --arg head_sha "$SHA" \
     --arg check "$CHECK" --arg commit "$CONTROL_PLANE_COMMIT" \
-    --arg conclusion "$conclusion" \
     --arg evidence_dir "${JAIN_NATIVE_EVIDENCE_DIR:-}" \
     --arg evidence_sha "${JAIN_NATIVE_EVIDENCE_SHA256:-}" \
-    --argjson evidence_required "$required" \
-    '{schema_version:"jain.host-ci-child-result/v1",status:"pass",
+    '{schema_version:"jain.host-ci-worker-evidence/v2",
       owner:$owner,repository:$repo,head_sha:$head_sha,required_check:$check,
-      control_plane_commit:$commit,conclusion:$conclusion,
-      native_evidence_required:$evidence_required,
+      control_plane_commit:$commit,
       native_evidence_dir:$evidence_dir,
       native_evidence_sha256:$evidence_sha}' >"$result_tmp" || return 1
   chmod 0600 "$result_tmp" || return 1
   mv -- "$result_tmp" "$CHILD_RESULT_PATH" || return 1
-  say "recorded exact child result: $conclusion"
+  say 'recorded worker evidence for root policy validation'
 }
 
 native_setup_failure() {
@@ -378,8 +182,7 @@ say "governed jobs=$JOBS"
 native_learners=()
 mapfile -t native_learners < <(jain_native_learners_for_repo "$REPO")
 managed_inventory="$(
-  cargo run --locked --quiet --manifest-path "$OPS_ROOT/Cargo.toml" -- \
-    managed-repos --manifest "$CANONICAL_MANIFEST" --json
+  "$SPLITCTL_BIN" managed-repos --manifest "$CANONICAL_MANIFEST" --json
 )" || {
   post_check failure || true
   echo "failed to derive canonical managed repository inventory" >&2
@@ -395,8 +198,11 @@ control_plane_remote="$(jain_authoritative_control_plane_remote "$managed_invent
   echo "control-plane remote is absent or ambiguous in canonical managed inventory" >&2
   exit 2
 }
+authority_mode=remote
+[[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 ]] && authority_mode=local
 jain_verify_reviewed_control_plane_commit \
-  "$OPS_ROOT" "$CONTROL_PLANE_COMMIT" "$control_plane_remote" || {
+  "$OPS_ROOT" "$CONTROL_PLANE_COMMIT" "$control_plane_remote" \
+  "$authority_mode" || {
   post_check failure || true
   echo "control-plane commit is not authoritative reviewed main" >&2
   exit 2
@@ -414,8 +220,8 @@ fi
 release_cargo_policy=""
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
   release_cargo_policy="$(
-    cargo run --locked --quiet --manifest-path "$OPS_ROOT/Cargo.toml" -- \
-      release-cargo-commands --manifest "$CANONICAL_MANIFEST" --repo "$REPO"
+    "$SPLITCTL_BIN" release-cargo-commands \
+      --manifest "$CANONICAL_MANIFEST" --repo "$REPO"
   )" || native_setup_failure \
     "failed to derive canonical release Cargo policy for $REPO" 2
 fi
@@ -453,7 +259,8 @@ git -C "$REPO_PATH" worktree add -f --detach "$wt" "$SHA" >/dev/null 2>&1 \
 # and preserve a checksummed receipt outside this disposable checkout.
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
   jain_extract_native_materializer "$OPS_ROOT" "$native_bundle" \
-    "$control_plane_remote" "$CONTROL_PLANE_COMMIT" || native_setup_failure \
+    "$control_plane_remote" "$CONTROL_PLANE_COMMIT" "$authority_mode" \
+    || native_setup_failure \
     "release CI exact native materializer extraction failed" 1
   native_authority="$JAIN_NATIVE_AUTHORITY"
   native_materializer="$JAIN_NATIVE_MATERIALIZER"
@@ -471,7 +278,7 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
     "control-plane bytes changed before native evidence persistence" 1
   jain_persist_native_evidence \
     "$native_vendor" "$tmp/native-vendor.log" \
-    "${JAIN_NATIVE_EVIDENCE_ROOT:-$SPLIT_ROOT/target/host-ci-evidence/native-materialization}" \
+    "${JAIN_NATIVE_EVIDENCE_ROOT:-${JAIN_HOST_CI_WRITABLE_ROOT:-$SPLIT_ROOT/target}/host-ci-evidence/native-materialization}" \
     "$tmp" "$OWNER" "$REPO" "$SHA" "$CHECK" \
     "$JAIN_NATIVE_CONTROL_COMMIT" "$OPS_ROOT" \
     || native_setup_failure \
@@ -563,8 +370,8 @@ fi
 # is being migrated. Bare mirrors are a credential-free CI cache, not canonical
 # source.
 if [ "$REPO" != "jain-split-ops" ]; then
-  ci_gitconfig="$SPLIT_ROOT/target/ci-gitconfig"
-  mkdir -p "$SPLIT_ROOT/target"
+  ci_gitconfig="${JAIN_HOST_CI_WRITABLE_ROOT:-$SPLIT_ROOT/target}/ci-gitconfig"
+  mkdir -p "$(dirname "$ci_gitconfig")"
   printf '[url "file://%s/target/bare-mirrors/"]\n\tinsteadOf = http://127.0.0.1:8787/git/jeryu/\n\tinsteadOf = http://127.0.0.1:8787/git/jain-split/\n\tinsteadOf = http://127.0.0.1:8787/git/redline/\n\tinsteadOf = https://github.com/neverhuman/\n[net]\n\tgit-fetch-with-cli = true\n' "$SPLIT_ROOT" > "$ci_gitconfig"
   say "cross-repo resolution: local bare mirrors (CI cache for local Jeryu tags)"
   export GIT_CONFIG_GLOBAL="$ci_gitconfig"
@@ -585,6 +392,13 @@ fi
 log="$tmp/ci.log"
 say "running scripts/ci-local.sh required for $OWNER/$REPO @ ${SHA:0:8}"
 if (cd "$wt" && bash scripts/ci-local.sh required) >"$log" 2>&1; then
+  boundary_probe="${JAIN_HOST_CI_WRITABLE_ROOT:-}/boundary-probe.txt"
+  if [[ -n "${JAIN_HOST_CI_WRITABLE_ROOT:-}" \
+    && -f "$boundary_probe" && ! -L "$boundary_probe" \
+    && "$(stat -c '%u:%a:%h:%s' -- "$boundary_probe" 2>/dev/null)" \
+      =~ ^$(id -u):600:1:[0-9]{1,4}$ ]]; then
+    cat "$boundary_probe" >&2
+  fi
   if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
     if [ -f "$wt/Cargo.toml" ]; then
       (cd "$wt" && cargo metadata --locked --format-version 1 >/dev/null && \
