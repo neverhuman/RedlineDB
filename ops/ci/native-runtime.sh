@@ -14,6 +14,50 @@ jain_native_learners_for_repo() {
   esac
 }
 
+jain_authoritative_control_plane_remote() {
+  local inventory="${1:?managed repository inventory is required}"
+  jq -er '
+    [.repositories[]
+      | select(.kind == "control-plane" and .name == "jain-split-ops")]
+    | select(length == 1)
+    | .[0].remote
+    | select(type == "string" and length > 0)' <<<"$inventory"
+}
+
+jain_authoritative_required_check() {
+  local inventory="${1:?managed repository inventory is required}"
+  local repo="${2:?repository name is required}"
+  jq -er --arg repo "$repo" '
+    [.repositories[] | select(.name == $repo)]
+    | select(length == 1)
+    | .[0].required_check
+    | select(type == "string" and length > 0)' <<<"$inventory"
+}
+
+jain_validate_native_check_mode() {
+  local repo="${1:?repository name is required}"
+  local check="${2:?check name is required}"
+  local protected_check="${3:?protected check name is required}"
+  local release_mode="${4:-0}"
+  local -a learners=()
+  mapfile -t learners < <(jain_native_learners_for_repo "$repo")
+  if [[ "${#learners[@]}" -gt 0 && "$check" == "$protected_check" \
+    && "$release_mode" != 1 ]]; then
+    printf '%s cannot satisfy protected %s without JAIN_RELEASE_CI=1\n' \
+      "$repo" "$protected_check" >&2
+    return 1
+  fi
+}
+
+jain_native_check_requires_evidence() {
+  local repo="${1:?repository name is required}"
+  local check="${2:?check name is required}"
+  local protected_check="${3:?protected check name is required}"
+  local -a learners=()
+  mapfile -t learners < <(jain_native_learners_for_repo "$repo")
+  [[ "${#learners[@]}" -gt 0 && "$check" == "$protected_check" ]]
+}
+
 jain_native_build_dirs() {
   local vendor_root="${1:?native vendor root is required}"
   printf '%s\n' \
@@ -316,7 +360,8 @@ jain_verify_native_evidence() {
   local expected_sha="${2:-}" expected_check="${3:-}"
   local file
   for file in materialization.log native-vendor-manifest.json \
-    native-sources.lock.json native-materializer.sh receipt.json; do
+    native-sources.lock.json native-materializer.sh native-runtime.sh \
+    split-host-ci.sh host-ci-integrity.sh receipt.json; do
     jain_verify_sha256_sidecar "$evidence_dir/$file" || return 1
   done
   jq -e --arg expected_sha "$expected_sha" --arg expected_check "$expected_check" \
@@ -331,10 +376,16 @@ jain_verify_native_evidence() {
     --arg manifest "$(sha256sum -- "$evidence_dir/native-vendor-manifest.json" | cut -d' ' -f1)" \
     --arg authority "$(sha256sum -- "$evidence_dir/native-sources.lock.json" | cut -d' ' -f1)" \
     --arg materializer "$(sha256sum -- "$evidence_dir/native-materializer.sh" | cut -d' ' -f1)" \
+    --arg runtime "$(sha256sum -- "$evidence_dir/native-runtime.sh" | cut -d' ' -f1)" \
+    --arg runner "$(sha256sum -- "$evidence_dir/split-host-ci.sh" | cut -d' ' -f1)" \
+    --arg integrity "$(sha256sum -- "$evidence_dir/host-ci-integrity.sh" | cut -d' ' -f1)" \
     '.log_sha256 == $log
      and .native_vendor_manifest_sha256 == $manifest
      and .authority.sha256 == $authority
-     and .materializer.sha256 == $materializer' \
+     and .materializer.sha256 == $materializer
+     and .orchestration.native_runtime_sha256 == $runtime
+     and .orchestration.split_host_ci_sha256 == $runner
+     and .orchestration.host_ci_integrity_sha256 == $integrity' \
     "$evidence_dir/receipt.json" >/dev/null
 }
 
@@ -346,6 +397,62 @@ jain_verify_native_evidence_binding() {
   jain_verify_native_evidence "$evidence_dir" "$expected_head" "$expected_check" || return 1
   [[ "$(sha256sum -- "$evidence_dir/receipt.json" | cut -d' ' -f1)" == \
     "$expected_receipt_sha" ]]
+}
+
+jain_verify_native_check_evidence() {
+  local conclusion="${1:?check conclusion is required}"
+  local evidence_required="${2:-0}"
+  local evidence_dir="${3:-}" receipt_sha="${4:-}"
+  local expected_head="${5:-}" expected_check="${6:-}"
+  if [[ -n "$evidence_dir" || -n "$receipt_sha" ]]; then
+    [[ -n "$evidence_dir" && -n "$receipt_sha" ]] || return 1
+    jain_verify_native_evidence_binding "$evidence_dir" "$receipt_sha" \
+      "$expected_head" "$expected_check"
+    return
+  fi
+  if [[ "$evidence_required" == 1 && "$conclusion" == success ]]; then
+    printf 'protected native success requires exact materialization evidence\n' >&2
+    return 1
+  fi
+}
+
+jain_resolve_durable_evidence_root() {
+  local evidence_root="${1:?native evidence root is required}"
+  local ephemeral_root="${2:?ephemeral CI root is required}"
+  local evidence_resolved ephemeral_resolved verified
+  command -v realpath >/dev/null 2>&1 || {
+    printf 'native evidence requires realpath\n' >&2
+    return 1
+  }
+  [[ "$evidence_root" = /* && "$ephemeral_root" = /* ]] || {
+    printf 'native evidence and ephemeral roots must be absolute\n' >&2
+    return 1
+  }
+  ephemeral_resolved="$(realpath -e -- "$ephemeral_root" 2>/dev/null)" || {
+    printf 'ephemeral CI root cannot be resolved: %s\n' "$ephemeral_root" >&2
+    return 1
+  }
+  evidence_resolved="$(realpath -m -- "$evidence_root")" || return 1
+  case "$evidence_resolved" in
+    /tmp | /tmp/*)
+      printf 'native evidence root cannot use /tmp: %s\n' "$evidence_resolved" >&2
+      return 1
+      ;;
+  esac
+  case "$evidence_resolved" in
+    "$ephemeral_resolved" | "$ephemeral_resolved"/*)
+      printf 'native evidence root resolves inside ephemeral CI: %s\n' \
+        "$evidence_resolved" >&2
+      return 1
+      ;;
+  esac
+  mkdir -p "$evidence_resolved" || return 1
+  verified="$(realpath -e -- "$evidence_resolved" 2>/dev/null)" || return 1
+  [[ "$verified" == "$evidence_resolved" ]] || {
+    printf 'native evidence root changed while resolving: %s\n' "$evidence_root" >&2
+    return 1
+  }
+  printf '%s\n' "$evidence_resolved"
 }
 
 # Persist all native inputs, output manifest, and log outside the disposable
@@ -360,23 +467,15 @@ jain_persist_native_evidence() {
   local control_commit="${9:?control-plane commit is required}"
   local authority="${10:?native authority is required}"
   local materializer="${11:?native materializer is required}"
+  local native_runtime="${12:?native runtime orchestration is required}"
+  local split_host_ci="${13:?split host CI orchestration is required}"
+  local host_ci_integrity="${14:?host CI integrity gate is required}"
   local check_slug attempt parent staging destination recorded_at file
 
   [[ "$head_sha" =~ ^[0-9a-f]{40}$ && "$control_commit" =~ ^[0-9a-f]{40}$ ]] || return 1
   [[ "$owner" =~ ^[A-Za-z0-9_.-]+$ && "$repo" =~ ^[A-Za-z0-9_.-]+$ ]] || return 1
-  case "$evidence_root" in
-    /*) ;;
-    *)
-      printf 'native evidence root must be absolute: %s\n' "$evidence_root" >&2
-      return 1
-      ;;
-  esac
-  case "$evidence_root/" in
-    "$ephemeral_root/"*)
-      printf 'native evidence root must survive ephemeral cleanup: %s\n' "$evidence_root" >&2
-      return 1
-      ;;
-  esac
+  evidence_root="$(jain_resolve_durable_evidence_root \
+    "$evidence_root" "$ephemeral_root")" || return 1
   [[ -s "$log" && -s "$vendor_root/receipts/manifest.json" ]] || return 1
   check_slug="${check//[^A-Za-z0-9_.-]/_}"
   attempt="${JAIN_CI_ATTEMPT_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
@@ -390,6 +489,9 @@ jain_persist_native_evidence() {
   cp -- "$vendor_root/receipts/manifest.json" "$staging/native-vendor-manifest.json"
   cp -- "$authority" "$staging/native-sources.lock.json"
   cp -- "$materializer" "$staging/native-materializer.sh"
+  cp -- "$native_runtime" "$staging/native-runtime.sh"
+  cp -- "$split_host_ci" "$staging/split-host-ci.sh"
+  cp -- "$host_ci_integrity" "$staging/host-ci-integrity.sh"
   recorded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   jq -n --arg owner "$owner" --arg repo "$repo" --arg head_sha "$head_sha" \
     --arg required_check "$check" --arg recorded_at "$recorded_at" \
@@ -398,18 +500,27 @@ jain_persist_native_evidence() {
     --arg manifest_sha256 "$(sha256sum -- "$staging/native-vendor-manifest.json" | cut -d' ' -f1)" \
     --arg authority_sha256 "$(sha256sum -- "$staging/native-sources.lock.json" | cut -d' ' -f1)" \
     --arg materializer_sha256 "$(sha256sum -- "$staging/native-materializer.sh" | cut -d' ' -f1)" \
+    --arg native_runtime_sha256 "$(sha256sum -- "$staging/native-runtime.sh" | cut -d' ' -f1)" \
+    --arg split_host_ci_sha256 "$(sha256sum -- "$staging/split-host-ci.sh" | cut -d' ' -f1)" \
+    --arg host_ci_integrity_sha256 "$(sha256sum -- "$staging/host-ci-integrity.sh" | cut -d' ' -f1)" \
     --slurpfile manifest "$staging/native-vendor-manifest.json" \
     '{schema_version:"jain.host-native-materialization/v1",recorded_at:$recorded_at,
       owner:$owner,repository:$repo,head_sha:$head_sha,required_check:$required_check,
       status:"pass",control_plane_commit:$control_commit,
       authority:{file:"native-sources.lock.json",sha256:$authority_sha256},
       materializer:{file:"native-materializer.sh",sha256:$materializer_sha256},
+      orchestration:{native_runtime_file:"native-runtime.sh",
+        native_runtime_sha256:$native_runtime_sha256,
+        split_host_ci_file:"split-host-ci.sh",split_host_ci_sha256:$split_host_ci_sha256,
+        host_ci_integrity_file:"host-ci-integrity.sh",
+        host_ci_integrity_sha256:$host_ci_integrity_sha256},
       log_file:"materialization.log",log_sha256:$log_sha256,
       native_vendor_manifest_file:"native-vendor-manifest.json",
       native_vendor_manifest_sha256:$manifest_sha256,
       native_vendor_manifest:$manifest[0]}' >"$staging/receipt.json"
   for file in materialization.log native-vendor-manifest.json \
-    native-sources.lock.json native-materializer.sh receipt.json; do
+    native-sources.lock.json native-materializer.sh native-runtime.sh \
+    split-host-ci.sh host-ci-integrity.sh receipt.json; do
     jain_write_sha256_sidecar "$staging/$file" || {
       rm -rf -- "$staging"
       return 1

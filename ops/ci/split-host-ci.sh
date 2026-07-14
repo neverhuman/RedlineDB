@@ -15,6 +15,10 @@ CHECK="${5:-$REPO/required}"
 JAIN_BASE="${JAIN_BASE:-http://127.0.0.1:8787}"
 OPS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
+"$OPS_ROOT/ops/ci/host-ci-integrity.sh" "$OPS_ROOT" >/dev/null || {
+  printf '[split-host-ci] exact control-plane integrity check failed\n' >&2
+  exit 2
+}
 # shellcheck source=ops/ci/native-runtime.sh
 source "$OPS_ROOT/ops/ci/native-runtime.sh"
 # shellcheck source=ops/ci/pinned-advisory.sh
@@ -40,13 +44,12 @@ post_check() {
   local conclusion="$1" token description
   token="$(jeryu_token)"
   if [ -z "$token" ]; then say "no merge token; cannot post required status"; return 1; fi
-  if [ -n "${JAIN_NATIVE_EVIDENCE_DIR:-}" ]; then
-    jain_verify_native_evidence_binding "$JAIN_NATIVE_EVIDENCE_DIR" \
-      "${JAIN_NATIVE_EVIDENCE_SHA256:-}" "$SHA" "$CHECK" || {
-      say "native evidence failed verification before status publication"
-      return 1
-    }
-  fi
+  jain_verify_native_check_evidence "$conclusion" \
+    "${NATIVE_EVIDENCE_REQUIRED:-0}" "${JAIN_NATIVE_EVIDENCE_DIR:-}" \
+    "${JAIN_NATIVE_EVIDENCE_SHA256:-}" "$SHA" "$CHECK" || {
+    say "native evidence requirement failed before status publication"
+    return 1
+  }
   # A check-run is the human-facing run record.
   curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/check-runs" \
     -H "Authorization: Bearer $token" \
@@ -72,6 +75,14 @@ post_check() {
       '{state:$state,context:$context,description:$description}')" \
     >/dev/null || return 1
   say "posted status $CHECK=$status_state on ${SHA:0:8}"
+}
+
+native_setup_failure() {
+  local message="${1:?native setup failure message is required}"
+  local rc="${2:-1}"
+  printf '%s\n' "$message" >&2
+  post_check failure || say "native setup failure status publication also failed"
+  exit "$rc"
 }
 
 run_release_cargo_commands() {
@@ -111,6 +122,7 @@ run_release_cargo_commands() {
 
 [ -e "$REPO_PATH/.git" ] || { echo "not a git repo: $REPO_PATH" >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || { echo "host CI requires jq" >&2; exit 2; }
+[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "host CI requires a full 40-hex SHA" >&2; exit 2; }
 curl -fsS "$JAIN_BASE/health" >/dev/null || { echo "forge not healthy" >&2; exit 2; }
 [ -n "$(jeryu_token)" ] || { echo "forge status credential is unavailable" >&2; exit 2; }
 
@@ -123,16 +135,50 @@ fi
 export JAIN_CI_JOBS="$JOBS" CARGO_BUILD_JOBS="$JOBS" WORKERS="$JOBS"
 say "governed jobs=$JOBS"
 
+native_learners=()
+mapfile -t native_learners < <(jain_native_learners_for_repo "$REPO")
+managed_inventory="$(
+  cargo run --locked --quiet --manifest-path "$OPS_ROOT/Cargo.toml" -- \
+    managed-repos --manifest "$CANONICAL_MANIFEST" --json
+)" || {
+  post_check failure || true
+  echo "failed to derive canonical managed repository inventory" >&2
+  exit 2
+}
+protected_check="$(jain_authoritative_required_check "$managed_inventory" "$REPO")" || {
+  post_check failure || true
+  echo "repository is absent or ambiguous in canonical managed inventory: $REPO" >&2
+  exit 2
+}
+control_plane_remote="$(jain_authoritative_control_plane_remote "$managed_inventory")" || {
+  post_check failure || true
+  echo "control-plane remote is absent or ambiguous in canonical managed inventory" >&2
+  exit 2
+}
+NATIVE_EVIDENCE_REQUIRED=0
+if jain_native_check_requires_evidence "$REPO" "$CHECK" "$protected_check"; then
+  NATIVE_EVIDENCE_REQUIRED=1
+fi
+if ! jain_validate_native_check_mode \
+  "$REPO" "$CHECK" "$protected_check" "${JAIN_RELEASE_CI:-0}"; then
+  post_check failure || true
+  exit 2
+fi
+
 release_cargo_policy=""
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
-  command -v jq >/dev/null 2>&1 || { echo "release CI requires jq" >&2; exit 2; }
   release_cargo_policy="$(
     cargo run --locked --quiet --manifest-path "$OPS_ROOT/Cargo.toml" -- \
       release-cargo-commands --manifest "$CANONICAL_MANIFEST" --repo "$REPO"
-  )" || { echo "failed to derive canonical release Cargo policy for $REPO" >&2; exit 2; }
+  )" || native_setup_failure \
+    "failed to derive canonical release Cargo policy for $REPO" 2
 fi
 
-git -C "$REPO_PATH" cat-file -e "$SHA^{commit}" 2>/dev/null || { echo "sha $SHA not in $REPO_PATH" >&2; exit 2; }
+git -C "$REPO_PATH" cat-file -e "$SHA^{commit}" 2>/dev/null || {
+  post_check failure || true
+  echo "sha $SHA not in $REPO_PATH" >&2
+  exit 2
+}
 
 tmp="$(mktemp -d /tmp/split-host-ci.XXXXXX)"
 wt="$tmp/$REPO"
@@ -142,8 +188,6 @@ native_source_root="$tmp/native-source"
 native_bundle="$tmp/native-materializer"
 native_authority=""
 native_materializer=""
-native_learners=()
-mapfile -t native_learners < <(jain_native_learners_for_repo "$REPO")
 cleanup() {
   git -C "$REPO_PATH" worktree remove -f "$wt" >/dev/null 2>&1 || true
   if [ -n "$native_authority" ] && [ -f "$native_authority" ]; then
@@ -162,44 +206,37 @@ git -C "$REPO_PATH" worktree add -f --detach "$wt" "$SHA" >/dev/null 2>&1 \
 # control-plane commit, stage clean worktrees from authority-bound Git objects,
 # and preserve a checksummed receipt outside this disposable checkout.
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
-  command -v jq >/dev/null 2>&1 || {
-    echo "release CI native materialization requires jq" >&2
-    exit 2
-  }
   jain_extract_native_materializer "$OPS_ROOT" "$native_bundle" \
-    "http://127.0.0.1:8787/git/veox/jain-split-ops.git" || {
-    echo "release CI exact native materializer extraction failed" >&2
-    exit 1
-  }
+    "$control_plane_remote" || native_setup_failure \
+    "release CI exact native materializer extraction failed" 1
   native_authority="$JAIN_NATIVE_AUTHORITY"
   native_materializer="$JAIN_NATIVE_MATERIALIZER"
   jain_stage_native_source_worktrees \
-    "$native_authority" "$native_source_input" "$native_source_root" || {
-    echo "release CI exact native source staging failed" >&2
-    exit 1
-  }
+    "$native_authority" "$native_source_input" "$native_source_root" \
+    || native_setup_failure "release CI exact native source staging failed" 1
   unset JAIN_NATIVE_SOURCE_ROOT JAIN_VENDOR_ROOT
   "$native_materializer" --authority "$native_authority" \
     --source-root "$native_source_root" --vendor-root "$native_vendor" \
     >"$tmp/native-vendor.log" 2>&1 || {
     cat "$tmp/native-vendor.log" >&2
-    echo "release CI exact native materialization failed" >&2
-    exit 1
+    native_setup_failure "release CI exact native materialization failed" 1
   }
   jain_persist_native_evidence \
     "$native_vendor" "$tmp/native-vendor.log" \
     "${JAIN_NATIVE_EVIDENCE_ROOT:-$SPLIT_ROOT/target/host-ci-evidence/native-materialization}" \
     "$tmp" "$OWNER" "$REPO" "$SHA" "$CHECK" \
-    "$JAIN_NATIVE_CONTROL_COMMIT" "$native_authority" "$native_materializer" || {
-    echo "release CI native materialization evidence persistence failed" >&2
-    exit 1
-  }
+    "$JAIN_NATIVE_CONTROL_COMMIT" "$native_authority" "$native_materializer" \
+    "$OPS_ROOT/ops/ci/native-runtime.sh" "$OPS_ROOT/ops/ci/split-host-ci.sh" \
+    "$OPS_ROOT/ops/ci/host-ci-integrity.sh" \
+    || native_setup_failure \
+    "release CI native materialization evidence persistence failed" 1
   say "native materialization receipt: $JAIN_NATIVE_EVIDENCE_DIR/receipt.json ($JAIN_NATIVE_EVIDENCE_SHA256)"
-  mkdir -p "$wt/target"
-  ln -s "$native_vendor" "$wt/target/native-vendor"
+  mkdir -p "$wt/target" || native_setup_failure \
+    "release CI native target setup failed" 1
+  ln -s "$native_vendor" "$wt/target/native-vendor" || native_setup_failure \
+    "release CI native vendor link setup failed" 1
   jain_prepare_native_runtime "$native_vendor" || {
-    echo "release CI native runtime path setup failed" >&2
-    exit 1
+    native_setup_failure "release CI native runtime path setup failed" 1
   }
 fi
 
@@ -250,22 +287,18 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
   rustsec_db="$CARGO_HOME/advisory-db"
   rustsec_tools="$tmp/pinned-rustsec-tools"
   real_cargo_audit="$(command -v cargo-audit)" || {
-    echo "release CI requires cargo-audit" >&2
-    exit 2
+    native_setup_failure "release CI requires cargo-audit" 2
   }
   real_cargo_deny="$(command -v cargo-deny)" || {
-    echo "release CI requires cargo-deny" >&2
-    exit 2
+    native_setup_failure "release CI requires cargo-deny" 2
   }
   jain_materialize_pinned_advisory_db \
     "$rustsec_source" "$rustsec_db" "$JAIN_PINNED_RUSTSEC_COMMIT" || {
-    echo "release CI pinned RustSec database setup failed" >&2
-    exit 1
+    native_setup_failure "release CI pinned RustSec database setup failed" 1
   }
   jain_install_pinned_rustsec_tools \
     "$rustsec_tools" "$rustsec_db" "$CARGO_HOME" "$OPS_ROOT" || {
-    echo "release CI pinned RustSec tool setup failed" >&2
-    exit 1
+    native_setup_failure "release CI pinned RustSec tool setup failed" 1
   }
   export JAIN_REAL_CARGO_AUDIT="$real_cargo_audit"
   export JAIN_REAL_CARGO_DENY="$real_cargo_deny"
@@ -326,7 +359,11 @@ if (cd "$wt" && bash scripts/ci-local.sh required) >"$log" 2>&1; then
       exit 1
     done
   fi
-  post_check success || { say "CI passed but required status publication failed"; exit 1; }
+  if ! post_check success; then
+    say "CI passed but required success publication/evidence failed"
+    post_check failure || say "required failure status publication also failed"
+    exit 1
+  fi
   say "PASS $OWNER/$REPO @ ${SHA:0:8}"
   exit 0
 else

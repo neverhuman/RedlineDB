@@ -81,14 +81,19 @@ JAIN_SPLIT_ROOT=/home/ubuntu/jain-split JAIN_RELEASE_CI=1 \
   ./ops/ci/split-host-ci.sh OWNER REPO SHA /absolute/checkout REPO/required
 ```
 
-For native-enabled release policies, the runner extracts
+The protected required context for a native-enabled repository refuses to run unless
+`JAIN_RELEASE_CI=1`; a lighter run must use a distinct, non-protected context. The runner first
+requires a completely clean control-plane checkout, derives the control-plane remote and required
+context from the authority manifest, and requires exact `origin/main` identity. It then extracts
 `ops/ci/native-materializer.sh` and `ops/ci/native-sources.lock.json` from the exact clean
 `jain-split-ops` commit. It never executes a canonical product checkout's vendor script. Native
 inputs are clean detached worktrees created from the authority-bound commit, Git-tree, SHA-256
 tree-manifest, submodule, and content identities. The materialization log, inputs, manifest, and
-receipt persist under `target/host-ci-evidence/native-materialization/`; every file has a SHA-256
-sidecar, and the receipt digest is included in the exact-head required status description. Set
-`JAIN_NATIVE_EVIDENCE_ROOT` only to another durable location outside the runner's `/tmp` tree.
+receipt persist under the canonical split root's
+`target/host-ci-evidence/native-materialization/`; every file has a SHA-256 sidecar, and the
+receipt digest is included in the exact-head required status description. Evidence roots under
+`/tmp`, or paths whose symlinks resolve into the ephemeral run tree, are rejected. Any native
+setup failure publishes a failing required result.
 
 Open a draft PR, then use the controlled lifecycle. Every mutating command has a dry-run recipe
 and a separate `*-apply` recipe:

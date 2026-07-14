@@ -6,12 +6,48 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$repo_root/ops/ci/native-runtime.sh"
 
 tmp="$(mktemp -d /tmp/jain-native-materializer-test.XXXXXX)"
-trap 'rm -rf "$tmp"' EXIT
+durable_root="${JAIN_TEST_DURABLE_ROOT:-$HOME/.cache/jain-native-materializer-test.$$}"
+rm -rf -- "$durable_root"
+mkdir -p "$durable_root"
+trap 'rm -rf "$tmp" "$durable_root"' EXIT
 source_root="$tmp/source"
 run_root="$tmp/run"
 vendor_root="$run_root/vendor"
 authority="$tmp/native-sources.lock.json"
 mkdir -p "$source_root" "$run_root"
+
+managed_inventory='{"repositories":[
+  {"kind":"control-plane","name":"jain-split-ops",
+   "remote":"http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
+   "required_check":"jain-split-ops/required"},
+  {"kind":"family","name":"jain-core",
+   "remote":"http://127.0.0.1:8787/git/jeryu/jain-core.git",
+   "required_check":"jain-core/required"}
+]}'
+[[ "$(jain_authoritative_control_plane_remote "$managed_inventory")" == \
+  'http://127.0.0.1:8787/git/jeryu/jain-split-ops.git' ]] || exit 1
+[[ "$(jain_authoritative_required_check "$managed_inventory" jain-core)" == \
+  'jain-core/required' ]] || exit 1
+if jain_validate_native_check_mode jain-core jain-core/required \
+  jain-core/required 0 2>/dev/null; then
+  printf 'protected native check accepted non-release mode\n' >&2
+  exit 1
+fi
+jain_validate_native_check_mode jain-core jain-core/required jain-core/required 1
+jain_validate_native_check_mode jain-core jain-core/fast jain-core/required 0
+jain_validate_native_check_mode jain-report jain-report/required jain-report/required 0
+jain_native_check_requires_evidence jain-core jain-core/required jain-core/required
+if jain_native_check_requires_evidence jain-core jain-core/fast jain-core/required; then
+  printf 'unprotected native check unexpectedly requires release evidence\n' >&2
+  exit 1
+fi
+if jain_verify_native_check_evidence success 1 '' '' \
+  0123456789abcdef0123456789abcdef01234567 jain-core/required 2>/dev/null; then
+  printf 'protected native success accepted missing evidence\n' >&2
+  exit 1
+fi
+jain_verify_native_check_evidence failure 1 '' '' \
+  0123456789abcdef0123456789abcdef01234567 jain-core/required
 
 init_repo() {
   local learner="$1" root="$source_root/$1"
@@ -163,36 +199,70 @@ git -C "$control" config user.email control-fixture@example.invalid
 git -C "$control" add .
 git -C "$control" commit --quiet -m authority
 git -C "$control" branch -M main
-git init --quiet --bare "$tmp/control-origin.git"
-git -C "$control" remote add origin "$tmp/control-origin.git"
+mkdir -p "$tmp/jeryu" "$tmp/veox"
+git init --quiet --bare "$tmp/jeryu/jain-split-ops.git"
+git init --quiet --bare "$tmp/veox/jain-split-ops.git"
+git -C "$control" remote add origin "$tmp/jeryu/jain-split-ops.git"
 git -C "$control" push --quiet -u origin main
-jain_extract_native_materializer "$control" "$tmp/extracted" "$tmp/control-origin.git"
+jain_extract_native_materializer \
+  "$control" "$tmp/extracted" "$tmp/jeryu/jain-split-ops.git"
 [[ -x "$JAIN_NATIVE_MATERIALIZER" && -s "$JAIN_NATIVE_AUTHORITY" ]] || exit 1
-git -C "$control" remote set-url origin "$tmp/unreviewed-origin.git"
+git -C "$control" remote set-url origin "$tmp/veox/jain-split-ops.git"
 if jain_extract_native_materializer "$control" "$tmp/unreviewed" \
-  "$tmp/control-origin.git" 2>/dev/null; then
-  printf 'exact materializer extraction accepted an unreviewed origin\n' >&2
+  "$tmp/jeryu/jain-split-ops.git" 2>/dev/null; then
+  printf 'exact materializer extraction accepted a divergent forge alias\n' >&2
   exit 1
 fi
-git -C "$control" remote set-url origin "$tmp/control-origin.git"
+git -C "$control" remote set-url origin "$tmp/jeryu/jain-split-ops.git"
 printf '# dirty\n' >>"$control/ops/ci/native-materializer.sh"
 if jain_extract_native_materializer "$control" "$tmp/rejected" \
-  "$tmp/control-origin.git" 2>/dev/null; then
+  "$tmp/jeryu/jain-split-ops.git" 2>/dev/null; then
   printf 'exact materializer extraction accepted a dirty reviewed script\n' >&2
   exit 1
 fi
 
-evidence_root="$tmp/persistent-evidence"
+evidence_root="$durable_root/persistent-evidence"
 head_sha="0123456789abcdef0123456789abcdef01234567"
 control_commit="$(git -C "$control" rev-parse HEAD)"
+if JAIN_CI_ATTEMPT_ID=tmp-rejected jain_persist_native_evidence \
+  "$vendor_root" "$run_root/materialization.log" "$tmp/evidence" "$run_root" \
+  veox jain-core "$head_sha" jain-core/required "$control_commit" \
+  "$authority" "$materializer" "$repo_root/ops/ci/native-runtime.sh" \
+  "$repo_root/ops/ci/split-host-ci.sh" "$repo_root/ops/ci/host-ci-integrity.sh" \
+  2>/dev/null; then
+  printf 'native evidence accepted a /tmp persistence root\n' >&2
+  exit 1
+fi
+ln -s "$run_root" "$durable_root/ephemeral-link"
+if JAIN_CI_ATTEMPT_ID=symlink-rejected jain_persist_native_evidence \
+  "$vendor_root" "$run_root/materialization.log" \
+  "$durable_root/ephemeral-link/evidence" "$run_root" \
+  veox jain-core "$head_sha" jain-core/required "$control_commit" \
+  "$authority" "$materializer" "$repo_root/ops/ci/native-runtime.sh" \
+  "$repo_root/ops/ci/split-host-ci.sh" "$repo_root/ops/ci/host-ci-integrity.sh" \
+  2>/dev/null; then
+  printf 'native evidence accepted a symlink into ephemeral CI\n' >&2
+  exit 1
+fi
+mkdir -p "$durable_root/durable-ephemeral-run"
+ln -s "$durable_root/durable-ephemeral-run" "$durable_root/durable-ephemeral-link"
+if jain_resolve_durable_evidence_root \
+  "$durable_root/durable-ephemeral-link/evidence" \
+  "$durable_root/durable-ephemeral-run" >/dev/null 2>&1; then
+  printf 'native evidence accepted a resolved path inside ephemeral CI\n' >&2
+  exit 1
+fi
 JAIN_CI_ATTEMPT_ID=fixture jain_persist_native_evidence \
   "$vendor_root" "$run_root/materialization.log" "$evidence_root" "$run_root" \
   veox jain-core "$head_sha" jain-core/required "$control_commit" \
-  "$authority" "$materializer"
+  "$authority" "$materializer" "$repo_root/ops/ci/native-runtime.sh" \
+  "$repo_root/ops/ci/split-host-ci.sh" "$repo_root/ops/ci/host-ci-integrity.sh"
 evidence_dir="$JAIN_NATIVE_EVIDENCE_DIR"
 receipt_sha="$JAIN_NATIVE_EVIDENCE_SHA256"
 [[ "$receipt_sha" =~ ^[0-9a-f]{64}$ ]] || exit 1
 jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required
+jain_verify_native_check_evidence success 1 "$evidence_dir" "$receipt_sha" \
+  "$head_sha" jain-core/required
 rm -rf -- "$run_root"
 jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required || {
   printf 'native evidence did not survive ephemeral cleanup\n' >&2
@@ -219,6 +289,19 @@ fi
 grep -Fq 'native-receipt=$JAIN_NATIVE_EVIDENCE_SHA256' \
   "$repo_root/ops/ci/split-host-ci.sh" || {
   printf 'host CI status does not bind the native receipt digest\n' >&2
+  exit 1
+}
+grep -Fq 'managed-repos --manifest "$CANONICAL_MANIFEST" --json' \
+  "$repo_root/ops/ci/split-host-ci.sh" || {
+  printf 'host CI does not derive policy from the authority manifest\n' >&2
+  exit 1
+}
+if grep -Fq 'git/veox/jain-split-ops.git' "$repo_root/ops/ci/split-host-ci.sh"; then
+  printf 'host CI still embeds the divergent control-plane alias\n' >&2
+  exit 1
+fi
+grep -Fq 'post_check failure' "$repo_root/ops/ci/split-host-ci.sh" || {
+  printf 'host CI native setup failures do not publish failure status\n' >&2
   exit 1
 }
 

@@ -7,7 +7,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 say() { printf '[required:jain-split-ops] %s\n' "$*" >&2; }
 
-for tool in bash cargo file git jq ldd rg rsync sha256sum shellcheck xargs; do
+for tool in bash cargo file git jq ldd realpath rg rsync sha256sum shellcheck xargs; do
   command -v "$tool" >/dev/null 2>&1 || {
     printf 'required tool is unavailable: %s\n' "$tool" >&2
     exit 1
@@ -20,6 +20,7 @@ for f in "${sh_files[@]}"; do bash -n "$f"; done
 shellcheck -S error "${sh_files[@]}"
 bash ops/ci/native-runtime-test.sh
 bash ops/ci/native-materializer-test.sh
+bash ops/ci/host-ci-integrity-test.sh
 bash ops/ci/pinned-advisory-test.sh
 
 say 'Rust: format, tests, canonical manifest, source coverage, and local-Jeryu policy'
