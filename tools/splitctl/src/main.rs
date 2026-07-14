@@ -8,7 +8,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const RELEASE_VERSION: &str = "8.0.0";
+const RELEASE_VERSION: &str = "8.0.1";
+const ROLLBACK_TARGET: &str = "7.0.6";
 const LOCAL_JERYU_BASE: &str = "http://127.0.0.1:8787";
 const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
 const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
@@ -841,6 +842,18 @@ fn validate_manifest_data(
     if string(data, "release_version").as_deref() != Some(RELEASE_VERSION) {
         errors.push(format!("release_version must be {RELEASE_VERSION}"));
     }
+    if string(data, "status").as_deref() != Some("candidate") {
+        errors.push("status must be candidate".to_owned());
+    }
+    if data.get("formal_ga").and_then(toml::Value::as_bool) != Some(false) {
+        errors.push("formal_ga must be false".to_owned());
+    }
+    if string(data, "sagemaker").as_deref() != Some("N/A") {
+        errors.push("sagemaker must be N/A".to_owned());
+    }
+    if string(data, "rollback_target").as_deref() != Some(ROLLBACK_TARGET) {
+        errors.push(format!("rollback_target must be {ROLLBACK_TARGET}"));
+    }
     if string(data, "repo_family").as_deref() != Some("jain-split") {
         errors.push("repo_family must be jain-split".to_owned());
     }
@@ -963,11 +976,16 @@ fn validate_manifest_data(
             ("forge_slug", "jain-split/jain-smartcluster"),
             ("required_check", "jain-smartcluster/required"),
             ("default_branch", "main"),
-            ("immutable_tag", "jain-smartcluster-v8.0.0-split.0"),
         ] {
             if string(raw, key).as_deref() != Some(expected) {
                 errors.push(format!("jain-smartcluster: {key} must be {expected}"));
             }
+        }
+        let expected_tag = format!("jain-smartcluster-v{RELEASE_VERSION}-split.0");
+        if string(raw, "immutable_tag").as_deref() != Some(expected_tag.as_str()) {
+            errors.push(format!(
+                "jain-smartcluster: immutable_tag must be {expected_tag}"
+            ));
         }
         let expected_infra_remote = format!("{INFRA_REMOTE_PREFIX}jain-smartcluster.git");
         if declared_remote(raw).as_deref() != Some(expected_infra_remote.as_str()) {
@@ -1022,6 +1040,7 @@ fn validate_manifest_data(
     if nested.get("required").and_then(toml::Value::as_bool) != Some(true) {
         errors.push("nested_families.redline.required must be true".to_owned());
     }
+    validate_rollout_waves(data, &mut errors)?;
     if !errors.is_empty() {
         return Err(format!(
             "manifest validation failed ({}):\n{}",
@@ -1029,6 +1048,73 @@ fn validate_manifest_data(
             errors.join("\n")
         )
         .into());
+    }
+    Ok(())
+}
+
+fn validate_rollout_waves(
+    data: &toml::Value,
+    errors: &mut Vec<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut waves = std::collections::BTreeMap::new();
+    for raw in manifest_repos(data)? {
+        let Some(name) = string(raw, "name") else {
+            continue;
+        };
+        let Some(wave) = raw.get("rollout_wave").and_then(toml::Value::as_integer) else {
+            errors.push(format!("{name}: rollout_wave is required"));
+            continue;
+        };
+        waves.insert(name, wave);
+    }
+    let external = data
+        .get("external_dependencies")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(toml::map::Map::values)
+        .filter_map(|dependency| string(dependency, "repository"))
+        .collect::<std::collections::BTreeSet<_>>();
+
+    for raw in family_repos(data)? {
+        let Some(name) = string(raw, "name") else {
+            continue;
+        };
+        let Some(wave) = waves.get(&name).copied() else {
+            continue;
+        };
+        for dependency in strings(raw, "cross_repo_deps") {
+            match waves.get(&dependency).copied() {
+                Some(dependency_wave) if dependency_wave >= wave => errors.push(format!(
+                    "{name}: dependency {dependency} must be in an earlier rollout wave ({dependency_wave} >= {wave})"
+                )),
+                Some(_) => {}
+                None if external.contains(&dependency) => {}
+                None => errors.push(format!("{name}: unknown cross_repo_deps entry {dependency}")),
+            }
+        }
+    }
+
+    for raw in data
+        .get("infrastructure_repo")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let Some(name) = string(raw, "name") else {
+            continue;
+        };
+        let Some(wave) = waves.get(&name).copied() else {
+            continue;
+        };
+        for dependant in strings(raw, "dependency_edges") {
+            match waves.get(&dependant).copied() {
+                Some(dependant_wave) if dependant_wave <= wave => errors.push(format!(
+                    "{name}: dependant {dependant} must be in a later rollout wave ({dependant_wave} <= {wave})"
+                )),
+                Some(_) => {}
+                None => errors.push(format!("{name}: unknown dependency_edges entry {dependant}")),
+            }
+        }
     }
     Ok(())
 }
@@ -1097,7 +1183,7 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
     if string(&lock_data, "release").as_deref()
         != Some(format!("{RELEASE_VERSION}-split.0").as_str())
     {
-        errors.push("lock release is not 8.0.0-split.0".to_owned());
+        errors.push(format!("lock release is not {RELEASE_VERSION}-split.0"));
     }
     let family = family_repos(&data)?;
     let lock_repos = lock_data
@@ -1254,6 +1340,10 @@ fn release_snapshot(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
     let report = json!({
         "schema_version": "jain.release.snapshot/v1",
         "release": RELEASE_VERSION,
+        "release_status": "candidate",
+        "formal_ga": false,
+        "sagemaker": "N/A",
+        "rollback_target": ROLLBACK_TARGET,
         "manifest": manifest,
         "manifest_sha256": manifest_sha256(&manifest)?,
         "repositories": rows,
@@ -1296,6 +1386,8 @@ fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         "release": RELEASE_VERSION,
         "status": "candidate",
         "formal_ga": false,
+        "sagemaker": "N/A",
+        "rollback_target": ROLLBACK_TARGET,
         "manifest_sha256": manifest_sha256(&manifest)?,
         "family_repo_count": family_repos(&data)?.len(),
         "infrastructure_repo_count": data.get("infrastructure_repo").and_then(toml::Value::as_array).map_or(0, Vec::len),
@@ -1795,7 +1887,8 @@ fn receipt_header(schema: &str, operation: &str, apply: bool) -> JsonValue {
 
 fn release_evidence_path(filename: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("docs/release-evidence/8.0.0")
+        .join("docs/release-evidence")
+        .join(RELEASE_VERSION)
         .join(filename)
 }
 
@@ -2645,7 +2738,6 @@ fn bump_version(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let mut manifest = root.join("repos.manifest.toml");
     let mut from_version = None;
     let mut new = None;
-    let mut update_lock = false;
     let mut rewrite_tags = false;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
@@ -2653,133 +2745,147 @@ fn bump_version(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
             "--from" => from_version = Some(iter.next().ok_or("--from needs a version")?),
             "--new" => new = Some(iter.next().ok_or("--new needs a version")?),
-            "--update-lock-shas" => update_lock = true,
+            "--update-lock-shas" => {
+                return Err("--update-lock-shas was removed: bump-version may only update its explicit authority manifest; use regenerate-lock with an explicit output and --apply".into())
+            }
             "--rewrite-split-tags" => rewrite_tags = true,
             value => return Err(format!("unknown bump-version argument: {value}").into()),
         }
     }
-    let from_version = from_version.unwrap_or_else(|| "7.0.1".to_owned());
-    if update_lock {
-        return update_lock_shas(&manifest);
+    let from_version = from_version.ok_or("--from is required")?;
+    let new = new.ok_or("--new is required")?;
+    validate_release_version(&from_version)?;
+    validate_release_version(&new)?;
+    if from_version == new {
+        return Err("--from and --new must differ".into());
     }
-    let new = new.ok_or("--new is required unless --update-lock-shas is used")?;
     if !rewrite_tags {
         return Err(
             "refusing to rewrite split tag pins by default; pass --rewrite-split-tags".into(),
         );
     }
-    let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
-    let from_tag = format!("v{from_version}-split.");
-    let new_tag = format!("v{new}-split.0");
-    replace_file(&manifest, |text| text.replace(&from_tag, &new_tag))?;
-    for repo in manifest_repos(&data)? {
-        let name = string(repo, "name").ok_or("repo missing name")?;
-        let path = PathBuf::from(string(repo, "path").ok_or("repo missing path")?);
-        let version_file = path.join("VERSION");
-        if version_file.exists() {
-            fs::write(version_file, format!("{name}-{new_tag}\n"))?;
-        }
-        rewrite_cargo_tree(&path, &from_version, &new)?;
-        let changelog = path.join("CHANGELOG.md");
-        if changelog.exists() {
-            let text = fs::read_to_string(&changelog)?;
-            if !text.contains(&new_tag) {
-                fs::write(
-                    changelog,
-                    format!("## {name}-{new_tag}\n\n- Split-family release pin refresh.\n\n{text}"),
-                )?;
-            }
-        }
-    }
-    for path in [
-        root.join("../jain/repos.manifest.toml"),
-        root.join("../jain-deploy/repos.manifest.toml"),
-    ] {
-        if path.exists() {
-            replace_file(&path, |text| text.replace(&from_tag, &new_tag))?;
-        }
-    }
-    Ok(())
-}
-
-fn replace_file(path: &Path, update: impl FnOnce(&str) -> String) -> io::Result<()> {
-    let original = fs::read_to_string(path)?;
-    let changed = update(&original);
+    let original = fs::read_to_string(&manifest)?;
+    let changed = bump_manifest_version(&original, &from_version, &new)?;
     if changed != original {
-        fs::write(path, changed)?;
-        println!("changed: {}", path.display());
+        write_atomic_bytes(&manifest, changed.as_bytes())?;
+        println!("changed: {}", manifest.display());
+    } else {
+        println!("already current: {}", manifest.display());
     }
     Ok(())
 }
 
-fn rewrite_cargo_tree(root: &Path, from_version: &str, new: &str) -> io::Result<()> {
-    if !root.is_dir() {
-        return Ok(());
-    }
-    for entry in fs::read_dir(root)? {
-        let path = entry?.path();
-        if path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| matches!(name, "target" | ".git" | ".stage" | "vendor"))
-        {
-            continue;
-        }
-        if path.is_dir() {
-            rewrite_cargo_tree(&path, from_version, new)?;
-        } else if path.file_name().and_then(|name| name.to_str()) == Some("Cargo.toml") {
-            replace_file(&path, |text| {
-                text.replace(
-                    &format!("version = \"{from_version}\""),
-                    &format!("version = \"{new}\""),
-                )
-                .replace(
-                    &format!("v{from_version}-split."),
-                    &format!("v{new}-split."),
-                )
-            })?;
-        }
+fn validate_release_version(version: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let components = version.split('.').collect::<Vec<_>>();
+    if components.len() != 3
+        || components.iter().any(|component| {
+            component.is_empty() || !component.chars().all(|ch| ch.is_ascii_digit())
+        })
+    {
+        return Err(format!("release version must be numeric MAJOR.MINOR.PATCH: {version}").into());
     }
     Ok(())
 }
 
-fn update_lock_shas(manifest: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let data: toml::Value = fs::read_to_string(manifest)?.parse()?;
-    let mut updates = Vec::new();
-    for repo in manifest_repos(&data)? {
-        let name = string(repo, "name").ok_or("repo missing name")?;
-        let path = PathBuf::from(string(repo, "path").ok_or("repo missing path")?);
-        if path.join(".git").exists() {
-            updates.push((
-                name,
-                git_output(&path, &["rev-parse", "HEAD"])?.trim().to_owned(),
-            ));
-        }
+fn bump_manifest_version(
+    original: &str,
+    from_version: &str,
+    new: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let data: toml::Value = original.parse()?;
+    let current = string(&data, "release_version").ok_or("manifest missing release_version")?;
+    if current != from_version && current != new {
+        return Err(format!(
+            "manifest release_version is {current}, expected --from {from_version} or already-current --new {new}"
+        )
+        .into());
     }
-    for lock in [
-        PathBuf::from("../jain/family.lock"),
-        PathBuf::from("../jain-deploy/jain-split.lock.toml"),
-    ] {
-        if !lock.exists() {
-            continue;
-        }
-        replace_file(&lock, |text| {
-            let mut output = text.to_owned();
-            for (name, sha) in &updates {
-                let marker = format!("repo = \"{name}\"");
-                if let Some(start) = output.find(&marker) {
-                    if let Some(commit) = output[start..].find("commit = \"") {
-                        let begin = start + commit + 10;
-                        if let Some(end) = output[begin..].find('"') {
-                            output.replace_range(begin..begin + end, sha);
-                        }
-                    }
+
+    let mut output = String::with_capacity(original.len());
+    let mut release_fields = 0usize;
+    let mut dependency_suffixes = 0usize;
+    for line in original.split_inclusive('\n') {
+        let mut rewritten = line.to_owned();
+        if let Some(range) = toml_string_value_range(line, "release_version") {
+            release_fields += 1;
+            rewritten.replace_range(range, new);
+        } else if let Some(range) = toml_string_value_range(line, "dependency_tag_suffix") {
+            dependency_suffixes += 1;
+            let normalized = normalize_split_tag(&line[range.clone()], from_version, new)?
+                .ok_or("dependency_tag_suffix must use the split tag namespace")?;
+            rewritten.replace_range(range, &normalized);
+        } else {
+            for key in ["current_tag", "immutable_tag"] {
+                let Some(range) = toml_string_value_range(line, key) else {
+                    continue;
+                };
+                if let Some(normalized) =
+                    normalize_split_tag(&line[range.clone()], from_version, new)?
+                {
+                    rewritten.replace_range(range, &normalized);
                 }
+                break;
             }
-            output
-        })?;
+        }
+        output.push_str(&rewritten);
     }
-    Ok(())
+    if release_fields != 1 {
+        return Err(format!(
+            "manifest must contain exactly one release_version, found {release_fields}"
+        )
+        .into());
+    }
+    if dependency_suffixes != 1 {
+        return Err(format!(
+            "manifest must contain exactly one dependency_tag_suffix, found {dependency_suffixes}"
+        )
+        .into());
+    }
+    let _: toml::Value = output.parse()?;
+    Ok(output)
+}
+
+fn toml_string_value_range(line: &str, key: &str) -> Option<std::ops::Range<usize>> {
+    let indentation = line.len() - line.trim_start().len();
+    let trimmed = &line[indentation..];
+    let remainder = trimmed.strip_prefix(key)?;
+    if !remainder.starts_with(|ch: char| ch.is_ascii_whitespace() || ch == '=') {
+        return None;
+    }
+    let equals = remainder.find('=')?;
+    let after_equals = indentation + key.len() + equals + 1;
+    let quote = line[after_equals..].find('"')? + after_equals;
+    let value_start = quote + 1;
+    let value_end = line[value_start..].find('"')? + value_start;
+    Some(value_start..value_end)
+}
+
+fn normalize_split_tag(
+    value: &str,
+    from_version: &str,
+    new: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let Some(marker) = value.rfind("-split.") else {
+        return Ok(None);
+    };
+    let revision = &value[marker + "-split.".len()..];
+    if revision.is_empty() || !revision.chars().all(|ch| ch.is_ascii_digit()) {
+        return Err(format!("invalid split tag revision: {value}").into());
+    }
+    let before_revision = &value[..marker];
+    let version_start = before_revision
+        .rfind("-v")
+        .map(|index| index + 2)
+        .or_else(|| before_revision.starts_with('v').then_some(1))
+        .ok_or_else(|| format!("invalid split tag: {value}"))?;
+    let version = &before_revision[version_start..];
+    if version != from_version && version != new {
+        return Err(format!(
+            "split tag {value} encodes {version}, expected {from_version} or {new}"
+        )
+        .into());
+    }
+    Ok(Some(format!("{}{new}-split.0", &value[..version_start])))
 }
 
 fn source_coverage(manifest: &Path, json_output: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -3080,8 +3186,8 @@ fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut manifest_failures = Vec::new();
-    if string(&data, "release_version").as_deref() != Some("8.0.0") {
-        manifest_failures.push("release_version must be 8.0.0".to_owned());
+    if string(&data, "release_version").as_deref() != Some(RELEASE_VERSION) {
+        manifest_failures.push(format!("release_version must be {RELEASE_VERSION}"));
     }
     let family_names = family_repos(&data)?
         .iter()
@@ -4546,6 +4652,158 @@ mod tests {
     }
 
     #[test]
+    fn bump_version_is_manifest_only_revision_resetting_and_idempotent() {
+        let root = TestDir::new("bump-version");
+        let product = root.path().join("product");
+        fs::create_dir_all(&product).unwrap();
+        let version_file = product.join("VERSION");
+        let cargo_file = product.join("Cargo.toml");
+        let changelog = product.join("CHANGELOG.md");
+        fs::write(&version_file, "example-v8.0.0-split.1\n").unwrap();
+        fs::write(
+            &cargo_file,
+            "[package]\nname = \"example\"\nversion = \"8.0.0\"\n",
+        )
+        .unwrap();
+        fs::write(&changelog, "# Existing history\n").unwrap();
+
+        let manifest = root.path().join("repos.manifest.toml");
+        fs::write(
+            &manifest,
+            format!(
+                r#"release_version = "8.0.0"
+dependency_tag_suffix = "v8.0.0-split.1"
+
+[external_dependencies.redline]
+immutable_tag = "redline-core-v4.1.0-jain.3"
+
+[[infrastructure_repo]]
+name = "infra"
+immutable_tag = "infra-v8.0.0-split.1"
+
+[[repo]]
+name = "example"
+path = {:?}
+current_tag = "example-v8.0.0-split.0"
+"#,
+                product
+            ),
+        )
+        .unwrap();
+        let args = || {
+            vec![
+                "--manifest".to_owned(),
+                manifest.display().to_string(),
+                "--from".to_owned(),
+                "8.0.0".to_owned(),
+                "--new".to_owned(),
+                "8.0.1".to_owned(),
+                "--rewrite-split-tags".to_owned(),
+            ]
+        };
+
+        bump_version(args()).unwrap();
+        let first = fs::read_to_string(&manifest).unwrap();
+        assert!(first.contains("release_version = \"8.0.1\""));
+        assert!(first.contains("dependency_tag_suffix = \"v8.0.1-split.0\""));
+        assert!(first.contains("immutable_tag = \"infra-v8.0.1-split.0\""));
+        assert!(first.contains("current_tag = \"example-v8.0.1-split.0\""));
+        assert!(first.contains("immutable_tag = \"redline-core-v4.1.0-jain.3\""));
+        assert_eq!(
+            fs::read_to_string(&version_file).unwrap(),
+            "example-v8.0.0-split.1\n"
+        );
+        assert!(fs::read_to_string(&cargo_file)
+            .unwrap()
+            .contains("version = \"8.0.0\""));
+        assert_eq!(
+            fs::read_to_string(&changelog).unwrap(),
+            "# Existing history\n"
+        );
+
+        bump_version(args()).unwrap();
+        assert_eq!(fs::read_to_string(&manifest).unwrap(), first);
+    }
+
+    #[test]
+    fn bump_version_rejects_implicit_lock_and_live_repo_updates() {
+        let root = TestDir::new("bump-version-lock");
+        let manifest = root.path().join("repos.manifest.toml");
+        let original = "release_version = \"8.0.0\"\ndependency_tag_suffix = \"v8.0.0-split.0\"\n";
+        fs::write(&manifest, original).unwrap();
+        let result = bump_version(vec![
+            "--manifest".to_owned(),
+            manifest.display().to_string(),
+            "--update-lock-shas".to_owned(),
+        ]);
+        assert!(result.unwrap_err().to_string().contains("was removed"));
+        assert_eq!(fs::read_to_string(manifest).unwrap(), original);
+    }
+
+    #[test]
+    fn canonical_rollout_topology_orders_contracts_and_battle_gpu_before_core_consumers() {
+        let manifest: toml::Value = fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml"),
+        )
+        .unwrap()
+        .parse()
+        .unwrap();
+        let mut errors = Vec::new();
+        validate_rollout_waves(&manifest, &mut errors).unwrap();
+        assert!(errors.is_empty(), "{}", errors.join("\n"));
+
+        let core = release_repo_entry(&manifest, "jain-core").unwrap();
+        assert!(strings(core, "cross_repo_deps").contains(&"jain-battle-gpu".to_owned()));
+        let core_wave = core
+            .get("rollout_wave")
+            .and_then(toml::Value::as_integer)
+            .unwrap();
+        let contracts = release_repo_entry(&manifest, "jain-contracts").unwrap();
+        let contracts_wave = contracts
+            .get("rollout_wave")
+            .and_then(toml::Value::as_integer)
+            .unwrap();
+        assert!(contracts_wave > core_wave);
+    }
+
+    #[test]
+    fn canonical_manifest_metadata_is_candidate_only_and_rollback_bound() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let canonical: toml::Value = fs::read_to_string(&path).unwrap().parse().unwrap();
+        validate_manifest_data(&canonical, &path, false).unwrap();
+
+        for (field, invalid, expected_error) in [
+            (
+                "status",
+                toml::Value::String("ga".to_owned()),
+                "status must be candidate",
+            ),
+            (
+                "formal_ga",
+                toml::Value::Boolean(true),
+                "formal_ga must be false",
+            ),
+            (
+                "sagemaker",
+                toml::Value::String("ready".to_owned()),
+                "sagemaker must be N/A",
+            ),
+            (
+                "rollback_target",
+                toml::Value::String("8.0.0".to_owned()),
+                "rollback_target must be 7.0.6",
+            ),
+        ] {
+            let mut data = canonical.clone();
+            data.as_table_mut()
+                .unwrap()
+                .insert(field.to_owned(), invalid);
+            let error = validate_manifest_data(&data, &path, false).unwrap_err();
+            assert!(error.to_string().contains(expected_error));
+        }
+    }
+
+    #[test]
     fn release_feature_matrix_rejects_partial_unsafe_and_non_maximal_policy() {
         let partial: toml::Value = r#"
 release_feature_sets = [["gpu"], ["gpu-dynamic-linking"]]
@@ -4961,7 +5219,7 @@ name = "two"
     #[test]
     fn derived_manifest_sync_is_dry_run_by_default_and_apply_is_explicit() {
         assert!(release_evidence_path("receipt.json")
-            .ends_with("docs/release-evidence/8.0.0/receipt.json"));
+            .ends_with("docs/release-evidence/8.0.1/receipt.json"));
         let root = TestDir::new("derived-sync");
         let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
         let mut canonical: toml::Value = fs::read_to_string(source).unwrap().parse().unwrap();

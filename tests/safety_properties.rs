@@ -1,6 +1,7 @@
 use serde_json::Value;
 use std::{
     fs,
+    os::unix::fs::PermissionsExt,
     path::{Path, PathBuf},
     process::{Command, Output},
     sync::atomic::{AtomicU64, Ordering},
@@ -151,6 +152,46 @@ fn release_cargo_commands_exposes_the_canonical_feature_matrix() {
         policy["commands"][3]["args"][5],
         "battle-gpu/gpu-dynamic-linking"
     );
+}
+
+#[test]
+fn cutover_receipt_derives_active_release_and_preserves_rollback() {
+    let scratch = Scratch::new();
+    let manifest = scratch.path().join("repos.manifest.toml");
+    fs::write(&manifest, "release_version = \"8.0.1\"\n").expect("write manifest");
+    let split = scratch.path().join("split");
+    let deploy = split.join("jain-deploy");
+    let binary = deploy.join("target/release/jain");
+    fs::create_dir_all(binary.parent().unwrap()).expect("create binary directory");
+    fs::write(&binary, "#!/usr/bin/env bash\nprintf 'jain 8.0.1\\n'\n")
+        .expect("write fake release binary");
+    let mut permissions = fs::metadata(&binary)
+        .expect("binary metadata")
+        .permissions();
+    permissions.set_mode(0o755);
+    fs::set_permissions(&binary, permissions).expect("make binary executable");
+    fs::write(deploy.join("jain-split.lock.toml"), "release = \"8.0.1\"\n")
+        .expect("write deploy lock fixture");
+    let receipt = scratch.path().join("cutover.json");
+    let script = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("ops/split/cutover.sh");
+    let output = Command::new("bash")
+        .arg(script)
+        .args(["--dry-run", "--receipt"])
+        .arg(&receipt)
+        .env("JAIN_SPLIT_ROOT", &split)
+        .env("JAIN_SPLIT_MANIFEST", &manifest)
+        .output()
+        .expect("run cutover dry-run");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value =
+        serde_json::from_slice(&fs::read(receipt).expect("read receipt")).expect("parse receipt");
+    assert_eq!(report["release"], "8.0.1");
+    assert_eq!(report["rollback_target"], "7.0.6");
+    assert_eq!(report["external_mutations"], serde_json::json!([]));
 }
 
 #[test]

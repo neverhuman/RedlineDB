@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:85cacf0bdd66d5df4e51f0b412b11f27d4ea6899e560c6be28f6a6f6a1de0c47",
-  "input_fingerprint": "sha256:df64ba8167c64921c71f1bb3cbd098c61ce15ab0457a68faa221777f3415226e",
+  "report_fingerprint": "sha256:b045546aa3cb895c821504ef17731267d9633964a6c24101b31143c021a832a3",
+  "input_fingerprint": "sha256:f247257bfa22ed42b85e7b709e4e1b6742e8e88c13f982c26524a300fb2e8782",
   "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
   "manifest_fingerprints": {
     "owner_map": "sha256:d58fbea9590434205dd7aeb7dbc2064799cbafefa866e33041dbab5e03d8f7b5",
@@ -8,15 +8,15 @@
     "generated_zones": "sha256:03229f89d637de558d3832dcc84552e782acbf4a1c13433a584d0ca5404e408d",
     "boundaries": "sha256:393fdb5254b2798a5bc0cbfd5dccd1e25f3882de77b12c126be494167206dc5a",
     "proof_lanes": "sha256:9bfff9225b803a4599f4025ef64ed1915704ed049033f61c86bec94af60e9402",
-    "standard_version": "sha256:dfd17ef1c0a836d1eef0c604e7e676e2d6895540d5d0dd7cf38b4b9f1f46373f"
+    "standard_version": "sha256:f33b9715b6109208b44f6931c43f37e8da642dd67ff6faaad77be486954243a4"
   },
   "dirty_worktree": true,
-  "generated_at": "1783850204",
+  "generated_at": "1784050502",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
-  "auditor_version": "1.6.10",
-  "schema_version": "jain-split-ops-v8.0.0-split.0",
+  "auditor_version": "1.6.11",
+  "schema_version": "jain-split-ops-v8.0.1-split.0",
   "paper_edition": "2026.05-ed8",
   "target_stack_id": "rust-ts-vite-react-postgres-bounded-python",
   "target_stack": "Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1783850204",
-  "started_at": "1783850204",
-  "elapsed_ms": 1800,
+  "run_id": "1784050502",
+  "started_at": "1784050502",
+  "elapsed_ms": 1851,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "2c14a6f",
+    "head": "beb0c19",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -67,7 +67,7 @@
     "advisory_on": [],
     "mode": "advisory",
     "standard_version": "0.9.0",
-    "auditor_version": "1.6.10",
+    "auditor_version": "1.6.11",
     "schema_version": "1.9.0",
     "paper_edition": "2026.05-ed8",
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
@@ -1003,9 +1003,9 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-12T09:56:42.493795211+00:00",
+    "generated_at": "2026-07-14T17:35:00.229941324+00:00",
     "repo": ".",
-    "auditor_version": "1.6.10",
+    "auditor_version": "1.6.11",
     "status": "review",
     "policy": {
       "active_source_only": true,
@@ -1041,20 +1041,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 234,
+      "files_scanned": 235,
       "files_considered": 1,
       "active_files": 1,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 6,
+      "warning_classes": 5,
       "hard_instances": 0,
-      "warning_instances": 20,
-      "duplicate_lines": 6,
-      "duplicate_tokens": 31,
-      "duplicate_bytes": 236,
-      "total_redundant_lines": 14,
-      "total_redundant_tokens": 79,
-      "total_redundant_bytes": 692
+      "warning_instances": 18,
+      "duplicate_lines": 5,
+      "duplicate_tokens": 23,
+      "duplicate_bytes": 169,
+      "total_redundant_lines": 13,
+      "total_redundant_tokens": 71,
+      "total_redundant_bytes": 625
     },
     "classes": [
       {
@@ -1079,107 +1079,72 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 631,
-            "end_line": 632,
+            "start_line": 632,
+            "end_line": 633,
             "unit_name": "sync_derived_manifests_command"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1077,
-            "end_line": 1078,
+            "start_line": 1163,
+            "end_line": 1164,
             "unit_name": "validate_family_lock"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1160,
-            "end_line": 1161,
+            "start_line": 1246,
+            "end_line": 1247,
             "unit_name": "regenerate_lock"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1232,
-            "end_line": 1233,
+            "start_line": 1318,
+            "end_line": 1319,
             "unit_name": "release_snapshot"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1281,
-            "end_line": 1282,
+            "start_line": 1371,
+            "end_line": 1372,
             "unit_name": "release_status"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1631,
-            "end_line": 1632,
+            "start_line": 1723,
+            "end_line": 1724,
             "unit_name": "verify_worktrees_command"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1950,
-            "end_line": 1951,
+            "start_line": 2043,
+            "end_line": 2044,
             "unit_name": "fix_local_remotes"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2502,
-            "end_line": 2503,
+            "start_line": 2595,
+            "end_line": 2596,
             "unit_name": "reconcile"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2643,
-            "end_line": 2644,
+            "start_line": 2736,
+            "end_line": 2737,
             "unit_name": "bump_version"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2916,
-            "end_line": 2917,
+            "start_line": 3022,
+            "end_line": 3023,
             "unit_name": "preflight"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-5ef6588a23781013",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 8,
-        "duplicate_bytes": 67,
-        "instance_count": 2,
-        "total_redundant_lines": 1,
-        "total_redundant_tokens": 8,
-        "total_redundant_bytes": 67,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "4627a998d2d4c3f6",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "tools/splitctl/src/main.rs",
-            "language": "rust",
-            "start_line": 2746,
-            "end_line": 2747,
-            "unit_name": "update_lock_shas"
-          },
-          {
-            "path": "tools/splitctl/src/main.rs",
-            "language": "rust",
-            "start_line": 2785,
-            "end_line": 2786,
-            "unit_name": "source_coverage"
           }
         ]
       },
@@ -1205,15 +1170,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1905,
-            "end_line": 1906,
+            "start_line": 1998,
+            "end_line": 1999,
             "unit_name": "strict_git_output"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2595,
-            "end_line": 2596,
+            "start_line": 2688,
+            "end_line": 2689,
             "unit_name": "git_output"
           }
         ]
@@ -1240,15 +1205,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 787,
-            "end_line": 788,
+            "start_line": 788,
+            "end_line": 789,
             "unit_name": "write_atomic_bytes"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1832,
-            "end_line": 1833,
+            "start_line": 1925,
+            "end_line": 1926,
             "unit_name": "write_json_receipt"
           }
         ]
@@ -1275,15 +1240,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1357,
-            "end_line": 1358,
+            "start_line": 1449,
+            "end_line": 1450,
             "unit_name": "bootstrap_main_command"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1507,
-            "end_line": 1508,
+            "start_line": 1599,
+            "end_line": 1600,
             "unit_name": "immutable_tag_command"
           }
         ]
@@ -1310,15 +1275,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1995,
-            "end_line": 1996,
+            "start_line": 2088,
+            "end_line": 2089,
             "unit_name": "jeryu_local"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2125,
-            "end_line": 2126,
+            "start_line": 2218,
+            "end_line": 2219,
             "unit_name": "jeryu_lifecycle"
           }
         ]

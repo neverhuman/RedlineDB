@@ -6,7 +6,7 @@ manifest="${ops_root}/repos.manifest.toml"
 base="${JERYU_BASE:-http://127.0.0.1:8787}"
 family_filter=""
 check_only=0
-receipt="${ops_root}/docs/release-evidence/8.0.0/forge-family-registration.json"
+receipt=""
 rows=()
 
 usage() {
@@ -40,8 +40,6 @@ emit_receipt() {
     >"$receipt"
   return "$rc"
 }
-trap emit_receipt EXIT
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --manifest) shift; manifest="${1:-}" ;;
@@ -55,6 +53,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 [[ -r "$manifest" ]] || { printf 'manifest not readable: %s\n' "$manifest" >&2; exit 1; }
+release_version="$(awk -F'"' '/^release_version = / {print $2; exit}' "$manifest")"
+[[ "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+  printf 'manifest release_version is missing or invalid: %s\n' "$manifest" >&2
+  exit 1
+}
+receipt="${receipt:-${ops_root}/docs/release-evidence/${release_version}/forge-family-registration.json}"
+trap emit_receipt EXIT
 for tool in cargo curl jq; do
   command -v "$tool" >/dev/null 2>&1 || { printf 'required tool missing: %s\n' "$tool" >&2; exit 1; }
 done

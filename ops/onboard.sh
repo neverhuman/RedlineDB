@@ -7,7 +7,7 @@
 #   e.g. onboard.sh /home/ubuntu/veox-split/veox-proofs jeryu/veox-proofs --push
 set -uo pipefail
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"; . "$HERE/lib.sh"
-REPO_PATH="${1:?repo_path}"; FULL="${2:?owner/name}"; shift 2; PUSH=0; OPEN_PR=0; FLIP=0; SEED_REF="refs/heads/main"; SEED_BRANCH="onboard/v8.0.0"; MANIFEST="${JAIN_SPLIT_MANIFEST:-$HERE/../repos.manifest.toml}"; REQUIRED_CHECK="${JAIN_REQUIRED_CHECK:-}"
+REPO_PATH="${1:?repo_path}"; FULL="${2:?owner/name}"; shift 2; PUSH=0; OPEN_PR=0; FLIP=0; SEED_REF="refs/heads/main"; SEED_BRANCH=""; MANIFEST="${JAIN_SPLIT_MANIFEST:-$HERE/../repos.manifest.toml}"; REQUIRED_CHECK="${JAIN_REQUIRED_CHECK:-}"
 while [[ $# -gt 0 ]]; do case "$1" in
   --push) PUSH=1 ;;
   --open-pr) OPEN_PR=1 ;;
@@ -18,6 +18,13 @@ while [[ $# -gt 0 ]]; do case "$1" in
   --required-check) shift; REQUIRED_CHECK="${1:-}" ;;
   *) die "unknown arg: $1" ;;
 esac; shift; done
+RELEASE_VERSION="${JAIN_RELEASE_VERSION:-}"
+if [[ -z "$RELEASE_VERSION" && -r "$MANIFEST" ]]; then
+  RELEASE_VERSION="$(awk -F'"' '/^release_version = / {print $2; exit}' "$MANIFEST")"
+fi
+[[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] \
+  || die "release version is unavailable; set JAIN_RELEASE_VERSION or pass a readable --manifest"
+SEED_BRANCH="${SEED_BRANCH:-onboard/v${RELEASE_VERSION}}"
 OWNER="${FULL%%/*}"; NAME="${FULL#*/}"
 [[ -d "$REPO_PATH/.git" ]] || die "not a git repo: $REPO_PATH"
 [[ -n "$SEED_REF" ]] || die "--seed-ref requires a ref"
@@ -100,7 +107,7 @@ if [[ "$PUSH" == "1" ]]; then
   if [[ "$OPEN_PR" == "1" ]]; then
     curl -fsS -X POST "$JERYU_BASE/repos/$OWNER/$NAME/pulls" \
       "${auth_args[@]}" -H 'content-type: application/json' \
-      -d "$(jq -cn --arg title "onboard $NAME for Jain v8.0.0" --arg head "$SEED_BRANCH" --arg body "Materialized reviewed Jain v8.0.0 source snapshot." '{title:$title,head:$head,base:"main",body:$body,draft:true,actor:"codex"}')" >/dev/null \
+      -d "$(jq -cn --arg title "onboard $NAME for Jain v${RELEASE_VERSION}" --arg head "$SEED_BRANCH" --arg body "Materialized reviewed Jain v${RELEASE_VERSION} source snapshot." '{title:$title,head:$head,base:"main",body:$body,draft:true,actor:"codex"}')" >/dev/null \
       || die "failed to open onboarding pull request"
     ok "opened onboarding pull request $OWNER/$NAME $SEED_BRANCH -> main"
   fi
@@ -123,6 +130,6 @@ jq -e --arg check "$REQUIRED_CHECK" '
   and ((if (.allow_force_pushes | type) == "object" then .allow_force_pushes.enabled else .allow_force_pushes end) == false)
   and ((if (.allow_deletions | type) == "object" then .allow_deletions.enabled else .allow_deletions end) == false)
 ' <<<"$readback" >/dev/null \
-  || die "branch protection readback did not satisfy the v8 Smartcluster policy"
+  || die "branch protection readback did not satisfy the active immutable-main policy"
 ok "protected main for $OWNER/$NAME"
 echo "$OWNER/$NAME"
