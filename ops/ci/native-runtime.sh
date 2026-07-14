@@ -34,6 +34,44 @@ jain_authoritative_required_check() {
     | select(type == "string" and length > 0)' <<<"$inventory"
 }
 
+jain_verify_reviewed_control_plane_commit() {
+  local ops_root="${1:?control-plane root is required}"
+  local expected_commit="${2:?control-plane commit is required}"
+  local reviewed_remote="${3:?reviewed control-plane remote is required}"
+  local commit remote reviewed_commit
+
+  [[ "$expected_commit" =~ ^[0-9a-f]{40}$ ]] || return 1
+  commit="$(git -C "$ops_root" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" || {
+    printf 'cannot resolve exact control-plane commit: %s\n' "$ops_root" >&2
+    return 1
+  }
+  [[ "$commit" == "$expected_commit" ]] || {
+    printf 'control-plane commit changed: %s != %s\n' \
+      "$commit" "$expected_commit" >&2
+    return 1
+  }
+  remote="$(git -C "$ops_root" remote get-url origin 2>/dev/null)" || {
+    printf 'control-plane origin is unavailable: %s\n' "$ops_root" >&2
+    return 1
+  }
+  [[ "$remote" == "$reviewed_remote" ]] || {
+    printf 'control-plane origin does not match reviewed authority: %s != %s\n' \
+      "$remote" "$reviewed_remote" >&2
+    return 1
+  }
+  reviewed_commit="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    git ls-remote --exit-code "$reviewed_remote" refs/heads/main 2>/dev/null \
+    | cut -f1)" || {
+    printf 'cannot read reviewed control-plane main from origin\n' >&2
+    return 1
+  }
+  [[ "$commit" == "$reviewed_commit" ]] || {
+    printf 'control-plane commit is not reviewed origin/main: %s != %s\n' \
+      "$commit" "$reviewed_commit" >&2
+    return 1
+  }
+}
+
 jain_validate_native_check_mode() {
   local repo="${1:?repository name is required}"
   local check="${2:?check name is required}"
@@ -98,7 +136,8 @@ jain_extract_native_materializer() {
   local ops_root="${1:?control-plane root is required}"
   local destination="${2:?materializer destination is required}"
   local reviewed_remote="${3:?reviewed control-plane remote is required}"
-  local commit path expected actual remote reviewed_commit
+  local expected_commit="${4:-}"
+  local commit path expected actual
   local -a paths=(
     ops/ci/native-materializer.sh
     ops/ci/native-sources.lock.json
@@ -116,25 +155,13 @@ jain_extract_native_materializer() {
     printf 'cannot resolve exact control-plane commit: %s\n' "$ops_root" >&2
     return 1
   }
-  remote="$(git -C "$ops_root" remote get-url origin 2>/dev/null)" || {
-    printf 'control-plane origin is unavailable: %s\n' "$ops_root" >&2
+  if [[ -n "$expected_commit" && "$commit" != "$expected_commit" ]]; then
+    printf 'control-plane materializer commit changed: %s != %s\n' \
+      "$commit" "$expected_commit" >&2
     return 1
-  }
-  [[ "$remote" == "$reviewed_remote" ]] || {
-    printf 'control-plane origin does not match reviewed authority: %s != %s\n' \
-      "$remote" "$reviewed_remote" >&2
-    return 1
-  }
-  reviewed_commit="$(GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
-    git ls-remote --exit-code "$reviewed_remote" refs/heads/main 2>/dev/null | cut -f1)" || {
-    printf 'cannot read reviewed control-plane main from origin\n' >&2
-    return 1
-  }
-  [[ "$commit" == "$reviewed_commit" ]] || {
-    printf 'control-plane materializer commit is not reviewed origin/main: %s != %s\n' \
-      "$commit" "$reviewed_commit" >&2
-    return 1
-  }
+  fi
+  jain_verify_reviewed_control_plane_commit \
+    "$ops_root" "$commit" "$reviewed_remote" || return 1
   for path in "${paths[@]}"; do
     git -C "$ops_root" cat-file -e "$commit:$path" 2>/dev/null || {
       printf 'reviewed control-plane commit lacks native input: %s\n' "$path" >&2
@@ -355,9 +382,69 @@ jain_verify_sha256_sidecar() {
   )
 }
 
+jain_control_plane_file_sha256() {
+  local control_root="${1:?control-plane root is required}"
+  local control_commit="${2:?control-plane commit is required}"
+  local path="${3:?control-plane path is required}"
+  git -C "$control_root" cat-file -e "$control_commit:$path" 2>/dev/null || return 1
+  git -C "$control_root" show "$control_commit:$path" | sha256sum | cut -d' ' -f1
+}
+
+jain_copy_control_plane_file() {
+  local control_root="${1:?control-plane root is required}"
+  local control_commit="${2:?control-plane commit is required}"
+  local path="${3:?control-plane path is required}"
+  local destination="${4:?destination is required}"
+  local expected actual
+  expected="$(jain_control_plane_file_sha256 \
+    "$control_root" "$control_commit" "$path")" || return 1
+  git -C "$control_root" show "$control_commit:$path" >"$destination" || return 1
+  actual="$(sha256sum -- "$destination" | cut -d' ' -f1)"
+  [[ "$actual" == "$expected" ]] || {
+    printf 'control-plane file changed while extracting: %s\n' "$path" >&2
+    return 1
+  }
+}
+
+jain_verify_evidence_control_plane_files() {
+  local evidence_dir="${1:?native evidence directory is required}"
+  local control_root="${2:?control-plane root is required}"
+  local control_commit="${3:?control-plane commit is required}"
+  local index expected actual
+  local -a evidence_files=(
+    native-sources.lock.json
+    native-materializer.sh
+    native-runtime.sh
+    split-host-ci.sh
+    host-ci-integrity.sh
+  )
+  local -a control_paths=(
+    ops/ci/native-sources.lock.json
+    ops/ci/native-materializer.sh
+    ops/ci/native-runtime.sh
+    ops/ci/split-host-ci.sh
+    ops/ci/host-ci-integrity.sh
+  )
+
+  [[ "$control_commit" =~ ^[0-9a-f]{40}$ ]] || return 1
+  for ((index = 0; index < ${#evidence_files[@]}; index++)); do
+    expected="$(jain_control_plane_file_sha256 \
+      "$control_root" "$control_commit" "${control_paths[$index]}")" || return 1
+    actual="$(sha256sum -- "$evidence_dir/${evidence_files[$index]}" \
+      | cut -d' ' -f1)"
+    [[ "$actual" == "$expected" ]] || {
+      printf 'native evidence is not from control-plane commit %s: %s\n' \
+        "$control_commit" "${evidence_files[$index]}" >&2
+      return 1
+    }
+  done
+}
+
 jain_verify_native_evidence() {
   local evidence_dir="${1:?native evidence directory is required}"
   local expected_sha="${2:-}" expected_check="${3:-}"
+  local control_root="${4:?control-plane root is required}"
+  local expected_control_commit="${5:?control-plane commit is required}"
   local file
   for file in materialization.log native-vendor-manifest.json \
     native-sources.lock.json native-materializer.sh native-runtime.sh \
@@ -365,12 +452,15 @@ jain_verify_native_evidence() {
     jain_verify_sha256_sidecar "$evidence_dir/$file" || return 1
   done
   jq -e --arg expected_sha "$expected_sha" --arg expected_check "$expected_check" \
+    --arg expected_control_commit "$expected_control_commit" \
     'select(.schema_version == "jain.host-native-materialization/v1")
      | select(($expected_sha == "" or .head_sha == $expected_sha)
        and ($expected_check == "" or .required_check == $expected_check))
      | select(.head_sha | test("^[0-9a-f]{40}$"))
-     | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
+     | select(.control_plane_commit == $expected_control_commit)
      | select(.status == "pass")' "$evidence_dir/receipt.json" >/dev/null || return 1
+  jain_verify_evidence_control_plane_files \
+    "$evidence_dir" "$control_root" "$expected_control_commit" || return 1
   jq -e \
     --arg log "$(sha256sum -- "$evidence_dir/materialization.log" | cut -d' ' -f1)" \
     --arg manifest "$(sha256sum -- "$evidence_dir/native-vendor-manifest.json" | cut -d' ' -f1)" \
@@ -393,8 +483,11 @@ jain_verify_native_evidence_binding() {
   local evidence_dir="${1:?native evidence directory is required}"
   local expected_receipt_sha="${2:?native receipt digest is required}"
   local expected_head="${3:-}" expected_check="${4:-}"
+  local control_root="${5:?control-plane root is required}"
+  local expected_control_commit="${6:?control-plane commit is required}"
   [[ "$expected_receipt_sha" =~ ^[0-9a-f]{64}$ ]] || return 1
-  jain_verify_native_evidence "$evidence_dir" "$expected_head" "$expected_check" || return 1
+  jain_verify_native_evidence "$evidence_dir" "$expected_head" "$expected_check" \
+    "$control_root" "$expected_control_commit" || return 1
   [[ "$(sha256sum -- "$evidence_dir/receipt.json" | cut -d' ' -f1)" == \
     "$expected_receipt_sha" ]]
 }
@@ -404,10 +497,12 @@ jain_verify_native_check_evidence() {
   local evidence_required="${2:-0}"
   local evidence_dir="${3:-}" receipt_sha="${4:-}"
   local expected_head="${5:-}" expected_check="${6:-}"
+  local control_root="${7:-}" expected_control_commit="${8:-}"
   if [[ -n "$evidence_dir" || -n "$receipt_sha" ]]; then
     [[ -n "$evidence_dir" && -n "$receipt_sha" ]] || return 1
     jain_verify_native_evidence_binding "$evidence_dir" "$receipt_sha" \
-      "$expected_head" "$expected_check"
+      "$expected_head" "$expected_check" \
+      "$control_root" "$expected_control_commit"
     return
   fi
   if [[ "$evidence_required" == 1 && "$conclusion" == success ]]; then
@@ -465,11 +560,7 @@ jain_persist_native_evidence() {
   local owner="${5:?owner is required}" repo="${6:?repository is required}"
   local head_sha="${7:?head SHA is required}" check="${8:?required check is required}"
   local control_commit="${9:?control-plane commit is required}"
-  local authority="${10:?native authority is required}"
-  local materializer="${11:?native materializer is required}"
-  local native_runtime="${12:?native runtime orchestration is required}"
-  local split_host_ci="${13:?split host CI orchestration is required}"
-  local host_ci_integrity="${14:?host CI integrity gate is required}"
+  local control_root="${10:?control-plane root is required}"
   local check_slug attempt parent staging destination recorded_at file
 
   [[ "$head_sha" =~ ^[0-9a-f]{40}$ && "$control_commit" =~ ^[0-9a-f]{40}$ ]] || return 1
@@ -487,11 +578,16 @@ jain_persist_native_evidence() {
   staging="$(mktemp -d "$parent/.staging.XXXXXX")"
   cp -- "$log" "$staging/materialization.log"
   cp -- "$vendor_root/receipts/manifest.json" "$staging/native-vendor-manifest.json"
-  cp -- "$authority" "$staging/native-sources.lock.json"
-  cp -- "$materializer" "$staging/native-materializer.sh"
-  cp -- "$native_runtime" "$staging/native-runtime.sh"
-  cp -- "$split_host_ci" "$staging/split-host-ci.sh"
-  cp -- "$host_ci_integrity" "$staging/host-ci-integrity.sh"
+  jain_copy_control_plane_file "$control_root" "$control_commit" \
+    ops/ci/native-sources.lock.json "$staging/native-sources.lock.json" || return 1
+  jain_copy_control_plane_file "$control_root" "$control_commit" \
+    ops/ci/native-materializer.sh "$staging/native-materializer.sh" || return 1
+  jain_copy_control_plane_file "$control_root" "$control_commit" \
+    ops/ci/native-runtime.sh "$staging/native-runtime.sh" || return 1
+  jain_copy_control_plane_file "$control_root" "$control_commit" \
+    ops/ci/split-host-ci.sh "$staging/split-host-ci.sh" || return 1
+  jain_copy_control_plane_file "$control_root" "$control_commit" \
+    ops/ci/host-ci-integrity.sh "$staging/host-ci-integrity.sh" || return 1
   recorded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   jq -n --arg owner "$owner" --arg repo "$repo" --arg head_sha "$head_sha" \
     --arg required_check "$check" --arg recorded_at "$recorded_at" \
@@ -526,16 +622,18 @@ jain_persist_native_evidence() {
       return 1
     }
   done
-  jain_verify_native_evidence "$staging" "$head_sha" "$check" || {
+  jain_verify_native_evidence "$staging" "$head_sha" "$check" \
+    "$control_root" "$control_commit" || {
     rm -rf -- "$staging"
     return 1
   }
   mv -- "$staging" "$destination"
-  jain_verify_native_evidence "$destination" "$head_sha" "$check" || return 1
+  jain_verify_native_evidence "$destination" "$head_sha" "$check" \
+    "$control_root" "$control_commit" || return 1
   JAIN_NATIVE_EVIDENCE_DIR="$destination"
   JAIN_NATIVE_EVIDENCE_SHA256="$(sha256sum -- "$destination/receipt.json" | cut -d' ' -f1)"
   jain_verify_native_evidence_binding "$destination" "$JAIN_NATIVE_EVIDENCE_SHA256" \
-    "$head_sha" "$check" || return 1
+    "$head_sha" "$check" "$control_root" "$control_commit" || return 1
   export JAIN_NATIVE_EVIDENCE_DIR JAIN_NATIVE_EVIDENCE_SHA256
 }
 

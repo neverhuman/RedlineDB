@@ -3,6 +3,7 @@
 set -euo pipefail
 
 ops_root="${1:?control-plane root is required}"
+expected_commit="${2:-}"
 [[ "$ops_root" = /* ]] || {
   printf 'host CI control-plane root must be absolute: %s\n' "$ops_root" >&2
   exit 1
@@ -12,6 +13,11 @@ commit="$(git -C "$ops_root" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" ||
   printf 'host CI cannot resolve the control-plane commit\n' >&2
   exit 1
 }
+if [[ -n "$expected_commit" && "$commit" != "$expected_commit" ]]; then
+  printf 'host CI control-plane commit changed: %s != %s\n' \
+    "$commit" "$expected_commit" >&2
+  exit 1
+fi
 
 if [[ -n "$(git -C "$ops_root" status --porcelain=v1 --untracked-files=all)" ]]; then
   printf 'host CI refuses a dirty control-plane worktree: %s\n' "$ops_root" >&2

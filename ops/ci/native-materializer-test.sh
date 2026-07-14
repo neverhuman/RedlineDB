@@ -189,10 +189,14 @@ grep -Fq 'materializer digest mismatch' "$tmp/tampered.log" || {
 control="$tmp/control"
 mkdir -p "$control/ops/ci"
 cp -- "$materializer" "$control/ops/ci/native-materializer.sh"
-cp -- "$repo_root/ops/ci/native-sources.lock.json" \
-  "$control/ops/ci/native-sources.lock.json"
-cp -- "$repo_root/ops/ci/native-sources.lock.json.sha256" \
-  "$control/ops/ci/native-sources.lock.json.sha256"
+cp -- "$authority" "$control/ops/ci/native-sources.lock.json"
+(
+  cd "$control/ops/ci"
+  sha256sum native-sources.lock.json >native-sources.lock.json.sha256
+)
+for path in native-runtime.sh split-host-ci.sh host-ci-integrity.sh; do
+  cp -- "$repo_root/ops/ci/$path" "$control/ops/ci/$path"
+done
 git init --quiet "$control"
 git -C "$control" config user.name 'Control Fixture'
 git -C "$control" config user.email control-fixture@example.invalid
@@ -220,6 +224,7 @@ if jain_extract_native_materializer "$control" "$tmp/rejected" \
   printf 'exact materializer extraction accepted a dirty reviewed script\n' >&2
   exit 1
 fi
+git -C "$control" restore ops/ci/native-materializer.sh
 
 evidence_root="$durable_root/persistent-evidence"
 head_sha="0123456789abcdef0123456789abcdef01234567"
@@ -227,8 +232,7 @@ control_commit="$(git -C "$control" rev-parse HEAD)"
 if JAIN_CI_ATTEMPT_ID=tmp-rejected jain_persist_native_evidence \
   "$vendor_root" "$run_root/materialization.log" "$tmp/evidence" "$run_root" \
   veox jain-core "$head_sha" jain-core/required "$control_commit" \
-  "$authority" "$materializer" "$repo_root/ops/ci/native-runtime.sh" \
-  "$repo_root/ops/ci/split-host-ci.sh" "$repo_root/ops/ci/host-ci-integrity.sh" \
+  "$control" \
   2>/dev/null; then
   printf 'native evidence accepted a /tmp persistence root\n' >&2
   exit 1
@@ -238,8 +242,7 @@ if JAIN_CI_ATTEMPT_ID=symlink-rejected jain_persist_native_evidence \
   "$vendor_root" "$run_root/materialization.log" \
   "$durable_root/ephemeral-link/evidence" "$run_root" \
   veox jain-core "$head_sha" jain-core/required "$control_commit" \
-  "$authority" "$materializer" "$repo_root/ops/ci/native-runtime.sh" \
-  "$repo_root/ops/ci/split-host-ci.sh" "$repo_root/ops/ci/host-ci-integrity.sh" \
+  "$control" \
   2>/dev/null; then
   printf 'native evidence accepted a symlink into ephemeral CI\n' >&2
   exit 1
@@ -255,19 +258,40 @@ fi
 JAIN_CI_ATTEMPT_ID=fixture jain_persist_native_evidence \
   "$vendor_root" "$run_root/materialization.log" "$evidence_root" "$run_root" \
   veox jain-core "$head_sha" jain-core/required "$control_commit" \
-  "$authority" "$materializer" "$repo_root/ops/ci/native-runtime.sh" \
-  "$repo_root/ops/ci/split-host-ci.sh" "$repo_root/ops/ci/host-ci-integrity.sh"
+  "$control"
 evidence_dir="$JAIN_NATIVE_EVIDENCE_DIR"
 receipt_sha="$JAIN_NATIVE_EVIDENCE_SHA256"
 [[ "$receipt_sha" =~ ^[0-9a-f]{64}$ ]] || exit 1
-jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required
+jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required \
+  "$control" "$control_commit"
 jain_verify_native_check_evidence success 1 "$evidence_dir" "$receipt_sha" \
-  "$head_sha" jain-core/required
+  "$head_sha" jain-core/required "$control" "$control_commit"
 rm -rf -- "$run_root"
-jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required || {
+jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required \
+  "$control" "$control_commit" || {
   printf 'native evidence did not survive ephemeral cleanup\n' >&2
   exit 1
 }
+
+# A receipt cannot relabel orchestration from one reviewed commit as another,
+# even when every mutable sidecar and receipt digest is recomputed.
+mixed_commit_evidence="$tmp/mixed-commit-evidence"
+cp -a -- "$evidence_dir" "$mixed_commit_evidence"
+printf '# successor commit\n' >>"$control/ops/ci/native-runtime.sh"
+git -C "$control" add ops/ci/native-runtime.sh
+git -C "$control" commit --quiet -m successor
+successor_commit="$(git -C "$control" rev-parse HEAD)"
+jq --arg commit "$successor_commit" '.control_plane_commit = $commit' \
+  "$mixed_commit_evidence/receipt.json" >"$mixed_commit_evidence/receipt.json.new"
+mv -- "$mixed_commit_evidence/receipt.json.new" \
+  "$mixed_commit_evidence/receipt.json"
+jain_write_sha256_sidecar "$mixed_commit_evidence/receipt.json"
+if jain_verify_native_evidence "$mixed_commit_evidence" "$head_sha" \
+  jain-core/required "$control" "$successor_commit" 2>/dev/null; then
+  printf 'native evidence accepted orchestration from a different commit\n' >&2
+  exit 1
+fi
+
 receipt_tamper="$tmp/receipt-tamper"
 cp -a -- "$evidence_dir" "$receipt_tamper"
 jq '.recorded_at = "tampered"' "$receipt_tamper/receipt.json" \
@@ -275,13 +299,14 @@ jq '.recorded_at = "tampered"' "$receipt_tamper/receipt.json" \
 mv -- "$receipt_tamper/receipt.json.new" "$receipt_tamper/receipt.json"
 jain_write_sha256_sidecar "$receipt_tamper/receipt.json"
 if jain_verify_native_evidence_binding "$receipt_tamper" "$receipt_sha" \
-  "$head_sha" jain-core/required 2>/dev/null; then
+  "$head_sha" jain-core/required "$control" "$control_commit" 2>/dev/null; then
   printf 'native evidence binding accepted a re-checksummed receipt tamper\n' >&2
   exit 1
 fi
 printf 'tamper\n' >>"$evidence_dir/materialization.log"
 jain_write_sha256_sidecar "$evidence_dir/materialization.log"
-if jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required 2>/dev/null; then
+if jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required \
+  "$control" "$control_commit" 2>/dev/null; then
   printf 'native evidence verification accepted a re-checksummed log tamper\n' >&2
   exit 1
 fi

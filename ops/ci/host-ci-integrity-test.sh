@@ -22,7 +22,14 @@ git -C "$fixture" config user.name 'Host CI Fixture'
 git -C "$fixture" config user.email host-ci-fixture@example.invalid
 git -C "$fixture" add .
 git -C "$fixture" commit --quiet -m exact
-"$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null
+fixture_commit="$(git -C "$fixture" rev-parse HEAD)"
+[[ "$("$fixture/ops/ci/host-ci-integrity.sh" \
+  "$fixture" "$fixture_commit")" == "$fixture_commit" ]] || exit 1
+if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" \
+  0123456789abcdef0123456789abcdef01234567 >/dev/null 2>&1; then
+  printf 'host CI integrity accepted a different expected commit\n' >&2
+  exit 1
+fi
 
 printf 'dirty runtime\n' >>"$fixture/ops/ci/native-runtime.sh"
 if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null 2>&1; then

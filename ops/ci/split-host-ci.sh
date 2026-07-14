@@ -13,12 +13,72 @@ set -uo pipefail
 OWNER="${1:?owner}"; REPO="${2:?repo}"; SHA="${3:?sha}"; REPO_PATH="${4:?repo_path}"
 CHECK="${5:-$REPO/required}"
 JAIN_BASE="${JAIN_BASE:-http://127.0.0.1:8787}"
-OPS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
-"$OPS_ROOT/ops/ci/host-ci-integrity.sh" "$OPS_ROOT" >/dev/null || {
-  printf '[split-host-ci] exact control-plane integrity check failed\n' >&2
+ENTRY_OPS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+
+# The checkout used to invoke this script is bootstrap-only. Capture its clean
+# commit, create a detached worktree from that Git object, and immediately
+# re-exec the reviewed runner there. No later CI or evidence step reads the
+# mutable invoking checkout.
+if [[ -z "${JAIN_HOST_CI_EXACT_ROOT:-}" ]]; then
+  bootstrap_commit="$(
+    "$ENTRY_OPS_ROOT/ops/ci/host-ci-integrity.sh" "$ENTRY_OPS_ROOT"
+  )" || {
+    printf '[split-host-ci] exact control-plane integrity check failed\n' >&2
+    exit 2
+  }
+  bootstrap_root="$(mktemp -d /tmp/split-host-ci-bootstrap.XXXXXX)" || exit 2
+  bootstrap_exact="$bootstrap_root/control-plane"
+  cleanup_failed_bootstrap() {
+    git -C "$ENTRY_OPS_ROOT" worktree remove --force \
+      "$bootstrap_exact" >/dev/null 2>&1 || true
+    rm -rf -- "$bootstrap_root"
+  }
+  trap cleanup_failed_bootstrap EXIT
+  git -C "$ENTRY_OPS_ROOT" worktree add --quiet --detach \
+    "$bootstrap_exact" "$bootstrap_commit" || exit 2
+  exact_commit="$(
+    git -C "$ENTRY_OPS_ROOT" show \
+      "$bootstrap_commit:ops/ci/host-ci-integrity.sh" \
+      | bash -s -- "$bootstrap_exact" "$bootstrap_commit"
+  )" || exit 2
+  [[ "$exact_commit" == "$bootstrap_commit" ]] || exit 2
+  export JAIN_HOST_CI_SOURCE_ROOT="$ENTRY_OPS_ROOT"
+  export JAIN_HOST_CI_EXACT_ROOT="$bootstrap_exact"
+  export JAIN_HOST_CI_CONTROL_COMMIT="$bootstrap_commit"
+  export JAIN_HOST_CI_BOOTSTRAP_ROOT="$bootstrap_root"
+  exec "$bootstrap_exact/ops/ci/split-host-ci.sh" "$@"
+  exit 2
+fi
+
+OPS_ROOT="$(realpath -e -- "$JAIN_HOST_CI_EXACT_ROOT")" || exit 2
+SOURCE_OPS_ROOT="${JAIN_HOST_CI_SOURCE_ROOT:?bootstrap source root is required}"
+CONTROL_PLANE_COMMIT="${JAIN_HOST_CI_CONTROL_COMMIT:?control-plane commit is required}"
+BOOTSTRAP_ROOT="${JAIN_HOST_CI_BOOTSTRAP_ROOT:?bootstrap root is required}"
+[[ "$ENTRY_OPS_ROOT" == "$OPS_ROOT" && "$CONTROL_PLANE_COMMIT" =~ ^[0-9a-f]{40}$ ]] \
+  || exit 2
+
+cleanup_bootstrap() {
+  git -C "$SOURCE_OPS_ROOT" worktree remove --force \
+    "$OPS_ROOT" >/dev/null 2>&1 || true
+  rm -rf -- "$BOOTSTRAP_ROOT"
+}
+trap cleanup_bootstrap EXIT
+
+verify_exact_control_plane_integrity() {
+  local verified
+  verified="$(
+    git -C "$OPS_ROOT" show \
+      "$CONTROL_PLANE_COMMIT:ops/ci/host-ci-integrity.sh" \
+      | bash -s -- "$OPS_ROOT" "$CONTROL_PLANE_COMMIT"
+  )" || return 1
+  [[ "$verified" == "$CONTROL_PLANE_COMMIT" ]]
+}
+
+verify_exact_control_plane_integrity || {
+  printf '[split-host-ci] detached control-plane integrity check failed\n' >&2
   exit 2
 }
+CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
 # shellcheck source=ops/ci/native-runtime.sh
 source "$OPS_ROOT/ops/ci/native-runtime.sh"
 # shellcheck source=ops/ci/pinned-advisory.sh
@@ -44,9 +104,16 @@ post_check() {
   local conclusion="$1" token description
   token="$(jeryu_token)"
   if [ -z "$token" ]; then say "no merge token; cannot post required status"; return 1; fi
+  if [[ "$conclusion" == success ]]; then
+    verify_exact_control_plane_integrity || {
+      say "control-plane bytes changed before success publication"
+      return 1
+    }
+  fi
   jain_verify_native_check_evidence "$conclusion" \
     "${NATIVE_EVIDENCE_REQUIRED:-0}" "${JAIN_NATIVE_EVIDENCE_DIR:-}" \
-    "${JAIN_NATIVE_EVIDENCE_SHA256:-}" "$SHA" "$CHECK" || {
+    "${JAIN_NATIVE_EVIDENCE_SHA256:-}" "$SHA" "$CHECK" \
+    "$OPS_ROOT" "$CONTROL_PLANE_COMMIT" || {
     say "native evidence requirement failed before status publication"
     return 1
   }
@@ -155,6 +222,12 @@ control_plane_remote="$(jain_authoritative_control_plane_remote "$managed_invent
   echo "control-plane remote is absent or ambiguous in canonical managed inventory" >&2
   exit 2
 }
+jain_verify_reviewed_control_plane_commit \
+  "$OPS_ROOT" "$CONTROL_PLANE_COMMIT" "$control_plane_remote" || {
+  post_check failure || true
+  echo "control-plane commit is not authoritative reviewed main" >&2
+  exit 2
+}
 NATIVE_EVIDENCE_REQUIRED=0
 if jain_native_check_requires_evidence "$REPO" "$CHECK" "$protected_check"; then
   NATIVE_EVIDENCE_REQUIRED=1
@@ -195,6 +268,7 @@ cleanup() {
       "$native_authority" "$native_source_input" "$native_source_root"
   fi
   rm -rf "$tmp" >/dev/null 2>&1 || true
+  cleanup_bootstrap
 }
 trap cleanup EXIT
 
@@ -207,7 +281,7 @@ git -C "$REPO_PATH" worktree add -f --detach "$wt" "$SHA" >/dev/null 2>&1 \
 # and preserve a checksummed receipt outside this disposable checkout.
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
   jain_extract_native_materializer "$OPS_ROOT" "$native_bundle" \
-    "$control_plane_remote" || native_setup_failure \
+    "$control_plane_remote" "$CONTROL_PLANE_COMMIT" || native_setup_failure \
     "release CI exact native materializer extraction failed" 1
   native_authority="$JAIN_NATIVE_AUTHORITY"
   native_materializer="$JAIN_NATIVE_MATERIALIZER"
@@ -221,13 +295,13 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
     cat "$tmp/native-vendor.log" >&2
     native_setup_failure "release CI exact native materialization failed" 1
   }
+  verify_exact_control_plane_integrity || native_setup_failure \
+    "control-plane bytes changed before native evidence persistence" 1
   jain_persist_native_evidence \
     "$native_vendor" "$tmp/native-vendor.log" \
     "${JAIN_NATIVE_EVIDENCE_ROOT:-$SPLIT_ROOT/target/host-ci-evidence/native-materialization}" \
     "$tmp" "$OWNER" "$REPO" "$SHA" "$CHECK" \
-    "$JAIN_NATIVE_CONTROL_COMMIT" "$native_authority" "$native_materializer" \
-    "$OPS_ROOT/ops/ci/native-runtime.sh" "$OPS_ROOT/ops/ci/split-host-ci.sh" \
-    "$OPS_ROOT/ops/ci/host-ci-integrity.sh" \
+    "$JAIN_NATIVE_CONTROL_COMMIT" "$OPS_ROOT" \
     || native_setup_failure \
     "release CI native materialization evidence persistence failed" 1
   say "native materialization receipt: $JAIN_NATIVE_EVIDENCE_DIR/receipt.json ($JAIN_NATIVE_EVIDENCE_SHA256)"
