@@ -299,7 +299,7 @@ pub(crate) fn run(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                         )]
                     };
                     wave_bound_identity |= tag_steps.iter().any(|step| {
-                        step["name"] == format!("bind-identity:{}", repo.name) && step_green(step)
+                        step["name"] == format!("tag:{}", repo.name) && step_green(step)
                     });
                     prerequisites_green &= tag_steps.iter().all(step_green);
                     steps.extend(tag_steps);

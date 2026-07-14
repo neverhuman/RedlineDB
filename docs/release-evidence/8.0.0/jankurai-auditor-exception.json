@@ -1,0 +1,24 @@
+{
+  "schema_version": "jain.release-exception/v1",
+  "exception_id": "jankurai-auditor-provenance-8.0.0",
+  "release_version": "8.0.0",
+  "status": "accepted",
+  "approved_by": "owner (jepson@veox.ai)",
+  "approved_via": "interactive session decision, 2026-07-14 ~02:0x UTC (AskUserQuestion: 'Override hold for v8.0.0')",
+  "recorded_at": "2026-07-14T02:55:00Z",
+  "scope": "v8.0.0 candidate lifecycle only: jain-fleet CI check consumption, PR approvals, merges, immutable split tags, manifest binds",
+  "defect": {
+    "summary": "Selected jankurai auditor binary self-reports 1.6.11 but embeds AUDITOR_VERSION=1.6.10; executable/report provenance is not bound by current score validation.",
+    "impact": "Provenance-string mismatch in the audit tool itself; audit findings, scores, caps, and hard-finding detection are unaffected.",
+    "discovered_by": "Codex read-only toolchain audit, AGENT_CHAT 2026-07-14 01:08 UTC",
+    "related": "jankurai kernel/dedup/fleet/analyzers tags retain failed jankurai/proof checks (AGENT_CHAT 01:52 UTC); that stack's corrective wave is deferred post-release"
+  },
+  "compensating_controls": [
+    "All other required lanes (required, security, package, coverage) remain fully enforced with no waivers",
+    "Branch protection and the reviewed PR lifecycle remain unmodified",
+    "Scores are ratcheted against committed baselines (no absolute-floor bypass)",
+    "This exception is recorded in release evidence and referenced from the AGENT_CHAT sole-writer entry"
+  ],
+  "post_release_obligation": "Build and install the attested jankurai auditor (embedded version == reported version, provenance-bound receipts); regenerate auditor receipts for the jankurai stack; remove this exception in the next -split.N+1 correction cycle.",
+  "expires": "superseded by the corrected auditor installation or the next release cycle, whichever is first"
+}

@@ -823,9 +823,12 @@ fn contract_drift_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
         }
         validate_local_jeryu(Some(manifest.clone()), true)?;
         let repositories = managed_repositories(&data, &manifest)?;
-        if repositories.len() != 33 {
+        // 32 = 25 family [[repo]] + jain-smartcluster (infrastructure) + jain-split-ops
+        // (control plane) + 4 redline [[repo]] + redline-split-ops (nested control plane).
+        // jain-python is an [[excluded_path]] (deferred from v8), never managed.
+        if repositories.len() != 32 {
             return Err(format!(
-                "managed repository inventory must contain 33 repositories, found {}",
+                "managed repository inventory must contain 32 repositories, found {}",
                 repositories.len()
             )
             .into());
@@ -1677,13 +1680,13 @@ fn validate_manifest_data(
         .get("external_dependencies")
         .and_then(|value| value.get("redline"))
         .ok_or("manifest must declare external_dependencies.redline")?;
-    if string(redline, "immutable_tag").as_deref() != Some("redline-core-v4.1.0-jain.2")
+    if string(redline, "immutable_tag").as_deref() != Some("redline-core-v4.1.0-jain.3")
         || string(redline, "remote").as_deref()
             != Some("http://127.0.0.1:8787/git/jeryu/redline-core.git")
         || string(redline, "required_check").as_deref() != Some("redline-core/required")
     {
         errors.push(
-            "redline dependency must use redline-core-v4.1.0-jain.2 from local Jeryu".to_owned(),
+            "redline dependency must use redline-core-v4.1.0-jain.3 from local Jeryu".to_owned(),
         );
     }
     validate_release_metadata(data, redline, "redline-core", "jain", None, &mut errors);
@@ -1704,7 +1707,7 @@ fn validate_manifest_data(
             "engine_remote",
             "http://127.0.0.1:8787/git/jeryu/redline-core.git",
         ),
-        ("engine_tag", "redline-core-v4.1.0-jain.2"),
+        ("engine_tag", "redline-core-v4.1.0-jain.3"),
     ] {
         if string(nested, key).as_deref() != Some(expected) {
             errors.push(format!("nested_families.redline.{key} must be {expected}"));
@@ -7985,7 +7988,7 @@ path = "../redline-split/redline-core"
 jeryu_slug = "jeryu/redline-core"
 required_check = "redline-core/required"
 default_branch = "main"
-current_tag = "redline-core-v4.1.0-jain.2"
+current_tag = "redline-core-v4.1.0-jain.3"
 "#,
         )
         .unwrap();
