@@ -1,0 +1,208 @@
+{
+  "schema": "jain.xbabe-functional-evidence/v1",
+  "created_at": "2026-07-14T23:29:36Z",
+  "status": "functional_test_pass_release_gate_fail",
+  "release_eligible": false,
+  "proof_scope": "ad_hoc_direct_host_test_not_smartcluster_release_proof",
+  "host": {
+    "name": "xbabe1",
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "driver": "570.153.02"
+  },
+  "source": {
+    "source_set_sha256": "2577824e61f7b555d6aa3076e0014f7f7ad844c7890b62cf8c6dd4af13d090f0",
+    "cli_commit": "3a8b7cb9637175dab2216ed46249a0ed6bd31f40",
+    "core_commit": "863ccf3f1d8101f39bc3f44874227c2ea9579616",
+    "web_commit": "62f41c60f1a60f49c31ff3bdab8e0c256b503df3",
+    "deploy_commit": "0954e5a5a07021dcdd928d3506be82a2f301fa75",
+    "authority_manifest_sha256": "ec0cc54cf7b70d95d08a3f0e5987429f9c93188468ee573b6f9d0da2c24f52a6"
+  },
+  "image": {
+    "reference": "veox/jain:8.0.0-gpu-model-smoke-test.2577824e",
+    "image_id": "sha256:ac155b57cc34b5f6370527e788dd2b1f347a9581b7ce197bac0374a0242507ee",
+    "config_digest": "sha256:6fe5f25564cd9f278017f7a5f357de1681a746c70d947532182fdc1439fca053",
+    "size_bytes": 1391123923,
+    "artifact_manifest_sha256": "3f30f229c7c4b8b5ffe6e415c27f3f1d49fc1f37a5dafdadde3d1a09f69ee5f6",
+    "artifact_manifest_file_count": 43,
+    "artifact_manifest_rehash_status": "pass",
+    "model_bundle_generation": "gen18",
+    "test_image": true,
+    "release_eligible_label": false,
+    "jope_prime_integration_label": "policy-and-prime-tested-separately",
+    "python_runtime_paths_absent": [
+      "/usr/bin/python",
+      "/usr/bin/python3"
+    ],
+    "transfer": {
+      "method": "docker-save-load",
+      "tar_path": "/tmp/jain-8.0.0-gpu-model-smoke-test.2577824e.tar",
+      "tar_size_bytes": 1391137280,
+      "local_sha256": "b45de42dce7804974c3a8cf2cf652cb78c7a6bd04ad9ca0c7739e691a60082c7",
+      "xbabe1_sha256": "b45de42dce7804974c3a8cf2cf652cb78c7a6bd04ad9ca0c7739e691a60082c7",
+      "registry_push_performed": false
+    }
+  },
+  "model_smoke": {
+    "script_commit": "a485444ad95efb5ffd82844ebcd7138f6d7907cf",
+    "script_sha256": "3555bf22972b503de0252a02dade5cc43c6c6b3a3e77d2246f3bbbd572a51383",
+    "command": "JAIN_MODEL_SMOKE_GPU=1 bash /tmp/jain-model-smoke.sh veox/jain:8.0.0-gpu-model-smoke-test.2577824e",
+    "exit_code": 0,
+    "gpu_required": true,
+    "elapsed_ms": 13099,
+    "scope": "ten_grouped_executable_paths",
+    "models": [
+      {
+        "id": "hyperion",
+        "status": "pass",
+        "elapsed_ms": 9345,
+        "device": "cuda:0"
+      },
+      {
+        "id": "jope-policy",
+        "status": "pass",
+        "elapsed_ms": 1999,
+        "assertion": "real bounded propose_v1 returned a valid ranked greedy proposal"
+      },
+      {
+        "id": "lime-search",
+        "status": "pass",
+        "elapsed_ms": 6,
+        "candidates": 5
+      },
+      {
+        "id": "prime-search",
+        "status": "pass",
+        "elapsed_ms": 719,
+        "candidates": 8
+      },
+      {
+        "id": "chimera-classifier",
+        "status": "pass",
+        "elapsed_ms": 545,
+        "device": "cuda:0"
+      },
+      {
+        "id": "chimera-regressor",
+        "status": "pass",
+        "elapsed_ms": 372,
+        "device": "cuda:0"
+      },
+      {
+        "id": "catboost",
+        "status": "pass",
+        "elapsed_ms": 55,
+        "save_reload_max_prediction_delta": 0.0
+      },
+      {
+        "id": "xgboost",
+        "status": "pass",
+        "elapsed_ms": 31,
+        "save_reload_max_prediction_delta": 0.0
+      },
+      {
+        "id": "lightgbm",
+        "status": "pass",
+        "elapsed_ms": 13,
+        "save_reload_max_prediction_delta": 0.0
+      },
+      {
+        "id": "jable",
+        "status": "pass",
+        "elapsed_ms": 4,
+        "save_reload_max_prediction_delta": 0.0
+      }
+    ],
+    "all_required_compiled_and_passed": true
+  },
+  "web": {
+    "container": "codex-model-smoke-web-2577824e",
+    "container_id": "529d5573112cd5cc392d45b755ef08b446f5aa4252f6c0a2de9a54b8ab17d4f8",
+    "started_at": "2026-07-14T23:24:18.30405385Z",
+    "docker_health": "healthy",
+    "training_event_source_labels": [
+      "Training started with jope-prime",
+      "Training started with jope-lime",
+      "Training complete with jope-lime"
+    ],
+    "training_event_runtime_tested_in_this_image": false,
+    "web_health": {
+      "endpoint": "http://127.0.0.1:28888/api/health",
+      "http_status": 200,
+      "body": {
+        "ok": true,
+        "version": "8.0.0",
+        "uptime_seconds": 18
+      }
+    },
+    "empty_sagemaker_health": {
+      "endpoint": "http://127.0.0.1:28080/ping",
+      "http_status": 503,
+      "expected_fail_closed": true
+    }
+  },
+  "allstate": {
+    "train_source": "/home/ubuntu/remote_super/quant/regression/c4b1f6dfb2a8605f/train.csv",
+    "train_source_sha256": "cef4e263a9cc02731c412cbd75db917c58ab3582778da3ba02bc1ed98efa0c62",
+    "test_source": "xbabe2:/home/ubuntu/remote_super/quant/regression/c4b1f6dfb2a8605f/test.csv",
+    "test_source_sha256": "afdb7f51e4ee2a705a451c639596d161895b41a944e0e6b7ad41795549ef8c74",
+    "staged_train_sha256": "0388ac8817f4c728723cd25b5ec0716235ace45ccacd6b6c314e6731ef512f7e",
+    "staged_test_sha256": "a683f89fab409c3cf8bef01ef947d57de8cd82a8bc58b55a360838dcc9b9d494",
+    "container": "codex-allstate-model-smoke-2577824e",
+    "started_at": "2026-07-14T23:23:58.627532243Z",
+    "finished_at": "2026-07-14T23:27:00.501220042Z",
+    "exit_code": 0,
+    "engine_log_callout": "[model] engine=jope-prime",
+    "deadline_log_callout": "[model] jope_prime_deadline_secs=300",
+    "hyperion_device": "cuda:0",
+    "observed_proposal_log_callout": "[GP] start",
+    "selected_model": "starforge_regressor_blend",
+    "selected_cv_r2": 0.47578,
+    "selected_internal_holdout_r2": 0.54276,
+    "raw_feature_internal_holdout_r2": 0.55681,
+    "internal_holdout_delta_r2": -0.01406,
+    "superior_to_raw_internal_baseline": false,
+    "saved_artifact": {
+      "model_manifest_sha256": "f0ab1ee2c2696f73cf21d431624ba0c5fc3287015c3ffb74e6f377d84d4cb7f0",
+      "invention_manifest_sha256": "a5a3e5fef8b0bd45d60d170cc1b56ea8c12164721cfb31267f75d41b720bf83c",
+      "invention_ledger_sha256": "cc4dfb919cde2f9eaa84aea5f401ec30b9564851172eb143b22f307e27604625"
+    },
+    "external_test": {
+      "selection_influence": false,
+      "rows": 999,
+      "r2": 0.549443292545,
+      "rmse": 0.02977690717,
+      "mae": 0.021858031202,
+      "target_mean": 0.049860373846,
+      "predictions_sha256": "fa2fbef25aecef3a732be1325ae1f3ed67025cb6a8abc5854b3c05230138dab9",
+      "reload_predictions_sha256": "fa2fbef25aecef3a732be1325ae1f3ed67025cb6a8abc5854b3c05230138dab9",
+      "reload_byte_identical": true,
+      "rust_scorer_source_sha256": "2ca616a5f70298f6bec827a046b87238631b3d30afe66809e0d9bb8114cdc94b",
+      "rust_scorer_binary_sha256": "e2e9723d27a9da0d21f4473ff42e23de4c7ba8aa09a9818846c1bc7b0ca57384"
+    }
+  },
+  "semantic_findings": {
+    "requested_user_log_callout_present": true,
+    "jope_policy_execution_passed": true,
+    "prime_search_execution_passed": true,
+    "jope_policy_to_prime_coupling_proven": false,
+    "reason": "The image executes JOPE propose_v1 and current Prime search as separate smoke paths; the Allstate train path logs [GP] immediately after the jope-prime label. This is not evidence of a fused JOPE-to-Prime implementation."
+  },
+  "release_blockers": [
+    "The bundled model generation is gen18, not the required complete gen31 bundle.",
+    "The staged source has no native prime, prime-cuda, or legacy-gp feature contract.",
+    "The Allstate path labeled jope-prime visibly enters the GP proposal harness; policy-to-Prime coupling is not implemented or proven.",
+    "The ten-row smoke covers grouped high-level paths, not every independently shipped component or every admitted Newmath path.",
+    "The Allstate selected model did not beat the raw-feature internal holdout baseline.",
+    "Direct xbabe1 execution is functional evidence only and is not a governed SmartCluster-dispatched GPU release proof.",
+    "The component heads are not all protected-main, immutable-tag, and authority-manifest bound.",
+    "The standalone Web worktree has divergent Core dependency pins and its focused logging test does not compile without the uncommitted staged dependency substitutions used for this image; only image compilation and Web health were proven here.",
+    "SBOM, Grype, cosign, protected landing, and exact-digest xbabe2 verification are incomplete for this image.",
+    "This image was deliberately not pushed."
+  ],
+  "mutations": {
+    "registry_push": false,
+    "tag_move": false,
+    "ga_promotion": false,
+    "production_deploy": false
+  }
+}
