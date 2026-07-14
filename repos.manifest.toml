@@ -13,6 +13,12 @@ container = "../redline-split"
 lock = "redline.lock.toml"
 consumers = ["jain-split", "jeryu-split"]
 
+[successor_transition]
+predecessor_lock_sha256 = "7efb22432f47f7e995edefdf0ab28f2bcee39463bad9f697fd707d4a74df56d4"
+predecessor_engine_tag = "redline-core-v4.1.0-jain.3"
+predecessor_engine_commit = "7137a1ee2d04be4eb6931d99ff78b8a52c827900"
+prepared_lock_sha256 = "a6223759a257baec12d5bcaaa235de70823101e0b3be1898ce58ecec07c620b7"
+
 [protection_policies.immutable-main-v1]
 required_approvals = 1
 required_status_check = true
@@ -72,10 +78,10 @@ role = "canonical-engine"
 profile = "custom"
 has_jeryu_std = true
 product_version = "4.1.0"
-tag_revision = 3
-current_tag = "redline-core-v4.1.0-jain.3"
-release_commit = "7137a1ee2d04be4eb6931d99ff78b8a52c827900"
-release_checksum_sha256 = "baec7cb2c084ffa5c3f10770ff62e8cadf869d7e19e21db849effd47e0871d83"
+tag_revision = 4
+current_tag = "redline-core-v4.1.0-jain.4"
+release_commit = "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e"
+release_checksum_sha256 = "b36a4ac5afd332bab7473f1007061356a991a7590eeda1336809be5dad5ce746"
 protection_policy = "immutable-main-v1"
 required_check = "redline-core/required"
 default_branch = "main"

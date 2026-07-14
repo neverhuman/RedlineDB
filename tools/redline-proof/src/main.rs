@@ -18,6 +18,7 @@ const FAMILY_CI_SCHEMA: &str = "redline.family-ci/v1";
 const CONSUMER_SCHEMA: &str = "redline.consumer-evidence/v1";
 const LOCK_SCHEMA: &str = "redline.split.lock/v2";
 const PROOF_REFRESH_SCHEMA: &str = "redline.proof-refresh/v1";
+const PROOF_SUCCESSOR_SCHEMA: &str = "redline.proof-successor/v1";
 const LOCAL_JERYU_BASE: &str = "http://127.0.0.1:8787/git/";
 const RELEASE_VERSION: &str = "8.0.0";
 const RELEASE_PROTECTION_POLICY: &str = "immutable-main-v1";
@@ -25,6 +26,12 @@ const PENDING: &str = "PENDING";
 const MAX_EVIDENCE_HOURS: i64 = 24;
 const MAX_CLOCK_SKEW_MINUTES: i64 = 5;
 const REQUIRED_CONSUMERS: [&str; 2] = ["jain-split", "jeryu-split"];
+const SUCCESSOR_PREDECESSOR_LOCK_SHA256: &str =
+    "7efb22432f47f7e995edefdf0ab28f2bcee39463bad9f697fd707d4a74df56d4";
+const SUCCESSOR_PREDECESSOR_TAG: &str = "redline-core-v4.1.0-jain.3";
+const SUCCESSOR_PREDECESSOR_COMMIT: &str = "7137a1ee2d04be4eb6931d99ff78b8a52c827900";
+const SUCCESSOR_PREPARED_LOCK_SHA256: &str =
+    "a6223759a257baec12d5bcaaa235de70823101e0b3be1898ce58ecec07c620b7";
 
 #[derive(Debug)]
 struct RepairError {
@@ -338,6 +345,15 @@ struct Repo {
 struct Manifest {
     path: PathBuf,
     repos: Vec<Repo>,
+    successor: SuccessorTransition,
+}
+
+#[derive(Clone, Debug)]
+struct SuccessorTransition {
+    predecessor_lock_sha256: String,
+    predecessor_engine_tag: String,
+    predecessor_engine_commit: String,
+    prepared_lock_sha256: String,
 }
 
 fn toml_string(table: &toml::value::Table, key: &str, context: &str) -> Result<String> {
@@ -359,7 +375,7 @@ fn toml_integer(table: &toml::value::Table, key: &str, context: &str) -> Result<
 fn expected_repo_release(name: &str) -> Option<(&'static str, i64)> {
     match name {
         "redline" => Some(("4.1.0", 2)),
-        "redline-core" => Some(("4.1.0", 3)),
+        "redline-core" => Some(("4.1.0", 4)),
         "redline-testing" => Some(("1.0.1", 1)),
         "redline-web" => Some(("0.1.0", 1)),
         _ => None,
@@ -464,6 +480,41 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         ));
     }
     validate_protection_policy(&value)?;
+    let successor = value
+        .get("successor_transition")
+        .and_then(toml::Value::as_table)
+        .ok_or_else(|| error("manifest lacks successor_transition"))?;
+    let successor = SuccessorTransition {
+        predecessor_lock_sha256: toml_string(
+            successor,
+            "predecessor_lock_sha256",
+            "successor_transition",
+        )?,
+        predecessor_engine_tag: toml_string(
+            successor,
+            "predecessor_engine_tag",
+            "successor_transition",
+        )?,
+        predecessor_engine_commit: toml_string(
+            successor,
+            "predecessor_engine_commit",
+            "successor_transition",
+        )?,
+        prepared_lock_sha256: toml_string(
+            successor,
+            "prepared_lock_sha256",
+            "successor_transition",
+        )?,
+    };
+    if successor.predecessor_lock_sha256 != SUCCESSOR_PREDECESSOR_LOCK_SHA256
+        || successor.predecessor_engine_tag != SUCCESSOR_PREDECESSOR_TAG
+        || successor.predecessor_engine_commit != SUCCESSOR_PREDECESSOR_COMMIT
+        || successor.prepared_lock_sha256 != SUCCESSOR_PREPARED_LOCK_SHA256
+    {
+        return Err(error(
+            "successor_transition does not bind the reviewed predecessor lock identity",
+        ));
+    }
     let control = value
         .get("control_plane")
         .and_then(toml::Value::as_table)
@@ -555,6 +606,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
     Ok(Manifest {
         path: absolute_path(path)?,
         repos,
+        successor,
     })
 }
 
@@ -2317,6 +2369,519 @@ fn ensure_distinct_paths(paths: &[(&str, PathBuf)]) -> Result<()> {
     Ok(())
 }
 
+fn successor_transition<'manifest, 'lock>(
+    manifest: &'manifest Manifest,
+    value: &'lock toml::Value,
+) -> Result<(&'manifest Repo, &'lock toml::value::Table)> {
+    let entries = lock_entries(value)?;
+    let proof = proof_table(value)?;
+    let eligible = proof.get("cutover_eligible").and_then(toml::Value::as_bool);
+    let historical = proof.get("parity_status").and_then(toml::Value::as_str)
+        == Some("historical-only-until-refreshed")
+        && proof
+            .get("accepted_consumer_evidence")
+            .and_then(toml::Value::as_array)
+            .is_some_and(Vec::is_empty);
+    if eligible != Some(true) && !(eligible == Some(false) && historical) {
+        return Err(error(
+            "proof-refresh successor transition requires an eligible lock or its exact historical rerun",
+        ));
+    }
+
+    let mut changed = None;
+    for repo in &manifest.repos {
+        let entry = entries
+            .iter()
+            .find(|entry| entry.get("name").and_then(toml::Value::as_str) == Some(&repo.name))
+            .ok_or_else(|| error(format!("successor lock omits {}", repo.name)))?;
+        let old_version = toml_string(entry, "product_version", &repo.name)?;
+        let old_revision = toml_integer(entry, "tag_revision", &repo.name)?;
+        let old_tag = toml_string(entry, "tag", &repo.name)?;
+        let old_commit = toml_string(entry, "commit", &repo.name)?;
+        let old_checksum = toml_string(entry, "checksum_sha256", &repo.name)?;
+        let unchanged = old_version == repo.product_version
+            && old_revision == repo.tag_revision
+            && old_tag == repo.current_tag
+            && old_commit == repo.release_commit
+            && old_checksum == repo.release_checksum_sha256;
+        if unchanged {
+            continue;
+        }
+        if changed.is_some()
+            || repo.name != "redline-core"
+            || old_version != repo.product_version
+            || old_revision.checked_add(1) != Some(repo.tag_revision)
+            || old_commit == repo.release_commit
+            || repo.release_commit == PENDING
+            || repo.release_checksum_sha256 == PENDING
+        {
+            return Err(error(
+                "proof-refresh successor transition permits exactly one next-revision redline-core identity",
+            ));
+        }
+        changed = Some((repo, *entry));
+    }
+    changed.ok_or_else(|| error("proof-refresh successor transition has no new core identity"))
+}
+
+fn render_historical_successor_lock(raw: &str, value: &toml::Value) -> Result<Vec<u8>> {
+    let proof = value
+        .get("proof")
+        .and_then(toml::Value::as_table)
+        .ok_or_else(|| error("Redline lock proof table is missing"))?;
+    let core_digest = toml_string(proof, "accepted_core_evidence_sha256", "historical proof")?;
+    let testing_digest = toml_string(
+        proof,
+        "accepted_testing_manifest_sha256",
+        "historical proof",
+    )?;
+    let proof_start = raw
+        .find("[proof]\n")
+        .ok_or_else(|| error("Redline lock proof block start is missing"))?;
+    let repo_start = raw[proof_start..]
+        .find("\n[[repo]]")
+        .map(|offset| proof_start + offset)
+        .ok_or_else(|| error("Redline lock repository block start is missing"))?;
+    let required = REQUIRED_CONSUMERS
+        .iter()
+        .map(|consumer| (*consumer).to_owned())
+        .collect::<Vec<_>>();
+    let replacement = format!(
+        "[proof]\nparity_status = \"historical-only-until-refreshed\"\naccepted_core_evidence_sha256 = {}\naccepted_testing_manifest_sha256 = {}\nrequired_consumer_evidence = {}\naccepted_consumer_evidence = []\ncutover_eligible = false\n",
+        toml_quote(&core_digest)?,
+        toml_quote(&testing_digest)?,
+        toml_array(&required)?,
+    );
+    let rendered = format!(
+        "{}{}{}",
+        &raw[..proof_start],
+        replacement,
+        &raw[repo_start..]
+    );
+    let parsed: toml::Value = rendered.parse()?;
+    let rendered_proof = proof_table(&parsed)?;
+    if rendered_proof
+        .get("cutover_eligible")
+        .and_then(toml::Value::as_bool)
+        != Some(false)
+        || rendered_proof
+            .get("accepted_consumer_evidence")
+            .and_then(toml::Value::as_array)
+            .is_none_or(|accepted| !accepted.is_empty())
+    {
+        return Err(error(
+            "rendered successor lock is not explicitly ineligible",
+        ));
+    }
+    Ok(rendered.into_bytes())
+}
+
+fn successor_transition_input_with(
+    manifest: &Manifest,
+    authoritative_bytes: &[u8],
+    mirror_bytes: &[u8],
+    predecessor_validator: fn(&Manifest, &[u8], &toml::Value) -> Result<()>,
+) -> Result<(String, toml::Value)> {
+    if authoritative_bytes == mirror_bytes {
+        return Err(error(
+            "successor reconciliation requires a reviewed historical authoritative lock and its bound predecessor mirror",
+        ));
+    }
+
+    let mirror_raw = std::str::from_utf8(mirror_bytes)?;
+    let mirror_value: toml::Value = mirror_raw.parse()?;
+    predecessor_validator(manifest, mirror_bytes, &mirror_value)?;
+    let expected = render_historical_successor_lock(mirror_raw, &mirror_value)?;
+    if authoritative_bytes != expected {
+        return Err(error(
+            "control-plane lock mirror drift is not the exact reviewed successor transition",
+        ));
+    }
+    Ok((mirror_raw.to_owned(), mirror_value))
+}
+
+fn validate_bound_predecessor_identity(
+    manifest: &Manifest,
+    bytes: &[u8],
+    value: &toml::Value,
+) -> Result<()> {
+    let digest = sha256_bytes(bytes);
+    if digest != manifest.successor.predecessor_lock_sha256 {
+        return Err(error(format!(
+            "successor predecessor lock digest is {digest}, expected {}",
+            manifest.successor.predecessor_lock_sha256
+        )));
+    }
+    if value.get("schema_version").and_then(toml::Value::as_str) != Some(LOCK_SCHEMA)
+        || value.get("family").and_then(toml::Value::as_str) != Some(FAMILY)
+    {
+        return Err(error(
+            "successor predecessor lock schema or family is invalid",
+        ));
+    }
+    let entries = lock_entries(value)?;
+    let names = entries
+        .iter()
+        .filter_map(|entry| entry.get("name").and_then(toml::Value::as_str))
+        .collect::<BTreeSet<_>>();
+    let expected_names = manifest
+        .repos
+        .iter()
+        .map(|repo| repo.name.as_str())
+        .collect::<BTreeSet<_>>();
+    if entries.len() != manifest.repos.len() || names != expected_names {
+        return Err(error(
+            "successor predecessor lock repository rows are not exact and unique",
+        ));
+    }
+    let proof = proof_table(value)?;
+    let accepted = proof
+        .get("accepted_consumer_evidence")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(toml::Value::as_str)
+        .collect::<BTreeSet<_>>();
+    if proof.get("parity_status").and_then(toml::Value::as_str) != Some("accepted")
+        || proof.get("cutover_eligible").and_then(toml::Value::as_bool) != Some(true)
+        || accepted != BTreeSet::from(REQUIRED_CONSUMERS)
+    {
+        return Err(error(
+            "successor predecessor lock is not the accepted two-consumer proof",
+        ));
+    }
+    let (_, old_core) = successor_transition(manifest, value)?;
+    let old_tag = toml_string(old_core, "tag", "predecessor redline-core")?;
+    let old_commit = toml_string(old_core, "commit", "predecessor redline-core")?;
+    if old_tag != manifest.successor.predecessor_engine_tag
+        || old_commit != manifest.successor.predecessor_engine_commit
+        || value.get("engine_tag").and_then(toml::Value::as_str) != Some(&old_tag)
+        || value.get("engine_commit").and_then(toml::Value::as_str) != Some(&old_commit)
+        || value.get("proof_lock_id").and_then(toml::Value::as_str)
+            != Some(proof_id(&core_version(&old_tag)?, &old_commit).as_str())
+    {
+        return Err(error(
+            "successor predecessor engine identity differs from its reviewed binding",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_bound_predecessor(
+    manifest: &Manifest,
+    bytes: &[u8],
+    value: &toml::Value,
+) -> Result<()> {
+    validate_bound_predecessor_identity(manifest, bytes, value)?;
+    let (core, old_core) = successor_transition(manifest, value)?;
+    let old_tag = toml_string(old_core, "tag", "predecessor redline-core")?;
+    let old_commit = toml_string(old_core, "commit", "predecessor redline-core")?;
+    let metadata = tag_metadata(&manifest.repo_root(core), &old_tag, true)?;
+    if metadata.commit != old_commit
+        || old_core.get("tag_object").and_then(toml::Value::as_str) != Some(&metadata.object)
+        || old_core
+            .get("tag_object_type")
+            .and_then(toml::Value::as_str)
+            != Some(&metadata.object_type)
+        || old_core.get("tag_subject").and_then(toml::Value::as_str) != Some(&metadata.subject)
+        || old_core
+            .get("remote_tag_verified")
+            .and_then(toml::Value::as_bool)
+            != Some(true)
+    {
+        return Err(error(
+            "successor predecessor lock differs from immutable Core tag metadata",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_successor_repository_state(manifest: &Manifest) -> Result<()> {
+    let core = manifest
+        .repos
+        .iter()
+        .find(|repo| repo.name == "redline-core")
+        .ok_or_else(|| error("redline-core is missing from successor manifest"))?;
+    let state = current_reviewed_state(manifest, core, true)?;
+    require_successor_tag_absent(&state)?;
+    for repo in &manifest.repos {
+        if repo.name != "redline-core" {
+            current_reviewed_state(manifest, repo, false)?;
+        }
+    }
+    Ok(())
+}
+
+fn require_successor_tag_absent(state: &JsonValue) -> Result<()> {
+    if state.get("tag_state").and_then(JsonValue::as_str) != Some("absent") {
+        return Err(error(
+            "proof-refresh successor transition must run before the new immutable tag exists",
+        ));
+    }
+    Ok(())
+}
+
+fn successor_receipt_payload(
+    paths: (&Path, &Path, &Path, &Path),
+    manifest: &Manifest,
+    predecessor: &toml::Value,
+    transition: (&str, bool),
+    lock_digest: &str,
+) -> Result<JsonValue> {
+    let (manifest_path, lock, mirror, operation_receipt) = paths;
+    let (transition_state, mirror_updated) = transition;
+    let (core, old_core) = successor_transition(manifest, predecessor)?;
+    let old_tag = toml_string(old_core, "tag", "predecessor redline-core")?;
+    let old_commit = toml_string(old_core, "commit", "predecessor redline-core")?;
+    let old_lock_id = predecessor
+        .get("proof_lock_id")
+        .and_then(toml::Value::as_str)
+        .ok_or_else(|| error("predecessor proof_lock_id is missing"))?;
+    let receipt_base = operation_receipt.parent().unwrap_or(Path::new("."));
+    Ok(json!({
+        "schema_version": PROOF_SUCCESSOR_SCHEMA,
+        "family": FAMILY,
+        "generated_at": format_time(Utc::now()),
+        "status": "pass",
+        "transition_state": transition_state,
+        "compatibility_mirror_updated": mirror_updated,
+        "cutover_eligible": false,
+        "previous_proof_lock_id": old_lock_id,
+        "previous_engine_tag": old_tag,
+        "previous_engine_commit": old_commit,
+        "predecessor_lock_sha256": manifest.successor.predecessor_lock_sha256,
+        "successor_engine_tag": core.current_tag,
+        "successor_engine_commit": core.release_commit,
+        "successor_manifest_sha256": sha256_file(manifest_path)?,
+        "authoritative_lock": recorded_path(lock, receipt_base)?,
+        "compatibility_mirror": recorded_path(mirror, receipt_base)?,
+        "lock_sha256": lock_digest,
+    }))
+}
+
+fn proof_refresh_prepare_successor_with(
+    manifest_path: &Path,
+    lock: &Path,
+    mirror: &Path,
+    operation_receipt: &Path,
+    predecessor_validator: fn(&Manifest, &[u8], &toml::Value) -> Result<()>,
+    state_validator: fn(&Manifest) -> Result<()>,
+) -> Result<()> {
+    ensure_distinct_paths(&[
+        ("manifest", manifest_path.to_path_buf()),
+        ("authoritative lock", lock.to_path_buf()),
+        ("compatibility mirror", mirror.to_path_buf()),
+        ("proof-refresh receipt", operation_receipt.to_path_buf()),
+    ])?;
+    verify_checksum(lock)?;
+    verify_checksum(mirror)?;
+    let manifest = load_manifest(manifest_path)?;
+    let authoritative_bytes = fs::read(lock)?;
+    let mirror_bytes = fs::read(mirror)?;
+    if authoritative_bytes != mirror_bytes {
+        return Err(error(
+            "successor preparation requires byte-identical authoritative and predecessor locks",
+        ));
+    }
+    let lock_raw = std::str::from_utf8(&authoritative_bytes)?;
+    let value: toml::Value = lock_raw.parse()?;
+    predecessor_validator(&manifest, &authoritative_bytes, &value)?;
+    state_validator(&manifest)?;
+    let lock_data = render_historical_successor_lock(lock_raw, &value)?;
+    let lock_digest = sha256_bytes(&lock_data);
+    if lock_digest != manifest.successor.prepared_lock_sha256 {
+        return Err(error(format!(
+            "prepared successor lock digest is {lock_digest}, expected {}",
+            manifest.successor.prepared_lock_sha256
+        )));
+    }
+    let payload = successor_receipt_payload(
+        (manifest_path, lock, mirror, operation_receipt),
+        &manifest,
+        &value,
+        ("prepared", false),
+        &lock_digest,
+    )?;
+    let (receipt_data, receipt_digest, receipt_sidecar) =
+        checksummed_json_bytes(operation_receipt, &payload)?;
+    let lock_sidecar = format!(
+        "{lock_digest}  {}\n",
+        lock.file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("redline.lock.toml")
+    )
+    .into_bytes();
+    transactional_write(&[
+        (lock.to_path_buf(), lock_data),
+        (checksum_path(lock), lock_sidecar),
+        (operation_receipt.to_path_buf(), receipt_data),
+        (checksum_path(operation_receipt), receipt_sidecar),
+    ])?;
+    verify_lock(manifest_path, lock, None)?;
+    println!(
+        "redline successor review prepared: lock_sha256={} receipt_sha256={}",
+        lock_digest, receipt_digest
+    );
+    Ok(())
+}
+
+fn proof_refresh_prepare_successor(
+    manifest_path: &Path,
+    lock: &Path,
+    mirror: &Path,
+    operation_receipt: &Path,
+) -> Result<()> {
+    proof_refresh_prepare_successor_with(
+        manifest_path,
+        lock,
+        mirror,
+        operation_receipt,
+        validate_bound_predecessor,
+        validate_successor_repository_state,
+    )
+}
+
+fn proof_refresh_reconcile_successor_with(
+    manifest_path: &Path,
+    lock: &Path,
+    mirror: &Path,
+    operation_receipt: &Path,
+    predecessor_validator: fn(&Manifest, &[u8], &toml::Value) -> Result<()>,
+    state_validator: fn(&Manifest) -> Result<()>,
+) -> Result<()> {
+    ensure_distinct_paths(&[
+        ("manifest", manifest_path.to_path_buf()),
+        ("authoritative lock", lock.to_path_buf()),
+        ("compatibility mirror", mirror.to_path_buf()),
+        ("proof-refresh receipt", operation_receipt.to_path_buf()),
+    ])?;
+    verify_checksum(lock)?;
+    verify_checksum(mirror)?;
+    let manifest = load_manifest(manifest_path)?;
+    let authoritative_bytes = fs::read(lock)?;
+    let mirror_bytes = fs::read(mirror)?;
+    let (predecessor_raw, predecessor) = successor_transition_input_with(
+        &manifest,
+        &authoritative_bytes,
+        &mirror_bytes,
+        predecessor_validator,
+    )?;
+    state_validator(&manifest)?;
+    let lock_data = render_historical_successor_lock(&predecessor_raw, &predecessor)?;
+    let lock_digest = sha256_bytes(&lock_data);
+    if lock_digest != manifest.successor.prepared_lock_sha256 {
+        return Err(error(format!(
+            "reconciled successor lock digest is {lock_digest}, expected {}",
+            manifest.successor.prepared_lock_sha256
+        )));
+    }
+    let payload = successor_receipt_payload(
+        (manifest_path, lock, mirror, operation_receipt),
+        &manifest,
+        &predecessor,
+        ("reconciled", true),
+        &lock_digest,
+    )?;
+    let (receipt_data, receipt_digest, receipt_sidecar) =
+        checksummed_json_bytes(operation_receipt, &payload)?;
+    let lock_sidecar = format!(
+        "{lock_digest}  {}\n",
+        lock.file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("redline.lock.toml")
+    )
+    .into_bytes();
+    let mirror_sidecar = format!(
+        "{lock_digest}  {}\n",
+        mirror
+            .file_name()
+            .and_then(|value| value.to_str())
+            .unwrap_or("redline.lock.toml")
+    )
+    .into_bytes();
+    transactional_write(&[
+        (lock.to_path_buf(), lock_data.clone()),
+        (checksum_path(lock), lock_sidecar),
+        (mirror.to_path_buf(), lock_data),
+        (checksum_path(mirror), mirror_sidecar),
+        (operation_receipt.to_path_buf(), receipt_data),
+        (checksum_path(operation_receipt), receipt_sidecar),
+    ])?;
+    verify_lock(manifest_path, lock, Some(mirror))?;
+    println!(
+        "redline successor mirror reconciled: lock_sha256={} receipt_sha256={}",
+        lock_digest, receipt_digest
+    );
+    Ok(())
+}
+
+fn proof_refresh_reconcile_successor(
+    manifest_path: &Path,
+    lock: &Path,
+    mirror: &Path,
+    operation_receipt: &Path,
+) -> Result<()> {
+    proof_refresh_reconcile_successor_with(
+        manifest_path,
+        lock,
+        mirror,
+        operation_receipt,
+        validate_bound_predecessor,
+        validate_successor_repository_state,
+    )
+}
+
+fn review_lock_verify_with(
+    manifest_path: &Path,
+    lock: &Path,
+    mirror: &Path,
+    predecessor_validator: fn(&Manifest, &[u8], &toml::Value) -> Result<()>,
+    state_validator: fn(&Manifest) -> Result<()>,
+) -> Result<&'static str> {
+    verify_checksum(lock)?;
+    verify_checksum(mirror)?;
+    let authoritative_bytes = fs::read(lock)?;
+    let mirror_bytes = fs::read(mirror)?;
+    if authoritative_bytes == mirror_bytes {
+        let value = verify_lock(manifest_path, lock, Some(mirror))?;
+        let eligible = proof_table(&value)?
+            .get("cutover_eligible")
+            .and_then(toml::Value::as_bool)
+            == Some(true);
+        return Ok(if eligible {
+            "synchronized"
+        } else {
+            "reconciled-successor"
+        });
+    }
+
+    let manifest = load_manifest(manifest_path)?;
+    verify_lock(manifest_path, lock, None)?;
+    successor_transition_input_with(
+        &manifest,
+        &authoritative_bytes,
+        &mirror_bytes,
+        predecessor_validator,
+    )?;
+    if sha256_bytes(&authoritative_bytes) != manifest.successor.prepared_lock_sha256 {
+        return Err(error(
+            "reviewed successor authoritative lock digest differs from its manifest binding",
+        ));
+    }
+    state_validator(&manifest)?;
+    Ok("prepared-successor")
+}
+
+fn review_lock_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<&'static str> {
+    review_lock_verify_with(
+        manifest_path,
+        lock,
+        mirror,
+        validate_bound_predecessor,
+        validate_successor_repository_state,
+    )
+}
+
 fn proof_refresh(
     manifest_path: &Path,
     lock: &Path,
@@ -2510,6 +3075,12 @@ fn verify_lock(manifest_path: &Path, lock: &Path, mirror: Option<&Path>) -> Resu
             ));
         }
     }
+    let lock_digest = verify_checksum(lock)?;
+    if let Some(mirror) = mirror {
+        if lock_digest != verify_checksum(mirror)? {
+            return Err(error("lock checksum mirrors differ"));
+        }
+    }
     let value = load_lock(lock)?;
     if let Some(mirror) = mirror {
         if value != load_lock(mirror)? {
@@ -2656,13 +3227,12 @@ fn verify_lock(manifest_path: &Path, lock: &Path, mirror: Option<&Path>) -> Resu
             "parity_harness_commit differs from redline-testing entry",
         ));
     }
-    if eligible {
-        if let Some(mirror) = mirror {
-            if verify_checksum(lock)? != verify_checksum(mirror)? {
-                return Err(error("lock checksum mirrors differ"));
-            }
+    if !eligible {
+        if lock_digest != manifest.successor.prepared_lock_sha256 {
+            return Err(error(
+                "historical successor lock digest differs from its manifest binding",
+            ));
         }
-    } else {
         let accepted = proof
             .get("accepted_consumer_evidence")
             .and_then(toml::Value::as_array)
@@ -3072,6 +3642,144 @@ fn security_receipt(path: &Path, root: &Path) -> Result<()> {
     Ok(())
 }
 
+fn successor_receipt_verify(
+    path: &Path,
+    manifest_path: &Path,
+    lock: &Path,
+    mirror: &Path,
+) -> Result<JsonValue> {
+    verify_checksum(path)?;
+    let receipt = read_json(path)?;
+    const FIELDS: [&str; 17] = [
+        "schema_version",
+        "family",
+        "generated_at",
+        "status",
+        "transition_state",
+        "compatibility_mirror_updated",
+        "cutover_eligible",
+        "previous_proof_lock_id",
+        "previous_engine_tag",
+        "previous_engine_commit",
+        "predecessor_lock_sha256",
+        "successor_engine_tag",
+        "successor_engine_commit",
+        "successor_manifest_sha256",
+        "authoritative_lock",
+        "compatibility_mirror",
+        "lock_sha256",
+    ];
+    reject_unknown_fields(&receipt, &FIELDS, "successor-transition receipt")?;
+    let manifest = load_manifest(manifest_path)?;
+    let core = manifest
+        .repos
+        .iter()
+        .find(|repo| repo.name == "redline-core")
+        .ok_or_else(|| error("redline-core is missing from successor manifest"))?;
+    let transition_state = receipt
+        .get("transition_state")
+        .and_then(JsonValue::as_str)
+        .ok_or_else(|| error("successor receipt transition_state is missing"))?;
+    let mirror_updated = receipt
+        .get("compatibility_mirror_updated")
+        .and_then(JsonValue::as_bool);
+    if !matches!(transition_state, "prepared" | "reconciled")
+        || mirror_updated != Some(transition_state == "reconciled")
+    {
+        return Err(error(
+            "successor receipt transition state and mirror update flag disagree",
+        ));
+    }
+    parse_time(
+        receipt
+            .get("generated_at")
+            .ok_or_else(|| error("successor receipt generated_at is missing"))?,
+        "successor receipt generated_at",
+    )?;
+    let expected_proof_id = proof_id(
+        &core_version(&manifest.successor.predecessor_engine_tag)?,
+        &manifest.successor.predecessor_engine_commit,
+    );
+    if receipt.get("schema_version").and_then(JsonValue::as_str) != Some(PROOF_SUCCESSOR_SCHEMA)
+        || receipt.get("family").and_then(JsonValue::as_str) != Some(FAMILY)
+        || receipt.get("status").and_then(JsonValue::as_str) != Some("pass")
+        || receipt.get("cutover_eligible").and_then(JsonValue::as_bool) != Some(false)
+        || receipt
+            .get("previous_proof_lock_id")
+            .and_then(JsonValue::as_str)
+            != Some(&expected_proof_id)
+        || receipt
+            .get("previous_engine_tag")
+            .and_then(JsonValue::as_str)
+            != Some(&manifest.successor.predecessor_engine_tag)
+        || receipt
+            .get("previous_engine_commit")
+            .and_then(JsonValue::as_str)
+            != Some(&manifest.successor.predecessor_engine_commit)
+        || receipt
+            .get("predecessor_lock_sha256")
+            .and_then(JsonValue::as_str)
+            != Some(&manifest.successor.predecessor_lock_sha256)
+        || receipt
+            .get("successor_engine_tag")
+            .and_then(JsonValue::as_str)
+            != Some(&core.current_tag)
+        || receipt
+            .get("successor_engine_commit")
+            .and_then(JsonValue::as_str)
+            != Some(&core.release_commit)
+        || receipt
+            .get("successor_manifest_sha256")
+            .and_then(JsonValue::as_str)
+            != Some(&sha256_file(manifest_path)?)
+        || receipt.get("lock_sha256").and_then(JsonValue::as_str)
+            != Some(&manifest.successor.prepared_lock_sha256)
+    {
+        return Err(error(
+            "successor receipt identity differs from the canonical manifest binding",
+        ));
+    }
+    let base = path.parent().unwrap_or(Path::new("."));
+    for (field, expected) in [
+        ("authoritative_lock", lock),
+        ("compatibility_mirror", mirror),
+    ] {
+        let recorded = resolve_recorded_path(
+            receipt
+                .get(field)
+                .ok_or_else(|| error(format!("successor receipt {field} is missing")))?,
+            base,
+            field,
+        )?;
+        if absolute_path(&recorded)? != absolute_path(expected)? {
+            return Err(error(format!(
+                "successor receipt {field} does not resolve to the canonical lock path"
+            )));
+        }
+    }
+    let predecessor_path = manifest_path
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("release-evidence/8.0.0/redline-lock-jain3-predecessor.toml");
+    verify_checksum(&predecessor_path)?;
+    let predecessor_bytes = fs::read(&predecessor_path)?;
+    let predecessor_value: toml::Value = std::str::from_utf8(&predecessor_bytes)?.parse()?;
+    validate_bound_predecessor_identity(&manifest, &predecessor_bytes, &predecessor_value)?;
+    let prepared = render_historical_successor_lock(
+        std::str::from_utf8(&predecessor_bytes)?,
+        &predecessor_value,
+    )?;
+    if sha256_bytes(&prepared) != manifest.successor.prepared_lock_sha256 {
+        return Err(error(
+            "successor receipt prepared digest is not reproducible from the governed predecessor snapshot",
+        ));
+    }
+    if transition_state == "reconciled" {
+        verify_lock(manifest_path, lock, Some(mirror))?;
+    }
+    Ok(receipt)
+}
+
 fn release_receipt(path: &Path, paths: &Paths) -> Result<()> {
     let security = paths.root.join("target/security/evidence.json");
     verify_checksum(&security)?;
@@ -3081,7 +3789,13 @@ fn release_receipt(path: &Path, paths: &Paths) -> Result<()> {
             "release readiness requires passing security evidence",
         ));
     }
-    verify_lock(&paths.manifest, &paths.lock, Some(&paths.mirror))?;
+    let transition_state = review_lock_verify(&paths.manifest, &paths.lock, &paths.mirror)?;
+    let lock = load_lock(&paths.lock)?;
+    let cutover_eligible = proof_table(&lock)?
+        .get("cutover_eligible")
+        .and_then(toml::Value::as_bool)
+        == Some(true)
+        && transition_state == "synchronized";
     let payload = json!({
         "schema_version": "redline.release-readiness/v1",
         "family": FAMILY,
@@ -3090,6 +3804,8 @@ fn release_receipt(path: &Path, paths: &Paths) -> Result<()> {
         "release_status": "candidate",
         "formal_ga": false,
         "source_commit": git(&paths.root, &["rev-parse", "HEAD"] )?,
+        "transition_state": transition_state,
+        "cutover_eligible": cutover_eligible,
         "metrics": {"required_controls_passed": 6, "required_controls_total": 6},
         "controls": {
             "security": "pass",
@@ -3165,6 +3881,7 @@ fn validate_receipt_schemas(root: &Path) -> Result<()> {
         "redline-family-ci.schema.json",
         "redline-consumer-evidence.schema.json",
         "redline-proof-refresh.schema.json",
+        "redline-proof-successor.schema.json",
     ] {
         let path = root.join("schemas").join(name);
         let value = read_json(&path)?;
@@ -3375,6 +4092,12 @@ fn real_main() -> Result<()> {
             println!("redline lock ok: {} repositories", lock_entries(&value)?.len());
             Ok(())
         }
+        "review-lock-verify" => {
+            if !args.is_empty() { return Err(error("review-lock-verify accepts no arguments")); }
+            let state = review_lock_verify(&paths.manifest, &paths.lock, &paths.mirror)?;
+            println!("redline review lock ok: transition_state={state}");
+            Ok(())
+        }
         "family-ci" | "ci" => {
             let receipt = take_option(&mut args, "--receipt")?.map(PathBuf::from)
                 .unwrap_or_else(|| paths.root.join("target/release-evidence/redline-family-ci.json"));
@@ -3382,9 +4105,46 @@ fn real_main() -> Result<()> {
             family_ci(&paths.manifest, &receipt)
         }
         "proof-refresh" => {
-            let family = PathBuf::from(take_option(&mut args, "--family-ci")?.ok_or_else(|| error("proof-refresh requires --family-ci"))?);
             let receipt = take_option(&mut args, "--receipt")?.map(PathBuf::from)
                 .unwrap_or_else(|| paths.root.join("target/release-evidence/redline-proof-refresh.json"));
+            let prepare_successor = if let Some(index) = args.iter().position(|value| value == "--prepare-successor") {
+                args.remove(index);
+                true
+            } else {
+                false
+            };
+            let reconcile_successor = if let Some(index) = args.iter().position(|value| value == "--reconcile-successor") {
+                args.remove(index);
+                true
+            } else {
+                false
+            };
+            if prepare_successor && reconcile_successor {
+                return Err(error("proof-refresh accepts only one successor transition mode"));
+            }
+            if prepare_successor {
+                if !args.is_empty() {
+                    return Err(error("proof-refresh --prepare-successor accepts only --receipt PATH"));
+                }
+                return proof_refresh_prepare_successor(
+                    &paths.manifest,
+                    &paths.lock,
+                    &paths.mirror,
+                    &receipt,
+                );
+            }
+            if reconcile_successor {
+                if !args.is_empty() {
+                    return Err(error("proof-refresh --reconcile-successor accepts only --receipt PATH"));
+                }
+                return proof_refresh_reconcile_successor(
+                    &paths.manifest,
+                    &paths.lock,
+                    &paths.mirror,
+                    &receipt,
+                );
+            }
+            let family = PathBuf::from(take_option(&mut args, "--family-ci")?.ok_or_else(|| error("proof-refresh requires --family-ci, --prepare-successor, or --reconcile-successor"))?);
             let mut assignments = Vec::new();
             while let Some(index) = args.iter().position(|value| value == "--consumer-evidence") {
                 if index + 1 >= args.len() { return Err(error("--consumer-evidence requires CONSUMER=PATH")); }
@@ -3411,6 +4171,19 @@ fn real_main() -> Result<()> {
             }
             audit_verify(Path::new(&args[0]))
         }
+        "successor-receipt-verify" => {
+            if args.len() != 1 {
+                return Err(error("successor-receipt-verify requires one receipt path"));
+            }
+            successor_receipt_verify(
+                Path::new(&args[0]),
+                &paths.manifest,
+                &paths.lock,
+                &paths.mirror,
+            )?;
+            println!("redline successor receipt ok: {}", args[0]);
+            Ok(())
+        }
         "test-receipt" => {
             if args.len() != 1 {
                 return Err(error("test-receipt requires one output path"));
@@ -3435,7 +4208,7 @@ fn real_main() -> Result<()> {
         }
         "update" => { if !args.is_empty() { return Err(error("update accepts no arguments")); } clone_or_update(&paths.manifest, false) }
         "--version" | "version" => { println!("redline-proof 0.1.0"); Ok(()) }
-        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|control-validate|validate|lock-verify|family-ci [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
+        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|control-validate|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
     }
 }
 
@@ -3667,7 +4440,7 @@ mod tests {
         );
         assert_eq!(
             identities.get("redline-core"),
-            Some(&("4.1.0", 3, "redline-core-v4.1.0-jain.3"))
+            Some(&("4.1.0", 4, "redline-core-v4.1.0-jain.4"))
         );
         assert_eq!(
             identities.get("redline-testing"),
@@ -3677,6 +4450,282 @@ mod tests {
             identities.get("redline-web"),
             Some(&("0.1.0", 1, "redline-web-v0.1.0-jain.1"))
         );
+    }
+
+    #[test]
+    fn successor_transition_accepts_only_the_next_core_revision() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
+        let lock = load_lock(&root.join("redline.lock.toml")).unwrap();
+        let (core, previous) = successor_transition(&manifest, &lock).unwrap();
+        assert_eq!(core.current_tag, "redline-core-v4.1.0-jain.4");
+        assert_eq!(
+            previous.get("tag").and_then(toml::Value::as_str),
+            Some("redline-core-v4.1.0-jain.3")
+        );
+
+        let mut skipped = manifest.clone();
+        let skipped_core = skipped
+            .repos
+            .iter_mut()
+            .find(|repo| repo.name == "redline-core")
+            .unwrap();
+        skipped_core.tag_revision = 5;
+        skipped_core.current_tag = "redline-core-v4.1.0-jain.5".to_owned();
+        assert!(successor_transition(&skipped, &lock)
+            .unwrap_err()
+            .to_string()
+            .contains("exactly one next-revision"));
+    }
+
+    #[test]
+    fn successor_transition_renders_an_explicitly_ineligible_lock() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
+        let lock_path = root.join("redline.lock.toml");
+        let lock = load_lock(&lock_path).unwrap();
+        successor_transition(&manifest, &lock).unwrap();
+        let rendered =
+            render_historical_successor_lock(&fs::read_to_string(lock_path).unwrap(), &lock)
+                .unwrap();
+        let value: toml::Value = std::str::from_utf8(&rendered).unwrap().parse().unwrap();
+        let proof = proof_table(&value).unwrap();
+        assert_eq!(
+            proof.get("cutover_eligible").and_then(toml::Value::as_bool),
+            Some(false)
+        );
+        assert_eq!(
+            proof.get("parity_status").and_then(toml::Value::as_str),
+            Some("historical-only-until-refreshed")
+        );
+        assert!(proof.get("family_ci_receipt").is_none());
+        assert!(proof.get("proof_refresh_receipt").is_none());
+        assert!(proof.get("consumer_evidence").is_none());
+        assert!(proof
+            .get("accepted_consumer_evidence")
+            .and_then(toml::Value::as_array)
+            .is_some_and(Vec::is_empty));
+    }
+
+    #[test]
+    fn successor_transition_reconciles_only_the_exact_reviewed_lock() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
+        let predecessor =
+            fs::read(root.join("release-evidence/8.0.0/redline-lock-jain3-predecessor.toml"))
+                .unwrap();
+        let predecessor_value: toml::Value =
+            std::str::from_utf8(&predecessor).unwrap().parse().unwrap();
+        validate_bound_predecessor_identity(&manifest, &predecessor, &predecessor_value).unwrap();
+        let historical = render_historical_successor_lock(
+            std::str::from_utf8(&predecessor).unwrap(),
+            &predecessor_value,
+        )
+        .unwrap();
+        assert_eq!(
+            historical,
+            fs::read(root.join("redline.lock.toml")).unwrap()
+        );
+
+        let (source, value) = successor_transition_input_with(
+            &manifest,
+            &historical,
+            &predecessor,
+            validate_bound_predecessor_identity,
+        )
+        .unwrap();
+        assert_eq!(source.as_bytes(), predecessor);
+        assert_eq!(
+            proof_table(&value)
+                .unwrap()
+                .get("cutover_eligible")
+                .and_then(toml::Value::as_bool),
+            Some(true)
+        );
+
+        let mut tampered = historical.clone();
+        tampered.extend_from_slice(b"# manual drift\n");
+        assert!(successor_transition_input_with(
+            &manifest,
+            &tampered,
+            &predecessor,
+            validate_bound_predecessor_identity,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("not the exact reviewed successor transition"));
+    }
+
+    #[test]
+    fn successor_predecessor_binding_rejects_fabricated_eligible_locks() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
+        let source = fs::read_to_string(
+            root.join("release-evidence/8.0.0/redline-lock-jain3-predecessor.toml"),
+        )
+        .unwrap();
+        for fabricated in [
+            source.replacen("[[repo]]", "[[repo]]\nname = \"duplicate\"\n\n[[repo]]", 1),
+            source.replacen(SUCCESSOR_PREDECESSOR_COMMIT, &"9".repeat(40), 1),
+            source.replace("family_ci_receipt =", "omitted_family_receipt ="),
+        ] {
+            let value: toml::Value = fabricated.parse().unwrap();
+            assert!(
+                validate_bound_predecessor_identity(&manifest, fabricated.as_bytes(), &value)
+                    .unwrap_err()
+                    .to_string()
+                    .contains("predecessor lock digest")
+            );
+        }
+    }
+
+    #[test]
+    fn successor_transition_rejects_a_present_tag_state() {
+        assert!(
+            require_successor_tag_absent(&json!({"tag_state": "present"}))
+                .unwrap_err()
+                .to_string()
+                .contains("before the new immutable tag exists")
+        );
+    }
+
+    #[test]
+    fn successor_prepare_review_and_reconcile_are_transactional() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest = root.join("repos.manifest.toml");
+        let predecessor =
+            fs::read(root.join("release-evidence/8.0.0/redline-lock-jain3-predecessor.toml"))
+                .unwrap();
+        let fixture = TestDir::new("successor-operation");
+        let authoritative = fixture.path().join("authoritative/redline.lock.toml");
+        let mirror = fixture.path().join("mirror/redline.lock.toml");
+        fs::create_dir_all(authoritative.parent().unwrap()).unwrap();
+        fs::create_dir_all(mirror.parent().unwrap()).unwrap();
+        for path in [&authoritative, &mirror] {
+            fs::write(path, &predecessor).unwrap();
+            fs::write(
+                checksum_path(path),
+                format!("{}  redline.lock.toml\n", sha256_bytes(&predecessor)),
+            )
+            .unwrap();
+        }
+
+        let prepared = fixture.path().join("prepared.json");
+        proof_refresh_prepare_successor_with(
+            &manifest,
+            &authoritative,
+            &mirror,
+            &prepared,
+            validate_bound_predecessor_identity,
+            |_| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(fs::read(&mirror).unwrap(), predecessor);
+        assert_eq!(
+            sha256_file(&authoritative).unwrap(),
+            SUCCESSOR_PREPARED_LOCK_SHA256
+        );
+        assert_eq!(
+            review_lock_verify_with(
+                &manifest,
+                &authoritative,
+                &mirror,
+                validate_bound_predecessor_identity,
+                |_| Ok(()),
+            )
+            .unwrap(),
+            "prepared-successor"
+        );
+        let prepared_value = read_json(&prepared).unwrap();
+        assert_eq!(prepared_value["transition_state"], "prepared");
+        assert_eq!(prepared_value["compatibility_mirror_updated"], false);
+        assert_eq!(prepared_value["cutover_eligible"], false);
+        verify_checksum(&prepared).unwrap();
+        successor_receipt_verify(&prepared, &manifest, &authoritative, &mirror).unwrap();
+
+        let premature = fixture.path().join("premature-reconciled.json");
+        let mut premature_value = prepared_value.clone();
+        premature_value["transition_state"] = json!("reconciled");
+        premature_value["compatibility_mirror_updated"] = json!(true);
+        write_checksummed_json(&premature, &premature_value).unwrap();
+        assert!(
+            successor_receipt_verify(&premature, &manifest, &authoritative, &mirror)
+                .unwrap_err()
+                .to_string()
+                .contains("mirror drift")
+        );
+
+        let reconciled = fixture.path().join("reconciled.json");
+        proof_refresh_reconcile_successor_with(
+            &manifest,
+            &authoritative,
+            &mirror,
+            &reconciled,
+            validate_bound_predecessor_identity,
+            |_| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(
+            fs::read(&authoritative).unwrap(),
+            fs::read(&mirror).unwrap()
+        );
+        assert_eq!(
+            review_lock_verify_with(
+                &manifest,
+                &authoritative,
+                &mirror,
+                validate_bound_predecessor_identity,
+                |_| Ok(()),
+            )
+            .unwrap(),
+            "reconciled-successor"
+        );
+        let reconciled_value = read_json(&reconciled).unwrap();
+        assert_eq!(reconciled_value["transition_state"], "reconciled");
+        assert_eq!(reconciled_value["compatibility_mirror_updated"], true);
+        assert_eq!(reconciled_value["cutover_eligible"], false);
+        verify_checksum(&reconciled).unwrap();
+        successor_receipt_verify(&reconciled, &manifest, &authoritative, &mirror).unwrap();
+
+        let tampered_receipt = fixture.path().join("tampered.json");
+        let mut tampered_value = prepared_value;
+        tampered_value["manual_override"] = json!(true);
+        write_checksummed_json(&tampered_receipt, &tampered_value).unwrap();
+        assert!(
+            successor_receipt_verify(&tampered_receipt, &manifest, &authoritative, &mirror,)
+                .unwrap_err()
+                .to_string()
+                .contains("unsupported fields")
+        );
+
+        let malformed = predecessor
+            .iter()
+            .copied()
+            .chain(b"# duplicate row\n".iter().copied())
+            .collect::<Vec<_>>();
+        for path in [&authoritative, &mirror] {
+            fs::write(path, &malformed).unwrap();
+            fs::write(
+                checksum_path(path),
+                format!("{}  redline.lock.toml\n", sha256_bytes(&malformed)),
+            )
+            .unwrap();
+        }
+        let rejected = fixture.path().join("rejected.json");
+        assert!(proof_refresh_prepare_successor_with(
+            &manifest,
+            &authoritative,
+            &mirror,
+            &rejected,
+            validate_bound_predecessor_identity,
+            |_| Ok(()),
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("predecessor lock digest"));
+        assert_eq!(fs::read(&authoritative).unwrap(), malformed);
+        assert_eq!(fs::read(&mirror).unwrap(), malformed);
+        assert!(!rejected.exists());
     }
 
     #[test]
@@ -4007,13 +5056,19 @@ mod tests {
         fs::create_dir_all(control.join("schemas")).unwrap();
         fs::create_dir_all(&mirror_dir).unwrap();
         let source = Path::new(env!("CARGO_MANIFEST_DIR"));
-        for name in ["repos.manifest.toml", "redline.lock.toml", "Cargo.toml"] {
+        for name in [
+            "repos.manifest.toml",
+            "redline.lock.toml",
+            "redline.lock.toml.sha256",
+            "Cargo.toml",
+        ] {
             fs::copy(source.join(name), control.join(name)).unwrap();
         }
         for name in [
             "redline-family-ci.schema.json",
             "redline-consumer-evidence.schema.json",
             "redline-proof-refresh.schema.json",
+            "redline-proof-successor.schema.json",
         ] {
             fs::copy(
                 source.join("schemas").join(name),

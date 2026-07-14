@@ -86,7 +86,7 @@ fields (replace the values with their reviewed consumer check output):
   "status": "pass",
   "source_commit": "0123456789abcdef0123456789abcdef01234567",
   "required_check": "jain-split/redline-consumer",
-  "engine_tag": "redline-core-v4.1.0-jain.3",
+  "engine_tag": "redline-core-v4.1.0-jain.4",
   "engine_commit": "<family-ci redline-core commit>",
   "proof_lock_id": "redline-proof/v2/4.1.0/<family-ci redline-core commit>",
   "family_ci_receipt_sha256": "<family-ci receipt SHA256>",
@@ -122,6 +122,37 @@ proof-lock identity, tag metadata, and `cutover_eligible` value, then safely
 replaces the authoritative lock and its compatibility mirror with identical
 bytes. `cutover-verify` reconstructs the lock from the still-fresh receipts and
 live immutable tag readback; a manual lock edit cannot make cutover pass.
+
+When a reviewed Core correction advances exactly one immutable tag revision,
+start the transition before creating that tag:
+
+```bash
+./redlinectl proof-refresh --prepare-successor \
+  --receipt release-evidence/8.0.0/redline-proof-successor-jain4-prepared.json
+```
+
+This mode accepts no family/consumer evidence or eligibility override. It
+requires clean forge-equal child mains, the proposed Core tag to be absent, and
+the byte-exact reviewed predecessor lock bound by SHA-256 in the manifest. It
+writes only the candidate authoritative lock, its sidecar, and a typed
+`prepared` receipt; the compatibility mirror stays unchanged. The manifest,
+historical authoritative lock, and preparation receipt land through protected
+review first. The review lane accepts that split state only when the historical
+bytes are the tool's exact manifest-bound rendering; operational `validate`,
+`lock-verify`, and `cutover-verify` remain strict and fail on the split state.
+`successor-receipt-verify` checksum-verifies the closed receipt fields, both
+canonical lock paths, predecessor/prepared digests, and exact engine identities.
+After merge, reconcile once:
+
+```bash
+./redlinectl proof-refresh --reconcile-successor \
+  --receipt release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json
+```
+
+This atomically updates the mirror and produces the governed `reconciled`
+receipt, which is then submitted through protected review. Any other byte drift
+fails closed. Only a normal two-consumer `proof-refresh` can restore cutover
+eligibility.
 
 Reviewed cutover inputs live under `release-evidence/<release>/`, alongside
 their checksum sidecars and the family-CI logs named by the receipt. The proof

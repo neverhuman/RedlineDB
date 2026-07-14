@@ -32,6 +32,23 @@ cannot pass cutover. `proof-refresh` is the only writer that can replace it and
 requires exact manifest product, revision, commit, tree checksum, remote, and
 protection-policy metadata first.
 
+`./redlinectl proof-refresh --prepare-successor --receipt PATH` is the only
+supported way to derive an ineligible authoritative candidate for a
+one-revision Core correction. Tests require the successor tag to be absent,
+every child main to be clean and forge-equal, and the two starting lock copies
+to match the manifest-bound predecessor SHA-256. Preparation never writes the
+product mirror. `review-lock-verify` accepts the temporary split state only when
+the candidate has the exact bound historical digest and records it as
+cutover-ineligible; strict operational verification continues to fail.
+`successor-receipt-verify PATH` rejects unknown fields, a bad sidecar, path
+substitution, manual eligibility, mismatched transition flags, or any manifest,
+engine, predecessor, or prepared-lock identity difference.
+Post-merge, `proof-refresh --reconcile-successor --receipt PATH` accepts only
+that authoritative candidate plus the byte-exact predecessor mirror, updates
+both copies transactionally, and emits a `reconciled` receipt. Unrelated drift
+is rejected. Both receipt variants use `redline.proof-successor/v1` and have
+checksum sidecars.
+
 `just family-ci` is intentionally stronger: every child must be clean `main`,
 equal its local-Jeryu forge head, and either have no proposed tag yet or have an
 immutable tag already bound to that exact commit. It executes the complete

@@ -9,5 +9,11 @@
   consumer evidence exist.
 - Advanced the canonical Redline core identity to the immutable `.jain.3`
   durability repair after reviewed reopen regression coverage.
+- Advanced the canonical Redline core identity to the `.jain.4` bounded-cell
+  repair after exact INSERT/UPDATE boundaries, repeated no-growth rejection,
+  WAL stability, checkpoint, and reopen coverage passed protected CI.
+- Added manifest-digest-bound successor preparation, protected split-state
+  review, and post-merge mirror reconciliation without weakening strict
+  operational lock or cutover verification.
 - Bound both consumer receipts to the canonical manifest and policy, each
   consumer's manifest and CI policy, and a fresh checksummed test log.
