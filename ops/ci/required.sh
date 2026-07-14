@@ -7,7 +7,7 @@ cd "$(git rev-parse --show-toplevel)"
 
 say() { printf '[required:jain-split-ops] %s\n' "$*" >&2; }
 
-for tool in bash cargo git jq rg sha256sum shellcheck; do
+for tool in bash cargo file git jq ldd rg sha256sum shellcheck; do
   command -v "$tool" >/dev/null 2>&1 || {
     printf 'required tool is unavailable: %s\n' "$tool" >&2
     exit 1
@@ -19,6 +19,7 @@ mapfile -t sh_files < <(find ops -type f -name '*.sh' | sort)
 for f in "${sh_files[@]}"; do bash -n "$f"; done
 shellcheck -S error "${sh_files[@]}"
 bash ops/ci/native-runtime-test.sh
+bash ops/ci/pinned-advisory-test.sh
 
 say 'Rust: format, tests, canonical manifest, source coverage, and local-Jeryu policy'
 cargo fmt -- --check

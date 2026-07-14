@@ -1,0 +1,4 @@
+#!/usr/bin/env bash
+set -euo pipefail
+: "${JAIN_TEST_TOOL_ARGS:?test tool argument output is required}"
+printf '%s\n' "$@" >"$JAIN_TEST_TOOL_ARGS"

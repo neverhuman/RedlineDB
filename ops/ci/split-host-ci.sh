@@ -17,6 +17,8 @@ OPS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
 # shellcheck source=ops/ci/native-runtime.sh
 source "$OPS_ROOT/ops/ci/native-runtime.sh"
+# shellcheck source=ops/ci/pinned-advisory.sh
+source "$OPS_ROOT/ops/ci/pinned-advisory.sh"
 # The split family root (where the sibling repos + target/bare-mirrors live) is an
 # EXPLICIT parameter, not derived from this script's location: this control-plane
 # now lives in its own repo (jain-split-ops/), a sibling of the family members, so
@@ -59,8 +61,10 @@ post_check() {
 }
 
 run_release_cargo_commands() {
-  local policy="$1" count index program label
+  local policy="$1" count index program label subcommand
+  shift
   local -a args=()
+  local -a native_learners=("$@")
   count="$(jq -er '.commands | length | select(. > 0)' <<<"$policy")" || return 1
   for ((index = 0; index < count; index++)); do
     program="$(jq -er --argjson index "$index" '.commands[$index].program' <<<"$policy")" || return 1
@@ -75,8 +79,19 @@ run_release_cargo_commands() {
       say "release cargo command has no arguments: $label"
       return 1
     }
+    subcommand="${args[0]}"
+    if [ "${#native_learners[@]}" -gt 0 ] && [ "$subcommand" = test ]; then
+      say "verifying native runtime before release test: $label"
+      jain_verify_native_libraries "$JAIN_VENDOR_ROOT" "${native_learners[@]}" || return 1
+      jain_verify_linked_binaries "$CARGO_TARGET_DIR/release" || return 1
+    fi
     say "running release cargo command: $label"
     cargo "${args[@]}" || return 1
+    if [ "${#native_learners[@]}" -gt 0 ] && [ "$subcommand" = build ]; then
+      say "verifying native runtime after release build: $label"
+      jain_verify_native_libraries "$JAIN_VENDOR_ROOT" "${native_learners[@]}" || return 1
+      jain_verify_linked_binaries "$CARGO_TARGET_DIR/release" || return 1
+    fi
   done
 }
 
@@ -108,6 +123,8 @@ tmp="$(mktemp -d /tmp/split-host-ci.XXXXXX)"
 wt="$tmp/$REPO"
 native_vendor="$tmp/native-vendor"
 native_source_root="${JAIN_NATIVE_SOURCE_ROOT:-}"
+native_learners=()
+mapfile -t native_learners < <(jain_native_learners_for_repo "$REPO")
 cleanup() {
   git -C "$REPO_PATH" worktree remove -f "$wt" >/dev/null 2>&1 || true
   rm -rf "$tmp" >/dev/null 2>&1 || true
@@ -118,9 +135,11 @@ git -C "$REPO_PATH" worktree add -f --detach "$wt" "$SHA" >/dev/null 2>&1 \
   || { post_check failure; echo "worktree checkout failed" >&2; exit 1; }
 
 # Release Cargo policy may enable native learners even when the repository's
-# merge lane does not. Materialize one pinned private tree, then make the three
-# learner runtime directories available to every required/release subprocess.
-if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
+# merge lane does not. Materialize one pinned private tree and export absolute
+# source/build roots before any required/release subprocess. Final library
+# directories are not pre-created; post-build checks inspect exact non-empty
+# learner outputs.
+if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
   native_bootstrap="$SPLIT_ROOT/jain-deploy/scripts/vendor-all.sh"
   [ -x "$native_bootstrap" ] || {
     echo "release CI native-vendor bootstrap missing: $native_bootstrap" >&2
@@ -136,9 +155,7 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
   }
   mkdir -p "$wt/target"
   ln -s "$native_vendor" "$wt/target/native-vendor"
-  mapfile -t native_runtime_dirs < <(jain_native_runtime_dirs "$native_vendor")
-  mkdir -p "${native_runtime_dirs[@]}"
-  jain_export_native_runtime_path "$native_vendor" || {
+  jain_prepare_native_runtime "$native_vendor" || {
     echo "release CI native runtime path setup failed" >&2
     exit 1
   }
@@ -183,6 +200,39 @@ if [ "${JAIN_RELEASE_CI:-0}" != "1" ] && [ -z "${RUSTC_WRAPPER:-}" ] && command 
 fi
 export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
 
+# Release security lanes consume an isolated checkout of one pinned RustSec
+# commit. The cargo-audit/cargo-deny shims force advisory no-fetch operation, so
+# a concurrent or dirty user advisory DB is neither read nor reset.
+if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
+  rustsec_source="${JAIN_RUSTSEC_ADVISORY_SOURCE:-$SPLIT_ROOT/target/advisory-db}"
+  rustsec_db="$CARGO_HOME/advisory-db"
+  rustsec_tools="$tmp/pinned-rustsec-tools"
+  real_cargo_audit="$(command -v cargo-audit)" || {
+    echo "release CI requires cargo-audit" >&2
+    exit 2
+  }
+  real_cargo_deny="$(command -v cargo-deny)" || {
+    echo "release CI requires cargo-deny" >&2
+    exit 2
+  }
+  jain_materialize_pinned_advisory_db \
+    "$rustsec_source" "$rustsec_db" "$JAIN_PINNED_RUSTSEC_COMMIT" || {
+    echo "release CI pinned RustSec database setup failed" >&2
+    exit 1
+  }
+  jain_install_pinned_rustsec_tools \
+    "$rustsec_tools" "$rustsec_db" "$CARGO_HOME" "$OPS_ROOT" || {
+    echo "release CI pinned RustSec tool setup failed" >&2
+    exit 1
+  }
+  export JAIN_REAL_CARGO_AUDIT="$real_cargo_audit"
+  export JAIN_REAL_CARGO_DENY="$real_cargo_deny"
+  export JAIN_PINNED_ADVISORY_DB="$rustsec_db"
+  export JAIN_PINNED_ADVISORY_COMMIT="$JAIN_PINNED_RUSTSEC_COMMIT"
+  export PATH="$rustsec_tools:$PATH"
+  say "RustSec advisory database: isolated commit $JAIN_PINNED_RUSTSEC_COMMIT"
+fi
+
 # Cross-repo dependency resolution WITHOUT network fetches and WITHOUT sibling
 # checkouts. Local Jeryu is the canonical operational source of truth, but CI
 # resolves the exact same local-Jeryu tag URLs through auth-free file:// bare
@@ -216,7 +266,8 @@ say "running scripts/ci-local.sh required for $OWNER/$REPO @ ${SHA:0:8}"
 if (cd "$wt" && bash scripts/ci-local.sh required) >"$log" 2>&1; then
   if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
     if [ -f "$wt/Cargo.toml" ]; then
-      (cd "$wt" && cargo metadata --locked --format-version 1 >/dev/null && run_release_cargo_commands "$release_cargo_policy") >>"$log" 2>&1 || {
+      (cd "$wt" && cargo metadata --locked --format-version 1 >/dev/null && \
+        run_release_cargo_commands "$release_cargo_policy" "${native_learners[@]}") >>"$log" 2>&1 || {
         tail -30 "$log" >&2
         post_check failure || true
         say "FAIL release Cargo policy $OWNER/$REPO @ ${SHA:0:8}"
