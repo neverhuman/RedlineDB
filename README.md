@@ -7,7 +7,7 @@ this subrepo dockerizes it and provides the remote client + the switchable shim.
 
 ## Layout
 - `crates/redlinedb-client` — sync remote client for `redlinedb-server` (framed TCP), rusqlite-shaped.
-- `crates/db-shim` — *(next)* switchable `sqlite|redline` abstraction (+ `{ns}` prefixing, `.env`).
+- `crates/db-shim` — switchable `sqlite|redline` abstraction (+ `{ns}` prefixing, `.env`) — proven.
 - `docker/` — `Dockerfile` + `docker-compose.yml` for the central server.
 - `.env.example` — `DB_BACKEND` / `DB_DSN` / `DB_NAMESPACE` template a consumer copies.
 

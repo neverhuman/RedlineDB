@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "crates/redlinedb-client",
+  "crates/db-shim",
 ]
 
 [workspace.package]
