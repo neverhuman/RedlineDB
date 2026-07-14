@@ -4,7 +4,12 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 tmp="$(mktemp -d /tmp/jain-split-host-integrity-test.XXXXXX)"
 forged_root=""
+runner_pid=""
 cleanup() {
+  if [[ -n "$runner_pid" ]] && kill -0 "$runner_pid" 2>/dev/null; then
+    kill "$runner_pid" 2>/dev/null || true
+    wait "$runner_pid" 2>/dev/null || true
+  fi
   rm -rf -- "$tmp"
   case "$forged_root" in
     /tmp/split-host-ci-bootstrap.??????) rm -rf -- "$forged_root" ;;
@@ -78,6 +83,10 @@ if JAIN_HOST_CI_EXACT_ROOT="$control" \
   JAIN_HOST_CI_SOURCE_ROOT="$control" \
   JAIN_HOST_CI_CONTROL_COMMIT="$(git -C "$control" rev-parse HEAD)" \
   JAIN_HOST_CI_BOOTSTRAP_ROOT="$victim" \
+  PATH="$fake_bin:$PATH" \
+  JAIN_BASE=http://fake-forge.invalid \
+  JERYU_MERGE_TOKEN=fixture-token \
+  JAIN_TEST_FORGE_LOG="$forge_log" \
   JAIN_SPLIT_ROOT="$split_root" \
     "$control/ops/ci/split-host-ci.sh" \
       jeryu jain-report "$product_sha" "$tmp/not-a-repository" \
@@ -90,35 +99,98 @@ fi
   exit 1
 }
 
-# Calling the reviewed filename directly with a forged sealed state also fails
-# closed and performs no cleanup. This exercises the internal entrypoint rather
-# than merely inspecting its source.
+# A structurally valid self-pointed reviewed child may execute and return a
+# success result, but it has no credential or status-publication code. Only the
+# public parent can turn a validated child result into a protected forge write.
 forged_root="$(mktemp -d /tmp/split-host-ci-bootstrap.XXXXXX)"
 chmod 0700 "$forged_root"
-cp -- "$control/ops/ci/split-host-ci.sh" \
-  "$forged_root/.split-host-ci-reviewed"
+forged_commit="$(git -C "$control" rev-parse HEAD)"
+git -C "$control" worktree add --quiet --detach \
+  "$forged_root/control-plane" "$forged_commit"
+git -C "$control" show "$forged_commit:ops/ci/split-host-ci.sh" \
+  >"$forged_root/.split-host-ci-reviewed"
 chmod 0500 "$forged_root/.split-host-ci-reviewed"
 forged_seal="$(printf 'ab%.0s' {1..32})"
+forged_result="$forged_root/child-result.json"
 jq -n --arg seal "$forged_seal" --arg source_root "$control" \
-  --arg exact_root "$victim" \
-  --arg commit "$(git -C "$control" rev-parse HEAD)" \
+  --arg exact_root "$forged_root/control-plane" \
+  --arg commit "$forged_commit" --arg result_path "$forged_result" \
   '{schema_version:"jain.host-ci-reexec/v1",seal:$seal,
-    source_root:$source_root,exact_root:$exact_root,commit:$commit}' \
+    source_root:$source_root,exact_root:$exact_root,commit:$commit,
+    result_path:$result_path}' \
   >"$forged_root/reexec-state.json"
 chmod 0600 "$forged_root/reexec-state.json"
-if JAIN_HOST_CI_REEXEC_STATE="$forged_root/reexec-state.json" \
+forged_started="$tmp/forged-started"
+forged_continue="$tmp/forged-continue"
+forged_forge_log="$tmp/forged-forge.log"
+touch "$forged_continue"
+if ! JAIN_HOST_CI_REEXEC_STATE="$forged_root/reexec-state.json" \
   JAIN_HOST_CI_REEXEC_SEAL="$forged_seal" \
+  PATH="$fake_bin:$PATH" \
+  JAIN_BASE=http://fake-forge.invalid \
+  JERYU_MERGE_TOKEN=fixture-token \
+  JAIN_SPLIT_ROOT="$split_root" \
+  JAIN_TEST_STARTED="$forged_started" \
+  JAIN_TEST_CONTINUE="$forged_continue" \
+  JAIN_TEST_FORGE_LOG="$forged_forge_log" \
+  CARGO_TARGET_DIR="$repo_root/target" \
     bash "$forged_root/.split-host-ci-reviewed" \
       jeryu jain-report "$product_sha" "$product" jain-report/required \
       >/dev/null 2>&1; then
-  printf 'host CI accepted a forged reviewed-runner state\n' >&2
+  printf 'structurally valid reviewed child could not return its local result\n' >&2
   exit 1
 fi
-[[ -s "$victim/sentinel" && -d "$forged_root" ]] || {
-  printf 'forged reviewed entry deleted caller-controlled paths\n' >&2
+jq -e 'select(.conclusion == "success" and .status == "pass")' \
+  "$forged_result" >/dev/null || {
+  printf 'reviewed child did not produce a valid local success result\n' >&2
   exit 1
 }
+if [[ -e "$forged_forge_log" ]] \
+  && grep -Eq '"(conclusion|state)":"success"' "$forged_forge_log"; then
+  printf 'direct reviewed child published protected success\n' >&2
+  exit 1
+fi
+[[ "$(<"$victim/sentinel")" == preserve && -d "$forged_root" ]] || {
+  printf 'direct reviewed child deleted caller-controlled paths\n' >&2
+  exit 1
+}
+git -C "$control" worktree remove --force \
+  "$forged_root/control-plane" >/dev/null
 rm -rf -- "$forged_root"
+
+# The public parent, with the credential retained outside its reviewed child,
+# can publish success only after validating the exact child result and log.
+success_forge_log="$tmp/success-forge.log"
+success_runner_log="$tmp/success-runner.log"
+touch "$continue_file"
+PATH="$fake_bin:$PATH" \
+JAIN_SPLIT_ROOT="$split_root" \
+JAIN_BASE=http://fake-forge.invalid \
+JERYU_MERGE_TOKEN=fixture-token \
+JAIN_TEST_FORGE_LOG="$success_forge_log" \
+JAIN_TEST_STARTED="$started" \
+JAIN_TEST_CONTINUE="$continue_file" \
+CARGO_TARGET_DIR="$repo_root/target" \
+  "$control/ops/ci/split-host-ci.sh" \
+    jeryu jain-report "$product_sha" "$product" jain-report/required \
+    >"$success_runner_log" 2>&1 || {
+  cat "$success_runner_log" >&2
+  printf 'validated public parent could not publish success\n' >&2
+  exit 1
+}
+grep -Fq '"conclusion":"success"' "$success_forge_log" || {
+  printf 'public parent did not publish a success check\n' >&2
+  exit 1
+}
+grep -Fq '"state":"success"' "$success_forge_log" || {
+  printf 'public parent did not publish a success status\n' >&2
+  exit 1
+}
+grep -Fq 'host-receipt=' "$success_forge_log" || {
+  printf 'public parent success did not bind its exact receipt\n' >&2
+  exit 1
+}
+rm -f -- "$continue_file" "$started"
 
 PATH="$fake_bin:$PATH" \
 JAIN_SPLIT_ROOT="$split_root" \
@@ -133,7 +205,7 @@ CARGO_TARGET_DIR="$repo_root/target" \
     >"$runner_log" 2>&1 &
 runner_pid=$!
 
-for _ in $(seq 1 500); do
+for _ in $(seq 1 1500); do
   [[ -e "$started" ]] && break
   kill -0 "$runner_pid" 2>/dev/null || break
   sleep 0.02

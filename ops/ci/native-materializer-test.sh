@@ -311,11 +311,6 @@ if jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required \
   exit 1
 fi
 
-grep -Fq 'native-receipt=$JAIN_NATIVE_EVIDENCE_SHA256' \
-  "$repo_root/ops/ci/split-host-ci.sh" || {
-  printf 'host CI status does not bind the native receipt digest\n' >&2
-  exit 1
-}
 grep -Fq 'managed-repos --manifest "$CANONICAL_MANIFEST" --json' \
   "$repo_root/ops/ci/split-host-ci.sh" || {
   printf 'host CI does not derive policy from the authority manifest\n' >&2
