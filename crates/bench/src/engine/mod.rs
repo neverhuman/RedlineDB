@@ -12,6 +12,7 @@ use std::time::Duration;
 
 use crate::config::{DurabilityKind, EngineKind, RunSpec};
 
+pub(crate) use postgres::MAX_CONTAINER_WRITABLE_LAYER_BYTES;
 pub(crate) use postgres::PostgresEngine;
 pub use postgres::{PostgresEndpoint, PostgresLiveIdentity};
 pub use redline::RedlineEngine;

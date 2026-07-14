@@ -37,7 +37,7 @@ readable repair receipts.
 | `beyond-sqlite-manifest`             | Verifies the beyond-SQLite backlog ranking, source tips, owners, and proof-lane routing.               |
 | `beyond-postgres-reference`          | Runs the beyond-SQLite manifest and Postgres oracle tests against PostgreSQL 16. Starts a Docker container locally when `REDLINEDB_POSTGRES_URL` is unset. |
 | `interaction-volume-smoke`           | Runs a fast identical-plan Redline/SQLite/PostgreSQL mechanics and integrity check. Informational only; never authorizes a release or performance claim. |
-| `interaction-volume-daily`           | Runs the immutable digest-bound seven-repetition interaction/volume profile, exact concurrency points, storage watchdog, and five-minute Redline delayed-growth soak. Scheduled CI fails closed and retains raw receipts. |
+| `interaction-volume-daily`           | Runs the immutable digest-bound seven-repetition profile, exact concurrency points, complete owned-PostgreSQL persistent-byte watchdog, and five-minute Redline delayed-growth soak. Only the token-authenticated canonical scheduled CI job is eligible; raw receipts are retained. |
 | `ffi-check`                          | Targeted `redlinedb-ffi` compile proof.                                                               |
 | `ffi-test`                           | Targeted `redlinedb-ffi` test proof.                                                                   |
 | `cli-check`                          | Targeted `redlinedb-cli` compile proof.                                                               |

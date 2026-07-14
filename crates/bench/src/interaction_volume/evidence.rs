@@ -1,15 +1,19 @@
 use std::path::Path;
-use std::process::Command;
+use std::process::{Command, Stdio};
+use std::{io::Write, process::Output};
 
 use super::*;
-use crate::engine::{PostgresEndpoint, PostgresLiveIdentity};
+use crate::engine::{MAX_CONTAINER_WRITABLE_LAYER_BYTES, PostgresEndpoint, PostgresLiveIdentity};
 use crate::report::collect_environment;
 
 pub(super) const EXECUTION_EVIDENCE_SCHEMA: &str =
-    "redline.interaction-volume-execution-evidence/v2";
+    "redline.interaction-volume-execution-evidence/v3";
 const EVIDENCE_GENERATOR: &str = "ops/ci/interaction-volume-cert.sh";
 const POSTGRES_DATA_DESTINATION: &str = "/var/lib/postgresql/data";
 const RUN_ID_LABEL: &str = "redline.interaction-volume.run_id";
+const POSTGRES_CONTAINER_ID_ENV: &str = "REDLINEDB_BENCH_POSTGRES_CONTAINER_ID";
+const CANONICAL_CI_PROJECT_PATH: &str = "jeryu/redline-core";
+const CANONICAL_CI_BRANCH: &str = "main";
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct PostgresExecutionEvidence {
@@ -26,6 +30,8 @@ pub struct PostgresExecutionEvidence {
     pub docker_daemon_id: Option<String>,
     pub endpoint_host: Option<String>,
     pub endpoint_port: Option<u16>,
+    pub rootfs_read_only: bool,
+    pub log_driver: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -72,10 +78,20 @@ pub struct CiTriggerEvidence {
     pub pipeline_source: String,
     pub pipeline_id: String,
     pub job_id: String,
+    pub project_id: String,
+    pub runner_id: String,
     pub job_name: String,
     pub source_commit: String,
     pub project_path: String,
+    pub server_url: String,
+    pub project_url: String,
     pub pipeline_url: String,
+    pub job_api_url: String,
+    pub job_web_url: String,
+    pub job_token_authenticated: bool,
+    pub default_branch: String,
+    pub commit_branch: String,
+    pub commit_ref_protected: bool,
     pub scheduled: bool,
 }
 
@@ -89,6 +105,9 @@ pub struct LivePostgresObservation {
     pub container_image_id: String,
     pub container_image_reference: String,
     pub container_started_at: String,
+    pub rootfs_read_only: bool,
+    pub log_driver: String,
+    pub container_size_rw_bytes: u64,
     pub data_mount_source: String,
     pub data_mount_destination: String,
     pub published_host_ip: String,
@@ -180,74 +199,225 @@ fn validate_ci_trigger(trigger: Option<&CiTriggerEvidence>, source_commit: &str)
     let Some(trigger) = trigger else {
         return Ok(false);
     };
-    if trigger.schema_version != "redline.interaction-volume-ci-trigger/v1"
+    if std::env::var("CI").as_deref() != Ok("true") {
+        bail!("CI trigger evidence is accepted only inside the live CI job");
+    }
+    if trigger.schema_version != "redline.interaction-volume-ci-trigger/v2"
+        || trigger.pipeline_source != "schedule"
+        || !trigger.scheduled
         || trigger.job_name != "interaction-volume-daily"
         || trigger.source_commit != source_commit
-        || trigger.project_path.trim().is_empty()
-        || !trigger.pipeline_url.starts_with("http")
+        || trigger.project_path != CANONICAL_CI_PROJECT_PATH
+        || trigger.default_branch != CANONICAL_CI_BRANCH
+        || trigger.commit_branch != CANONICAL_CI_BRANCH
+        || !trigger.commit_ref_protected
+        || !trigger.job_token_authenticated
     {
         bail!("CI trigger evidence identity does not match the daily certificate");
     }
     for (field, value) in [
         ("pipeline id", trigger.pipeline_id.as_str()),
         ("job id", trigger.job_id.as_str()),
+        ("project id", trigger.project_id.as_str()),
+        ("runner id", trigger.runner_id.as_str()),
     ] {
         if value == "0" || value.is_empty() || !value.bytes().all(|byte| byte.is_ascii_digit()) {
             bail!("CI trigger evidence {field} must be a nonzero numeric id");
         }
     }
-    let scheduled = trigger.pipeline_source == "schedule";
-    if !matches!(
-        trigger.pipeline_source.as_str(),
-        "schedule" | "web" | "merge_request_event"
-    ) || trigger.scheduled != scheduled
+    let expected_project_url = format!(
+        "{}/{}",
+        trigger.server_url.trim_end_matches('/'),
+        CANONICAL_CI_PROJECT_PATH
+    );
+    if !trigger.server_url.starts_with("http")
+        || trigger.project_url != expected_project_url
+        || trigger.pipeline_url
+            != format!(
+                "{}/-/pipelines/{}",
+                trigger.project_url, trigger.pipeline_id
+            )
     {
-        bail!("CI trigger evidence has an unsupported or inconsistent pipeline source");
+        bail!("CI trigger URLs are not bound to the canonical project and pipeline id");
     }
-    if std::env::var("CI").as_deref() == Ok("true") {
-        for (name, observed, expected) in [
-            (
-                "CI_PIPELINE_SOURCE",
-                std::env::var("CI_PIPELINE_SOURCE").ok(),
-                trigger.pipeline_source.as_str(),
-            ),
-            (
-                "CI_PIPELINE_ID",
-                std::env::var("CI_PIPELINE_ID").ok(),
-                trigger.pipeline_id.as_str(),
-            ),
-            (
-                "CI_JOB_ID",
-                std::env::var("CI_JOB_ID").ok(),
-                trigger.job_id.as_str(),
-            ),
-            (
-                "CI_JOB_NAME",
-                std::env::var("CI_JOB_NAME").ok(),
-                trigger.job_name.as_str(),
-            ),
-            (
-                "CI_COMMIT_SHA",
-                std::env::var("CI_COMMIT_SHA").ok(),
-                trigger.source_commit.as_str(),
-            ),
-            (
-                "CI_PROJECT_PATH",
-                std::env::var("CI_PROJECT_PATH").ok(),
-                trigger.project_path.as_str(),
-            ),
-            (
-                "CI_PIPELINE_URL",
-                std::env::var("CI_PIPELINE_URL").ok(),
-                trigger.pipeline_url.as_str(),
-            ),
-        ] {
-            if observed.as_deref() != Some(expected) {
-                bail!("live {name} differs from CI trigger evidence");
-            }
+    let expected_api_url = format!("{}/api/v4", trigger.server_url.trim_end_matches('/'));
+    if trigger.job_api_url != format!("{expected_api_url}/job")
+        || trigger.job_web_url != format!("{}/-/jobs/{}", trigger.project_url, trigger.job_id)
+    {
+        bail!("CI job attestation URLs are not bound to the canonical project and job id");
+    }
+    for (name, observed, expected) in [
+        (
+            "CI_PIPELINE_SOURCE",
+            std::env::var("CI_PIPELINE_SOURCE").ok(),
+            trigger.pipeline_source.as_str(),
+        ),
+        (
+            "CI_PIPELINE_ID",
+            std::env::var("CI_PIPELINE_ID").ok(),
+            trigger.pipeline_id.as_str(),
+        ),
+        (
+            "CI_JOB_ID",
+            std::env::var("CI_JOB_ID").ok(),
+            trigger.job_id.as_str(),
+        ),
+        (
+            "CI_PROJECT_ID",
+            std::env::var("CI_PROJECT_ID").ok(),
+            trigger.project_id.as_str(),
+        ),
+        (
+            "CI_RUNNER_ID",
+            std::env::var("CI_RUNNER_ID").ok(),
+            trigger.runner_id.as_str(),
+        ),
+        (
+            "CI_JOB_NAME",
+            std::env::var("CI_JOB_NAME").ok(),
+            trigger.job_name.as_str(),
+        ),
+        (
+            "CI_COMMIT_SHA",
+            std::env::var("CI_COMMIT_SHA").ok(),
+            trigger.source_commit.as_str(),
+        ),
+        (
+            "CI_PROJECT_PATH",
+            std::env::var("CI_PROJECT_PATH").ok(),
+            trigger.project_path.as_str(),
+        ),
+        (
+            "CI_SERVER_URL",
+            std::env::var("CI_SERVER_URL").ok(),
+            trigger.server_url.as_str(),
+        ),
+        (
+            "CI_PROJECT_URL",
+            std::env::var("CI_PROJECT_URL").ok(),
+            trigger.project_url.as_str(),
+        ),
+        (
+            "CI_PIPELINE_URL",
+            std::env::var("CI_PIPELINE_URL").ok(),
+            trigger.pipeline_url.as_str(),
+        ),
+        (
+            "CI_API_V4_URL",
+            std::env::var("CI_API_V4_URL").ok(),
+            expected_api_url.as_str(),
+        ),
+        (
+            "CI_DEFAULT_BRANCH",
+            std::env::var("CI_DEFAULT_BRANCH").ok(),
+            trigger.default_branch.as_str(),
+        ),
+        (
+            "CI_COMMIT_BRANCH",
+            std::env::var("CI_COMMIT_BRANCH").ok(),
+            trigger.commit_branch.as_str(),
+        ),
+        (
+            "CI_COMMIT_REF_PROTECTED",
+            std::env::var("CI_COMMIT_REF_PROTECTED").ok(),
+            "true",
+        ),
+    ] {
+        if observed.as_deref() != Some(expected) {
+            bail!("live {name} differs from CI trigger evidence");
         }
     }
+    validate_live_ci_job(trigger)?;
     Ok(true)
+}
+
+fn validate_live_ci_job(trigger: &CiTriggerEvidence) -> Result<()> {
+    let token = std::env::var("CI_JOB_TOKEN").context("live CI job token is absent")?;
+    if token.is_empty()
+        || !token
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-' | b'.'))
+    {
+        bail!("live CI job token has an invalid shape");
+    }
+    let mut child = Command::new("curl")
+        .args([
+            "--fail",
+            "--silent",
+            "--show-error",
+            "--max-time",
+            "15",
+            "--header",
+            "@-",
+            &trigger.job_api_url,
+        ])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .context("start live CI job-token attestation")?;
+    child
+        .stdin
+        .take()
+        .context("open CI attestation request input")?
+        .write_all(format!("JOB-TOKEN: {token}\n").as_bytes())
+        .context("write CI attestation request header")?;
+    let output = child
+        .wait_with_output()
+        .context("wait for live CI job-token attestation")?;
+    ensure_attestation_succeeded(&output)?;
+    let document: serde_json::Value =
+        serde_json::from_slice(&output.stdout).context("decode live CI job-token attestation")?;
+    validate_ci_job_document(&document, trigger)
+}
+
+fn ensure_attestation_succeeded(output: &Output) -> Result<()> {
+    if !output.status.success() {
+        bail!(
+            "live CI job-token attestation failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(())
+}
+
+fn validate_ci_job_document(
+    document: &serde_json::Value,
+    trigger: &CiTriggerEvidence,
+) -> Result<()> {
+    let expected_job_id = trigger.job_id.parse::<u64>()?;
+    let expected_pipeline_id = trigger.pipeline_id.parse::<u64>()?;
+    let expected_project_id = trigger.project_id.parse::<u64>()?;
+    let expected_runner_id = trigger.runner_id.parse::<u64>()?;
+    let string_matches = [
+        ("/name", trigger.job_name.as_str()),
+        ("/source", "schedule"),
+        ("/status", "running"),
+        ("/ref", CANONICAL_CI_BRANCH),
+        ("/web_url", trigger.job_web_url.as_str()),
+        ("/commit/id", trigger.source_commit.as_str()),
+        ("/pipeline/ref", CANONICAL_CI_BRANCH),
+        ("/pipeline/sha", trigger.source_commit.as_str()),
+    ];
+    if json_u64(document, "/id") != Some(expected_job_id)
+        || json_u64(document, "/pipeline/id") != Some(expected_pipeline_id)
+        || json_u64(document, "/pipeline/project_id") != Some(expected_project_id)
+        || json_u64(document, "/runner/id") != Some(expected_runner_id)
+        || string_matches
+            .iter()
+            .any(|(pointer, expected)| json_str(document, pointer) != Some(*expected))
+    {
+        bail!("live CI job-token attestation does not match the scheduled canonical job");
+    }
+    Ok(())
+}
+
+fn json_u64(document: &serde_json::Value, pointer: &str) -> Option<u64> {
+    document.pointer(pointer)?.as_u64()
+}
+
+fn json_str<'a>(document: &'a serde_json::Value, pointer: &str) -> Option<&'a str> {
+    document.pointer(pointer)?.as_str()
 }
 
 pub(super) fn controlled_environment(evidence: &ValidatedEvidence) -> RunEnvironment {
@@ -271,6 +441,9 @@ fn observe_live_postgres(
     let expected = &document.postgres;
     let container_id = required_evidence(expected.container_id.as_deref(), "container id")?;
     validate_hex_id(container_id, "container id")?;
+    if std::env::var(POSTGRES_CONTAINER_ID_ENV).as_deref() != Ok(container_id) {
+        bail!("PostgreSQL storage-accounting container differs from execution evidence");
+    }
     let container_name = required_evidence(expected.container_name.as_deref(), "container name")?;
     let container_run_id =
         required_evidence(expected.container_run_id.as_deref(), "container run id")?;
@@ -288,7 +461,7 @@ fn observe_live_postgres(
             "live Docker daemon id {daemon_id} differs from execution evidence {expected_daemon}"
         );
     }
-    let inspect = docker_json(&["inspect", container_id])?;
+    let inspect = docker_json(&["inspect", "--size", container_id])?;
     let container = inspect
         .as_array()
         .and_then(|values| values.first())
@@ -312,6 +485,32 @@ fn observe_live_postgres(
         bail!("certification PostgreSQL container is not healthy");
     }
     let started_at = json_string(container, "/State/StartedAt")?.to_owned();
+    let rootfs_read_only = container
+        .pointer("/HostConfig/ReadonlyRootfs")
+        .and_then(|value| value.as_bool())
+        .context("Docker observation lacks read-only-rootfs state")?;
+    let log_driver = json_string(container, "/HostConfig/LogConfig/Type")?.to_owned();
+    let size_rw = container
+        .pointer("/SizeRw")
+        .and_then(|value| value.as_i64())
+        .context("Docker size observation lacks writable-layer bytes")?;
+    let container_size_rw_bytes =
+        u64::try_from(size_rw).context("Docker writable-layer size was negative")?;
+    if !expected.rootfs_read_only
+        || expected.log_driver != "none"
+        || !rootfs_read_only
+        || log_driver != "none"
+        || container_size_rw_bytes > MAX_CONTAINER_WRITABLE_LAYER_BYTES
+    {
+        bail!(
+            "PostgreSQL container must have a read-only bounded rootfs layer and disabled logs \
+             (evidence rootfs_read_only={}, log_driver={}; live rootfs_read_only={rootfs_read_only}, \
+             log_driver={log_driver}, size_rw={container_size_rw_bytes}, \
+             max_size_rw={MAX_CONTAINER_WRITABLE_LAYER_BYTES})",
+            expected.rootfs_read_only,
+            expected.log_driver
+        );
+    }
     let image_id = json_string(container, "/Image")?.to_owned();
     validate_hex_id(
         image_id.strip_prefix("sha256:").unwrap_or(&image_id),
@@ -420,6 +619,9 @@ fn observe_live_postgres(
         container_image_id: image_id,
         container_image_reference: image_reference,
         container_started_at: started_at,
+        rootfs_read_only,
+        log_driver,
+        container_size_rw_bytes,
         data_mount_source: mount_source,
         data_mount_destination: POSTGRES_DATA_DESTINATION.to_owned(),
         published_host_ip: host_ip,
@@ -598,23 +800,78 @@ fn git_output(args: &[&str]) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{CiTriggerEvidence, validate_ci_trigger};
+    use super::{CiTriggerEvidence, validate_ci_job_document, validate_ci_trigger};
 
     #[test]
     fn release_trigger_is_absent_or_fail_closed_when_malformed() {
         let source = "a".repeat(40);
         assert!(!validate_ci_trigger(None, &source).unwrap());
         let malformed = CiTriggerEvidence {
-            schema_version: "redline.interaction-volume-ci-trigger/v1".to_owned(),
+            schema_version: "redline.interaction-volume-ci-trigger/v2".to_owned(),
             pipeline_source: "schedule".to_owned(),
             pipeline_id: "0".to_owned(),
             job_id: "2".to_owned(),
+            project_id: "3".to_owned(),
+            runner_id: "4".to_owned(),
             job_name: "not-the-daily-job".to_owned(),
             source_commit: source.clone(),
             project_path: "jeryu/redline".to_owned(),
-            pipeline_url: "http://forge/pipeline/1".to_owned(),
+            server_url: "http://forge".to_owned(),
+            project_url: "http://forge/jeryu/redline".to_owned(),
+            pipeline_url: "http://forge/jeryu/redline/-/pipelines/0".to_owned(),
+            job_api_url: "http://forge/api/v4/job".to_owned(),
+            job_web_url: "http://forge/jeryu/redline/-/jobs/2".to_owned(),
+            job_token_authenticated: true,
+            default_branch: "main".to_owned(),
+            commit_branch: "main".to_owned(),
+            commit_ref_protected: true,
             scheduled: true,
         };
         assert!(validate_ci_trigger(Some(&malformed), &source).is_err());
+
+        let direct_fabrication = CiTriggerEvidence {
+            schema_version: "redline.interaction-volume-ci-trigger/v2".to_owned(),
+            pipeline_source: "schedule".to_owned(),
+            pipeline_id: "1".to_owned(),
+            job_id: "2".to_owned(),
+            project_id: "3".to_owned(),
+            runner_id: "4".to_owned(),
+            job_name: "interaction-volume-daily".to_owned(),
+            source_commit: source.clone(),
+            project_path: "jeryu/redline-core".to_owned(),
+            server_url: "http://forge".to_owned(),
+            project_url: "http://forge/jeryu/redline-core".to_owned(),
+            pipeline_url: "http://forge/jeryu/redline-core/-/pipelines/1".to_owned(),
+            job_api_url: "http://forge/api/v4/job".to_owned(),
+            job_web_url: "http://forge/jeryu/redline-core/-/jobs/2".to_owned(),
+            job_token_authenticated: true,
+            default_branch: "main".to_owned(),
+            commit_branch: "main".to_owned(),
+            commit_ref_protected: true,
+            scheduled: true,
+        };
+        assert!(validate_ci_trigger(Some(&direct_fabrication), &source).is_err());
+
+        let job = serde_json::json!({
+            "id": 2,
+            "name": "interaction-volume-daily",
+            "source": "schedule",
+            "status": "running",
+            "ref": "main",
+            "web_url": "http://forge/jeryu/redline-core/-/jobs/2",
+            "commit": {"id": source.clone()},
+            "pipeline": {"id": 1, "project_id": 3, "ref": "main", "sha": source.clone()},
+            "runner": {"id": 4}
+        });
+        assert!(validate_ci_job_document(&job, &direct_fabrication).is_ok());
+        let mut wrong_source = job;
+        wrong_source["source"] = serde_json::json!("web");
+        assert!(validate_ci_job_document(&wrong_source, &direct_fabrication).is_err());
+
+        let mut fork = direct_fabrication.clone();
+        fork.project_path = "customer/redline-core".to_owned();
+        fork.project_url = "http://forge/customer/redline-core".to_owned();
+        fork.pipeline_url = "http://forge/customer/redline-core/-/pipelines/1".to_owned();
+        assert!(validate_ci_trigger(Some(&fork), &source).is_err());
     }
 }

@@ -205,10 +205,16 @@ fn gitlab_daily_certificate_is_pinned_serialized_and_not_retried() {
     assert!(!daily.contains("REDLINEDB_POSTGRES_CERT_CI_SERVICE"));
     assert!(daily.contains("interaction-volume-ci-entrypoint.sh daily"));
     assert!(daily.contains("expire_in: 90 days"));
+    assert!(daily.contains("CI_PIPELINE_SOURCE == \"schedule\""));
+    assert!(daily.contains("CI_PROJECT_PATH == \"jeryu/redline-core\""));
+    assert!(daily.contains("CI_COMMIT_REF_PROTECTED == \"true\""));
+    assert!(!daily.contains("when: manual"));
 
     let wrapper = include_str!("../../../../ops/ci/interaction-volume-cert.sh");
     assert!(wrapper.contains(pinned_digest));
     assert!(wrapper.contains("type=bind"));
+    assert!(wrapper.contains("--read-only"));
+    assert!(wrapper.contains("--log-driver none"));
     assert!(!wrapper.contains("--tmpfs /var/lib/postgresql/data"));
 
     let trigger: serde_json::Value = serde_json::from_str(include_str!(
@@ -216,8 +222,15 @@ fn gitlab_daily_certificate_is_pinned_serialized_and_not_retried() {
     ))
     .unwrap();
     assert_eq!(trigger["daily_job"], "interaction-volume-daily");
+    assert_eq!(trigger["canonical_project_path"], "jeryu/redline-core");
+    assert_eq!(trigger["canonical_branch"], "main");
+    assert_eq!(
+        trigger["permitted_daily_sources"],
+        serde_json::json!(["schedule"])
+    );
     assert_eq!(trigger["artifact_retention_days"], 90);
     assert_eq!(trigger["runtime_trigger_receipt"], "trigger-evidence.json");
+    assert_eq!(trigger["job_token_attestation_endpoint"], "/api/v4/job");
     assert_eq!(
         trigger["interruption_receipt_tests"],
         serde_json::json!(["postgres_timeout", "postgres_sigterm"])
@@ -389,6 +402,15 @@ fn strict_comparison_gate_requires_both_throughput_and_tail_wins() {
         run(EngineLabel::Postgres, 110.0, 90),
     ];
     assert!(!comparisons(&losing, &[1]).unwrap()[0].bounded_result_eligible);
+
+    let zero_reference_latency = vec![
+        run(EngineLabel::Redline, 120.0, 0),
+        run(EngineLabel::Sqlite, 100.0, 0),
+        run(EngineLabel::Postgres, 110.0, 90),
+    ];
+    let comparison = &comparisons(&zero_reference_latency, &[1]).unwrap()[0];
+    assert_eq!(comparison.redline_to_sqlite_p99_ratio, f64::MAX);
+    assert!(!comparison.bounded_result_eligible);
 }
 
 #[test]
@@ -668,6 +690,8 @@ fn execution_evidence_binds_git_binary_postgres_and_shared_mount() {
             docker_daemon_id: None,
             endpoint_host: Some("postgres-cert".to_owned()),
             endpoint_port: Some(5432),
+            rootfs_read_only: false,
+            log_driver: "unobservable".to_owned(),
         },
         storage: StorageContract {
             class: "shared_host_durable_bind".to_owned(),
@@ -709,6 +733,8 @@ fn service_or_memory_storage_can_never_authorize_a_reference_win() {
         docker_daemon_id: None,
         endpoint_host: Some("postgres-cert".to_owned()),
         endpoint_port: Some(5432),
+        rootfs_read_only: false,
+        log_driver: "unobservable".to_owned(),
     };
     let storage = StorageContract {
         class: "unmatched_ci_service".to_owned(),

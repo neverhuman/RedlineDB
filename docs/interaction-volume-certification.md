@@ -21,9 +21,16 @@ The daily profile is CI-only. GitLab invokes the runtime boundary directly:
 bash ops/ci/interaction-volume-ci-entrypoint.sh daily
 ```
 
-That boundary requires `CI=true`, the exact daily job name and checked-out
-commit, a reachable Docker client and server, a permitted pipeline source, and
-nonzero pipeline/job IDs. It writes `trigger-evidence.json`; running
+That boundary accepts only a scheduled job for the canonical
+`jeryu/redline-core` project on its protected `main` branch. It binds the exact
+job name, checked-out commit, server/project/pipeline URLs, and nonzero
+pipeline/job/project/runner IDs from the live CI environment. Direct execution,
+web or merge-request pipelines, unprotected refs, and fork project identities
+fail before Docker is contacted. The entrypoint and Rust certificate each
+authenticate `CI_JOB_TOKEN` against GitLab's `GET /api/v4/job` endpoint and
+require that server-authenticated job, pipeline, project, runner, source, ref,
+and commit identity to match. Fabricating CI-shaped environment variables is
+therefore insufficient. It writes `trigger-evidence.json`; running
 `rtk just interaction-volume-daily` outside that environment fails closed.
 
 ## Runtime identity
@@ -43,7 +50,8 @@ sha256:786dab398303b8ce7cb76b407bb21ef2e4dfbbbd4c6abcf3d29b3130467ffdbc
 
 Before benchmark work starts, Rust independently observes the live Docker
 daemon, full container ID, unique run label, image ID and RepoDigest, health and
-start time, read-write PostgreSQL bind, published endpoint, filesystem mount
+start time, read-only root filesystem, disabled log driver, bounded Docker-reported
+writable layer, read-write PostgreSQL bind, published endpoint, filesystem mount
 identities, physically allocated reserve, and PostgreSQL system/start/data-dir
 identity. Wrapper JSON is not sufficient by itself. Executable adversarial
 cases prove that stale container IDs and substituted ports are rejected.
@@ -75,10 +83,19 @@ allocated 512 MiB file on the same durable filesystem. The process also has a
 stop threshold, and a 32 MiB reserve.
 
 Redline accounts every file below its database root. SQLite accounts its
-database and optional WAL. PostgreSQL accounts its complete default tablespace
-and current WAL directory. Missing required paths, traversal/metadata failures,
-negative sizes, and arithmetic overflow all fail; they never become zero-byte
-observations. These sizes are safety bounds only and never rank engines.
+database and optional WAL. For the eligible owned-container path, PostgreSQL
+recursively accounts the complete `PGDATA` tree from inside the exact
+evidence-bound container, including global catalogs, transaction state,
+temporary files, and `pg_wal`. The container root is read-only, its Docker log
+driver is disabled. The Docker-reported writable layer is measured on every
+sample, must stay at or below 1 MiB, and is added to the same data-plus-WAL cap.
+Thus the persistent database-byte cap covers all customer-data growth; it
+deliberately does not claim Docker control-plane metadata or the two bounded
+in-memory tmpfs mounts. Service-managed PostgreSQL exposes only a
+server-reported default-tablespace-plus-WAL subset and can never authorize a
+comparison. Missing required paths, observations, negative sizes, and
+arithmetic overflow fail; they never become zero-byte observations. These sizes
+are safety bounds only and never rank engines.
 
 The release comparison requires all three roots and the reserve to resolve to
 one non-memory host mount. Service-managed or unmatched storage can demonstrate

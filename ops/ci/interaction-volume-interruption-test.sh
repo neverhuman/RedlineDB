@@ -17,7 +17,8 @@ wait_for_active_postgres() {
       progress="$live_dir/progress.json"
       evidence="$live_dir/execution-evidence.json"
       if [ -s "$progress" ] && [ -s "$evidence" ] && \
-        jq -e '.active_engine == "postgres" and .active_point.engine == "postgres"' \
+        jq -e '.active_engine == "postgres" and .active_point.engine == "postgres" and
+          .lifecycle_phase != "run_start"' \
           "$progress" >/dev/null 2>&1; then
         container_id="$(jq -r '.postgres.container_id // empty' "$evidence")"
         schema_count="$(docker exec "$container_id" psql -U redline_cert -d redline_cert -Atqc \

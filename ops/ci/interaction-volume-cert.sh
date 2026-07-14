@@ -85,17 +85,20 @@ jq -e '
 
 trigger_contract='ops/ci/interaction-volume-trigger-contract.json'
 jq -e --arg profile_sha "$approved_profile_sha256" '
-  .schema_version == "redline.interaction-volume-trigger/v2" and
+  .schema_version == "redline.interaction-volume-trigger/v3" and
   .contract_id == "interaction-volume-daily-v1" and
   .authoritative_ci == ".gitlab-ci.yml" and
   .daily_job == "interaction-volume-daily" and
   .required_smoke_job == "interaction-volume-smoke" and
-  .permitted_daily_sources == ["schedule", "web", "merge_request_event"] and
+  .canonical_project_path == "jeryu/redline-core" and
+  .canonical_branch == "main" and
+  .permitted_daily_sources == ["schedule"] and
   .resource_group == "redline-heavy-benchmark" and
   .retry == 0 and
   (.interruptible | not) and
   .canonical_profile_sha256 == $profile_sha and
   .ci_entrypoint == "ops/ci/interaction-volume-ci-entrypoint.sh" and
+  .job_token_attestation_endpoint == "/api/v4/job" and
   .docker_service_digest == "sha256:aa3df78ecf320f5fafdce71c659f1629e96e9de0968305fe1de670e0ca9176ce" and
   .runtime_trigger_receipt == "trigger-evidence.json" and
   .artifact_retention_days == 90 and
@@ -123,6 +126,8 @@ storage_class='unmatched_ci_service'
 storage_same_mount=false
 storage_durable=false
 postgres_bind_mode='service_managed'
+postgres_rootfs_read_only=false
+postgres_log_driver='unobservable'
 container_name="redline-interaction-cert-${mode}-$$"
 container_run_id="$(printf '%s' "${container_name}-$(date +%s%N)-${RANDOM}" | sha256sum | awk '{print $1}')"
 receipt_name="$mode"
@@ -359,6 +364,8 @@ else
   storage_class='shared_host_durable_bind'
   storage_same_mount=true
   postgres_bind_mode='rw'
+  postgres_rootfs_read_only=true
+  postgres_log_driver='none'
   mkdir -p "$postgres_data_root"
   postgres_publish_ip='127.0.0.1'
   postgres_endpoint_host='127.0.0.1'
@@ -398,6 +405,8 @@ else
       --label "redline.interaction-volume.run_id=${container_run_id}" \
       --memory 3g \
       --pids-limit 512 \
+      --read-only \
+      --log-driver none \
       --mount "type=bind,src=${postgres_data_root},dst=/var/lib/postgresql/data" \
       --tmpfs /var/run/postgresql:rw,nosuid,nodev,size=67108864 \
       --tmpfs /tmp:rw,nosuid,nodev,size=67108864 \
@@ -476,11 +485,12 @@ if [ "$postgres_backend" = docker ]; then
   esac
 
   export REDLINEDB_BENCH_POSTGRES_ISOLATED=1
+  export REDLINEDB_BENCH_POSTGRES_CONTAINER_ID="$container_id"
   export REDLINEDB_BENCH_POSTGRES_URL="host=${postgres_endpoint_host} port=${postgres_port} user=redline_cert password=redline-cert-local-only dbname=redline_cert connect_timeout=5"
 fi
 
 if [ "$mode" = daily ]; then
-  rtk cargo build --release --locked -p redlinedb-bench --bin interaction_volume_cert
+  rtk cargo build --release --locked -p redlinedb-bench --bin interaction_volume_cert 9>&-
   cert_bin='target/release/interaction_volume_cert'
   cert_timeout=7200
   cert_max_file_bytes="$cert_stop_storage_bytes"
@@ -490,7 +500,7 @@ if [ "$mode" = daily ]; then
     --approved-profile "$approved_profile"
   )
 else
-  rtk cargo build --locked -p redlinedb-bench --bin interaction_volume_cert
+  rtk cargo build --locked -p redlinedb-bench --bin interaction_volume_cert 9>&-
   cert_bin='target/debug/interaction_volume_cert'
   cert_timeout=300
   cert_max_file_bytes="$cert_stop_storage_bytes"
@@ -557,7 +567,7 @@ if [ "$postgres_backend" = docker ]; then
   evidence_backend='docker_bind'
 fi
 jq -n \
-  --arg schema 'redline.interaction-volume-execution-evidence/v2' \
+  --arg schema 'redline.interaction-volume-execution-evidence/v3' \
   --arg generator 'ops/ci/interaction-volume-cert.sh' \
   --arg source_commit "$source_commit" \
   --argjson source_dirty "$source_dirty" \
@@ -573,6 +583,8 @@ jq -n \
   --arg docker_daemon_id "$docker_daemon_id" \
   --arg endpoint_host "$postgres_endpoint_host" \
   --argjson endpoint_port "$postgres_port" \
+  --argjson rootfs_read_only "$postgres_rootfs_read_only" \
+  --arg log_driver "$postgres_log_driver" \
   --arg storage_class "$storage_class" \
   --arg local_root "$scratch_dir/dbs" \
   --arg postgres_root "$postgres_data_root" \
@@ -603,7 +615,9 @@ jq -n \
       container_run_id:($container_run_id | if $backend == "docker_bind" then . else null end),
       docker_daemon_id:($docker_daemon_id | if length == 0 then null else . end),
       endpoint_host:($endpoint_host | if length == 0 then null else . end),
-      endpoint_port:$endpoint_port
+      endpoint_port:$endpoint_port,
+      rootfs_read_only:$rootfs_read_only,
+      log_driver:$log_driver
     },
     storage:{
       class:$storage_class,
@@ -670,7 +684,9 @@ if [ -n "$adversarial_case" ]; then
   case "$adversarial_case" in
     stale_container)
       grep -F 'No such object' "$receipt_dir/cert.stderr.log" >/dev/null || \
-        grep -F 'controlled docker inspect' "$receipt_dir/cert.stderr.log" >/dev/null
+        grep -F 'controlled docker inspect' "$receipt_dir/cert.stderr.log" >/dev/null || \
+        grep -F 'storage-accounting container differs from execution evidence' \
+          "$receipt_dir/cert.stderr.log" >/dev/null
       ;;
     endpoint_mismatch)
       grep -F 'is not the live container endpoint' "$receipt_dir/cert.stderr.log" >/dev/null
@@ -697,6 +713,9 @@ jq -e --arg postgres_digest "$postgres_digest" \
   (if .execution_evidence.postgres.backend == "docker_bind" then
      .live_postgres_observation.container_id == .execution_evidence.postgres.container_id and
      .live_postgres_observation.docker_daemon_id == .execution_evidence.postgres.docker_daemon_id and
+     .live_postgres_observation.rootfs_read_only and
+     .live_postgres_observation.log_driver == "none" and
+     .live_postgres_observation.container_size_rw_bytes <= 1048576 and
      .live_postgres_observation.emergency_reserve_allocated_bytes >= .storage_contract.emergency_reserve_bytes
    else .live_postgres_observation == null end)
 ' \
@@ -732,7 +751,10 @@ jq -e --arg evidence_sha "$(sha256sum "$receipt_dir/execution-evidence.json" | a
    .storage_contract == .execution_evidence.storage and
    (if .execution_evidence.postgres.backend == "docker_bind" then
       .live_postgres_observation.container_id == .execution_evidence.postgres.container_id and
-      .live_postgres_observation.published_host_port == .execution_evidence.postgres.endpoint_port
+      .live_postgres_observation.published_host_port == .execution_evidence.postgres.endpoint_port and
+      .live_postgres_observation.rootfs_read_only and
+      .live_postgres_observation.log_driver == "none" and
+      .live_postgres_observation.container_size_rw_bytes <= 1048576
     else .live_postgres_observation == null end)' \
   "$receipt_dir/manifest.json" >/dev/null
 jq -e --arg attempt_sha "$(sha256sum "$receipt_dir/attempt.json" | awk '{print $1}')" \
@@ -740,6 +762,11 @@ jq -e --arg attempt_sha "$(sha256sum "$receipt_dir/attempt.json" | awk '{print $
   "$receipt_dir/manifest.json" >/dev/null
 jq -e '. as $root | (($root.runs | length) > 0) and all($root.runs[]; .plan_integrity_verified and .reopen_verified)' \
   "$receipt_dir/raw-runs.json" >/dev/null
+jq -e 'all(.runs[];
+  if .engine == "postgres" then
+    .engine_stats.storage_accounting_scope == "complete_pgdata_plus_writable_layer"
+  else true end
+)' "$receipt_dir/raw-runs.json" >/dev/null
 jq -e 'all(.runs[];
   (.storage_semantics.cross_engine_comparable | not) and
   .storage_semantics.sampled_inside_timed_window and

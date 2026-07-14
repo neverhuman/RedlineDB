@@ -1713,17 +1713,20 @@ fn comparisons(runs: &[EngineRun], threads: &[usize]) -> Result<Vec<Comparison>>
             let redline_p99 = p99(EngineLabel::Redline)?;
             let sqlite_p99 = p99(EngineLabel::Sqlite)?;
             let postgres_p99 = p99(EngineLabel::Postgres)?;
-            let redline_to_sqlite_throughput_ratio = ratio(redline_throughput, sqlite_throughput);
+            let redline_to_sqlite_throughput_ratio =
+                throughput_ratio(redline_throughput, sqlite_throughput);
             let redline_to_postgres_throughput_ratio =
-                ratio(redline_throughput, postgres_throughput);
-            let redline_to_sqlite_p99_ratio = ratio(redline_p99 as f64, sqlite_p99 as f64);
-            let redline_to_postgres_p99_ratio = ratio(redline_p99 as f64, postgres_p99 as f64);
+                throughput_ratio(redline_throughput, postgres_throughput);
+            let redline_to_sqlite_p99_ratio = latency_ratio(redline_p99 as f64, sqlite_p99 as f64);
+            let redline_to_postgres_p99_ratio =
+                latency_ratio(redline_p99 as f64, postgres_p99 as f64);
             let worst_redline_to_sqlite_throughput_ratio = min_ratio(paired_ratios(
                 runs,
                 *threads,
                 EngineLabel::Redline,
                 EngineLabel::Sqlite,
                 |run| run.metrics.throughput_ops_per_sec,
+                throughput_ratio,
             )?)?;
             let worst_redline_to_postgres_throughput_ratio = min_ratio(paired_ratios(
                 runs,
@@ -1731,6 +1734,7 @@ fn comparisons(runs: &[EngineRun], threads: &[usize]) -> Result<Vec<Comparison>>
                 EngineLabel::Redline,
                 EngineLabel::Postgres,
                 |run| run.metrics.throughput_ops_per_sec,
+                throughput_ratio,
             )?)?;
             let worst_redline_to_sqlite_p99_ratio = max_ratio(paired_ratios(
                 runs,
@@ -1738,6 +1742,7 @@ fn comparisons(runs: &[EngineRun], threads: &[usize]) -> Result<Vec<Comparison>>
                 EngineLabel::Redline,
                 EngineLabel::Sqlite,
                 |run| run.metrics.latency.p99_us as f64,
+                latency_ratio,
             )?)?;
             let worst_redline_to_postgres_p99_ratio = max_ratio(paired_ratios(
                 runs,
@@ -1745,6 +1750,7 @@ fn comparisons(runs: &[EngineRun], threads: &[usize]) -> Result<Vec<Comparison>>
                 EngineLabel::Redline,
                 EngineLabel::Postgres,
                 |run| run.metrics.latency.p99_us as f64,
+                latency_ratio,
             )?)?;
             Ok(Comparison {
                 threads: *threads,
@@ -1777,6 +1783,7 @@ fn paired_ratios(
     numerator: EngineLabel,
     denominator: EngineLabel,
     value: impl Fn(&EngineRun) -> f64,
+    ratio: fn(f64, f64) -> f64,
 ) -> Result<Vec<f64>> {
     let repetitions = runs
         .iter()
@@ -1849,9 +1856,21 @@ fn median_u64(mut values: Vec<u64>) -> Result<u64> {
     Ok(values[values.len() / 2])
 }
 
-fn ratio(numerator: f64, denominator: f64) -> f64 {
-    if denominator <= 0.0 {
+fn throughput_ratio(numerator: f64, denominator: f64) -> f64 {
+    if !numerator.is_finite() || !denominator.is_finite() || numerator <= 0.0 || denominator <= 0.0
+    {
         0.0
+    } else {
+        numerator / denominator
+    }
+}
+
+fn latency_ratio(numerator: f64, denominator: f64) -> f64 {
+    if !numerator.is_finite() || !denominator.is_finite() || numerator < 0.0 || denominator <= 0.0 {
+        // Keep receipts valid finite JSON while making an invalid/zero reference latency a
+        // categorical loss. A shared generic zero-denominator fallback used to report 0.0,
+        // accidentally satisfying the <= 1.0 latency-win gate.
+        f64::MAX
     } else {
         numerator / denominator
     }

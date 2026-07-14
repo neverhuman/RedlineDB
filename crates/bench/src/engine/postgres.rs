@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::process::Command;
 use std::str::FromStr;
 use std::time::Duration;
 
@@ -17,6 +18,9 @@ const CI_SERVICE_ENV: &str = "REDLINEDB_BENCH_POSTGRES_CI_SERVICE";
 const CI_SERVICE_HOST: &str = "postgres-cert";
 const DIND_SERVICE_ENV: &str = "REDLINEDB_BENCH_POSTGRES_DOCKER_DAEMON_SERVICE";
 const DIND_SERVICE_HOST: &str = "docker";
+const CONTAINER_ID_ENV: &str = "REDLINEDB_BENCH_POSTGRES_CONTAINER_ID";
+const PGDATA: &str = "/var/lib/postgresql/data";
+pub(crate) const MAX_CONTAINER_WRITABLE_LAYER_BYTES: u64 = 1_048_576;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PostgresEndpoint {
@@ -219,22 +223,48 @@ impl BenchEngine for PostgresEngine {
 
     fn snapshot(&self) -> Result<EngineSnapshot> {
         let mut client = self.open_client()?;
-        // The certificate owns a dedicated PostgreSQL cluster. Account for its full default
-        // tablespace, not only the active schema/database, so catalogs, indexes, prior-run
-        // residue, and temporary relation growth all consume the same absolute safety budget.
-        let data_bytes = client
-            .query_one("SELECT pg_tablespace_size('pg_default')::bigint", &[])?
-            .get::<_, i64>(0);
-        let data_bytes =
-            u64::try_from(data_bytes).context("PostgreSQL default tablespace size was negative")?;
-        let wal_bytes = client
-            .query_one(
-                "SELECT COALESCE(SUM(size), 0)::bigint FROM pg_ls_waldir()",
-                &[],
-            )?
-            .get::<_, i64>(0);
-        let wal_bytes =
-            u64::try_from(wal_bytes).context("PostgreSQL WAL directory size was negative")?;
+        let ci_service = std::env::var(CI_SERVICE_ENV).as_deref() == Ok("1");
+        let (data_bytes, wal_bytes, accounting_scope) = if ci_service {
+            // Service-managed PostgreSQL is smoke-only and cannot authorize a comparison. Its
+            // server-reported subset remains useful mechanics telemetry, but is labelled as such.
+            let data_bytes = client
+                .query_one("SELECT pg_tablespace_size('pg_default')::bigint", &[])?
+                .get::<_, i64>(0);
+            let wal_bytes = client
+                .query_one(
+                    "SELECT COALESCE(SUM(size), 0)::bigint FROM pg_ls_waldir()",
+                    &[],
+                )?
+                .get::<_, i64>(0);
+            (
+                u64::try_from(data_bytes)
+                    .context("PostgreSQL default tablespace size was negative")?,
+                u64::try_from(wal_bytes).context("PostgreSQL WAL directory size was negative")?,
+                "service_reported_default_tablespace_plus_wal",
+            )
+        } else {
+            // The owned container has a read-only root and no log driver. Count the complete
+            // PGDATA bind recursively from inside that exact evidence-bound container so global
+            // catalogs, transaction state, temp files, and every WAL file share one hard cap.
+            let container_id = std::env::var(CONTAINER_ID_ENV)
+                .context("owned PostgreSQL snapshot lacks its evidence-bound container id")?;
+            validate_container_id(&container_id)?;
+            let total_bytes = docker_apparent_bytes(&container_id, PGDATA)?;
+            let wal_bytes = docker_apparent_bytes(&container_id, &format!("{PGDATA}/pg_wal"))?;
+            let writable_layer_bytes = docker_writable_layer_bytes(&container_id)?;
+            if writable_layer_bytes > MAX_CONTAINER_WRITABLE_LAYER_BYTES {
+                bail!(
+                    "PostgreSQL container writable layer used {writable_layer_bytes} bytes, above \
+                     the {MAX_CONTAINER_WRITABLE_LAYER_BYTES}-byte safety bound"
+                );
+            }
+            let data_bytes = total_bytes
+                .checked_sub(wal_bytes)
+                .context("PostgreSQL WAL bytes exceeded the complete PGDATA footprint")?
+                .checked_add(writable_layer_bytes)
+                .context("PostgreSQL persistent-byte accounting overflowed")?;
+            (data_bytes, wal_bytes, "complete_pgdata_plus_writable_layer")
+        };
         let version: String = client.query_one("SHOW server_version", &[])?.get(0);
         let synchronous_commit: String = client.query_one("SHOW synchronous_commit", &[])?.get(0);
         let full_page_writes: String = client.query_one("SHOW full_page_writes", &[])?.get(0);
@@ -247,6 +277,7 @@ impl BenchEngine for PostgresEngine {
                 "full_page_writes": full_page_writes,
                 "schema": self.schema,
                 "dedicated_server": self.server_identity,
+                "storage_accounting_scope": accounting_scope,
             }),
             fsyncs_issued: None,
             fdatasyncs_issued: None,
@@ -260,6 +291,73 @@ impl BenchEngine for PostgresEngine {
         };
         crate::engine::kv_checksum(&mut conn)
     }
+}
+
+fn validate_container_id(container_id: &str) -> Result<()> {
+    if container_id.len() != 64 || !container_id.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        bail!("PostgreSQL storage container id must be 64 hexadecimal characters");
+    }
+    Ok(())
+}
+
+fn docker_apparent_bytes(container_id: &str, path: &str) -> Result<u64> {
+    let output = Command::new("docker")
+        .args(["exec", "-u", "0", container_id, "du", "-sb", path])
+        .output()
+        .with_context(|| format!("measure complete PostgreSQL storage path {path}"))?;
+    if !output.status.success() {
+        bail!(
+            "complete PostgreSQL storage observation failed for {path}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    parse_du_bytes(&output.stdout, path)
+}
+
+fn docker_writable_layer_bytes(container_id: &str) -> Result<u64> {
+    let output = Command::new("docker")
+        .args(["inspect", "--size", "--format", "{{.SizeRw}}", container_id])
+        .output()
+        .context("measure PostgreSQL container writable layer")?;
+    if !output.status.success() {
+        bail!(
+            "PostgreSQL writable-layer observation failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    parse_single_u64(&output.stdout, "PostgreSQL writable-layer observation")
+}
+
+fn parse_single_u64(output: &[u8], label: &str) -> Result<u64> {
+    let output = std::str::from_utf8(output).with_context(|| format!("{label} was not UTF-8"))?;
+    let mut fields = output.split_whitespace();
+    let value = fields
+        .next()
+        .with_context(|| format!("{label} omitted its byte count"))?
+        .parse::<u64>()
+        .with_context(|| format!("{label} returned an invalid byte count"))?;
+    if fields.next().is_some() {
+        bail!("{label} returned trailing fields");
+    }
+    Ok(value)
+}
+
+fn parse_du_bytes(output: &[u8], path: &str) -> Result<u64> {
+    let output = std::str::from_utf8(output)
+        .with_context(|| format!("PostgreSQL storage observation for {path} was not UTF-8"))?;
+    let mut fields = output.split_whitespace();
+    let bytes = fields
+        .next()
+        .context("PostgreSQL storage observation omitted its byte count")?
+        .parse::<u64>()
+        .context("PostgreSQL storage observation returned an invalid byte count")?;
+    let observed_path = fields
+        .next()
+        .context("PostgreSQL storage observation omitted its path")?;
+    if observed_path != path || fields.next().is_some() {
+        bail!("PostgreSQL storage observation was not bound to {path}");
+    }
+    Ok(bytes)
 }
 
 struct PostgresConn {
@@ -515,7 +613,9 @@ fn validate_dedicated_server(client: &mut Client) -> Result<serde_json::Value> {
 
 #[cfg(test)]
 mod tests {
-    use super::{postgres_placeholders, schema_name};
+    use super::{
+        parse_du_bytes, parse_single_u64, postgres_placeholders, schema_name, validate_container_id,
+    };
     use std::path::Path;
 
     #[test]
@@ -535,5 +635,30 @@ mod tests {
                 .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'_')
         );
         assert_eq!(name, schema_name(Path::new("/tmp/example")));
+    }
+
+    #[test]
+    fn postgres_storage_observation_is_strictly_parsed_and_bound() {
+        let id = "a".repeat(64);
+        assert!(validate_container_id(&id).is_ok());
+        assert!(validate_container_id("short").is_err());
+        assert_eq!(
+            parse_du_bytes(
+                b"123\t/var/lib/postgresql/data\n",
+                "/var/lib/postgresql/data"
+            )
+            .unwrap(),
+            123
+        );
+        assert!(parse_du_bytes(b"123\t/other\n", "/var/lib/postgresql/data").is_err());
+        assert!(
+            parse_du_bytes(
+                b"not-a-size\t/var/lib/postgresql/data\n",
+                "/var/lib/postgresql/data"
+            )
+            .is_err()
+        );
+        assert_eq!(parse_single_u64(b"4096\n", "size").unwrap(), 4096);
+        assert!(parse_single_u64(b"4096 trailing\n", "size").is_err());
     }
 }
