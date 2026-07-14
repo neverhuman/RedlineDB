@@ -39,7 +39,7 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
 - `cargo run --locked -- validate-local-jeryu`: local-source policy validator.
 - `ops/ci/split-host-ci.sh`: local Jeryu required-check runner.
 - `docs/local-jeryu-forge-agent-workflow.md`: PR and status workflow.
-- `docs/release-runbook.md`: canonical v8.0.0 release, SmartCluster, Redline,
+- `docs/release-runbook.md`: canonical v8.0.1 release, SmartCluster, Redline,
   artifact, canary, promotion, and rollback workflow.
 
 SmartCluster is managed as required infrastructure under the declared

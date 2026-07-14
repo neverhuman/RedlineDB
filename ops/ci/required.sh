@@ -25,6 +25,6 @@ cargo test --locked
 cargo run --locked --quiet -- validate-manifest --manifest repos.manifest.toml --check-paths --check-derived
 cargo run --locked --quiet -- source-coverage --manifest repos.manifest.toml
 cargo run --locked --quiet -- validate-local-jeryu --manifest repos.manifest.toml
-cargo run --locked --quiet -- python-boundary
+cargo run --locked --quiet -- python-boundary --manifest repos.manifest.toml
 
 printf 'required ok: jain-split-ops\n'

@@ -1,0 +1,887 @@
+# GENERATED DERIVED MANIFEST: authority is /home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml.
+# Do not edit; regenerate with splitctl sync-derived-manifests.
+canonical_manifest_sha256 = "2942686a4416e593a990a12b982810ea16618b353cd65b8fa969585d4243cb79"
+dependency_tag_suffix = "v8.0.1-split.0"
+formal_ga = false
+generator_version = "splitctl 0.1.0"
+manifest_authority = "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml"
+release_version = "8.0.1"
+repo_family = "jain-split"
+required_repos = [
+    "jain",
+    "jain-docs",
+    "jain-domain",
+    "jain-math",
+    "jain-contracts",
+    "jain-catboost",
+    "jain-xgboost",
+    "jain-lightgbm",
+    "jain-jable",
+    "jain-battle-gpu",
+    "jain-starforge",
+    "jain-core",
+    "jain-llm",
+    "jain-agent",
+    "jain-jnoccio",
+    "jain-zyal",
+    "jain-jailgun",
+    "jain-research",
+    "jain-report",
+    "jain-tui",
+    "jain-cli",
+    "jain-web",
+    "jain-python",
+    "jain-model-zoo",
+    "jain-ops",
+    "jain-deploy",
+]
+retired_paths = [
+    ".cargo/**",
+    ".dockerignore",
+    ".gitattributes",
+    ".github/**",
+    ".gitignore",
+    ".grype.yaml",
+    "AGENTS.md",
+    "Cargo.lock",
+    "Cargo.toml",
+    "CHANGELOG.md",
+    "Justfile",
+    "README.md",
+    "RELEASE.md",
+    "RELEASE_PROCESS.md",
+    "RESULTS.md",
+    "ROLLBACK.md",
+    "agent/AGENTS.md",
+    "agent/JANKURAI_STANDARD.md",
+    "agent/audit-policy.toml",
+    "agent/boundaries.toml",
+    "agent/generated-zones.toml",
+    "agent/jankurai-badge.json",
+    "agent/jankurai-badge.svg",
+    "agent/owner-map.json",
+    "agent/proof-lanes.toml",
+    "agent/repair-patterns.toml",
+    "agent/security-policy.toml",
+    "agent/standard-version.toml",
+    "agent/test-map.json",
+    "agent/tool-adoption.toml",
+    "ops/AGENTS.md",
+    "ops/ci/**",
+    "ops/git-hooks/pre-push",
+    "reference/vendor",
+    "renovate.json",
+    "rust-toolchain.toml",
+    "scripts/ci-*.sh",
+    "scripts/prune_vendor.sh",
+    "tools/security-lane.sh",
+]
+rollback_target = "7.0.6"
+rollout_wave_order = [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+]
+sagemaker = "N/A"
+schema_version = "1"
+source_branch = "apex"
+source_root = "/home/ubuntu/jain_small"
+source_sha = "cc27936eb45006bda0cae85b0f578f4d5985991d"
+split_root = "/home/ubuntu/jain-split"
+status = "candidate"
+umbrella_repo = "jain"
+workers = 40
+
+[control_plane]
+branch = "main"
+name = "jain-split-ops"
+path = "/home/ubuntu/jain-split/jain-split-ops"
+remote = "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git"
+required_check = "jain-split-ops/required"
+role = "family-control-plane"
+
+[derived_manifests.deploy]
+consumer_path = "/home/ubuntu/jain-split/jain-deploy/repos.manifest.toml"
+path = "derived-manifests/deploy.toml"
+
+[derived_manifests.portal]
+consumer_path = "/home/ubuntu/jain-split/jain/repos.manifest.toml"
+path = "derived-manifests/portal.toml"
+
+[[excluded_path]]
+name = "jain-tools"
+owner = "workspace-ops"
+path = "/home/ubuntu/jain-split/jain-tools"
+reason = "local tooling checkout; not a managed Jain family product"
+
+[[excluded_path]]
+name = "jain-feature-expansion"
+owner = "feature-expansion"
+path = "/home/ubuntu/jain-split/jain-feature-expansion"
+reason = "feature branch checkout; promotion requires reviewed family repository work"
+
+[[excluded_path]]
+name = "jain-web-brand-favicon"
+owner = "web"
+path = "/home/ubuntu/jain-split/jain-web-brand-favicon"
+reason = "branding worktree; excluded from release source coverage"
+
+[external_dependencies.redline]
+identity_status = "pending"
+owner = "jeryu"
+reason = "release database dependency; immutable identity must be bound after the reviewed successor tag exists"
+remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
+repository = "redline-core"
+required = true
+rollout_wave = 0
+
+[family]
+name = "jain-split"
+registration = "jeryu-family"
+
+[[infrastructure_repo]]
+cargo_members = [
+    "crates/jain-smartcluster-core",
+    "crates/jain-smartcluster",
+    "crates/jain-smartcluster-daemon",
+    "crates/scq",
+    "crates/jain-worker",
+]
+copy_paths = [
+    "crates/jain-smartcluster-core",
+    "crates/jain-smartcluster",
+    "crates/jain-smartcluster-daemon",
+    "crates/scq",
+    "crates/jain-worker",
+    "handlers",
+    "fuzz",
+    "smartcluster.example.toml",
+]
+cross_repo_deps = []
+default_branch = "main"
+dependency_edges = [
+    "jain-web",
+    "jain-cli",
+    "jain-deploy",
+]
+dependency_resolution = "immutable-git-tag"
+family_registered = true
+forge_owner = "jain-split"
+forge_slug = "jain-split/jain-smartcluster"
+immutable_tag = "jain-smartcluster-v8.0.1-split.0"
+kind = "required-infrastructure"
+name = "jain-smartcluster"
+note = "Durable local scheduler, daemon, client, worker protocol, and scq CLI."
+owner = "platform-infrastructure"
+path = "/home/ubuntu/jain-split/jain-smartcluster"
+profile = "rust-workspace"
+remote = "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git"
+required = true
+required_check = "jain-smartcluster/required"
+role = "infrastructure-runtime"
+rollout_wave = 5
+source_paths = [
+    "crates/jain-smartcluster-core/**",
+    "crates/jain-smartcluster/**",
+    "crates/jain-smartcluster-daemon/**",
+    "crates/scq/**",
+    "crates/jain-worker/**",
+    "handlers/**",
+    "fuzz/**",
+    "smartcluster.example.toml",
+]
+
+[infrastructure_repo.deployment]
+config_path = "/etc/jain-smartcluster/scqd.toml"
+daemon_binary = "scqd"
+required = true
+socket_path = "/run/jain-smartcluster/scqd.sock"
+worker_binary = "jain-worker"
+worker_path = "/usr/libexec/jain/jain-worker"
+
+[nested_families.redline]
+container_path = "/home/ubuntu/jain-split/redline-split"
+control_plane = "/home/ubuntu/jain-split/redline-split-ops"
+engine_identity_status = "pending"
+engine_remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
+engine_repository = "redline-core"
+family = "redline-split"
+manifest_path = "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml"
+required = true
+
+[[repo]]
+cargo_members = []
+copy_paths = []
+cross_repo_deps = []
+current_tag = "jain-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain"
+mirror_github_main = true
+name = "jain"
+note = "Split-family portal and orchestration surface."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain"
+profile = "public-portal"
+required_check = "jain/required"
+role = "portal"
+rollout_wave = 9
+source_paths = []
+
+[[repo]]
+cargo_members = []
+copy_paths = ["docs"]
+cross_repo_deps = []
+current_tag = "jain-docs-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-docs"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-docs"
+mirror_github_main = true
+name = "jain-docs"
+note = "Product documentation and manual sources."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-docs"
+profile = "custom"
+required_check = "jain-docs/required"
+role = "docs"
+rollout_wave = 7
+source_paths = ["docs/**"]
+
+[[repo]]
+cargo_members = ["crates/domain"]
+copy_paths = ["crates/domain"]
+cross_repo_deps = []
+current_tag = "jain-domain-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-domain"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-domain"
+mirror_github_main = true
+name = "jain-domain"
+note = "Shared domain error and repair-hint contract."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-domain"
+profile = "rust-workspace"
+required_check = "jain-domain/required"
+role = "domain"
+rollout_wave = 1
+source_paths = ["crates/domain/**"]
+
+[[repo]]
+cargo_members = ["crates/feat-math"]
+copy_paths = ["crates/feat-math"]
+cross_repo_deps = []
+current_tag = "jain-math-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-math"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-math"
+mirror_github_main = true
+name = "jain-math"
+note = "Feature DSL and pure math utilities."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-math"
+profile = "rust-workspace"
+required_check = "jain-math/required"
+role = "math"
+rollout_wave = 1
+source_paths = ["crates/feat-math/**"]
+
+[[repo]]
+cargo_members = []
+copy_paths = ["contracts"]
+cross_repo_deps = ["jain-core"]
+current_tag = "jain-contracts-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-contracts"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-contracts"
+mirror_github_main = true
+name = "jain-contracts"
+note = "Published mirror of jain-core contracts."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-contracts"
+profile = "mirror"
+required_check = "jain-contracts/required"
+role = "contracts"
+rollout_wave = 4
+source_paths = []
+
+[[repo]]
+cargo_members = [
+    "crates/catboost-sys",
+    "crates/catboost",
+]
+copy_paths = [
+    "crates/catboost-sys",
+    "crates/catboost",
+    "tests/cbtest.c",
+    "scripts/prune_vendor.sh",
+]
+cross_repo_deps = []
+current_tag = "jain-catboost-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-catboost"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-catboost"
+mirror_github_main = true
+name = "jain-catboost"
+note = "CatBoost FFI binding and safe Rust wrapper."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-catboost"
+profile = "rust-workspace"
+required_check = "jain-catboost/required"
+role = "native-learner"
+rollout_wave = 1
+source_paths = [
+    "crates/catboost-sys/**",
+    "crates/catboost/**",
+    "tests/cbtest.c",
+]
+
+[[repo]]
+cargo_members = ["crates/xgboost"]
+copy_paths = [
+    "crates/xgboost",
+    "scripts/prune_vendor.sh",
+]
+cross_repo_deps = []
+current_tag = "jain-xgboost-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-xgboost"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-xgboost"
+mirror_github_main = true
+name = "jain-xgboost"
+note = "XGBoost FFI binding."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-xgboost"
+profile = "rust-workspace"
+required_check = "jain-xgboost/required"
+role = "native-learner"
+rollout_wave = 1
+source_paths = ["crates/xgboost/**"]
+
+[[repo]]
+cargo_members = ["crates/lightgbm"]
+copy_paths = [
+    "crates/lightgbm",
+    "scripts/prune_vendor.sh",
+]
+cross_repo_deps = []
+current_tag = "jain-lightgbm-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-lightgbm"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-lightgbm"
+mirror_github_main = true
+name = "jain-lightgbm"
+note = "LightGBM FFI binding."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-lightgbm"
+profile = "rust-workspace"
+required_check = "jain-lightgbm/required"
+role = "native-learner"
+rollout_wave = 1
+source_paths = ["crates/lightgbm/**"]
+
+[[repo]]
+authored = true
+cargo_members = ["crates/jable"]
+copy_paths = []
+cross_repo_deps = []
+current_tag = "jain-jable-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-jable"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-jable"
+mirror_github_main = true
+name = "jain-jable"
+note = "Pure-Rust Jable scalar tabular regressor."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-jable"
+profile = "rust-workspace"
+required_check = "jain-jable/required"
+role = "native-learner"
+rollout_wave = 2
+source_paths = []
+
+[[repo]]
+cargo_members = ["crates/battle-gpu"]
+copy_paths = ["crates/battle-gpu"]
+cross_repo_deps = ["jain-math"]
+current_tag = "jain-battle-gpu-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-battle-gpu"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-battle-gpu"
+mirror_github_main = true
+name = "jain-battle-gpu"
+note = "Optional GPU kernel factory over feat-math."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-battle-gpu"
+profile = "rust-workspace"
+release_feature_sets = [
+    [
+    "gpu",
+    "gpu-dynamic-loading",
+],
+    ["gpu-dynamic-linking"],
+]
+release_package = "battle-gpu"
+required_check = "jain-battle-gpu/required"
+role = "gpu"
+rollout_wave = 2
+source_paths = ["crates/battle-gpu/**"]
+
+[[repo]]
+cargo_members = ["crates/starforge"]
+copy_paths = [
+    "crates/starforge",
+    "artifacts/starforge",
+    "artifacts/foundation",
+    "scripts/compress-starforge-weights.sh",
+    "scripts/prepare-starforge-artifacts.sh",
+]
+cross_repo_deps = []
+current_tag = "jain-starforge-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-starforge"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-starforge"
+mirror_github_main = false
+name = "jain-starforge"
+note = "Starforge inference code and all required safetensors weights."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-starforge"
+profile = "rust-workspace-lfs"
+required_check = "jain-starforge/required"
+role = "starforge"
+rollout_wave = 2
+source_paths = [
+    "crates/starforge/**",
+    "artifacts/starforge/**",
+    "artifacts/foundation/**",
+    "scripts/compress-starforge-weights.sh",
+    "scripts/prepare-starforge-artifacts.sh",
+]
+
+[[repo]]
+cargo_members = ["crates/feat-core"]
+copy_paths = [
+    "crates/feat-core",
+    "contracts",
+]
+cross_repo_deps = [
+    "jain-domain",
+    "jain-math",
+    "jain-catboost",
+    "jain-xgboost",
+    "jain-lightgbm",
+    "jain-jable",
+    "jain-battle-gpu",
+    "jain-starforge",
+]
+current_tag = "jain-core-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-core"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-core"
+mirror_github_main = true
+name = "jain-core"
+note = "Pipeline hub and canonical progress-event contract producer."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-core"
+profile = "rust-workspace"
+release_feature_sets = [
+    [
+    "ci-smoke",
+    "catboost",
+    "xgboost",
+    "lightgbm",
+    "jable",
+    "jable_required_smoke",
+    "starforge-cpu",
+    "hyperion-cpu",
+    "jope",
+    "invention-gpu",
+],
+    [
+    "ci-smoke",
+    "catboost",
+    "xgboost",
+    "lightgbm",
+    "jable",
+    "jable_required_smoke",
+    "starforge-cpu",
+    "starforge-cuda",
+    "hyperion-cpu",
+    "hyperion-cuda",
+    "jope",
+],
+]
+release_package = "feat-core"
+required_check = "jain-core/required"
+role = "core"
+rollout_wave = 3
+source_paths = [
+    "crates/feat-core/**",
+    "contracts/**",
+]
+
+[[repo]]
+authored = true
+cargo_members = ["crates/jain-llm"]
+copy_paths = []
+cross_repo_deps = []
+current_tag = "jain-llm-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-llm"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-llm"
+mirror_github_main = true
+name = "jain-llm"
+note = "Native Jain LLM provider interfaces and routing contracts."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-llm"
+profile = "rust-workspace"
+required_check = "jain-llm/required"
+role = "llm"
+rollout_wave = 4
+source_paths = ["crates/jain-llm/**"]
+
+[[repo]]
+authored = true
+cargo_members = ["."]
+copy_paths = []
+cross_repo_deps = ["jain-llm"]
+current_tag = "jain-agent-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-agent"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-agent"
+mirror_github_main = true
+name = "jain-agent"
+note = "Governed Jekko runtime and tool contracts."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-agent"
+profile = "rust-workspace"
+required_check = "jain-agent/required"
+role = "agent"
+rollout_wave = 5
+source_paths = ["src/**"]
+
+[[repo]]
+authored = true
+cargo_members = ["."]
+copy_paths = []
+cross_repo_deps = ["jain-llm"]
+current_tag = "jain-jnoccio-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-jnoccio"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-jnoccio"
+mirror_github_main = true
+name = "jain-jnoccio"
+note = "Provider adapters, probes, routing, and usage metrics."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-jnoccio"
+profile = "rust-workspace"
+required_check = "jain-jnoccio/required"
+role = "jnoccio"
+rollout_wave = 5
+source_paths = ["src/**"]
+
+[[repo]]
+authored = true
+cargo_members = ["."]
+copy_paths = []
+cross_repo_deps = []
+current_tag = "jain-zyal-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-zyal"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-zyal"
+mirror_github_main = true
+name = "jain-zyal"
+note = "ZYAL 2.6 compiler and durable supervisor."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-zyal"
+profile = "rust-workspace"
+required_check = "jain-zyal/required"
+role = "zyal"
+rollout_wave = 4
+source_paths = ["src/**"]
+
+[[repo]]
+authored = true
+cargo_members = ["."]
+copy_paths = []
+cross_repo_deps = []
+current_tag = "jain-jailgun-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-jailgun"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-jailgun"
+mirror_github_main = true
+name = "jain-jailgun"
+note = "Managed browser accounts and Jailgun lifecycle."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-jailgun"
+profile = "rust-workspace"
+required_check = "jain-jailgun/required"
+role = "jailgun"
+rollout_wave = 4
+source_paths = ["src/**"]
+
+[[repo]]
+authored = true
+cargo_members = ["crates/jain-research"]
+copy_paths = []
+cross_repo_deps = [
+    "jain-llm",
+    "jain-math",
+]
+current_tag = "jain-research-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-research"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-research"
+mirror_github_main = true
+name = "jain-research"
+note = "AutoResearch and theory-chase orchestration contracts."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-research"
+profile = "rust-workspace"
+required_check = "jain-research/required"
+role = "research"
+rollout_wave = 5
+source_paths = ["crates/jain-research/**"]
+
+[[repo]]
+cargo_members = ["crates/feat-report"]
+copy_paths = ["crates/feat-report"]
+cross_repo_deps = [
+    "jain-core",
+    "jain-math",
+]
+current_tag = "jain-report-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-report"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-report"
+mirror_github_main = true
+name = "jain-report"
+note = "Executive report rendering and templates."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-report"
+profile = "rust-workspace"
+required_check = "jain-report/required"
+role = "report"
+rollout_wave = 5
+source_paths = ["crates/feat-report/**"]
+
+[[repo]]
+cargo_members = ["crates/feat-tui"]
+copy_paths = ["crates/feat-tui"]
+cross_repo_deps = ["jain-core"]
+current_tag = "jain-tui-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-tui"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-tui"
+mirror_github_main = true
+name = "jain-tui"
+note = "Reusable ratatui dashboard layer."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-tui"
+profile = "rust-workspace"
+required_check = "jain-tui/required"
+role = "tui"
+rollout_wave = 5
+source_paths = ["crates/feat-tui/**"]
+
+[[repo]]
+cargo_members = ["crates/feat-cli"]
+copy_paths = ["crates/feat-cli"]
+cross_repo_deps = [
+    "jain-core",
+    "jain-math",
+    "jain-report",
+    "jain-tui",
+    "jain-battle-gpu",
+]
+current_tag = "jain-cli-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-cli"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-cli"
+mirror_github_main = true
+name = "jain-cli"
+note = "Product CLI and SageMaker entrypoint binaries."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-cli"
+profile = "rust-workspace"
+required_check = "jain-cli/required"
+role = "cli"
+rollout_wave = 6
+source_paths = ["crates/feat-cli/**"]
+
+[[repo]]
+cargo_members = ["crates/feat-web"]
+copy_paths = [
+    "crates/feat-web",
+    "apps/web",
+    "contracts",
+    "db",
+]
+cross_repo_deps = [
+    "jain-core",
+    "jain-report",
+    "jain-battle-gpu",
+]
+current_tag = "jain-web-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-web"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-web"
+mirror_github_main = true
+name = "jain-web"
+note = "Local web server and React cockpit."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-web"
+profile = "rust-node-hybrid"
+required_check = "jain-web/required"
+role = "web"
+rollout_wave = 6
+source_paths = [
+    "crates/feat-web/**",
+    "apps/web/**",
+    "db/**",
+]
+
+[[repo]]
+cargo_members = []
+copy_paths = [
+    "python/ai-service",
+    "contracts",
+]
+cross_repo_deps = ["jain-contracts"]
+current_tag = "jain-python-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-python"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-python"
+mirror_github_main = true
+name = "jain-python"
+note = "Transport-only Python SDK and SageMaker helpers."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-python"
+profile = "python"
+required_check = "jain-python/required"
+role = "python"
+rollout_wave = 6
+source_paths = ["python/ai-service/**"]
+
+[[repo]]
+cargo_members = []
+copy_paths = [
+    "reference/ported",
+    "ops/parity",
+]
+cross_repo_deps = []
+current_tag = "jain-model-zoo-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-model-zoo"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-model-zoo"
+mirror_github_main = false
+name = "jain-model-zoo"
+note = "Frozen reference ports, oracle fixtures, and parity harness."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-model-zoo"
+profile = "custom"
+required_check = "jain-model-zoo/required"
+role = "model-zoo"
+rollout_wave = 7
+source_paths = [
+    "reference/ported/**",
+    "ops/parity/**",
+]
+
+[[repo]]
+cargo_members = []
+copy_paths = [
+    "ops/apex",
+    "agent/zyal",
+    "scripts/global_bench.sh",
+    "scripts/manifest_reg_mini.txt",
+    "scripts/manifest_reg_smalln.txt",
+    "scripts/manifest_regression.txt",
+]
+cross_repo_deps = []
+current_tag = "jain-ops-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-ops"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-ops"
+mirror_github_main = true
+name = "jain-ops"
+note = "Apex research campaigns, zyal templates, and bench manifests."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-ops"
+profile = "custom"
+required_check = "jain-ops/required"
+role = "ops"
+rollout_wave = 7
+source_paths = [
+    "ops/apex/**",
+    "agent/zyal/**",
+    "scripts/global_bench.sh",
+    "scripts/manifest_reg_mini.txt",
+    "scripts/manifest_reg_smalln.txt",
+    "scripts/manifest_regression.txt",
+]
+
+[[repo]]
+cargo_members = [
+    "deployment/ops/sagemaker-ci",
+    "deployment/product",
+    "crates/jain-deploy-engine",
+]
+copy_paths = [
+    "deployment/ops",
+    "contracts",
+    "scripts/get_data.sh",
+    "scripts/sync-base-digests.sh",
+]
+cross_repo_deps = ["jain-cli"]
+current_tag = "jain-deploy-v8.0.1-split.0"
+default_branch = "main"
+github_slug = "neverhuman/jain-deploy"
+has_jeryu_std = true
+jeryu_slug = "jeryu/jain-deploy"
+mirror_github_main = true
+name = "jain-deploy"
+note = "Release authority and integration home."
+onboarded = false
+path = "/home/ubuntu/jain-split/jain-deploy"
+profile = "deploy"
+required_check = "jain-deploy/required"
+role = "deploy"
+rollout_wave = 8
+source_paths = [
+    "deployment/ops/**",
+    "crates/jain-deploy-engine/**",
+    "scripts/get_data.sh",
+    "scripts/sync-base-digests.sh",
+]

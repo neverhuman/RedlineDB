@@ -11,6 +11,6 @@ log 'fast lane: Rust control-plane build and tests'
 cargo fmt -- --check
 cargo test --locked
 cargo run --locked --quiet -- validate-local-jeryu --manifest repos.manifest.toml --skip-remotes
-cargo run --locked --quiet -- python-boundary
+cargo run --locked --quiet -- python-boundary --manifest repos.manifest.toml
 
 printf 'fast ok: jain-split-ops\n'

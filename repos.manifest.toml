@@ -113,9 +113,18 @@ registration = "jeryu-family"
 owner = "jeryu"
 repository = "redline-core"
 remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
-immutable_tag = "redline-core-v4.1.0-jain.1"
+identity_status = "pending"
+rollout_wave = 0
 required = true
-reason = "release database dependency"
+reason = "release database dependency; immutable identity must be bound after the reviewed successor tag exists"
+
+[derived_manifests.portal]
+path = "derived-manifests/portal.toml"
+consumer_path = "/home/ubuntu/jain-split/jain/repos.manifest.toml"
+
+[derived_manifests.deploy]
+path = "derived-manifests/deploy.toml"
+consumer_path = "/home/ubuntu/jain-split/jain-deploy/repos.manifest.toml"
 
 [control_plane]
 name = "jain-split-ops"
@@ -133,7 +142,7 @@ control_plane = "/home/ubuntu/jain-split/redline-split-ops"
 required = true
 engine_repository = "redline-core"
 engine_remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
-engine_tag = "redline-core-v4.1.0-jain.1"
+engine_identity_status = "pending"
 
 [[infrastructure_repo]]
 path = "/home/ubuntu/jain-split/jain-smartcluster"

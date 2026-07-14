@@ -103,7 +103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             source_coverage(&manifest, json_output)?;
         }
-        Some("python-boundary") => python_boundary()?,
+        Some("python-boundary") => python_boundary(args.collect())?,
         Some("jeryu-doctor") => {
             let mut manifest = None;
             let mut skip_remotes = false;
@@ -145,6 +145,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("validate-manifest") => validate_manifest_command(args.collect())?,
         Some("validate-family") => preflight(args.collect())?,
         Some("validate-family-lock") => validate_family_lock(args.collect())?,
+        Some("validate-deploy-lock") => validate_deploy_lock_command(args.collect())?,
         Some("regenerate-lock") => regenerate_lock(args.collect())?,
         Some("release-preflight") => release_preflight(args.collect())?,
         Some("release-snapshot") => release_snapshot(args.collect())?,
@@ -155,7 +156,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | validate-deploy-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--manifest PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -857,6 +858,14 @@ fn validate_manifest_data(
     if string(data, "repo_family").as_deref() != Some("jain-split") {
         errors.push("repo_family must be jain-split".to_owned());
     }
+    match string(data, "dependency_tag_suffix") {
+        Some(value) => {
+            if let Err(error) = validate_split_tag(&value, "v", RELEASE_VERSION) {
+                errors.push(format!("dependency_tag_suffix: {error}"));
+            }
+        }
+        None => errors.push("dependency_tag_suffix is required".to_owned()),
+    }
     let split_root = string(data, "split_root").map(PathBuf::from);
     if let Some(split_root) = &split_root {
         let expected_authority = split_root.join("jain-split-ops/repos.manifest.toml");
@@ -917,12 +926,15 @@ fn validate_manifest_data(
         if string(raw, "required_check").as_deref() != Some(format!("{name}/required").as_str()) {
             errors.push(format!("{name}: required_check must be {name}/required"));
         }
-        if string(raw, "current_tag").as_deref()
-            != Some(format!("{name}-v{RELEASE_VERSION}-split.0").as_str())
-        {
-            errors.push(format!(
-                "{name}: current_tag must be {name}-v{RELEASE_VERSION}-split.0"
-            ));
+        match string(raw, "current_tag") {
+            Some(value) => {
+                if let Err(error) =
+                    validate_split_tag(&value, &format!("{name}-v"), RELEASE_VERSION)
+                {
+                    errors.push(format!("{name}: current_tag: {error}"));
+                }
+            }
+            None => errors.push(format!("{name}: current_tag is required")),
         }
         if raw.get("has_jeryu_std").and_then(toml::Value::as_bool) != Some(true) {
             errors.push(format!("{name}: has_jeryu_std must be true"));
@@ -981,11 +993,15 @@ fn validate_manifest_data(
                 errors.push(format!("jain-smartcluster: {key} must be {expected}"));
             }
         }
-        let expected_tag = format!("jain-smartcluster-v{RELEASE_VERSION}-split.0");
-        if string(raw, "immutable_tag").as_deref() != Some(expected_tag.as_str()) {
-            errors.push(format!(
-                "jain-smartcluster: immutable_tag must be {expected_tag}"
-            ));
+        match string(raw, "immutable_tag") {
+            Some(value) => {
+                if let Err(error) =
+                    validate_split_tag(&value, "jain-smartcluster-v", RELEASE_VERSION)
+                {
+                    errors.push(format!("jain-smartcluster: immutable_tag: {error}"));
+                }
+            }
+            None => errors.push("jain-smartcluster: immutable_tag is required".to_owned()),
         }
         let expected_infra_remote = format!("{INFRA_REMOTE_PREFIX}jain-smartcluster.git");
         if declared_remote(raw).as_deref() != Some(expected_infra_remote.as_str()) {
@@ -1008,11 +1024,13 @@ fn validate_manifest_data(
         .get("external_dependencies")
         .and_then(|value| value.get("redline"))
         .ok_or("manifest must declare external_dependencies.redline")?;
-    if string(redline, "immutable_tag").as_deref() != Some("redline-core-v4.1.0-jain.1")
+    if string(redline, "owner").as_deref() != Some("jeryu")
+        || string(redline, "repository").as_deref() != Some("redline-core")
         || string(redline, "remote").as_deref()
             != Some("http://127.0.0.1:8787/git/jeryu/redline-core.git")
+        || redline.get("required").and_then(toml::Value::as_bool) != Some(true)
     {
-        errors.push("redline dependency must use the immutable local-Jeryu v4.1.0 tag".to_owned());
+        errors.push("redline dependency must be the required local-Jeryu redline-core".to_owned());
     }
     let nested = data
         .get("nested_families")
@@ -1031,7 +1049,6 @@ fn validate_manifest_data(
             "engine_remote",
             "http://127.0.0.1:8787/git/jeryu/redline-core.git",
         ),
-        ("engine_tag", "redline-core-v4.1.0-jain.1"),
     ] {
         if string(nested, key).as_deref() != Some(expected) {
             errors.push(format!("nested_families.redline.{key} must be {expected}"));
@@ -1039,6 +1056,73 @@ fn validate_manifest_data(
     }
     if nested.get("required").and_then(toml::Value::as_bool) != Some(true) {
         errors.push("nested_families.redline.required must be true".to_owned());
+    }
+    match string(redline, "identity_status").as_deref() {
+        Some("pending") => {
+            if redline.get("immutable_tag").is_some() || nested.get("engine_tag").is_some() {
+                errors.push(
+                    "pending Redline identity must not fabricate immutable_tag or engine_tag"
+                        .to_owned(),
+                );
+            }
+            if string(nested, "engine_identity_status").as_deref() != Some("pending") {
+                errors.push(
+                    "nested_families.redline.engine_identity_status must be pending".to_owned(),
+                );
+            }
+        }
+        Some("bound") => {
+            let tag = string(redline, "immutable_tag").unwrap_or_default();
+            if let Err(error) = validate_redline_tag(&tag) {
+                errors.push(error.to_string());
+            }
+            if string(nested, "engine_identity_status").as_deref() != Some("bound") {
+                errors.push(
+                    "nested_families.redline.engine_identity_status must be bound".to_owned(),
+                );
+            }
+            if string(nested, "engine_tag").as_deref() != Some(tag.as_str()) {
+                errors.push(
+                    "nested_families.redline.engine_tag must match the bound Redline identity"
+                        .to_owned(),
+                );
+            }
+        }
+        Some(other) => errors.push(format!(
+            "external_dependencies.redline.identity_status is invalid: {other}"
+        )),
+        None => errors.push("external_dependencies.redline.identity_status is required".to_owned()),
+    }
+    for (target, consumer_repo) in [("portal", "jain"), ("deploy", "jain-deploy")] {
+        let declaration = data
+            .get("derived_manifests")
+            .and_then(|value| value.get(target));
+        let expected_review = format!("derived-manifests/{target}.toml");
+        let expected_consumer = split_root
+            .as_ref()
+            .map(|root| root.join(consumer_repo).join("repos.manifest.toml"));
+        if declaration
+            .and_then(|value| string(value, "path"))
+            .as_deref()
+            != Some(expected_review.as_str())
+        {
+            errors.push(format!(
+                "derived_manifests.{target}.path must be the tracked review artifact {expected_review}"
+            ));
+        }
+        if declaration
+            .and_then(|value| string(value, "consumer_path"))
+            .map(PathBuf::from)
+            != expected_consumer
+        {
+            errors.push(format!(
+                "derived_manifests.{target}.consumer_path must be {}",
+                expected_consumer
+                    .as_deref()
+                    .unwrap_or(Path::new("<missing split_root>"))
+                    .display()
+            ));
+        }
     }
     validate_rollout_waves(data, &mut errors)?;
     if !errors.is_empty() {
@@ -1056,7 +1140,35 @@ fn validate_rollout_waves(
     data: &toml::Value,
     errors: &mut Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    let mut order = Vec::new();
+    let mut order_seen = std::collections::BTreeSet::new();
+    match data
+        .get("rollout_wave_order")
+        .and_then(toml::Value::as_array)
+    {
+        Some(values) => {
+            for value in values {
+                let Some(wave) = value.as_integer() else {
+                    errors.push("rollout_wave_order must contain only integers".to_owned());
+                    continue;
+                };
+                if wave < 0 {
+                    errors.push(format!("rollout_wave_order contains negative wave {wave}"));
+                }
+                if !order_seen.insert(wave) {
+                    errors.push(format!("rollout_wave_order repeats wave {wave}"));
+                }
+                order.push(wave);
+            }
+        }
+        None => errors.push("rollout_wave_order is required".to_owned()),
+    }
+    if order.windows(2).any(|pair| pair[0] >= pair[1]) {
+        errors.push("rollout_wave_order must be strictly increasing".to_owned());
+    }
+
     let mut waves = std::collections::BTreeMap::new();
+    let mut dependencies = std::collections::BTreeMap::new();
     for raw in manifest_repos(data)? {
         let Some(name) = string(raw, "name") else {
             continue;
@@ -1065,15 +1177,60 @@ fn validate_rollout_waves(
             errors.push(format!("{name}: rollout_wave is required"));
             continue;
         };
+        if wave < 0 {
+            errors.push(format!("{name}: rollout_wave must be nonnegative"));
+        }
         waves.insert(name, wave);
+        dependencies.insert(
+            string(raw, "name").unwrap_or_default(),
+            strings(raw, "cross_repo_deps"),
+        );
     }
-    let external = data
+    let external_rows = data
         .get("external_dependencies")
         .and_then(toml::Value::as_table)
         .into_iter()
         .flat_map(toml::map::Map::values)
-        .filter_map(|dependency| string(dependency, "repository"))
+        .collect::<Vec<_>>();
+    for raw in external_rows {
+        let Some(name) = string(raw, "repository") else {
+            errors.push("external dependency is missing repository".to_owned());
+            continue;
+        };
+        let Some(wave) = raw.get("rollout_wave").and_then(toml::Value::as_integer) else {
+            errors.push(format!("{name}: external rollout_wave is required"));
+            continue;
+        };
+        if wave < 0 {
+            errors.push(format!("{name}: rollout_wave must be nonnegative"));
+        }
+        if waves.insert(name.clone(), wave).is_some() {
+            errors.push(format!("duplicate rollout node: {name}"));
+        }
+        dependencies.insert(name.clone(), Vec::new());
+    }
+
+    let used_waves = waves
+        .values()
+        .copied()
         .collect::<std::collections::BTreeSet<_>>();
+    for wave in &used_waves {
+        if !order_seen.contains(wave) {
+            errors.push(format!(
+                "rollout wave {wave} is not reachable from rollout_wave_order"
+            ));
+        }
+    }
+    for wave in &order_seen {
+        if !used_waves.contains(wave) {
+            errors.push(format!("rollout_wave_order contains unused wave {wave}"));
+        }
+    }
+    let order_index = order
+        .iter()
+        .enumerate()
+        .map(|(index, wave)| (*wave, index))
+        .collect::<std::collections::BTreeMap<_, _>>();
 
     for raw in family_repos(data)? {
         let Some(name) = string(raw, "name") else {
@@ -1084,11 +1241,14 @@ fn validate_rollout_waves(
         };
         for dependency in strings(raw, "cross_repo_deps") {
             match waves.get(&dependency).copied() {
-                Some(dependency_wave) if dependency_wave >= wave => errors.push(format!(
-                    "{name}: dependency {dependency} must be in an earlier rollout wave ({dependency_wave} >= {wave})"
-                )),
+                Some(dependency_wave)
+                    if order_index.get(&dependency_wave) >= order_index.get(&wave) =>
+                {
+                    errors.push(format!(
+                        "{name}: dependency {dependency} must be in an earlier rollout wave ({dependency_wave} before {wave})"
+                    ))
+                }
                 Some(_) => {}
-                None if external.contains(&dependency) => {}
                 None => errors.push(format!("{name}: unknown cross_repo_deps entry {dependency}")),
             }
         }
@@ -1108,13 +1268,46 @@ fn validate_rollout_waves(
         };
         for dependant in strings(raw, "dependency_edges") {
             match waves.get(&dependant).copied() {
-                Some(dependant_wave) if dependant_wave <= wave => errors.push(format!(
-                    "{name}: dependant {dependant} must be in a later rollout wave ({dependant_wave} <= {wave})"
-                )),
+                Some(dependant_wave)
+                    if order_index.get(&dependant_wave) <= order_index.get(&wave) =>
+                {
+                    errors.push(format!(
+                        "{name}: dependant {dependant} must be in a later rollout wave ({dependant_wave} after {wave})"
+                    ))
+                }
                 Some(_) => {}
                 None => errors.push(format!("{name}: unknown dependency_edges entry {dependant}")),
             }
         }
+    }
+
+    let mut completed = std::collections::BTreeSet::new();
+    for wave in &order {
+        let wave_nodes = waves
+            .iter()
+            .filter_map(|(name, node_wave)| (node_wave == wave).then_some(name.clone()))
+            .collect::<Vec<_>>();
+        for name in &wave_nodes {
+            for dependency in dependencies.get(name).into_iter().flatten() {
+                if !completed.contains(dependency) {
+                    errors.push(format!(
+                        "all-PENDING rollout cannot reach {name} in wave {wave}: {dependency} is not complete"
+                    ));
+                }
+            }
+        }
+        completed.extend(wave_nodes);
+    }
+    if completed.len() != waves.len() {
+        let missing = waves
+            .keys()
+            .filter(|name| !completed.contains(*name))
+            .cloned()
+            .collect::<Vec<_>>();
+        errors.push(format!(
+            "all-PENDING rollout leaves unreachable nodes: {}",
+            missing.join(", ")
+        ));
     }
     Ok(())
 }
@@ -1180,10 +1373,11 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
     if string(&lock_data, "source_manifest_sha256").as_deref() != Some(expected_hash.as_str()) {
         errors.push("source_manifest_sha256 does not match the canonical manifest".to_owned());
     }
-    if string(&lock_data, "release").as_deref()
-        != Some(format!("{RELEASE_VERSION}-split.0").as_str())
-    {
-        errors.push(format!("lock release is not {RELEASE_VERSION}-split.0"));
+    let expected_release = string(&data, "dependency_tag_suffix")
+        .and_then(|suffix| suffix.strip_prefix('v').map(str::to_owned))
+        .unwrap_or_default();
+    if string(&lock_data, "release").as_deref() != Some(expected_release.as_str()) {
+        errors.push(format!("lock release is not {expected_release}"));
     }
     let family = family_repos(&data)?;
     let lock_repos = lock_data
@@ -1191,6 +1385,13 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
         .and_then(toml::Value::as_array)
         .cloned()
         .unwrap_or_default();
+    if lock_data
+        .get("family_repo_count")
+        .and_then(toml::Value::as_integer)
+        != Some(family.len() as i64)
+    {
+        errors.push(format!("family_repo_count must be {}", family.len()));
+    }
     if lock_repos.len() != family.len() {
         errors.push(format!(
             "lock has {} family entries, expected {}",
@@ -1198,49 +1399,287 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
             family.len()
         ));
     }
-    for raw in family.iter().copied().chain(
-        data.get("infrastructure_repo")
-            .and_then(toml::Value::as_array)
-            .into_iter()
-            .flatten(),
-    ) {
-        let name = string(raw, "name").unwrap_or_default();
-        let tag = string(raw, "immutable_tag").or_else(|| string(raw, "current_tag"));
-        let found = lock_repos
-            .iter()
-            .chain(
-                lock_data
-                    .get("infrastructure_repo")
-                    .and_then(toml::Value::as_array)
-                    .into_iter()
-                    .flatten(),
-            )
-            .find(|entry| {
-                string(entry, "repo")
-                    .or_else(|| string(entry, "name"))
-                    .as_deref()
-                    == Some(name.as_str())
-            });
-        match found {
-            Some(entry) => {
-                if string(entry, "tag") != tag {
-                    errors.push(format!("{name}: lock tag does not match the manifest"));
-                }
-                let commit = string(entry, "commit").unwrap_or_default();
-                if commit.len() != 40 || !commit.chars().all(|ch| ch.is_ascii_hexdigit()) {
-                    errors.push(format!(
-                        "{name}: lock commit is not an immutable 40-character SHA"
-                    ));
-                }
+    let infrastructure = data
+        .get("infrastructure_repo")
+        .and_then(toml::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let lock_infrastructure = lock_data
+        .get("infrastructure_repo")
+        .and_then(toml::Value::as_array);
+    if lock_data
+        .get("infrastructure_repo_count")
+        .and_then(toml::Value::as_integer)
+        != Some(infrastructure.len() as i64)
+    {
+        errors.push(format!(
+            "infrastructure_repo_count must be {}",
+            infrastructure.len()
+        ));
+    }
+    validate_lock_pin_group(&family, Some(&lock_repos), "repo", &mut errors);
+    validate_lock_pin_group(
+        &infrastructure.iter().collect::<Vec<_>>(),
+        lock_infrastructure,
+        "infrastructure_repo",
+        &mut errors,
+    );
+    let redline = data
+        .get("external_dependencies")
+        .and_then(|value| value.get("redline"));
+    let nested = lock_data
+        .get("nested")
+        .and_then(|value| value.get("redline"));
+    match redline.and_then(|value| string(value, "identity_status")) {
+        Some(status) if status == "bound" => {
+            let expected_tag = redline
+                .and_then(|value| string(value, "immutable_tag"))
+                .unwrap_or_default();
+            if nested.and_then(|value| string(value, "tag")).as_deref()
+                != Some(expected_tag.as_str())
+            {
+                errors.push(format!(
+                    "nested.redline.tag must match authority tag {expected_tag}"
+                ));
             }
-            None => errors.push(format!("{name}: missing from family lock")),
+            let commit = nested
+                .and_then(|value| string(value, "commit"))
+                .unwrap_or_default();
+            if !is_hex(&commit, 40) {
+                errors.push("nested.redline.commit must be a 40-character SHA".to_owned());
+            }
         }
+        _ => errors.push(
+            "authority Redline identity is not bound; family lock cannot be released".to_owned(),
+        ),
     }
     if !errors.is_empty() {
         return Err(format!("family lock validation failed:\n{}", errors.join("\n")).into());
     }
     println!("family lock valid: {}", lock.display());
     Ok(())
+}
+
+fn validate_deploy_lock_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut manifest = root.join("repos.manifest.toml");
+    let mut lock = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--lock" => lock = Some(PathBuf::from(iter.next().ok_or("--lock needs a path")?)),
+            value => return Err(format!("unknown validate-deploy-lock argument: {value}").into()),
+        }
+    }
+    let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+    validate_manifest_data(&data, &manifest, false)?;
+    let lock = lock.unwrap_or_else(|| {
+        PathBuf::from(string(&data, "split_root").unwrap_or_default())
+            .join("jain-deploy/jain-split.lock.toml")
+    });
+    let lock_data: toml::Value = fs::read_to_string(&lock)?.parse()?;
+    validate_deploy_lock_data(&data, &manifest, &lock_data, &lock)?;
+    println!("deploy lock valid: {}", lock.display());
+    Ok(())
+}
+
+fn validate_deploy_lock_data(
+    authority: &toml::Value,
+    manifest: &Path,
+    lock: &toml::Value,
+    lock_path: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut errors = Vec::new();
+    let expected_hash = manifest_sha256(manifest)?;
+    if string(lock, "source_manifest_sha256").as_deref() != Some(expected_hash.as_str()) {
+        errors.push(format!(
+            "source_manifest_sha256 does not match authority digest {expected_hash}"
+        ));
+    }
+    if string(lock, "schema_version").as_deref() != Some("1.0.0") {
+        errors.push("schema_version must be 1.0.0".to_owned());
+    }
+    if string(lock, "family").as_deref() != Some("jain") {
+        errors.push("family must be jain".to_owned());
+    }
+    let expected_release = string(authority, "dependency_tag_suffix")
+        .and_then(|suffix| suffix.strip_prefix('v').map(str::to_owned))
+        .unwrap_or_default();
+    if string(lock, "release").as_deref() != Some(expected_release.as_str()) {
+        errors.push(format!("release must be {expected_release}"));
+    }
+
+    let family = family_repos(authority)?;
+    let infrastructure = authority
+        .get("infrastructure_repo")
+        .and_then(toml::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    if lock
+        .get("family_repo_count")
+        .and_then(toml::Value::as_integer)
+        != Some(family.len() as i64)
+    {
+        errors.push(format!("family_repo_count must be {}", family.len()));
+    }
+    if lock
+        .get("infrastructure_repo_count")
+        .and_then(toml::Value::as_integer)
+        != Some(infrastructure.len() as i64)
+    {
+        errors.push(format!(
+            "infrastructure_repo_count must be {}",
+            infrastructure.len()
+        ));
+    }
+    validate_lock_pin_group(
+        &family,
+        lock.get("repo").and_then(toml::Value::as_array),
+        "repo",
+        &mut errors,
+    );
+    validate_lock_pin_group(
+        &infrastructure.iter().collect::<Vec<_>>(),
+        lock.get("infrastructure_repo")
+            .and_then(toml::Value::as_array),
+        "infrastructure_repo",
+        &mut errors,
+    );
+
+    let redline = authority
+        .get("external_dependencies")
+        .and_then(|value| value.get("redline"));
+    let nested = lock.get("nested").and_then(|value| value.get("redline"));
+    match redline.and_then(|value| string(value, "identity_status")) {
+        Some(status) if status == "bound" => {
+            let expected_tag = redline
+                .and_then(|value| string(value, "immutable_tag"))
+                .unwrap_or_default();
+            if nested.and_then(|value| string(value, "family")).as_deref() != Some("redline-split")
+            {
+                errors.push("nested.redline.family must be redline-split".to_owned());
+            }
+            if nested
+                .and_then(|value| string(value, "engine_tag"))
+                .as_deref()
+                != Some(expected_tag.as_str())
+            {
+                errors.push(format!(
+                    "nested.redline.engine_tag must match authority tag {expected_tag}"
+                ));
+            }
+            let commit = nested
+                .and_then(|value| string(value, "engine_commit"))
+                .unwrap_or_default();
+            if !is_hex(&commit, 40) {
+                errors.push("nested.redline.engine_commit must be a 40-character SHA".to_owned());
+            }
+            let expected_lock_id = format!("redline-proof/v2/4.1.0/{commit}");
+            if nested
+                .and_then(|value| string(value, "proof_lock_id"))
+                .as_deref()
+                != Some(expected_lock_id.as_str())
+            {
+                errors.push(format!(
+                    "nested.redline.proof_lock_id must bind engine commit {commit}"
+                ));
+            }
+        }
+        _ => errors.push(
+            "authority Redline identity is not bound; deploy cutover remains blocked".to_owned(),
+        ),
+    }
+
+    if !errors.is_empty() {
+        return Err(format!(
+            "deploy lock validation failed ({}):\n{}",
+            lock_path.display(),
+            errors.join("\n")
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn validate_lock_pin_group(
+    expected: &[&toml::Value],
+    actual: Option<&Vec<toml::Value>>,
+    label: &str,
+    errors: &mut Vec<String>,
+) {
+    let actual = actual.map(Vec::as_slice).unwrap_or_default();
+    if actual.len() != expected.len() {
+        errors.push(format!(
+            "{label} pin count is {}, expected {}",
+            actual.len(),
+            expected.len()
+        ));
+    }
+    let mut seen = std::collections::BTreeSet::new();
+    for entry in actual {
+        let name = string(entry, "repo")
+            .or_else(|| string(entry, "name"))
+            .unwrap_or_default();
+        if name.is_empty() || !seen.insert(name.clone()) {
+            errors.push(format!(
+                "{label} contains a missing or duplicate repository name: {name}"
+            ));
+        }
+    }
+    for raw in expected {
+        let name = string(raw, "name").unwrap_or_default();
+        let Some(entry) = actual.iter().find(|entry| {
+            string(entry, "repo")
+                .or_else(|| string(entry, "name"))
+                .as_deref()
+                == Some(name.as_str())
+        }) else {
+            errors.push(format!("{name}: missing from {label} pins"));
+            continue;
+        };
+        let expected_tag = string(raw, "immutable_tag").or_else(|| string(raw, "current_tag"));
+        if string(entry, "tag") != expected_tag {
+            errors.push(format!("{name}: lock tag does not match authority"));
+        }
+        if string(entry, "jeryu") != declared_remote(raw) {
+            errors.push(format!(
+                "{name}: lock Jeryu remote does not match authority"
+            ));
+        }
+        if string(entry, "required_check") != string(raw, "required_check") {
+            errors.push(format!(
+                "{name}: lock required_check does not match authority"
+            ));
+        }
+        let commit = string(entry, "commit").unwrap_or_default();
+        if !is_hex(&commit, 40) {
+            errors.push(format!("{name}: lock commit must be a 40-character SHA"));
+        }
+        if let Some(checksum) = string(entry, "checksum_sha256") {
+            if !is_hex(&checksum, 64) {
+                errors.push(format!(
+                    "{name}: checksum_sha256 must be a 64-character digest"
+                ));
+            }
+        }
+        if label == "infrastructure_repo"
+            && (string(entry, "kind") != string(raw, "kind")
+                || string(entry, "forge_owner") != string(raw, "forge_owner")
+                || entry
+                    .get("family_registered")
+                    .and_then(toml::Value::as_bool)
+                    != Some(true))
+        {
+            errors.push(format!(
+                "{name}: infrastructure lock metadata is not fail-closed"
+            ));
+        }
+    }
+}
+
+fn is_hex(value: &str, length: usize) -> bool {
+    value.len() == length && value.chars().all(|ch| ch.is_ascii_hexdigit())
 }
 
 fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -1262,10 +1701,22 @@ fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
     }
     let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
     validate_manifest_data(&data, &manifest, false)?;
+    let redline = data
+        .get("external_dependencies")
+        .and_then(|value| value.get("redline"))
+        .ok_or("manifest missing external_dependencies.redline")?;
+    if string(redline, "identity_status").as_deref() != Some("bound") {
+        return Err(
+            "cannot regenerate a release lock while the Redline reviewed identity is pending"
+                .into(),
+        );
+    }
     let manifest_hash = manifest_sha256(&manifest)?;
-    let release = string(&data, "release_version").ok_or("manifest missing release_version")?;
+    let release = string(&data, "dependency_tag_suffix")
+        .and_then(|suffix| suffix.strip_prefix('v').map(str::to_owned))
+        .ok_or("manifest dependency_tag_suffix is invalid")?;
     let mut text = format!(
-        "schema_version = \"1.0.0\"\nfamily = \"jain-split\"\nrelease = \"{release}-split.0\"\ngenerator_version = \"splitctl 0.1.0\"\nsource = \"{}\"\nsource_manifest_sha256 = \"{manifest_hash}\"\nfamily_repo_count = {}\ninfrastructure_repo_count = {}\ndependency_resolution = \"immutable-git-tag\"\n\n",
+        "schema_version = \"1.0.0\"\nfamily = \"jain-split\"\nrelease = \"{release}\"\ngenerator_version = \"splitctl 0.1.0\"\nsource = \"{}\"\nsource_manifest_sha256 = \"{manifest_hash}\"\nfamily_repo_count = {}\ninfrastructure_repo_count = {}\ndependency_resolution = \"immutable-git-tag\"\n\n",
         manifest.display(),
         family_repos(&data)?.len(),
         data.get("infrastructure_repo")
@@ -1286,23 +1737,37 @@ fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
             } else {
                 "repo"
             };
+        let infrastructure_metadata = if table == "infrastructure_repo" {
+            format!(
+                "kind = \"{}\"\nforge_owner = \"{}\"\nfamily_registered = true\n",
+                string(raw, "kind").unwrap_or_default(),
+                string(raw, "forge_owner").unwrap_or_default()
+            )
+        } else {
+            String::new()
+        };
         text.push_str(&format!(
-            "[[{table}]]\nrepo = \"{}\"\ntag = \"{tag}\"\ncommit = \"{commit}\"\njeryu = \"{}\"\nrequired_check = \"{}\"\n\n",
+            "[[{table}]]\nrepo = \"{}\"\ntag = \"{tag}\"\ncommit = \"{commit}\"\njeryu = \"{}\"\nrequired_check = \"{}\"\n{infrastructure_metadata}\n",
             repo.name,
             declared_remote(raw).ok_or_else(|| format!("{} missing remote", repo.name))?,
             string(raw, "required_check").unwrap_or_else(|| format!("{}/required", repo.name))
         ));
     }
-    if let Some(redline) = data
-        .get("external_dependencies")
+    let redline_tag = string(redline, "immutable_tag").unwrap_or_default();
+    let redline_core = data
+        .get("nested_families")
         .and_then(|value| value.get("redline"))
-    {
-        text.push_str(&format!(
-            "[nested.redline]\nfamily = \"redline-split\"\nremote = \"{}\"\ntag = \"{}\"\n\n",
-            string(redline, "remote").unwrap_or_default(),
-            string(redline, "immutable_tag").unwrap_or_default()
-        ));
-    }
+        .and_then(|value| string(value, "container_path"))
+        .map(PathBuf::from)
+        .ok_or("nested Redline container path is missing")?
+        .join("redline-core");
+    let redline_ref = format!("refs/tags/{redline_tag}^{{}}");
+    let redline_commit = git_query(&redline_core, &["rev-parse", &redline_ref])
+        .ok_or_else(|| format!("Redline core is missing immutable tag {redline_tag}"))?;
+    text.push_str(&format!(
+        "[nested.redline]\nfamily = \"redline-split\"\nremote = \"{}\"\ntag = \"{redline_tag}\"\ncommit = \"{redline_commit}\"\n\n",
+        string(redline, "remote").unwrap_or_default(),
+    ));
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
     }
@@ -2787,6 +3252,37 @@ fn validate_release_version(version: &str) -> Result<(), Box<dyn std::error::Err
     Ok(())
 }
 
+fn parse_revision(value: &str, label: &str) -> Result<u64, Box<dyn std::error::Error>> {
+    if value.is_empty()
+        || !value.chars().all(|ch| ch.is_ascii_digit())
+        || (value.len() > 1 && value.starts_with('0'))
+    {
+        return Err(format!("{label} must be a canonical nonnegative integer: {value}").into());
+    }
+    value
+        .parse::<u64>()
+        .map_err(|_| format!("{label} is outside the supported integer range: {value}").into())
+}
+
+fn validate_split_tag(
+    value: &str,
+    expected_prefix: &str,
+    expected_version: &str,
+) -> Result<u64, Box<dyn std::error::Error>> {
+    let prefix = format!("{expected_prefix}{expected_version}-split.");
+    let revision = value
+        .strip_prefix(&prefix)
+        .ok_or_else(|| format!("split tag must start with {prefix}: {value}"))?;
+    parse_revision(revision, "split tag revision")
+}
+
+fn validate_redline_tag(value: &str) -> Result<u64, Box<dyn std::error::Error>> {
+    let revision = value
+        .strip_prefix("redline-core-v4.1.0-jain.")
+        .ok_or_else(|| format!("invalid reviewed Redline core tag: {value}"))?;
+    parse_revision(revision, "Redline tag revision")
+}
+
 fn bump_manifest_version(
     original: &str,
     from_version: &str,
@@ -2869,9 +3365,7 @@ fn normalize_split_tag(
         return Ok(None);
     };
     let revision = &value[marker + "-split.".len()..];
-    if revision.is_empty() || !revision.chars().all(|ch| ch.is_ascii_digit()) {
-        return Err(format!("invalid split tag revision: {value}").into());
-    }
+    parse_revision(revision, "split tag revision")?;
     let before_revision = &value[..marker];
     let version_start = before_revision
         .rfind("-v")
@@ -2885,7 +3379,10 @@ fn normalize_split_tag(
         )
         .into());
     }
-    Ok(Some(format!("{}{new}-split.0", &value[..version_start])))
+    Ok(Some(format!(
+        "{}{new}-split.{revision}",
+        &value[..version_start]
+    )))
 }
 
 fn source_coverage(manifest: &Path, json_output: bool) -> Result<(), Box<dyn std::error::Error>> {
@@ -2974,11 +3471,24 @@ fn source_coverage(manifest: &Path, json_output: bool) -> Result<(), Box<dyn std
     }
 }
 
-fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .ok_or("split root unavailable")?
-        .to_path_buf();
+fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let control_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut manifest = control_root.join("repos.manifest.toml");
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            value => return Err(format!("unknown python-boundary argument: {value}").into()),
+        }
+    }
+    let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+    let root = env::var_os("JAIN_SPLIT_ROOT")
+        .map(PathBuf::from)
+        .or_else(|| string(&data, "split_root").map(PathBuf::from))
+        .ok_or("manifest split_root is unavailable")?;
+    if !root.is_dir() {
+        return Err(format!("declared split root is not a directory: {}", root.display()).into());
+    }
     let mut files = Vec::new();
     collect_python(&root, &mut files)?;
     let mut unexpected = Vec::new();
@@ -3353,7 +3863,23 @@ fn external_dependency_failures(data: &toml::Value) -> Vec<String> {
     let Some(redline) = redline else {
         return vec!["missing external_dependencies.redline".to_owned()];
     };
+    match string(redline, "identity_status").as_deref() {
+        Some("pending") => {
+            return vec![
+                "Redline reviewed successor identity is pending; bind the immutable tag explicitly after its protected merge and tag"
+                    .to_owned(),
+            ]
+        }
+        Some("bound") => {}
+        Some(other) => {
+            return vec![format!("invalid Redline identity_status: {other}")];
+        }
+        None => return vec!["missing Redline identity_status".to_owned()],
+    }
     let tag = string(redline, "immutable_tag").unwrap_or_default();
+    if let Err(error) = validate_redline_tag(&tag) {
+        failures.push(error.to_string());
+    }
     let remote = string(redline, "remote").unwrap_or_default();
     let core_path = nested
         .and_then(|value| string(value, "container_path"))
@@ -3400,6 +3926,11 @@ fn external_dependency_failures(data: &toml::Value) -> Vec<String> {
                 != Some(true)
             {
                 failures.push("Redline proof lock is not cutover_eligible".to_owned());
+            }
+            if string(&lock, "engine_tag").as_deref() != Some(tag.as_str()) {
+                failures.push(format!(
+                    "Redline proof lock engine_tag does not match authority tag {tag}"
+                ));
             }
             if let (Some(expected), Some(actual)) = (string(&lock, "engine_commit"), local_commit) {
                 if expected != actual {
@@ -3449,7 +3980,15 @@ fn collect_python(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
             .is_some_and(|name| {
                 matches!(
                     name,
-                    ".git" | "target" | ".stage" | ".venv" | "vendor" | "node_modules"
+                    ".git"
+                        | "target"
+                        | ".stage"
+                        | ".venv"
+                        | "vendor"
+                        | "node_modules"
+                        | ".worktrees"
+                        | ".work"
+                        | ".ci-worktrees"
                 )
             })
         {
@@ -4652,7 +5191,7 @@ mod tests {
     }
 
     #[test]
-    fn bump_version_is_manifest_only_revision_resetting_and_idempotent() {
+    fn bump_version_is_manifest_only_revision_preserving_and_idempotent() {
         let root = TestDir::new("bump-version");
         let product = root.path().join("product");
         fs::create_dir_all(&product).unwrap();
@@ -4685,8 +5224,13 @@ immutable_tag = "infra-v8.0.0-split.1"
 name = "example"
 path = {:?}
 current_tag = "example-v8.0.0-split.0"
+
+[[repo]]
+name = "already-bumped"
+path = {:?}
+current_tag = "already-bumped-v8.0.1-split.2"
 "#,
-                product
+                product, product
             ),
         )
         .unwrap();
@@ -4705,9 +5249,10 @@ current_tag = "example-v8.0.0-split.0"
         bump_version(args()).unwrap();
         let first = fs::read_to_string(&manifest).unwrap();
         assert!(first.contains("release_version = \"8.0.1\""));
-        assert!(first.contains("dependency_tag_suffix = \"v8.0.1-split.0\""));
-        assert!(first.contains("immutable_tag = \"infra-v8.0.1-split.0\""));
+        assert!(first.contains("dependency_tag_suffix = \"v8.0.1-split.1\""));
+        assert!(first.contains("immutable_tag = \"infra-v8.0.1-split.1\""));
         assert!(first.contains("current_tag = \"example-v8.0.1-split.0\""));
+        assert!(first.contains("current_tag = \"already-bumped-v8.0.1-split.2\""));
         assert!(first.contains("immutable_tag = \"redline-core-v4.1.0-jain.3\""));
         assert_eq!(
             fs::read_to_string(&version_file).unwrap(),
@@ -4723,6 +5268,28 @@ current_tag = "example-v8.0.0-split.0"
 
         bump_version(args()).unwrap();
         assert_eq!(fs::read_to_string(&manifest).unwrap(), first);
+    }
+
+    #[test]
+    fn bump_version_rejects_malformed_revisions_without_writing() {
+        let root = TestDir::new("bump-version-malformed");
+        let manifest = root.path().join("repos.manifest.toml");
+        let original = "release_version = \"8.0.0\"\ndependency_tag_suffix = \"v8.0.0-split.01\"\n";
+        fs::write(&manifest, original).unwrap();
+        let result = bump_version(vec![
+            "--manifest".to_owned(),
+            manifest.display().to_string(),
+            "--from".to_owned(),
+            "8.0.0".to_owned(),
+            "--new".to_owned(),
+            "8.0.1".to_owned(),
+            "--rewrite-split-tags".to_owned(),
+        ]);
+        assert!(result
+            .unwrap_err()
+            .to_string()
+            .contains("canonical nonnegative integer"));
+        assert_eq!(fs::read_to_string(manifest).unwrap(), original);
     }
 
     #[test]
@@ -4767,6 +5334,51 @@ current_tag = "example-v8.0.0-split.0"
     }
 
     #[test]
+    fn rollout_validation_rejects_negative_unreachable_and_all_pending_deadlocks() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let canonical: toml::Value = fs::read_to_string(path).unwrap().parse().unwrap();
+
+        let mut negative = canonical.clone();
+        negative
+            .get_mut("rollout_wave_order")
+            .and_then(toml::Value::as_array_mut)
+            .unwrap()[0] = toml::Value::Integer(-1);
+        let mut errors = Vec::new();
+        validate_rollout_waves(&negative, &mut errors).unwrap();
+        assert!(errors.iter().any(|error| error.contains("negative wave")));
+
+        let mut unreachable = canonical.clone();
+        unreachable
+            .get_mut("rollout_wave_order")
+            .and_then(toml::Value::as_array_mut)
+            .unwrap()
+            .retain(|value| value.as_integer() != Some(4));
+        let mut errors = Vec::new();
+        validate_rollout_waves(&unreachable, &mut errors).unwrap();
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("not reachable from rollout_wave_order")));
+
+        let mut deadlocked = canonical;
+        let contracts = deadlocked
+            .get_mut("repo")
+            .and_then(toml::Value::as_array_mut)
+            .unwrap()
+            .iter_mut()
+            .find(|repo| string(repo, "name").as_deref() == Some("jain-contracts"))
+            .unwrap();
+        contracts
+            .as_table_mut()
+            .unwrap()
+            .insert("rollout_wave".to_owned(), toml::Value::Integer(3));
+        let mut errors = Vec::new();
+        validate_rollout_waves(&deadlocked, &mut errors).unwrap();
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("all-PENDING rollout cannot reach jain-contracts")));
+    }
+
+    #[test]
     fn canonical_manifest_metadata_is_candidate_only_and_rollback_bound() {
         let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
         let canonical: toml::Value = fs::read_to_string(&path).unwrap().parse().unwrap();
@@ -4801,6 +5413,114 @@ current_tag = "example-v8.0.0-split.0"
             let error = validate_manifest_data(&data, &path, false).unwrap_err();
             assert!(error.to_string().contains(expected_error));
         }
+    }
+
+    #[test]
+    fn pending_redline_identity_is_structural_but_blocks_release_operations() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let canonical: toml::Value = fs::read_to_string(&path).unwrap().parse().unwrap();
+        validate_manifest_data(&canonical, &path, false).unwrap();
+        assert_eq!(
+            external_dependency_failures(&canonical),
+            vec!["Redline reviewed successor identity is pending; bind the immutable tag explicitly after its protected merge and tag"]
+        );
+
+        let root = TestDir::new("pending-redline-lock");
+        let manifest = root.path().join("repos.manifest.toml");
+        fs::write(&manifest, toml::to_string_pretty(&canonical).unwrap()).unwrap();
+        let output = root.path().join("family.lock");
+        let error = regenerate_lock(vec![
+            "--manifest".to_owned(),
+            manifest.display().to_string(),
+            "--output".to_owned(),
+            output.display().to_string(),
+            "--apply".to_owned(),
+        ])
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("Redline reviewed identity is pending"));
+        assert!(!output.exists());
+
+        let mut malformed = canonical;
+        let redline = malformed
+            .get_mut("external_dependencies")
+            .and_then(|value| value.get_mut("redline"))
+            .and_then(toml::Value::as_table_mut)
+            .unwrap();
+        redline.insert(
+            "identity_status".to_owned(),
+            toml::Value::String("bound".to_owned()),
+        );
+        redline.insert(
+            "immutable_tag".to_owned(),
+            toml::Value::String("redline-core-v4.1.0-jain.04".to_owned()),
+        );
+        let nested = malformed
+            .get_mut("nested_families")
+            .and_then(|value| value.get_mut("redline"))
+            .and_then(toml::Value::as_table_mut)
+            .unwrap();
+        nested.insert(
+            "engine_identity_status".to_owned(),
+            toml::Value::String("bound".to_owned()),
+        );
+        nested.insert(
+            "engine_tag".to_owned(),
+            toml::Value::String("redline-core-v4.1.0-jain.04".to_owned()),
+        );
+        assert!(validate_manifest_data(&malformed, &path, false)
+            .unwrap_err()
+            .to_string()
+            .contains("canonical nonnegative integer"));
+    }
+
+    #[test]
+    fn manifest_accepts_lawful_split_revisions_and_rejects_malformed_ones() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let canonical: toml::Value = fs::read_to_string(&path).unwrap().parse().unwrap();
+        let mut revised = canonical.clone();
+        revised.as_table_mut().unwrap().insert(
+            "dependency_tag_suffix".to_owned(),
+            toml::Value::String("v8.0.1-split.2".to_owned()),
+        );
+        revised
+            .get_mut("repo")
+            .and_then(toml::Value::as_array_mut)
+            .unwrap()[0]
+            .as_table_mut()
+            .unwrap()
+            .insert(
+                "current_tag".to_owned(),
+                toml::Value::String("jain-v8.0.1-split.1".to_owned()),
+            );
+        revised
+            .get_mut("infrastructure_repo")
+            .and_then(toml::Value::as_array_mut)
+            .unwrap()[0]
+            .as_table_mut()
+            .unwrap()
+            .insert(
+                "immutable_tag".to_owned(),
+                toml::Value::String("jain-smartcluster-v8.0.1-split.2".to_owned()),
+            );
+        validate_manifest_data(&revised, &path, false).unwrap();
+
+        let mut malformed = revised;
+        malformed
+            .get_mut("repo")
+            .and_then(toml::Value::as_array_mut)
+            .unwrap()[0]
+            .as_table_mut()
+            .unwrap()
+            .insert(
+                "current_tag".to_owned(),
+                toml::Value::String("jain-v8.0.1-split.01".to_owned()),
+            );
+        assert!(validate_manifest_data(&malformed, &path, false)
+            .unwrap_err()
+            .to_string()
+            .contains("canonical nonnegative integer"));
     }
 
     #[test]
@@ -5109,7 +5829,7 @@ path = "../redline-split/redline-core"
 jeryu_slug = "jeryu/redline-core"
 required_check = "redline-core/required"
 default_branch = "main"
-current_tag = "redline-core-v4.1.0-jain.1"
+current_tag = "redline-core-v4.1.0-jain.3"
 "#,
         )
         .unwrap();
@@ -5223,14 +5943,24 @@ name = "two"
         let root = TestDir::new("derived-sync");
         let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
         let mut canonical: toml::Value = fs::read_to_string(source).unwrap().parse().unwrap();
-        let portal = root.path().join("portal.toml");
-        let deploy = root.path().join("deploy.toml");
+        let portal = root.path().join("derived-manifests/portal.toml");
+        let deploy = root.path().join("derived-manifests/deploy.toml");
         let mut targets = toml::map::Map::new();
-        for (name, path) in [("portal", &portal), ("deploy", &deploy)] {
+        for (name, consumer) in [
+            ("portal", "/home/ubuntu/jain-split/jain/repos.manifest.toml"),
+            (
+                "deploy",
+                "/home/ubuntu/jain-split/jain-deploy/repos.manifest.toml",
+            ),
+        ] {
             let mut target = toml::map::Map::new();
             target.insert(
                 "path".to_owned(),
-                toml::Value::String(path.display().to_string()),
+                toml::Value::String(format!("derived-manifests/{name}.toml")),
+            );
+            target.insert(
+                "consumer_path".to_owned(),
+                toml::Value::String(consumer.to_owned()),
             );
             targets.insert(name.to_owned(), toml::Value::Table(target));
         }
