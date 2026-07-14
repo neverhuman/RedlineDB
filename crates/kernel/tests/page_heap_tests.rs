@@ -1,16 +1,92 @@
+use redlinedb_kernel::Error;
 use redlinedb_kernel::engine::page_heap::{PageBackedHeap, RelationWriteTarget};
 use redlinedb_kernel::engine::tx::ConcurrentTxStatus;
-use redlinedb_kernel::format::{Csn, Lsn, RelId, RowId};
+use redlinedb_kernel::format::{
+    Csn, Lsn, PAGE_HEADER_LEN, RelId, RowId, SLOT_LEN, TUPLE_HEADER_LEN,
+};
 use redlinedb_kernel::storage::{BufferPool, PageFile};
 use std::sync::Arc;
 use tempfile::TempDir;
 
+const TEST_PAGE_SIZE: usize = 4096;
+
 fn page_heap() -> (TempDir, PageBackedHeap, ConcurrentTxStatus) {
     let temp = TempDir::new().unwrap();
-    let page_file = Arc::new(PageFile::create(temp.path().join("data.redline"), 4096).unwrap());
+    let page_file =
+        Arc::new(PageFile::create(temp.path().join("data.redline"), TEST_PAGE_SIZE).unwrap());
     let buffer = Arc::new(BufferPool::new(page_file, 128).unwrap());
     let heap = PageBackedHeap::new(RelId(1), 8, buffer).unwrap();
     (temp, heap, ConcurrentTxStatus::new())
+}
+
+#[test]
+fn page_backed_heap_enforces_exact_empty_page_cell_boundary_before_allocation() {
+    let maximum_cell = TEST_PAGE_SIZE - PAGE_HEADER_LEN - SLOT_LEN;
+    let maximum_payload = maximum_cell - TUPLE_HEADER_LEN;
+
+    for payload_size in [maximum_payload - 1, maximum_payload] {
+        let (_temp, heap, txs) = page_heap();
+        let tx = txs.begin();
+        let row = heap.reserve_row_id();
+        heap.insert_with_row_id(tx, row, vec![7; payload_size], Lsn(10))
+            .expect("max-1 and max encoded cells must fit");
+        assert_eq!(heap.resident_pages(), 1);
+    }
+
+    let (_temp, heap, txs) = page_heap();
+    let tx = txs.begin();
+    let row = heap.reserve_row_id();
+    let error = heap
+        .insert_with_row_id(tx, row, vec![7; maximum_payload + 1], Lsn(10))
+        .expect_err("max+1 encoded cell must fail");
+    assert_eq!(
+        error,
+        Error::RecordTooLarge {
+            needed: maximum_cell + 1,
+            maximum: maximum_cell,
+        }
+    );
+    assert_eq!(heap.resident_pages(), 0);
+    assert_eq!(heap.page_count().expect("page count"), 0);
+}
+
+#[test]
+fn oversized_update_is_rejected_before_appending_an_undo_cell() {
+    let (_temp, heap, txs) = page_heap();
+    let insert_tx = txs.begin();
+    let row = heap.reserve_row_id();
+    heap.insert_with_row_id(insert_tx, row, b"small".to_vec(), Lsn(10))
+        .expect("seed row");
+    let insert_csn = txs.reserve_csn();
+    txs.publish_commit(insert_tx, insert_csn);
+
+    let maximum_cell = TEST_PAGE_SIZE - PAGE_HEADER_LEN - SLOT_LEN;
+    let oversized_payload = vec![9; maximum_cell - TUPLE_HEADER_LEN + 1];
+    let resident_before = heap.resident_pages();
+    let pages_before = heap.page_count().expect("page count before");
+    for _ in 0..128 {
+        let update_tx = txs.begin();
+        let error = heap
+            .update(
+                update_tx,
+                &txs.snapshot(),
+                &txs,
+                row,
+                oversized_payload.clone(),
+                Lsn(20),
+            )
+            .expect_err("oversized update must fail");
+        assert!(matches!(error, Error::RecordTooLarge { .. }));
+        txs.abort(update_tx);
+    }
+
+    assert_eq!(heap.resident_pages(), resident_before);
+    assert_eq!(heap.page_count().expect("page count after"), pages_before);
+    assert_eq!(
+        heap.get(&txs, &txs.snapshot(), None, row)
+            .expect("read seed row"),
+        Some(b"small".to_vec())
+    );
 }
 
 #[test]

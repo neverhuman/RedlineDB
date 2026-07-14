@@ -23,12 +23,17 @@ impl PageBackedHeap {
         } else {
             rel_id
         };
+        // Validate the replacement before appending its before-image. Otherwise a rejected
+        // oversized UPDATE leaves an unreachable undo cell behind even though no heap tuple or
+        // WAL record was written.
+        let mut next = TupleVersion::new(row_id, rel_id, tx_id, payload);
+        self.ensure_cell_size(next.encoded_size()?)?;
         let wal_payload = if lsn != Lsn::ZERO {
             Some(WalPayload::HeapUpdate {
                 tx_id,
                 rel_id,
                 row_id,
-                payload: payload.clone(),
+                payload: next.payload.clone(),
             })
         } else {
             None
@@ -48,7 +53,6 @@ impl PageBackedHeap {
             lsn,
         )?;
 
-        let mut next = TupleVersion::new(row_id, rel_id, tx_id, payload);
         next.undo_head = undo_ptr;
         let ptr = self.append_tuple(tx_id, row_id, next, lsn, wal_payload)?;
         self.set_head(row_id, ptr)?;
@@ -160,16 +164,7 @@ impl PageBackedHeap {
         // fit even an empty page, however, retrying can never succeed. The old loop allocated and
         // dirtied one new page per iteration forever; reject the record before allocating any
         // page instead.
-        let maximum = self
-            .buffer
-            .page_size()
-            .saturating_sub(PAGE_HEADER_LEN + SLOT_LEN);
-        if encoded.len() > maximum {
-            return Err(Error::RecordTooLarge {
-                needed: encoded.len(),
-                maximum,
-            });
-        }
+        self.ensure_cell_size(encoded.len())?;
         let mut needs_reinit = false;
         loop {
             let guard = match current_page {
@@ -251,5 +246,16 @@ impl PageBackedHeap {
                 }
             }
         }
+    }
+
+    fn ensure_cell_size(&self, needed: usize) -> Result<()> {
+        let maximum = self
+            .buffer
+            .page_size()
+            .saturating_sub(PAGE_HEADER_LEN + SLOT_LEN);
+        if needed > maximum {
+            return Err(Error::RecordTooLarge { needed, maximum });
+        }
+        Ok(())
     }
 }
