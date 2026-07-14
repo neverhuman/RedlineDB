@@ -8,21 +8,33 @@ Jain 8.0.0 but does not itself push images, change routes, or promote production
 
 ## Required sequence
 
-1. Run `bash ops/ci/quality-gates.sh` on the exact reviewed control commit.
-2. Run `just family-ci` with all child repositories clean, on `main`, and equal
+1. For a one-revision Core correction, bind the exact successor commit and tree
+   checksum plus the reviewed predecessor lock digest in the manifest, then run
+   `proof-refresh --prepare-successor` before creating the tag. Commit its
+   explicitly ineligible authoritative lock, sidecar, and `prepared` receipt
+   through protected review; this mode never writes the product mirror. The
+   review verifier accepts only the exact manifest-bound split state and records
+   `cutover_eligible=false`. After merge, run
+   `proof-refresh --reconcile-successor --receipt
+   release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json` to
+   update the mirror atomically, then submit that exact `reconciled` operation
+   receipt through protected review.
+2. Run `bash ops/ci/quality-gates.sh` on the exact reviewed control commit.
+3. Run `just family-ci` with all child repositories clean, on `main`, and equal
    to local Jeryu. Preserve the receipt, checksum sidecar, and named logs.
-3. Verify every local, Jeryu, and mirror tag resolves the manifest commit and
+4. Create the immutable successor tag, then verify every local, Jeryu, and
+   mirror tag resolves the manifest commit and
    release-tree checksum. Immutable tags are never recreated or moved.
-4. Build and test both Jain and Jeryu against the exact Redline engine. Each
+5. Build and test both Jain and Jeryu against the exact Redline engine. Each
    clean-main producer writes closed-schema evidence, its real test log, and a
    checksum sidecar.
-5. Place those real inputs under `release-evidence/8.0.0/` and run
+6. Place those real inputs under `release-evidence/8.0.0/` and run
    `just proof-refresh <family-ci> <jain-evidence> <jeryu-evidence> <receipt>`.
    No eligibility flag or single-consumer path exists.
-6. Require the authoritative and compatibility lock bytes and checksums to
+7. Require the authoritative and compatibility lock bytes and checksums to
    match, then run `just cutover-verify`. This reconstructs the lock from the
    still-fresh evidence and live tag readback.
-7. Commit the derived lock, sidecar, and evidence bundle through protected
+8. Commit the derived lock, sidecar, and evidence bundle through protected
    review. On reviewed `main`, restore the compatibility mirror from the exact
    lock bytes and rerun `just cutover-verify` before any Jain dependency wave.
 

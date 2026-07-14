@@ -7,12 +7,12 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1783848878`
-- Started at: `1783848878`
-- Elapsed: `1651` ms
+- Run ID: `1784054530`
+- Started at: `1784054530`
+- Elapsed: `2439` ms
 - Scope: `full`
-- Raw score: `86`
-- Final score: `86`
+- Raw score: `87`
+- Final score: `87`
 - Decision: `pass`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -70,9 +70,9 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`4` files=`1`
+- Status: `review` hard=`0` warning=`8` files=`1`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`4` tokens=`14` bytes=`127`
+- Duplicate volume: lines=`21` tokens=`56` bytes=`597`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
@@ -81,10 +81,14 @@
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/redline-proof/src/main.rs:708-709, tools/redline-proof/src/main.rs:1228-1229, tools/redline-proof/src/main.rs:2187-2188, tools/redline-proof/src/main.rs:2285-2286` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/redline-proof/src/main.rs:429-430, tools/redline-proof/src/main.rs:442-443` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/redline-proof/src/main.rs:1983-1984, tools/redline-proof/src/main.rs:2029-2030` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `tools/redline-proof/src/main.rs:1607-1608, tools/redline-proof/src/main.rs:1620-1621` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 7 | 20 | `tools/redline-proof/src/main.rs:2662-2669, tools/redline-proof/src/main.rs:2744-2751` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 9 | `tools/redline-proof/src/main.rs:2728-2733, tools/redline-proof/src/main.rs:2818-2823` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 8 | `tools/redline-proof/src/main.rs:2503-2507, tools/redline-proof/src/main.rs:2570-2574` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `tools/redline-proof/src/main.rs:1128-1129, tools/redline-proof/src/main.rs:3044-3045, tools/redline-proof/src/main.rs:3057-3058` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 8 | `tools/redline-proof/src/main.rs:670-671, tools/redline-proof/src/main.rs:3034-3035` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/redline-proof/src/main.rs:648-649, tools/redline-proof/src/main.rs:707-708` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/redline-proof/src/main.rs:1338-1339, tools/redline-proof/src/main.rs:2115-2116` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `tools/redline-proof/src/main.rs:359-360, tools/redline-proof/src/main.rs:368-369` | `same body appears under different names across files` |
 
 ## Dimensions
 
@@ -96,7 +100,7 @@
 | Security and supply-chain posture | 12 | 80 | 9.60 | lockfile present; secret or dependency scan tooling found |
 | Code shape and semantic surface | 12 | 90 | 10.80 | no authored adopter product code files in scope |
 | Data truth and workflow safety | 8 | 50 | 4.00 |  |
-| Observability and repair evidence | 8 | 49 | 3.92 | ops/observability directory present; repair receipts or raw artifact language found |
+| Observability and repair evidence | 8 | 57 | 4.56 | ops/observability directory present; repair receipts or raw artifact language found |
 | Context economy and agent instructions | 7 | 93 | 6.51 | root `AGENTS.md` present; root `AGENTS.md` stays short |
 | Jankurai tool adoption and CI replacement | 7 | 100 | 7.00 | control-plane files present; applicable=13 |
 | Python containment and polyglot hygiene | 4 | 100 | 4.00 | no Python files in scope |
@@ -158,14 +162,6 @@
 | `release-readiness` | `release` | `auto` | `artifact_verified` | `manual launch checklist` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
 | `cost-budget` | `release` | `auto` | `artifact_verified` | `manual spend review` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
 
-## Security evidence (ingested)
-
-- Source: `target/jankurai/security/evidence.json`
-- Envelope exit code: `0` · elapsed: `4037` ms · strict: `true`
-- Commands — ran: `6`, skipped: `0`, failed: `0`
-- Generated at: `1783848747`
-- Git HEAD (envelope): `7c74d2184e1af8f9b4da63179ed0024b5f1999dc`
-
 ## Boundary Reclassifications
 
 No audited runtime boundary reclassifications declared.
@@ -214,11 +210,11 @@ No audited runtime boundary reclassifications declared.
    Check: `HLT-017-OPAQUE-OBSERVABILITY:observability` `soft` confidence `0.76`
    Route: TLR `Repair`, lane `observability`, owner `docs`
    Docs: `agent/JANKURAI_STANDARD.md#repair-receipts`
-   Reason: `Observability and repair evidence` scored 49 below the standard floor of 85
+   Reason: `Observability and repair evidence` scored 57 below the standard floor of 85
    Fix: add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof
    Rerun: `just score`
-   Fingerprint: `sha256:277f6c3e13b5b169dafcbc2723092aae7fd5a6881d4d80c40f399f3d1cd8eed1`
-   Evidence: ops/observability directory present, repair receipts or raw artifact language found, repair receipt guidance is documented, no agent-friendly exception pattern found
+   Fingerprint: `sha256:8ce018ddaa8c2b6ddef11b6784922e6befd60bb670ab8564e69cd26455aa44a6`
+   Evidence: ops/observability directory present, repair receipts or raw artifact language found, repair-hint and receipt convention are documented, repair receipt guidance is documented
 
 ## Policy
 

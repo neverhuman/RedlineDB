@@ -12,7 +12,7 @@ check:
   cargo fmt --check
   cargo clippy --locked --all-targets -- -D warnings
   cargo test --locked
-  {{redlinectl}} validate
+  {{redlinectl}} review-lock-verify
 
 required:
   bash scripts/ci-local.sh required

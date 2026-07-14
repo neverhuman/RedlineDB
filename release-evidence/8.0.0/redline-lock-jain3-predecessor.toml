@@ -10,12 +10,33 @@ proof_lock_id = "redline-proof/v2/4.1.0/7137a1ee2d04be4eb6931d99ff78b8a52c827900
 consumers = ["jain-split", "jeryu-split"]
 
 [proof]
-parity_status = "historical-only-until-refreshed"
+parity_status = "accepted"
+generated_at = "2026-07-13T13:10:26Z"
+fresh_until = "2026-07-14T13:10:26Z"
+family_ci_receipt = "release-evidence/8.0.0/redline-family-ci-jain3-final.json"
+family_ci_receipt_sha256 = "d8fdc0cba2d7d02f8be272435304b7a94f6a7ddb36e59e414dda776aa182b41d"
+proof_refresh_receipt = "release-evidence/8.0.0/redline-proof-refresh-jain3.json"
 accepted_core_evidence_sha256 = "aff39201db5e6d47cd35f3b614e9e4c9ea7b5d551b2f29ec201c4ead66a7659b"
 accepted_testing_manifest_sha256 = "344a02924857765d45c2f5317c5a92e016fa976d71c11a0207051e30d6c588ba"
 required_consumer_evidence = ["jain-split", "jeryu-split"]
-accepted_consumer_evidence = []
-cutover_eligible = false
+accepted_consumer_evidence = ["jain-split", "jeryu-split"]
+cutover_eligible = true
+
+[[proof.consumer_evidence]]
+consumer = "jain-split"
+path = "release-evidence/8.0.0/jain-consumer.json"
+sha256 = "1ca22268f30c013d7137e85ff2e6ce1e607c08b9916ad56554c1c9e4c084e899"
+generated_at = "2026-07-13T13:04:10Z"
+source_commit = "1c80c91cb62176a6ffab62d7a62a57b8fcb712b0"
+required_check = "jain-split/redline-consumer"
+
+[[proof.consumer_evidence]]
+consumer = "jeryu-split"
+path = "release-evidence/8.0.0/jeryu-consumer.json"
+sha256 = "9303876207c678b86acba4905b25828e6344bcc2a29a95b2e97d4ab5b5ed6c7b"
+generated_at = "2026-07-13T10:58:29Z"
+source_commit = "16db27cfd41e26e44ebe641b253080389b21d8d9"
+required_check = "jeryu-split/redline-consumer"
 
 [[repo]]
 name = "redline"
