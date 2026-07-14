@@ -1678,13 +1678,13 @@ fn validate_manifest_data(
         .get("external_dependencies")
         .and_then(|value| value.get("redline"))
         .ok_or("manifest must declare external_dependencies.redline")?;
-    if string(redline, "immutable_tag").as_deref() != Some("redline-core-v4.1.0-jain.3")
+    if string(redline, "immutable_tag").as_deref() != Some("redline-core-v4.1.0-jain.4")
         || string(redline, "remote").as_deref()
             != Some("http://127.0.0.1:8787/git/jeryu/redline-core.git")
         || string(redline, "required_check").as_deref() != Some("redline-core/required")
     {
         errors.push(
-            "redline dependency must use redline-core-v4.1.0-jain.3 from local Jeryu".to_owned(),
+            "redline dependency must use redline-core-v4.1.0-jain.4 from local Jeryu".to_owned(),
         );
     }
     validate_release_metadata(data, redline, "redline-core", "jain", None, &mut errors);
@@ -1705,7 +1705,7 @@ fn validate_manifest_data(
             "engine_remote",
             "http://127.0.0.1:8787/git/jeryu/redline-core.git",
         ),
-        ("engine_tag", "redline-core-v4.1.0-jain.3"),
+        ("engine_tag", "redline-core-v4.1.0-jain.4"),
     ] {
         if string(nested, key).as_deref() != Some(expected) {
             errors.push(format!("nested_families.redline.{key} must be {expected}"));
@@ -7980,7 +7980,7 @@ path = "../redline-split/redline-core"
 jeryu_slug = "jeryu/redline-core"
 required_check = "redline-core/required"
 default_branch = "main"
-current_tag = "redline-core-v4.1.0-jain.3"
+current_tag = "redline-core-v4.1.0-jain.4"
 "#,
         )
         .unwrap();

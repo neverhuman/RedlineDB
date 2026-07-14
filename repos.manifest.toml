@@ -125,11 +125,11 @@ allow_deletions = false
 owner = "jeryu"
 repository = "redline-core"
 remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
-immutable_tag = "redline-core-v4.1.0-jain.3"
+immutable_tag = "redline-core-v4.1.0-jain.4"
 product_version = "4.1.0"
-tag_revision = 3
-release_commit = "7137a1ee2d04be4eb6931d99ff78b8a52c827900"
-release_checksum_sha256 = "baec7cb2c084ffa5c3f10770ff62e8cadf869d7e19e21db849effd47e0871d83"
+tag_revision = 4
+release_commit = "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e"
+release_checksum_sha256 = "b36a4ac5afd332bab7473f1007061356a991a7590eeda1336809be5dad5ce746"
 protection_policy = "immutable-main-v1"
 required_check = "redline-core/required"
 required = true
@@ -157,7 +157,7 @@ control_plane = "/home/ubuntu/jain-split/redline-split-ops"
 required = true
 engine_repository = "redline-core"
 engine_remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
-engine_tag = "redline-core-v4.1.0-jain.3"
+engine_tag = "redline-core-v4.1.0-jain.4"
 
 [[infrastructure_repo]]
 path = "/home/ubuntu/jain-split/jain-smartcluster"
