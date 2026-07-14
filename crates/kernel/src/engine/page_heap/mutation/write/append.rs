@@ -1,7 +1,8 @@
 use super::PageBackedHeap;
 use crate::engine::page_heap::encode_undo_ptr;
 use crate::format::{
-    Lsn, PageGeneration, PageId, PageKind, RelId, RowId, TuplePtr, TupleVersion, TxId, UndoPtr,
+    Lsn, PAGE_HEADER_LEN, PageGeneration, PageId, PageKind, RelId, RowId, SLOT_LEN, TuplePtr,
+    TupleVersion, TxId, UndoPtr,
 };
 use crate::txn::{UndoKind, UndoRecord};
 use crate::wal::{WalPayload, WalRecordKind};
@@ -155,6 +156,20 @@ impl PageBackedHeap {
         lsn: Lsn,
         wal_payload: Option<WalPayload>,
     ) -> Result<(PageId, u16, PageGeneration)> {
+        // `PageFull` on an existing page means "try a fresh page". If the encoded cell cannot
+        // fit even an empty page, however, retrying can never succeed. The old loop allocated and
+        // dirtied one new page per iteration forever; reject the record before allocating any
+        // page instead.
+        let maximum = self
+            .buffer
+            .page_size()
+            .saturating_sub(PAGE_HEADER_LEN + SLOT_LEN);
+        if encoded.len() > maximum {
+            return Err(Error::RecordTooLarge {
+                needed: encoded.len(),
+                maximum,
+            });
+        }
         let mut needs_reinit = false;
         loop {
             let guard = match current_page {
