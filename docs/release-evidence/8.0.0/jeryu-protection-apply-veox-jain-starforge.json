@@ -30,7 +30,7 @@
       ],
       "strict": true
     },
-    "updated_at": "2026-07-14T02:50:18.457633006Z",
+    "updated_at": "2026-07-15T11:31:46.525282586Z",
     "url": "/repos/veox/jain-starforge/branches/main/protection"
   },
   "repository": "veox/jain-starforge",
@@ -76,10 +76,10 @@
       ],
       "strict": true
     },
-    "updated_at": "2026-07-14T02:50:18.457633006Z",
+    "updated_at": "2026-07-15T11:31:46.525282586Z",
     "url": "/repos/veox/jain-starforge/branches/main/protection"
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1783997418
+  "timestamp_unix": 1784115106
 }

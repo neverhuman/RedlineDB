@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-cli"
+      },
+      "sha": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3"
+    },
+    "body": "Adds the Core PipelineConfig invention_engine field to both CLI constructors and aligns the worst-loop candidate log call with the v8 Core API. Fixes the exact release Cargo build-all-features blocker at the deploy head.",
+    "created_at": "2026-07-14T04:08:26.546321109Z",
+    "draft": false,
+    "head": {
+      "label": "codex/wq-6-cli-core-compat-20260714",
+      "ref": "codex/wq-6-cli-core-compat-20260714",
+      "repo": {
+        "full_name": "veox/jain-cli"
+      },
+      "sha": "2e8805e52ce51089eb1b01a0de430ab557aa15e1"
+    },
+    "html_url": "/veox/jain-cli/pull/1",
+    "id": "cb803f76-5f7d-4d68-b88e-33165efda90d",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "veox/jain-cli",
+    "state": "open",
+    "title": "fix(cli): restore v8 Core compatibility",
+    "updated_at": "2026-07-14T04:08:26.546321109Z",
+    "url": "/repos/veox/jain-cli/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "veox/jain-cli",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Adds the Core PipelineConfig invention_engine field to both CLI constructors and aligns the worst-loop candidate log call with the v8 Core API. Fixes the exact release Cargo build-all-features blocker at the deploy head.",
+      "draft": false,
+      "head": "codex/wq-6-cli-core-compat-20260714",
+      "title": "fix(cli): restore v8 Core compatibility"
+    },
+    "method": "POST",
+    "path": "/repos/veox/jain-cli/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-cli"
+      },
+      "sha": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3"
+    },
+    "body": "Adds the Core PipelineConfig invention_engine field to both CLI constructors and aligns the worst-loop candidate log call with the v8 Core API. Fixes the exact release Cargo build-all-features blocker at the deploy head.",
+    "created_at": "2026-07-14T04:08:26.546321109Z",
+    "draft": false,
+    "head": {
+      "label": "codex/wq-6-cli-core-compat-20260714",
+      "ref": "codex/wq-6-cli-core-compat-20260714",
+      "repo": {
+        "full_name": "veox/jain-cli"
+      },
+      "sha": "2e8805e52ce51089eb1b01a0de430ab557aa15e1"
+    },
+    "html_url": "/veox/jain-cli/pull/1",
+    "id": "cb803f76-5f7d-4d68-b88e-33165efda90d",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "veox/jain-cli",
+    "state": "open",
+    "title": "fix(cli): restore v8 Core compatibility",
+    "updated_at": "2026-07-14T04:08:26.546321109Z",
+    "url": "/repos/veox/jain-cli/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784002106
+}

@@ -1,0 +1,53 @@
+{
+  "schema": "jain.e2e-studies/v1",
+  "status": "blocked",
+  "blocker": "smartcluster training failed: read cluster job at /tmp/jain-web/sessions/0c92d158-089d-47f9-98db-7a191d90e169/cluster/job.json: Permission denied (os error 13)",
+  "run_id": "run-9dd7e52c61e1f77f",
+  "generated_at": "2026-07-14T04:41:00Z",
+  "mode": "fast",
+  "base_url": "http://127.0.0.1:8888",
+  "effort": "low",
+  "runner": "real",
+  "auditor_exception": "docs/release-evidence/8.0.0/jankurai-auditor-exception.json",
+  "preflight": {
+    "health_status": "200",
+    "health_version": "8.0.0",
+    "runtime": "runner=real execution_mode=real cluster_access=true training_enabled=true"
+  },
+  "dataset": {
+    "path": "docs/release-evidence/8.0.0/e2e-studies/data/e2e.csv",
+    "sha256": "96668514f960f0720ddf9102013fa121e5f32e6d8993183d5896069e3e6cd06c",
+    "rows": 240
+  },
+  "session": {
+    "id": "0c92d158-089d-47f9-98db-7a191d90e169",
+    "chimera_enabled": true,
+    "model_id": "",
+    "terminal_state": "failed"
+  },
+  "engine_observed": "legacy",
+  "engine_expected": "any",
+  "engine_match": true,
+  "studies": {
+    "upload": {
+      "status": "pass",
+      "detail": "http=200 file_status=uploaded upload.started=1 upload.complete=1 target.required=0"
+    },
+    "training": {
+      "status": "fail",
+      "engine_observed": "legacy",
+      "terminal_state": "failed",
+      "detail": "terminal=failed phase6_done=0 engine=legacy expect=any match=true strict=0 failure=smartcluster training failed: read cluster job at /tmp/jain-web/sessions/0c92d158-089d-47f9-98db-7a191d90e169/cluster/job.json: Permission denied (os error 13)"
+    },
+    "chimera": {
+      "status": "fail",
+      "starforge_completed_trials": 0,
+      "detail": "skipped (training did not complete)"
+    },
+    "export": {
+      "status": "fail",
+      "detail": "skipped (training did not complete)"
+    }
+  },
+  "verdict": "fail"
+}

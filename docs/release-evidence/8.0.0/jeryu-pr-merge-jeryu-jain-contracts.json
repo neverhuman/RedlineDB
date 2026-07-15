@@ -6,14 +6,14 @@
   "request": {
     "body": {},
     "method": "PUT",
-    "path": "/repos/jeryu/jain-contracts/pulls/4/merge"
+    "path": "/repos/jeryu/jain-contracts/pulls/10/merge"
   },
   "response": {
     "merged": true,
     "message": "Pull Request successfully merged",
-    "sha": "ac58ea206d58a3dff3f9e2f6e2a16c03de28093f"
+    "sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946"
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1783993499
+  "timestamp_unix": 1783998604
 }

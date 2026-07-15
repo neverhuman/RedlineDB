@@ -1,0 +1,306 @@
+diff --git a/apps/web/src/components/HyperionSweepLive.tsx b/apps/web/src/components/HyperionSweepLive.tsx
+index c73c752..d09fab6 100644
+--- a/apps/web/src/components/HyperionSweepLive.tsx
++++ b/apps/web/src/components/HyperionSweepLive.tsx
+@@ -228,11 +228,13 @@ export function HyperionSweepLive({
+     // overall % and a flat grid, and say so instead of faking per-cell activity.
+     const pct = Math.round(((encoding as EncodingState).progress ?? 0) * 100);
+     const caption =
+-      encoding?.engine === 'projection'
+-        ? 'projection Hyperion features active; live sweep telemetry requires v7'
+-        : encoding?.engine === 'v7'
+-          ? 'waiting for v7 sweep telemetry'
+-          : 'live sweep telemetry unavailable';
++      encoding?.status === 'skipped'
++        ? 'Hyperion encode skipped — model weights unavailable (check JAIN_HYPERION_WEIGHTS)'
++        : encoding?.engine === 'projection'
++          ? 'projection Hyperion features active; live sweep telemetry requires v7'
++          : encoding?.engine === 'v7'
++            ? 'waiting for v7 sweep telemetry'
++            : 'live sweep telemetry unavailable';
+     return (
+       <div className="hyperion-sweep feed-widget" data-testid="hyperion-sweep" aria-label="Hyperion encoding sweep">
+         {head}
+diff --git a/apps/web/src/components/InventionLab.test.tsx b/apps/web/src/components/InventionLab.test.tsx
+index a6b97d2..5cc4816 100644
+--- a/apps/web/src/components/InventionLab.test.tsx
++++ b/apps/web/src/components/InventionLab.test.tsx
+@@ -71,7 +71,8 @@ describe('InventionLab', () => {
+     expect(getByTestId('algo-terminal-frame')).toBeTruthy();
+     const terminalHead = getByTestId('algo-terminal-head').textContent ?? '';
+     expect(terminalHead).toContain('algos/sec');
+-    expect(terminalHead).toContain('candidates');
++    // The counter is cumulative (all candidates ever tried) and must say so.
++    expect(terminalHead).toContain('Σ candidates');
+     expect(terminalHead).toContain('generation');
+     expect(terminalHead).toContain('★ best');
+     // Honesty: the run never emitted per-candidate source, so no token/byte throughput is shown.
+@@ -85,7 +86,7 @@ describe('InventionLab', () => {
+     const telemetry = getByTestId('algo-search-pane').textContent ?? '';
+     expect(telemetry).toContain('generation');
+     expect(telemetry).toContain('42/1000');
+-    expect(telemetry).toContain('candidates');
++    expect(telemetry).toContain('Σ candidates');
+     expect(telemetry).toContain('algos/sec');
+     expect(telemetry).toContain('best R²');
+     expect(telemetry).toContain('recent evals');
+@@ -192,19 +193,28 @@ describe('InventionLab', () => {
+     expect(getByTestId('algo-search-stats').textContent ?? '').toContain('cpu only');
+   });
+ 
+-  it('keeps Algorithm Evolution inside a bordered terminal frame', () => {
+-    expect(styles).toMatch(/\.algo-terminal-frame\s*{[\s\S]*border:\s*1px solid[\s\S]*border-radius:\s*8px;/);
+-    expect(styles).toMatch(/\.algo-terminal-head\s*{[\s\S]*border-bottom:\s*1px solid/);
++  it('keeps Algorithm Evolution in a borderless high-contrast terminal frame', () => {
++    // Borderless TUI: the frame is a near-black screen with no card chrome at all.
++    expect(styles).toMatch(/\.algo-terminal-frame\s*{[^}]*background:\s*#050708;/);
++    expect(styles).not.toMatch(/\.algo-terminal-frame\s*{[^}]*border/);
++    expect(styles).not.toMatch(/\.algo-terminal-frame\s*{[^}]*box-shadow/);
++    // The head is a terminal status line, not a card header: no rule, no gradient.
++    expect(styles).not.toMatch(/\.algo-terminal-head\s*{[^}]*border-bottom/);
++    expect(styles).not.toMatch(/\.algo-terminal-head\s*{[^}]*gradient/);
+     expect(styles).toMatch(
+       /\.algo-split-pane\s*{[\s\S]*grid-template-columns:\s*minmax\(230px,\s*0\.74fr\)\s*minmax\(0,\s*1\.86fr\);/
+     );
+-    expect(styles).toMatch(/\.algo-code-pane\s*{[\s\S]*border:\s*1px solid[\s\S]*border-radius:\s*6px;/);
++    // The code pane keeps only a tmux-style hairline divider — no full box, no radius.
++    expect(styles).toMatch(/\.algo-code-pane\s*{[^}]*border-left:\s*1px solid/);
++    expect(styles).not.toMatch(/\.algo-code-pane\s*{[^}]*border-radius/);
+     expect(styles).toMatch(/\.algo-code-title\s*{[\s\S]*border-bottom:\s*1px solid/);
+     expect(styles).toMatch(/\.algo-generation-track\s*{[\s\S]*height:\s*2px;[\s\S]*background:/);
+     expect(styles).toMatch(
+       /\.algo-code-stream\s*{[\s\S]*height:\s*min\(1460px,\s*max\(360px,\s*calc\(100vh - 220px\)\)\);[\s\S]*overflow:\s*hidden;/
+     );
+-    expect(styles).toMatch(/\.algo-stream-code\s*{[\s\S]*overflow:\s*auto;/);
++    // Scrollback: the code window itself scrolls vertically within a bounded height.
++    expect(styles).toMatch(/\.algo-stream-code\s*{[^}]*max-height:\s*100%;/);
++    expect(styles).toMatch(/\.algo-stream-code\s*{[^}]*overflow-y:\s*auto;/);
+     expect(styles).toMatch(/@media \(max-width:\s*700px\)\s*{[\s\S]*\.algo-split-pane\s*{[\s\S]*grid-template-columns:\s*1fr;/);
+     expect(styles).not.toMatch(/\.algo-toprail\s*{/);
+   });
+@@ -256,7 +266,7 @@ describe('InventionLab', () => {
+     expect(container.textContent).not.toContain('math_worse_later');
+   });
+ 
+-  it('renders the latest 80-line visible slice of a long code sample', () => {
++  it('renders the full revealed source of a long code sample so the user can scroll back to line 1', () => {
+     const code = Array.from({ length: 120 }, (_, i) => `# line ${i + 1}`).join('\n');
+     const { container } = render(
+       <InventionLab
+@@ -278,11 +288,12 @@ describe('InventionLab', () => {
+     );
+ 
+     const lines = Array.from(container.querySelectorAll('.algo-stream-line'));
+-    expect(lines).toHaveLength(80);
+-    expect(container.querySelector('[data-testid="algo-stream-code"]')?.getAttribute('data-visible-lines')).toBe('80');
+-    expect(lines[0].querySelector('.pyc-ln')?.textContent).toBe('41');
+-    expect(lines.some((line) => line.querySelector('.pyc-ln')?.textContent === '1')).toBe(false);
+-    expect(container.textContent).not.toContain('# line 40');
++    expect(lines).toHaveLength(120);
++    expect(container.querySelector('[data-testid="algo-stream-code"]')?.getAttribute('data-visible-lines')).toBe('120');
++    // No windowing: line 1 stays in the DOM (scrollback), and the newest line is present too.
++    expect(lines[0].querySelector('.pyc-ln')?.textContent).toBe('1');
++    expect(container.textContent).toContain('# line 1');
++    expect(container.textContent).toContain('# line 40');
+     expect(container.textContent).toContain('# line 120');
+   });
+ 
+diff --git a/apps/web/src/components/InventionLab.tsx b/apps/web/src/components/InventionLab.tsx
+index 0ed3786..c948c65 100644
+--- a/apps/web/src/components/InventionLab.tsx
++++ b/apps/web/src/components/InventionLab.tsx
+@@ -10,10 +10,12 @@ const TITLE = 'Algorithm Evolution';
+ // Upper anchor for coloring the live candidate-evaluation rate (candidates/sec). Purely a visual
+ // scale for the throughput gradient — it credits nothing that did not happen.
+ const CANDIDATE_RATE_MAX = 20_000;
+-// A tall scrolling TUI window: each leader's full source is revealed fast, then the newest lines are
+-// pinned in view while only this many lines are kept live in the DOM (older lines drop out).
+-const STREAM_VISIBLE_LINE_LIMIT = 80;
++// A tall scrolling TUI window: each leader's full source is revealed fast and the entire revealed
++// source stays in the DOM (algorithms are only ~500 lines), so the user can scroll back to line 1.
++// The view follows the newest line only while the user is already at the bottom.
+ const STREAM_LINES_PER_TICK = 24;
++// How close (px) to the bottom edge still counts as "at the bottom" for the auto-follow.
++const STREAM_STICK_THRESHOLD_PX = 40;
+ 
+ function compact(n: number): string {
+   if (!Number.isFinite(n)) return '0';
+@@ -132,6 +134,14 @@ function CodeStreamBlock({
+   const rawLines = useMemo(() => pythonCodeLines(sample.code), [sample.code]);
+   const [visible, setVisible] = useState(live ? Math.min(STREAM_LINES_PER_TICK, rawLines.length) : rawLines.length);
+   const codeRef = useRef<HTMLElement>(null);
++  // Stick-to-bottom-unless-scrolled: true while the user is at (or near) the bottom of the code
++  // window. Scrolling up pauses the follow so the full source — back to line 1 — stays readable.
++  const stickToBottomRef = useRef(true);
++  const handleScroll = () => {
++    const el = codeRef.current;
++    if (!el) return;
++    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < STREAM_STICK_THRESHOLD_PX;
++  };
+ 
+   useEffect(() => {
+     if (!live) {
+@@ -157,16 +167,15 @@ function CodeStreamBlock({
+   }, [rawLines.length, live, sample.id, sample.code]);
+ 
+   const end = Math.min(visible, rawLines.length);
+-  const start = Math.max(0, end - STREAM_VISIBLE_LINE_LIMIT);
+-  const shown = useMemo(() => tokenizePythonLines(rawLines.slice(start, end)), [rawLines, start, end]);
++  const shown = useMemo(() => tokenizePythonLines(rawLines.slice(0, end)), [rawLines, end]);
+   const tier = scoreTier(sample, best);
+   const model = sampleModel(sample);
+   const candidate = sample.candidate > 0 ? sample.candidate : sample.id;
+ 
+-  // Pin the newest line in view as the source streams in / grows past the window.
++  // Follow the newest line as the source streams in — but only while the user is at the bottom.
+   useEffect(() => {
+     const el = codeRef.current;
+-    if (!el) return;
++    if (!el || !stickToBottomRef.current) return;
+     el.scrollTop = el.scrollHeight;
+   }, [shown.length, sample.id]);
+ 
+@@ -186,6 +195,7 @@ function CodeStreamBlock({
+       </div>
+       <code
+         ref={codeRef}
++        onScroll={handleScroll}
+         className="algo-stream-code"
+         data-testid="algo-stream-code"
+         data-visible-lines={shown.length}
+@@ -194,11 +204,11 @@ function CodeStreamBlock({
+         {shown.map((toks, li) => (
+           <span
+             className={`pyc-line algo-stream-line${live && li === shown.length - 1 && end < rawLines.length ? ' pyc-cursor' : ''}`}
+-            key={`${sample.id}-${start + li}`}
++            key={`${sample.id}-${li}`}
+             style={{ ['--i' as string]: li }}
+           >
+             <span className="pyc-ln" aria-hidden>
+-              {start + li + 1}
++              {li + 1}
+             </span>
+             <span className="pyc-code">{renderTokens(toks)}</span>
+           </span>
+@@ -314,7 +324,7 @@ export function InventionLab({
+               <strong>{Math.round(evalRate).toLocaleString()}</strong>
+             </span>
+             <span>
+-              <em>candidates</em>
++              <em>Σ candidates</em>
+               <strong>{compact(tried)}</strong>
+             </span>
+             <span>
+@@ -351,7 +361,7 @@ export function InventionLab({
+ 
+             <div className="algo-search-stats" data-testid="algo-search-stats">
+               <span>
+-                <em>candidates</em>
++                <em>Σ candidates</em>
+                 <strong>{compact(tried)}</strong>
+               </span>
+               <span>
+diff --git a/apps/web/src/styles.css b/apps/web/src/styles.css
+index bdb2ee9..21681bb 100644
+--- a/apps/web/src/styles.css
++++ b/apps/web/src/styles.css
+@@ -2586,10 +2586,9 @@ textarea {
+   color: var(--muted);
+   text-transform: none;
+   letter-spacing: 0;
+-  border: 1px solid var(--line);
+-  border-bottom: none;
++  border: none;
+   padding: 3px 8px;
+-  background: var(--panel2);
++  background: none;
+ }
+ .ilab-score {
+   font-family: var(--mono);
+@@ -2606,22 +2605,23 @@ textarea {
+   color: var(--good);
+ }
+ .algo-terminal-frame {
++  /* Borderless high-contrast TUI screen: no card chrome at all, just a near-black background
++     and brighter mono text — the theme vars are re-scoped brighter inside the frame. */
++  --text: #f2f8f4;
++  --muted: #a9b8b1;
+   min-width: 0;
+   overflow: hidden;
+-  border: 1px solid rgba(119, 134, 143, 0.58);
+-  border-radius: 8px;
+-  background: color-mix(in srgb, var(--deep) 92%, #050708);
+-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025);
++  background: #050708;
+ }
+ .algo-terminal-head {
++  /* terminal status line, not a card header — flat, with no rule beneath it */
+   display: flex;
+   align-items: center;
+   justify-content: space-between;
+   gap: 12px;
+   min-width: 0;
+   padding: 7px 10px;
+-  border-bottom: 1px solid rgba(119, 134, 143, 0.42);
+-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.01));
++  background: none;
+   font-family: var(--mono);
+ }
+ .algo-terminal-title {
+@@ -2629,7 +2629,7 @@ textarea {
+   align-items: center;
+   gap: 7px;
+   min-width: max-content;
+-  color: var(--text);
++  color: var(--good);
+ }
+ .algo-terminal-title svg {
+   color: var(--accent);
+@@ -2688,10 +2688,9 @@ textarea {
+   min-width: 0;
+   min-height: 0;
+   overflow: hidden;
+-  border: 1px solid rgba(119, 134, 143, 0.62);
+-  border-radius: 6px;
+-  background: var(--deep);
+-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025);
++  /* tmux-style pane split: a single hairline divider, no box, no radius */
++  border-left: 1px solid rgba(119, 134, 143, 0.34);
++  background: transparent;
+ }
+ .algo-code-title {
+   display: flex;
+@@ -2801,8 +2800,8 @@ textarea {
+   gap: 2px 10px;
+   min-width: 0;
+   padding: 7px 8px;
+-  border: 1px solid rgba(49, 199, 177, 0.34);
+-  border-radius: 5px;
++  /* terminal accent: thin left rule instead of a boxed card */
++  border-left: 2px solid var(--good);
+   background: rgba(49, 199, 177, 0.08);
+   color: var(--muted);
+   font-family: var(--mono);
+@@ -3022,7 +3021,9 @@ textarea {
+ .algo-stream-code {
+   display: block;
+   min-height: 0;
+-  overflow: auto;
++  max-height: 100%;
++  overflow-x: hidden;
++  overflow-y: auto;
+   padding: 5px 0 7px;
+   font-family: var(--mono);
+   font-size: 12px;
+@@ -3096,6 +3097,11 @@ textarea {
+     gap: 10px;
+     padding: 8px;
+   }
++  .algo-code-pane {
++    /* stacked panes: the vertical tmux divider becomes a horizontal one */
++    border-left: none;
++    box-shadow: inset 0 1px 0 rgba(119, 134, 143, 0.34);
++  }
+   .algo-search-stats {
+     grid-template-columns: repeat(2, minmax(0, 1fr));
+   }

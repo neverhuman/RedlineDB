@@ -1,0 +1,97 @@
+{
+  "schema_version": "jain.core-native-source-proof/v1",
+  "recorded_at": "2026-07-14T13:37:11Z",
+  "repository": "veox/jain-core",
+  "head_sha": "400585b14ea83d027cbb487225b740dc70923fe7",
+  "required_check": "jain-core/required",
+  "input_policy": "isolated clean worktrees at the native materializer's pinned revisions",
+  "shared_vendor_mutated": false,
+  "security_lane": {
+    "status": "pass",
+    "advisory_database": "/tmp/codex-core-native-diagnose/advisory-db",
+    "advisory_database_commit": "9f3e138091487e69144f536d36976e427a7a3307",
+    "advisory_database_clean": true,
+    "network_fetch": false,
+    "cargo_audit_sha256": "b80c6a7a27eeb4bae7901d9abb0951b2ad2d097fdc74eeb975baeee15c0ebb63",
+    "cargo_deny_log_sha256": "0d31781d1825d836e9e7ad2e23eafa93a7e685b1d2399a50a26908b1a31838ad",
+    "sbom_sha256": "3fe76766723ca440bc8e339ab95baeabcd7a15c880b2dedbe0efe3fc23fadea7"
+  },
+  "native_runtime": {
+    "status": "pass",
+    "contract": "learner-specific build directories plus LD_LIBRARY_PATH",
+    "stable_build_log_sha256": "d405c7d6d27ab527c9e706522234b235cc6b929bf04168dd706ffdff5116f98c",
+    "artifact_loader_test_log_sha256": "cc03125022b911ab44127e6f95b74906a8e96d3962dd05db07fa5f4f6e6aa110",
+    "libraries": {
+      "libcatboost.so": "1b433b5009e35aa0e5138e083e3442a2d54038fa3c176f1e4b291965c6c92cda",
+      "libxgboost.so": "8082a782e51b0605aecc1f671bfa48f7074e326fb0527f1147e7ae1fe38ef0a3",
+      "lib_lightgbm.so": "8af1032c63f4d36cbe3520acf9d829b3e27896a1d175f4bb699cc320bbaffcff"
+    }
+  },
+  "catboost_release_build": {
+    "status": "pass",
+    "command": "cargo build --locked --release -p feat-core --no-default-features --features catboost --all-targets",
+    "log_sha256": "0fa53567a5ac084c21eb697cf9b1849a01469e24cd1515a6623dbbb1c175b015"
+  },
+  "lightgbm_release_build": {
+    "status": "pass",
+    "command": "cargo build --locked --release -p feat-core --no-default-features --features lightgbm --all-targets",
+    "log_sha256": "c8ce0f78de25d90e343639840bd590e24ef2cd9f5286eb0699d59132abc0f559"
+  },
+  "xgboost_release_build": {
+    "status": "pass",
+    "command": "cargo build --locked --release -p feat-core --no-default-features --features xgboost --all-targets",
+    "log_sha256": "6136e78f031af77c9ed37953c14daf701f7c86da8d4b2b8cff98a1acac0403fd"
+  },
+  "xgboost_submodules": {
+    "dmlc-core": "13341857549852a9a86b1894b5ba84c6276ab381",
+    "gputreeshap": "787259b412c18ab8d5f24bf2b8bd6a59ff8208f3"
+  },
+  "lightgbm_submodules": {
+    "external_libs/compute": "36350b7de849300bd3d72a05d8bf890ca405a014",
+    "external_libs/eigen": "3147391d946bb4b6c68edd901f2add6ac1f31f8c",
+    "external_libs/fast_double_parser": "252029ddac664370bdda3f0761675785d92a1573",
+    "external_libs/fast_double_parser/benchmarks/dependencies/abseil-cpp": "d936052d32a5b7ca08b0199a6724724aea432309",
+    "external_libs/fast_double_parser/benchmarks/dependencies/double-conversion": "f4cb2384efa55dee0e6652f8674b05763441ab09",
+    "external_libs/fmt": "8303d140a1a11f19b982a9f664bbe59a1ccda3f4"
+  },
+  "native_vendor_manifest_sha256": "1ab43d999ebe4ad5865752ebcf6f922b78524779f18c5e408851d1523d11ce0e",
+  "native_vendor": {
+    "schema_version": "jain.native-vendor-manifest/v1",
+    "source_root": "/tmp/codex-core-native-diagnose/native-source",
+    "vendor_root": "/tmp/codex-core-native-diagnose/vendor",
+    "materializer": "jain-deploy/scripts/vendor-all.sh",
+    "atomic_install": true,
+    "learners": {
+      "catboost": {
+        "schema_version": "jain.native-vendor/v1",
+        "learner": "catboost",
+        "source": "/tmp/codex-core-native-diagnose/native-source/catboost",
+        "dest": "/tmp/codex-core-native-diagnose/vendor/catboost",
+        "revision": "b1bd2a6d77219e82a1acfcedfccb8e6f6c1ee084",
+        "source_digest_sha256": "fb74c14b9677b4b0ba5701528dd711237b05ff8d873386dda3fd7a3fabd6957a",
+        "vendor_digest_sha256": "22293f38fdf9e769ac65d15a4cc907b99ac373b99df3156ef4c4070c66c4c734",
+        "pruned": true
+      },
+      "xgboost": {
+        "schema_version": "jain.native-vendor/v1",
+        "learner": "xgboost",
+        "source": "/tmp/codex-core-native-diagnose/native-source/xgboost",
+        "dest": "/tmp/codex-core-native-diagnose/vendor/xgboost",
+        "revision": "62e7923619352c4079b24303b367134486b1c84f",
+        "source_digest_sha256": "5479d59cb7ed92c09a0393c84cb5d8231eab3b18d0f2ff887b1411951cc2a83d",
+        "vendor_digest_sha256": "9d61570a22d9b30629fe80618df3750aa554980fd40ff1331573b902ec51e8a7",
+        "pruned": true
+      },
+      "lightgbm": {
+        "schema_version": "jain.native-vendor/v1",
+        "learner": "lightgbm",
+        "source": "/tmp/codex-core-native-diagnose/native-source/lightgbm",
+        "dest": "/tmp/codex-core-native-diagnose/vendor/lightgbm",
+        "revision": "d02a01ac6f51d36c9e62388243bcb75c3b1b1774",
+        "source_digest_sha256": "ea0ec64c159cf71fd5786f0e8a23ef55c39295b66f45355dbd074dc6bcc6126a",
+        "vendor_digest_sha256": "c903370c6762243ba3c0cd30d15c128ee51302498731d19d4b9f14ba3f259f87",
+        "pruned": true
+      }
+    }
+  }
+}

@@ -1,0 +1,166 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Restore the exact governed CatBoost ABI v1 export namespace when a native source tree contains stale future cb_* entries. Includes idempotence, exact cached-library namespace, contract-drift, cold native link, and smoke proof.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-15T10:13:03.662534093+00:00",
+      "head_sha": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5",
+      "status": "pass"
+    },
+    "passport_hash": "passport:8ffc9bc0d11b8a194089ba3dc140b1849d0870e5:Pass:0:0:0:2",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "49714a2bb375b382e8e6c561a2120ec3f2b1cf4d",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "723c05fe-e01b-491e-a708-8b94d00506b2#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codexb/restore-catboost-exports-20260715",
+      "head_sha": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 1,
+      "passport_hash": "passport:8ffc9bc0d11b8a194089ba3dc140b1849d0870e5:Pass:0:0:0:2",
+      "repo": {
+        "host": "jeryu",
+        "id": "723c05fe-e01b-491e-a708-8b94d00506b2",
+        "name": "jain-catboost",
+        "owner": "veox"
+      },
+      "review": {
+        "approvals": 2,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "fix(catboost): reconcile canonical ABI exports",
+      "updated_at": "2026-07-15T10:06:13.061208740+00:00"
+    }
+  },
+  "repository": "veox/jain-catboost",
+  "request": {
+    "body": {
+      "body_markdown": "Independent exact-head review: canonical ABI-v1 export reconciliation, cache namespace validation, package-scoped test rpath, offline default dependency policy, agent/release documentation, automatic Jankurai proof, and clean-host required CI are green.",
+      "evidence": null,
+      "expected_head_sha": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/veox%2Fjain-catboost/pulls/1/reviews"
+  },
+  "response": {
+    "description": "Restore the exact governed CatBoost ABI v1 export namespace when a native source tree contains stale future cb_* entries. Includes idempotence, exact cached-library namespace, contract-drift, cold native link, and smoke proof.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-15T10:13:03.653067713+00:00",
+      "head_sha": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5",
+      "status": "pass"
+    },
+    "passport_hash": "passport:8ffc9bc0d11b8a194089ba3dc140b1849d0870e5:Pass:0:0:0:2",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "49714a2bb375b382e8e6c561a2120ec3f2b1cf4d",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "723c05fe-e01b-491e-a708-8b94d00506b2#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codexb/restore-catboost-exports-20260715",
+      "head_sha": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 1,
+      "passport_hash": "passport:8ffc9bc0d11b8a194089ba3dc140b1849d0870e5:Pass:0:0:0:2",
+      "repo": {
+        "host": "jeryu",
+        "id": "723c05fe-e01b-491e-a708-8b94d00506b2",
+        "name": "jain-catboost",
+        "owner": "veox"
+      },
+      "review": {
+        "approvals": 2,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "fix(catboost): reconcile canonical ABI exports",
+      "updated_at": "2026-07-15T10:06:13.061208740+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784110382
+}

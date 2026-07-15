@@ -1,0 +1,44 @@
+{
+  "schema_version": "jain.exact-head-proof/v1",
+  "repository": "jeryu/jeryu-deploy",
+  "head_sha": "2acf4384f2bc358677aaf52738a2d1b3c52ae953",
+  "tree_sha": "7effd0d6eebf0ded9f2850534db002557c07d526",
+  "timestamp": "2026-07-15T12:00:19Z",
+  "runner": {
+    "worktree": "/home/ubuntu/jeryu-split/.worktrees/jeryu-deploy-lfs-batch-download-auth-20260715",
+    "tracked_status": "clean",
+    "dependency_layout": "clean sibling worktrees and clean canonical siblings"
+  },
+  "required_lane": {
+    "command": "ops/ci/pr-ci.sh",
+    "status": "pass",
+    "checks": [
+      "cargo fmt --all --check",
+      "cargo clippy --workspace --all-targets -- -D warnings",
+      "cargo test --workspace with documented sandbox exclusions",
+      "jankurai full advisory audit"
+    ]
+  },
+  "jankurai": {
+    "version": "1.6.10",
+    "score": 85,
+    "minimum_score": 85,
+    "hard_findings": 0,
+    "soft_findings": 4,
+    "caps": [],
+    "report_sha256": "84dd49f39a987eb27627439f35b6a7fe63e5fb57ad24cb6ccafe63039303e5d5"
+  },
+  "focused_lfs_tests": {
+    "status": "pass",
+    "tests": [
+      "git_transport::tests::logical_repo_name_strips_only_the_transport_suffix",
+      "s4_git_lfs_batch_and_locks_verify_routes_return_protocol_json",
+      "s4_git_lfs_cpkt_versions_roundtrip_over_http"
+    ]
+  },
+  "supplemental_security": {
+    "status": "baseline-fail",
+    "reason": "The repository-wide gitleaks lane reports the pre-existing deterministic currentPassword fixture in crates/jeryu-api/src/web/tests.rs; this exact-head change does not modify that file."
+  },
+  "status": "pass"
+}

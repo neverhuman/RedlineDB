@@ -1,0 +1,89 @@
+{
+  "schema_version": "1.0.0",
+  "standard_version": "0.9.0",
+  "generated_at": "1784142377",
+  "repo_root": ".",
+  "git_head": "dc42c988517c0e6b3af8f81d452c7c8184c938b0",
+  "lane": "security",
+  "wrapper": {
+    "kind": "bash_script",
+    "path": "tools/security-lane.sh",
+    "strict": true
+  },
+  "exit_code": 1,
+  "elapsed_ms": 1416,
+  "log_path": "target/jankurai/security/security-lane-1784142376-562.log",
+  "policy": {
+    "schema_version": "1.0.0",
+    "profile": "ci",
+    "enabled_tools": [
+      "cargo-audit",
+      "cargo-deny",
+      "gitleaks",
+      "grype",
+      "npm",
+      "syft",
+      "trivy",
+      "zizmor"
+    ],
+    "required_tools": [
+      "cargo-audit",
+      "gitleaks",
+      "npm",
+      "zizmor"
+    ],
+    "advisory_tools": [
+      "cargo-deny",
+      "grype",
+      "syft",
+      "trivy"
+    ],
+    "require_one_of": [],
+    "fail_lane_on": "high"
+  },
+  "commands": [
+    {
+      "label": "gitleaks",
+      "shell_command": "echo 'security-lane:gitleaks:start' >&2; if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then scan_dir=\"$(mktemp -d)\"; trap 'rm -rf \"$scan_dir\"' EXIT; git archive --format=tar HEAD | tar -xf - -C \"$scan_dir\"; (cd \"$scan_dir\" && gitleaks detect --no-git --source . --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore --redact --no-banner); else gitleaks detect --no-git --source . --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore --redact --no-banner; fi; status=$?; echo 'security-lane:gitleaks:done' >&2; exit $status",
+      "tool": "gitleaks",
+      "status": "failed",
+      "required_by_policy": true,
+      "blocking": true,
+      "exit_code": 1,
+      "advisory": false
+    },
+    {
+      "label": "cargo-audit",
+      "shell_command": "cargo-audit",
+      "tool": "cargo-audit",
+      "status": "skipped",
+      "required_by_policy": true,
+      "blocking": true,
+      "advisory": false,
+      "stderr_excerpt": "required security tool did not produce evidence",
+      "normalized_decision": "block"
+    },
+    {
+      "label": "npm",
+      "shell_command": "npm",
+      "tool": "npm",
+      "status": "skipped",
+      "required_by_policy": true,
+      "blocking": true,
+      "advisory": false,
+      "stderr_excerpt": "required security tool did not produce evidence",
+      "normalized_decision": "block"
+    },
+    {
+      "label": "zizmor",
+      "shell_command": "zizmor",
+      "tool": "zizmor",
+      "status": "skipped",
+      "required_by_policy": true,
+      "blocking": true,
+      "advisory": false,
+      "stderr_excerpt": "required security tool did not produce evidence",
+      "normalized_decision": "block"
+    }
+  ]
+}

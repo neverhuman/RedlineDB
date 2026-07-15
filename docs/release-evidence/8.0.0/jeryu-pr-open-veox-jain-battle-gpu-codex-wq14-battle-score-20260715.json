@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-battle-gpu"
+      },
+      "sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b"
+    },
+    "body": "Native Prime CUDA dispatch with fail-closed cache integrity, focused modules, and passing required/release-gate evidence.",
+    "created_at": "2026-07-15T01:31:24.278732004Z",
+    "draft": false,
+    "head": {
+      "label": "codex/wq14-battle-score-20260715",
+      "ref": "codex/wq14-battle-score-20260715",
+      "repo": {
+        "full_name": "veox/jain-battle-gpu"
+      },
+      "sha": "7dd5989ec0940bf9f81ebaf79cdce8f06eaec121"
+    },
+    "html_url": "/veox/jain-battle-gpu/pull/1",
+    "id": "61fee102-7c8d-4bb0-a2df-4a41a994eaec",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "veox/jain-battle-gpu",
+    "state": "open",
+    "title": "feat(gpu): land native Prime CUDA dispatch",
+    "updated_at": "2026-07-15T01:31:24.278732004Z",
+    "url": "/repos/veox/jain-battle-gpu/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "veox/jain-battle-gpu",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Native Prime CUDA dispatch with fail-closed cache integrity, focused modules, and passing required/release-gate evidence.",
+      "draft": false,
+      "head": "codex/wq14-battle-score-20260715",
+      "title": "feat(gpu): land native Prime CUDA dispatch"
+    },
+    "method": "POST",
+    "path": "/repos/veox/jain-battle-gpu/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-battle-gpu"
+      },
+      "sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b"
+    },
+    "body": "Native Prime CUDA dispatch with fail-closed cache integrity, focused modules, and passing required/release-gate evidence.",
+    "created_at": "2026-07-15T01:31:24.278732004Z",
+    "draft": false,
+    "head": {
+      "label": "codex/wq14-battle-score-20260715",
+      "ref": "codex/wq14-battle-score-20260715",
+      "repo": {
+        "full_name": "veox/jain-battle-gpu"
+      },
+      "sha": "7dd5989ec0940bf9f81ebaf79cdce8f06eaec121"
+    },
+    "html_url": "/veox/jain-battle-gpu/pull/1",
+    "id": "61fee102-7c8d-4bb0-a2df-4a41a994eaec",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "veox/jain-battle-gpu",
+    "state": "open",
+    "title": "feat(gpu): land native Prime CUDA dispatch",
+    "updated_at": "2026-07-15T01:31:24.278732004Z",
+    "url": "/repos/veox/jain-battle-gpu/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784079084
+}

@@ -1,0 +1,145 @@
+{
+  "executed": [
+    {
+      "args": [
+        "build",
+        "--locked",
+        "--release",
+        "--workspace",
+        "--no-default-features",
+        "--features",
+        "battle-gpu/gpu,battle-gpu/gpu-dynamic-loading",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "label": "build-feature-set-1",
+      "program": "cargo",
+      "status": "pass"
+    },
+    {
+      "args": [
+        "test",
+        "--locked",
+        "--workspace",
+        "--no-default-features",
+        "--features",
+        "battle-gpu/gpu,battle-gpu/gpu-dynamic-loading",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "label": "test-feature-set-1",
+      "program": "cargo",
+      "status": "pass"
+    },
+    {
+      "args": [
+        "build",
+        "--locked",
+        "--release",
+        "--workspace",
+        "--no-default-features",
+        "--features",
+        "battle-gpu/gpu-dynamic-linking",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "label": "build-feature-set-2",
+      "program": "cargo",
+      "status": "pass"
+    },
+    {
+      "args": [
+        "test",
+        "--locked",
+        "--workspace",
+        "--no-default-features",
+        "--features",
+        "battle-gpu/gpu-dynamic-linking",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "label": "test-feature-set-2",
+      "program": "cargo",
+      "status": "pass"
+    }
+  ],
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "run-release-cargo-commands",
+  "policy": {
+    "commands": [
+      {
+        "args": [
+          "build",
+          "--locked",
+          "--release",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "battle-gpu/gpu,battle-gpu/gpu-dynamic-loading",
+          "--all-targets"
+        ],
+        "label": "build-feature-set-1",
+        "program": "cargo"
+      },
+      {
+        "args": [
+          "test",
+          "--locked",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "battle-gpu/gpu,battle-gpu/gpu-dynamic-loading",
+          "--all-targets"
+        ],
+        "label": "test-feature-set-1",
+        "program": "cargo"
+      },
+      {
+        "args": [
+          "build",
+          "--locked",
+          "--release",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "battle-gpu/gpu-dynamic-linking",
+          "--all-targets"
+        ],
+        "label": "build-feature-set-2",
+        "program": "cargo"
+      },
+      {
+        "args": [
+          "test",
+          "--locked",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "battle-gpu/gpu-dynamic-linking",
+          "--all-targets"
+        ],
+        "label": "test-feature-set-2",
+        "program": "cargo"
+      }
+    ],
+    "mode": "feature-matrix",
+    "release_feature_sets": [
+      [
+        "gpu",
+        "gpu-dynamic-loading"
+      ],
+      [
+        "gpu-dynamic-linking"
+      ]
+    ],
+    "release_package": "battle-gpu",
+    "repo": "jain-battle-gpu",
+    "schema_version": "jain.split.release-cargo-commands/v1"
+  },
+  "repository": "jain-battle-gpu",
+  "schema_version": "jain.release-cargo-execution/v1",
+  "status": "pass",
+  "timestamp_unix": 1784079493,
+  "working_directory": "/tmp/split-host-ci.f1SHqS/jain-battle-gpu"
+}

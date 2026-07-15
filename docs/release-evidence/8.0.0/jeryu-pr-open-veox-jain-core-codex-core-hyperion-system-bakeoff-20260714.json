@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "3e22e5ea9f1b52f9874616ab9f3cc83bfc35cc6d"
+    },
+    "body": "Runs complete matched no-Hyperion/Hyperion JOPE systems under identical train-only CV settings; persists both ledgers, exact effort policy, explicit off/delta receipts, Allstate regression high/no-lift tests, and live Lime/Prime workflow evidence. Local just required and Jankurai score 88 hard=0 pass.",
+    "created_at": "2026-07-14T15:54:04.306590839Z",
+    "draft": false,
+    "head": {
+      "label": "codex/core-hyperion-system-bakeoff-20260714",
+      "ref": "codex/core-hyperion-system-bakeoff-20260714",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "8ea8f3cf9f0df9b0ca7967d229338146d6db5e67"
+    },
+    "html_url": "/veox/jain-core/pull/2",
+    "id": "9c120d5a-04c9-40ad-a481-7077af49a6bb",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 2,
+    "source_repository": "veox/jain-core",
+    "state": "open",
+    "title": "feat(core): compare matched Hyperion JOPE systems",
+    "updated_at": "2026-07-14T15:54:04.306590839Z",
+    "url": "/repos/veox/jain-core/pulls/2",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "veox/jain-core",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Runs complete matched no-Hyperion/Hyperion JOPE systems under identical train-only CV settings; persists both ledgers, exact effort policy, explicit off/delta receipts, Allstate regression high/no-lift tests, and live Lime/Prime workflow evidence. Local just required and Jankurai score 88 hard=0 pass.",
+      "draft": false,
+      "head": "codex/core-hyperion-system-bakeoff-20260714",
+      "title": "feat(core): compare matched Hyperion JOPE systems"
+    },
+    "method": "POST",
+    "path": "/repos/veox/jain-core/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "3e22e5ea9f1b52f9874616ab9f3cc83bfc35cc6d"
+    },
+    "body": "Runs complete matched no-Hyperion/Hyperion JOPE systems under identical train-only CV settings; persists both ledgers, exact effort policy, explicit off/delta receipts, Allstate regression high/no-lift tests, and live Lime/Prime workflow evidence. Local just required and Jankurai score 88 hard=0 pass.",
+    "created_at": "2026-07-14T15:54:04.306590839Z",
+    "draft": false,
+    "head": {
+      "label": "codex/core-hyperion-system-bakeoff-20260714",
+      "ref": "codex/core-hyperion-system-bakeoff-20260714",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "8ea8f3cf9f0df9b0ca7967d229338146d6db5e67"
+    },
+    "html_url": "/veox/jain-core/pull/2",
+    "id": "9c120d5a-04c9-40ad-a481-7077af49a6bb",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 2,
+    "source_repository": "veox/jain-core",
+    "state": "open",
+    "title": "feat(core): compare matched Hyperion JOPE systems",
+    "updated_at": "2026-07-14T15:54:04.306590839Z",
+    "url": "/repos/veox/jain-core/pulls/2",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784044444
+}

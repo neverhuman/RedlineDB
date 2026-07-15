@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-15T13:03:28.899243826+00:00",
+      "head_sha": "a98f087ad3c9c331f3aba70562f8d65beca5c75b",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:a98f087ad3c9c331f3aba70562f8d65beca5c75b:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "2acf4384f2bc358677aaf52738a2d1b3c52ae953",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "61984a91-3115-47d0-9bed-72282ffc0fce#14",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/passport-latest-check-20260715",
+      "head_sha": "a98f087ad3c9c331f3aba70562f8d65beca5c75b",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "a98f087ad3c9c331f3aba70562f8d65beca5c75b",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 14,
+      "passport_hash": "passport:a98f087ad3c9c331f3aba70562f8d65beca5c75b:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "61984a91-3115-47d0-9bed-72282ffc0fce",
+        "name": "jeryu-deploy",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "fix(api): evaluate latest check run in merge passport",
+      "updated_at": "2026-07-15T12:58:39.587366849+00:00"
+    }
+  },
+  "repository": "jeryu/jeryu-deploy",
+  "request": {
+    "body": {
+      "body_markdown": null,
+      "evidence": null,
+      "expected_head_sha": "a98f087ad3c9c331f3aba70562f8d65beca5c75b",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjeryu-deploy/pulls/14/reviews"
+  },
+  "response": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-15T13:03:28.888667649+00:00",
+      "head_sha": "a98f087ad3c9c331f3aba70562f8d65beca5c75b",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:a98f087ad3c9c331f3aba70562f8d65beca5c75b:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "2acf4384f2bc358677aaf52738a2d1b3c52ae953",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "61984a91-3115-47d0-9bed-72282ffc0fce#14",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/passport-latest-check-20260715",
+      "head_sha": "a98f087ad3c9c331f3aba70562f8d65beca5c75b",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "a98f087ad3c9c331f3aba70562f8d65beca5c75b",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 14,
+      "passport_hash": "passport:a98f087ad3c9c331f3aba70562f8d65beca5c75b:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "61984a91-3115-47d0-9bed-72282ffc0fce",
+        "name": "jeryu-deploy",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "fix(api): evaluate latest check run in merge passport",
+      "updated_at": "2026-07-15T12:58:39.587366849+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784120607
+}

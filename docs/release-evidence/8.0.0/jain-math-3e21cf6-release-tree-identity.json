@@ -1,0 +1,11 @@
+{
+  "commit": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279",
+  "commit_input": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279",
+  "mode": "dry-run",
+  "operation": "release-tree-identity",
+  "release_checksum_sha256": "80fa5aeb8adf76217936b51a09d4583c131040026e496556aed6afe8a7227a2c",
+  "repository": "/tmp/codex-math-prime-fixture-20260715",
+  "schema_version": "jain.release-tree-identity/v1",
+  "status": "pass",
+  "timestamp_unix": 1784120793
+}

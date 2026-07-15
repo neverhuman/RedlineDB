@@ -1,0 +1,65 @@
+{
+  "executed": [
+    {
+      "args": [
+        "build",
+        "--locked",
+        "--release",
+        "--all-features",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "label": "build-all-features",
+      "program": "cargo",
+      "status": "pass"
+    },
+    {
+      "args": [
+        "test",
+        "--locked",
+        "--all-features",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "label": "test-all-features",
+      "program": "cargo",
+      "status": "pass"
+    }
+  ],
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "run-release-cargo-commands",
+  "policy": {
+    "commands": [
+      {
+        "args": [
+          "build",
+          "--locked",
+          "--release",
+          "--all-features",
+          "--all-targets"
+        ],
+        "label": "build-all-features",
+        "program": "cargo"
+      },
+      {
+        "args": [
+          "test",
+          "--locked",
+          "--all-features",
+          "--all-targets"
+        ],
+        "label": "test-all-features",
+        "program": "cargo"
+      }
+    ],
+    "mode": "all-features",
+    "repo": "jain-math",
+    "schema_version": "jain.split.release-cargo-commands/v1"
+  },
+  "repository": "jain-math",
+  "schema_version": "jain.release-cargo-execution/v1",
+  "status": "pass",
+  "timestamp_unix": 1784119700,
+  "working_directory": "/tmp/split-host-ci.FgLH62/jain-math"
+}

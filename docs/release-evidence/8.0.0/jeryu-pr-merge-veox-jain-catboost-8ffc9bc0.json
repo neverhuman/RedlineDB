@@ -1,0 +1,19 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-merge",
+  "repository": "veox/jain-catboost",
+  "request": {
+    "body": {},
+    "method": "PUT",
+    "path": "/repos/veox/jain-catboost/pulls/1/merge"
+  },
+  "response": {
+    "merged": true,
+    "message": "Pull Request successfully merged",
+    "sha": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784110410
+}

@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-close",
+  "repository": "veox/jain-cli",
+  "request": {
+    "body": {
+      "state": "closed"
+    },
+    "method": "PATCH",
+    "path": "/repos/veox/jain-cli/pulls/4"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-cli"
+      },
+      "sha": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3"
+    },
+    "body": "Add Core's required invention_engine field with the legacy default and align candidate_log_record with the current signature. This is the WQ-6 fix for the WQ-8 exact-head release-Cargo blocker.",
+    "created_at": "2026-07-14T04:15:11.077382156Z",
+    "draft": false,
+    "head": {
+      "label": "codex/wq-6-cli-core-compat-final-20260714",
+      "ref": "codex/wq-6-cli-core-compat-final-20260714",
+      "repo": {
+        "full_name": "veox/jain-cli"
+      },
+      "sha": "86256872fdd1dd801e0bd91b9edcbc3e4da44b64"
+    },
+    "html_url": "/veox/jain-cli/pull/4",
+    "id": "8302a7a5-fe15-4992-a764-fb8bca6a2399",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "closed",
+    "merged": false,
+    "merged_at": null,
+    "number": 4,
+    "source_repository": "veox/jain-cli",
+    "state": "closed",
+    "title": "fix(cli): restore Core pipeline compatibility",
+    "updated_at": "2026-07-14T04:19:18.874545730Z",
+    "url": "/repos/veox/jain-cli/pulls/4",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784002758
+}

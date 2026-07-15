@@ -1,0 +1,19 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-merge",
+  "repository": "veox/jain-math",
+  "request": {
+    "body": {},
+    "method": "PUT",
+    "path": "/repos/veox/jain-math/pulls/1/merge"
+  },
+  "response": {
+    "merged": true,
+    "message": "Pull Request successfully merged",
+    "sha": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784120758
+}

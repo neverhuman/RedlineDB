@@ -1,0 +1,66 @@
+{
+  "error": "release Cargo command failed: test-all-features",
+  "executed": [
+    {
+      "args": [
+        "build",
+        "--locked",
+        "--release",
+        "--all-features",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "label": "build-all-features",
+      "program": "cargo",
+      "status": "pass"
+    },
+    {
+      "args": [
+        "test",
+        "--locked",
+        "--all-features",
+        "--all-targets"
+      ],
+      "exit_code": 127,
+      "label": "test-all-features",
+      "program": "cargo",
+      "status": "fail"
+    }
+  ],
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "run-release-cargo-commands",
+  "policy": {
+    "commands": [
+      {
+        "args": [
+          "build",
+          "--locked",
+          "--release",
+          "--all-features",
+          "--all-targets"
+        ],
+        "label": "build-all-features",
+        "program": "cargo"
+      },
+      {
+        "args": [
+          "test",
+          "--locked",
+          "--all-features",
+          "--all-targets"
+        ],
+        "label": "test-all-features",
+        "program": "cargo"
+      }
+    ],
+    "mode": "all-features",
+    "repo": "jain-catboost",
+    "schema_version": "jain.split.release-cargo-commands/v1"
+  },
+  "repository": "jain-catboost",
+  "schema_version": "jain.release-cargo-execution/v1",
+  "status": "fail",
+  "timestamp_unix": 1784108097,
+  "working_directory": "/tmp/split-host-ci.KUO4F8/jain-catboost"
+}

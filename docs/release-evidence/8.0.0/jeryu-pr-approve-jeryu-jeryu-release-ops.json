@@ -1,0 +1,166 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-14T20:15:15.527633370+00:00",
+      "head_sha": "7048a72be412466647ab1bde69ca9f9db8990374",
+      "status": "pass"
+    },
+    "passport_hash": "passport:7048a72be412466647ab1bde69ca9f9db8990374:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "16db27cfd41e26e44ebe641b253080389b21d8d9",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "47f76fb8-f2ea-45a9-9a38-c247c410edea#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-jain4-consumer-20260714",
+      "head_sha": "7048a72be412466647ab1bde69ca9f9db8990374",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "7048a72be412466647ab1bde69ca9f9db8990374",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 7,
+      "passport_hash": "passport:7048a72be412466647ab1bde69ca9f9db8990374:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "47f76fb8-f2ea-45a9-9a38-c247c410edea",
+        "name": "jeryu-release-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "chore(redline): bind jain.4 consumer proof",
+      "updated_at": "2026-07-14T20:14:29.784189188+00:00"
+    }
+  },
+  "repository": "jeryu/jeryu-release-ops",
+  "request": {
+    "body": {
+      "body_markdown": null,
+      "evidence": null,
+      "expected_head_sha": "7048a72be412466647ab1bde69ca9f9db8990374",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjeryu-release-ops/pulls/7/reviews"
+  },
+  "response": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-14T20:15:15.518523389+00:00",
+      "head_sha": "7048a72be412466647ab1bde69ca9f9db8990374",
+      "status": "pass"
+    },
+    "passport_hash": "passport:7048a72be412466647ab1bde69ca9f9db8990374:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "16db27cfd41e26e44ebe641b253080389b21d8d9",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "47f76fb8-f2ea-45a9-9a38-c247c410edea#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/redline-jain4-consumer-20260714",
+      "head_sha": "7048a72be412466647ab1bde69ca9f9db8990374",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "7048a72be412466647ab1bde69ca9f9db8990374",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 7,
+      "passport_hash": "passport:7048a72be412466647ab1bde69ca9f9db8990374:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "47f76fb8-f2ea-45a9-9a38-c247c410edea",
+        "name": "jeryu-release-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "chore(redline): bind jain.4 consumer proof",
+      "updated_at": "2026-07-14T20:14:29.784189188+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784060112
+}

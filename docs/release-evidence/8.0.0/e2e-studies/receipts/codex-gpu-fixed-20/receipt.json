@@ -1,0 +1,53 @@
+{
+  "schema": "jain.e2e-studies/v1",
+  "status": "blocked",
+  "blocker": "unexpected server version 7.0.6",
+  "run_id": "codex-gpu-fixed-20",
+  "generated_at": "2026-07-14T05:45:04Z",
+  "mode": "fast",
+  "base_url": "http://127.0.0.1:8893",
+  "effort": "low",
+  "runner": "unknown",
+  "auditor_exception": "docs/release-evidence/8.0.0/jankurai-auditor-exception.json",
+  "preflight": {
+    "health_status": "200",
+    "health_version": "7.0.6",
+    "runtime": ""
+  },
+  "dataset": {
+    "path": "docs/release-evidence/8.0.0/e2e-studies/data/e2e.csv",
+    "sha256": "96668514f960f0720ddf9102013fa121e5f32e6d8993183d5896069e3e6cd06c",
+    "rows": 240
+  },
+  "session": {
+    "id": "",
+    "chimera_enabled": false,
+    "model_id": "",
+    "terminal_state": "unknown"
+  },
+  "engine_observed": "unknown",
+  "engine_expected": "any",
+  "engine_match": true,
+  "studies": {
+    "upload": {
+      "status": "fail",
+      "detail": ""
+    },
+    "training": {
+      "status": "fail",
+      "engine_observed": "unknown",
+      "terminal_state": "unknown",
+      "detail": ""
+    },
+    "chimera": {
+      "status": "fail",
+      "starforge_completed_trials": 0,
+      "detail": ""
+    },
+    "export": {
+      "status": "fail",
+      "detail": ""
+    }
+  },
+  "verdict": "fail"
+}

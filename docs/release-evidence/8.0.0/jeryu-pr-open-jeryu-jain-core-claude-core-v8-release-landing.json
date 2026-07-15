@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-core"
+      },
+      "sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8"
+    },
+    "body": "",
+    "created_at": "2026-07-14T03:05:34.620224522Z",
+    "draft": false,
+    "head": {
+      "label": "claude/core-v8-release-landing",
+      "ref": "claude/core-v8-release-landing",
+      "repo": {
+        "full_name": "jeryu/jain-core"
+      },
+      "sha": "0a4097376f08d42a42d4a7326242bd2921e06eb8"
+    },
+    "html_url": "/jeryu/jain-core/pull/12",
+    "id": "c698e06c-8464-47fb-84dd-33ae78bda850",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 12,
+    "source_repository": "jeryu/jain-core",
+    "state": "open",
+    "title": "release(core): v8 head — JOPE/Lime port + effort-gated Lime/Prime engine + fail-closed hardening",
+    "updated_at": "2026-07-14T03:05:34.620224522Z",
+    "url": "/repos/jeryu/jain-core/pulls/12",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-core",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "claude/core-v8-release-landing",
+      "title": "release(core): v8 head — JOPE/Lime port + effort-gated Lime/Prime engine + fail-closed hardening"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-core/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-core"
+      },
+      "sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8"
+    },
+    "body": "",
+    "created_at": "2026-07-14T03:05:34.620224522Z",
+    "draft": false,
+    "head": {
+      "label": "claude/core-v8-release-landing",
+      "ref": "claude/core-v8-release-landing",
+      "repo": {
+        "full_name": "jeryu/jain-core"
+      },
+      "sha": "0a4097376f08d42a42d4a7326242bd2921e06eb8"
+    },
+    "html_url": "/jeryu/jain-core/pull/12",
+    "id": "c698e06c-8464-47fb-84dd-33ae78bda850",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 12,
+    "source_repository": "jeryu/jain-core",
+    "state": "open",
+    "title": "release(core): v8 head — JOPE/Lime port + effort-gated Lime/Prime engine + fail-closed hardening",
+    "updated_at": "2026-07-14T03:05:34.620224522Z",
+    "url": "/repos/jeryu/jain-core/pulls/12",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783998334
+}

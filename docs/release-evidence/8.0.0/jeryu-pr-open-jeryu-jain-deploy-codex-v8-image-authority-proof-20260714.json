@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-deploy"
+      },
+      "sha": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74"
+    },
+    "body": "WQ-8: adopt the reviewed Starforge artifact-lock/staging proof and retarget the signed image, installer, runtime defaults, registry fixtures, retention, and OCI source labels to image.neverhuman.org/veox/jain. No AtomicSoul push, tag, manifest bind, or production mutation. Required CI must run with sibling resolution once the reviewed SmartCluster v8 tag is available.",
+    "created_at": "2026-07-14T03:06:48.028282650Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8-image-authority-proof-20260714",
+      "ref": "codex/v8-image-authority-proof-20260714",
+      "repo": {
+        "full_name": "jeryu/jain-deploy"
+      },
+      "sha": "79c490f26a6f58f0a79779af8c731856f7b3cde8"
+    },
+    "html_url": "/jeryu/jain-deploy/pull/21",
+    "id": "bacede6f-8d08-42cf-82e5-624311bb04f2",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 21,
+    "source_repository": "jeryu/jain-deploy",
+    "state": "open",
+    "title": "release(deploy): lock v8 image identity and Starforge assets",
+    "updated_at": "2026-07-14T03:06:48.028282650Z",
+    "url": "/repos/jeryu/jain-deploy/pulls/21",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-deploy",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "WQ-8: adopt the reviewed Starforge artifact-lock/staging proof and retarget the signed image, installer, runtime defaults, registry fixtures, retention, and OCI source labels to image.neverhuman.org/veox/jain. No AtomicSoul push, tag, manifest bind, or production mutation. Required CI must run with sibling resolution once the reviewed SmartCluster v8 tag is available.",
+      "draft": false,
+      "head": "codex/v8-image-authority-proof-20260714",
+      "title": "release(deploy): lock v8 image identity and Starforge assets"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-deploy/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-deploy"
+      },
+      "sha": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74"
+    },
+    "body": "WQ-8: adopt the reviewed Starforge artifact-lock/staging proof and retarget the signed image, installer, runtime defaults, registry fixtures, retention, and OCI source labels to image.neverhuman.org/veox/jain. No AtomicSoul push, tag, manifest bind, or production mutation. Required CI must run with sibling resolution once the reviewed SmartCluster v8 tag is available.",
+    "created_at": "2026-07-14T03:06:48.028282650Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8-image-authority-proof-20260714",
+      "ref": "codex/v8-image-authority-proof-20260714",
+      "repo": {
+        "full_name": "jeryu/jain-deploy"
+      },
+      "sha": "79c490f26a6f58f0a79779af8c731856f7b3cde8"
+    },
+    "html_url": "/jeryu/jain-deploy/pull/21",
+    "id": "bacede6f-8d08-42cf-82e5-624311bb04f2",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 21,
+    "source_repository": "jeryu/jain-deploy",
+    "state": "open",
+    "title": "release(deploy): lock v8 image identity and Starforge assets",
+    "updated_at": "2026-07-14T03:06:48.028282650Z",
+    "url": "/repos/jeryu/jain-deploy/pulls/21",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1783998407
+}

@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Adds v8 algorithm build, model operation, progress, fitted model, license, result, prediction, and receipt contracts with hermetic schema validation. Required, security, artifact, tool-adoption, and Jankurai gates pass at the exact head.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T06:23:13.756087608+00:00",
+      "head_sha": "7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "165c5282-04dd-4b88-8404-1e384b61afba#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/wq14-native-jope-contracts-20260714",
+      "head_sha": "7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "165c5282-04dd-4b88-8404-1e384b61afba",
+        "name": "jain-contracts",
+        "owner": "veox"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat(contracts): govern native JOPE model operations",
+      "updated_at": "2026-07-14T06:17:17.064535442+00:00"
+    }
+  },
+  "repository": "veox/jain-contracts",
+  "request": {
+    "body": {
+      "body_markdown": "Independent review approved exact head after adversarial schema, release-policy, and public API fixes; required and jankurai/proof are green.",
+      "evidence": null,
+      "expected_head_sha": "7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/veox%2Fjain-contracts/pulls/1/reviews"
+  },
+  "response": {
+    "description": "Adds v8 algorithm build, model operation, progress, fitted model, license, result, prediction, and receipt contracts with hermetic schema validation. Required, security, artifact, tool-adoption, and Jankurai gates pass at the exact head.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T06:23:13.729705894+00:00",
+      "head_sha": "7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "165c5282-04dd-4b88-8404-1e384b61afba#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/wq14-native-jope-contracts-20260714",
+      "head_sha": "7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "165c5282-04dd-4b88-8404-1e384b61afba",
+        "name": "jain-contracts",
+        "owner": "veox"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat(contracts): govern native JOPE model operations",
+      "updated_at": "2026-07-14T06:17:17.064535442+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784010191
+}

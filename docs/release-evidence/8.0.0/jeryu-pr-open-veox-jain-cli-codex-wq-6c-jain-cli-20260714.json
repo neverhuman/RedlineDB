@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-cli"
+      },
+      "sha": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3"
+    },
+    "body": "Add the Core invention_engine field with the Legacy default and align candidate_log_record with its current signature. WQ-6 unblock for WQ-8 exact-head release CI.",
+    "created_at": "2026-07-14T04:10:28.902518840Z",
+    "draft": false,
+    "head": {
+      "label": "codex/wq-6c-jain-cli-20260714",
+      "ref": "codex/wq-6c-jain-cli-20260714",
+      "repo": {
+        "full_name": "veox/jain-cli"
+      },
+      "sha": "b2a77d147f471d8b1d26811cc8fdea0e46ae5095"
+    },
+    "html_url": "/veox/jain-cli/pull/3",
+    "id": "2ef685be-d1d5-48ea-90e1-9d8a2ad7cfc8",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 3,
+    "source_repository": "veox/jain-cli",
+    "state": "open",
+    "title": "fix(cli): restore Core PipelineConfig compatibility",
+    "updated_at": "2026-07-14T04:10:28.902518840Z",
+    "url": "/repos/veox/jain-cli/pulls/3",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "veox/jain-cli",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Add the Core invention_engine field with the Legacy default and align candidate_log_record with its current signature. WQ-6 unblock for WQ-8 exact-head release CI.",
+      "draft": false,
+      "head": "codex/wq-6c-jain-cli-20260714",
+      "title": "fix(cli): restore Core PipelineConfig compatibility"
+    },
+    "method": "POST",
+    "path": "/repos/veox/jain-cli/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-cli"
+      },
+      "sha": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3"
+    },
+    "body": "Add the Core invention_engine field with the Legacy default and align candidate_log_record with its current signature. WQ-6 unblock for WQ-8 exact-head release CI.",
+    "created_at": "2026-07-14T04:10:28.902518840Z",
+    "draft": false,
+    "head": {
+      "label": "codex/wq-6c-jain-cli-20260714",
+      "ref": "codex/wq-6c-jain-cli-20260714",
+      "repo": {
+        "full_name": "veox/jain-cli"
+      },
+      "sha": "b2a77d147f471d8b1d26811cc8fdea0e46ae5095"
+    },
+    "html_url": "/veox/jain-cli/pull/3",
+    "id": "2ef685be-d1d5-48ea-90e1-9d8a2ad7cfc8",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 3,
+    "source_repository": "veox/jain-cli",
+    "state": "open",
+    "title": "fix(cli): restore Core PipelineConfig compatibility",
+    "updated_at": "2026-07-14T04:10:28.902518840Z",
+    "url": "/repos/veox/jain-cli/pulls/3",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784002228
+}

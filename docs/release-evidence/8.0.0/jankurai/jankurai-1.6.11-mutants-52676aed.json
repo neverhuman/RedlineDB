@@ -1,0 +1,479 @@
+{
+  "outcomes": [
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "jankurai",
+          "file": "crates/jankurai/src/versions.rs",
+          "function": {
+            "function_name": "assert_release_tag",
+            "return_type": "-> Result<()>",
+            "span": {
+              "start": {
+                "line": 145,
+                "column": 1
+              },
+              "end": {
+                "line": 157,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 151,
+              "column": 23
+            },
+            "end": {
+              "line": 151,
+              "column": 25
+            }
+          },
+          "replacement": "==",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__jankurai__src__versions.rs_line_151_col_23.log",
+      "diff_path": "diff/crates__jankurai__src__versions.rs_line_151_col_23.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 121.558872617,
+          "process_status": "Success",
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.102051274,
+          "process_status": {
+            "Failure": 1
+          },
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features",
+            "--test-threads=1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "jankurai",
+          "file": "crates/jankurai/src/versions.rs",
+          "function": {
+            "function_name": "assert_release_tag",
+            "return_type": "-> Result<()>",
+            "span": {
+              "start": {
+                "line": 145,
+                "column": 1
+              },
+              "end": {
+                "line": 157,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 149,
+              "column": 25
+            },
+            "end": {
+              "line": 149,
+              "column": 26
+            }
+          },
+          "replacement": "",
+          "genre": "UnaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__jankurai__src__versions.rs_line_149_col_25.log",
+      "diff_path": "diff/crates__jankurai__src__versions.rs_line_149_col_25.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 121.646644579,
+          "process_status": "Success",
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.064332232,
+          "process_status": {
+            "Failure": 1
+          },
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features",
+            "--test-threads=1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "jankurai",
+          "file": "crates/jankurai/src/versions.rs",
+          "function": {
+            "function_name": "check_versions",
+            "return_type": "-> Result<()>",
+            "span": {
+              "start": {
+                "line": 33,
+                "column": 1
+              },
+              "end": {
+                "line": 108,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 34,
+              "column": 5
+            },
+            "end": {
+              "line": 107,
+              "column": 11
+            }
+          },
+          "replacement": "Ok(())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__jankurai__src__versions.rs_line_34_col_5.log",
+      "diff_path": "diff/crates__jankurai__src__versions.rs_line_34_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 122.318769972,
+          "process_status": "Success",
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.063422461,
+          "process_status": {
+            "Failure": 1
+          },
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features",
+            "--test-threads=1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "jankurai",
+          "file": "crates/jankurai/src/validation.rs",
+          "function": {
+            "function_name": "Validator::load_schema",
+            "return_type": "-> Result<Value>",
+            "span": {
+              "start": {
+                "line": 301,
+                "column": 5
+              },
+              "end": {
+                "line": 315,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 307,
+              "column": 37
+            },
+            "end": {
+              "line": 307,
+              "column": 39
+            }
+          },
+          "replacement": "!=",
+          "genre": "BinaryOperator"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__jankurai__src__validation.rs_line_307_col_37.log",
+      "diff_path": "diff/crates__jankurai__src__validation.rs_line_307_col_37.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 123.325293629,
+          "process_status": "Success",
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.052111801,
+          "process_status": {
+            "Failure": 1
+          },
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features",
+            "--test-threads=1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "jankurai",
+          "file": "crates/jankurai/src/validation.rs",
+          "function": {
+            "function_name": "Validator::load_schema",
+            "return_type": "-> Result<Value>",
+            "span": {
+              "start": {
+                "line": 301,
+                "column": 5
+              },
+              "end": {
+                "line": 315,
+                "column": 6
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 302,
+              "column": 9
+            },
+            "end": {
+              "line": 314,
+              "column": 18
+            }
+          },
+          "replacement": "Ok(Default::default())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__jankurai__src__validation.rs_line_302_col_9.log",
+      "diff_path": "diff/crates__jankurai__src__validation.rs_line_302_col_9.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 35.26204999,
+          "process_status": "Success",
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.052375083,
+          "process_status": {
+            "Failure": 1
+          },
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features",
+            "--test-threads=1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "jankurai",
+          "file": "crates/jankurai/src/versions.rs",
+          "function": {
+            "function_name": "assert_release_tag",
+            "return_type": "-> Result<()>",
+            "span": {
+              "start": {
+                "line": 145,
+                "column": 1
+              },
+              "end": {
+                "line": 157,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 146,
+              "column": 5
+            },
+            "end": {
+              "line": 156,
+              "column": 11
+            }
+          },
+          "replacement": "Ok(())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__jankurai__src__versions.rs_line_146_col_5.log",
+      "diff_path": "diff/crates__jankurai__src__versions.rs_line_146_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 35.443117302,
+          "process_status": "Success",
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.189478802,
+          "process_status": {
+            "Failure": 1
+          },
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features",
+            "--test-threads=1"
+          ]
+        }
+      ]
+    },
+    {
+      "scenario": {
+        "Mutant": {
+          "package": "jankurai",
+          "file": "crates/jankurai/src/validation.rs",
+          "function": {
+            "function_name": "validate_value",
+            "return_type": "-> Result<()>",
+            "span": {
+              "start": {
+                "line": 153,
+                "column": 1
+              },
+              "end": {
+                "line": 159,
+                "column": 2
+              }
+            }
+          },
+          "span": {
+            "start": {
+              "line": 154,
+              "column": 5
+            },
+            "end": {
+              "line": 158,
+              "column": 11
+            }
+          },
+          "replacement": "Ok(())",
+          "genre": "FnValue"
+        }
+      },
+      "summary": "CaughtMutant",
+      "log_path": "log/crates__jankurai__src__validation.rs_line_154_col_5.log",
+      "diff_path": "diff/crates__jankurai__src__validation.rs_line_154_col_5.diff",
+      "phase_results": [
+        {
+          "phase": "Build",
+          "duration": 42.244823239,
+          "process_status": "Success",
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--no-run",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features"
+          ]
+        },
+        {
+          "phase": "Test",
+          "duration": 0.052029309,
+          "process_status": {
+            "Failure": 1
+          },
+          "argv": [
+            "/home/ubuntu/.rustup/toolchains/1.95.0-x86_64-unknown-linux-gnu/bin/cargo",
+            "test",
+            "--verbose",
+            "--package=jankurai@1.6.11",
+            "--all-features",
+            "--test-threads=1"
+          ]
+        }
+      ]
+    }
+  ],
+  "total_mutants": 7,
+  "missed": 0,
+  "caught": 7,
+  "timeout": 0,
+  "unviable": 0,
+  "success": 0
+}

@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-math"
+      },
+      "sha": "b0157e514b0e5ba53409d7555197e3852bfb1a9b"
+    },
+    "body": "",
+    "created_at": "2026-07-15T12:38:49.827109803Z",
+    "draft": false,
+    "head": {
+      "label": "codex/wq14-math-provenance-20260715",
+      "ref": "codex/wq14-math-provenance-20260715",
+      "repo": {
+        "full_name": "veox/jain-math"
+      },
+      "sha": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279"
+    },
+    "html_url": "/veox/jain-math/pull/1",
+    "id": "c36a35cc-2f84-4d99-92ed-a6afa3a799ae",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "veox/jain-math",
+    "state": "open",
+    "title": "feat(math): add governed JOPE Prime and Lime runtime",
+    "updated_at": "2026-07-15T12:38:49.827109803Z",
+    "url": "/repos/veox/jain-math/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "veox/jain-math",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codex/wq14-math-provenance-20260715",
+      "title": "feat(math): add governed JOPE Prime and Lime runtime"
+    },
+    "method": "POST",
+    "path": "/repos/veox/jain-math/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-math"
+      },
+      "sha": "b0157e514b0e5ba53409d7555197e3852bfb1a9b"
+    },
+    "body": "",
+    "created_at": "2026-07-15T12:38:49.827109803Z",
+    "draft": false,
+    "head": {
+      "label": "codex/wq14-math-provenance-20260715",
+      "ref": "codex/wq14-math-provenance-20260715",
+      "repo": {
+        "full_name": "veox/jain-math"
+      },
+      "sha": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279"
+    },
+    "html_url": "/veox/jain-math/pull/1",
+    "id": "c36a35cc-2f84-4d99-92ed-a6afa3a799ae",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "veox/jain-math",
+    "state": "open",
+    "title": "feat(math): add governed JOPE Prime and Lime runtime",
+    "updated_at": "2026-07-15T12:38:49.827109803Z",
+    "url": "/repos/veox/jain-math/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784119129
+}

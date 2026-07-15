@@ -1,0 +1,11 @@
+{
+  "commit": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5",
+  "commit_input": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5",
+  "mode": "dry-run",
+  "operation": "release-tree-identity",
+  "release_checksum_sha256": "6bdf66f7f55c888ce925c1d21549f5f4d8ee42c36fe2e2ee43eb88ea9adde8fa",
+  "repository": "/home/ubuntu/jain-split/.worktrees/jain-catboost/restore-exports-20260715",
+  "schema_version": "jain.release-tree-identity/v1",
+  "status": "pass",
+  "timestamp_unix": 1784110458
+}

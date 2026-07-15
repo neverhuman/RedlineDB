@@ -1,0 +1,834 @@
+{
+  "schema_url": "schemas/conformance-results.schema.json",
+  "schema_version": "1.9.0",
+  "standard_version": "0.9.0",
+  "auditor_version": "1.6.11",
+  "command": "jankurai conformance run",
+  "generated_at": "2026-07-15T19:45:08Z",
+  "fixture_root": "conformance/fixtures",
+  "expected_root": "conformance/expected",
+  "fixture_count": 10,
+  "pass_count": 10,
+  "fail_count": 0,
+  "results": [
+    {
+      "fixture_id": "authz-isolation-fail",
+      "expected_audit_decision": "block",
+      "observed_audit_decision": "block",
+      "expected_witness_decision": "block",
+      "observed_witness_decision": "block",
+      "expected_rules": [
+        "HLT-022-AUTHZ-ISOLATION-GAP"
+      ],
+      "observed_rules": [
+        "HLT-004-UNMAPPED-PROOF",
+        "HLT-006-DIRECT-DB-WRONG-LAYER",
+        "HLT-007-HANDWRITTEN-CONTRACT",
+        "HLT-015-CONTEXT-SETUP-GAP",
+        "HLT-016-SUPPLY-CHAIN-DRIFT",
+        "HLT-017-OPAQUE-OBSERVABILITY",
+        "HLT-018-PERF-CONCURRENCY-DRIFT",
+        "HLT-022-AUTHZ-ISOLATION-GAP",
+        "HLT-047-CANONICAL-README"
+      ],
+      "rule_matches": [
+        {
+          "rule_id": "HLT-004-UNMAPPED-PROOF",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-022-AUTHZ-ISOLATION-GAP",
+          "expected": true,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-047-CANONICAL-README",
+          "expected": false,
+          "observed": true
+        }
+      ],
+      "missing_expected_rules": [],
+      "expected_missing_evidence": [],
+      "missing_evidence": [
+        "required proof lane `fast` has no successful receipt"
+      ],
+      "missing_expected_evidence": [],
+      "result": "pass",
+      "elapsed_ms": 252,
+      "artifact_paths": [
+        "conformance/expected/authz-isolation-fail.repo-score.json"
+      ]
+    },
+    {
+      "fixture_id": "destructive-migration-fail",
+      "expected_audit_decision": "block",
+      "observed_audit_decision": "block",
+      "expected_witness_decision": "block",
+      "observed_witness_decision": "block",
+      "expected_rules": [
+        "HLT-021-DESTRUCTIVE-MIGRATION"
+      ],
+      "observed_rules": [
+        "HLT-004-UNMAPPED-PROOF",
+        "HLT-006-DIRECT-DB-WRONG-LAYER",
+        "HLT-007-HANDWRITTEN-CONTRACT",
+        "HLT-015-CONTEXT-SETUP-GAP",
+        "HLT-016-SUPPLY-CHAIN-DRIFT",
+        "HLT-017-OPAQUE-OBSERVABILITY",
+        "HLT-018-PERF-CONCURRENCY-DRIFT",
+        "HLT-021-DESTRUCTIVE-MIGRATION",
+        "HLT-025-RELEASE-READINESS-GAP",
+        "HLT-030-SQL-BAD-BEHAVIOR",
+        "HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP",
+        "HLT-047-CANONICAL-README"
+      ],
+      "rule_matches": [
+        {
+          "rule_id": "HLT-004-UNMAPPED-PROOF",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-021-DESTRUCTIVE-MIGRATION",
+          "expected": true,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-025-RELEASE-READINESS-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-030-SQL-BAD-BEHAVIOR",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-047-CANONICAL-README",
+          "expected": false,
+          "observed": true
+        }
+      ],
+      "missing_expected_rules": [],
+      "expected_missing_evidence": [],
+      "missing_evidence": [
+        "required proof lane `fast` has no successful receipt"
+      ],
+      "missing_expected_evidence": [],
+      "result": "pass",
+      "elapsed_ms": 183,
+      "artifact_paths": [
+        "conformance/expected/destructive-migration-fail.repo-score.json"
+      ]
+    },
+    {
+      "fixture_id": "generated-zone-mutation-fail",
+      "expected_audit_decision": "block",
+      "observed_audit_decision": "block",
+      "expected_witness_decision": "block",
+      "observed_witness_decision": "block",
+      "expected_rules": [
+        "HLT-002-GENERATED-MUTATION"
+      ],
+      "observed_rules": [
+        "HLT-002-GENERATED-MUTATION",
+        "HLT-003-OWNERLESS-PATH",
+        "HLT-004-UNMAPPED-PROOF",
+        "HLT-006-DIRECT-DB-WRONG-LAYER",
+        "HLT-007-HANDWRITTEN-CONTRACT",
+        "HLT-015-CONTEXT-SETUP-GAP",
+        "HLT-016-SUPPLY-CHAIN-DRIFT",
+        "HLT-017-OPAQUE-OBSERVABILITY",
+        "HLT-018-PERF-CONCURRENCY-DRIFT",
+        "HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP",
+        "HLT-047-CANONICAL-README"
+      ],
+      "rule_matches": [
+        {
+          "rule_id": "HLT-002-GENERATED-MUTATION",
+          "expected": true,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-003-OWNERLESS-PATH",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-004-UNMAPPED-PROOF",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-047-CANONICAL-README",
+          "expected": false,
+          "observed": true
+        }
+      ],
+      "missing_expected_rules": [],
+      "expected_missing_evidence": [
+        "generated zones"
+      ],
+      "missing_evidence": [
+        "required proof lane `fast` has no successful receipt",
+        "changed paths touch generated zones; source regeneration proof is required"
+      ],
+      "missing_expected_evidence": [],
+      "result": "pass",
+      "elapsed_ms": 217,
+      "artifact_paths": [
+        "conformance/expected/generated-zone-mutation-fail.repo-score.json"
+      ]
+    },
+    {
+      "fixture_id": "hl3-pass-minimal",
+      "expected_audit_decision": "pass",
+      "observed_audit_decision": "pass",
+      "expected_witness_decision": "pass",
+      "observed_witness_decision": "pass",
+      "expected_rules": [],
+      "observed_rules": [
+        "HLT-004-UNMAPPED-PROOF",
+        "HLT-006-DIRECT-DB-WRONG-LAYER",
+        "HLT-007-HANDWRITTEN-CONTRACT",
+        "HLT-015-CONTEXT-SETUP-GAP",
+        "HLT-016-SUPPLY-CHAIN-DRIFT",
+        "HLT-017-OPAQUE-OBSERVABILITY",
+        "HLT-018-PERF-CONCURRENCY-DRIFT",
+        "HLT-047-CANONICAL-README"
+      ],
+      "rule_matches": [
+        {
+          "rule_id": "HLT-004-UNMAPPED-PROOF",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-047-CANONICAL-README",
+          "expected": false,
+          "observed": true
+        }
+      ],
+      "missing_expected_rules": [],
+      "expected_missing_evidence": [],
+      "missing_evidence": [],
+      "missing_expected_evidence": [],
+      "result": "pass",
+      "elapsed_ms": 202,
+      "artifact_paths": [
+        "conformance/expected/hl3-pass-minimal.repo-score.json",
+        "conformance/fixtures/hl3-pass-minimal/proof-receipts",
+        "target/jankurai/conformance-baselines/hl3-pass-minimal.json"
+      ]
+    },
+    {
+      "fixture_id": "input-boundary-xss-fail",
+      "expected_audit_decision": "block",
+      "observed_audit_decision": "block",
+      "expected_witness_decision": "block",
+      "observed_witness_decision": "block",
+      "expected_rules": [
+        "HLT-023-INPUT-BOUNDARY-GAP"
+      ],
+      "observed_rules": [
+        "HLT-001-DEAD-MARKER",
+        "HLT-004-UNMAPPED-PROOF",
+        "HLT-006-DIRECT-DB-WRONG-LAYER",
+        "HLT-007-HANDWRITTEN-CONTRACT",
+        "HLT-015-CONTEXT-SETUP-GAP",
+        "HLT-016-SUPPLY-CHAIN-DRIFT",
+        "HLT-017-OPAQUE-OBSERVABILITY",
+        "HLT-018-PERF-CONCURRENCY-DRIFT",
+        "HLT-023-INPUT-BOUNDARY-GAP",
+        "HLT-031-TYPESCRIPT-BAD-BEHAVIOR",
+        "HLT-047-CANONICAL-README"
+      ],
+      "rule_matches": [
+        {
+          "rule_id": "HLT-001-DEAD-MARKER",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-004-UNMAPPED-PROOF",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-023-INPUT-BOUNDARY-GAP",
+          "expected": true,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-031-TYPESCRIPT-BAD-BEHAVIOR",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-047-CANONICAL-README",
+          "expected": false,
+          "observed": true
+        }
+      ],
+      "missing_expected_rules": [],
+      "expected_missing_evidence": [],
+      "missing_evidence": [
+        "required proof lane `fast` has no successful receipt"
+      ],
+      "missing_expected_evidence": [],
+      "result": "pass",
+      "elapsed_ms": 190,
+      "artifact_paths": [
+        "conformance/expected/input-boundary-xss-fail.repo-score.json"
+      ]
+    },
+    {
+      "fixture_id": "overbroad-agency-fail",
+      "expected_audit_decision": "block",
+      "observed_audit_decision": "block",
+      "expected_witness_decision": "block",
+      "observed_witness_decision": "block",
+      "expected_rules": [
+        "HLT-012-OVERBROAD-AGENCY"
+      ],
+      "observed_rules": [
+        "HLT-004-UNMAPPED-PROOF",
+        "HLT-006-DIRECT-DB-WRONG-LAYER",
+        "HLT-007-HANDWRITTEN-CONTRACT",
+        "HLT-012-OVERBROAD-AGENCY",
+        "HLT-015-CONTEXT-SETUP-GAP",
+        "HLT-016-SUPPLY-CHAIN-DRIFT",
+        "HLT-017-OPAQUE-OBSERVABILITY",
+        "HLT-018-PERF-CONCURRENCY-DRIFT",
+        "HLT-047-CANONICAL-README"
+      ],
+      "rule_matches": [
+        {
+          "rule_id": "HLT-004-UNMAPPED-PROOF",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-012-OVERBROAD-AGENCY",
+          "expected": true,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-047-CANONICAL-README",
+          "expected": false,
+          "observed": true
+        }
+      ],
+      "missing_expected_rules": [],
+      "expected_missing_evidence": [],
+      "missing_evidence": [
+        "required proof lane `fast` has no successful receipt"
+      ],
+      "missing_expected_evidence": [],
+      "result": "pass",
+      "elapsed_ms": 168,
+      "artifact_paths": [
+        "conformance/expected/overbroad-agency-fail.repo-score.json"
+      ]
+    },
+    {
+      "fixture_id": "ownerless-path-fail",
+      "expected_audit_decision": "block",
+      "observed_audit_decision": "block",
+      "expected_witness_decision": "block",
+      "observed_witness_decision": "block",
+      "expected_rules": [
+        "HLT-003-OWNERLESS-PATH"
+      ],
+      "observed_rules": [
+        "HLT-003-OWNERLESS-PATH",
+        "HLT-004-UNMAPPED-PROOF",
+        "HLT-006-DIRECT-DB-WRONG-LAYER",
+        "HLT-007-HANDWRITTEN-CONTRACT",
+        "HLT-015-CONTEXT-SETUP-GAP",
+        "HLT-016-SUPPLY-CHAIN-DRIFT",
+        "HLT-017-OPAQUE-OBSERVABILITY",
+        "HLT-018-PERF-CONCURRENCY-DRIFT",
+        "HLT-047-CANONICAL-README"
+      ],
+      "rule_matches": [
+        {
+          "rule_id": "HLT-003-OWNERLESS-PATH",
+          "expected": true,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-004-UNMAPPED-PROOF",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-047-CANONICAL-README",
+          "expected": false,
+          "observed": true
+        }
+      ],
+      "missing_expected_rules": [],
+      "expected_missing_evidence": [],
+      "missing_evidence": [
+        "required proof lane `fast` has no successful receipt"
+      ],
+      "missing_expected_evidence": [],
+      "result": "pass",
+      "elapsed_ms": 171,
+      "artifact_paths": [
+        "conformance/expected/ownerless-path-fail.repo-score.json"
+      ]
+    },
+    {
+      "fixture_id": "rendered-ux-gap-fail",
+      "expected_audit_decision": "block",
+      "observed_audit_decision": "block",
+      "expected_witness_decision": "block",
+      "observed_witness_decision": "block",
+      "expected_rules": [
+        "HLT-013-RENDERED-UX-GAP"
+      ],
+      "observed_rules": [
+        "HLT-004-UNMAPPED-PROOF",
+        "HLT-006-DIRECT-DB-WRONG-LAYER",
+        "HLT-007-HANDWRITTEN-CONTRACT",
+        "HLT-013-RENDERED-UX-GAP",
+        "HLT-015-CONTEXT-SETUP-GAP",
+        "HLT-016-SUPPLY-CHAIN-DRIFT",
+        "HLT-017-OPAQUE-OBSERVABILITY",
+        "HLT-018-PERF-CONCURRENCY-DRIFT",
+        "HLT-047-CANONICAL-README"
+      ],
+      "rule_matches": [
+        {
+          "rule_id": "HLT-004-UNMAPPED-PROOF",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-013-RENDERED-UX-GAP",
+          "expected": true,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-047-CANONICAL-README",
+          "expected": false,
+          "observed": true
+        }
+      ],
+      "missing_expected_rules": [],
+      "expected_missing_evidence": [],
+      "missing_evidence": [
+        "required proof lane `fast` has no successful receipt"
+      ],
+      "missing_expected_evidence": [],
+      "result": "pass",
+      "elapsed_ms": 179,
+      "artifact_paths": [
+        "conformance/expected/rendered-ux-gap-fail.repo-score.json"
+      ]
+    },
+    {
+      "fixture_id": "secret-sprawl-fail",
+      "expected_audit_decision": "block",
+      "observed_audit_decision": "block",
+      "expected_witness_decision": "block",
+      "observed_witness_decision": "block",
+      "expected_rules": [
+        "HLT-010-SECRET-SPRAWL"
+      ],
+      "observed_rules": [
+        "HLT-004-UNMAPPED-PROOF",
+        "HLT-006-DIRECT-DB-WRONG-LAYER",
+        "HLT-007-HANDWRITTEN-CONTRACT",
+        "HLT-010-SECRET-SPRAWL",
+        "HLT-015-CONTEXT-SETUP-GAP",
+        "HLT-016-SUPPLY-CHAIN-DRIFT",
+        "HLT-017-OPAQUE-OBSERVABILITY",
+        "HLT-018-PERF-CONCURRENCY-DRIFT",
+        "HLT-047-CANONICAL-README"
+      ],
+      "rule_matches": [
+        {
+          "rule_id": "HLT-004-UNMAPPED-PROOF",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-010-SECRET-SPRAWL",
+          "expected": true,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-047-CANONICAL-README",
+          "expected": false,
+          "observed": true
+        }
+      ],
+      "missing_expected_rules": [],
+      "expected_missing_evidence": [],
+      "missing_evidence": [
+        "required proof lane `fast` has no successful receipt"
+      ],
+      "missing_expected_evidence": [],
+      "result": "pass",
+      "elapsed_ms": 181,
+      "artifact_paths": [
+        "conformance/expected/secret-sprawl-fail.repo-score.json"
+      ]
+    },
+    {
+      "fixture_id": "unmapped-proof-fail",
+      "expected_audit_decision": "block",
+      "observed_audit_decision": "block",
+      "expected_witness_decision": "block",
+      "observed_witness_decision": "block",
+      "expected_rules": [
+        "HLT-004-UNMAPPED-PROOF"
+      ],
+      "observed_rules": [
+        "HLT-004-UNMAPPED-PROOF",
+        "HLT-006-DIRECT-DB-WRONG-LAYER",
+        "HLT-007-HANDWRITTEN-CONTRACT",
+        "HLT-015-CONTEXT-SETUP-GAP",
+        "HLT-016-SUPPLY-CHAIN-DRIFT",
+        "HLT-017-OPAQUE-OBSERVABILITY",
+        "HLT-018-PERF-CONCURRENCY-DRIFT",
+        "HLT-047-CANONICAL-README"
+      ],
+      "rule_matches": [
+        {
+          "rule_id": "HLT-004-UNMAPPED-PROOF",
+          "expected": true,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-015-CONTEXT-SETUP-GAP",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-018-PERF-CONCURRENCY-DRIFT",
+          "expected": false,
+          "observed": true
+        },
+        {
+          "rule_id": "HLT-047-CANONICAL-README",
+          "expected": false,
+          "observed": true
+        }
+      ],
+      "missing_expected_rules": [],
+      "expected_missing_evidence": [],
+      "missing_evidence": [],
+      "missing_expected_evidence": [],
+      "result": "pass",
+      "elapsed_ms": 186,
+      "artifact_paths": [
+        "conformance/expected/unmapped-proof-fail.repo-score.json"
+      ]
+    }
+  ]
+}

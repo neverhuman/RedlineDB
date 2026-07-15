@@ -1,0 +1,48 @@
+{
+  "schema": "jankurai.release-security-summary/v1",
+  "release_authoritative": false,
+  "candidate_commit": "dc42c988517c0e6b3af8f81d452c7c8184c938b0",
+  "reviewed_schema_parent": "cea83b0cbe204be276a2f0299cd760f6812ea2b0",
+  "protected_main_parent": "760335d3d2c0edf2b8c6fd56ea794df8f94a5bcb",
+  "strict_lane": {
+    "conclusion": "failure",
+    "typed_reason": "inherited_repository_security_debt",
+    "evidence_file": "jankurai-1.6.11-strict-security-failure.json",
+    "evidence_sha256": "9f8ad276b1a07192d8d5b8ec28cb1c7756ab315a54f3602a0d9fb36dde03e29f",
+    "blocking_tools": ["gitleaks", "cargo-audit", "npm", "zizmor"]
+  },
+  "candidate_diff_gitleaks": {
+    "range": "760335d3d2c0edf2b8c6fd56ea794df8f94a5bcb..dc42c988517c0e6b3af8f81d452c7c8184c938b0",
+    "commits_scanned": 2,
+    "findings": 0,
+    "conclusion": "success"
+  },
+  "repository_gitleaks": {
+    "findings": 7,
+    "conclusion": "failure",
+    "classification": "pre_existing_false_positives_in_example_and_archived_text"
+  },
+  "cargo_audit": {
+    "offline": true,
+    "advisory_database": "/home/ubuntu/.cargo/advisory-db",
+    "vulnerabilities": 1,
+    "allowed_warnings": 5,
+    "blocking_advisory": "RUSTSEC-2026-0204",
+    "package": "crossbeam-epoch 0.9.18",
+    "in_protected_main_lock": true,
+    "conclusion": "failure"
+  },
+  "npm_audit": {
+    "offline": true,
+    "high_or_critical_vulnerabilities": 0,
+    "conclusion": "success"
+  },
+  "zizmor": {
+    "findings": 0,
+    "suppressed": 17,
+    "conclusion": "success"
+  },
+  "policy_changed": false,
+  "waiver_used": false,
+  "recorded_at_utc": "2026-07-15T19:10:00Z"
+}

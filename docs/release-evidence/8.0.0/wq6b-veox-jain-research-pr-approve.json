@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "WQ-6B identity-only correction; exact-head review and governed required CI.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T03:35:10.618611119+00:00",
+      "head_sha": "074d09b4382f5aeb265d1fd273669563c85836ff",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:074d09b4382f5aeb265d1fd273669563c85836ff:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "ede23857-7cf9-4dfe-92c5-6178607b7252#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/wq-6b-identity-jain-research-20260714",
+      "head_sha": "074d09b4382f5aeb265d1fd273669563c85836ff",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "074d09b4382f5aeb265d1fd273669563c85836ff",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:074d09b4382f5aeb265d1fd273669563c85836ff:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "ede23857-7cf9-4dfe-92c5-6178607b7252",
+        "name": "jain-research",
+        "owner": "veox"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(jain-research): add split package identity",
+      "updated_at": "2026-07-14T03:23:26.757804718+00:00"
+    }
+  },
+  "repository": "veox/jain-research",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact head 074d09b4382f5aeb265d1fd273669563c85836ff: jain-research/required=success; score=88 raw=88 caps=0 hard=0.",
+      "evidence": null,
+      "expected_head_sha": "074d09b4382f5aeb265d1fd273669563c85836ff",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/veox%2Fjain-research/pulls/1/reviews"
+  },
+  "response": {
+    "description": "WQ-6B identity-only correction; exact-head review and governed required CI.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-14T03:35:10.608820517+00:00",
+      "head_sha": "074d09b4382f5aeb265d1fd273669563c85836ff",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:074d09b4382f5aeb265d1fd273669563c85836ff:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "ede23857-7cf9-4dfe-92c5-6178607b7252#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/wq-6b-identity-jain-research-20260714",
+      "head_sha": "074d09b4382f5aeb265d1fd273669563c85836ff",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "074d09b4382f5aeb265d1fd273669563c85836ff",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:074d09b4382f5aeb265d1fd273669563c85836ff:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "ede23857-7cf9-4dfe-92c5-6178607b7252",
+        "name": "jain-research",
+        "owner": "veox"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(jain-research): add split package identity",
+      "updated_at": "2026-07-14T03:23:26.757804718+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784000108
+}

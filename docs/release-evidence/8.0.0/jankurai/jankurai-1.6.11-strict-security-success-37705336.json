@@ -1,0 +1,96 @@
+{
+  "schema_version": "1.0.0",
+  "standard_version": "0.9.0",
+  "generated_at": "1784143353",
+  "repo_root": ".",
+  "git_head": "3770533689c33f9f41010f92140cd3ff87066a7e",
+  "lane": "security",
+  "wrapper": {
+    "kind": "bash_script",
+    "path": "tools/security-lane.sh",
+    "strict": true
+  },
+  "exit_code": 0,
+  "elapsed_ms": 9322,
+  "log_path": "target/jankurai/security/security-lane-1784143344-205.log",
+  "policy": {
+    "schema_version": "1.0.0",
+    "profile": "ci",
+    "enabled_tools": [
+      "cargo-audit",
+      "cargo-deny",
+      "gitleaks",
+      "grype",
+      "npm",
+      "syft",
+      "trivy",
+      "zizmor"
+    ],
+    "required_tools": [
+      "cargo-audit",
+      "gitleaks",
+      "npm",
+      "zizmor"
+    ],
+    "advisory_tools": [
+      "cargo-deny",
+      "grype",
+      "syft",
+      "trivy"
+    ],
+    "require_one_of": [],
+    "fail_lane_on": "high"
+  },
+  "commands": [
+    {
+      "label": "gitleaks",
+      "shell_command": "echo 'security-lane:gitleaks:start' >&2; if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then scan_dir=\"$(mktemp -d)\"; trap 'rm -rf \"$scan_dir\"' EXIT; git archive --format=tar HEAD | tar -xf - -C \"$scan_dir\"; (cd \"$scan_dir\" && gitleaks detect --no-git --source . --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore --redact --no-banner); else gitleaks detect --no-git --source . --config .gitleaks.toml --gitleaks-ignore-path .gitleaksignore --redact --no-banner; fi; status=$?; echo 'security-lane:gitleaks:done' >&2; exit $status",
+      "tool": "gitleaks",
+      "status": "ran",
+      "required_by_policy": true,
+      "blocking": false,
+      "exit_code": 0,
+      "advisory": false
+    },
+    {
+      "label": "cargo-audit",
+      "shell_command": "db=\"${JANKURAI_CARGO_AUDIT_DB:-target/jankurai/security/advisory-db}\"; offline=\"${JANKURAI_SECURITY_OFFLINE:-${CARGO_NET_OFFLINE:-false}}\"; case \"$offline\" in 1|true|TRUE) [ -d \"$db\" ] || { echo \"offline advisory database missing: $db\" >&2; exit 1; } ;; *) if [ -d \"$db/.git\" ]; then git -C \"$db\" pull --ff-only --depth 1; else git clone --depth 1 https://github.com/RustSec/advisory-db.git \"$db\"; fi ;; esac; cargo audit --db \"$db\" --no-fetch --stale",
+      "tool": "cargo-audit",
+      "status": "ran",
+      "required_by_policy": true,
+      "blocking": false,
+      "exit_code": 0,
+      "advisory": false
+    },
+    {
+      "label": "npm",
+      "shell_command": "npm audit --audit-level=high",
+      "tool": "npm",
+      "status": "ran",
+      "required_by_policy": true,
+      "blocking": false,
+      "exit_code": 0,
+      "advisory": false
+    },
+    {
+      "label": "zizmor",
+      "shell_command": "zizmor .github/workflows",
+      "tool": "zizmor",
+      "status": "ran",
+      "required_by_policy": true,
+      "blocking": false,
+      "exit_code": 0,
+      "advisory": false
+    },
+    {
+      "label": "syft",
+      "shell_command": "syft . -o spdx-json=target/jankurai/sbom.spdx.json",
+      "tool": "syft",
+      "status": "ran",
+      "required_by_policy": false,
+      "blocking": false,
+      "exit_code": 0,
+      "advisory": true
+    }
+  ]
+}

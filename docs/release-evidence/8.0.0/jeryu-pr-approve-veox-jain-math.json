@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-15T12:51:25.474157948+00:00",
+      "head_sha": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:3e21cf6fe3edf5b157b85a643e53bd68f40f3279:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "b0157e514b0e5ba53409d7555197e3852bfb1a9b",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "573ed69d-0dc8-4829-9695-846544c42433#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/wq14-math-provenance-20260715",
+      "head_sha": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:3e21cf6fe3edf5b157b85a643e53bd68f40f3279:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "573ed69d-0dc8-4829-9695-846544c42433",
+        "name": "jain-math",
+        "owner": "veox"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat(math): add governed JOPE Prime and Lime runtime",
+      "updated_at": "2026-07-15T12:38:49.827109803+00:00"
+    }
+  },
+  "repository": "veox/jain-math",
+  "request": {
+    "body": {
+      "body_markdown": null,
+      "evidence": null,
+      "expected_head_sha": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/veox%2Fjain-math/pulls/1/reviews"
+  },
+  "response": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-15T12:51:25.464079971+00:00",
+      "head_sha": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:3e21cf6fe3edf5b157b85a643e53bd68f40f3279:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "b0157e514b0e5ba53409d7555197e3852bfb1a9b",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "573ed69d-0dc8-4829-9695-846544c42433#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/wq14-math-provenance-20260715",
+      "head_sha": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "3e21cf6fe3edf5b157b85a643e53bd68f40f3279",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:3e21cf6fe3edf5b157b85a643e53bd68f40f3279:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "573ed69d-0dc8-4829-9695-846544c42433",
+        "name": "jain-math",
+        "owner": "veox"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat(math): add governed JOPE Prime and Lime runtime",
+      "updated_at": "2026-07-15T12:38:49.827109803+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784119883
+}

@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8"
+    },
+    "body": "",
+    "created_at": "2026-07-14T11:48:21.361045602Z",
+    "draft": false,
+    "head": {
+      "label": "codex/train-test-eval-core-20260714",
+      "ref": "codex/train-test-eval-core-20260714",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "057ea4bec47626a7647cf3f9703bced8a0705f74"
+    },
+    "html_url": "/veox/jain-core/pull/1",
+    "id": "ce588a0e-6bda-48f2-b9b6-b9d96b2e5ca3",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "veox/jain-core",
+    "state": "open",
+    "title": "feat(core): first-class train/test evaluation and Prime deadline",
+    "updated_at": "2026-07-14T11:48:21.361045602Z",
+    "url": "/repos/veox/jain-core/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "veox/jain-core",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codex/train-test-eval-core-20260714",
+      "title": "feat(core): first-class train/test evaluation and Prime deadline"
+    },
+    "method": "POST",
+    "path": "/repos/veox/jain-core/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8"
+    },
+    "body": "",
+    "created_at": "2026-07-14T11:48:21.361045602Z",
+    "draft": false,
+    "head": {
+      "label": "codex/train-test-eval-core-20260714",
+      "ref": "codex/train-test-eval-core-20260714",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "057ea4bec47626a7647cf3f9703bced8a0705f74"
+    },
+    "html_url": "/veox/jain-core/pull/1",
+    "id": "ce588a0e-6bda-48f2-b9b6-b9d96b2e5ca3",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "veox/jain-core",
+    "state": "open",
+    "title": "feat(core): first-class train/test evaluation and Prime deadline",
+    "updated_at": "2026-07-14T11:48:21.361045602Z",
+    "url": "/repos/veox/jain-core/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784029701
+}

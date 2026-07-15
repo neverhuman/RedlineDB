@@ -1,0 +1,166 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-15T11:32:14.439074438+00:00",
+      "head_sha": "e15efb6cacd4417d93f7a129197abaf8965f1698",
+      "status": "pass"
+    },
+    "passport_hash": "passport:e15efb6cacd4417d93f7a129197abaf8965f1698:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "e75276edb6f90d082620a4351c8982bab7324c51",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "541c4fc2-a3c5-425a-9a60-32743d11b2b7#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/wq14-target-encoder-bundle-20260714",
+      "head_sha": "e15efb6cacd4417d93f7a129197abaf8965f1698",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "e15efb6cacd4417d93f7a129197abaf8965f1698",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 1,
+      "passport_hash": "passport:e15efb6cacd4417d93f7a129197abaf8965f1698:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "541c4fc2-a3c5-425a-9a60-32743d11b2b7",
+        "name": "jain-starforge",
+        "owner": "veox"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Bind generation-31 Prime model bundle",
+      "updated_at": "2026-07-15T10:44:17.809916978+00:00"
+    }
+  },
+  "repository": "veox/jain-starforge",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact generation-31 bundle SHA; detached required and Jankurai proof are green.",
+      "evidence": null,
+      "expected_head_sha": "e15efb6cacd4417d93f7a129197abaf8965f1698",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/veox%2Fjain-starforge/pulls/1/reviews"
+  },
+  "response": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-15T11:32:14.429236799+00:00",
+      "head_sha": "e15efb6cacd4417d93f7a129197abaf8965f1698",
+      "status": "pass"
+    },
+    "passport_hash": "passport:e15efb6cacd4417d93f7a129197abaf8965f1698:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "e75276edb6f90d082620a4351c8982bab7324c51",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "541c4fc2-a3c5-425a-9a60-32743d11b2b7#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/wq14-target-encoder-bundle-20260714",
+      "head_sha": "e15efb6cacd4417d93f7a129197abaf8965f1698",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "e15efb6cacd4417d93f7a129197abaf8965f1698",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 1,
+      "passport_hash": "passport:e15efb6cacd4417d93f7a129197abaf8965f1698:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "541c4fc2-a3c5-425a-9a60-32743d11b2b7",
+        "name": "jain-starforge",
+        "owner": "veox"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Bind generation-31 Prime model bundle",
+      "updated_at": "2026-07-15T10:44:17.809916978+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784115132
+}

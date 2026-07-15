@@ -3,7 +3,7 @@
   "mode": "apply",
   "operation": "jeryu-local pr-approve",
   "readback": {
-    "description": "Syncs the mirrored progress contract payloads to the jain-core v7.0.1 split line used by the Jable portal registration.",
+    "description": "Adds the canonical full-v1 demo contract, fixture hashes, generated-zone ownership, and required contract-drift validation. Required and contract-drift lanes pass locally; no tags or manifest binds are included.",
     "merge_passport": {
       "blockers": [
         {
@@ -12,11 +12,11 @@
           "message": "One or more checks are failing."
         }
       ],
-      "evaluated_at": "2026-07-14T01:44:59.899920422+00:00",
-      "head_sha": "3878cb9854311da9c8511da9aec8a34a867dd2ca",
+      "evaluated_at": "2026-07-14T03:10:04.072494860+00:00",
+      "head_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
       "status": "blocked"
     },
-    "passport_hash": "passport:3878cb9854311da9c8511da9aec8a34a867dd2ca:Blocked:1:1:0:1",
+    "passport_hash": "passport:fcbb36064e008403a0fd992e7f278a73b6b1d946:Blocked:1:2:0:1",
     "summary": {
       "agents": {
         "active_sessions": 0,
@@ -38,31 +38,31 @@
         }
       ],
       "base_ref": "main",
-      "base_sha": "fcfd056240d490c41195a5dd5aac7f70875cbc5a",
+      "base_sha": "ac58ea206d58a3dff3f9e2f6e2a16c03de28093f",
       "checks": {
-        "failing": 1,
+        "failing": 2,
         "passing": 3,
         "pending": 0,
-        "skipped": 2,
-        "total": 6
+        "skipped": 0,
+        "total": 5
       },
       "draft": false,
       "entity": {
-        "id": "45ca40c2-3a5f-418c-b85c-92736a5040ff#4",
+        "id": "45ca40c2-3a5f-418c-b85c-92736a5040ff#10",
         "kind": "pull_request"
       },
-      "head_ref": "codex/jable-contract-sync",
-      "head_sha": "3878cb9854311da9c8511da9aec8a34a867dd2ca",
+      "head_ref": "codex/wq7-contracts-full-v1-20260714",
+      "head_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
       "labels": [],
       "mergeable": {
         "can_merge": false,
-        "exact_head_sha": "3878cb9854311da9c8511da9aec8a34a867dd2ca",
+        "exact_head_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
         "level": "blocked",
         "reason": "failing checks",
         "required_gate": "merge_passport"
       },
-      "number": 4,
-      "passport_hash": "passport:3878cb9854311da9c8511da9aec8a34a867dd2ca:Blocked:1:1:0:1",
+      "number": 10,
+      "passport_hash": "passport:fcbb36064e008403a0fd992e7f278a73b6b1d946:Blocked:1:2:0:1",
       "repo": {
         "host": "jeryu",
         "id": "45ca40c2-3a5f-418c-b85c-92736a5040ff",
@@ -77,24 +77,24 @@
         "user_review_state": null
       },
       "state": "open",
-      "title": "contracts: sync progress contract v11",
-      "updated_at": "2026-07-10T16:39:21.188165817+00:00"
+      "title": "test(contracts): register canonical full-v1 demo scenario",
+      "updated_at": "2026-07-14T02:57:18.303067144+00:00"
     }
   },
   "repository": "jeryu/jain-contracts",
   "request": {
     "body": {
-      "body_markdown": "Reviewed exact head and green required/Jankurai evidence.",
+      "body_markdown": "Reviewed exact head fcbb3606: governed sibling-resolved required CI passed; Jankurai 1.6.11 score=88, hard findings=0, caps=0; canonical full-v1 fixture hashes verified.",
       "evidence": null,
-      "expected_head_sha": "3878cb9854311da9c8511da9aec8a34a867dd2ca",
+      "expected_head_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
       "thread_comments": [],
       "verdict": "approve"
     },
     "method": "POST",
-    "path": "/api/v1/repos/jeryu%2Fjain-contracts/pulls/4/reviews"
+    "path": "/api/v1/repos/jeryu%2Fjain-contracts/pulls/10/reviews"
   },
   "response": {
-    "description": "Syncs the mirrored progress contract payloads to the jain-core v7.0.1 split line used by the Jable portal registration.",
+    "description": "Adds the canonical full-v1 demo contract, fixture hashes, generated-zone ownership, and required contract-drift validation. Required and contract-drift lanes pass locally; no tags or manifest binds are included.",
     "merge_passport": {
       "blockers": [
         {
@@ -103,11 +103,11 @@
           "message": "One or more checks are failing."
         }
       ],
-      "evaluated_at": "2026-07-14T01:44:59.890157063+00:00",
-      "head_sha": "3878cb9854311da9c8511da9aec8a34a867dd2ca",
+      "evaluated_at": "2026-07-14T03:10:04.063031798+00:00",
+      "head_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
       "status": "blocked"
     },
-    "passport_hash": "passport:3878cb9854311da9c8511da9aec8a34a867dd2ca:Blocked:1:1:0:1",
+    "passport_hash": "passport:fcbb36064e008403a0fd992e7f278a73b6b1d946:Blocked:1:2:0:1",
     "summary": {
       "agents": {
         "active_sessions": 0,
@@ -129,31 +129,31 @@
         }
       ],
       "base_ref": "main",
-      "base_sha": "fcfd056240d490c41195a5dd5aac7f70875cbc5a",
+      "base_sha": "ac58ea206d58a3dff3f9e2f6e2a16c03de28093f",
       "checks": {
-        "failing": 1,
+        "failing": 2,
         "passing": 3,
         "pending": 0,
-        "skipped": 2,
-        "total": 6
+        "skipped": 0,
+        "total": 5
       },
       "draft": false,
       "entity": {
-        "id": "45ca40c2-3a5f-418c-b85c-92736a5040ff#4",
+        "id": "45ca40c2-3a5f-418c-b85c-92736a5040ff#10",
         "kind": "pull_request"
       },
-      "head_ref": "codex/jable-contract-sync",
-      "head_sha": "3878cb9854311da9c8511da9aec8a34a867dd2ca",
+      "head_ref": "codex/wq7-contracts-full-v1-20260714",
+      "head_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
       "labels": [],
       "mergeable": {
         "can_merge": false,
-        "exact_head_sha": "3878cb9854311da9c8511da9aec8a34a867dd2ca",
+        "exact_head_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
         "level": "blocked",
         "reason": "failing checks",
         "required_gate": "merge_passport"
       },
-      "number": 4,
-      "passport_hash": "passport:3878cb9854311da9c8511da9aec8a34a867dd2ca:Blocked:1:1:0:1",
+      "number": 10,
+      "passport_hash": "passport:fcbb36064e008403a0fd992e7f278a73b6b1d946:Blocked:1:2:0:1",
       "repo": {
         "host": "jeryu",
         "id": "45ca40c2-3a5f-418c-b85c-92736a5040ff",
@@ -168,11 +168,11 @@
         "user_review_state": null
       },
       "state": "open",
-      "title": "contracts: sync progress contract v11",
-      "updated_at": "2026-07-10T16:39:21.188165817+00:00"
+      "title": "test(contracts): register canonical full-v1 demo scenario",
+      "updated_at": "2026-07-14T02:57:18.303067144+00:00"
     }
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1783993497
+  "timestamp_unix": 1783998602
 }

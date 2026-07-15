@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-core"
+      },
+      "sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8"
+    },
+    "body": "",
+    "created_at": "2026-07-15T08:57:37.049302016Z",
+    "draft": false,
+    "head": {
+      "label": "codexb/product-worker-contract-20260715",
+      "ref": "codexb/product-worker-contract-20260715",
+      "repo": {
+        "full_name": "jeryu/jain-core"
+      },
+      "sha": "head-13"
+    },
+    "html_url": "/jeryu/jain-core/pull/13",
+    "id": "e8a1c1d3-fa40-4d96-a1bd-338657260739",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 13,
+    "source_repository": "jeryu/jain-core",
+    "state": "open",
+    "title": "feat(contracts): define product worker v1 envelopes",
+    "updated_at": "2026-07-15T08:57:38.677645801Z",
+    "url": "/repos/jeryu/jain-core/pulls/13",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-core",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codexb/product-worker-contract-20260715",
+      "title": "feat(contracts): define product worker v1 envelopes"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-core/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-core"
+      },
+      "sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8"
+    },
+    "body": "",
+    "created_at": "2026-07-15T08:57:37.049302016Z",
+    "draft": false,
+    "head": {
+      "label": "codexb/product-worker-contract-20260715",
+      "ref": "codexb/product-worker-contract-20260715",
+      "repo": {
+        "full_name": "jeryu/jain-core"
+      },
+      "sha": "head-13"
+    },
+    "html_url": "/jeryu/jain-core/pull/13",
+    "id": "e8a1c1d3-fa40-4d96-a1bd-338657260739",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 13,
+    "source_repository": "jeryu/jain-core",
+    "state": "open",
+    "title": "feat(contracts): define product worker v1 envelopes",
+    "updated_at": "2026-07-15T08:57:37.049302016Z",
+    "url": "/repos/jeryu/jain-core/pulls/13",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784105857
+}

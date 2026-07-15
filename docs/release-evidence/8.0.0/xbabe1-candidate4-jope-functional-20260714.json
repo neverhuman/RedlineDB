@@ -1,0 +1,112 @@
+{
+  "schema": "jain.xbabe-functional-evidence/v1",
+  "created_at": "2026-07-14T22:30:00Z",
+  "status": "functional_test_pass_release_gate_fail",
+  "release_eligible": false,
+  "host": {
+    "name": "xbabe1",
+    "gpu": "NVIDIA GeForce RTX 4090",
+    "driver": "570.153.02",
+    "memory_mib": 24564
+  },
+  "image": {
+    "reference": "image.neverhuman.org/veox/jain:8.0.0-gpu-candidate-20260714.4",
+    "index_digest": "sha256:e2f3a4534e39f537a9f59342a50b36359c984ec4456ee8cb12e27ac85061b8da",
+    "amd64_manifest_digest": "sha256:df48b67e9a4f493bad3f19c681e9373c78ec76594869a0c8f7a7823231d677c6",
+    "config_digest": "sha256:bab16ffa7d4c09ef08618b940c4e12c524266e38ca6ae031081e6d92889319d6",
+    "deploy_revision_label": "536e91cec52b0fa31ce79f2a8d14a7318cf4ca43",
+    "artifact_manifest_label": "2eff874f6c9714ead04fc1d583b246c332928c1d1b667908b3db22ae145ecf07",
+    "split_manifest_label": "ec0cc54cf7b70d95d08a3f0e5987429f9c93188468ee573b6f9d0da2c24f52a6",
+    "cosign_verified": true,
+    "rekor_log_index": 2168104361
+  },
+  "quick_smoke": {
+    "web_health": {
+      "status": "pass",
+      "endpoint": "http://127.0.0.1:18888/api/health",
+      "sha256": "b609d79bbdb419c06bb09e2421d21db57723298078268fafc60ef2147bd0f3fb"
+    },
+    "chimera_gpu_forward": {
+      "status": "pass",
+      "device": "cuda:0",
+      "dtype": "bf16",
+      "finite_predictions": [0.530525, 0.750750],
+      "log_sha256": "65214f417c3e5dc551d734b1fbb2a417163e0e9112ea52a3169e83e4cd4a643e"
+    },
+    "dataset": {
+      "train_sha256": "d8d0ac8f4651435accb62c8c79c2c7bff9158c2b82b53ae295b6f5901bdbf799",
+      "holdout_sha256": "1016e4f7da0deb845fc93f64a5cc3ff2a707b1cdcb3bdd2933f0510c8fd3967f"
+    },
+    "prime": {
+      "status": "pass",
+      "log_callout": "[model] engine=jope-prime",
+      "hyperion_device": "cuda:0",
+      "evaluations": 46,
+      "evaluated_ledger_rows": 28,
+      "finalist": "math_58a48e38",
+      "finalist_cv_r2": 0.9986716816316757,
+      "selected_model": "jable",
+      "selected_cv_r2": 0.9982993290228791,
+      "selected_holdout_r2": 0.9989981576044439,
+      "train_log_sha256": "b6717e24bd0b7264862212c6e77364c3107732ca73394b7ffd6831056fd3900f",
+      "reload_predictions_sha256": "b63bab757cc0e2a2cd5b52ea1fdbce4976bf007e569cbacc66cf6d196ca9eb5c"
+    },
+    "lime": {
+      "status": "pass",
+      "log_callout": "[model] engine=jope-lime",
+      "hyperion_device": "cuda:0",
+      "evaluations": 5,
+      "evaluated_ledger_rows": 5,
+      "finalist": "math_e8fb6975",
+      "finalist_cv_r2": 0.998661453470541,
+      "selected_model": "jable",
+      "train_log_sha256": "0208f0f7e997e74c144954ccea3a9b1c6b3a186adc2affb88f45b3613fd7ac4c",
+      "reload_predictions_sha256": "b63bab757cc0e2a2cd5b52ea1fdbce4976bf007e569cbacc66cf6d196ca9eb5c"
+    }
+  },
+  "allstate": {
+    "train_source": "/home/ubuntu/remote_super/quant/regression/c4b1f6dfb2a8605f/train.csv",
+    "train_source_sha256": "cef4e263a9cc02731c412cbd75db917c58ab3582778da3ba02bc1ed98efa0c62",
+    "test_source": "xbabe2:/home/ubuntu/remote_super/quant/regression/c4b1f6dfb2a8605f/test.csv",
+    "test_source_sha256": "afdb7f51e4ee2a705a451c639596d161895b41a944e0e6b7ad41795549ef8c74",
+    "started_at": "2026-07-14T22:24:23.094551891Z",
+    "finished_at": "2026-07-14T22:26:46.514563208Z",
+    "exit_code": 0,
+    "engine_log_callout": "[model] engine=jope-prime",
+    "hyperion_device": "cuda:0",
+    "prime_evaluations": 1842,
+    "prime_evaluated_ledger_rows": 1820,
+    "prime_finalist": "math_3ea6d23f",
+    "prime_finalist_cv_r2": 0.43399388873929884,
+    "selected_model": "starforge_regressor_blend",
+    "selected_cv_r2": 0.47577927219069005,
+    "selected_cv_lcb": 0.44401406157222834,
+    "selected_internal_holdout_r2": 0.5427551408706044,
+    "raw_feature_internal_holdout_r2": 0.5568129196,
+    "internal_holdout_delta_r2": -0.0140577787293956,
+    "external_test": {
+      "selection_influence": false,
+      "rows": 999,
+      "r2": 0.549255192107,
+      "rmse": 0.029795692286,
+      "mae": 0.021879168588,
+      "predictions_sha256": "fa2fbef25aecef3a732be1325ae1f3ed67025cb6a8abc5854b3c05230138dab9",
+      "metrics_sha256": "015be3350a572c5d037e87701e225283dde4555d83b430c435a11ab06a2f016b"
+    },
+    "model_manifest_sha256": "5c0e425a6d984daaa52211848763c7369989dc90602f5460b7109f19cb59f6af",
+    "invention_manifest_sha256": "65962f3297c7047196f2894492add9d1b704f7de2b2a8ab579093a90f5cccb0f",
+    "invention_ledger_sha256": "ce9dfa1e3b7fa6c19807e895699f6858d7c8e0c6bfae55fd34d1c9adbdcba380",
+    "train_log_sha256": "4da1d4bd3ecc560711a8d1a5b070a718d461732cbaea4c554abed134081ca4e9"
+  },
+  "release_blockers": [
+    "Deploy revision is not protected-main or immutable-tag bound",
+    "image omits the required native prime, prime-cuda, and legacy-gp build-feature contract",
+    "observed Prime path is the legacy GP-evolved Lime/Prime harness and logs GP activity",
+    "current owner bash verifier can false-pass name mentions and mislabel Low/Lime as Prime",
+    "runtime/SBOM still contains Python",
+    "Grype receipt is missing",
+    "CPU/CUDA prediction parity is not proven",
+    "Allstate selected model did not beat the raw-feature internal holdout baseline",
+    "exact-digest xbabe2 runtime verification is not complete"
+  ]
+}

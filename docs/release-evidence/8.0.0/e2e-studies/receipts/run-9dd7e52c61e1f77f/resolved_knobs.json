@@ -1,0 +1,19 @@
+{
+  "gp_pop": 32,
+  "gp_gens": 12,
+  "hyperion_enabled": true,
+  "chimera_enabled": true,
+  "algorithm_language": "python",
+  "hyperion_sweeps": 1,
+  "gp_islands": 1,
+  "max_gp": 32,
+  "eda_pop": 8,
+  "eda_gens": 2,
+  "cv_iters": 6,
+  "ho_iters": 8,
+  "p2_epochs": 1,
+  "p2_iters": 4,
+  "invent_gens": 6,
+  "invent_pop": 16,
+  "gp_overfit_gap": 0.05
+}

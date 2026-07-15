@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "generated_by": "jankurai coverage audit",
+  "repo_root": ".",
+  "config_path": "agent/coverage-sources.toml",
+  "strict": false,
+  "changed_from": null,
+  "summary": {
+    "status": "pass",
+    "sources_total": 2,
+    "sources_present": 2,
+    "sources_missing": 0,
+    "hard_findings": 0,
+    "soft_findings": 0
+  },
+  "sources": [
+    {
+      "id": "rust-lcov",
+      "kind": "line_coverage",
+      "format": "lcov",
+      "mode": "auto",
+      "status": "pass",
+      "artifact_paths": [
+        "target/llvm-cov/lcov.info",
+        "target/jankurai/coverage/rust-lcov.info"
+      ],
+      "matched_artifact": "target/llvm-cov/lcov.info",
+      "applies_to": [
+        "crates/**/*.rs"
+      ],
+      "owner": "tools",
+      "lane": "coverage-audit",
+      "metrics": {
+        "covered_branches": 0,
+        "covered_lines": 41570,
+        "present": true,
+        "total_branches": 0,
+        "total_line_coverage": 0.805089669597552,
+        "total_lines": 51634
+      },
+      "parser_warnings": []
+    },
+    {
+      "id": "rust-mutation",
+      "kind": "mutation",
+      "format": "cargo-mutants-json",
+      "mode": "auto",
+      "status": "pass",
+      "artifact_paths": [
+        "target/mutants/mutants.out/outcomes.json",
+        "target/mutants/outcomes.json"
+      ],
+      "matched_artifact": "target/mutants/mutants.out/outcomes.json",
+      "applies_to": [
+        "crates/**/*.rs"
+      ],
+      "owner": "tools",
+      "lane": "coverage-audit",
+      "metrics": {
+        "present": true
+      },
+      "parser_warnings": []
+    },
+    {
+      "id": "docker-trivy",
+      "kind": "supply_chain",
+      "format": "trivy-json",
+      "mode": "auto",
+      "status": "disabled",
+      "artifact_paths": [
+        "target/jankurai/security/trivy.json"
+      ],
+      "matched_artifact": null,
+      "applies_to": [
+        "Dockerfile",
+        "docker/**/*.Dockerfile",
+        "docker-compose*.yml",
+        "docker-compose*.yaml"
+      ],
+      "owner": "ops",
+      "lane": "security",
+      "metrics": {},
+      "parser_warnings": []
+    }
+  ],
+  "findings": []
+}

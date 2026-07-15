@@ -1,0 +1,13 @@
+{
+  "commit_input": "7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f",
+  "error": "jain-contracts: immutable-tag request differs from canonical manifest (remote=http://127.0.0.1:8787/git/veox/jain-contracts.git, tag=jain-contracts-v8.0.0-split.2, commit=7fabfc69cbece4b8fd3589a6d544ebcd8d9dc51f, checksum=a59355d0676fee9cb179b4190dbd1178967b6322f85cbcfb508dbf5137cb69ba)",
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "remote": "http://127.0.0.1:8787/git/veox/jain-contracts.git",
+  "repository": "/home/ubuntu/jain-split/jain-contracts",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "fail",
+  "tag": "jain-contracts-v8.0.0-split.2",
+  "timestamp_unix": 1784010297
+}

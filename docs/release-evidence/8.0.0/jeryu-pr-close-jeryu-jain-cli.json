@@ -1,0 +1,16 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-close",
+  "repository": "jeryu/jain-cli",
+  "request": {
+    "body": {
+      "state": "closed"
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-cli/pulls/8"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784002719
+}

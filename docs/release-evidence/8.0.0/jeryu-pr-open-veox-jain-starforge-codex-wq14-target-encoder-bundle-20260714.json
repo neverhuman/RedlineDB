@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-starforge"
+      },
+      "sha": "e75276edb6f90d082620a4351c8982bab7324c51"
+    },
+    "body": "",
+    "created_at": "2026-07-15T10:44:16.703994655Z",
+    "draft": false,
+    "head": {
+      "label": "codex/wq14-target-encoder-bundle-20260714",
+      "ref": "codex/wq14-target-encoder-bundle-20260714",
+      "repo": {
+        "full_name": "veox/jain-starforge"
+      },
+      "sha": "e15efb6cacd4417d93f7a129197abaf8965f1698"
+    },
+    "html_url": "/veox/jain-starforge/pull/1",
+    "id": "8c1d50c5-5d0d-4b7a-b529-b18ec128e498",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "veox/jain-starforge",
+    "state": "open",
+    "title": "Bind generation-31 Prime model bundle",
+    "updated_at": "2026-07-15T10:44:17.809916978Z",
+    "url": "/repos/veox/jain-starforge/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "veox/jain-starforge",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codex/wq14-target-encoder-bundle-20260714",
+      "title": "Bind generation-31 Prime model bundle"
+    },
+    "method": "POST",
+    "path": "/repos/veox/jain-starforge/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-starforge"
+      },
+      "sha": "e75276edb6f90d082620a4351c8982bab7324c51"
+    },
+    "body": "",
+    "created_at": "2026-07-15T10:44:16.703994655Z",
+    "draft": false,
+    "head": {
+      "label": "codex/wq14-target-encoder-bundle-20260714",
+      "ref": "codex/wq14-target-encoder-bundle-20260714",
+      "repo": {
+        "full_name": "veox/jain-starforge"
+      },
+      "sha": "e15efb6cacd4417d93f7a129197abaf8965f1698"
+    },
+    "html_url": "/veox/jain-starforge/pull/1",
+    "id": "8c1d50c5-5d0d-4b7a-b529-b18ec128e498",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 1,
+    "source_repository": "veox/jain-starforge",
+    "state": "open",
+    "title": "Bind generation-31 Prime model bundle",
+    "updated_at": "2026-07-15T10:44:16.703994655Z",
+    "url": "/repos/veox/jain-starforge/pulls/1",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784112256
+}

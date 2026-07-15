@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "3e22e5ea9f1b52f9874616ab9f3cc83bfc35cc6d"
+    },
+    "body": "",
+    "created_at": "2026-07-15T08:58:37.635982741Z",
+    "draft": false,
+    "head": {
+      "label": "codexb/product-worker-contract-20260715",
+      "ref": "codexb/product-worker-contract-20260715",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "85256b11173ddb611705b5fa6ff23a3e769f180c"
+    },
+    "html_url": "/veox/jain-core/pull/3",
+    "id": "e5d4388e-3010-4287-b57e-3f574fce0c48",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 3,
+    "source_repository": "veox/jain-core",
+    "state": "open",
+    "title": "feat(contracts): define product worker v1 envelopes",
+    "updated_at": "2026-07-15T08:58:37.635982741Z",
+    "url": "/repos/veox/jain-core/pulls/3",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "veox/jain-core",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codexb/product-worker-contract-20260715",
+      "title": "feat(contracts): define product worker v1 envelopes"
+    },
+    "method": "POST",
+    "path": "/repos/veox/jain-core/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "3e22e5ea9f1b52f9874616ab9f3cc83bfc35cc6d"
+    },
+    "body": "",
+    "created_at": "2026-07-15T08:58:37.635982741Z",
+    "draft": false,
+    "head": {
+      "label": "codexb/product-worker-contract-20260715",
+      "ref": "codexb/product-worker-contract-20260715",
+      "repo": {
+        "full_name": "veox/jain-core"
+      },
+      "sha": "85256b11173ddb611705b5fa6ff23a3e769f180c"
+    },
+    "html_url": "/veox/jain-core/pull/3",
+    "id": "e5d4388e-3010-4287-b57e-3f574fce0c48",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 3,
+    "source_repository": "veox/jain-core",
+    "state": "open",
+    "title": "feat(contracts): define product worker v1 envelopes",
+    "updated_at": "2026-07-15T08:58:37.635982741Z",
+    "url": "/repos/veox/jain-core/pulls/3",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784105917
+}
