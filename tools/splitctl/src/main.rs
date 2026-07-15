@@ -144,6 +144,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("managed-repos") => managed_repos_command(args.collect())?,
         Some("release-cargo-commands") => release_cargo_commands_command(args.collect())?,
         Some("sync-derived-manifests") => sync_derived_manifests_command(args.collect())?,
+        Some("jankurai-evidence") => jankurai_evidence_command(args.collect())?,
         Some("validate-manifest") => validate_manifest_command(args.collect())?,
         Some("validate-family") => preflight(args.collect())?,
         Some("validate-family-lock") => validate_family_lock(args.collect())?,
@@ -157,7 +158,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -890,6 +891,522 @@ fn render_derived_manifest(
 
 fn sha256_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
+}
+
+fn is_full_hex(value: &str, length: usize) -> bool {
+    value.len() == length
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn numeric_toml(value: Option<&toml::Value>, field: &str) -> Result<f64, String> {
+    value
+        .and_then(|value| {
+            value
+                .as_float()
+                .or_else(|| value.as_integer().map(|number| number as f64))
+        })
+        .ok_or_else(|| format!("governed audit policy is missing numeric {field}"))
+}
+
+fn jankurai_evidence_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repository = None;
+    let mut commit = None;
+    let mut worktree = None;
+    let mut report_root = None;
+    let mut report = None;
+    let mut auditor = None;
+    let mut attempt_id = None;
+    let mut lane_conclusion = None;
+    let mut lane_failure_reason = None;
+    let mut clean_tracked_tree_start = None;
+    let mut receipt = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repository" => repository = Some(iter.next().ok_or("--repository needs a name")?),
+            "--commit" => commit = Some(iter.next().ok_or("--commit needs a SHA")?),
+            "--worktree" => {
+                worktree = Some(PathBuf::from(iter.next().ok_or("--worktree needs a path")?))
+            }
+            "--report-root" => {
+                report_root = Some(PathBuf::from(
+                    iter.next().ok_or("--report-root needs a path")?,
+                ))
+            }
+            "--report" => report = Some(PathBuf::from(iter.next().ok_or("--report needs a path")?)),
+            "--auditor" => {
+                auditor = Some(PathBuf::from(iter.next().ok_or("--auditor needs a path")?))
+            }
+            "--attempt-id" => attempt_id = Some(iter.next().ok_or("--attempt-id needs a value")?),
+            "--lane-conclusion" => {
+                lane_conclusion = Some(iter.next().ok_or("--lane-conclusion needs a value")?)
+            }
+            "--lane-failure-reason" => {
+                lane_failure_reason =
+                    Some(iter.next().ok_or("--lane-failure-reason needs a value")?)
+            }
+            "--clean-tracked-tree-start" => {
+                clean_tracked_tree_start = Some(
+                    match iter
+                        .next()
+                        .ok_or("--clean-tracked-tree-start needs true or false")?
+                        .as_str()
+                    {
+                        "true" => true,
+                        "false" => false,
+                        _ => return Err("--clean-tracked-tree-start needs true or false".into()),
+                    },
+                )
+            }
+            "--receipt" => {
+                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            value => return Err(format!("unknown jankurai-evidence argument: {value}").into()),
+        }
+    }
+
+    let repository = repository.ok_or("jankurai-evidence requires --repository")?;
+    if repository.is_empty()
+        || !repository
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        return Err("--repository must be a lowercase repository name".into());
+    }
+    let commit = commit.ok_or("jankurai-evidence requires --commit")?;
+    if !is_full_hex(&commit, 40) {
+        return Err("--commit must be a full lowercase 40-character Git SHA".into());
+    }
+    let worktree = worktree
+        .ok_or("jankurai-evidence requires --worktree")?
+        .canonicalize()?;
+    if worktree.file_name().and_then(|name| name.to_str()) != Some(repository.as_str()) {
+        return Err("exact-SHA worktree basename must match --repository".into());
+    }
+    let report_root = report_root
+        .ok_or("jankurai-evidence requires --report-root")?
+        .canonicalize()?;
+    let report = report
+        .ok_or("jankurai-evidence requires --report")?
+        .canonicalize()?;
+    if report.parent() != Some(report_root.as_path())
+        || report.file_name().and_then(|name| name.to_str()) != Some("report.json")
+    {
+        return Err("Jankurai report must be report.json directly beneath --report-root".into());
+    }
+    let report_metadata = fs::symlink_metadata(&report)?;
+    if !report_metadata.file_type().is_file()
+        || std::os::unix::fs::MetadataExt::nlink(&report_metadata) != 1
+    {
+        return Err("Jankurai report must be a regular single-link file".into());
+    }
+    let receipt = receipt.ok_or("jankurai-evidence requires --receipt")?;
+    if receipt.file_name().and_then(|name| name.to_str()) != Some("receipt.json")
+        || receipt
+            .parent()
+            .ok_or("Jankurai receipt has no parent")?
+            .canonicalize()?
+            != report_root
+    {
+        return Err("Jankurai receipt must be receipt.json beneath --report-root".into());
+    }
+    if receipt.exists() || receipt.is_symlink() {
+        return Err("Jankurai receipt destination must not already exist".into());
+    }
+
+    let auditor = auditor
+        .ok_or("jankurai-evidence requires --auditor")?
+        .canonicalize()?;
+    let auditor_metadata = fs::symlink_metadata(&auditor)?;
+    if !auditor_metadata.file_type().is_file()
+        || std::os::unix::fs::MetadataExt::nlink(&auditor_metadata) != 1
+    {
+        return Err("Jankurai auditor must be a regular single-link file".into());
+    }
+    let auditor_bytes = fs::read(&auditor)?;
+    let auditor_output = Command::new(&auditor).arg("--version").output()?;
+    if !auditor_output.status.success() {
+        return Err("Jankurai auditor did not report its version".into());
+    }
+    let auditor_version = String::from_utf8(auditor_output.stdout)?;
+    let auditor_version = auditor_version.trim();
+    let auditor_release = auditor_version
+        .split_whitespace()
+        .last()
+        .filter(|value| !value.is_empty())
+        .ok_or("Jankurai auditor version is malformed")?;
+
+    let attempt_id = attempt_id.ok_or("jankurai-evidence requires --attempt-id")?;
+    if attempt_id.is_empty()
+        || !attempt_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    {
+        return Err("--attempt-id must be a portable non-empty identifier".into());
+    }
+    let lane_conclusion = lane_conclusion.ok_or("jankurai-evidence requires --lane-conclusion")?;
+    if !matches!(lane_conclusion.as_str(), "success" | "failure") {
+        return Err("--lane-conclusion must be success or failure".into());
+    }
+    if lane_conclusion == "failure" && lane_failure_reason.as_deref().is_none_or(str::is_empty) {
+        return Err("failed evidence requires --lane-failure-reason".into());
+    }
+    let clean_tracked_tree_start =
+        clean_tracked_tree_start.ok_or("jankurai-evidence requires --clean-tracked-tree-start")?;
+    let checkout_commit = resolve_commit(&worktree, "HEAD")?;
+    if checkout_commit != commit {
+        return Err(format!(
+            "Jankurai worktree HEAD {checkout_commit} does not match requested commit {commit}"
+        )
+        .into());
+    }
+
+    let report_bytes = fs::read(&report)?;
+    let score_report: JsonValue = serde_json::from_slice(&report_bytes)?;
+    let report_repository = score_report
+        .get("repo")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing repo identity")?;
+    if report_repository != "." {
+        return Err("score report must identify the exact worktree as repo=.".into());
+    }
+    let report_head = score_report
+        .get("git")
+        .and_then(|git| git.get("head"))
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing git.head")?;
+    if !(7..=40).contains(&report_head.len())
+        || !report_head
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(
+            "score report git.head must be a lowercase 7- to 40-character Git identity".into(),
+        );
+    }
+    let report_commit = resolve_commit(&worktree, report_head)?;
+    if report_commit != commit {
+        return Err(format!(
+            "score report git.head resolves to {report_commit}, expected {commit}"
+        )
+        .into());
+    }
+    let report_run_id = score_report
+        .get("run_id")
+        .and_then(JsonValue::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or("score report is missing run_id")?;
+    let report_auditor_version = score_report
+        .get("auditor_version")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing auditor_version")?;
+    let input_fingerprint = score_report
+        .get("input_fingerprint")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing input_fingerprint")?;
+    let policy_fingerprint = score_report
+        .get("policy_fingerprint")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing policy_fingerprint")?;
+    if !is_sha256_fingerprint(input_fingerprint) || !is_sha256_fingerprint(policy_fingerprint) {
+        return Err("score report fingerprints must be non-zero sha256 identities".into());
+    }
+    let score = score_report
+        .get("score")
+        .and_then(JsonValue::as_f64)
+        .ok_or("score report is missing numeric score")?;
+    let hard_value = score_report
+        .get("decision")
+        .and_then(|value| value.get("hard_findings"))
+        .or_else(|| score_report.get("hard_findings"));
+    let hard_findings = match hard_value {
+        Some(JsonValue::Array(values)) => values.len() as u64,
+        Some(value) => value
+            .as_u64()
+            .ok_or("hard_findings must be an array or integer")?,
+        None => return Err("score report is missing hard_findings".into()),
+    };
+    let caps_value = score_report
+        .get("caps_applied")
+        .ok_or("score report is missing caps_applied")?;
+    let caps_applied = match caps_value {
+        JsonValue::Array(values) => values.len() as u64,
+        value => value
+            .as_u64()
+            .ok_or("caps_applied must be an array or integer")?,
+    };
+    let decision = score_report
+        .get("decision")
+        .ok_or("score report is missing decision")?;
+    let decision_passed = decision.get("passed").and_then(JsonValue::as_bool) == Some(true);
+    let reported_minimum_score = decision
+        .get("minimum_score")
+        .and_then(JsonValue::as_f64)
+        .ok_or("score report decision is missing minimum_score")?;
+    let ratchet = decision
+        .get("ratchet")
+        .ok_or("score report decision is missing ratchet")?;
+    let reported_ratchet_passed = ratchet.get("passed").and_then(JsonValue::as_bool) == Some(true);
+    let reported_baseline_score = ratchet
+        .get("baseline_score")
+        .and_then(JsonValue::as_f64)
+        .ok_or("score report ratchet is missing baseline_score")?;
+    let reported_allowed_drop = ratchet
+        .get("allowed_drop")
+        .and_then(JsonValue::as_f64)
+        .ok_or("score report ratchet is missing allowed_drop")?;
+    let conformance_decision = score_report
+        .get("conformance_decision")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing conformance_decision")?;
+    let conformance_blockers = score_report
+        .get("conformance_blockers")
+        .and_then(JsonValue::as_array)
+        .ok_or("score report is missing conformance_blockers")?;
+    let report_dirty = score_report
+        .get("dirty_worktree")
+        .and_then(JsonValue::as_bool)
+        .ok_or("score report is missing dirty_worktree")?;
+    let report_git_dirty = score_report
+        .get("git")
+        .and_then(|git| git.get("dirty_worktree"))
+        .and_then(JsonValue::as_bool)
+        .ok_or("score report is missing git.dirty_worktree")?;
+    let report_policy = score_report
+        .get("policy")
+        .ok_or("score report is missing policy identity")?;
+    let report_policy_path = report_policy
+        .get("path")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report policy is missing path")?;
+    let report_policy_auditor = report_policy
+        .get("auditor_version")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report policy is missing auditor_version")?;
+    let report_policy_minimum = report_policy
+        .get("minimum_score")
+        .and_then(JsonValue::as_f64)
+        .ok_or("score report policy is missing minimum_score")?;
+
+    let policy_path = worktree.join(report_policy_path);
+    let governed_policy_path = worktree.join("agent/audit-policy.toml");
+    let governed_policy_metadata = fs::symlink_metadata(&governed_policy_path)?;
+    if policy_path.canonicalize()? != governed_policy_path
+        || governed_policy_path.canonicalize()? != governed_policy_path
+        || !governed_policy_metadata.file_type().is_file()
+        || std::os::unix::fs::MetadataExt::nlink(&governed_policy_metadata) != 1
+    {
+        return Err("score report policy path is not the governed repository policy".into());
+    }
+    let policy_bytes = fs::read(&governed_policy_path)?;
+    let policy_data: toml::Value = String::from_utf8(policy_bytes.clone())?.parse()?;
+    let computed_policy_fingerprint = format!("sha256:{}", sha256_bytes(&policy_bytes));
+    let required_tool = string(&policy_data, "required_tool")
+        .ok_or("governed audit policy is missing required_tool")?;
+    let required_tool_version = string(&policy_data, "required_tool_version")
+        .ok_or("governed audit policy is missing required_tool_version")?;
+    let minimum_score = numeric_toml(policy_data.get("minimum_score"), "minimum_score")?;
+    let allowed_drop = policy_data
+        .get("allowed_score_drop")
+        .map(|value| numeric_toml(Some(value), "allowed_score_drop"))
+        .transpose()?
+        .unwrap_or(0.0);
+    if allowed_drop < 0.0 {
+        return Err("governed allowed_score_drop cannot be negative".into());
+    }
+
+    let baseline_path = worktree.join("agent/jankurai-baseline.json");
+    let baseline_metadata = fs::symlink_metadata(&baseline_path)?;
+    if baseline_path.canonicalize()? != baseline_path
+        || !baseline_metadata.file_type().is_file()
+        || std::os::unix::fs::MetadataExt::nlink(&baseline_metadata) != 1
+    {
+        return Err("governed Jankurai baseline must be a regular single-link file".into());
+    }
+    let baseline_bytes = fs::read(&baseline_path)?;
+    let baseline: JsonValue = serde_json::from_slice(&baseline_bytes)?;
+    let baseline_score = baseline
+        .get("score")
+        .and_then(JsonValue::as_f64)
+        .ok_or("governed Jankurai baseline is missing numeric score")?;
+    let baseline_auditor = baseline
+        .get("auditor")
+        .and_then(JsonValue::as_str)
+        .ok_or("governed Jankurai baseline is missing auditor")?;
+    let clean_tracked_tree_finish = git_tracked_tree_clean(&worktree)?;
+
+    let mut evidence = receipt_header(
+        "jain.jankurai-exact-sha-evidence/v1",
+        "jankurai-evidence",
+        false,
+    );
+    evidence["mode"] = json!("evidence");
+    evidence["attempt_id"] = json!(attempt_id);
+    evidence["run_id"] = json!(report_run_id);
+    evidence["lane"] = json!({
+        "conclusion": lane_conclusion,
+        "failure_reason": lane_failure_reason,
+    });
+    evidence["repository"] = json!(repository);
+    evidence["commit"] = json!(commit);
+    evidence["worktree"] = json!(worktree);
+    evidence["report"] = json!(report);
+    evidence["report_sha256"] = json!(sha256_bytes(&report_bytes));
+    evidence["policy"] = json!({
+        "path": governed_policy_path,
+        "sha256": sha256_bytes(&policy_bytes),
+        "minimum_score": minimum_score,
+        "allowed_score_drop": allowed_drop,
+    });
+    evidence["baseline"] = json!({
+        "path": baseline_path,
+        "sha256": sha256_bytes(&baseline_bytes),
+        "score": baseline_score,
+        "auditor": baseline_auditor,
+    });
+    evidence["report_identity"] = json!({
+        "repo": report_repository,
+        "git_head": report_head,
+        "commit": report_commit,
+        "input_fingerprint": input_fingerprint,
+        "policy_fingerprint": policy_fingerprint,
+        "computed_policy_fingerprint": computed_policy_fingerprint,
+        "required_tool": required_tool,
+        "required_tool_version": required_tool_version,
+        "auditor_version": report_auditor_version,
+        "policy_path": report_policy_path,
+        "policy_auditor_version": report_policy_auditor,
+        "dirty_worktree": report_dirty,
+        "git_dirty_worktree": report_git_dirty,
+        "decision_passed": decision_passed,
+        "reported_minimum_score": reported_minimum_score,
+        "reported_ratchet_passed": reported_ratchet_passed,
+        "reported_baseline_score": reported_baseline_score,
+        "reported_allowed_drop": reported_allowed_drop,
+        "conformance_decision": conformance_decision,
+        "conformance_blockers": conformance_blockers,
+    });
+    evidence["score"] = json!(score);
+    evidence["hard_findings"] = json!(hard_findings);
+    evidence["caps_applied"] = json!(caps_applied);
+    evidence["ratchet_passed"] = json!(score >= baseline_score - allowed_drop);
+    evidence["clean_tracked_tree_at_start"] = json!(clean_tracked_tree_start);
+    evidence["clean_tracked_tree_at_finish"] = json!(clean_tracked_tree_finish);
+    evidence["auditor"] = json!({
+        "path": auditor,
+        "version": auditor_version,
+        "sha256": sha256_bytes(&auditor_bytes),
+    });
+
+    let mut failures = Vec::new();
+    if !clean_tracked_tree_start {
+        failures.push("exact-SHA worktree had tracked changes before audit".to_owned());
+    }
+    if !clean_tracked_tree_finish {
+        failures.push("exact-SHA worktree had tracked changes after audit".to_owned());
+    }
+    if report_dirty || report_git_dirty {
+        failures.push("Jankurai audited a dirty tracked worktree".to_owned());
+    }
+    if report_auditor_version != auditor_release || report_policy_auditor != auditor_release {
+        failures.push(format!(
+            "auditor version mismatch: executable={auditor_release} report={report_auditor_version} policy={report_policy_auditor}"
+        ));
+    }
+    if baseline_auditor != auditor_version {
+        failures.push(format!(
+            "baseline auditor mismatch: baseline={baseline_auditor} executable={auditor_version}"
+        ));
+    }
+    if policy_fingerprint != computed_policy_fingerprint {
+        failures
+            .push("Jankurai policy fingerprint does not match agent/audit-policy.toml".to_owned());
+    }
+    if required_tool != "jankurai" || required_tool_version != auditor_release {
+        failures.push(format!(
+            "governed policy tool mismatch: required={required_tool}@{required_tool_version} executable={auditor_release}"
+        ));
+    }
+    if reported_minimum_score != minimum_score || report_policy_minimum != minimum_score {
+        failures.push(format!(
+            "reported score floor differs from governed policy: decision={reported_minimum_score} report_policy={report_policy_minimum} governed={minimum_score}"
+        ));
+    }
+    if !decision_passed {
+        failures.push("Jankurai decision.passed is not true".to_owned());
+    }
+    if score < minimum_score {
+        failures.push(format!(
+            "score {score} is below governed floor {minimum_score}"
+        ));
+    }
+    if !reported_ratchet_passed || score < baseline_score - allowed_drop {
+        failures.push(format!(
+            "Jankurai ratchet failed: score={score} baseline={baseline_score} allowed_drop={allowed_drop}"
+        ));
+    }
+    if reported_allowed_drop != allowed_drop {
+        failures.push(format!(
+            "reported allowed drop {reported_allowed_drop} differs from governed {allowed_drop}"
+        ));
+    }
+    if conformance_decision != "pass" || !conformance_blockers.is_empty() {
+        failures.push("Jankurai conformance did not pass without blockers".to_owned());
+    }
+    if hard_findings != 0 {
+        failures.push(format!("hard findings present: {hard_findings}"));
+    }
+    if caps_applied != 0 {
+        failures.push(format!("caps applied: {caps_applied}"));
+    }
+    if lane_conclusion == "failure" {
+        failures.push(format!(
+            "authoritative lane failed: {}",
+            lane_failure_reason
+                .as_deref()
+                .unwrap_or("unspecified failure")
+        ));
+    }
+    evidence["failures"] = json!(failures);
+    let result = if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; ").into())
+    };
+    finish_receipted_operation(&receipt, &mut evidence, result)
+}
+
+fn is_sha256_fingerprint(value: &str) -> bool {
+    value
+        .strip_prefix("sha256:")
+        .is_some_and(|digest| is_full_hex(digest, 64) && !digest.bytes().all(|byte| byte == b'0'))
+}
+
+fn git_tracked_tree_clean(repo: &Path) -> Result<bool, Box<dyn std::error::Error>> {
+    for args in [
+        ["diff", "--quiet", "HEAD", "--"].as_slice(),
+        ["diff", "--cached", "--quiet"].as_slice(),
+    ] {
+        let status = Command::new("git")
+            .args([
+                "-c",
+                "core.fsmonitor=false",
+                "-c",
+                "core.hooksPath=/dev/null",
+                "-c",
+                "diff.external=",
+                "-C",
+            ])
+            .arg(repo)
+            .args(args)
+            .status()?;
+        if !status.success() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
 }
 
 fn write_atomic_bytes(path: &Path, bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
@@ -4451,7 +4968,7 @@ fn render_ci_local() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::{symlink, PermissionsExt};
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
@@ -4520,6 +5037,324 @@ mod tests {
 
     fn read_json(path: &Path) -> JsonValue {
         serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+    }
+
+    struct JankuraiFixture {
+        _root: TestDir,
+        repo: PathBuf,
+        commit: String,
+        report_root: PathBuf,
+        report: PathBuf,
+        receipt: PathBuf,
+        policy: PathBuf,
+        baseline: PathBuf,
+        auditor: PathBuf,
+    }
+
+    impl JankuraiFixture {
+        fn new(label: &str) -> Self {
+            let root = TestDir::new(label);
+            let repo = root.path().join("source");
+            command({
+                let mut command = Command::new("git");
+                command.args(["init", "-b", "main"]).arg(&repo);
+                command
+            });
+            run_git_strict(&repo, &["config", "user.name", "Release Test"]).unwrap();
+            run_git_strict(&repo, &["config", "user.email", "release@example.invalid"]).unwrap();
+            let policy = repo.join("agent/audit-policy.toml");
+            let baseline = repo.join("agent/jankurai-baseline.json");
+            fs::create_dir_all(policy.parent().unwrap()).unwrap();
+            fs::write(repo.join("payload.txt"), "reviewed\n").unwrap();
+            fs::write(
+                &policy,
+                "minimum_score = 85\nallowed_score_drop = 0\nrequired_tool = \"jankurai\"\nrequired_tool_version = \"1.6.10\"\n",
+            )
+            .unwrap();
+            fs::write(
+                &baseline,
+                serde_json::to_vec(&json!({
+                    "schema": "jain.split.jankurai-baseline/v1",
+                    "score": 90,
+                    "caps": [],
+                    "hard_findings": 0,
+                    "auditor": "jankurai 1.6.10",
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+            run_git_strict(&repo, &["add", "."]).unwrap();
+            run_git_strict(&repo, &["commit", "-m", "reviewed audit fixture"]).unwrap();
+            let commit = resolve_commit(&repo, "HEAD").unwrap();
+
+            let report_root = root.path().join("proof");
+            fs::create_dir(&report_root).unwrap();
+            let report = report_root.join("report.json");
+            let receipt = report_root.join("receipt.json");
+            let auditor = root.path().join("jankurai");
+            let mut auditor_file = fs::File::create(&auditor).unwrap();
+            auditor_file
+                .write_all(b"#!/bin/sh\necho 'jankurai 1.6.10'\n")
+                .unwrap();
+            auditor_file.sync_all().unwrap();
+            drop(auditor_file);
+            let mut permissions = fs::metadata(&auditor).unwrap().permissions();
+            permissions.set_mode(0o755);
+            fs::set_permissions(&auditor, permissions).unwrap();
+
+            Self {
+                _root: root,
+                repo,
+                commit,
+                report_root,
+                report,
+                receipt,
+                policy,
+                baseline,
+                auditor,
+            }
+        }
+
+        fn valid_report(&self) -> JsonValue {
+            json!({
+                "score": 92,
+                "repo": ".",
+                "auditor_version": "1.6.10",
+                "input_fingerprint": format!("sha256:{}", "1".repeat(64)),
+                "policy_fingerprint": format!(
+                    "sha256:{}",
+                    sha256_bytes(&fs::read(&self.policy).unwrap())
+                ),
+                "dirty_worktree": false,
+                "git": {
+                    "head": &self.commit,
+                    "dirty_worktree": false,
+                },
+                "decision": {
+                    "passed": true,
+                    "minimum_score": 85,
+                    "hard_findings": [],
+                    "ratchet": {
+                        "passed": true,
+                        "baseline_score": 90,
+                        "allowed_drop": 0,
+                    },
+                },
+                "caps_applied": [],
+                "conformance_decision": "pass",
+                "conformance_blockers": [],
+                "run_id": "auditor-run-1",
+                "policy": {
+                    "path": "./agent/audit-policy.toml",
+                    "minimum_score": 85,
+                    "auditor_version": "1.6.10",
+                },
+            })
+        }
+
+        fn args(&self, clean_start: bool) -> Vec<String> {
+            vec![
+                "--repository".to_owned(),
+                "source".to_owned(),
+                "--commit".to_owned(),
+                self.commit.clone(),
+                "--worktree".to_owned(),
+                self.repo.display().to_string(),
+                "--report-root".to_owned(),
+                self.report_root.display().to_string(),
+                "--report".to_owned(),
+                self.report.display().to_string(),
+                "--auditor".to_owned(),
+                self.auditor.display().to_string(),
+                "--attempt-id".to_owned(),
+                "attempt-1".to_owned(),
+                "--lane-conclusion".to_owned(),
+                "success".to_owned(),
+                "--clean-tracked-tree-start".to_owned(),
+                clean_start.to_string(),
+                "--receipt".to_owned(),
+                self.receipt.display().to_string(),
+            ]
+        }
+
+        fn validate(
+            &self,
+            report: &JsonValue,
+            clean_start: bool,
+        ) -> Result<(), Box<dyn std::error::Error>> {
+            if self.receipt.exists() {
+                fs::remove_file(&self.receipt).unwrap();
+            }
+            fs::write(&self.report, serde_json::to_vec(report).unwrap()).unwrap();
+            jankurai_evidence_command(self.args(clean_start))
+        }
+    }
+
+    fn rejected_report(label: &str, expected: &str, mutate: impl FnOnce(&mut JsonValue)) {
+        let fixture = JankuraiFixture::new(label);
+        let mut report = fixture.valid_report();
+        mutate(&mut report);
+        let error = fixture.validate(&report, true).unwrap_err().to_string();
+        assert!(
+            error.contains(expected),
+            "{label}: expected {expected:?} in {error:?}"
+        );
+    }
+
+    #[test]
+    fn jankurai_evidence_binds_valid_exact_sha_policy_and_auditor() {
+        let fixture = JankuraiFixture::new("jankurai-valid");
+        let mut report = fixture.valid_report();
+        report["git"]["head"] = json!(&fixture.commit[..7]);
+        fixture.validate(&report, true).unwrap();
+        let evidence = read_json(&fixture.receipt);
+        assert_eq!(
+            evidence["schema_version"],
+            "jain.jankurai-exact-sha-evidence/v1"
+        );
+        assert_eq!(evidence["status"], "pass");
+        assert_eq!(evidence["repository"], "source");
+        assert_eq!(evidence["commit"], fixture.commit);
+        assert_eq!(evidence["report_identity"]["commit"], fixture.commit);
+        assert_eq!(
+            evidence["report_identity"]["git_head"],
+            &fixture.commit[..7]
+        );
+        assert_eq!(evidence["run_id"], "auditor-run-1");
+        assert_eq!(evidence["attempt_id"], "attempt-1");
+        assert_eq!(evidence["score"], 92.0);
+        assert_eq!(evidence["hard_findings"], 0);
+        assert_eq!(evidence["caps_applied"], 0);
+        assert_eq!(evidence["ratchet_passed"], true);
+        assert_eq!(evidence["baseline"]["score"], 90.0);
+        assert_eq!(evidence["clean_tracked_tree_at_start"], true);
+        assert_eq!(evidence["clean_tracked_tree_at_finish"], true);
+        assert!(is_full_hex(
+            evidence["auditor"]["sha256"].as_str().unwrap(),
+            64
+        ));
+        assert!(is_full_hex(evidence["report_sha256"].as_str().unwrap(), 64));
+        assert!(is_full_hex(
+            evidence["policy"]["sha256"].as_str().unwrap(),
+            64
+        ));
+        assert!(is_full_hex(
+            evidence["baseline"]["sha256"].as_str().unwrap(),
+            64
+        ));
+        assert_eq!(
+            evidence["baseline"]["sha256"],
+            sha256_bytes(&fs::read(&fixture.baseline).unwrap())
+        );
+    }
+
+    #[test]
+    fn jankurai_evidence_rejects_identity_policy_and_score_failures() {
+        rejected_report("jankurai-repository", "repo=.", |report| {
+            report["repo"] = json!("different");
+        });
+        rejected_report("jankurai-short-sha", "7- to 40-character", |report| {
+            report["git"]["head"] = json!("111111");
+        });
+        rejected_report("jankurai-uppercase-sha", "7- to 40-character", |report| {
+            report["git"]["head"] = json!("ABCDEF1");
+        });
+        rejected_report("jankurai-policy", "policy fingerprint", |report| {
+            report["policy_fingerprint"] = json!(format!("sha256:{}", "2".repeat(64)));
+        });
+        rejected_report(
+            "jankurai-policy-path",
+            "governed repository policy",
+            |report| {
+                report["policy"]["path"] = json!("./agent/jankurai-baseline.json");
+            },
+        );
+        rejected_report("jankurai-floor-identity", "score floor differs", |report| {
+            report["decision"]["minimum_score"] = json!(84);
+        });
+        rejected_report("jankurai-floor", "below governed floor", |report| {
+            report["score"] = json!(84);
+        });
+        rejected_report("jankurai-ratchet", "ratchet failed", |report| {
+            report["score"] = json!(89);
+            report["decision"]["ratchet"]["passed"] = json!(false);
+        });
+        rejected_report("jankurai-conformance", "conformance", |report| {
+            report["conformance_decision"] = json!("fail");
+            report["conformance_blockers"] = json!(["blocked"]);
+        });
+        rejected_report("jankurai-hard", "hard findings present", |report| {
+            report["decision"]["hard_findings"] = json!([{"rule": "hard"}]);
+        });
+        rejected_report("jankurai-cap", "caps applied", |report| {
+            report["caps_applied"] = json!(["cap"]);
+        });
+        rejected_report("jankurai-auditor", "auditor version mismatch", |report| {
+            report["auditor_version"] = json!("1.6.11");
+        });
+        rejected_report(
+            "jankurai-report-dirty",
+            "dirty tracked worktree",
+            |report| {
+                report["dirty_worktree"] = json!(true);
+            },
+        );
+    }
+
+    #[test]
+    fn jankurai_evidence_rejects_dirty_start_finish_and_linked_report() {
+        let fixture = JankuraiFixture::new("jankurai-dirty-start");
+        let error = fixture
+            .validate(&fixture.valid_report(), false)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("before audit"));
+
+        let fixture = JankuraiFixture::new("jankurai-dirty-finish");
+        fs::write(fixture.repo.join("payload.txt"), "dirty\n").unwrap();
+        let error = fixture
+            .validate(&fixture.valid_report(), true)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("after audit"));
+
+        let fixture = JankuraiFixture::new("jankurai-hardlink-report");
+        fs::write(
+            &fixture.report,
+            serde_json::to_vec(&fixture.valid_report()).unwrap(),
+        )
+        .unwrap();
+        fs::hard_link(
+            &fixture.report,
+            fixture.report_root.join("report-copy.json"),
+        )
+        .unwrap();
+        let error = jankurai_evidence_command(fixture.args(true))
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("single-link"));
+
+        let fixture = JankuraiFixture::new("jankurai-linked-policy");
+        let external_policy = fixture._root.path().join("external-policy.toml");
+        fs::copy(&fixture.policy, &external_policy).unwrap();
+        fs::remove_file(&fixture.policy).unwrap();
+        symlink(&external_policy, &fixture.policy).unwrap();
+        let error = fixture
+            .validate(&fixture.valid_report(), true)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("governed repository policy"));
+
+        let fixture = JankuraiFixture::new("jankurai-linked-baseline");
+        let external_baseline = fixture._root.path().join("external-baseline.json");
+        fs::copy(&fixture.baseline, &external_baseline).unwrap();
+        fs::remove_file(&fixture.baseline).unwrap();
+        symlink(&external_baseline, &fixture.baseline).unwrap();
+        let error = fixture
+            .validate(&fixture.valid_report(), true)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("baseline must be a regular single-link"));
     }
 
     #[test]

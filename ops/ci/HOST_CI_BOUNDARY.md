@@ -8,9 +8,14 @@ or acquire privilege. A fixed root-owned launcher creates nested PID and user
 namespaces, then irreversibly drops all capabilities before reviewed or
 candidate-controlled bytes execute. The sandbox fetches a root-owned immutable
 control checkout from the configured reviewed remote, derives native-evidence
-policy from it, kills the worker cgroup, and seals a one-time result. Only then
-does it invoke the root-only publisher. The unprivileged parent has no sudo rule
-for the publisher and cannot create, replay, or refresh a root nonce.
+policy from it, and kills the worker cgroup. It then starts the separately
+installed, digest-pinned Jankurai 1.6.10 auditor in a second network-isolated
+unit. Jankurai sees a separate clean, read-only checkout at the requested full
+SHA and a bounded output `tmpfs`; it never sees the product worker checkout.
+Root kills the audit cgroup, validates and promotes the report plus receipt,
+and binds the receipt digest into a one-time result seal. Only then does it
+invoke the root-only publisher. The unprivileged parent has no sudo rule for
+the publisher and cannot create, replay, or refresh a root nonce.
 The sandbox snapshots the caller request into root-only storage before parsing
 it, so a writable descriptor retained across the ownership transition cannot
 change the run. It also uses one reviewed, root-owned `splitctl`; callers cannot
@@ -31,6 +36,22 @@ newest eight attempts per repository check. A symlink, special inode, extra
 file, size overflow, low-space store, or unexpected non-native evidence turns
 the check into failure; none can become publication authority.
 
+Jankurai proof output is independently bounded to three regular, single-link
+files in a 16 MiB, 32-inode `tmpfs`. The Rust validator binds the repository,
+full commit, clean tracked state before and after audit, report/run/attempt IDs,
+governed policy and baseline digests, installed auditor version and digest,
+score floor and ratchet, conformance, zero hard findings, and zero caps. Root
+promotes only `report.json` and the `jain.jankurai-exact-sha-evidence/v1`
+receipt into a distinct root-only durable store. Any identity mismatch, dirty
+tree, low score, ratchet failure, nonconformance, finding, cap, linked inode,
+extra file, tampering, or auditor mismatch fails closed.
+
+Publication is strictly ordered: POST `jankurai/proof`, GET the commit's check
+runs and verify the exact receipt digest, attempt, and full SHA, POST
+`<repo>/required`, then POST its commit status. A proof POST failure prevents
+required publication. After any successful POST, a readback or later POST
+failure consumes the request; it can never be replayed.
+
 ## One-time administrator installation
 
 Review the exact immutable control-plane commit first. From a root shell (not
@@ -47,6 +68,13 @@ install -o root -g root -m 0500 ops/ci/host-ci-boundary-preflight.sh \
 cargo build --locked --release --bin splitctl
 install -o root -g root -m 0500 target/release/splitctl \
   /usr/local/libexec/jain/splitctl
+test "$(/home/ubuntu/.jeryu/bin/jankurai --version)" = 'jankurai 1.6.10'
+test "$(sha256sum /home/ubuntu/.jeryu/bin/jankurai | cut -d' ' -f1)" = \
+  ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0
+install -o root -g root -m 0555 /home/ubuntu/.jeryu/bin/jankurai \
+  /usr/local/libexec/jain/jankurai
+test "$(sha256sum /usr/local/libexec/jain/jankurai | cut -d' ' -f1)" = \
+  ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0
 useradd --system --user-group --home-dir /var/lib/jain-host-ci \
   --shell /usr/sbin/nologin jain-host-ci
 install -d -o jain-host-ci -g jain-host-ci -m 0700 \
@@ -54,6 +82,8 @@ install -d -o jain-host-ci -g jain-host-ci -m 0700 \
 install -d -o root -g root -m 0700 /run/jain-host-ci
 install -d -o root -g root -m 0700 \
   /var/lib/jain-host-ci/native-evidence
+install -d -o root -g root -m 0700 \
+  /var/lib/jain-host-ci/proof-evidence
 ```
 
 Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
@@ -61,10 +91,11 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
 
 ```json
 {
-  "schema_version": "jain.host-ci-sandbox-config/v3",
+  "schema_version": "jain.host-ci-sandbox-config/v4",
   "sandbox_sha256": "<64 lowercase hex>",
   "publisher_sha256": "<64 lowercase hex>",
   "splitctl_sha256": "<64 lowercase hex>",
+  "jankurai_sha256": "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0",
   "parent_uid": 1000,
   "parent_gid": 1000,
   "worker_user": "jain-host-ci",
@@ -77,6 +108,7 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
   "forge_git_base": "http://127.0.0.1:8787/git",
   "request_root": "/run/jain-host-ci",
   "native_evidence_root": "/var/lib/jain-host-ci/native-evidence",
+  "proof_evidence_root": "/var/lib/jain-host-ci/proof-evidence",
   "retain_requests": false,
   "device_allow": []
 }
@@ -88,15 +120,17 @@ a command line or in an environment variable:
 
 ```json
 {
-  "schema_version": "jain.host-ci-publisher-config/v3",
+  "schema_version": "jain.host-ci-publisher-config/v4",
   "publisher_sha256": "<64 lowercase hex>",
   "sandbox_sha256": "<64 lowercase hex>",
   "splitctl_sha256": "<64 lowercase hex>",
+  "jankurai_sha256": "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0",
   "forge_base": "http://127.0.0.1:8787",
   "forge_git_base": "http://127.0.0.1:8787/git",
   "control_remote": "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
   "request_root": "/run/jain-host-ci",
   "native_evidence_root": "/var/lib/jain-host-ci/native-evidence",
+  "proof_evidence_root": "/var/lib/jain-host-ci/proof-evidence",
   "max_seal_age_seconds": 300,
   "token": "<root-only Jeryu merge token>"
 }
@@ -121,11 +155,16 @@ Run the installed preflight as root:
 /usr/local/libexec/jain/host-ci-boundary-preflight
 ```
 
-It fails if modes/digests/UIDs differ, the worker has sudo, the parent has any
+It fails if modes/digests/UIDs differ, Jankurai is not the governed root-owned
+1.6.10 binary, the worker has sudo, the parent has any
 sudo rule beyond the exact sandbox command above, request/cache ownership differs,
-the durable native-evidence directory is missing or uses `/tmp`, or the systemd
+either durable evidence directory is missing, shared, or uses `/tmp`, or the systemd
 namespace/seccomp probe cannot run. GPU release validation is dispatched by SCQ
 to registered GPU workers; do not add nonexistent AtomicSoul GPU devices to this
 host boundary. Re-run installation and
 preflight for every immutable broker revision; never update a digest without
 installing and reviewing the matching bytes.
+
+These commands are a post-merge authority-owner procedure. A source/PR lane
+must not install the broker, migrate the credential, run the unmerged publisher,
+or publish product checks.

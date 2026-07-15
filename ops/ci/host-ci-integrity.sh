@@ -41,6 +41,7 @@ paths=(
   ops/ci/host-ci-publisher.sh
   ops/ci/host-ci-sandbox.sh
   ops/ci/host-ci-boundary-preflight.sh
+  ops/ci/host-ci-proof-evidence.sh
   ops/ci/native-runtime.sh
   ops/ci/pinned-advisory.sh
   ops/ci/pinned-cargo-audit.sh

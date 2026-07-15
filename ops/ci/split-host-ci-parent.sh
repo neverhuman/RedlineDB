@@ -71,7 +71,7 @@ jq -n --arg commit "$control_commit" \
   --arg owner "$OWNER" --arg repo "$REPO" --arg sha "$SHA" \
   --arg product "$staged_product" --arg check "$CHECK" \
   --argjson environment "$child_environment" \
-  '{schema_version:"jain.host-ci-sandbox-request/v3",
+  '{schema_version:"jain.host-ci-sandbox-request/v4",
     control_plane_commit:$commit,split_root:$split_root,
     arguments:[$owner,$repo,$sha,$product,$check],environment:$environment}' \
   >"$sandbox_request" || exit 2

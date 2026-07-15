@@ -4,6 +4,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 tmp="$(mktemp -d /tmp/jain-split-host-integrity-test.XXXXXX)"
 native_evidence_root="$(mktemp -d "$HOME/.cache/jain-native-evidence-test.XXXXXX")"
+proof_evidence_root="$(mktemp -d "$HOME/.cache/jain-proof-evidence-test.XXXXXX")"
 advisory_owner=""
 forged_root=""
 fd_attack_root=""
@@ -45,6 +46,7 @@ cleanup() {
   sudo -n rm -rf -- "$request_root" 2>/dev/null || true
   sudo -n rm -rf -- "$worker_cache" 2>/dev/null || true
   sudo -n rm -rf -- "$native_evidence_root" 2>/dev/null || true
+  sudo -n rm -rf -- "$proof_evidence_root" 2>/dev/null || true
   rm -rf -- "$tmp"
   return "$cleanup_rc"
 }
@@ -73,6 +75,8 @@ git -C "$advisory_owner" worktree add --quiet --detach \
 product="$split_root/jain-report"
 product_remote="$product_forge_root/jeryu/jain-report.git"
 forge_log="$tmp/forge.log"
+forge_state="$tmp/forge-state.jsonl"
+forge_behavior="$tmp/forge-behavior"
 forge_address_file="$tmp/forge-address"
 started="$tmp/started"
 continue_file="$tmp/continue"
@@ -84,7 +88,8 @@ runner_log="$tmp/runner.log"
 # publisher reaches it from the host network namespace; the candidate's actual
 # forge attempt must be blocked by its isolated network namespace.
 rustc --edition=2021 "$repo_root/ops/ci/fake-forge.rs" -o "$tmp/fake-forge"
-"$tmp/fake-forge" "$forge_address_file" "$forge_log" >"$tmp/forge.stderr" 2>&1 &
+"$tmp/fake-forge" "$forge_address_file" "$forge_log" \
+  "$forge_state" "$forge_behavior" >"$tmp/forge.stderr" 2>&1 &
 forge_pid=$!
 for _ in $(seq 1 500); do
   [[ -s "$forge_address_file" ]] && break
@@ -99,6 +104,82 @@ done
 forge_base="$(tr -d '\n' <"$forge_address_file")"
 touch "$forge_log"
 
+# A deterministic stand-in exercises the installed-auditor boundary without
+# trusting a user-owned product tool. Production still pins the governed
+# Jankurai 1.6.10 binary and digest; only this isolated fixture substitutes its
+# reviewed digest before committing the control-plane fixture.
+fake_jankurai="$tmp/jankurai"
+cat >"$fake_jankurai" <<'JANKURAI'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "${1:-}" == --version ]]; then
+  printf 'jankurai 1.6.10\n'
+  exit 0
+fi
+[[ "${1:-}" == audit && "${2:-}" == . ]] || exit 64
+shift 2
+report=''
+markdown=''
+repairs=''
+full=0
+advisory=0
+no_history=0
+policy=''
+while [[ "$#" -gt 0 ]]; do
+  case "$1" in
+    --full) full=1; shift ;;
+    --mode) [[ "${2:-}" == advisory ]] || exit 65; advisory=1; shift 2 ;;
+    --policy) policy="${2:-}"; shift 2 ;;
+    --json) report="${2:-}"; shift 2 ;;
+    --md) markdown="${2:-}"; shift 2 ;;
+    --repair-queue-jsonl) repairs="${2:-}"; shift 2 ;;
+    --no-score-history) no_history=1; shift ;;
+    *) exit 66 ;;
+  esac
+done
+[[ "$full" == 1 && "$advisory" == 1 && "$no_history" == 1 \
+  && "$policy" == agent/audit-policy.toml \
+  && "$report" == /opt/jain-ci/output/report.json \
+  && "$markdown" == /opt/jain-ci/output/report.md \
+  && "$repairs" == /opt/jain-ci/output/repair-queue.jsonl ]] || exit 67
+source_read_only=true
+if /usr/bin/touch .jankurai-boundary-write 2>/dev/null; then
+  source_read_only=false
+  rm -f .jankurai-boundary-write
+fi
+network_isolated=true
+if /usr/bin/curl -fsS --max-time 1 '__FORGE_BASE__/health' >/dev/null 2>&1; then
+  network_isolated=false
+fi
+head="$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+  -c diff.external= rev-parse HEAD)"
+mode="$(cat agent/test-auditor-mode 2>/dev/null || printf valid)"
+if [[ "$mode" == wrong-head ]]; then
+  head="$(printf '0%.0s' {1..40})"
+fi
+policy_sha="$(sha256sum agent/audit-policy.toml | cut -d' ' -f1)"
+jq -n --arg head "$head" --arg policy_sha "$policy_sha" \
+  --arg source_read_only "$source_read_only" \
+  --arg network_isolated "$network_isolated" \
+  '{score:92,repo:".",auditor_version:"1.6.10",
+    input_fingerprint:("sha256:" + ("1" * 64)),
+    policy_fingerprint:("sha256:" + $policy_sha),dirty_worktree:false,
+    git:{head:$head,dirty_worktree:false},
+    decision:{passed:true,minimum_score:85,hard_findings:[],
+      ratchet:{passed:true,baseline_score:90,allowed_drop:0}},
+    caps_applied:[],conformance_decision:"pass",conformance_blockers:[],
+    run_id:("fixture-audit-" + $head),
+    policy:{path:"agent/audit-policy.toml",minimum_score:85,
+      auditor_version:"1.6.10"},
+    fixture:{source_read_only:($source_read_only == "true"),
+      network_isolated:($network_isolated == "true")}}' >"$report"
+printf '# fixture Jankurai report\n' >"$markdown"
+printf '{"repair":"none"}\n' >"$repairs"
+JANKURAI
+sed -i "s#__FORGE_BASE__#$forge_base#g" "$fake_jankurai"
+chmod 0755 "$fake_jankurai"
+fake_jankurai_digest="$(sha256sum "$fake_jankurai" | cut -d' ' -f1)"
+
 git clone --quiet --shared "$repo_root" "$control"
 git -C "$control" config user.name 'Host CI Integration Fixture'
 git -C "$control" config user.email host-ci-integration@example.invalid
@@ -106,9 +187,17 @@ for boundary_file in \
   ops/ci/host-ci-integrity.sh ops/ci/host-ci-publisher.sh \
   ops/ci/host-ci-sandbox.sh ops/ci/host-ci-boundary-preflight.sh \
   ops/ci/native-runtime.sh ops/ci/host-ci-evidence.sh \
+  ops/ci/host-ci-proof-evidence.sh \
   ops/ci/pinned-advisory.sh \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh; do
   install -D -m 0755 "$repo_root/$boundary_file" "$control/$boundary_file"
+done
+for boundary_file in ops/ci/host-ci-publisher.sh \
+  ops/ci/host-ci-sandbox.sh ops/ci/host-ci-boundary-preflight.sh \
+  ops/ci/host-ci-proof-evidence.sh; do
+  sed -i \
+    "s#ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0#$fake_jankurai_digest#g" \
+    "$control/$boundary_file"
 done
 install -D -m 0644 "$repo_root/tools/splitctl/src/main.rs" \
   "$control/tools/splitctl/src/main.rs"
@@ -139,6 +228,7 @@ publisher_config="$publisher_root/host-ci-publisher.config.json"
 sandbox="$publisher_root/host-ci-sandbox"
 sandbox_config="$publisher_root/host-ci-sandbox.config.json"
 splitctl="$publisher_root/splitctl"
+jankurai="$publisher_root/jankurai"
 sudo -n install -d -o root -g root -m 0711 "$publisher_root"
 sudo -n install -d -o root -g root -m 0700 "$request_root"
 mkdir -p "$(dirname "$product_remote")"
@@ -149,48 +239,55 @@ sudo -n install -o root -g root -m 0500 \
 sudo -n install -d -o xbwork -g xbwork -m 0700 "$worker_cache"
 sudo -n chown root:root "$native_evidence_root"
 sudo -n chmod 0700 "$native_evidence_root"
+sudo -n chown root:root "$proof_evidence_root"
+sudo -n chmod 0700 "$proof_evidence_root"
 cargo build --locked --quiet --manifest-path "$control/Cargo.toml" \
   --bin splitctl --target-dir "$tmp/direct-control-target"
 splitctl_digest="$(sha256sum "$tmp/direct-control-target/debug/splitctl" \
   | cut -d' ' -f1)"
 sudo -n install -o root -g root -m 0500 \
   "$tmp/direct-control-target/debug/splitctl" "$splitctl"
+sudo -n install -o root -g root -m 0555 "$fake_jankurai" "$jankurai"
 publisher_token="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
 jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d' ' -f1)" \
   --arg sandbox_digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
-  --arg splitctl_digest "$splitctl_digest" \
+  --arg splitctl_digest "$splitctl_digest" --arg jankurai_digest "$fake_jankurai_digest" \
   --arg base "$forge_base" --arg token "$publisher_token" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
   --arg native_evidence_root "$native_evidence_root" \
-  '{schema_version:"jain.host-ci-publisher-config/v3",
+  --arg proof_evidence_root "$proof_evidence_root" \
+  '{schema_version:"jain.host-ci-publisher-config/v4",
     publisher_sha256:$digest,sandbox_sha256:$sandbox_digest,
-    splitctl_sha256:$splitctl_digest,
+    splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
     forge_base:$base,forge_git_base:$git_base,
     control_remote:$remote,request_root:$requests,
     native_evidence_root:$native_evidence_root,
+    proof_evidence_root:$proof_evidence_root,
     max_seal_age_seconds:300,token:$token}' \
   | sudo -n tee "$publisher_config" >/dev/null
 sudo -n chown root:root "$publisher_config"
 sudo -n chmod 0600 "$publisher_config"
 jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
   --arg publisher_digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d' ' -f1)" \
-  --arg splitctl_digest "$splitctl_digest" \
+  --arg splitctl_digest "$splitctl_digest" --arg jankurai_digest "$fake_jankurai_digest" \
   --arg family "$sandbox_family_root" --arg cache "$worker_cache" \
   --arg cargo_bin "$HOME/.cargo/bin" --arg rustup "$HOME/.rustup" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
   --arg native_evidence_root "$native_evidence_root" \
+  --arg proof_evidence_root "$proof_evidence_root" \
   --argjson parent_uid "$(id -u)" --argjson parent_gid "$(id -g)" \
-  '{schema_version:"jain.host-ci-sandbox-config/v3",
+  '{schema_version:"jain.host-ci-sandbox-config/v4",
     sandbox_sha256:$digest,publisher_sha256:$publisher_digest,
-    splitctl_sha256:$splitctl_digest,
+    splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
     parent_uid:$parent_uid,parent_gid:$parent_gid,
     worker_user:"xbwork",worker_group:"xbwork",family_root:$family,
     worker_cache:$cache,cargo_bin:$cargo_bin,rustup_home:$rustup,
     control_remote:$remote,forge_git_base:$git_base,
     request_root:$requests,retain_requests:true,
     native_evidence_root:$native_evidence_root,
+    proof_evidence_root:$proof_evidence_root,
     device_allow:[]}' | sudo -n tee "$sandbox_config" >/dev/null
 sudo -n chown root:root "$sandbox_config"
 sudo -n chmod 0600 "$sandbox_config"
@@ -221,7 +318,17 @@ if sudo -n "$splitctl" host-ci-snapshot-request \
   exit 1
 fi
 
-mkdir -p "$product/scripts" "$split_root/jain-core"
+mkdir -p "$product/scripts" "$product/agent" "$split_root/jain-core"
+cat >"$product/agent/audit-policy.toml" <<'POLICY'
+minimum_score = 85
+allowed_score_drop = 0
+required_tool = "jankurai"
+required_tool_version = "1.6.10"
+POLICY
+cat >"$product/agent/jankurai-baseline.json" <<'BASELINE'
+{"schema":"jain.split.jankurai-baseline/v1","score":90,"caps":[],"hard_findings":0,"auditor":"jankurai 1.6.10"}
+BASELINE
+printf 'valid\n' >"$product/agent/test-auditor-mode"
 cat >"$product/scripts/ci-local.sh" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -476,6 +583,7 @@ grep -Fq 'requested head is not an advertised product ref' \
 # visible proc entry and the root config path, then makes a real forged-status
 # request. It must recover nothing and the request must not reach the server.
 success_log="$tmp/success-runner.log"
+success_offset="$(stat -c '%s' "$forge_log")"
 host_pid_namespace="$(readlink /proc/self/ns/pid)"
 host_user_namespace="$(readlink /proc/self/ns/user)"
 JAIN_HOST_CI_PUBLISHER="$publisher" \
@@ -497,10 +605,35 @@ JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
   printf 'validated parent could not publish success\n' >&2
   exit 1
 }
-grep -Fq 'body={"name":"jain-report/required"' "$forge_log" \
+success_tail="$(tail -c "+$((success_offset + 1))" "$forge_log")"
+grep -Fq 'body={"name":"jain-report/required"' <<<"$success_tail" \
   && grep -Fq '"conclusion":"success"' "$forge_log" || {
   cat "$forge_log" >&2
   printf 'publisher did not publish a success check\n' >&2
+  exit 1
+}
+grep -Fq 'body={"name":"jankurai/proof"' <<<"$success_tail" \
+  && grep -Fq 'receipt_sha256=' <<<"$success_tail" \
+  && grep -Fq 'attempt_id=' <<<"$success_tail" || {
+  printf 'publisher did not publish SHA-bound proof evidence\n' >&2
+  exit 1
+}
+proof_post_line="$(grep -nF 'body={"name":"jankurai/proof"' \
+  <<<"$success_tail" | head -1 | cut -d: -f1)"
+proof_get_line="$(grep -nF \
+  "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+  <<<"$success_tail" | head -1 | cut -d: -f1)"
+required_post_line="$(grep -nF 'body={"name":"jain-report/required"' \
+  <<<"$success_tail" | head -1 | cut -d: -f1)"
+status_post_line="$(grep -nF \
+  "POST /repos/jeryu/jain-report/statuses/$product_sha HTTP/1.1" \
+  <<<"$success_tail" | head -1 | cut -d: -f1)"
+[[ "$proof_post_line" =~ ^[0-9]+$ && "$proof_get_line" =~ ^[0-9]+$ \
+  && "$required_post_line" =~ ^[0-9]+$ && "$status_post_line" =~ ^[0-9]+$ ]] \
+  && (( proof_post_line < proof_get_line \
+    && proof_get_line < required_post_line \
+    && required_post_line < status_post_line )) || {
+  printf 'publisher did not enforce proof POST/readback/required/status order\n' >&2
   exit 1
 }
 grep -Fq '"state":"success"' "$forge_log" || {
@@ -557,6 +690,48 @@ mapfile -t retained_states < <(
 success_request="$(dirname "${retained_states[0]}")"
 sudo -n jq -e 'select(.status == "consumed")' \
   "$success_request/root-state.json" >/dev/null
+success_proof_dir="$(sudo -n jq -er '.proof_evidence_dir' \
+  "$success_request/root-result.json")"
+case "$success_proof_dir" in
+  "$proof_evidence_root"/*) ;;
+  *) printf 'proof evidence escaped its durable root\n' >&2; exit 1 ;;
+esac
+[[ "$(sudo -n stat -c '%u:%g:%a' "$success_proof_dir")" == '0:0:500' \
+  && "$(sudo -n stat -c '%u:%g:%a:%h' "$success_proof_dir/report.json")" \
+    == '0:0:400:1' \
+  && "$(sudo -n stat -c '%u:%g:%a:%h' "$success_proof_dir/receipt.json")" \
+    == '0:0:400:1' ]] || {
+  printf 'durable proof evidence lacks immutable root ownership\n' >&2
+  exit 1
+}
+sudo -n jq -e --arg repo jain-report --arg head "$product_sha" '
+  select(.schema_version == "jain.jankurai-exact-sha-evidence/v1")
+  | select(.status == "pass" and .repository == $repo and .commit == $head)
+  | select(.hard_findings == 0 and .caps_applied == 0)
+  | select(.ratchet_passed == true)
+  | select(.clean_tracked_tree_at_start == true
+      and .clean_tracked_tree_at_finish == true)' \
+  "$success_proof_dir/receipt.json" >/dev/null
+sudo -n jq -e '
+  select(.fixture.source_read_only == true
+    and .fixture.network_isolated == true)' \
+  "$success_proof_dir/report.json" >/dev/null
+# Installed protocol versions are mandatory trust inputs, not advisory parser
+# hints. A v3 publisher config is rejected even for an otherwise sealed v4
+# request, and restoring the exact v4 bytes does not make that request replayable.
+sudo -n cp -- "$publisher_config" "$tmp/publisher-config.v4"
+sudo -n jq '.schema_version="jain.host-ci-publisher-config/v3"' \
+  "$publisher_config" >"$tmp/publisher-config.v3"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/publisher-config.v3" "$publisher_config"
+if sudo -n "$publisher" "$success_request" \
+  >"$tmp/old-publisher-config.log" 2>&1; then
+  printf 'publisher accepted a v3 config protocol\n' >&2
+  exit 1
+fi
+grep -Fq 'invalid publisher config schema' "$tmp/old-publisher-config.log"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/publisher-config.v4" "$publisher_config"
 if "$publisher" "$success_request" >/dev/null 2>&1; then
   printf 'unprivileged parent directly executed the root-only publisher\n' >&2
   exit 1
@@ -587,15 +762,17 @@ make_sealed_variant() {
   local destination="$request_root/$request_id"
   local local_result="$tmp/$request_id.result.json"
   local local_state="$tmp/$request_id.state.json"
-  local nonce result_sha root_seal
+  local nonce proof_receipt_sha result_sha root_seal
   sudo -n cp -a -- "$success_request" "$destination"
   sudo -n rm -rf -- "$destination/publish.lock"
   sudo -n jq --arg request_id "$request_id" "$result_filter" \
     "$success_request/root-result.json" >"$local_result"
   result_sha="$(sha256sum -- "$local_result" | cut -d' ' -f1)"
+  proof_receipt_sha="$(jq -er '.proof_receipt_sha256' "$local_result")"
   nonce="$(sudo -n jq -er '.nonce' "$success_request/root-state.json")"
   root_seal="$({
-    printf '%s\n%s\n%s\n%s\n' "$nonce" "$result_sha" "$sealed_at" "$request_id"
+    printf '%s\n%s\n%s\n%s\n%s\n' \
+      "$nonce" "$result_sha" "$proof_receipt_sha" "$sealed_at" "$request_id"
   } | sha256sum | cut -d' ' -f1)"
   sudo -n jq --arg request_id "$request_id" --arg status sealed \
     --arg result_sha "$result_sha" --arg root_seal "$root_seal" \
@@ -625,6 +802,17 @@ if sudo -n "$publisher" "$request_root/$stale_id" >/dev/null 2>&1; then
   exit 1
 fi
 
+old_result_id="$(printf 'c%.0s' {1..64})"
+make_sealed_variant "$old_result_id" \
+  '.request_id=$request_id
+   | .schema_version="jain.host-ci-root-result/v3"' "$(date +%s)"
+if sudo -n "$publisher" "$request_root/$old_result_id" \
+  >"$tmp/old-root-result.log" 2>&1; then
+  printf 'v4 publisher accepted a v3 root result protocol\n' >&2
+  exit 1
+fi
+grep -Fq 'invalid root result schema' "$tmp/old-root-result.log"
+
 # Even a valid fresh root seal cannot mark native evidence optional for a repo
 # whose reviewed native policy requires it.
 downgrade_id="$(printf 'b%.0s' {1..64})"
@@ -642,6 +830,98 @@ grep -Fq 'native evidence policy downgrade' "$tmp/downgrade.log"
   printf 'replay/stale/downgrade rejection reached the forge\n' >&2
   exit 1
 }
+
+run_fixture_lane() {
+  local log="${1:?log required}"
+  shift
+  env \
+    JAIN_HOST_CI_SANDBOX="$sandbox" \
+    JAIN_SPLIT_ROOT="$sandbox_family_root" \
+    JAIN_TEST_ATTACK_URL="$forge_base" \
+    JAIN_TEST_REQUIRE_ISOLATION=1 \
+    JAIN_TEST_HOST_PID_NAMESPACE="$host_pid_namespace" \
+    JAIN_TEST_HOST_USER_NAMESPACE="$host_user_namespace" \
+    JAIN_TEST_ROOT_CONFIG_PATH="$publisher_config" \
+    JAIN_TEST_ROOT_REQUEST_PATH="$request_root" \
+    JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
+    JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
+    "$@" \
+    "$control/ops/ci/split-host-ci.sh" \
+      jeryu jain-report "$product_sha" "$product" jain-report/required \
+      >"$log" 2>&1
+}
+
+latest_root_request() {
+  sudo -n find "$request_root" -mindepth 2 -maxdepth 2 \
+    -type f -name root-state.json -printf '%T@ %h\n' \
+    | LC_ALL=C sort -nr | head -1 | cut -d' ' -f2-
+}
+
+exercise_partial_publication() {
+  local behavior="${1:?behavior required}"
+  local expected_state="${2:?state required}"
+  local stage="${3:?stage required}"
+  local offset tail request replay_offset
+  printf '%s\n' "$behavior" >"$forge_behavior"
+  offset="$(stat -c '%s' "$forge_log")"
+  if run_fixture_lane "$tmp/$behavior.log"; then
+    printf 'partial publication fixture unexpectedly succeeded: %s\n' \
+      "$behavior" >&2
+    exit 1
+  fi
+  tail="$(tail -c "+$((offset + 1))" "$forge_log")"
+  grep -Fq 'body={"name":"jankurai/proof"' <<<"$tail" || {
+    printf '%s did not attempt proof publication\n' "$behavior" >&2
+    exit 1
+  }
+  if (( stage >= 2 )); then
+    grep -Fq \
+      "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+      <<<"$tail"
+  elif grep -Fq \
+      "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+      <<<"$tail"; then
+    printf '%s read back a failed proof POST\n' "$behavior" >&2
+    exit 1
+  fi
+  if (( stage >= 3 )); then
+    grep -Fq 'body={"name":"jain-report/required"' <<<"$tail"
+  elif grep -Fq 'body={"name":"jain-report/required"' <<<"$tail"; then
+    printf '%s reached required-check publication too early\n' "$behavior" >&2
+    exit 1
+  fi
+  if (( stage >= 4 )); then
+    grep -Fq \
+      "POST /repos/jeryu/jain-report/statuses/$product_sha HTTP/1.1" \
+      <<<"$tail"
+  elif grep -Fq \
+      "POST /repos/jeryu/jain-report/statuses/$product_sha HTTP/1.1" \
+      <<<"$tail"; then
+    printf '%s reached commit-status publication too early\n' "$behavior" >&2
+    exit 1
+  fi
+  request="$(latest_root_request)"
+  sudo -n jq -e --arg state "$expected_state" \
+    'select(.status == $state)' "$request/root-state.json" >/dev/null
+  replay_offset="$(stat -c '%s' "$forge_log")"
+  if sudo -n "$publisher" "$request" >/dev/null 2>&1; then
+    printf 'partial publication was replayable: %s\n' "$behavior" >&2
+    exit 1
+  fi
+  [[ "$(stat -c '%s' "$forge_log")" == "$replay_offset" ]] || {
+    printf 'partial publication replay reached forge: %s\n' "$behavior" >&2
+    exit 1
+  }
+  printf 'ok\n' >"$forge_behavior"
+}
+
+# Proof POST is the publication gate. Once any POST succeeds, every later
+# readback/required/status failure consumes the request and cannot be replayed.
+exercise_partial_publication proof-post-fail failed 1
+exercise_partial_publication readback-missing consumed 2
+exercise_partial_publication readback-mismatch consumed 2
+exercise_partial_publication required-post-fail consumed 3
+exercise_partial_publication status-post-fail consumed 4
 
 # A nonzero reviewed worker exit is independently sealed and can publish only
 # failure; it cannot reuse the prior success result.
@@ -672,6 +952,39 @@ if grep -Fq '"conclusion":"success"' <<<"$failure_tail" \
   exit 1
 fi
 
+# An advertised product head still has no authority to forge the report's
+# audited SHA. The validator rejects it before a root result or forge POST.
+printf 'wrong-head\n' >"$product/agent/test-auditor-mode"
+git -C "$product" add agent/test-auditor-mode
+git -C "$product" commit --quiet -m 'fixture forged auditor report'
+forged_report_sha="$(git -C "$product" rev-parse HEAD)"
+git -C "$product" push --quiet "$product_remote" \
+  "$forged_report_sha:refs/heads/forged-report"
+forged_report_offset="$(stat -c '%s' "$forge_log")"
+if env \
+  JAIN_HOST_CI_SANDBOX="$sandbox" \
+  JAIN_SPLIT_ROOT="$sandbox_family_root" \
+  JAIN_TEST_ATTACK_URL="$forge_base" \
+  JAIN_TEST_REQUIRE_ISOLATION=1 \
+  JAIN_TEST_HOST_PID_NAMESPACE="$host_pid_namespace" \
+  JAIN_TEST_HOST_USER_NAMESPACE="$host_user_namespace" \
+  JAIN_TEST_ROOT_CONFIG_PATH="$publisher_config" \
+  JAIN_TEST_ROOT_REQUEST_PATH="$request_root" \
+  JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
+  JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
+  "$control/ops/ci/split-host-ci.sh" \
+    jeryu jain-report "$forged_report_sha" "$product" \
+    jain-report/required >"$tmp/forged-report.log" 2>&1; then
+  printf 'forged Jankurai report acquired publication authority\n' >&2
+  exit 1
+fi
+grep -Eq 'score report git.head|rev-parse|proof evidence promotion failed' \
+  "$tmp/forged-report.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$forged_report_offset" ]] || {
+  printf 'forged Jankurai report reached the forge\n' >&2
+  exit 1
+}
+
 # A caller can retain a writable descriptor even after the sandbox changes the
 # bootstrap tree to the worker identity. Mutating the request through that
 # descriptor must not change the already snapshotted authority input. The
@@ -688,7 +1001,7 @@ jq -cn --arg commit "$control_commit" --arg split_root "$sandbox_family_root" \
   --arg check jain-report/required \
   --arg cargo_target "$fd_attack_root/cargo-target" \
   --arg writable "$fd_attack_root/writable" \
-  '{schema_version:"jain.host-ci-sandbox-request/v3",
+  '{schema_version:"jain.host-ci-sandbox-request/v4",
     control_plane_commit:$commit,split_root:$split_root,
     arguments:[$owner,$repo,$head,$product,$check],
     environment:{CARGO_TARGET_DIR:$cargo_target,
@@ -696,6 +1009,41 @@ jq -cn --arg commit "$control_commit" --arg split_root "$sandbox_family_root" \
       JAIN_RELEASE_CI:"1",
       JAIN_TEST_SLEEP_SECONDS:"1"}}' \
   >"$fd_attack_request"
+chmod 0600 "$fd_attack_request"
+# The other installed broker config is independently strict as well.
+sudo -n cp -- "$sandbox_config" "$tmp/sandbox-config.v4"
+sudo -n jq '.schema_version="jain.host-ci-sandbox-config/v3"' \
+  "$sandbox_config" >"$tmp/sandbox-config.v3"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/sandbox-config.v3" "$sandbox_config"
+if sudo -n "$sandbox" "$fd_attack_request" \
+  >"$tmp/old-sandbox-config.log" 2>&1; then
+  printf 'sandbox accepted a v3 config protocol\n' >&2
+  exit 1
+fi
+grep -Fq 'invalid sandbox config schema' "$tmp/old-sandbox-config.log"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/sandbox-config.v4" "$sandbox_config"
+# The installed v4 broker rejects a structurally valid request carrying the
+# previous protocol before it creates a worker or reaches the forge.
+jq '.schema_version="jain.host-ci-sandbox-request/v3"' \
+  "$fd_attack_request" >"$tmp/old-sandbox-request.json"
+mv "$tmp/old-sandbox-request.json" "$fd_attack_request"
+chmod 0600 "$fd_attack_request"
+old_request_offset="$(stat -c '%s' "$forge_log")"
+if sudo -n "$sandbox" "$fd_attack_request" \
+  >"$tmp/old-sandbox-request.log" 2>&1; then
+  printf 'v4 sandbox accepted a v3 request protocol\n' >&2
+  exit 1
+fi
+grep -Fq 'invalid sandbox request schema' "$tmp/old-sandbox-request.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$old_request_offset" ]] || {
+  printf 'old sandbox request protocol reached the forge\n' >&2
+  exit 1
+}
+jq '.schema_version="jain.host-ci-sandbox-request/v4"' \
+  "$fd_attack_request" >"$tmp/v4-sandbox-request.json"
+mv "$tmp/v4-sandbox-request.json" "$fd_attack_request"
 chmod 0600 "$fd_attack_request"
 malicious_request="$(jq -c \
   '.environment.JAIN_TEST_FORCE_FAILURE="1"' "$fd_attack_request")"
@@ -736,5 +1084,116 @@ exec {request_fd}>&-
 grep -Fq 'worker cgroup stopped before sealing' "$tmp/retained-fd-run.log"
 rm -rf -- "$fd_attack_root"
 fd_attack_root=""
+
+make_proof_tamper_variant() {
+  local request_id="${1:?request ID required}"
+  local mutation="${2:?mutation required}"
+  local destination="$request_root/$request_id"
+  local proof_parent proof_destination receipt_sha report_sha
+  local result_file="$tmp/$request_id.proof-result.json"
+  local state_file="$tmp/$request_id.proof-state.json"
+  local receipt_file="$tmp/$request_id.proof-receipt.json"
+  local nonce result_sha sealed_at root_seal external
+  proof_parent="$(dirname "$success_proof_dir")"
+  proof_destination="$proof_parent/$request_id"
+  sudo -n cp -a -- "$success_request" "$destination"
+  sudo -n rm -rf -- "$destination/publish.lock"
+  sudo -n install -d -o root -g root -m 0700 "$proof_destination"
+  sudo -n install -o root -g root -m 0400 \
+    "$success_proof_dir/report.json" "$proof_destination/report.json"
+  sudo -n jq --arg report "$proof_destination/report.json" \
+    '.report=$report' "$success_proof_dir/receipt.json" >"$receipt_file"
+  sudo -n install -o root -g root -m 0400 \
+    "$receipt_file" "$proof_destination/receipt.json"
+  sudo -n chmod 0500 "$proof_destination"
+  receipt_sha="$(sudo -n sha256sum "$proof_destination/receipt.json" \
+    | cut -d' ' -f1)"
+  report_sha="$(sudo -n sha256sum "$proof_destination/report.json" \
+    | cut -d' ' -f1)"
+  sudo -n jq --arg request_id "$request_id" \
+    --arg proof_dir "$proof_destination" \
+    --arg receipt "$proof_destination/receipt.json" \
+    --arg receipt_sha "$receipt_sha" \
+    --arg report "$proof_destination/report.json" \
+    --arg report_sha "$report_sha" '
+      .request_id=$request_id
+      | .proof_evidence_dir=$proof_dir
+      | .proof_receipt_path=$receipt
+      | .proof_receipt_sha256=$receipt_sha
+      | .proof_report_path=$report
+      | .proof_report_sha256=$report_sha' \
+    "$success_request/root-result.json" >"$result_file"
+  result_sha="$(sha256sum "$result_file" | cut -d' ' -f1)"
+  nonce="$(sudo -n jq -er '.nonce' "$success_request/root-state.json")"
+  sealed_at="$(date +%s)"
+  root_seal="$({
+    printf '%s\n%s\n%s\n%s\n%s\n' \
+      "$nonce" "$result_sha" "$receipt_sha" "$sealed_at" "$request_id"
+  } | sha256sum | cut -d' ' -f1)"
+  sudo -n jq --arg request_id "$request_id" --arg status sealed \
+    --arg result_sha "$result_sha" --arg root_seal "$root_seal" \
+    --argjson sealed_at "$sealed_at" '
+      .request_id=$request_id | .status=$status
+      | .result_sha256=$result_sha | .root_seal=$root_seal
+      | .sealed_at=$sealed_at' "$success_request/root-state.json" >"$state_file"
+  sudo -n install -o root -g root -m 0600 \
+    "$result_file" "$destination/root-result.json"
+  sudo -n install -o root -g root -m 0600 \
+    "$state_file" "$destination/root-state.json"
+  case "$mutation" in
+    missing)
+      sudo -n chmod 0700 "$proof_destination"
+      sudo -n rm -- "$proof_destination/receipt.json"
+      sudo -n chmod 0500 "$proof_destination"
+      ;;
+    symlink)
+      sudo -n chmod 0700 "$proof_destination"
+      sudo -n rm -- "$proof_destination/report.json"
+      sudo -n ln -s -- "$success_proof_dir/report.json" \
+        "$proof_destination/report.json"
+      sudo -n chmod 0500 "$proof_destination"
+      ;;
+    hardlink)
+      external="$proof_evidence_root/.hardlink-$request_id"
+      sudo -n install -o root -g root -m 0400 \
+        "$success_proof_dir/report.json" "$external"
+      sudo -n chmod 0700 "$proof_destination"
+      sudo -n rm -- "$proof_destination/report.json"
+      sudo -n ln -- "$external" "$proof_destination/report.json"
+      sudo -n chmod 0500 "$proof_destination"
+      ;;
+    tamper)
+      sudo -n chmod 0700 "$proof_destination"
+      sudo -n chmod 0600 "$proof_destination/report.json"
+      printf 'tampered\n' | sudo -n tee -a \
+        "$proof_destination/report.json" >/dev/null
+      sudo -n chmod 0400 "$proof_destination/report.json"
+      sudo -n chmod 0500 "$proof_destination"
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+# A valid root seal cannot bless evidence that changed afterward or whose
+# immutable inode shape was replaced. All four failures occur before a POST.
+for proof_mutation in missing symlink hardlink tamper; do
+  case "$proof_mutation" in
+    missing) proof_mutation_id="$(printf 'd%.0s' {1..64})" ;;
+    symlink) proof_mutation_id="$(printf 'e%.0s' {1..64})" ;;
+    hardlink) proof_mutation_id="$(printf 'f%.0s' {1..64})" ;;
+    tamper) proof_mutation_id="$(printf '9%.0s' {1..64})" ;;
+  esac
+  make_proof_tamper_variant "$proof_mutation_id" "$proof_mutation"
+  proof_mutation_offset="$(stat -c '%s' "$forge_log")"
+  if sudo -n "$publisher" "$request_root/$proof_mutation_id" \
+    >"$tmp/proof-$proof_mutation.log" 2>&1; then
+    printf 'publisher accepted %s proof evidence\n' "$proof_mutation" >&2
+    exit 1
+  fi
+  [[ "$(stat -c '%s' "$forge_log")" == "$proof_mutation_offset" ]] || {
+    printf '%s proof evidence reached the forge\n' "$proof_mutation" >&2
+    exit 1
+  }
+done
 
 printf 'host CI privilege-separated publication and adversarial isolation contract ok\n'

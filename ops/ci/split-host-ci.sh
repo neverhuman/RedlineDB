@@ -44,7 +44,7 @@ REEXEC_STATE="${JAIN_HOST_CI_REEXEC_STATE:-}"
   && ! -L "$RUNNER_PATH" \
   && "$(stat -c '%a:%h' -- "$RUNNER_PATH")" == '555:1' ]] || exit 2
 jq -e '
-  select(.schema_version == "jain.host-ci-reexec/v3")
+  select(.schema_version == "jain.host-ci-reexec/v4")
   | select(.source_root == "/opt/jain-ci/authority/control-plane")
   | select(.exact_root == "/opt/jain-ci/authority/control-plane")
   | select(.result_path | type == "string" and startswith("/tmp/split-host-ci-bootstrap."))
@@ -113,7 +113,7 @@ post_check() {
     --arg check "$CHECK" --arg commit "$CONTROL_PLANE_COMMIT" \
     --arg evidence_dir "${JAIN_NATIVE_EVIDENCE_DIR:-}" \
     --arg evidence_sha "${JAIN_NATIVE_EVIDENCE_SHA256:-}" \
-    '{schema_version:"jain.host-ci-worker-evidence/v2",
+    '{schema_version:"jain.host-ci-worker-evidence/v4",
       owner:$owner,repository:$repo,head_sha:$head_sha,required_check:$check,
       control_plane_commit:$commit,
       native_evidence_dir:$evidence_dir,

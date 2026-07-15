@@ -12,6 +12,7 @@ for path in \
   Cargo.lock Cargo.toml repos.manifest.toml \
   ops/ci/host-ci-publisher.sh ops/ci/host-ci-sandbox.sh \
   ops/ci/host-ci-boundary-preflight.sh \
+  ops/ci/host-ci-proof-evidence.sh \
   ops/ci/native-runtime.sh ops/ci/pinned-advisory.sh \
   ops/ci/pinned-cargo-audit.sh ops/ci/pinned-cargo-deny.sh \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh \
@@ -72,6 +73,13 @@ if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null 2>&1; then
   exit 1
 fi
 git -C "$fixture" restore ops/ci/host-ci-publisher.sh
+
+printf 'dirty proof evidence policy\n' >>"$fixture/ops/ci/host-ci-proof-evidence.sh"
+if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null 2>&1; then
+  printf 'host CI integrity accepted dirty proof evidence policy\n' >&2
+  exit 1
+fi
+git -C "$fixture" restore ops/ci/host-ci-proof-evidence.sh
 
 printf 'untracked orchestration\n' >"$fixture/ops/ci/unreviewed.sh"
 if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null 2>&1; then

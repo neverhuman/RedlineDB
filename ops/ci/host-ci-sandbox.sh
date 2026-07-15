@@ -27,6 +27,7 @@ install_dir="$(dirname "$sandbox_path")"
 config="$install_dir/host-ci-sandbox.config.json"
 publisher_path="$install_dir/host-ci-publisher"
 splitctl_path="$install_dir/splitctl"
+jankurai_path="$install_dir/jankurai"
 [[ ! -L "$sandbox_path" \
   && "$(stat -c '%u:%a:%h' -- "$sandbox_path" 2>/dev/null)" == '0:500:1' ]] \
   || fail 'sandbox must be root-owned mode 0500'
@@ -36,6 +37,9 @@ splitctl_path="$install_dir/splitctl"
 [[ ! -L "$splitctl_path" \
   && "$(stat -c '%u:%a:%h' -- "$splitctl_path" 2>/dev/null)" == '0:500:1' ]] \
   || fail 'splitctl must be root-owned mode 0500'
+[[ ! -L "$jankurai_path" \
+  && "$(stat -c '%u:%a:%h' -- "$jankurai_path" 2>/dev/null)" == '0:555:1' ]] \
+  || fail 'Jankurai must be root-owned mode 0555'
 [[ ! -L "$install_dir" && -d "$install_dir" \
   && "$(stat -c '%u' -- "$install_dir")" == 0 \
   && "$((8#$(stat -c '%a' -- "$install_dir") & 8#022))" == 0 ]] \
@@ -44,10 +48,11 @@ splitctl_path="$install_dir/splitctl"
   && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
   || fail 'unsafe root sandbox config'
 jq -e '
-  select(.schema_version == "jain.host-ci-sandbox-config/v3")
+  select(.schema_version == "jain.host-ci-sandbox-config/v4")
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
+  | select(.jankurai_sha256 == "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0")
   | select(.parent_uid | type == "number")
   | select(.parent_gid | type == "number")
   | select(.worker_user | type == "string" and length > 0)
@@ -60,6 +65,7 @@ jq -e '
   | select(.forge_git_base | type == "string" and length > 0)
   | select(.request_root | type == "string" and startswith("/"))
   | select(.native_evidence_root | type == "string" and startswith("/"))
+  | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.retain_requests | type == "boolean")
   | select(.device_allow | type == "array")' "$config" >/dev/null \
   || fail 'invalid sandbox config schema'
@@ -67,9 +73,14 @@ jq -e '
 sandbox_sha="$(sha256sum -- "$sandbox_path" | cut -d' ' -f1)"
 publisher_sha="$(sha256sum -- "$publisher_path" | cut -d' ' -f1)"
 splitctl_sha="$(sha256sum -- "$splitctl_path" | cut -d' ' -f1)"
+jankurai_sha="$(sha256sum -- "$jankurai_path" | cut -d' ' -f1)"
 [[ "$sandbox_sha" == "$(jq -er '.sandbox_sha256' "$config")" \
   && "$publisher_sha" == "$(jq -er '.publisher_sha256' "$config")" \
-  && "$splitctl_sha" == "$(jq -er '.splitctl_sha256' "$config")" ]] \
+  && "$splitctl_sha" == "$(jq -er '.splitctl_sha256' "$config")" \
+  && "$jankurai_sha" == "$(jq -er '.jankurai_sha256' "$config")" \
+  && "$jankurai_sha" \
+    == 'ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0' \
+  && "$("$jankurai_path" --version)" == 'jankurai 1.6.10' ]] \
   || fail 'installed broker digest/config mismatch'
 
 parent_uid="$(jq -er '.parent_uid' "$config")"
@@ -107,15 +118,30 @@ request_root="$(realpath -e -- "$(jq -er '.request_root' "$config")")" \
 native_evidence_root="$(realpath -e -- \
   "$(jq -er '.native_evidence_root' "$config")")" \
   || fail 'durable native evidence directory unavailable'
+proof_evidence_root="$(realpath -e -- \
+  "$(jq -er '.proof_evidence_root' "$config")")" \
+  || fail 'durable proof evidence directory unavailable'
 [[ "$(stat -c '%u:%a' -- "$worker_cache")" == "$worker_uid:700" \
   && "$(stat -c '%u:%a' -- "$request_root")" == '0:700' \
   && ! -L "$native_evidence_root" \
   && "$(stat -c '%u:%g:%a' -- "$native_evidence_root")" \
-    == '0:0:700' ]] \
+    == '0:0:700' \
+  && ! -L "$proof_evidence_root" \
+  && "$(stat -c '%u:%g:%a' -- "$proof_evidence_root")" \
+    == '0:0:700' \
+  && "$proof_evidence_root" != "$native_evidence_root" ]] \
   || fail 'cache, request, or durable evidence ownership mismatch'
-case "$native_evidence_root" in
-  /tmp | /tmp/*) fail 'durable native evidence root cannot use /tmp' ;;
+case "$proof_evidence_root/" in
+  "$native_evidence_root/"*) fail 'durable evidence roots cannot be nested' ;;
 esac
+case "$native_evidence_root/" in
+  "$proof_evidence_root/"*) fail 'durable evidence roots cannot be nested' ;;
+esac
+for evidence_root in "$native_evidence_root" "$proof_evidence_root"; do
+  case "$evidence_root" in
+    /tmp | /tmp/*) fail 'durable evidence root cannot use /tmp' ;;
+  esac
+done
 for launcher in /usr/bin/unshare /usr/bin/setpriv /usr/bin/findmnt \
   /usr/bin/flock; do
   [[ ! -L "$launcher" \
@@ -170,7 +196,7 @@ request="$root_request/caller-request.json"
   && "$(stat -c '%s' -- "$request")" -le 65536 ]] \
   || fail 'unsafe root request snapshot'
 jq -e '
-  select(.schema_version == "jain.host-ci-sandbox-request/v3")
+  select(.schema_version == "jain.host-ci-sandbox-request/v4")
   | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
   | select(.split_root | type == "string" and startswith("/"))
   | select(.arguments | type == "array" and length == 5)
@@ -199,6 +225,8 @@ for name in "${environment_names[@]}"; do
     && "$name" != JAIN_BASE && "$name" != JAIN_HOST_CI_PUBLISHER \
     && "$name" != JAIN_NATIVE_EVIDENCE_ROOT \
     && "$name" != JAIN_NATIVE_EVIDENCE_STAGING_ROOT \
+    && "$name" != JAIN_PROOF_EVIDENCE_ROOT \
+    && "$name" != JAIN_PROOF_EVIDENCE_STAGING_ROOT \
     && "$name" != JAIN_RUSTSEC_ADVISORY_SOURCE \
     && "$name" != JAIN_HOST_CI_HOST_PID_NAMESPACE \
     && "$name" != JAIN_HOST_CI_HOST_USER_NAMESPACE ]] \
@@ -318,13 +346,33 @@ git clone --quiet --no-local --no-checkout \
   "$product_authority" "${arguments[3]}"
 git -C "${arguments[3]}" checkout --quiet --detach "${arguments[2]}"
 
+# The proof auditor never reuses the product worker's mutable checkout. Root
+# creates a second standalone exact-head checkout, strips its remote, verifies
+# a clean tracked tree, and exposes it read-only only after the product cgroup
+# has been killed.
+audit_source_root="$root_request/audit-source"
+audit_worktree="$audit_source_root/$repo"
+mkdir -m 0755 "$audit_source_root"
+git clone --quiet --no-local --no-checkout "$product_authority" "$audit_worktree"
+git -C "$audit_worktree" checkout --quiet --detach "${arguments[2]}"
+git -C "$audit_worktree" remote remove origin
+[[ "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -c diff.external= -C "$audit_worktree" rev-parse 'HEAD^{commit}')" \
+    == "${arguments[2]}" \
+  && -z "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -c diff.external= -C "$audit_worktree" status --porcelain=v1 \
+      --untracked-files=all)" ]] \
+  || fail 'root exact-head audit checkout is not clean authority'
+chmod -R go-w "$audit_source_root"
+chown -R root:root "$audit_source_root"
+
 install -o root -g root -m 0555 "$splitctl_path" "$worker_authority/splitctl"
 install -o root -g root -m 0555 \
   "$control_root/ops/ci/split-host-ci.sh" \
   "$worker_authority/.split-host-ci-reviewed"
 worker_result="$bootstrap_root/writable/worker-evidence.json"
 jq -n --arg commit "$control_commit" --arg result "$worker_result" \
-  '{schema_version:"jain.host-ci-reexec/v3",
+  '{schema_version:"jain.host-ci-reexec/v4",
     source_root:"/opt/jain-ci/authority/control-plane",
     exact_root:"/opt/jain-ci/authority/control-plane",
     commit:$commit,result_path:$result,
@@ -341,13 +389,17 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --arg commit "$control_commit" --arg remote "$control_remote" \
   --arg publisher_sha "$publisher_sha" --arg sandbox_sha "$sandbox_sha" \
   --arg splitctl_sha "$splitctl_sha" \
+  --arg jankurai_sha "$jankurai_sha" \
   --arg native_evidence_root "$native_evidence_root" \
+  --arg proof_evidence_root "$proof_evidence_root" \
   --argjson created_at "$created_at" \
-  '{schema_version:"jain.host-ci-root-state/v3",status:"running",
+  '{schema_version:"jain.host-ci-root-state/v4",status:"running",
     request_id:$request_id,nonce:$nonce,created_at:$created_at,
     control_plane_commit:$commit,control_remote:$remote,
     publisher_sha256:$publisher_sha,sandbox_sha256:$sandbox_sha,
-    splitctl_sha256:$splitctl_sha,native_evidence_root:$native_evidence_root}' >"$root_state"
+    splitctl_sha256:$splitctl_sha,jankurai_sha256:$jankurai_sha,
+    native_evidence_root:$native_evidence_root,
+    proof_evidence_root:$proof_evidence_root}' >"$root_state"
 chmod 0600 "$root_state"
 chown root:root "$root_state"
 
@@ -363,16 +415,29 @@ evidence_mounted=1
   || fail 'native evidence staging is not the expected tmpfs'
 
 unit="jain-host-ci-${request_id:0:24}.service"
+audit_unit="jain-host-ci-proof-${request_id:0:18}.service"
+proof_staging_root="$root_request/proof-staging"
+proof_mounted=0
 cleanup_evidence_mount() {
   if [[ "${evidence_mounted:-0}" == 1 ]]; then
     /usr/bin/umount -- "$evidence_staging_root" >/dev/null 2>&1 || true
     evidence_mounted=0
   fi
 }
+cleanup_proof_mount() {
+  if [[ "${proof_mounted:-0}" == 1 ]]; then
+    /usr/bin/umount -- "$proof_staging_root" >/dev/null 2>&1 || true
+    proof_mounted=0
+  fi
+}
 restore_owner() {
   systemctl kill --kill-whom=all --signal=KILL "$unit" >/dev/null 2>&1 || true
+  systemctl kill --kill-whom=all --signal=KILL "$audit_unit" \
+    >/dev/null 2>&1 || true
   systemctl reset-failed "$unit" >/dev/null 2>&1 || true
+  systemctl reset-failed "$audit_unit" >/dev/null 2>&1 || true
   cleanup_evidence_mount
+  cleanup_proof_mount
   chown -R "$parent_uid:$parent_gid" "$bootstrap_root" >/dev/null 2>&1 || true
 }
 trap 'restore_owner; cleanup_root_request' EXIT
@@ -459,6 +524,88 @@ systemctl is-active --quiet "$unit" \
   && fail 'sandbox cgroup remained active after worker exit'
 printf '[host-ci-sandbox] worker cgroup stopped before sealing\n' >&2
 
+# The auditor is a separately installed, digest-pinned trust input. It runs
+# only after every product process is dead, in its own private network and PID
+# namespace, against the separate root-owned exact-head checkout. Source is
+# read-only; the only writable mount is a bounded output tmpfs.
+mkdir -m 0700 "$proof_staging_root"
+/usr/bin/mount -t tmpfs \
+  -o "nodev,nosuid,noexec,size=16777216,nr_inodes=32,mode=0700,uid=$worker_uid,gid=$worker_gid" \
+  "jain-host-ci-proof-$request_id" "$proof_staging_root" \
+  || fail 'cannot mount bounded proof evidence staging'
+proof_mounted=1
+[[ "$(/usr/bin/findmnt -rn -o FSTYPE,TARGET --target "$proof_staging_root")" \
+  == "tmpfs $proof_staging_root" ]] \
+  || fail 'proof evidence staging is not the expected tmpfs'
+
+audit_clean_start=false
+if [[ -z "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -c diff.external= -C "$audit_worktree" status --porcelain=v1 \
+      --untracked-files=all)" ]]; then
+  audit_clean_start=true
+fi
+[[ "$audit_clean_start" == true ]] || fail 'exact-head audit checkout became dirty'
+
+audit_systemd_args=(
+  --quiet --wait --pipe --collect --service-type=exec --unit="$audit_unit"
+  --property="User=$worker_user" --property="Group=$worker_group"
+  --property=PrivateUsers=yes --property=PrivateNetwork=yes
+  --property=PrivateTmp=yes --property=ProtectProc=invisible
+  --property=ProcSubset=pid --property=ProtectSystem=strict
+  --property=ProtectHome=tmpfs --property=NoNewPrivileges=yes
+  --property='CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SETPCAP'
+  --property='AmbientCapabilities=CAP_SYS_ADMIN CAP_SETPCAP'
+  --property=RestrictSUIDSGID=yes --property=LockPersonality=yes
+  --property=RestrictRealtime=yes --property='RestrictNamespaces=pid mnt'
+  --property=SystemCallArchitectures=native
+  --property='SystemCallFilter=@system-service unshare mount umount2'
+  --property='SystemCallFilter=~@resources @reboot @swap @module @raw-io @obsolete @keyring'
+  --property=SystemCallErrorNumber=EPERM
+  --property=RestrictAddressFamilies=AF_UNIX
+  --property=DevicePolicy=closed --property=PrivateDevices=yes
+  --property=KillMode=control-group --property=SendSIGKILL=yes
+  --property=TimeoutStopSec=5s
+  --property="BindReadOnlyPaths=$audit_worktree:/opt/jain-ci/repository"
+  --property="BindReadOnlyPaths=$jankurai_path:/opt/jain-ci/jankurai"
+  --property="BindPaths=$proof_staging_root:/opt/jain-ci/output"
+  --property="InaccessiblePaths=/usr/bin/sudo /etc/sudoers /etc/sudoers.d -$install_dir -$request_root"
+  --setenv=HOME=/tmp --setenv="USER=$worker_user" --setenv="LOGNAME=$worker_user"
+  --setenv=SHELL=/bin/bash --setenv=PATH=/usr/bin:/bin
+  --setenv=GIT_CONFIG_GLOBAL=/dev/null --setenv=GIT_CONFIG_NOSYSTEM=1
+  --setenv=GIT_CONFIG_COUNT=1 --setenv=GIT_CONFIG_KEY_0=safe.directory
+  --setenv=GIT_CONFIG_VALUE_0=/opt/jain-ci/repository
+  --setenv=GIT_TERMINAL_PROMPT=0 --setenv=JANKURAI_NO_UPDATE_CHECK=1
+  --setenv="JAIN_HOST_CI_HOST_PID_NAMESPACE=$host_pid_namespace"
+  --setenv="JAIN_HOST_CI_HOST_USER_NAMESPACE=$host_user_namespace"
+)
+audit_rc=0
+systemd-run "${audit_systemd_args[@]}" \
+  /usr/bin/unshare --pid --fork --kill-child=KILL --mount-proc \
+  /usr/bin/setpriv --inh-caps=-all --ambient-caps=-all \
+    --bounding-set=-all --no-new-privs \
+    /bin/bash -ceu '
+      [[ "$(readlink /proc/self/ns/pid)" \
+        != "${JAIN_HOST_CI_HOST_PID_NAMESPACE:?}" ]]
+      [[ "$(readlink /proc/self/ns/user)" \
+        != "${JAIN_HOST_CI_HOST_USER_NAMESPACE:?}" ]]
+      unset JAIN_HOST_CI_HOST_PID_NAMESPACE JAIN_HOST_CI_HOST_USER_NAMESPACE
+      umask 077
+      cd /opt/jain-ci/repository
+      exec /opt/jain-ci/jankurai audit . \
+        --full --mode advisory --policy agent/audit-policy.toml \
+        --json /opt/jain-ci/output/report.json \
+        --md /opt/jain-ci/output/report.md \
+        --repair-queue-jsonl /opt/jain-ci/output/repair-queue.jsonl \
+        --no-score-history
+    ' || audit_rc=$?
+if [[ "$audit_rc" != 0 ]]; then
+  journalctl --quiet --no-pager --unit "$audit_unit" --lines=80 >&2 || true
+fi
+systemctl kill --kill-whom=all --signal=KILL "$audit_unit" >/dev/null 2>&1 || true
+systemctl is-active --quiet "$audit_unit" \
+  && fail 'proof auditor cgroup remained active after exit'
+printf '[host-ci-sandbox] proof auditor cgroup stopped before validation\n' >&2
+
 conclusion=failure
 evidence_dir=''
 evidence_sha=''
@@ -468,7 +615,7 @@ if [[ "$runner_rc" == 0 && -f "$worker_result" && ! -L "$worker_result" \
   && jq -e --arg owner "${arguments[0]}" --arg repo "$repo" \
     --arg head "${arguments[2]}" --arg check "${arguments[4]}" \
     --arg commit "$control_commit" \
-    'select(.schema_version == "jain.host-ci-worker-evidence/v2")
+    'select(.schema_version == "jain.host-ci-worker-evidence/v4")
      | select(.owner == $owner and .repository == $repo)
      | select(.head_sha == $head and .required_check == $check)
      | select(.control_plane_commit == $commit)
@@ -518,6 +665,47 @@ if [[ "$conclusion" == success ]]; then
   fi
 fi
 
+# The proof receipt is mandatory for every forge publication attempt. A failed
+# product/native lane may produce a validated failure receipt, but malformed,
+# forged, linked, oversized, or identity-mismatched auditor output produces no
+# publication authority at all.
+# shellcheck source=ops/ci/host-ci-proof-evidence.sh
+source "$control_root/ops/ci/host-ci-proof-evidence.sh"
+lane_conclusion=success
+lane_failure_reason=''
+if [[ "$conclusion" != success ]]; then
+  lane_conclusion=failure
+  lane_failure_reason="product/native lane failed (runner_exit_code=$runner_rc)"
+elif [[ "$audit_rc" != 0 ]]; then
+  lane_conclusion=failure
+  lane_failure_reason="Jankurai auditor exited nonzero (exit_code=$audit_rc)"
+fi
+proof_attempt_id="$request_id"
+proof_result_line="$(jain_host_ci_promote_proof_evidence \
+  "$proof_staging_root" "$proof_evidence_root" \
+  "${arguments[0]}" "$repo" "${arguments[2]}" "${arguments[4]}" \
+  "$request_id" "$proof_attempt_id" "$worker_uid" "$worker_gid" \
+  "$audit_worktree" "$splitctl_path" "$jankurai_path" \
+  "$lane_conclusion" "$lane_failure_reason" "$audit_clean_start")" \
+  || fail 'root exact-SHA proof evidence promotion failed'
+IFS=$'\t' read -r proof_evidence_dir proof_receipt_sha proof_report_sha \
+  proof_status proof_validator_rc <<<"$proof_result_line"
+[[ -n "$proof_evidence_dir" && "$proof_receipt_sha" =~ ^[0-9a-f]{64}$ \
+  && "$proof_report_sha" =~ ^[0-9a-f]{64}$ \
+  && "$proof_status" =~ ^(pass|fail)$ \
+  && "$proof_validator_rc" =~ ^[0-9]+$ ]] \
+  || fail 'root exact-SHA proof evidence result is malformed'
+if [[ "$proof_status" != pass || "$audit_rc" != 0 ]]; then
+  conclusion=failure
+fi
+
+/usr/bin/umount -- "$proof_staging_root" \
+  || fail 'cannot unmount bounded proof evidence staging'
+proof_mounted=0
+if /usr/bin/findmnt -rn -M "$proof_staging_root" >/dev/null; then
+  fail 'proof evidence staging mount survived root validation'
+fi
+
 /usr/bin/umount -- "$evidence_staging_root" \
   || fail 'cannot unmount bounded native evidence staging'
 evidence_mounted=0
@@ -531,19 +719,35 @@ jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
   --arg head "${arguments[2]}" --arg check "${arguments[4]}" \
   --arg conclusion "$conclusion" --arg evidence_dir "$evidence_dir" \
   --arg evidence_sha "$evidence_sha" --argjson rc "$runner_rc" \
+  --arg proof_dir "$proof_evidence_dir" \
+  --arg proof_receipt "$proof_evidence_dir/receipt.json" \
+  --arg proof_receipt_sha "$proof_receipt_sha" \
+  --arg proof_report "$proof_evidence_dir/report.json" \
+  --arg proof_report_sha "$proof_report_sha" \
+  --arg proof_status "$proof_status" --arg proof_attempt "$proof_attempt_id" \
+  --argjson audit_rc "$audit_rc" \
+  --argjson proof_validator_rc "$proof_validator_rc" \
   --argjson evidence_required "$derived_required" \
-  '{schema_version:"jain.host-ci-root-result/v3",request_id:$request_id,
+  '{schema_version:"jain.host-ci-root-result/v4",request_id:$request_id,
     control_plane_commit:$commit,owner:$owner,repository:$repo,head_sha:$head,
     required_check:$check,conclusion:$conclusion,runner_exit_code:$rc,
     native_evidence_required:$evidence_required,
-    native_evidence_dir:$evidence_dir,native_evidence_sha256:$evidence_sha}' \
+    native_evidence_dir:$evidence_dir,native_evidence_sha256:$evidence_sha,
+    proof_evidence_required:true,proof_evidence_dir:$proof_dir,
+    proof_receipt_path:$proof_receipt,
+    proof_receipt_sha256:$proof_receipt_sha,
+    proof_report_path:$proof_report,proof_report_sha256:$proof_report_sha,
+    proof_status:$proof_status,proof_attempt_id:$proof_attempt,
+    proof_auditor_exit_code:$audit_rc,
+    proof_validator_exit_code:$proof_validator_rc}' \
   >"$root_result"
 chmod 0600 "$root_result"
 chown root:root "$root_result"
 result_sha="$(sha256sum -- "$root_result" | cut -d' ' -f1)"
 sealed_at="$(date +%s)"
 root_seal="$({
-  printf '%s\n%s\n%s\n%s\n' "$nonce" "$result_sha" "$sealed_at" "$request_id"
+  printf '%s\n%s\n%s\n%s\n%s\n' \
+    "$nonce" "$result_sha" "$proof_receipt_sha" "$sealed_at" "$request_id"
 } | sha256sum | cut -d' ' -f1)"
 jq --arg status sealed --arg result_sha "$result_sha" \
   --arg root_seal "$root_seal" --argjson sealed_at "$sealed_at" \

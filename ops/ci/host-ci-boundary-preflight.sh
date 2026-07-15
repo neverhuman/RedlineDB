@@ -22,19 +22,27 @@ publisher_config="$install_dir/host-ci-publisher.config.json"
 sandbox="$install_dir/host-ci-sandbox"
 sandbox_config="$install_dir/host-ci-sandbox.config.json"
 splitctl="$install_dir/splitctl"
+jankurai="$install_dir/jankurai"
 for executable in "$publisher" "$sandbox" "$splitctl"; do
   [[ ! -L "$executable" \
     && "$(stat -c '%u:%a:%h' -- "$executable" 2>/dev/null)" == '0:500:1' ]] \
     || fail "unsafe installed executable: $executable"
 done
+[[ ! -L "$jankurai" \
+  && "$(stat -c '%u:%a:%h' -- "$jankurai" 2>/dev/null)" == '0:555:1' ]] \
+  || fail 'unsafe installed Jankurai auditor'
 for config in "$publisher_config" "$sandbox_config"; do
   [[ ! -L "$config" \
     && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
     || fail "unsafe installed config: $config"
 done
-jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v3")' \
+jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v4")
+  | select(.jankurai_sha256 == "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0")
+  | select(.proof_evidence_root | type == "string" and startswith("/"))' \
   "$publisher_config" >/dev/null || fail 'invalid publisher config version'
-jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v3")
+jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v4")
+  | select(.jankurai_sha256 == "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0")
+  | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.retain_requests == false)' "$sandbox_config" >/dev/null \
   || fail 'invalid or test-only sandbox config'
 [[ "$(sha256sum -- "$publisher" | cut -d' ' -f1)" \
@@ -46,9 +54,14 @@ jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v3")
 [[ "$(sha256sum -- "$splitctl" | cut -d' ' -f1)" \
   == "$(jq -er '.splitctl_sha256' "$sandbox_config")" ]] \
   || fail 'splitctl digest/config mismatch'
+[[ "$(sha256sum -- "$jankurai" | cut -d' ' -f1)" \
+  == 'ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0' \
+  && "$("$jankurai" --version)" == 'jankurai 1.6.10' ]] \
+  || fail 'governed Jankurai binary/version mismatch'
 for field in \
-  publisher_sha256 sandbox_sha256 splitctl_sha256 control_remote forge_git_base \
-  request_root native_evidence_root; do
+  publisher_sha256 sandbox_sha256 splitctl_sha256 jankurai_sha256 \
+  control_remote forge_git_base request_root native_evidence_root \
+  proof_evidence_root; do
   [[ "$(jq -er ".$field" "$publisher_config")" \
     == "$(jq -er ".$field" "$sandbox_config")" ]] \
     || fail "broker configs disagree on $field"
@@ -111,8 +124,24 @@ case "$native_evidence_root" in
 esac
 [[ ! -L "$native_evidence_root" \
   && "$(stat -c '%u:%g:%a' -- "$native_evidence_root")" \
-    == '0:0:700' ]] \
+  == '0:0:700' ]] \
   || fail 'durable native evidence ownership/mode mismatch'
+proof_evidence_root="$(realpath -e -- \
+  "$(jq -er '.proof_evidence_root' "$sandbox_config")")" \
+  || fail 'durable proof evidence directory missing'
+case "$proof_evidence_root" in
+  /tmp | /tmp/*) fail 'durable proof evidence directory cannot use /tmp' ;;
+esac
+[[ "$proof_evidence_root" != "$native_evidence_root" \
+  && ! -L "$proof_evidence_root" \
+  && "$(stat -c '%u:%g:%a' -- "$proof_evidence_root")" == '0:0:700' ]] \
+  || fail 'durable proof evidence ownership/mode mismatch'
+case "$proof_evidence_root/" in
+  "$native_evidence_root/"*) fail 'durable evidence directories cannot be nested' ;;
+esac
+case "$native_evidence_root/" in
+  "$proof_evidence_root/"*) fail 'durable evidence directories cannot be nested' ;;
+esac
 [[ "$(systemctl show -p Version --value)" =~ ^[0-9]+([.][0-9]+)*$ ]] \
   || fail 'systemd manager unavailable'
 command -v systemd-run >/dev/null || fail 'systemd-run unavailable'

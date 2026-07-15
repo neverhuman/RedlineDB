@@ -81,19 +81,26 @@ JAIN_SPLIT_ROOT=/home/ubuntu/jain-split JAIN_RELEASE_CI=1 \
   ./ops/ci/split-host-ci.sh OWNER REPO SHA /absolute/checkout REPO/required
 ```
 
-The protected required context for a native-enabled repository refuses to run unless
-`JAIN_RELEASE_CI=1`; a lighter run must use a distinct, non-protected context. The runner first
-requires a completely clean control-plane checkout, derives the control-plane remote and required
-context from the authority manifest, and requires exact `origin/main` identity. It then extracts
-`ops/ci/native-materializer.sh` and `ops/ci/native-sources.lock.json` from the exact clean
-`jain-split-ops` commit. It never executes a canonical product checkout's vendor script. Native
-inputs are clean detached worktrees created from the authority-bound commit, Git-tree, SHA-256
-tree-manifest, submodule, and content identities. The materialization log, inputs, manifest, and
-receipt persist under the canonical split root's
-`target/host-ci-evidence/native-materialization/`; every file has a SHA-256 sidecar, and the
-receipt digest is included in the exact-head required status description. Evidence roots under
-`/tmp`, or paths whose symlinks resolve into the ephemeral run tree, are rejected. Any native
-setup failure publishes a failing required result.
+The protected required context refuses to run unless `JAIN_RELEASE_CI=1`; a lighter run must use a
+distinct, non-protected context. The runner requires a completely clean control-plane checkout,
+derives the control-plane remote and required context from the authority manifest, and requires
+exact `origin/main` identity. Native inputs, where required, are clean detached worktrees created
+from the authority-bound commit, Git-tree, SHA-256 tree-manifest, submodule, and content identities.
+It never executes a canonical product checkout's vendor script.
+
+After the product cgroup is dead, the v4 host boundary runs the governed, root-owned Jankurai
+1.6.10 (`sha256:ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0`) in a second
+network-isolated unit against a separate clean, read-only exact-head checkout. Root validates and
+persists the report plus `jain.jankurai-exact-sha-evidence/v1` receipt in the configured proof
+evidence store. The root result seal binds the receipt digest. The publisher must POST and read
+back the exact `jankurai/proof` check before it can POST `<repo>/required` and its commit status.
+Any repository/SHA/auditor/policy mismatch, dirty tree, low score, ratchet failure, hard finding,
+cap, nonconformance, stale seal, linked inode, tampering, missing readback, or partial publication
+fails closed. A request is never replayed after a publication attempt.
+
+Install or update this boundary only from a protected-merged `jain-split-ops` commit, following
+[`../ops/ci/HOST_CI_BOUNDARY.md`](../ops/ci/HOST_CI_BOUNDARY.md). A source or PR lane must not run
+the unmerged publisher, install the auditor, migrate the token, or publish product checks.
 
 Open a draft PR, then use the controlled lifecycle. Every mutating command has a dry-run recipe
 and a separate `*-apply` recipe:

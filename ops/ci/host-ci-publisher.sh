@@ -24,6 +24,7 @@ publisher_path="$(realpath -e -- "${BASH_SOURCE[0]}")" \
 install_dir="$(dirname "$publisher_path")"
 config="$install_dir/host-ci-publisher.config.json"
 splitctl_path="$install_dir/splitctl"
+jankurai_path="$install_dir/jankurai"
 [[ ! -L "$publisher_path" \
   && "$(stat -c '%u:%a:%h' -- "$publisher_path" 2>/dev/null)" == '0:500:1' ]] \
   || fail 'publisher must be root-owned mode 0500'
@@ -37,16 +38,21 @@ splitctl_path="$install_dir/splitctl"
 [[ ! -L "$splitctl_path" \
   && "$(stat -c '%u:%a:%h' -- "$splitctl_path" 2>/dev/null)" == '0:500:1' ]] \
   || fail 'splitctl must be root-owned mode 0500'
+[[ ! -L "$jankurai_path" \
+  && "$(stat -c '%u:%a:%h' -- "$jankurai_path" 2>/dev/null)" == '0:555:1' ]] \
+  || fail 'Jankurai must be root-owned mode 0555'
 jq -e '
-  select(.schema_version == "jain.host-ci-publisher-config/v3")
+  select(.schema_version == "jain.host-ci-publisher-config/v4")
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
+  | select(.jankurai_sha256 == "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0")
   | select(.forge_base | type == "string")
   | select(.forge_git_base | type == "string" and length > 0)
   | select(.control_remote | type == "string" and length > 0)
   | select(.request_root | type == "string" and startswith("/"))
   | select(.native_evidence_root | type == "string" and startswith("/"))
+  | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.max_seal_age_seconds | type == "number" and . >= 1 and . <= 300)
   | select(.token | type == "string")' "$config" >/dev/null \
   || fail 'invalid publisher config schema'
@@ -58,6 +64,12 @@ expected_publisher_sha="$(jq -er '.publisher_sha256' "$config")"
 splitctl_sha="$(sha256sum -- "$splitctl_path" | cut -d' ' -f1)"
 [[ "$splitctl_sha" == "$(jq -er '.splitctl_sha256' "$config")" ]] \
   || fail 'splitctl digest/config mismatch'
+jankurai_sha="$(sha256sum -- "$jankurai_path" | cut -d' ' -f1)"
+[[ "$jankurai_sha" == "$(jq -er '.jankurai_sha256' "$config")" \
+  && "$jankurai_sha" \
+    == 'ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0' \
+  && "$("$jankurai_path" --version)" == 'jankurai 1.6.10' ]] \
+  || fail 'governed Jankurai digest/version mismatch'
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$config")")" \
   || fail 'request root is unavailable'
 [[ ! -L "$request_root" \
@@ -72,6 +84,22 @@ esac
 [[ ! -L "$native_evidence_root" \
   && "$(stat -c '%u:%g:%a' -- "$native_evidence_root")" == '0:0:700' ]] \
   || fail 'durable native evidence root must be root-owned mode 0700'
+proof_evidence_root="$(realpath -e -- \
+  "$(jq -er '.proof_evidence_root' "$config")")" \
+  || fail 'durable proof evidence root is unavailable'
+case "$proof_evidence_root" in
+  /tmp | /tmp/*) fail 'durable proof evidence root cannot use /tmp' ;;
+esac
+[[ "$proof_evidence_root" != "$native_evidence_root" \
+  && ! -L "$proof_evidence_root" \
+  && "$(stat -c '%u:%g:%a' -- "$proof_evidence_root")" == '0:0:700' ]] \
+  || fail 'durable proof evidence root must be distinct root-owned mode 0700'
+case "$proof_evidence_root/" in
+  "$native_evidence_root/"*) fail 'durable evidence roots cannot be nested' ;;
+esac
+case "$native_evidence_root/" in
+  "$proof_evidence_root/"*) fail 'durable evidence roots cannot be nested' ;;
+esac
 
 request_dir="$(realpath -e -- "$1")" || fail 'request directory missing'
 request_id="${request_dir##*/}"
@@ -94,7 +122,7 @@ mkdir -m 0700 "$request_dir/publish.lock" 2>/dev/null \
   || fail 'request was already used or is being published'
 
 jq -e --arg request_id "$request_id" \
-  'select(.schema_version == "jain.host-ci-root-state/v3")
+  'select(.schema_version == "jain.host-ci-root-state/v4")
    | select(.request_id == $request_id and .status == "sealed")
    | select(.nonce | test("^[0-9a-f]{64}$"))
    | select(.result_sha256 | test("^[0-9a-f]{64}$"))
@@ -104,7 +132,9 @@ jq -e --arg request_id "$request_id" \
    | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
    | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
    | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
-   | select(.native_evidence_root | type == "string")' "$state" >/dev/null \
+   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
+   | select(.native_evidence_root | type == "string")
+   | select(.proof_evidence_root | type == "string")' "$state" >/dev/null \
   || fail 'root request is not sealed for one-shot publication'
 nonce="$(jq -er '.nonce' "$state")"
 result_sha="$(sha256sum -- "$result" | cut -d' ' -f1)"
@@ -115,8 +145,11 @@ now="$(date +%s)"
 max_age="$(jq -er '.max_seal_age_seconds' "$config")"
 age=$((now - sealed_at))
 (( age >= 0 && age <= max_age )) || fail 'root request seal is stale'
+proof_receipt_sha="$(jq -er '.proof_receipt_sha256 | select(test("^[0-9a-f]{64}$"))' \
+  "$result")" || fail 'root result lacks a proof receipt digest'
 expected_seal="$({
-  printf '%s\n%s\n%s\n%s\n' "$nonce" "$result_sha" "$sealed_at" "$request_id"
+  printf '%s\n%s\n%s\n%s\n%s\n' \
+    "$nonce" "$result_sha" "$proof_receipt_sha" "$sealed_at" "$request_id"
 } | sha256sum | cut -d' ' -f1)"
 [[ "$expected_seal" == "$(jq -er '.root_seal' "$state")" ]] \
   || fail 'root result seal mismatch'
@@ -124,12 +157,15 @@ expected_seal="$({
   && "$(jq -er '.sandbox_sha256' "$state")" \
     == "$(jq -er '.sandbox_sha256' "$config")" \
   && "$(jq -er '.splitctl_sha256' "$state")" == "$splitctl_sha" \
+  && "$(jq -er '.jankurai_sha256' "$state")" == "$jankurai_sha" \
   && "$(jq -er '.native_evidence_root' "$state")" \
-    == "$native_evidence_root" ]] \
+    == "$native_evidence_root" \
+  && "$(jq -er '.proof_evidence_root' "$state")" \
+    == "$proof_evidence_root" ]] \
   || fail 'root request broker binding mismatch'
 
 jq -e --arg request_id "$request_id" \
-  'select(.schema_version == "jain.host-ci-root-result/v3")
+  'select(.schema_version == "jain.host-ci-root-result/v4")
    | select(.request_id == $request_id)
    | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
    | select(.owner | test("^[a-z0-9][a-z0-9-]*$"))
@@ -140,7 +176,17 @@ jq -e --arg request_id "$request_id" \
    | select(.runner_exit_code | type == "number")
    | select(.native_evidence_required | type == "boolean")
    | select(.native_evidence_dir | type == "string")
-   | select(.native_evidence_sha256 | type == "string")' "$result" >/dev/null \
+   | select(.native_evidence_sha256 | type == "string")
+   | select(.proof_evidence_required == true)
+   | select(.proof_evidence_dir | type == "string" and startswith("/"))
+   | select(.proof_receipt_path | type == "string" and startswith("/"))
+   | select(.proof_receipt_sha256 | test("^[0-9a-f]{64}$"))
+   | select(.proof_report_path | type == "string" and startswith("/"))
+   | select(.proof_report_sha256 | test("^[0-9a-f]{64}$"))
+   | select(.proof_status == "pass" or .proof_status == "fail")
+   | select(.proof_attempt_id | test("^[A-Za-z0-9_.-]+$"))
+   | select(.proof_auditor_exit_code | type == "number")
+   | select(.proof_validator_exit_code | type == "number")' "$result" >/dev/null \
   || fail 'invalid root result schema'
 
 control_root="$request_dir/worker-authority/control-plane"
@@ -153,7 +199,7 @@ if find "$control_root" -xdev \( -type f -o -type d \) \
 fi
 for critical in repos.manifest.toml ops/ci/host-ci-publisher.sh \
   ops/ci/host-ci-sandbox.sh ops/ci/native-runtime.sh \
-  ops/ci/host-ci-evidence.sh; do
+  ops/ci/host-ci-evidence.sh ops/ci/host-ci-proof-evidence.sh; do
   [[ -f "$control_root/$critical" && ! -L "$control_root/$critical" \
     && "$(stat -c '%u' -- "$control_root/$critical")" == 0 ]] \
     || fail "unsafe immutable control input: $critical"
@@ -213,6 +259,8 @@ required_check="$(jq -er '.required_check' "$result")"
 source "$control_root/ops/ci/native-runtime.sh"
 # shellcheck source=ops/ci/host-ci-evidence.sh
 source "$control_root/ops/ci/host-ci-evidence.sh"
+# shellcheck source=ops/ci/host-ci-proof-evidence.sh
+source "$control_root/ops/ci/host-ci-proof-evidence.sh"
 derived_required=false
 if jain_native_check_requires_evidence "$repo" "$required_check" "$protected_check"; then
   derived_required=true
@@ -221,9 +269,35 @@ fi
   || fail 'root result attempted a native evidence policy downgrade'
 conclusion="$(jq -er '.conclusion' "$result")"
 head_sha="$(jq -er '.head_sha' "$result")"
+proof_evidence_dir="$(jq -er '.proof_evidence_dir' "$result")"
+proof_evidence_resolved="$(realpath -e -- "$proof_evidence_dir" 2>/dev/null || true)"
+proof_check_slug="${required_check//[^A-Za-z0-9_.-]/_}"
+expected_proof_dir="$proof_evidence_root/$owner/$repo/$proof_check_slug/$request_id"
+[[ "$proof_evidence_resolved" == "$expected_proof_dir" \
+  && "$(jq -er '.proof_receipt_path' "$result")" \
+    == "$proof_evidence_resolved/receipt.json" \
+  && "$(jq -er '.proof_report_path' "$result")" \
+    == "$proof_evidence_resolved/report.json" ]] \
+  || fail 'root result proof evidence escaped configured durable authority'
+proof_status="$(jq -er '.proof_status' "$result")"
+proof_attempt_id="$(jq -er '.proof_attempt_id' "$result")"
+proof_auditor_rc="$(jq -er '.proof_auditor_exit_code' "$result")"
+proof_validator_rc="$(jq -er '.proof_validator_exit_code' "$result")"
+jain_host_ci_verify_promoted_proof_evidence "$proof_evidence_resolved" \
+  "$owner" "$repo" "$head_sha" "$required_check" "$proof_attempt_id" \
+  "$jankurai_sha" "$proof_status" \
+  || fail 'root result proof evidence is not immutable root authority'
+[[ "$(sha256sum -- "$proof_evidence_resolved/receipt.json" | cut -d' ' -f1)" \
+    == "$proof_receipt_sha" \
+  && "$(sha256sum -- "$proof_evidence_resolved/report.json" | cut -d' ' -f1)" \
+    == "$(jq -er '.proof_report_sha256' "$result")" ]] \
+  || fail 'root result proof evidence digest mismatch'
 if [[ "$conclusion" == success ]]; then
   [[ "$(jq -er '.runner_exit_code' "$result")" == 0 ]] \
     || fail 'success result has a nonzero worker exit'
+  [[ "$proof_status" == pass && "$proof_auditor_rc" == 0 \
+    && "$proof_validator_rc" == 0 ]] \
+    || fail 'success result lacks a passing exact-SHA Jankurai proof'
   evidence_dir="$(jq -er '.native_evidence_dir' "$result")"
   evidence_sha="$(jq -er '.native_evidence_sha256' "$result")"
   required_int=0
@@ -241,6 +315,9 @@ if [[ "$conclusion" == success ]]; then
     "$evidence_dir" "$evidence_sha" "$head_sha" "$required_check" \
     "$control_root" "$control_commit" \
     || fail 'root result native evidence validation failed'
+else
+  [[ "$proof_status" == fail && "$proof_validator_rc" != 0 ]] \
+    || fail 'failure result lacks a failed exact-SHA Jankurai receipt'
 fi
 
 control_remote="$(jq -er '.control_remote' "$config")"
@@ -252,12 +329,12 @@ if [[ "$conclusion" == success ]]; then
     || fail 'cannot read reviewed control-plane main'
   [[ "$reviewed_commit" == "$control_commit" ]] \
     || fail 'success authority is no longer reviewed main'
-  forge_git_base="$(jq -er '.forge_git_base' "$config")"
-  product_remote="${forge_git_base%/}/$owner/$repo.git"
-  "${safe_git[@]}" ls-remote --exit-code "$product_remote" 2>/dev/null \
-    | awk -v head="$head_sha" '$1 == head { found=1 } END { exit !found }' \
-    || fail 'success head is not an advertised authoritative product ref'
 fi
+forge_git_base="$(jq -er '.forge_git_base' "$config")"
+product_remote="${forge_git_base%/}/$owner/$repo.git"
+"${safe_git[@]}" ls-remote --exit-code "$product_remote" 2>/dev/null \
+  | awk -v head="$head_sha" '$1 == head { found=1 } END { exit !found }' \
+  || fail 'head is not an advertised authoritative product ref'
 
 write_status() {
   local status="${1:?status required}" tmp="$request_dir/root-state.tmp.$$"
@@ -283,11 +360,42 @@ post_json() {
     | curl --config - -fsS --max-time 10 -X POST "$url" \
       -H 'content-type: application/json' -d "$payload" >/dev/null
 }
+get_json() {
+  local url="$1"
+  printf 'header = "Authorization: Bearer %s"\n' "$token" \
+    | curl --config - -fsS --max-time 10 "$url"
+}
+proof_check='jankurai/proof'
+proof_run_id="$(jq -er '.run_id' "$proof_evidence_resolved/receipt.json")"
+proof_score="$(jq -er '.score' "$proof_evidence_resolved/receipt.json")"
+proof_summary="receipt_sha256=$proof_receipt_sha attempt_id=$proof_attempt_id run_id=$proof_run_id auditor_sha256=$jankurai_sha score=$proof_score hard_findings=0 caps_applied=0 root_seal=$(jq -er '.root_seal' "$state")"
+post_json "$forge_base/repos/$owner/$repo/check-runs" \
+  "$(jq -cn --arg name "$proof_check" --arg sha "$head_sha" \
+    --arg conclusion "$conclusion" --arg summary "$proof_summary" \
+    '{name:$name,head_sha:$sha,status:"completed",conclusion:$conclusion,
+      output:{title:"Root-sealed exact-SHA Jankurai proof",summary:$summary}}')" \
+  || { write_status failed; fail 'Jankurai proof publication failed'; }
+proof_readback="$(get_json \
+  "$forge_base/repos/$owner/$repo/commits/$head_sha/check-runs")" \
+  || { write_status consumed; fail 'Jankurai proof readback failed'; }
+jq -e --arg name "$proof_check" --arg sha "$head_sha" \
+  --arg conclusion "$conclusion" --arg receipt "$proof_receipt_sha" \
+  --arg attempt "$proof_attempt_id" '
+    select(.check_runs | type == "array")
+    | [.check_runs[]
+       | select(.name == $name and .head_sha == $sha
+           and .status == "completed" and .conclusion == $conclusion
+           and ((.output.summary // "")
+             | contains("receipt_sha256=" + $receipt))
+           and ((.output.summary // "")
+             | contains("attempt_id=" + $attempt)))]
+    | length == 1' <<<"$proof_readback" >/dev/null \
+  || { write_status consumed; fail 'Jankurai proof readback mismatch'; }
 post_json "$forge_base/repos/$owner/$repo/check-runs" \
   "$(jq -cn --arg name "$required_check" --arg sha "$head_sha" \
     --arg conclusion "$conclusion" \
     '{name:$name,head_sha:$sha,status:"completed",conclusion:$conclusion}')" \
-  || { write_status failed; fail 'check-run publication failed'; }
+  || { write_status consumed; fail 'check-run publication failed'; }
 state_value=failure
 [[ "$conclusion" == success ]] && state_value=success
 description="$required_check root-seal=$(jq -er '.root_seal' "$state" | cut -c1-16)"
@@ -295,7 +403,7 @@ post_json "$forge_base/repos/$owner/$repo/statuses/$head_sha" \
   "$(jq -cn --arg state "$state_value" --arg context "$required_check" \
     --arg description "$description" \
     '{state:$state,context:$context,description:$description}')" \
-  || { write_status failed; fail 'commit-status publication failed'; }
+  || { write_status consumed; fail 'commit-status publication failed'; }
 write_status consumed
 printf '[host-ci-publisher] consumed one-shot %s for %s/%s @ %.12s\n' \
   "$request_id" "$owner" "$repo" "$head_sha" >&2
