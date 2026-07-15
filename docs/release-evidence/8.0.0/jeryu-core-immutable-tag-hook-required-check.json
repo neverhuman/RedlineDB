@@ -1,0 +1,69 @@
+{
+  "schema": "jain.exact-head-required-check/v1",
+  "release_authoritative": false,
+  "typed_reason": "bootstrap_hook_fix_exact_head_passed_awaiting_independent_review; automatic_jankurai_proof_retained_red_until_governed_1.6.11_install",
+  "repository": "jeryu/jeryu-core",
+  "pull_request": 7,
+  "head_sha": "ace088c4810f20b32e7a8901bee1b6c81a9e8212",
+  "tree_sha": "2a6fb67e2179a91ceb218ea10fd371815e2a28ea",
+  "base_sha": "47fad5279df87db863309a65012436bd7306476f",
+  "runner": {
+    "script": "/home/ubuntu/jain-split/jain-split-ops/ops/ci/split-host-ci.sh",
+    "command": "JAIN_RELEASE_CI=1 ops/ci/split-host-ci.sh jeryu jeryu-core <head_sha> /home/ubuntu/jeryu-split/jeryu-core jeryu-core/required",
+    "detached_workspace": true,
+    "tracked_clean_finish": true,
+    "conclusion": "success"
+  },
+  "validated_change": {
+    "files": [
+      "crates/jeryu-gitd/src/hooks.rs",
+      "crates/jeryu-gitd/tests/pre_receive.rs"
+    ],
+    "generated_hook_rejects_existing_tag_update_without_helper": true,
+    "generated_hook_rejects_existing_tag_delete_without_helper": true,
+    "new_branch_creation_allowed": true,
+    "new_tag_creation_allowed": true,
+    "focused_test": "success",
+    "format": "success",
+    "clippy_warnings_denied": "success",
+    "jeryu_gitd_tests": "success",
+    "workspace_tests": "749_passed"
+  },
+  "forge_readback": {
+    "required_check": {
+      "id": "cd66a49e-3e1a-4f4e-ae44-3ff8f4cee29e",
+      "name": "jeryu-core/required",
+      "head_sha": "ace088c4810f20b32e7a8901bee1b6c81a9e8212",
+      "status": "completed",
+      "conclusion": "success",
+      "completed_at": "2026-07-15T22:08:32.345830234Z"
+    },
+    "required_commit_status": {
+      "id": "7d9dc361-2d21-49ae-b537-405d40543161",
+      "context": "jeryu-core/required",
+      "state": "success",
+      "created_at": "2026-07-15T22:08:34.475200974Z"
+    },
+    "automatic_jankurai_proof": {
+      "id": "fb9a280d-381c-45e9-bc93-ebb6ac371b71",
+      "name": "jankurai/proof",
+      "head_sha": "ace088c4810f20b32e7a8901bee1b6c81a9e8212",
+      "status": "completed",
+      "conclusion": "failure",
+      "classification": "preserved_non_required_bootstrap_failure_before_governed_1.6.11_install"
+    }
+  },
+  "protection": {
+    "required_check": "jeryu-core/required",
+    "strict": true,
+    "required_approvals": 1,
+    "linear_history": true,
+    "enforce_admins": true,
+    "force_pushes": false,
+    "deletions": false,
+    "required_jankurai_proof": false
+  },
+  "finished_at": "2026-07-15T22:08:34.475200974Z",
+  "operator": "codex:/root",
+  "conclusion": "success"
+}

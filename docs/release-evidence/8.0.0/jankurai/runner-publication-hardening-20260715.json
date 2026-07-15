@@ -1,0 +1,23 @@
+{
+  "schema": "jeryu.host-runner-hardening/v1",
+  "scope": "local_jeryu_split_host_required_check_publication",
+  "script": "/home/ubuntu/jeryu-split/ops/ci/split-host-ci.sh",
+  "script_sha256": "f002be1596596897e686545030630b317343ce6579e57cf934ef7eeea11d818f",
+  "changes": [
+    "read the existing local merge token without printing it",
+    "supply authorization through a pipe-backed header file rather than process arguments",
+    "use the public forge health endpoint",
+    "fail closed when the publication credential is unavailable",
+    "publish both the completed check-run and exact-SHA commit status",
+    "fail a green CI invocation if required-result publication fails"
+  ],
+  "validation": {
+    "bash_syntax": "success",
+    "exact_head_candidate": "52676aed1c7b7d697a83a5c934eecd5d2d33ae7e",
+    "check_run_publication": "success",
+    "commit_status_publication": "success",
+    "forge_readback": "success"
+  },
+  "repository_or_tag_state_changed": false,
+  "recorded_at_utc": "2026-07-15T20:19:29Z"
+}

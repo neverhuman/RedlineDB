@@ -1,0 +1,77 @@
+{
+  "schema": "jankurai.required-check/v1",
+  "release_authoritative": false,
+  "typed_reason": "exact_head_ci_passed_awaiting_independent_approval_protected_merge_and_immutable_tag",
+  "repository": "jeryu/jankurai",
+  "pull_request": 1,
+  "head_sha": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+  "tree_sha": "34a8a1fb59bc4ebfadf12c45d95f169d06acc781",
+  "base_sha": "760335d3d2c0edf2b8c6fd56ea794df8f94a5bcb",
+  "runner": {
+    "script": "/home/ubuntu/jeryu-split/ops/ci/split-host-ci.sh",
+    "detached_workspace": true,
+    "tracked_clean_start": true,
+    "tracked_clean_finish": true,
+    "jobs": 2,
+    "command": "JAIN_RELEASE_CI=1 ops/ci/split-host-ci.sh jeryu jankurai <head_sha> /home/ubuntu/jankurai jankurai/required"
+  },
+  "environment": {
+    "cargo_net_offline": true,
+    "git_global_config_disabled": true,
+    "git_system_config_disabled": true,
+    "git_terminal_prompt": false,
+    "jankurai_update_check": false
+  },
+  "checks": {
+    "canonical_pr_ci": "success",
+    "format": "success",
+    "locked_workspace_check_all_targets_features": "success",
+    "clippy_warnings_denied": "success",
+    "workspace_tests": "success",
+    "ux_playwright": "20_passed",
+    "compatibility_and_conformance": "success",
+    "llvm_line_coverage": "80.03_percent",
+    "mutation": "18_total_15_caught_3_unviable_0_missed",
+    "relocation_after_source_removal": "success",
+    "strict_offline_security": "success",
+    "semantic_coverage": "success",
+    "release_identity": "jankurai 1.6.11",
+    "audit": "score_96_hard_0_caps_0"
+  },
+  "forge_readback": {
+    "check_run": {
+      "id": "a19ec050-edd5-473d-a33a-6fd3488a1374",
+      "name": "jankurai/required",
+      "head_sha": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+      "status": "completed",
+      "conclusion": "success",
+      "completed_at": "2026-07-15T21:35:10.880551772Z"
+    },
+    "commit_status": {
+      "id": "dfe0e371-1072-4e9c-8642-9d89b7e7d9cc",
+      "context": "jankurai/required",
+      "state": "success",
+      "created_at": "2026-07-15T21:35:13.689924126Z"
+    },
+    "automatic_proof": {
+      "id": "1e21892b-6de4-4f4b-9a10-3b05f21f1033",
+      "name": "jankurai/proof",
+      "head_sha": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  },
+  "protection": {
+    "required_check": "jankurai/required",
+    "strict": true,
+    "required_approvals": 1,
+    "linear_history": true,
+    "enforce_admins": true,
+    "force_pushes": false,
+    "deletions": false
+  },
+  "started_at": "2026-07-15T21:17:26Z",
+  "finished_at": "2026-07-15T21:35:13.689924126Z",
+  "operator": "codex:/root",
+  "conclusion": "success"
+}

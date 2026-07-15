@@ -1,0 +1,29 @@
+{
+  "schema": "jankurai.immutable-tag/v1",
+  "release_authoritative": true,
+  "repository": "jeryu/jankurai",
+  "remote": "http://127.0.0.1:8787/git/jeryu/jankurai.git",
+  "tag": "v1.6.11-deadlang-precision-split.1",
+  "commit": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+  "tree": "34a8a1fb59bc4ebfadf12c45d95f169d06acc781",
+  "source_archive_sha256": "2fbca5d04083e3c8d32f383d5b6b4520b8911690b26968c6fbcb210e1202b938",
+  "cargo_lock_sha256": "b9acb981c326226a687d0b6703e4f7ee303148e9e1a6dda1aa03d77988820f6a",
+  "version_output": "jankurai 1.6.11",
+  "expected_installer_binary_sha256": "f125a237dd68c542fa9320837ecdbcbfd609adaa61422bcb4c6e8c701c5cddfb",
+  "protected_merge_receipt_sha256": "00d71920ca69593cb90d50fbba8429b1b1b6879de01fd812bc87a103ce952866",
+  "independent_review_receipt": {
+    "path": "scratchpad/jankurai-review-dface739.json",
+    "sha256_prefix": "383bcea5",
+    "verdict": "approve"
+  },
+  "immutability": {
+    "pre_receive_hook_sha256": "70d34137bdb94d8e245111d8db93564a881ce7aaa0144fd4d622a1648592766d",
+    "forced_update_probe": "rejected",
+    "post_probe_commit": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+    "rejected_probe_log_sha256": "aab2869884bb7cd6c2ec01823d72dea09df374313242838701678246cd1df29d"
+  },
+  "supersedes_burned_tag": "v1.6.11-deadlang-precision",
+  "created_at": "2026-07-15T21:57:22Z",
+  "operator": "codex:/root",
+  "conclusion": "success"
+}

@@ -1,0 +1,55 @@
+{
+  "schema": "jankurai.reproducible-install-build/v1",
+  "release_authoritative": false,
+  "typed_reason": "candidate_build_proof_awaiting_exact_head_ci_independent_review_merge_and_tag",
+  "repository": "jeryu/jankurai",
+  "candidate_commit": "646c6ceeb0e4a110644d79961a1ff8687af32aaf",
+  "candidate_tree": "27e47ddd7df349d94de7cebb6cff9197641aeb8c",
+  "source_archive_sha256": "4d7e3048c2f1b6ec3fde9119271bd0dbf9564ad719155a29b0b094389ed43ea1",
+  "cargo_lock_sha256": "b9acb981c326226a687d0b6703e4f7ee303148e9e1a6dda1aa03d77988820f6a",
+  "version_output": "jankurai 1.6.11",
+  "rust_toolchain": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "cargo_toolchain": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "target_triple": "x86_64-unknown-linux-gnu",
+  "build_mode": {
+    "command": "cargo +1.95.0 install --locked --offline --path <source>/crates/jankurai --root <out> --bin jankurai",
+    "cargo_net_offline": true,
+    "dedicated_scratch_cargo_home": true,
+    "global_git_config_disabled": true,
+    "system_git_config_disabled": true,
+    "git_terminal_prompt": false,
+    "update_check": false,
+    "rustflags": [
+      "--remap-path-prefix=<scratch>/source=/jankurai-build/source",
+      "--remap-path-prefix=<scratch>/cargo=/jankurai-build/cargo",
+      "--remap-path-prefix=<scratch>/target=/jankurai-build/target"
+    ]
+  },
+  "builds": [
+    {
+      "physical_root": "/tmp/codex-jankurai-remap-a-20260715",
+      "binary_sha256": "6add9148d22fb121b85e043b4be8952e510ce71a44f04e410047a121d14415fe",
+      "version_output": "jankurai 1.6.11",
+      "physical_path_leak": false,
+      "conclusion": "success"
+    },
+    {
+      "physical_root": "/tmp/codex-jankurai-remap-b-20260715",
+      "binary_sha256": "6add9148d22fb121b85e043b4be8952e510ce71a44f04e410047a121d14415fe",
+      "version_output": "jankurai 1.6.11",
+      "physical_path_leak": false,
+      "conclusion": "success"
+    }
+  ],
+  "byte_identical": true,
+  "expected_install_binary_sha256": "6add9148d22fb121b85e043b4be8952e510ce71a44f04e410047a121d14415fe",
+  "historical_diagnostic": {
+    "superseded_commit": "52676aed1c7b7d697a83a5c934eecd5d2d33ae7e",
+    "first_binary_sha256": "e3c5a7a081623d8758ef46585a04b661daf6b7a33271d52fdfc02910bee63bbb",
+    "second_binary_sha256": "a72ccde08b27865e131fb9bc17107b50ff5f138520a5b8e2502b3ac1cde7fb4f",
+    "typed_reason": "production_CARGO_MANIFEST_DIR_string_prevented_cross_root_reproducibility",
+    "promoted": false
+  },
+  "waiver_used": false,
+  "recorded_at_utc": "2026-07-15T20:19:29Z"
+}

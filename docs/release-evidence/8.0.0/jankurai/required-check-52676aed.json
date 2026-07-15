@@ -1,0 +1,72 @@
+{
+  "schema": "jankurai.required-check/v1",
+  "release_authoritative": false,
+  "typed_reason": "exact_head_ci_green_awaiting_independent_approval_merge_and_immutable_tag",
+  "repository": "jeryu/jankurai",
+  "pull_request": 1,
+  "candidate_commit": "52676aed1c7b7d697a83a5c934eecd5d2d33ae7e",
+  "candidate_tree": "bb5b441fcfc1f831cac31b446b51bebfe3ed1620",
+  "detached_runner": {
+    "script": "/home/ubuntu/jeryu-split/ops/ci/split-host-ci.sh",
+    "script_sha256": "f002be1596596897e686545030630b317343ce6579e57cf934ef7eeea11d818f",
+    "governed_jobs": 2,
+    "entrypoint": "ops/ci/pr-ci.sh",
+    "worktree_mode": "temporary_detached_exact_commit",
+    "worktree_removed_after_run": true,
+    "tracked_candidate_clean_after_run": true,
+    "conclusion": "success"
+  },
+  "check_runs_readback": {
+    "total_count": 2,
+    "items": [
+      {
+        "name": "jankurai/proof",
+        "head_sha": "52676aed1c7b7d697a83a5c934eecd5d2d33ae7e",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-07-15T19:55:49.858527482Z",
+        "id": "61b0f5de-3777-4803-bfe7-9e31f7c2d80a"
+      },
+      {
+        "name": "jankurai/required",
+        "head_sha": "52676aed1c7b7d697a83a5c934eecd5d2d33ae7e",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-07-15T20:18:08.174836996Z",
+        "id": "a8dab2a1-cf82-40ef-ae0c-e19dfd61295e"
+      }
+    ]
+  },
+  "commit_status_readback": {
+    "sha": "52676aed1c7b7d697a83a5c934eecd5d2d33ae7e",
+    "state": "success",
+    "total_count": 1,
+    "context": "jankurai/required",
+    "description": "jankurai/required via split-host-ci",
+    "created_at": "2026-07-15T20:18:12.819693789Z",
+    "id": "3d4fbb0e-cff8-4780-aa99-2befea293d56"
+  },
+  "protection_readback": {
+    "required_status_checks": [
+      "jankurai/required"
+    ],
+    "strict": true,
+    "required_approving_review_count": 1,
+    "required_linear_history": true,
+    "enforce_admins": true,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  },
+  "pull_request_readback": {
+    "state": "open",
+    "head_sha": "52676aed1c7b7d697a83a5c934eecd5d2d33ae7e",
+    "base_sha": "760335d3d2c0edf2b8c6fd56ea794df8f94a5bcb",
+    "merged": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "blocking_reason": "independent_approval_required"
+  },
+  "waiver_used": false,
+  "self_approval_used": false,
+  "recorded_at_utc": "2026-07-15T20:19:29Z"
+}

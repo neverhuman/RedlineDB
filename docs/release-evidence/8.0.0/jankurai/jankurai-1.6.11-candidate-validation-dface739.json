@@ -1,0 +1,82 @@
+{
+  "schema": "jankurai.candidate-validation/v1",
+  "release_authoritative": false,
+  "typed_reason": "awaiting_protected_pr_exact_head_check_independent_review_merge_and_immutable_tag",
+  "repository": "jeryu/jankurai",
+  "source_remote": "http://127.0.0.1:8787/git/jeryu/jankurai.git",
+  "branch": "codex/release-1.6.11-governed-20260715",
+  "candidate_commit": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+  "candidate_tree": "34a8a1fb59bc4ebfadf12c45d95f169d06acc781",
+  "reviewed_schema_parent": "cea83b0cbe204be276a2f0299cd760f6812ea2b0",
+  "protected_main_parent": "760335d3d2c0edf2b8c6fd56ea794df8f94a5bcb",
+  "requested_tag": "v1.6.11-deadlang-precision",
+  "version_output": "jankurai 1.6.11",
+  "root_version": "1.6.11",
+  "cargo_package_version": "1.6.11",
+  "rust_toolchain": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "cargo_toolchain": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "target_triple": "x86_64-unknown-linux-gnu",
+  "source_archive_sha256": "2fbca5d04083e3c8d32f383d5b6b4520b8911690b26968c6fbcb210e1202b938",
+  "cargo_lock_sha256": "b9acb981c326226a687d0b6703e4f7ee303148e9e1a6dda1aa03d77988820f6a",
+  "workspace_validation_binary_sha256": "02e195bfdef45c94de2dd45c59d9e91469354a25f034812cdcd1d4f8287db738",
+  "expected_installer_binary_sha256": "f125a237dd68c542fa9320837ecdbcbfd609adaa61422bcb4c6e8c701c5cddfb",
+  "environment": {
+    "cargo_net_offline": true,
+    "git_global_config_disabled": true,
+    "git_system_config_disabled": true,
+    "git_terminal_prompt": false,
+    "update_check": false,
+    "tracked_worktree_clean_at_start": true,
+    "tracked_worktree_clean_at_finish": true
+  },
+  "checks": {
+    "format": "success",
+    "locked_workspace_check_all_targets_features": "success",
+    "clippy_warnings_denied": "success",
+    "workspace_tests": "success",
+    "ux_build": "success",
+    "playwright_tests": "20_passed",
+    "compatibility": "success",
+    "conformance": "success",
+    "generated_zones": "success",
+    "source_coverage": "80.44113944886617_percent_lines",
+    "changed_code_mutation": "18_total_14_caught_4_unviable_0_missed_0_timeout",
+    "semantic_coverage": "pass_hard_0_soft_0",
+    "strict_offline_security": "success_5_commands_0_failed",
+    "release_identity": "success",
+    "relocation_after_source_removal": "success",
+    "two_build_reproducibility": "success"
+  },
+  "audit": {
+    "score": 96,
+    "raw_score": 96,
+    "hard_findings": 0,
+    "caps": 0,
+    "policy_fingerprint": "sha256:14e94b410bbb9c8d5303629002601ebd7abfcf714504cec00f729bae60c3d55b",
+    "input_fingerprint": "sha256:47d088b1cb70ec899499a4da087798728bdafc318f21e1bdeafffd6a6e9b9d3c",
+    "report_fingerprint": "sha256:affdbbff302a766802e3546d58fa24e88029008a968f29cf5a08d5cea6939ad9"
+  },
+  "artifact_sha256": {
+    "repo_score": "d8f154787d09d5561e2e08d144d69d1e80da6e85cbf24b977cbb30026a5f9fc2",
+    "security_evidence": "b9789e6c2ed9fa0cf287ab16781d9ef734e3ab9fb2b92fa8c675f221f0a6af6a",
+    "semantic_coverage": "62b7c8a0fdf44d6d235d1adb1ed48fadf1d271fffd83482f5f9921f31b07481d",
+    "mutation_outcomes": "5d7a9882f4cf0914f08786d4c28bb6be4254f5006e91ef1cb498996585714e71",
+    "lcov": "9ba9d865945f6a3af1cedaf6eccc8c6cf1f8af648ee3a3dcd2a85366d9eb79f5",
+    "conformance_results": "a6bac7719876fa57f0c5ef028250554326deae7273e965cb2abd48c88c0f6f45"
+  },
+  "supersedes_candidates": [
+    {
+      "commit": "52676aed1c7b7d697a83a5c934eecd5d2d33ae7e",
+      "reason": "workspace_path_independence_was_not_yet_complete"
+    },
+    {
+      "commit": "646c6ceeb0e4a110644d79961a1ff8687af32aaf",
+      "reason": "intermediate_relocation_successor_replaced_by_fixture_semantics_fix"
+    }
+  ],
+  "attempt_id": "codex-jankurai-dface739-pr-ci-20260715",
+  "started_at": "2026-07-15T19:06:16Z",
+  "finished_at": "2026-07-15T21:11:20Z",
+  "operator": "codex:/root",
+  "conclusion": "success"
+}

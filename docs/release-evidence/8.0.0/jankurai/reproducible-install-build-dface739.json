@@ -1,0 +1,59 @@
+{
+  "schema": "jankurai.reproducible-install-build/v1",
+  "release_authoritative": false,
+  "typed_reason": "candidate_build_proof_awaiting_exact_head_ci_independent_review_merge_and_tag",
+  "repository": "jeryu/jankurai",
+  "candidate_commit": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+  "candidate_tree": "34a8a1fb59bc4ebfadf12c45d95f169d06acc781",
+  "source_archive_sha256": "2fbca5d04083e3c8d32f383d5b6b4520b8911690b26968c6fbcb210e1202b938",
+  "cargo_lock_sha256": "b9acb981c326226a687d0b6703e4f7ee303148e9e1a6dda1aa03d77988820f6a",
+  "version_output": "jankurai 1.6.11",
+  "rust_toolchain": "rustc 1.95.0 (59807616e 2026-04-14)",
+  "cargo_toolchain": "cargo 1.95.0 (f2d3ce0bd 2026-03-21)",
+  "target_triple": "x86_64-unknown-linux-gnu",
+  "build_mode": {
+    "command": "cargo +1.95.0 install --locked --offline --path <source>/crates/jankurai --root <out>",
+    "cargo_net_offline": true,
+    "dedicated_scratch_cargo_home": true,
+    "global_git_config_disabled": true,
+    "system_git_config_disabled": true,
+    "git_terminal_prompt": false,
+    "update_check": false,
+    "rustflags": [
+      "--remap-path-prefix=<scratch>/source=/jankurai-build/source",
+      "--remap-path-prefix=<scratch>/cargo=/jankurai-build/cargo",
+      "--remap-path-prefix=<scratch>/target=/jankurai-build/target"
+    ]
+  },
+  "builds": [
+    {
+      "physical_root": "/tmp/jankurai-repro-a.9aBhVN",
+      "binary_sha256": "f125a237dd68c542fa9320837ecdbcbfd609adaa61422bcb4c6e8c701c5cddfb",
+      "version_output": "jankurai 1.6.11",
+      "physical_path_leak": false,
+      "conclusion": "success"
+    },
+    {
+      "physical_root": "/tmp/jankurai-repro-b.ZRwP7h",
+      "binary_sha256": "f125a237dd68c542fa9320837ecdbcbfd609adaa61422bcb4c6e8c701c5cddfb",
+      "version_output": "jankurai 1.6.11",
+      "physical_path_leak": false,
+      "conclusion": "success"
+    }
+  ],
+  "byte_comparison": "identical",
+  "expected_installer_binary_sha256": "f125a237dd68c542fa9320837ecdbcbfd609adaa61422bcb4c6e8c701c5cddfb",
+  "workspace_validation_binary": {
+    "build_command": "cargo build -p jankurai --release --locked",
+    "sha256": "02e195bfdef45c94de2dd45c59d9e91469354a25f034812cdcd1d4f8287db738",
+    "classification": "separate_cargo_build_mode_not_the_governed_installer_artifact"
+  },
+  "supersedes_candidates": [
+    "52676aed1c7b7d697a83a5c934eecd5d2d33ae7e",
+    "646c6ceeb0e4a110644d79961a1ff8687af32aaf"
+  ],
+  "started_at": "2026-07-15T21:11:44Z",
+  "finished_at": "2026-07-15T21:15:19Z",
+  "operator": "codex:/root",
+  "conclusion": "success"
+}

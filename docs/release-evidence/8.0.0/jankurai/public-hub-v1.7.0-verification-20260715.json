@@ -1,0 +1,36 @@
+{
+  "schema": "jankurai.public-hub-verification/v1",
+  "release_authoritative_for_internal_1_6_11": false,
+  "repository": "root/jankurai",
+  "path": "/home/ubuntu/jankurai-split/jankurai",
+  "commit": "6bde810949fe4a92c522f3fb8f5d241af9090b43",
+  "tree": "e9e93ede48e0cfe7a20ca31f48cffc8e84207bd3",
+  "immutable_tag": "jankurai-v1.7.0-split.0",
+  "worktree_clean_before": true,
+  "worktree_clean_after": true,
+  "family_lock_sha256": "c574522dc6b8437dd6001b7ab3fbfc44c6238cdc578785be56291b400cc5a195",
+  "manifest_sha256": "321507238920445db3924ce92a82224842fc211d226070145fa8aef63e8e9767",
+  "ci_entrypoint_sha256": "9728e0f1d768087a14cbd88e0ad861d020f34fb9291cd1d657ad130e120bc51b",
+  "family_validator_sha256": "04e7726897a83bc27762857cb01a3a04092e83a015cbc9c68ec1a750aeeb3271",
+  "canonical_checkout_diagnostic": {
+    "conclusion": "not_authoritative",
+    "typed_reason": "sibling_checkout_is_on_later_clean_main_than_immutable_family_lock",
+    "locked_kernel_commit": "35e63f98928bc0f036ffda1d9bbdfa8e88eafbc6",
+    "ambient_kernel_commit": "91efdfe44fc6ff5c4ff6dca75796a8341f688af9",
+    "validator_message": "family.lock SHA mismatch for jankurai-tools-kernel"
+  },
+  "immutable_family_validation": {
+    "workspace": "disposable_detached_worktrees",
+    "members": 15,
+    "hub_commit": "6bde810949fe4a92c522f3fb8f5d241af9090b43",
+    "member_commits": "exactly_from_family_lock",
+    "command": "bash scripts/ci-local.sh required",
+    "output": "validate-family: ok",
+    "conclusion": "success",
+    "update_check_disabled": true,
+    "terminal_prompt_disabled": true
+  },
+  "public_release_changed": false,
+  "internal_auditor_scope_reused": false,
+  "recorded_at_utc": "2026-07-15T20:19:29Z"
+}

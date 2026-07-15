@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Promotes the internal Jain/Jeryu CI auditor only. Exact head dface7397fe24d46b0b1885ddd5782c34edbff49 (tree 34a8a1fb59bc4ebfadf12c45d95f169d06acc781) preserves reviewed schema parent cea83b0c and protected main parent 760335d3. Fresh detached exact-head host CI passed: jankurai 1.6.11, score 96/hard 0/caps 0, strict offline security green, LLVM line coverage 80.03%, 18 mutants (15 caught, 3 unviable, 0 missed), and relocation after source removal. Two independent offline cargo-install builds are byte-identical at f125a237dd68c542fa9320837ecdbcbfd609adaa61422bcb4c6e8c701c5cddfb. Earlier heads 52676aed and 646c6cee are historical only. Public jankurai-split 1.7.0 is unchanged. Exact-head jankurai/proof and jankurai/required are green. Requires independent review; no self-approval.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-15T21:54:52.648206035+00:00",
+      "head_sha": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:dface7397fe24d46b0b1885ddd5782c34edbff49:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "760335d3d2c0edf2b8c6fd56ea794df8f94a5bcb",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "b62ad8fa-81df-4704-a27b-e4a6e58d3ccb#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/release-1.6.11-governed-20260715",
+      "head_sha": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:dface7397fe24d46b0b1885ddd5782c34edbff49:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "b62ad8fa-81df-4704-a27b-e4a6e58d3ccb",
+        "name": "jankurai",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: governed internal Jankurai 1.6.11",
+      "updated_at": "2026-07-15T21:36:03.146518877+00:00"
+    }
+  },
+  "repository": "jeryu/jankurai",
+  "request": {
+    "body": {
+      "body_markdown": "Independent Claude review APPROVE per UPGRADE_CHAT 2026-07-15 22:07 UTC; receipt scratchpad/jankurai-review-dface739.json sha256 383bcea5...; exact head dface7397fe24d46b0b1885ddd5782c34edbff49.",
+      "evidence": null,
+      "expected_head_sha": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjankurai/pulls/1/reviews"
+  },
+  "response": {
+    "description": "Promotes the internal Jain/Jeryu CI auditor only. Exact head dface7397fe24d46b0b1885ddd5782c34edbff49 (tree 34a8a1fb59bc4ebfadf12c45d95f169d06acc781) preserves reviewed schema parent cea83b0c and protected main parent 760335d3. Fresh detached exact-head host CI passed: jankurai 1.6.11, score 96/hard 0/caps 0, strict offline security green, LLVM line coverage 80.03%, 18 mutants (15 caught, 3 unviable, 0 missed), and relocation after source removal. Two independent offline cargo-install builds are byte-identical at f125a237dd68c542fa9320837ecdbcbfd609adaa61422bcb4c6e8c701c5cddfb. Earlier heads 52676aed and 646c6cee are historical only. Public jankurai-split 1.7.0 is unchanged. Exact-head jankurai/proof and jankurai/required are green. Requires independent review; no self-approval.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-15T21:54:52.629167489+00:00",
+      "head_sha": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:dface7397fe24d46b0b1885ddd5782c34edbff49:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "760335d3d2c0edf2b8c6fd56ea794df8f94a5bcb",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "b62ad8fa-81df-4704-a27b-e4a6e58d3ccb#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/release-1.6.11-governed-20260715",
+      "head_sha": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:dface7397fe24d46b0b1885ddd5782c34edbff49:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "b62ad8fa-81df-4704-a27b-e4a6e58d3ccb",
+        "name": "jankurai",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: governed internal Jankurai 1.6.11",
+      "updated_at": "2026-07-15T21:36:03.146518877+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784152490
+}

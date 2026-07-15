@@ -1,0 +1,50 @@
+{
+  "schema": "jankurai.tag-immutability-incident/v1",
+  "release_authoritative": false,
+  "repository": "jeryu/jankurai",
+  "remote": "http://127.0.0.1:8787/git/jeryu/jankurai.git",
+  "commit": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+  "tree": "34a8a1fb59bc4ebfadf12c45d95f169d06acc781",
+  "burned_tag": "v1.6.11-deadlang-precision",
+  "typed_reason": "direct_git_http_receive_path_accepted_forced_tag_update_when_jeryu_gitd_was_absent_from_server_path",
+  "timeline": [
+    {
+      "action": "created_tag",
+      "from": null,
+      "to": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+      "conclusion": "success"
+    },
+    {
+      "action": "immutability_probe",
+      "from": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+      "to": "760335d3d2c0edf2b8c6fd56ea794df8f94a5bcb",
+      "conclusion": "unexpectedly_accepted"
+    },
+    {
+      "action": "immediate_recovery",
+      "from": "760335d3d2c0edf2b8c6fd56ea794df8f94a5bcb",
+      "to": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+      "conclusion": "restored_but_tag_is_not_eligible_as_immutable_authority"
+    }
+  ],
+  "root_cause": {
+    "hook": "/home/ubuntu/.local/share/jeryu/git/jeryu/jankurai.git/hooks/pre-receive",
+    "server_path_contains_jeryu_gitd": false,
+    "previous_behavior": "optional_jeryu_gitd_check_failed_open_for_non_main_refs"
+  },
+  "containment": {
+    "behavior": "pre_receive_rejects_every_update_or_delete_of_refs_tags_even_without_jeryu_gitd",
+    "hook_sha256": "70d34137bdb94d8e245111d8db93564a881ce7aaa0144fd4d622a1648592766d",
+    "burned_tag_move_after_hardening": "rejected",
+    "burned_tag_current_commit": "dface7397fe24d46b0b1885ddd5782c34edbff49"
+  },
+  "evidence_sha256": {
+    "accepted_move_log": "5365888014a09b7b97ba9f36aa29fc44f5b2f34fb7a99148ad47e4abfe6db7d2",
+    "rejected_move_log": "8a69bd2890aae1a954fb7587fa88bb4d6497631f72e9cda1dcf32669f9ac0e96"
+  },
+  "correction_tag": "v1.6.11-deadlang-precision-split.1",
+  "disposition": "burned_tag_retained_as_historical_non_authoritative_ref; correction_tag_is_release_authority",
+  "operator": "codex:/root",
+  "recorded_at": "2026-07-15T21:57:22Z",
+  "conclusion": "contained_with_correction_tag"
+}
