@@ -4,12 +4,32 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=ops/ci/native-runtime.sh
 source "$repo_root/ops/ci/native-runtime.sh"
+# shellcheck source=ops/ci/host-ci-evidence.sh
+source "$repo_root/ops/ci/host-ci-evidence.sh"
 
 tmp="$(mktemp -d /tmp/jain-native-materializer-test.XXXXXX)"
 durable_root="${JAIN_TEST_DURABLE_ROOT:-$HOME/.cache/jain-native-materializer-test.$$}"
+promotion_staging=""
+promotion_small_store=""
+promotion_staging_mounted=0
+promotion_small_store_mounted=0
 rm -rf -- "$durable_root"
 mkdir -p "$durable_root"
-trap 'chmod -R u+w "$source_root" 2>/dev/null || true; rm -rf "$tmp" "$durable_root"' EXIT
+cleanup() {
+  local cleanup_rc=$?
+  if [[ "$promotion_staging_mounted" == 1 ]]; then
+    sudo -n /usr/bin/umount -- "$promotion_staging" >/dev/null 2>&1 || true
+  fi
+  if [[ "$promotion_small_store_mounted" == 1 ]]; then
+    sudo -n /usr/bin/umount -- "$promotion_small_store" >/dev/null 2>&1 || true
+  fi
+  sudo -n rm -rf -- "$durable_root" >/dev/null 2>&1 || true
+  [[ -z "${source_root:-}" ]] \
+    || chmod -R u+w "$source_root" 2>/dev/null || true
+  rm -rf -- "$tmp" "$durable_root"
+  return "$cleanup_rc"
+}
+trap cleanup EXIT
 source_root="$tmp/source"
 run_root="$tmp/run"
 vendor_root="$run_root/vendor"
@@ -291,6 +311,149 @@ jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required \
   "$control" "$control_commit"
 jain_verify_native_check_evidence success 1 "$evidence_dir" "$receipt_sha" \
   "$head_sha" jain-core/required "$control" "$control_commit"
+
+# Exercise the root-only post-cgroup promotion boundary with a real, valid
+# evidence ledger. The worker can write only to a small per-request tmpfs; the
+# root broker copies verified bytes into a non-worker-writable durable store.
+promotion_staging="$tmp/native-evidence-staging"
+promotion_store="$durable_root/root-evidence-store"
+promotion_small_store="$durable_root/root-evidence-small-store"
+promotion_symlink_store="$durable_root/root-evidence-symlink-store"
+worker_uid="$(id -u)"
+worker_gid="$(id -g)"
+mkdir -p "$promotion_staging"
+sudo -n /usr/bin/mount -t tmpfs \
+  -o "nodev,nosuid,noexec,size=33554432,nr_inodes=64,mode=0700,uid=$worker_uid,gid=$worker_gid" \
+  jain-native-evidence-test "$promotion_staging"
+promotion_staging_mounted=1
+[[ "$(stat -f -c '%T' -- "$promotion_staging")" == tmpfs \
+  && "$(stat -c '%u:%g:%a' -- "$promotion_staging")" \
+    == "$worker_uid:$worker_gid:700" ]] || {
+  printf 'native evidence staging test did not establish its hard quota\n' >&2
+  exit 1
+}
+sudo -n install -d -o root -g root -m 0700 \
+  "$promotion_store" "$promotion_symlink_store"
+
+reset_promotion_staging() {
+  find "$promotion_staging" -xdev -mindepth 1 -delete
+  promotion_evidence="$promotion_staging/veox/jain-core/$head_sha/jain-core_required/fixture"
+  mkdir -p "$promotion_evidence"
+  cp -a -- "$evidence_dir/." "$promotion_evidence/"
+}
+
+root_promote() {
+  local store="${1:?store is required}" request_id="${2:?request ID is required}"
+  sudo -n /bin/bash -ceu '
+    source "$1/ops/ci/native-runtime.sh"
+    source "$1/ops/ci/host-ci-evidence.sh"
+    jain_host_ci_promote_native_evidence \
+      "$2" "$3" "$4" "$5" veox jain-core "$6" \
+      jain-core/required "$7" "$8" "$9" "${10}" "${11}"
+  ' -- "$repo_root" "$promotion_staging" "$promotion_evidence" \
+    "$receipt_sha" "$store" "$head_sha" "$request_id" \
+    "$worker_uid" "$worker_gid" "$control" "$control_commit"
+}
+
+reset_promotion_staging
+first_request_id="$(printf 'f%.0s' {1..64})"
+promoted_evidence="$(root_promote "$promotion_store" "$first_request_id")"
+sudo -n /bin/bash -ceu '
+  source "$1/ops/ci/native-runtime.sh"
+  source "$1/ops/ci/host-ci-evidence.sh"
+  jain_host_ci_verify_promoted_evidence "$2"
+' -- "$repo_root" "$promoted_evidence"
+if { printf 'worker tamper\n' >>"$promoted_evidence/materialization.log"; } \
+    2>/dev/null; then
+  printf 'worker could mutate root-promoted native evidence\n' >&2
+  exit 1
+fi
+
+# A symlink anywhere in the worker staging tree is rejected before copying.
+reset_promotion_staging
+rm -- "$promotion_evidence/materialization.log"
+ln -s /etc/passwd "$promotion_evidence/materialization.log"
+if root_promote "$promotion_store" "$(printf 'e%.0s' {1..64})" \
+    >"$tmp/promotion-symlink.log" 2>&1; then
+  printf 'native evidence promotion accepted a staging symlink\n' >&2
+  exit 1
+fi
+
+# Per-file and total limits are checked independently of receipt checksums.
+reset_promotion_staging
+truncate -s "$((JAIN_NATIVE_EVIDENCE_MAX_FILE_BYTES + 1))" \
+  "$promotion_evidence/materialization.log"
+if root_promote "$promotion_store" "$(printf 'd%.0s' {1..64})" \
+    >"$tmp/promotion-oversize.log" 2>&1; then
+  printf 'native evidence promotion accepted an oversized artifact\n' >&2
+  exit 1
+fi
+
+# The tmpfs quota is a kernel-enforced ceiling, not only a post-write check.
+reset_promotion_staging
+if dd if=/dev/zero of="$promotion_staging/quota-fill" bs=1048576 count=40 \
+    status=none 2>"$tmp/promotion-quota-fill.log"; then
+  printf 'native evidence staging exceeded its 32 MiB hard quota\n' >&2
+  exit 1
+fi
+quota_fill_size="$(stat -c '%s' -- "$promotion_staging/quota-fill")"
+(( quota_fill_size > 0 && quota_fill_size < 40 * 1048576 )) || {
+  printf 'native evidence staging quota did not fail closed\n' >&2
+  exit 1
+}
+rm -- "$promotion_staging/quota-fill"
+
+# A symlinked durable hierarchy component cannot redirect root promotion.
+reset_promotion_staging
+sudo -n ln -s "$tmp" "$promotion_symlink_store/veox"
+if root_promote "$promotion_symlink_store" "$(printf 'c%.0s' {1..64})" \
+    >"$tmp/promotion-store-symlink.log" 2>&1; then
+  printf 'native evidence promotion accepted a durable-store symlink\n' >&2
+  exit 1
+fi
+
+# Preserve at least 1 GiB after promotion. A deliberately small durable
+# filesystem deterministically exercises the low-space/fill rejection.
+sudo -n install -d -o root -g root -m 0700 "$promotion_small_store"
+sudo -n /usr/bin/mount -t tmpfs \
+  -o 'nodev,nosuid,noexec,size=67108864,nr_inodes=128,mode=0700,uid=0,gid=0' \
+  jain-native-evidence-small-store "$promotion_small_store"
+promotion_small_store_mounted=1
+if root_promote "$promotion_small_store" "$(printf 'b%.0s' {1..64})" \
+    >"$tmp/promotion-free-space.log" 2>&1; then
+  printf 'native evidence promotion ignored its free-space reserve\n' >&2
+  exit 1
+fi
+grep -Fq 'native evidence store free-space guard failed' \
+  "$tmp/promotion-free-space.log" || {
+  printf 'native evidence low-space rejection was not explicit\n' >&2
+  exit 1
+}
+
+# Keep only the newest eight immutable attempts for a check.
+for attempt in $(seq 1 10); do
+  request_id="$(printf '%064x' "$attempt")"
+  root_promote "$promotion_store" "$request_id" >/dev/null
+done
+retention_parent="$promotion_store/veox/jain-core/jain-core_required"
+retained_count="$(sudo -n find "$retention_parent" -mindepth 1 -maxdepth 1 \
+  -type d -regextype posix-extended -regex '.*/[0-9a-f]{64}' | wc -l)"
+[[ "$retained_count" == 8 ]] || {
+  printf 'native evidence retention did not preserve exactly the newest eight attempts\n' >&2
+  exit 1
+}
+if sudo -n test -e "$retention_parent/$(printf '%064x' 1)" \
+  || sudo -n test -e "$retention_parent/$(printf '%064x' 2)"; then
+  printf 'native evidence retention preserved an expired attempt\n' >&2
+  exit 1
+fi
+latest_evidence="$retention_parent/$(printf '%064x' 10)"
+[[ "$(sudo -n stat -c '%u:%g:%a' -- "$latest_evidence")" == '0:0:500' ]]
+
+sudo -n /usr/bin/umount -- "$promotion_small_store"
+promotion_small_store_mounted=0
+sudo -n /usr/bin/umount -- "$promotion_staging"
+promotion_staging_mounted=0
 rm -rf -- "$run_root"
 jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required \
   "$control" "$control_commit" || {

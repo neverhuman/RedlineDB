@@ -446,13 +446,54 @@ jain_verify_evidence_control_plane_files() {
   done
 }
 
+JAIN_NATIVE_EVIDENCE_MAX_FILES=16
+JAIN_NATIVE_EVIDENCE_MAX_BYTES=16777216
+JAIN_NATIVE_EVIDENCE_MAX_FILE_BYTES=8388608
+JAIN_NATIVE_EVIDENCE_MIN_FREE_BYTES=1073741824
+JAIN_NATIVE_EVIDENCE_RETAIN_PER_CHECK=8
+readonly JAIN_NATIVE_EVIDENCE_MAX_FILES JAIN_NATIVE_EVIDENCE_MAX_BYTES
+readonly JAIN_NATIVE_EVIDENCE_MAX_FILE_BYTES JAIN_NATIVE_EVIDENCE_MIN_FREE_BYTES
+readonly JAIN_NATIVE_EVIDENCE_RETAIN_PER_CHECK
+
+jain_native_evidence_files() {
+  local file
+  for file in materialization.log native-vendor-manifest.json \
+    native-sources.lock.json native-materializer.sh native-runtime.sh \
+    split-host-ci.sh host-ci-integrity.sh receipt.json; do
+    printf '%s\n%s.sha256\n' "$file" "$file"
+  done
+}
+
+jain_verify_native_evidence_layout() {
+  local evidence_dir="${1:?native evidence directory is required}"
+  local file size total=0
+  local -a expected=() actual=()
+  [[ -d "$evidence_dir" && ! -L "$evidence_dir" ]] || return 1
+  mapfile -t expected < <(jain_native_evidence_files | LC_ALL=C sort)
+  mapfile -t actual < <(
+    find "$evidence_dir" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort
+  )
+  [[ "${#expected[@]}" == "$JAIN_NATIVE_EVIDENCE_MAX_FILES" \
+    && "${actual[*]}" == "${expected[*]}" ]] || return 1
+  for file in "${expected[@]}"; do
+    [[ -f "$evidence_dir/$file" && ! -L "$evidence_dir/$file" \
+      && "$(stat -c '%h' -- "$evidence_dir/$file" 2>/dev/null)" == 1 ]] \
+      || return 1
+    size="$(stat -c '%s' -- "$evidence_dir/$file")" || return 1
+    (( size <= JAIN_NATIVE_EVIDENCE_MAX_FILE_BYTES )) || return 1
+    total=$((total + size))
+    (( total <= JAIN_NATIVE_EVIDENCE_MAX_BYTES )) || return 1
+  done
+  printf '%s\n' "$total"
+}
+
 jain_verify_native_evidence() {
   local evidence_dir="${1:?native evidence directory is required}"
   local expected_sha="${2:-}" expected_check="${3:-}"
   local control_root="${4:?control-plane root is required}"
   local expected_control_commit="${5:?control-plane commit is required}"
   local file
-  [[ -d "$evidence_dir" && ! -L "$evidence_dir" ]] || return 1
+  jain_verify_native_evidence_layout "$evidence_dir" >/dev/null || return 1
   for file in materialization.log native-vendor-manifest.json \
     native-sources.lock.json native-materializer.sh native-runtime.sh \
     split-host-ci.sh host-ci-integrity.sh receipt.json; do
@@ -557,6 +598,25 @@ jain_resolve_durable_evidence_root() {
   printf '%s\n' "$evidence_resolved"
 }
 
+jain_resolve_worker_evidence_staging_root() {
+  local evidence_root="${1:?native evidence staging root is required}"
+  local configured="${JAIN_NATIVE_EVIDENCE_STAGING_ROOT:-}"
+  local writable="${JAIN_HOST_CI_WRITABLE_ROOT:-}"
+  local expected resolved
+  [[ -n "$configured" && -n "$writable" \
+    && "$evidence_root" == "$configured" ]] || return 1
+  expected="$(realpath -e -- "$writable")/native-evidence-staging" || return 1
+  resolved="$(realpath -e -- "$evidence_root")" || return 1
+  [[ "$resolved" == "$expected" && ! -L "$resolved" \
+    && "$(stat -c '%u:%a' -- "$resolved")" == "$(id -u):700" \
+    && "$(stat -f -c '%T' -- "$resolved")" == tmpfs ]] || {
+    printf 'native evidence staging is outside the root quota boundary: %s\n' \
+      "$evidence_root" >&2
+    return 1
+  }
+  printf '%s\n' "$resolved"
+}
+
 # Persist all native inputs, output manifest, and log outside the disposable
 # host-CI tree. The receipt digest is later included in the exact-SHA status.
 jain_persist_native_evidence() {
@@ -572,8 +632,13 @@ jain_persist_native_evidence() {
 
   [[ "$head_sha" =~ ^[0-9a-f]{40}$ && "$control_commit" =~ ^[0-9a-f]{40}$ ]] || return 1
   [[ "$owner" =~ ^[A-Za-z0-9_.-]+$ && "$repo" =~ ^[A-Za-z0-9_.-]+$ ]] || return 1
-  evidence_root="$(jain_resolve_durable_evidence_root \
-    "$evidence_root" "$ephemeral_root")" || return 1
+  if [[ -n "${JAIN_NATIVE_EVIDENCE_STAGING_ROOT:-}" ]]; then
+    evidence_root="$(jain_resolve_worker_evidence_staging_root \
+      "$evidence_root")" || return 1
+  else
+    evidence_root="$(jain_resolve_durable_evidence_root \
+      "$evidence_root" "$ephemeral_root")" || return 1
+  fi
   [[ -s "$log" && -s "$vendor_root/receipts/manifest.json" ]] || return 1
   check_slug="${check//[^A-Za-z0-9_.-]/_}"
   attempt="${JAIN_CI_ATTEMPT_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
@@ -629,6 +694,12 @@ jain_persist_native_evidence() {
       return 1
     }
   done
+  while IFS= read -r file; do
+    chmod 0600 -- "$staging/$file" || {
+      rm -rf -- "$staging"
+      return 1
+    }
+  done < <(jain_native_evidence_files)
   jain_verify_native_evidence "$staging" "$head_sha" "$check" \
     "$control_root" "$control_commit" || {
     rm -rf -- "$staging"

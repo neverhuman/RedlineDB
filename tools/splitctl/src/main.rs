@@ -2,7 +2,9 @@
 use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
-    env, fs, io,
+    env, fs,
+    io::{self, Read, Write},
+    os::unix::fs::{MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
@@ -77,6 +79,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             println!("Rust split materialization contract refreshed");
         }
         Some("refresh-bare-mirrors") => refresh_bare_mirrors(args.collect())?,
+        Some("host-ci-snapshot-request") => host_ci_snapshot_request_command(args.collect())?,
         Some("validate-local-jeryu") => {
             let mut manifest = None;
             let mut skip_remotes = false;
@@ -154,7 +157,112 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+    }
+    Ok(())
+}
+
+fn host_ci_snapshot_request_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut source = None;
+    let mut destination = None;
+    let mut expected_uid = None;
+    let mut expected_gid = None;
+    let mut max_bytes = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--source" => source = Some(PathBuf::from(iter.next().ok_or("--source needs a path")?)),
+            "--destination" => {
+                destination = Some(PathBuf::from(
+                    iter.next().ok_or("--destination needs a path")?,
+                ))
+            }
+            "--expected-uid" => {
+                expected_uid = Some(
+                    iter.next()
+                        .ok_or("--expected-uid needs a value")?
+                        .parse::<u32>()?,
+                )
+            }
+            "--expected-gid" => {
+                expected_gid = Some(
+                    iter.next()
+                        .ok_or("--expected-gid needs a value")?
+                        .parse::<u32>()?,
+                )
+            }
+            "--max-bytes" => {
+                max_bytes = Some(
+                    iter.next()
+                        .ok_or("--max-bytes needs a value")?
+                        .parse::<u64>()?,
+                )
+            }
+            value => {
+                return Err(format!("unknown host-ci-snapshot-request argument: {value}").into())
+            }
+        }
+    }
+    let source = source.ok_or("--source is required")?;
+    let destination = destination.ok_or("--destination is required")?;
+    let max_bytes = max_bytes.ok_or("--max-bytes is required")?;
+    if max_bytes == 0 || max_bytes > 1_048_576 {
+        return Err("--max-bytes must be between 1 and 1048576".into());
+    }
+    snapshot_host_ci_request(
+        &source,
+        &destination,
+        expected_uid.ok_or("--expected-uid is required")?,
+        expected_gid.ok_or("--expected-gid is required")?,
+        max_bytes,
+    )
+}
+
+fn snapshot_host_ci_request(
+    source: &Path,
+    destination: &Path,
+    expected_uid: u32,
+    expected_gid: u32,
+    max_bytes: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Linux O_NONBLOCK prevents a path-swap to a FIFO from hanging the root
+    // broker; O_NOFOLLOW binds the read to a non-symlink inode.
+    const O_NONBLOCK: i32 = 0o4000;
+    const O_NOFOLLOW: i32 = 0o400000;
+    let input = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(O_NONBLOCK | O_NOFOLLOW)
+        .open(source)?;
+    let metadata = input.metadata()?;
+    if !metadata.file_type().is_file()
+        || metadata.nlink() != 1
+        || metadata.uid() != expected_uid
+        || metadata.gid() != expected_gid
+        || metadata.mode() & 0o7777 != 0o600
+        || metadata.len() > max_bytes
+    {
+        return Err("unsafe host-CI request inode".into());
+    }
+    let mut bytes = Vec::with_capacity((max_bytes + 1) as usize);
+    input.take(max_bytes + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err("host-CI request exceeds byte limit".into());
+    }
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(destination)?;
+    output.write_all(&bytes)?;
+    output.sync_all()?;
+    let output_metadata = output.metadata()?;
+    if !output_metadata.file_type().is_file()
+        || output_metadata.nlink() != 1
+        || output_metadata.mode() & 0o7777 != 0o600
+    {
+        drop(output);
+        let _ = fs::remove_file(destination);
+        return Err("unsafe host-CI request snapshot".into());
     }
     Ok(())
 }
@@ -209,7 +317,7 @@ fn manifest_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
         if repo.get("has_jeryu_std").and_then(toml::Value::as_bool) != Some(true) {
             return Err(format!("{name} must set has_jeryu_std=true").into());
         }
-        if check_paths {
+        if check_paths && repo_is_onboarded(repo) {
             for required in ["AGENTS.md", "agent/owner-map.json", "agent/test-map.json"] {
                 if !repo_path.join(required).exists() {
                     return Err(format!("{name} missing {required}").into());
@@ -921,7 +1029,7 @@ fn validate_manifest_data(
         if declared_remote(raw).as_deref() != Some(expected_remote.as_str()) {
             errors.push(format!("{name}: remote must be {expected_remote}"));
         }
-        if check_paths {
+        if check_paths && repo_is_onboarded(raw) {
             for required in ["AGENTS.md", "agent/owner-map.json", "agent/test-map.json"] {
                 if !path.join(required).is_file() {
                     errors.push(format!("{name}: missing {required}"));
@@ -3409,6 +3517,9 @@ fn validate_local_jeryu(
     }
     let mut errors = Vec::new();
     for raw in &repos {
+        if !repo_is_onboarded(raw) {
+            continue;
+        }
         let repo = repo_from(raw)?;
         if !repo.path.join(".git").exists() && !skip_remotes {
             errors.push(format!(
@@ -3863,6 +3974,13 @@ fn string(value: &toml::Value, key: &str) -> Option<String> {
         .get(key)
         .and_then(toml::Value::as_str)
         .map(ToOwned::to_owned)
+}
+
+fn repo_is_onboarded(value: &toml::Value) -> bool {
+    value
+        .get("onboarded")
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(true)
 }
 
 fn strings(value: &toml::Value, key: &str) -> Vec<String> {
@@ -4333,6 +4451,7 @@ fn render_ci_local() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::PermissionsExt;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
@@ -5010,5 +5129,83 @@ name = "two"
             string(&portal_data, "canonical_manifest_sha256"),
             Some(manifest_sha256(&manifest).unwrap())
         );
+    }
+
+    #[test]
+    fn path_checks_only_require_onboarded_repository_checkouts() {
+        let default_repo: toml::Value = "name = \"core\"".parse().unwrap();
+        let excluded_repo: toml::Value = "name = \"python\"\nonboarded = false".parse().unwrap();
+        assert!(repo_is_onboarded(&default_repo));
+        assert!(!repo_is_onboarded(&excluded_repo));
+    }
+
+    #[test]
+    fn host_ci_request_snapshot_is_bounded_and_rejects_special_inodes() {
+        let root = TestDir::new("host-ci-snapshot");
+        let source = root.path().join("request.json");
+        fs::write(&source, b"{\"request\":true}\n").unwrap();
+        fs::set_permissions(&source, fs::Permissions::from_mode(0o600)).unwrap();
+        let metadata = fs::metadata(&source).unwrap();
+        let destination = root.path().join("snapshot.json");
+        snapshot_host_ci_request(
+            &source,
+            &destination,
+            metadata.uid(),
+            metadata.gid(),
+            65_536,
+        )
+        .unwrap();
+        assert_eq!(fs::read(&destination).unwrap(), fs::read(&source).unwrap());
+
+        let oversized = root.path().join("oversized.json");
+        fs::write(&oversized, vec![b'x'; 65_537]).unwrap();
+        fs::set_permissions(&oversized, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(snapshot_host_ci_request(
+            &oversized,
+            &root.path().join("oversized-copy"),
+            metadata.uid(),
+            metadata.gid(),
+            65_536,
+        )
+        .is_err());
+
+        let hardlink = root.path().join("request-hardlink");
+        fs::hard_link(&source, &hardlink).unwrap();
+        assert!(snapshot_host_ci_request(
+            &source,
+            &root.path().join("hardlink-copy"),
+            metadata.uid(),
+            metadata.gid(),
+            65_536,
+        )
+        .is_err());
+        fs::remove_file(hardlink).unwrap();
+
+        let symlink = root.path().join("request-symlink");
+        std::os::unix::fs::symlink(&source, &symlink).unwrap();
+        assert!(snapshot_host_ci_request(
+            &symlink,
+            &root.path().join("symlink-copy"),
+            metadata.uid(),
+            metadata.gid(),
+            65_536,
+        )
+        .is_err());
+
+        let fifo = root.path().join("request-fifo");
+        assert!(Command::new("mkfifo")
+            .args(["-m", "0600"])
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success());
+        assert!(snapshot_host_ci_request(
+            &fifo,
+            &root.path().join("fifo-copy"),
+            metadata.uid(),
+            metadata.gid(),
+            65_536,
+        )
+        .is_err());
     }
 }

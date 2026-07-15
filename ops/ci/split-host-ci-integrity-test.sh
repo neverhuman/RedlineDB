@@ -3,9 +3,13 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 tmp="$(mktemp -d /tmp/jain-split-host-integrity-test.XXXXXX)"
+native_evidence_root="$(mktemp -d "$HOME/.cache/jain-native-evidence-test.XXXXXX")"
+advisory_owner=""
 forged_root=""
+fd_attack_root=""
 runner_pid=""
 forge_pid=""
+attack_pid=""
 publisher_root="$tmp/root-publisher"
 request_root="$tmp/root-requests"
 worker_cache="$tmp/worker-cache"
@@ -27,12 +31,20 @@ cleanup() {
     kill "$forge_pid" 2>/dev/null || true
     wait "$forge_pid" 2>/dev/null || true
   fi
+  if [[ -n "$attack_pid" ]] && kill -0 "$attack_pid" 2>/dev/null; then
+    kill "$attack_pid" 2>/dev/null || true
+    wait "$attack_pid" 2>/dev/null || true
+  fi
   case "$forged_root" in
     /tmp/split-host-ci-bootstrap.??????) rm -rf -- "$forged_root" ;;
+  esac
+  case "$fd_attack_root" in
+    /tmp/split-host-ci-bootstrap.??????) rm -rf -- "$fd_attack_root" ;;
   esac
   sudo -n rm -rf -- "$publisher_root" 2>/dev/null || true
   sudo -n rm -rf -- "$request_root" 2>/dev/null || true
   sudo -n rm -rf -- "$worker_cache" 2>/dev/null || true
+  sudo -n rm -rf -- "$native_evidence_root" 2>/dev/null || true
   rm -rf -- "$tmp"
   return "$cleanup_rc"
 }
@@ -41,7 +53,23 @@ trap cleanup EXIT
 control="$tmp/control"
 control_remote="$tmp/jain-split-ops.git"
 split_root="$tmp/split"
-sandbox_family_root=/home/ubuntu/jain-split
+sandbox_family_root="$tmp/sandbox-family"
+advisory_owner="$tmp/private-advisory-owner"
+pinned_advisory_commit="$(sed -n \
+  's/^JAIN_PINNED_RUSTSEC_COMMIT="\([0-9a-f]\{40\}\)"$/\1/p' \
+  "$repo_root/ops/ci/pinned-advisory.sh")"
+[[ "$pinned_advisory_commit" =~ ^[0-9a-f]{40}$ ]]
+mkdir -p "$sandbox_family_root/target" "$sandbox_family_root/jain-core" \
+  "$sandbox_family_root/redline-split-ops"
+install -m 0644 "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml" \
+  "$sandbox_family_root/redline-split-ops/repos.manifest.toml"
+git init --quiet "$advisory_owner"
+git -C "$advisory_owner" fetch --quiet "$HOME/.cargo/advisory-db" \
+  "$pinned_advisory_commit"
+git -C "$advisory_owner" checkout --quiet --detach FETCH_HEAD
+git -C "$advisory_owner" worktree add --quiet --detach \
+  "$sandbox_family_root/target/advisory-db" "$pinned_advisory_commit"
+[[ -f "$sandbox_family_root/target/advisory-db/.git" ]]
 product="$split_root/jain-report"
 product_remote="$product_forge_root/jeryu/jain-report.git"
 forge_log="$tmp/forge.log"
@@ -77,15 +105,26 @@ git -C "$control" config user.email host-ci-integration@example.invalid
 for boundary_file in \
   ops/ci/host-ci-integrity.sh ops/ci/host-ci-publisher.sh \
   ops/ci/host-ci-sandbox.sh ops/ci/host-ci-boundary-preflight.sh \
-  ops/ci/native-runtime.sh \
+  ops/ci/native-runtime.sh ops/ci/host-ci-evidence.sh \
+  ops/ci/pinned-advisory.sh \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh; do
   install -D -m 0755 "$repo_root/$boundary_file" "$control/$boundary_file"
 done
+install -D -m 0644 "$repo_root/tools/splitctl/src/main.rs" \
+  "$control/tools/splitctl/src/main.rs"
+# Keep the fixture self-contained while preserving splitctl's production rule
+# that the reviewed nested-family path is exact rather than caller-selected.
+sed -i \
+  "s#/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml#$sandbox_family_root/redline-split-ops/repos.manifest.toml#g" \
+  "$control/tools/splitctl/src/main.rs"
 git init --quiet --bare "$control_remote"
 sed -i \
   "s#remote = \"http://127.0.0.1:8787/git/jeryu/jain-split-ops.git\"#remote = \"$control_remote\"#" \
   "$control/repos.manifest.toml"
-git -C "$control" add repos.manifest.toml ops/ci
+sed -i \
+  "s#manifest_path = \"/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml\"#manifest_path = \"$sandbox_family_root/redline-split-ops/repos.manifest.toml\"#" \
+  "$control/repos.manifest.toml"
+git -C "$control" add repos.manifest.toml ops/ci tools/splitctl/src/main.rs
 git -C "$control" commit --quiet -m 'fixture reviewed host-CI boundary'
 git -C "$control" switch -C main --quiet
 git -C "$control" remote set-url origin "$control_remote"
@@ -99,6 +138,7 @@ publisher="$publisher_root/host-ci-publisher"
 publisher_config="$publisher_root/host-ci-publisher.config.json"
 sandbox="$publisher_root/host-ci-sandbox"
 sandbox_config="$publisher_root/host-ci-sandbox.config.json"
+splitctl="$publisher_root/splitctl"
 sudo -n install -d -o root -g root -m 0711 "$publisher_root"
 sudo -n install -d -o root -g root -m 0700 "$request_root"
 mkdir -p "$(dirname "$product_remote")"
@@ -107,38 +147,79 @@ sudo -n install -o root -g root -m 0500 \
 sudo -n install -o root -g root -m 0500 \
   "$control/ops/ci/host-ci-sandbox.sh" "$sandbox"
 sudo -n install -d -o xbwork -g xbwork -m 0700 "$worker_cache"
+sudo -n chown root:root "$native_evidence_root"
+sudo -n chmod 0700 "$native_evidence_root"
+cargo build --locked --quiet --manifest-path "$control/Cargo.toml" \
+  --bin splitctl --target-dir "$tmp/direct-control-target"
+splitctl_digest="$(sha256sum "$tmp/direct-control-target/debug/splitctl" \
+  | cut -d' ' -f1)"
+sudo -n install -o root -g root -m 0500 \
+  "$tmp/direct-control-target/debug/splitctl" "$splitctl"
 publisher_token="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
 jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d' ' -f1)" \
   --arg sandbox_digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
+  --arg splitctl_digest "$splitctl_digest" \
   --arg base "$forge_base" --arg token "$publisher_token" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
-  '{schema_version:"jain.host-ci-publisher-config/v2",
+  --arg native_evidence_root "$native_evidence_root" \
+  '{schema_version:"jain.host-ci-publisher-config/v3",
     publisher_sha256:$digest,sandbox_sha256:$sandbox_digest,
+    splitctl_sha256:$splitctl_digest,
     forge_base:$base,forge_git_base:$git_base,
     control_remote:$remote,request_root:$requests,
+    native_evidence_root:$native_evidence_root,
     max_seal_age_seconds:300,token:$token}' \
   | sudo -n tee "$publisher_config" >/dev/null
 sudo -n chown root:root "$publisher_config"
 sudo -n chmod 0600 "$publisher_config"
 jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
   --arg publisher_digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d' ' -f1)" \
+  --arg splitctl_digest "$splitctl_digest" \
   --arg family "$sandbox_family_root" --arg cache "$worker_cache" \
   --arg cargo_bin "$HOME/.cargo/bin" --arg rustup "$HOME/.rustup" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
+  --arg native_evidence_root "$native_evidence_root" \
   --argjson parent_uid "$(id -u)" --argjson parent_gid "$(id -g)" \
-  '{schema_version:"jain.host-ci-sandbox-config/v2",
+  '{schema_version:"jain.host-ci-sandbox-config/v3",
     sandbox_sha256:$digest,publisher_sha256:$publisher_digest,
+    splitctl_sha256:$splitctl_digest,
     parent_uid:$parent_uid,parent_gid:$parent_gid,
     worker_user:"xbwork",worker_group:"xbwork",family_root:$family,
     worker_cache:$cache,cargo_bin:$cargo_bin,rustup_home:$rustup,
     control_remote:$remote,forge_git_base:$git_base,
     request_root:$requests,retain_requests:true,
+    native_evidence_root:$native_evidence_root,
     device_allow:[]}' | sudo -n tee "$sandbox_config" >/dev/null
 sudo -n chown root:root "$sandbox_config"
 sudo -n chmod 0600 "$sandbox_config"
 unset publisher_token
+
+# The installed root snapshotter must reject special or over-limit request
+# inodes promptly. In particular, a FIFO cannot stall the sudo boundary.
+snapshot_fifo="$tmp/snapshot-request.fifo"
+mkfifo -m 0600 "$snapshot_fifo"
+fifo_rc=0
+/usr/bin/timeout 5 sudo -n "$splitctl" host-ci-snapshot-request \
+  --source "$snapshot_fifo" --destination "$request_root/fifo.snapshot" \
+  --expected-uid "$(id -u)" --expected-gid "$(id -g)" \
+  --max-bytes 65536 >"$tmp/snapshot-fifo.log" 2>&1 || fifo_rc=$?
+[[ "$fifo_rc" != 0 && "$fifo_rc" != 124 ]] || {
+  printf 'installed request snapshotter accepted or hung on a FIFO\n' >&2
+  exit 1
+}
+snapshot_oversized="$tmp/snapshot-request-oversized.json"
+truncate -s 65537 "$snapshot_oversized"
+chmod 0600 "$snapshot_oversized"
+if sudo -n "$splitctl" host-ci-snapshot-request \
+  --source "$snapshot_oversized" \
+  --destination "$request_root/oversized.snapshot" \
+  --expected-uid "$(id -u)" --expected-gid "$(id -g)" \
+  --max-bytes 65536 >"$tmp/snapshot-oversized.log" 2>&1; then
+  printf 'installed request snapshotter accepted a grown 64 KiB request\n' >&2
+  exit 1
+fi
 
 mkdir -p "$product/scripts" "$split_root/jain-core"
 cat >"$product/scripts/ci-local.sh" <<'SCRIPT'
@@ -178,6 +259,21 @@ MONITOR
   user_namespace_separate=0
   [[ "$user_namespace" != "${JAIN_TEST_HOST_USER_NAMESPACE:?}" ]] \
     && user_namespace_separate=1
+  rustsec_standalone=0
+  if [[ "${JAIN_RUSTSEC_ADVISORY_SOURCE:-}" \
+      == /opt/jain-ci/authority/advisory-db \
+    && -d "${JAIN_RUSTSEC_ADVISORY_SOURCE}/.git" \
+    && ! -L "${JAIN_RUSTSEC_ADVISORY_SOURCE}/.git" ]]; then
+    rustsec_standalone=1
+  fi
+  evidence_staging_bounded=0
+  if [[ "${JAIN_NATIVE_EVIDENCE_STAGING_ROOT:-}" \
+      == "$JAIN_HOST_CI_WRITABLE_ROOT/native-evidence-staging" \
+    && "$(stat -f -c '%T' -- "$JAIN_NATIVE_EVIDENCE_STAGING_ROOT")" == tmpfs \
+    && "$(df -PB1 --output=size "$JAIN_NATIVE_EVIDENCE_STAGING_ROOT" \
+      | tail -n 1 | tr -d ' ')" -le 33554432 ]]; then
+    evidence_staging_bounded=1
+  fi
   recovered=''
   visible_pids=0
   for process in /proc/[0-9]*; do
@@ -185,6 +281,9 @@ MONITOR
     visible_pids=$((visible_pids + 1))
     for candidate in "$process/environ" "$process/cmdline" "$process"/fd/*; do
       [[ -r "$candidate" ]] || continue
+      case "$candidate" in
+        */fd/*) [[ -f "$candidate" ]] || continue ;;
+      esac
       value="$(tr '\0' '\n' <"$candidate" 2>/dev/null \
         | sed -n 's/^JERYU_MERGE_TOKEN=//p; s/^Authorization: Bearer //p' \
         | head -1 || true)"
@@ -234,6 +333,10 @@ MONITOR
     "$root_request_readable" >>"$probe"
   printf 'boundary_forge_attempt=%s\n' "$forge_attempt" >>"$probe"
   printf 'boundary_sudo_attempt=%s\n' "$sudo_attempt" >>"$probe"
+  printf 'boundary_release_ci=%s\n' "${JAIN_RELEASE_CI:-missing}" >>"$probe"
+  printf 'boundary_rustsec_standalone=%s\n' "$rustsec_standalone" >>"$probe"
+  printf 'boundary_evidence_staging_bounded=%s\n' \
+    "$evidence_staging_bounded" >>"$probe"
   # A malicious background descendant must die with namespace PID 1 before
   # the publisher reads its credential.
   (
@@ -309,24 +412,15 @@ forged_result="$forged_root/child-result.json"
 jq -n --arg seal "$forged_seal" --arg source_root "$control" \
   --arg exact_root "$forged_root/control-plane" \
   --arg commit "$control_commit" --arg result_path "$forged_result" \
-  '{schema_version:"jain.host-ci-reexec/v1",seal:$seal,
+  '{schema_version:"jain.host-ci-reexec/v3",seal:$seal,
     source_root:$source_root,exact_root:$exact_root,commit:$commit,
-    result_path:$result_path}' \
+    result_path:$result_path,
+    splitctl_path:"/opt/jain-ci/authority/splitctl"}' \
   >"$forged_root/reexec-state.json"
 chmod 0600 "$forged_root/reexec-state.json"
 forged_started="$tmp/forged-started"
 forged_continue="$tmp/forged-continue"
 touch "$forged_continue"
-forged_splitctl="$forged_root/splitctl"
-cargo build --locked --quiet --manifest-path "$control/Cargo.toml" \
-  --bin splitctl --target-dir "$tmp/direct-control-target"
-install -m 0500 "$tmp/direct-control-target/debug/splitctl" "$forged_splitctl"
-jq --arg splitctl_path "$forged_splitctl" \
-  --arg splitctl_sha256 "$(sha256sum "$forged_splitctl" | cut -d' ' -f1)" \
-  '. + {splitctl_path:$splitctl_path,splitctl_sha256:$splitctl_sha256}' \
-  "$forged_root/reexec-state.json" >"$forged_root/reexec-state.json.tmp"
-mv "$forged_root/reexec-state.json.tmp" "$forged_root/reexec-state.json"
-chmod 0600 "$forged_root/reexec-state.json"
 forge_lines_before="$(wc -l <"$forge_log" 2>/dev/null || echo 0)"
 if JAIN_HOST_CI_REEXEC_STATE="$forged_root/reexec-state.json" \
   JAIN_HOST_CI_REEXEC_SEAL="$forged_seal" \
@@ -387,6 +481,8 @@ host_user_namespace="$(readlink /proc/self/ns/user)"
 JAIN_HOST_CI_PUBLISHER="$publisher" \
 JAIN_HOST_CI_SANDBOX="$sandbox" \
 JAIN_SPLIT_ROOT="$sandbox_family_root" \
+JAIN_RELEASE_CI=0 \
+JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
 JAIN_TEST_ATTACK_URL="$forge_base" \
 JAIN_TEST_REQUIRE_ISOLATION=1 \
 JAIN_TEST_HOST_PID_NAMESPACE="$host_pid_namespace" \
@@ -431,6 +527,9 @@ grep -Fq 'boundary_root_config_readable=0' "$success_log"
 grep -Fq 'boundary_root_request_readable=0' "$success_log"
 grep -Fq 'boundary_forge_attempt=blocked' "$success_log"
 grep -Fq 'boundary_sudo_attempt=blocked' "$success_log"
+grep -Fq 'boundary_release_ci=1' "$success_log"
+grep -Fq 'boundary_rustsec_standalone=1' "$success_log"
+grep -Fq 'boundary_evidence_staging_bounded=1' "$success_log"
 grep -Fq 'boundary_survivor_started=1' "$success_log"
 grep -Fq 'worker cgroup stopped before sealing' "$success_log"
 if grep -Fq '/candidate-forge' "$forge_log"; then
@@ -556,6 +655,7 @@ if JAIN_HOST_CI_SANDBOX="$sandbox" \
   JAIN_TEST_ROOT_CONFIG_PATH="$publisher_config" \
   JAIN_TEST_ROOT_REQUEST_PATH="$request_root" \
   JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
+  JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
   JAIN_TEST_FORCE_FAILURE=1 \
     "$control/ops/ci/split-host-ci.sh" \
       jeryu jain-report "$product_sha" "$product" jain-report/required \
@@ -571,5 +671,70 @@ if grep -Fq '"conclusion":"success"' <<<"$failure_tail" \
   printf 'failed worker published success\n' >&2
   exit 1
 fi
+
+# A caller can retain a writable descriptor even after the sandbox changes the
+# bootstrap tree to the worker identity. Mutating the request through that
+# descriptor must not change the already snapshotted authority input. The
+# replacement is valid and asks the worker to fail, so a successful run proves
+# the sandbox never reread caller-controlled bytes after the ownership change.
+fd_attack_root="$(mktemp -d /tmp/split-host-ci-bootstrap.XXXXXX)"
+chmod 0700 "$fd_attack_root"
+mkdir -m 0700 "$fd_attack_root/child-home" \
+  "$fd_attack_root/writable" "$fd_attack_root/cargo-target"
+fd_attack_request="$fd_attack_root/sandbox-request.json"
+jq -cn --arg commit "$control_commit" --arg split_root "$sandbox_family_root" \
+  --arg owner jeryu --arg repo jain-report --arg head "$product_sha" \
+  --arg product "$fd_attack_root/product-source" \
+  --arg check jain-report/required \
+  --arg cargo_target "$fd_attack_root/cargo-target" \
+  --arg writable "$fd_attack_root/writable" \
+  '{schema_version:"jain.host-ci-sandbox-request/v3",
+    control_plane_commit:$commit,split_root:$split_root,
+    arguments:[$owner,$repo,$head,$product,$check],
+    environment:{CARGO_TARGET_DIR:$cargo_target,
+      JAIN_HOST_CI_WRITABLE_ROOT:$writable,JAIN_SPLIT_ROOT:$split_root,
+      JAIN_RELEASE_CI:"1",
+      JAIN_TEST_SLEEP_SECONDS:"1"}}' \
+  >"$fd_attack_request"
+chmod 0600 "$fd_attack_request"
+malicious_request="$(jq -c \
+  '.environment.JAIN_TEST_FORCE_FAILURE="1"' "$fd_attack_request")"
+attack_complete="$tmp/retained-fd-mutated"
+worker_uid="$(id -u xbwork)"
+exec {request_fd}<>"$fd_attack_request"
+(
+  for _ in $(seq 1 3000); do
+    if [[ "$(stat -Lc '%u' "/proc/$BASHPID/fd/$request_fd" 2>/dev/null || true)" \
+      == "$worker_uid" ]]; then
+      printf '%s\n' "$malicious_request" >&"$request_fd"
+      : >"$attack_complete"
+      exit 0
+    fi
+    sleep 0.01
+  done
+  exit 1
+) &
+attack_pid=$!
+if ! sudo -n "$sandbox" "$fd_attack_request" \
+  >"$tmp/retained-fd-run.log" 2>&1; then
+  cat "$tmp/retained-fd-run.log" >&2
+  printf 'retained descriptor changed snapshotted sandbox authority\n' >&2
+  exit 1
+fi
+if ! wait "$attack_pid"; then
+  attack_pid=""
+  printf 'retained descriptor attack did not observe worker ownership\n' >&2
+  exit 1
+fi
+attack_pid=""
+exec {request_fd}>&-
+[[ -f "$attack_complete" ]] \
+  && grep -Fq 'JAIN_TEST_FORCE_FAILURE' "$fd_attack_request" || {
+  printf 'retained descriptor did not mutate the caller request\n' >&2
+  exit 1
+}
+grep -Fq 'worker cgroup stopped before sealing' "$tmp/retained-fd-run.log"
+rm -rf -- "$fd_attack_root"
+fd_attack_root=""
 
 printf 'host CI privilege-separated publication and adversarial isolation contract ok\n'

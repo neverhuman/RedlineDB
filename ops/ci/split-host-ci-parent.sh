@@ -22,7 +22,6 @@ control_commit="$("$OPS_ROOT/ops/ci/host-ci-integrity.sh" "$OPS_ROOT")" \
 bootstrap_root="$(mktemp -d /tmp/split-host-ci-bootstrap.XXXXXX)" || exit 2
 sandbox_request="$bootstrap_root/sandbox-request.json"
 staged_product="$bootstrap_root/product-source"
-splitctl_bin="$bootstrap_root/splitctl"
 child_log="$bootstrap_root/child.log"
 cleanup() {
   local root_real
@@ -38,19 +37,14 @@ cleanup() {
 trap cleanup EXIT
 
 [[ -d "$REPO_PATH/.git" ]] || exit 2
-cargo build --locked --quiet --manifest-path "$OPS_ROOT/Cargo.toml" \
-  --bin splitctl --target-dir "$bootstrap_root/control-target" || exit 2
-install -m 0500 "$bootstrap_root/control-target/debug/splitctl" \
-  "$splitctl_bin" || exit 2
 mkdir -m 0700 "$bootstrap_root/child-home" "$bootstrap_root/writable" \
   "$bootstrap_root/cargo-target" || exit 2
 
 child_environment='{}'
 safe_child_vars=(
   CARGO_BUILD_JOBS CARGO_NET_OFFLINE RUSTFLAGS TERM
-  JAIN_RELEASE_CI JAIN_CI_JOBS JAIN_NEEDS_SIBLINGS JAIN_NEEDS_ARTIFACTS
-  JAIN_NATIVE_SOURCE_ROOT JAIN_NATIVE_EVIDENCE_ROOT
-  JAIN_RUSTSEC_ADVISORY_SOURCE
+  JAIN_CI_JOBS JAIN_NEEDS_SIBLINGS JAIN_NEEDS_ARTIFACTS
+  JAIN_NATIVE_SOURCE_ROOT
   CUDA_VISIBLE_DEVICES NVIDIA_VISIBLE_DEVICES NVIDIA_DRIVER_CAPABILITIES
   JAIN_TEST_ATTACK_URL JAIN_TEST_REQUIRE_ISOLATION JAIN_TEST_SLEEP_SECONDS
   JAIN_TEST_FORCE_FAILURE
@@ -70,17 +64,15 @@ child_environment="$(jq -c \
   --arg target "$bootstrap_root/cargo-target" \
   --arg writable "$bootstrap_root/writable" \
   '. + {JAIN_SPLIT_ROOT:$split_root,CARGO_TARGET_DIR:$target,
-    JAIN_HOST_CI_WRITABLE_ROOT:$writable}' <<<"$child_environment")" || exit 2
+    JAIN_HOST_CI_WRITABLE_ROOT:$writable,JAIN_RELEASE_CI:"1"}' \
+  <<<"$child_environment")" || exit 2
 jq -n --arg commit "$control_commit" \
   --arg split_root "${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}" \
-  --arg splitctl "$splitctl_bin" \
-  --arg splitctl_sha "$(sha256sum -- "$splitctl_bin" | cut -d' ' -f1)" \
   --arg owner "$OWNER" --arg repo "$REPO" --arg sha "$SHA" \
   --arg product "$staged_product" --arg check "$CHECK" \
   --argjson environment "$child_environment" \
-  '{schema_version:"jain.host-ci-sandbox-request/v2",
+  '{schema_version:"jain.host-ci-sandbox-request/v3",
     control_plane_commit:$commit,split_root:$split_root,
-    splitctl_path:$splitctl,splitctl_sha256:$splitctl_sha,
     arguments:[$owner,$repo,$sha,$product,$check],environment:$environment}' \
   >"$sandbox_request" || exit 2
 chmod 0600 "$sandbox_request"

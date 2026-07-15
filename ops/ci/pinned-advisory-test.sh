@@ -33,6 +33,54 @@ jain_materialize_pinned_advisory_db "$source_db" "$advisory_db" "$expected"
   exit 1
 }
 
+# A caller-controlled partial clone can name an upload-pack command in local
+# Git config. Root staging must neither execute it nor lazily fetch a missing
+# object: source Git runs as the non-root owner with all transports disabled.
+promisor_source="$tmp/promisor-source"
+promisor_remote="$tmp/promisor-remote.git"
+promisor_destination="$tmp/promisor-destination"
+uploadpack_marker="$tmp/uploadpack-executed"
+uploadpack_attack="$tmp/malicious-uploadpack"
+mkdir -p "$promisor_source/crates/promisor"
+git -C "$promisor_source" init -q
+git -C "$promisor_source" config user.name test
+git -C "$promisor_source" config user.email test@example.invalid
+printf 'promisor payload\n' >"$promisor_source/crates/promisor/advisory.md"
+git -C "$promisor_source" add .
+git -C "$promisor_source" commit -qm 'promisor fixture'
+promisor_expected="$(git -C "$promisor_source" rev-parse HEAD)"
+promisor_blob="$(git -C "$promisor_source" rev-parse \
+  HEAD:crates/promisor/advisory.md)"
+git clone --quiet --bare --no-hardlinks "$promisor_source" "$promisor_remote"
+{
+  printf '#!/bin/sh\n'
+  printf ': >%q\n' "$uploadpack_marker"
+  printf 'exec /usr/bin/git-upload-pack "$@"\n'
+} >"$uploadpack_attack"
+chmod 0700 "$uploadpack_attack"
+git -C "$promisor_source" config core.repositoryFormatVersion 1
+git -C "$promisor_source" config extensions.partialClone origin
+git -C "$promisor_source" config remote.origin.url "$promisor_remote"
+git -C "$promisor_source" config remote.origin.promisor true
+git -C "$promisor_source" config remote.origin.partialCloneFilter blob:none
+git -C "$promisor_source" config remote.origin.uploadpack "$uploadpack_attack"
+rm -- "$promisor_source/.git/objects/${promisor_blob:0:2}/${promisor_blob:2}"
+if sudo -n /bin/bash -ceu '
+  source "$1"
+  jain_materialize_pinned_advisory_db \
+    "$2" "$3" "$4" "$5" "$6"
+' -- "$repo_root/ops/ci/pinned-advisory.sh" \
+  "$promisor_source" "$promisor_destination" "$promisor_expected" \
+  "$(id -u)" "$(id -g)" >"$tmp/promisor-root.log" 2>&1; then
+  printf 'pinned advisory accepted a source with a missing promised object\n' >&2
+  exit 1
+fi
+[[ ! -e "$uploadpack_marker" ]] || {
+  printf 'pinned advisory executed caller upload-pack config\n' >&2
+  exit 1
+}
+sudo -n rm -rf -- "$promisor_destination"
+
 tool_dir="$tmp/tools"
 jain_install_pinned_rustsec_tools "$tool_dir" "$advisory_db" \
   "$tmp/cargo-home" "$repo_root"

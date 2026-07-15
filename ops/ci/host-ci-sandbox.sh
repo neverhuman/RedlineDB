@@ -26,12 +26,16 @@ sandbox_path="$(realpath -e -- "${BASH_SOURCE[0]}")" \
 install_dir="$(dirname "$sandbox_path")"
 config="$install_dir/host-ci-sandbox.config.json"
 publisher_path="$install_dir/host-ci-publisher"
+splitctl_path="$install_dir/splitctl"
 [[ ! -L "$sandbox_path" \
   && "$(stat -c '%u:%a:%h' -- "$sandbox_path" 2>/dev/null)" == '0:500:1' ]] \
   || fail 'sandbox must be root-owned mode 0500'
 [[ ! -L "$publisher_path" \
   && "$(stat -c '%u:%a:%h' -- "$publisher_path" 2>/dev/null)" == '0:500:1' ]] \
   || fail 'publisher must be root-owned mode 0500'
+[[ ! -L "$splitctl_path" \
+  && "$(stat -c '%u:%a:%h' -- "$splitctl_path" 2>/dev/null)" == '0:500:1' ]] \
+  || fail 'splitctl must be root-owned mode 0500'
 [[ ! -L "$install_dir" && -d "$install_dir" \
   && "$(stat -c '%u' -- "$install_dir")" == 0 \
   && "$((8#$(stat -c '%a' -- "$install_dir") & 8#022))" == 0 ]] \
@@ -40,9 +44,10 @@ publisher_path="$install_dir/host-ci-publisher"
   && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
   || fail 'unsafe root sandbox config'
 jq -e '
-  select(.schema_version == "jain.host-ci-sandbox-config/v2")
+  select(.schema_version == "jain.host-ci-sandbox-config/v3")
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
+  | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
   | select(.parent_uid | type == "number")
   | select(.parent_gid | type == "number")
   | select(.worker_user | type == "string" and length > 0)
@@ -54,18 +59,24 @@ jq -e '
   | select(.control_remote | type == "string" and length > 0)
   | select(.forge_git_base | type == "string" and length > 0)
   | select(.request_root | type == "string" and startswith("/"))
+  | select(.native_evidence_root | type == "string" and startswith("/"))
   | select(.retain_requests | type == "boolean")
   | select(.device_allow | type == "array")' "$config" >/dev/null \
   || fail 'invalid sandbox config schema'
 
 sandbox_sha="$(sha256sum -- "$sandbox_path" | cut -d' ' -f1)"
 publisher_sha="$(sha256sum -- "$publisher_path" | cut -d' ' -f1)"
+splitctl_sha="$(sha256sum -- "$splitctl_path" | cut -d' ' -f1)"
 [[ "$sandbox_sha" == "$(jq -er '.sandbox_sha256' "$config")" \
-  && "$publisher_sha" == "$(jq -er '.publisher_sha256' "$config")" ]] \
+  && "$publisher_sha" == "$(jq -er '.publisher_sha256' "$config")" \
+  && "$splitctl_sha" == "$(jq -er '.splitctl_sha256' "$config")" ]] \
   || fail 'installed broker digest/config mismatch'
 
 parent_uid="$(jq -er '.parent_uid' "$config")"
 parent_gid="$(jq -er '.parent_gid' "$config")"
+[[ "$parent_uid" =~ ^[0-9]+$ && "$parent_uid" != 0 \
+  && "$parent_gid" =~ ^[0-9]+$ && "$parent_gid" != 0 ]] \
+  || fail 'parent must be a non-root identity'
 [[ "${SUDO_UID:-}" == "$parent_uid" && "${SUDO_GID:-}" == "$parent_gid" ]] \
   || fail 'sandbox caller does not match configured parent identity'
 worker_user="$(jq -er '.worker_user' "$config")"
@@ -93,34 +104,75 @@ rustup_home="$(realpath -e -- "$(jq -er '.rustup_home' "$config")")" \
   || fail 'rustup home unavailable'
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$config")")" \
   || fail 'root request directory unavailable'
+native_evidence_root="$(realpath -e -- \
+  "$(jq -er '.native_evidence_root' "$config")")" \
+  || fail 'durable native evidence directory unavailable'
 [[ "$(stat -c '%u:%a' -- "$worker_cache")" == "$worker_uid:700" \
-  && "$(stat -c '%u:%a' -- "$request_root")" == '0:700' ]] \
-  || fail 'cache or root request ownership mismatch'
-for launcher in /usr/bin/unshare /usr/bin/setpriv; do
+  && "$(stat -c '%u:%a' -- "$request_root")" == '0:700' \
+  && ! -L "$native_evidence_root" \
+  && "$(stat -c '%u:%g:%a' -- "$native_evidence_root")" \
+    == '0:0:700' ]] \
+  || fail 'cache, request, or durable evidence ownership mismatch'
+case "$native_evidence_root" in
+  /tmp | /tmp/*) fail 'durable native evidence root cannot use /tmp' ;;
+esac
+for launcher in /usr/bin/unshare /usr/bin/setpriv /usr/bin/findmnt \
+  /usr/bin/flock; do
   [[ ! -L "$launcher" \
     && "$(stat -c '%u:%a:%h' -- "$launcher")" == '0:755:1' ]] \
     || fail "unsafe namespace launcher: $launcher"
 done
+for launcher in /usr/bin/mount /usr/bin/umount; do
+  [[ ! -L "$launcher" \
+    && "$(stat -c '%u:%a:%h' -- "$launcher")" =~ ^0:(755|4755):1$ ]] \
+    || fail "unsafe quota mount tool: $launcher"
+done
 
-request="$(realpath -e -- "$request")" || fail 'sandbox request missing'
-bootstrap_root="$(dirname "$request")"
+caller_request="$(realpath -e -- "$request")" || fail 'sandbox request missing'
+bootstrap_root="$(dirname "$caller_request")"
 case "$bootstrap_root" in
   /tmp/split-host-ci-bootstrap.??????) ;;
   *) fail 'request is outside a host-CI bootstrap directory' ;;
 esac
-[[ "$request" == "$bootstrap_root/sandbox-request.json" \
-  && ! -L "$request" && ! -L "$bootstrap_root" \
-  && "$(stat -c '%u:%g:%a:%h' -- "$request")" \
+[[ "$caller_request" == "$bootstrap_root/sandbox-request.json" \
+  && -f "$caller_request" && ! -L "$caller_request" && ! -L "$bootstrap_root" \
+  && "$(stat -c '%u:%g:%a:%h' -- "$caller_request")" \
     == "$parent_uid:$parent_gid:600:1" \
   && "$(stat -c '%u:%g:%a' -- "$bootstrap_root")" \
-    == "$parent_uid:$parent_gid:700" ]] \
+    == "$parent_uid:$parent_gid:700" \
+  && "$(stat -c '%s' -- "$caller_request")" -le 65536 ]] \
   || fail 'unsafe sandbox request ownership or location'
+
+# Snapshot caller bytes into root-only storage before parsing. The caller may
+# retain a writable descriptor across the later bootstrap chown, but that
+# descriptor can never alter this single authority input.
+request_id="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+nonce="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+[[ "$request_id" =~ ^[0-9a-f]{64}$ && "$nonce" =~ ^[0-9a-f]{64}$ ]] \
+  || fail 'root randomness unavailable'
+root_request="$request_root/$request_id"
+mkdir -m 0700 "$root_request" || fail 'cannot create root request'
+retain_requests="$(jq -er '.retain_requests' "$config")"
+cleanup_root_request() {
+  if [[ "$retain_requests" != true ]]; then
+    rm -rf -- "$root_request"
+  fi
+}
+trap cleanup_root_request EXIT
+request="$root_request/caller-request.json"
+"$splitctl_path" host-ci-snapshot-request \
+  --source "$caller_request" --destination "$request" \
+  --expected-uid "$parent_uid" --expected-gid "$parent_gid" \
+  --max-bytes 65536 \
+  || fail 'cannot snapshot caller request'
+[[ ! -L "$request" \
+  && "$(stat -c '%u:%g:%a:%h' -- "$request")" == '0:0:600:1' \
+  && "$(stat -c '%s' -- "$request")" -le 65536 ]] \
+  || fail 'unsafe root request snapshot'
 jq -e '
-  select(.schema_version == "jain.host-ci-sandbox-request/v2")
+  select(.schema_version == "jain.host-ci-sandbox-request/v3")
   | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
   | select(.split_root | type == "string" and startswith("/"))
-  | select(.splitctl_path | type == "string" and startswith("/"))
-  | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
   | select(.arguments | type == "array" and length == 5)
   | select(.environment | type == "object")
   | select(.environment | all(to_entries[]; .value | type == "string"))' \
@@ -129,15 +181,6 @@ control_commit="$(jq -er '.control_plane_commit' "$request")"
 split_root="$(realpath -e -- "$(jq -er '.split_root' "$request")")" \
   || fail 'split root unavailable'
 [[ "$split_root" == "$family_root" ]] || fail 'split root is not configured authority'
-splitctl_input="$(realpath -e -- "$(jq -er '.splitctl_path' "$request")")" \
-  || fail 'splitctl input unavailable'
-[[ "$splitctl_input" == "$bootstrap_root/splitctl" \
-  && ! -L "$splitctl_input" \
-  && "$(stat -c '%u:%g:%a:%h' -- "$splitctl_input")" \
-    == "$parent_uid:$parent_gid:500:1" \
-  && "$(sha256sum -- "$splitctl_input" | cut -d' ' -f1)" \
-    == "$(jq -er '.splitctl_sha256' "$request")" ]] \
-  || fail 'unsafe splitctl input'
 mapfile -t arguments < <(jq -er '.arguments[]' "$request")
 [[ "${#arguments[@]}" == 5 \
   && "${arguments[0]}" =~ ^[a-z0-9][a-z0-9-]*$ \
@@ -154,6 +197,9 @@ for name in "${environment_names[@]}"; do
   [[ "$name" =~ $allowed_environment \
     && "$name" != *TOKEN* && "$name" != *SECRET* && "$name" != *PASSWORD* \
     && "$name" != JAIN_BASE && "$name" != JAIN_HOST_CI_PUBLISHER \
+    && "$name" != JAIN_NATIVE_EVIDENCE_ROOT \
+    && "$name" != JAIN_NATIVE_EVIDENCE_STAGING_ROOT \
+    && "$name" != JAIN_RUSTSEC_ADVISORY_SOURCE \
     && "$name" != JAIN_HOST_CI_HOST_PID_NAMESPACE \
     && "$name" != JAIN_HOST_CI_HOST_USER_NAMESPACE ]] \
     || fail "forbidden sandbox environment key: $name"
@@ -162,26 +208,13 @@ done
   == "$bootstrap_root/cargo-target" \
   && "$(jq -er '.environment.JAIN_HOST_CI_WRITABLE_ROOT' "$request")" \
     == "$bootstrap_root/writable" \
-  && "$(jq -er '.environment.JAIN_SPLIT_ROOT' "$request")" == "$family_root" ]] \
-  || fail 'worker writable paths are outside bootstrap authority'
+  && "$(jq -er '.environment.JAIN_SPLIT_ROOT' "$request")" == "$family_root" \
+  && "$(jq -er '.environment.JAIN_RELEASE_CI' "$request")" == 1 ]] \
+  || fail 'worker paths or mandatory release mode differ from root authority'
 
-request_id="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
-nonce="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
-[[ "$request_id" =~ ^[0-9a-f]{64}$ && "$nonce" =~ ^[0-9a-f]{64}$ ]] \
-  || fail 'root randomness unavailable'
-root_request="$request_root/$request_id"
-mkdir -m 0700 "$root_request" || fail 'cannot create root request'
 worker_authority="$root_request/worker-authority"
 control_root="$worker_authority/control-plane"
 mkdir -m 0755 "$worker_authority"
-
-retain_requests="$(jq -er '.retain_requests' "$config")"
-cleanup_root_request() {
-  if [[ "$retain_requests" != true ]]; then
-    rm -rf -- "$root_request"
-  fi
-}
-trap cleanup_root_request EXIT
 
 safe_git=(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
   -c core.untrackedCache=false -c diff.external=)
@@ -203,6 +236,26 @@ reviewed_commit="$("${safe_git[@]}" ls-remote --exit-code \
   && "$(sha256sum -- "$control_root/ops/ci/host-ci-publisher.sh" | cut -d' ' -f1)" \
     == "$publisher_sha" ]] \
   || fail 'installed brokers do not match reviewed main'
+
+# Materialize the exact reviewed RustSec commit while still root. The canonical
+# host source may be a linked worktree whose private Git metadata is deliberately
+# invisible to the worker; only this standalone, read-only snapshot crosses the
+# privilege boundary.
+rustsec_source="$family_root/target/advisory-db"
+rustsec_source="$(realpath -e -- "$rustsec_source")" \
+  || fail 'canonical pinned RustSec source is unavailable'
+# shellcheck source=ops/ci/pinned-advisory.sh
+source "$control_root/ops/ci/pinned-advisory.sh"
+rustsec_stage="$worker_authority/advisory-db"
+jain_materialize_pinned_advisory_db \
+  "$rustsec_source" "$rustsec_stage" "$JAIN_PINNED_RUSTSEC_COMMIT" \
+  "$parent_uid" "$parent_gid" \
+  || fail 'root pinned RustSec staging failed'
+[[ -d "$rustsec_stage/.git" && ! -L "$rustsec_stage/.git" \
+  && "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -C "$rustsec_stage" rev-parse 'HEAD^{commit}')" \
+    == "$JAIN_PINNED_RUSTSEC_COMMIT" ]] \
+  || fail 'root pinned RustSec snapshot is not standalone authority'
 
 # Resolve owner/check only from the root-fetched manifest.
 repo="${arguments[1]}"
@@ -265,13 +318,13 @@ git clone --quiet --no-local --no-checkout \
   "$product_authority" "${arguments[3]}"
 git -C "${arguments[3]}" checkout --quiet --detach "${arguments[2]}"
 
-install -o root -g root -m 0555 "$splitctl_input" "$worker_authority/splitctl"
+install -o root -g root -m 0555 "$splitctl_path" "$worker_authority/splitctl"
 install -o root -g root -m 0555 \
   "$control_root/ops/ci/split-host-ci.sh" \
   "$worker_authority/.split-host-ci-reviewed"
 worker_result="$bootstrap_root/writable/worker-evidence.json"
 jq -n --arg commit "$control_commit" --arg result "$worker_result" \
-  '{schema_version:"jain.host-ci-reexec/v2",
+  '{schema_version:"jain.host-ci-reexec/v3",
     source_root:"/opt/jain-ci/authority/control-plane",
     exact_root:"/opt/jain-ci/authority/control-plane",
     commit:$commit,result_path:$result,
@@ -287,18 +340,39 @@ root_state="$root_request/root-state.json"
 jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --arg commit "$control_commit" --arg remote "$control_remote" \
   --arg publisher_sha "$publisher_sha" --arg sandbox_sha "$sandbox_sha" \
+  --arg splitctl_sha "$splitctl_sha" \
+  --arg native_evidence_root "$native_evidence_root" \
   --argjson created_at "$created_at" \
-  '{schema_version:"jain.host-ci-root-state/v2",status:"running",
+  '{schema_version:"jain.host-ci-root-state/v3",status:"running",
     request_id:$request_id,nonce:$nonce,created_at:$created_at,
     control_plane_commit:$commit,control_remote:$remote,
-    publisher_sha256:$publisher_sha,sandbox_sha256:$sandbox_sha}' >"$root_state"
+    publisher_sha256:$publisher_sha,sandbox_sha256:$sandbox_sha,
+    splitctl_sha256:$splitctl_sha,native_evidence_root:$native_evidence_root}' >"$root_state"
 chmod 0600 "$root_state"
 chown root:root "$root_state"
 
+evidence_staging_root="$bootstrap_root/writable/native-evidence-staging"
+mkdir -m 0700 "$evidence_staging_root"
+/usr/bin/mount -t tmpfs \
+  -o "nodev,nosuid,noexec,size=33554432,nr_inodes=64,mode=0700,uid=$worker_uid,gid=$worker_gid" \
+  "jain-host-ci-evidence-$request_id" "$evidence_staging_root" \
+  || fail 'cannot mount bounded native evidence staging'
+evidence_mounted=1
+[[ "$(/usr/bin/findmnt -rn -o FSTYPE,TARGET --target "$evidence_staging_root")" \
+  == "tmpfs $evidence_staging_root" ]] \
+  || fail 'native evidence staging is not the expected tmpfs'
+
 unit="jain-host-ci-${request_id:0:24}.service"
+cleanup_evidence_mount() {
+  if [[ "${evidence_mounted:-0}" == 1 ]]; then
+    /usr/bin/umount -- "$evidence_staging_root" >/dev/null 2>&1 || true
+    evidence_mounted=0
+  fi
+}
 restore_owner() {
   systemctl kill --kill-whom=all --signal=KILL "$unit" >/dev/null 2>&1 || true
   systemctl reset-failed "$unit" >/dev/null 2>&1 || true
+  cleanup_evidence_mount
   chown -R "$parent_uid:$parent_gid" "$bootstrap_root" >/dev/null 2>&1 || true
 }
 trap 'restore_owner; cleanup_root_request' EXIT
@@ -331,6 +405,7 @@ systemd_args=(
   --property="BindReadOnlyPaths=$family_root"
   --property="BindReadOnlyPaths=$cargo_bin:/opt/jain-ci/cargo-bin"
   --property="BindReadOnlyPaths=$rustup_home:/opt/jain-ci/rustup"
+  --property="BindPaths=$evidence_staging_root"
   --property="InaccessiblePaths=/usr/bin/sudo /etc/sudoers /etc/sudoers.d -$install_dir -$request_root"
   --setenv="HOME=$bootstrap_root/child-home"
   --setenv="USER=$worker_user" --setenv="LOGNAME=$worker_user"
@@ -349,6 +424,8 @@ systemd_args=(
   --setenv="JAIN_HOST_CI_HOST_PID_NAMESPACE=$host_pid_namespace"
   --setenv="JAIN_HOST_CI_HOST_USER_NAMESPACE=$host_user_namespace"
   --setenv=JAIN_HOST_CI_NETWORK_ISOLATED=1
+  --setenv=JAIN_RUSTSEC_ADVISORY_SOURCE=/opt/jain-ci/authority/advisory-db
+  --setenv="JAIN_NATIVE_EVIDENCE_STAGING_ROOT=$evidence_staging_root"
 )
 while IFS=$'\t' read -r name value; do
   systemd_args+=(--setenv="$name=$value")
@@ -385,6 +462,7 @@ printf '[host-ci-sandbox] worker cgroup stopped before sealing\n' >&2
 conclusion=failure
 evidence_dir=''
 evidence_sha=''
+promoted_evidence_dir=''
 if [[ "$runner_rc" == 0 && -f "$worker_result" && ! -L "$worker_result" \
   && "$(stat -c '%u:%a:%h' -- "$worker_result")" == "$worker_uid:600:1" ]] \
   && jq -e --arg owner "${arguments[0]}" --arg repo "$repo" \
@@ -404,9 +482,30 @@ fi
 
 # shellcheck source=ops/ci/native-runtime.sh
 source "$control_root/ops/ci/native-runtime.sh"
+# shellcheck source=ops/ci/host-ci-evidence.sh
+source "$control_root/ops/ci/host-ci-evidence.sh"
 derived_required=false
 if jain_native_check_requires_evidence "$repo" "${arguments[4]}" "$protected_check"; then
   derived_required=true
+fi
+if [[ "$conclusion" == success ]]; then
+  if [[ "$derived_required" == true ]]; then
+    promoted_evidence_dir="$(jain_host_ci_promote_native_evidence \
+      "$evidence_staging_root" "$evidence_dir" "$evidence_sha" \
+      "$native_evidence_root" "${arguments[0]}" "$repo" "${arguments[2]}" \
+      "${arguments[4]}" "$request_id" "$worker_uid" "$worker_gid" \
+      "$control_root" "$control_commit")" || {
+      printf '[host-ci-sandbox] bounded native evidence promotion failed\n' >&2
+      conclusion=failure
+    }
+    if [[ "$conclusion" == success ]]; then
+      evidence_dir="$promoted_evidence_dir"
+    fi
+  elif [[ -n "$evidence_dir" || -n "$evidence_sha" ]] \
+    || ! jain_host_ci_staging_is_empty "$evidence_staging_root"; then
+    printf '[host-ci-sandbox] non-native worker wrote unexpected evidence\n' >&2
+    conclusion=failure
+  fi
 fi
 if [[ "$conclusion" == success ]]; then
   required_int=0
@@ -419,6 +518,13 @@ if [[ "$conclusion" == success ]]; then
   fi
 fi
 
+/usr/bin/umount -- "$evidence_staging_root" \
+  || fail 'cannot unmount bounded native evidence staging'
+evidence_mounted=0
+if /usr/bin/findmnt -rn -M "$evidence_staging_root" >/dev/null; then
+  fail 'native evidence staging mount survived worker validation'
+fi
+
 root_result="$root_request/root-result.json"
 jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
   --arg owner "${arguments[0]}" --arg repo "$repo" \
@@ -426,7 +532,7 @@ jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
   --arg conclusion "$conclusion" --arg evidence_dir "$evidence_dir" \
   --arg evidence_sha "$evidence_sha" --argjson rc "$runner_rc" \
   --argjson evidence_required "$derived_required" \
-  '{schema_version:"jain.host-ci-root-result/v2",request_id:$request_id,
+  '{schema_version:"jain.host-ci-root-result/v3",request_id:$request_id,
     control_plane_commit:$commit,owner:$owner,repository:$repo,head_sha:$head,
     required_check:$check,conclusion:$conclusion,runner_exit_code:$rc,
     native_evidence_required:$evidence_required,

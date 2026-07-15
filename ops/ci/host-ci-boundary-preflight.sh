@@ -21,7 +21,8 @@ publisher="$install_dir/host-ci-publisher"
 publisher_config="$install_dir/host-ci-publisher.config.json"
 sandbox="$install_dir/host-ci-sandbox"
 sandbox_config="$install_dir/host-ci-sandbox.config.json"
-for executable in "$publisher" "$sandbox"; do
+splitctl="$install_dir/splitctl"
+for executable in "$publisher" "$sandbox" "$splitctl"; do
   [[ ! -L "$executable" \
     && "$(stat -c '%u:%a:%h' -- "$executable" 2>/dev/null)" == '0:500:1' ]] \
     || fail "unsafe installed executable: $executable"
@@ -31,9 +32,9 @@ for config in "$publisher_config" "$sandbox_config"; do
     && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
     || fail "unsafe installed config: $config"
 done
-jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v2")' \
+jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v3")' \
   "$publisher_config" >/dev/null || fail 'invalid publisher config version'
-jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v2")
+jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v3")
   | select(.retain_requests == false)' "$sandbox_config" >/dev/null \
   || fail 'invalid or test-only sandbox config'
 [[ "$(sha256sum -- "$publisher" | cut -d' ' -f1)" \
@@ -42,8 +43,12 @@ jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v2")
 [[ "$(sha256sum -- "$sandbox" | cut -d' ' -f1)" \
   == "$(jq -er '.sandbox_sha256' "$sandbox_config")" ]] \
   || fail 'sandbox digest/config mismatch'
+[[ "$(sha256sum -- "$splitctl" | cut -d' ' -f1)" \
+  == "$(jq -er '.splitctl_sha256' "$sandbox_config")" ]] \
+  || fail 'splitctl digest/config mismatch'
 for field in \
-  publisher_sha256 sandbox_sha256 control_remote forge_git_base request_root; do
+  publisher_sha256 sandbox_sha256 splitctl_sha256 control_remote forge_git_base \
+  request_root native_evidence_root; do
   [[ "$(jq -er ".$field" "$publisher_config")" \
     == "$(jq -er ".$field" "$sandbox_config")" ]] \
     || fail "broker configs disagree on $field"
@@ -51,6 +56,9 @@ done
 
 parent_uid="$(jq -er '.parent_uid' "$sandbox_config")"
 parent_gid="$(jq -er '.parent_gid' "$sandbox_config")"
+[[ "$parent_uid" =~ ^[0-9]+$ && "$parent_uid" != 0 \
+  && "$parent_gid" =~ ^[0-9]+$ && "$parent_gid" != 0 ]] \
+  || fail 'configured parent must be a non-root identity'
 worker_user="$(jq -er '.worker_user' "$sandbox_config")"
 worker_group="$(jq -er '.worker_group' "$sandbox_config")"
 parent_user="$(getent passwd "$parent_uid" | cut -d: -f1)"
@@ -95,14 +103,48 @@ request_root="$(realpath -e -- "$(jq -er '.request_root' "$sandbox_config")")" \
   || fail 'root request directory missing'
 [[ "$(stat -c '%u:%g:%a' -- "$request_root")" == '0:0:700' ]] \
   || fail 'root request directory ownership/mode mismatch'
+native_evidence_root="$(realpath -e -- \
+  "$(jq -er '.native_evidence_root' "$sandbox_config")")" \
+  || fail 'durable native evidence directory missing'
+case "$native_evidence_root" in
+  /tmp | /tmp/*) fail 'durable native evidence directory cannot use /tmp' ;;
+esac
+[[ ! -L "$native_evidence_root" \
+  && "$(stat -c '%u:%g:%a' -- "$native_evidence_root")" \
+    == '0:0:700' ]] \
+  || fail 'durable native evidence ownership/mode mismatch'
 [[ "$(systemctl show -p Version --value)" =~ ^[0-9]+([.][0-9]+)*$ ]] \
   || fail 'systemd manager unavailable'
 command -v systemd-run >/dev/null || fail 'systemd-run unavailable'
-for launcher in /usr/bin/unshare /usr/bin/setpriv; do
+for launcher in /usr/bin/unshare /usr/bin/setpriv /usr/bin/findmnt \
+  /usr/bin/flock; do
   [[ ! -L "$launcher" \
     && "$(stat -c '%u:%a:%h' -- "$launcher" 2>/dev/null)" == '0:755:1' ]] \
     || fail "unsafe namespace launcher: $launcher"
 done
+for launcher in /usr/bin/mount /usr/bin/umount; do
+  [[ ! -L "$launcher" \
+    && "$(stat -c '%u:%a:%h' -- "$launcher" 2>/dev/null)" \
+      =~ ^0:(755|4755):1$ ]] \
+    || fail "unsafe quota mount tool: $launcher"
+done
+quota_probe="$(mktemp -d "$request_root/.quota-preflight.XXXXXX")" \
+  || fail 'cannot create evidence quota probe'
+cleanup_quota_probe() {
+  /usr/bin/umount -- "$quota_probe" >/dev/null 2>&1 || true
+  rmdir -- "$quota_probe" >/dev/null 2>&1 || true
+}
+trap cleanup_quota_probe EXIT
+/usr/bin/mount -t tmpfs \
+  -o 'nodev,nosuid,noexec,size=1048576,nr_inodes=16,mode=0700' \
+  jain-host-ci-preflight "$quota_probe" \
+  || fail 'bounded evidence tmpfs cannot be mounted'
+[[ "$(/usr/bin/findmnt -rn -o FSTYPE,TARGET --target "$quota_probe")" \
+  == "tmpfs $quota_probe" ]] \
+  || fail 'bounded evidence tmpfs verification failed'
+/usr/bin/umount -- "$quota_probe" || fail 'bounded evidence tmpfs cannot be unmounted'
+rmdir -- "$quota_probe" || fail 'bounded evidence quota probe cleanup failed'
+trap - EXIT
 host_pid_namespace="$(readlink /proc/self/ns/pid)" \
   || fail 'cannot identify the host PID namespace'
 host_user_namespace="$(readlink /proc/self/ns/user)" \

@@ -44,7 +44,7 @@ REEXEC_STATE="${JAIN_HOST_CI_REEXEC_STATE:-}"
   && ! -L "$RUNNER_PATH" \
   && "$(stat -c '%a:%h' -- "$RUNNER_PATH")" == '555:1' ]] || exit 2
 jq -e '
-  select(.schema_version == "jain.host-ci-reexec/v2")
+  select(.schema_version == "jain.host-ci-reexec/v3")
   | select(.source_root == "/opt/jain-ci/authority/control-plane")
   | select(.exact_root == "/opt/jain-ci/authority/control-plane")
   | select(.result_path | type == "string" and startswith("/tmp/split-host-ci-bootstrap."))
@@ -276,9 +276,10 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
   }
   verify_exact_control_plane_integrity || native_setup_failure \
     "control-plane bytes changed before native evidence persistence" 1
+  : "${JAIN_NATIVE_EVIDENCE_STAGING_ROOT:?root evidence staging is required}"
   jain_persist_native_evidence \
     "$native_vendor" "$tmp/native-vendor.log" \
-    "${JAIN_NATIVE_EVIDENCE_ROOT:-${JAIN_HOST_CI_WRITABLE_ROOT:-$SPLIT_ROOT/target}/host-ci-evidence/native-materialization}" \
+    "$JAIN_NATIVE_EVIDENCE_STAGING_ROOT" \
     "$tmp" "$OWNER" "$REPO" "$SHA" "$CHECK" \
     "$JAIN_NATIVE_CONTROL_COMMIT" "$OPS_ROOT" \
     || native_setup_failure \

@@ -23,6 +23,7 @@ publisher_path="$(realpath -e -- "${BASH_SOURCE[0]}")" \
   || fail 'cannot resolve publisher path'
 install_dir="$(dirname "$publisher_path")"
 config="$install_dir/host-ci-publisher.config.json"
+splitctl_path="$install_dir/splitctl"
 [[ ! -L "$publisher_path" \
   && "$(stat -c '%u:%a:%h' -- "$publisher_path" 2>/dev/null)" == '0:500:1' ]] \
   || fail 'publisher must be root-owned mode 0500'
@@ -33,14 +34,19 @@ config="$install_dir/host-ci-publisher.config.json"
 [[ ! -L "$config" \
   && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
   || fail 'publisher config must be root-owned mode 0600'
+[[ ! -L "$splitctl_path" \
+  && "$(stat -c '%u:%a:%h' -- "$splitctl_path" 2>/dev/null)" == '0:500:1' ]] \
+  || fail 'splitctl must be root-owned mode 0500'
 jq -e '
-  select(.schema_version == "jain.host-ci-publisher-config/v2")
+  select(.schema_version == "jain.host-ci-publisher-config/v3")
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
+  | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
   | select(.forge_base | type == "string")
   | select(.forge_git_base | type == "string" and length > 0)
   | select(.control_remote | type == "string" and length > 0)
   | select(.request_root | type == "string" and startswith("/"))
+  | select(.native_evidence_root | type == "string" and startswith("/"))
   | select(.max_seal_age_seconds | type == "number" and . >= 1 and . <= 300)
   | select(.token | type == "string")' "$config" >/dev/null \
   || fail 'invalid publisher config schema'
@@ -49,11 +55,23 @@ publisher_sha="$(sha256sum -- "$publisher_path" | cut -d' ' -f1)"
 expected_publisher_sha="$(jq -er '.publisher_sha256' "$config")"
 [[ "$publisher_sha" == "$expected_publisher_sha" ]] \
   || fail 'publisher digest/config mismatch'
+splitctl_sha="$(sha256sum -- "$splitctl_path" | cut -d' ' -f1)"
+[[ "$splitctl_sha" == "$(jq -er '.splitctl_sha256' "$config")" ]] \
+  || fail 'splitctl digest/config mismatch'
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$config")")" \
   || fail 'request root is unavailable'
 [[ ! -L "$request_root" \
   && "$(stat -c '%u:%a' -- "$request_root")" == '0:700' ]] \
   || fail 'request root must be root-owned mode 0700'
+native_evidence_root="$(realpath -e -- \
+  "$(jq -er '.native_evidence_root' "$config")")" \
+  || fail 'durable native evidence root is unavailable'
+case "$native_evidence_root" in
+  /tmp | /tmp/*) fail 'durable native evidence root cannot use /tmp' ;;
+esac
+[[ ! -L "$native_evidence_root" \
+  && "$(stat -c '%u:%g:%a' -- "$native_evidence_root")" == '0:0:700' ]] \
+  || fail 'durable native evidence root must be root-owned mode 0700'
 
 request_dir="$(realpath -e -- "$1")" || fail 'request directory missing'
 request_id="${request_dir##*/}"
@@ -76,7 +94,7 @@ mkdir -m 0700 "$request_dir/publish.lock" 2>/dev/null \
   || fail 'request was already used or is being published'
 
 jq -e --arg request_id "$request_id" \
-  'select(.schema_version == "jain.host-ci-root-state/v2")
+  'select(.schema_version == "jain.host-ci-root-state/v3")
    | select(.request_id == $request_id and .status == "sealed")
    | select(.nonce | test("^[0-9a-f]{64}$"))
    | select(.result_sha256 | test("^[0-9a-f]{64}$"))
@@ -84,7 +102,9 @@ jq -e --arg request_id "$request_id" \
    | select(.sealed_at | type == "number")
    | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
    | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
-   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))' "$state" >/dev/null \
+   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
+   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
+   | select(.native_evidence_root | type == "string")' "$state" >/dev/null \
   || fail 'root request is not sealed for one-shot publication'
 nonce="$(jq -er '.nonce' "$state")"
 result_sha="$(sha256sum -- "$result" | cut -d' ' -f1)"
@@ -102,11 +122,14 @@ expected_seal="$({
   || fail 'root result seal mismatch'
 [[ "$(jq -er '.publisher_sha256' "$state")" == "$publisher_sha" \
   && "$(jq -er '.sandbox_sha256' "$state")" \
-    == "$(jq -er '.sandbox_sha256' "$config")" ]] \
+    == "$(jq -er '.sandbox_sha256' "$config")" \
+  && "$(jq -er '.splitctl_sha256' "$state")" == "$splitctl_sha" \
+  && "$(jq -er '.native_evidence_root' "$state")" \
+    == "$native_evidence_root" ]] \
   || fail 'root request broker binding mismatch'
 
 jq -e --arg request_id "$request_id" \
-  'select(.schema_version == "jain.host-ci-root-result/v2")
+  'select(.schema_version == "jain.host-ci-root-result/v3")
    | select(.request_id == $request_id)
    | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
    | select(.owner | test("^[a-z0-9][a-z0-9-]*$"))
@@ -129,7 +152,8 @@ if find "$control_root" -xdev \( -type f -o -type d \) \
   fail 'immutable control checkout is group/world writable'
 fi
 for critical in repos.manifest.toml ops/ci/host-ci-publisher.sh \
-  ops/ci/host-ci-sandbox.sh ops/ci/native-runtime.sh; do
+  ops/ci/host-ci-sandbox.sh ops/ci/native-runtime.sh \
+  ops/ci/host-ci-evidence.sh; do
   [[ -f "$control_root/$critical" && ! -L "$control_root/$critical" \
     && "$(stat -c '%u' -- "$control_root/$critical")" == 0 ]] \
     || fail "unsafe immutable control input: $critical"
@@ -187,6 +211,8 @@ required_check="$(jq -er '.required_check' "$result")"
 # worker-supplied boolean is never an authorization input.
 # shellcheck source=ops/ci/native-runtime.sh
 source "$control_root/ops/ci/native-runtime.sh"
+# shellcheck source=ops/ci/host-ci-evidence.sh
+source "$control_root/ops/ci/host-ci-evidence.sh"
 derived_required=false
 if jain_native_check_requires_evidence "$repo" "$required_check" "$protected_check"; then
   derived_required=true
@@ -202,6 +228,15 @@ if [[ "$conclusion" == success ]]; then
   evidence_sha="$(jq -er '.native_evidence_sha256' "$result")"
   required_int=0
   [[ "$derived_required" == true ]] && required_int=1
+  if [[ "$derived_required" == true ]]; then
+    evidence_resolved="$(realpath -e -- "$evidence_dir" 2>/dev/null || true)"
+    case "$evidence_resolved" in
+      "$native_evidence_root"/*) ;;
+      *) fail 'root result native evidence escaped configured durable root' ;;
+    esac
+    jain_host_ci_verify_promoted_evidence "$evidence_resolved" \
+      || fail 'root result native evidence is not immutable root authority'
+  fi
   jain_verify_native_check_evidence success "$required_int" \
     "$evidence_dir" "$evidence_sha" "$head_sha" "$required_check" \
     "$control_root" "$control_commit" \
