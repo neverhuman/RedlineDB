@@ -1,15 +1,15 @@
 # jankurai Repo Score
 
 - Standard: `jankurai`
-- Auditor: `1.6.11`
+- Auditor: `1.6.10`
 - Schema: `jain-split-ops-v8.0.1-split.0`
 - Paper edition: `2026.05-ed8`
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1784052138`
-- Started at: `1784052138`
-- Elapsed: `2215` ms
+- Run ID: `1784136420`
+- Started at: `1784136420`
+- Elapsed: `2390` ms
 - Scope: `full`
 - Raw score: `93`
 - Final score: `93`

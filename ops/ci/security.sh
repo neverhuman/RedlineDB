@@ -5,6 +5,13 @@ cd "$(git rev-parse --show-toplevel)"
 printf '[security:jain-split-ops] required secret, dependency, license, SBOM, and vulnerability scans\n' >&2
 mkdir -p target/jankurai/security target/security
 
+# Release qualification is 100% local. Missing or stale local databases fail
+# closed; the lane never refreshes advisory data or checks for tool updates.
+export CARGO_NET_OFFLINE=true
+export GRYPE_DB_AUTO_UPDATE=false
+export GRYPE_CHECK_FOR_APP_UPDATE=false
+export SYFT_CHECK_FOR_APP_UPDATE=false
+
 for tool in actionlint cargo cargo-audit cargo-deny gitleaks grype jq sha256sum syft tee zizmor; do
   command -v "$tool" >/dev/null 2>&1 || {
     printf 'required security tool is unavailable: %s\n' "$tool" >&2
@@ -21,8 +28,8 @@ gitleaks detect --source . --no-git --redact --exit-code 1 \
   --report-format json --report-path target/security/gitleaks.json
 jq -e 'type == "array" and length == 0' target/security/gitleaks.json >/dev/null
 
-cargo audit --deny warnings 2>&1 | tee target/security/cargo-audit.log
-cargo deny check --config deny.toml 2>&1 | tee target/security/cargo-deny.log
+cargo audit --no-fetch --deny warnings 2>&1 | tee target/security/cargo-audit.log
+cargo deny check --disable-fetch --config deny.toml 2>&1 | tee target/security/cargo-deny.log
 
 syft scan dir:. --exclude './target/**' \
   --output spdx-json=target/security/sbom.spdx.json
@@ -44,7 +51,7 @@ jq -n \
   --arg grype_sha256 "$grype_sha" \
   --argjson package_count "$package_count" \
   --argjson high_or_critical "$high_or_critical" \
-  '{schema:"jain-split-ops.security/v1",status:"pass",scans:["actionlint","zizmor","gitleaks","cargo-audit","cargo-deny","syft","grype"],fallbacks:false,sbom:{format:"spdx-json",sha256:$sbom_sha256,packages:$package_count},vulnerabilities:{grype_sha256:$grype_sha256,fail_on:"high",high_or_critical:$high_or_critical}}' \
+  '{schema:"jain-split-ops.security/v1",status:"pass",network:"disabled",scans:["actionlint","zizmor","gitleaks","cargo-audit","cargo-deny","syft","grype"],fallbacks:false,sbom:{format:"spdx-json",sha256:$sbom_sha256,packages:$package_count},vulnerabilities:{grype_sha256:$grype_sha256,fail_on:"high",high_or_critical:$high_or_critical}}' \
   > target/jankurai/security/evidence.json
 cp target/jankurai/security/evidence.json target/security/evidence.json
 printf 'security ok: jain-split-ops\n'
