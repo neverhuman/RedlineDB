@@ -46,7 +46,7 @@ jq -e '
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
-  | select(.jankurai_sha256 == "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0")
+  | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select(.forge_base | type == "string")
   | select(.forge_git_base | type == "string" and length > 0)
   | select(.control_remote | type == "string" and length > 0)
@@ -66,9 +66,7 @@ splitctl_sha="$(sha256sum -- "$splitctl_path" | cut -d' ' -f1)"
   || fail 'splitctl digest/config mismatch'
 jankurai_sha="$(sha256sum -- "$jankurai_path" | cut -d' ' -f1)"
 [[ "$jankurai_sha" == "$(jq -er '.jankurai_sha256' "$config")" \
-  && "$jankurai_sha" \
-    == 'ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0' \
-  && "$("$jankurai_path" --version)" == 'jankurai 1.6.10' ]] \
+  && "$("$jankurai_path" --version)" == 'jankurai 1.6.11' ]] \
   || fail 'governed Jankurai digest/version mismatch'
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$config")")" \
   || fail 'request root is unavailable'
@@ -368,7 +366,9 @@ get_json() {
 proof_check='jankurai/proof'
 proof_run_id="$(jq -er '.run_id' "$proof_evidence_resolved/receipt.json")"
 proof_score="$(jq -er '.score' "$proof_evidence_resolved/receipt.json")"
-proof_summary="receipt_sha256=$proof_receipt_sha attempt_id=$proof_attempt_id run_id=$proof_run_id auditor_sha256=$jankurai_sha score=$proof_score hard_findings=0 caps_applied=0 root_seal=$(jq -er '.root_seal' "$state")"
+proof_hard="$(jq -er '.hard_findings' "$proof_evidence_resolved/receipt.json")"
+proof_caps="$(jq -er '.caps_applied' "$proof_evidence_resolved/receipt.json")"
+proof_summary="receipt_sha256=$proof_receipt_sha attempt_id=$proof_attempt_id run_id=$proof_run_id auditor_sha256=$jankurai_sha proof_status=$proof_status score=$proof_score hard_findings=$proof_hard caps_applied=$proof_caps root_seal=$(jq -er '.root_seal' "$state")"
 post_json "$forge_base/repos/$owner/$repo/check-runs" \
   "$(jq -cn --arg name "$proof_check" --arg sha "$head_sha" \
     --arg conclusion "$conclusion" --arg summary "$proof_summary" \

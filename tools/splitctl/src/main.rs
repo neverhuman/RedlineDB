@@ -1218,23 +1218,36 @@ fn jankurai_evidence_command(args: Vec<String>) -> Result<(), Box<dyn std::error
     }
 
     let baseline_path = worktree.join("agent/jankurai-baseline.json");
-    let baseline_metadata = fs::symlink_metadata(&baseline_path)?;
-    if baseline_path.canonicalize()? != baseline_path
-        || !baseline_metadata.file_type().is_file()
-        || std::os::unix::fs::MetadataExt::nlink(&baseline_metadata) != 1
-    {
-        return Err("governed Jankurai baseline must be a regular single-link file".into());
-    }
-    let baseline_bytes = fs::read(&baseline_path)?;
-    let baseline: JsonValue = serde_json::from_slice(&baseline_bytes)?;
-    let baseline_score = baseline
-        .get("score")
-        .and_then(JsonValue::as_f64)
-        .ok_or("governed Jankurai baseline is missing numeric score")?;
-    let baseline_auditor = baseline
-        .get("auditor")
-        .and_then(JsonValue::as_str)
-        .ok_or("governed Jankurai baseline is missing auditor")?;
+    let (baseline_bytes, baseline_score, baseline_auditor) =
+        match fs::symlink_metadata(&baseline_path) {
+            Ok(metadata) => {
+                if baseline_path.canonicalize()? != baseline_path
+                    || !metadata.file_type().is_file()
+                    || std::os::unix::fs::MetadataExt::nlink(&metadata) != 1
+                {
+                    return Err(
+                        "governed Jankurai baseline must be a regular single-link file".into(),
+                    );
+                }
+                let bytes = fs::read(&baseline_path)?;
+                let baseline: JsonValue = serde_json::from_slice(&bytes)?;
+                let score = baseline
+                    .get("score")
+                    .and_then(JsonValue::as_f64)
+                    .ok_or("governed Jankurai baseline is missing numeric score")?;
+                let auditor = baseline
+                    .get("auditor")
+                    .and_then(JsonValue::as_str)
+                    .ok_or("governed Jankurai baseline is missing auditor")?
+                    .to_owned();
+                (Some(bytes), Some(score), Some(auditor))
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => (None, None, None),
+            Err(error) => return Err(error.into()),
+        };
+    let baseline_configured = baseline_bytes.is_some();
+    let governed_ratchet_passed =
+        baseline_score.is_none_or(|baseline_score| score >= baseline_score - allowed_drop);
     let clean_tracked_tree_finish = git_tracked_tree_clean(&worktree)?;
 
     let mut evidence = receipt_header(
@@ -1261,10 +1274,12 @@ fn jankurai_evidence_command(args: Vec<String>) -> Result<(), Box<dyn std::error
         "allowed_score_drop": allowed_drop,
     });
     evidence["baseline"] = json!({
+        "configured": baseline_configured,
+        "mode": if baseline_configured { "governed-baseline" } else { "policy-floor-only" },
         "path": baseline_path,
-        "sha256": sha256_bytes(&baseline_bytes),
+        "sha256": baseline_bytes.as_deref().map(sha256_bytes),
         "score": baseline_score,
-        "auditor": baseline_auditor,
+        "auditor": baseline_auditor.as_deref(),
     });
     evidence["report_identity"] = json!({
         "repo": report_repository,
@@ -1291,7 +1306,7 @@ fn jankurai_evidence_command(args: Vec<String>) -> Result<(), Box<dyn std::error
     evidence["score"] = json!(score);
     evidence["hard_findings"] = json!(hard_findings);
     evidence["caps_applied"] = json!(caps_applied);
-    evidence["ratchet_passed"] = json!(score >= baseline_score - allowed_drop);
+    evidence["ratchet_passed"] = json!(governed_ratchet_passed);
     evidence["clean_tracked_tree_at_start"] = json!(clean_tracked_tree_start);
     evidence["clean_tracked_tree_at_finish"] = json!(clean_tracked_tree_finish);
     evidence["auditor"] = json!({
@@ -1300,75 +1315,79 @@ fn jankurai_evidence_command(args: Vec<String>) -> Result<(), Box<dyn std::error
         "sha256": sha256_bytes(&auditor_bytes),
     });
 
-    let mut failures = Vec::new();
+    let mut authority_failures = Vec::new();
+    let mut gate_failures = Vec::new();
     if !clean_tracked_tree_start {
-        failures.push("exact-SHA worktree had tracked changes before audit".to_owned());
+        authority_failures.push("exact-SHA worktree had tracked changes before audit".to_owned());
     }
     if !clean_tracked_tree_finish {
-        failures.push("exact-SHA worktree had tracked changes after audit".to_owned());
+        authority_failures.push("exact-SHA worktree had tracked changes after audit".to_owned());
     }
     if report_dirty || report_git_dirty {
-        failures.push("Jankurai audited a dirty tracked worktree".to_owned());
+        authority_failures.push("Jankurai audited a dirty tracked worktree".to_owned());
     }
     if report_auditor_version != auditor_release || report_policy_auditor != auditor_release {
-        failures.push(format!(
+        authority_failures.push(format!(
             "auditor version mismatch: executable={auditor_release} report={report_auditor_version} policy={report_policy_auditor}"
         ));
     }
-    if baseline_auditor != auditor_version {
-        failures.push(format!(
-            "baseline auditor mismatch: baseline={baseline_auditor} executable={auditor_version}"
-        ));
-    }
     if policy_fingerprint != computed_policy_fingerprint {
-        failures
+        authority_failures
             .push("Jankurai policy fingerprint does not match agent/audit-policy.toml".to_owned());
     }
     if required_tool != "jankurai" || required_tool_version != auditor_release {
-        failures.push(format!(
+        authority_failures.push(format!(
             "governed policy tool mismatch: required={required_tool}@{required_tool_version} executable={auditor_release}"
         ));
     }
     if reported_minimum_score != minimum_score || report_policy_minimum != minimum_score {
-        failures.push(format!(
+        authority_failures.push(format!(
             "reported score floor differs from governed policy: decision={reported_minimum_score} report_policy={report_policy_minimum} governed={minimum_score}"
         ));
     }
     if !decision_passed {
-        failures.push("Jankurai decision.passed is not true".to_owned());
+        gate_failures.push("Jankurai decision.passed is not true".to_owned());
     }
     if score < minimum_score {
-        failures.push(format!(
+        gate_failures.push(format!(
             "score {score} is below governed floor {minimum_score}"
         ));
     }
-    if !reported_ratchet_passed || score < baseline_score - allowed_drop {
-        failures.push(format!(
-            "Jankurai ratchet failed: score={score} baseline={baseline_score} allowed_drop={allowed_drop}"
+    if baseline_configured && !governed_ratchet_passed {
+        gate_failures.push(format!(
+            "Jankurai ratchet failed: score={score} baseline={} allowed_drop={allowed_drop}",
+            baseline_score.expect("configured baseline has a score")
         ));
     }
     if reported_allowed_drop != allowed_drop {
-        failures.push(format!(
+        authority_failures.push(format!(
             "reported allowed drop {reported_allowed_drop} differs from governed {allowed_drop}"
         ));
     }
     if conformance_decision != "pass" || !conformance_blockers.is_empty() {
-        failures.push("Jankurai conformance did not pass without blockers".to_owned());
+        gate_failures.push("Jankurai conformance did not pass without blockers".to_owned());
     }
     if hard_findings != 0 {
-        failures.push(format!("hard findings present: {hard_findings}"));
+        gate_failures.push(format!("hard findings present: {hard_findings}"));
     }
     if caps_applied != 0 {
-        failures.push(format!("caps applied: {caps_applied}"));
+        gate_failures.push(format!("caps applied: {caps_applied}"));
     }
     if lane_conclusion == "failure" {
-        failures.push(format!(
+        gate_failures.push(format!(
             "authoritative lane failed: {}",
             lane_failure_reason
                 .as_deref()
                 .unwrap_or("unspecified failure")
         ));
     }
+    let failures = authority_failures
+        .iter()
+        .chain(&gate_failures)
+        .cloned()
+        .collect::<Vec<_>>();
+    evidence["authority_failures"] = json!(authority_failures);
+    evidence["gate_failures"] = json!(gate_failures);
     evidence["failures"] = json!(failures);
     let result = if failures.is_empty() {
         Ok(())
@@ -5053,6 +5072,14 @@ mod tests {
 
     impl JankuraiFixture {
         fn new(label: &str) -> Self {
+            Self::with_baseline(label, true)
+        }
+
+        fn without_baseline(label: &str) -> Self {
+            Self::with_baseline(label, false)
+        }
+
+        fn with_baseline(label: &str, include_baseline: bool) -> Self {
             let root = TestDir::new(label);
             let repo = root.path().join("source");
             command({
@@ -5068,21 +5095,23 @@ mod tests {
             fs::write(repo.join("payload.txt"), "reviewed\n").unwrap();
             fs::write(
                 &policy,
-                "minimum_score = 85\nallowed_score_drop = 0\nrequired_tool = \"jankurai\"\nrequired_tool_version = \"1.6.10\"\n",
+                "minimum_score = 85\nallowed_score_drop = 0\nrequired_tool = \"jankurai\"\nrequired_tool_version = \"1.6.11\"\n",
             )
             .unwrap();
-            fs::write(
-                &baseline,
-                serde_json::to_vec(&json!({
-                    "schema": "jain.split.jankurai-baseline/v1",
-                    "score": 90,
-                    "caps": [],
-                    "hard_findings": 0,
-                    "auditor": "jankurai 1.6.10",
-                }))
-                .unwrap(),
-            )
-            .unwrap();
+            if include_baseline {
+                fs::write(
+                    &baseline,
+                    serde_json::to_vec(&json!({
+                        "schema": "jain.split.jankurai-baseline/v1",
+                        "score": 90,
+                        "caps": [],
+                        "hard_findings": 0,
+                        "auditor": "jankurai 1.6.11",
+                    }))
+                    .unwrap(),
+                )
+                .unwrap();
+            }
             run_git_strict(&repo, &["add", "."]).unwrap();
             run_git_strict(&repo, &["commit", "-m", "reviewed audit fixture"]).unwrap();
             let commit = resolve_commit(&repo, "HEAD").unwrap();
@@ -5094,7 +5123,7 @@ mod tests {
             let auditor = root.path().join("jankurai");
             let mut auditor_file = fs::File::create(&auditor).unwrap();
             auditor_file
-                .write_all(b"#!/bin/sh\necho 'jankurai 1.6.10'\n")
+                .write_all(b"#!/bin/sh\necho 'jankurai 1.6.11'\n")
                 .unwrap();
             auditor_file.sync_all().unwrap();
             drop(auditor_file);
@@ -5119,7 +5148,7 @@ mod tests {
             json!({
                 "score": 92,
                 "repo": ".",
-                "auditor_version": "1.6.10",
+                "auditor_version": "1.6.11",
                 "input_fingerprint": format!("sha256:{}", "1".repeat(64)),
                 "policy_fingerprint": format!(
                     "sha256:{}",
@@ -5147,7 +5176,7 @@ mod tests {
                 "policy": {
                     "path": "./agent/audit-policy.toml",
                     "minimum_score": 85,
-                    "auditor_version": "1.6.10",
+                    "auditor_version": "1.6.11",
                 },
             })
         }
@@ -5201,6 +5230,28 @@ mod tests {
         );
     }
 
+    fn gate_failed_report(label: &str, expected: &str, mutate: impl FnOnce(&mut JsonValue)) {
+        let fixture = JankuraiFixture::new(label);
+        let mut report = fixture.valid_report();
+        mutate(&mut report);
+        let error = fixture.validate(&report, true).unwrap_err().to_string();
+        assert!(
+            error.contains(expected),
+            "{label}: expected {expected:?} in {error:?}"
+        );
+        let evidence = read_json(&fixture.receipt);
+        assert_eq!(evidence["status"], "fail");
+        assert_eq!(evidence["authority_failures"], json!([]));
+        assert!(
+            evidence["gate_failures"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|failure| failure.as_str().unwrap().contains(expected)),
+            "{label}: missing classified gate failure in {evidence}"
+        );
+    }
+
     #[test]
     fn jankurai_evidence_binds_valid_exact_sha_policy_and_auditor() {
         let fixture = JankuraiFixture::new("jankurai-valid");
@@ -5227,6 +5278,7 @@ mod tests {
         assert_eq!(evidence["caps_applied"], 0);
         assert_eq!(evidence["ratchet_passed"], true);
         assert_eq!(evidence["baseline"]["score"], 90.0);
+        assert_eq!(evidence["baseline"]["mode"], "governed-baseline");
         assert_eq!(evidence["clean_tracked_tree_at_start"], true);
         assert_eq!(evidence["clean_tracked_tree_at_finish"], true);
         assert!(is_full_hex(
@@ -5246,6 +5298,29 @@ mod tests {
             evidence["baseline"]["sha256"],
             sha256_bytes(&fs::read(&fixture.baseline).unwrap())
         );
+    }
+
+    #[test]
+    fn jankurai_evidence_supports_governed_floor_without_a_baseline() {
+        let fixture = JankuraiFixture::without_baseline("jankurai-floor-only");
+        let mut report = fixture.valid_report();
+        report["decision"]["ratchet"]["passed"] = json!(false);
+        report["decision"]["ratchet"]["baseline_score"] = json!(92);
+        fixture.validate(&report, true).unwrap();
+        let evidence = read_json(&fixture.receipt);
+        assert_eq!(evidence["status"], "pass");
+        assert_eq!(evidence["baseline"]["configured"], false);
+        assert_eq!(evidence["baseline"]["mode"], "policy-floor-only");
+        assert!(evidence["baseline"]["sha256"].is_null());
+        assert!(evidence["baseline"]["score"].is_null());
+        assert!(evidence["baseline"]["auditor"].is_null());
+        assert_eq!(evidence["ratchet_passed"], true);
+        assert_eq!(
+            evidence["report_identity"]["reported_ratchet_passed"],
+            false
+        );
+        assert_eq!(evidence["authority_failures"], json!([]));
+        assert_eq!(evidence["gate_failures"], json!([]));
     }
 
     #[test]
@@ -5272,25 +5347,25 @@ mod tests {
         rejected_report("jankurai-floor-identity", "score floor differs", |report| {
             report["decision"]["minimum_score"] = json!(84);
         });
-        rejected_report("jankurai-floor", "below governed floor", |report| {
+        gate_failed_report("jankurai-floor", "below governed floor", |report| {
             report["score"] = json!(84);
         });
-        rejected_report("jankurai-ratchet", "ratchet failed", |report| {
+        gate_failed_report("jankurai-ratchet", "ratchet failed", |report| {
             report["score"] = json!(89);
             report["decision"]["ratchet"]["passed"] = json!(false);
         });
-        rejected_report("jankurai-conformance", "conformance", |report| {
+        gate_failed_report("jankurai-conformance", "conformance", |report| {
             report["conformance_decision"] = json!("fail");
             report["conformance_blockers"] = json!(["blocked"]);
         });
-        rejected_report("jankurai-hard", "hard findings present", |report| {
+        gate_failed_report("jankurai-hard", "hard findings present", |report| {
             report["decision"]["hard_findings"] = json!([{"rule": "hard"}]);
         });
-        rejected_report("jankurai-cap", "caps applied", |report| {
+        gate_failed_report("jankurai-cap", "caps applied", |report| {
             report["caps_applied"] = json!(["cap"]);
         });
         rejected_report("jankurai-auditor", "auditor version mismatch", |report| {
-            report["auditor_version"] = json!("1.6.11");
+            report["auditor_version"] = json!("1.6.10");
         });
         rejected_report(
             "jankurai-report-dirty",
@@ -5299,6 +5374,26 @@ mod tests {
                 report["dirty_worktree"] = json!(true);
             },
         );
+    }
+
+    #[test]
+    fn jankurai_evidence_preserves_a_historical_baseline_auditor() {
+        let mut fixture = JankuraiFixture::new("jankurai-baseline-auditor");
+        let mut baseline = read_json(&fixture.baseline);
+        baseline["auditor"] = json!("jankurai 1.6.10");
+        fs::write(&fixture.baseline, serde_json::to_vec(&baseline).unwrap()).unwrap();
+        run_git_strict(&fixture.repo, &["add", "agent/jankurai-baseline.json"]).unwrap();
+        run_git_strict(
+            &fixture.repo,
+            &["commit", "-m", "historical baseline auditor"],
+        )
+        .unwrap();
+        fixture.commit = resolve_commit(&fixture.repo, "HEAD").unwrap();
+        fixture.validate(&fixture.valid_report(), true).unwrap();
+        let evidence = read_json(&fixture.receipt);
+        assert_eq!(evidence["status"], "pass");
+        assert_eq!(evidence["baseline"]["auditor"], "jankurai 1.6.10");
+        assert_eq!(evidence["auditor"]["version"], "jankurai 1.6.11");
     }
 
     #[test]

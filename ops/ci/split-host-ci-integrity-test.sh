@@ -106,14 +106,14 @@ touch "$forge_log"
 
 # A deterministic stand-in exercises the installed-auditor boundary without
 # trusting a user-owned product tool. Production still pins the governed
-# Jankurai 1.6.10 binary and digest; only this isolated fixture substitutes its
+# Jankurai 1.6.11 binary and digest; only this isolated fixture substitutes its
 # reviewed digest before committing the control-plane fixture.
 fake_jankurai="$tmp/jankurai"
 cat >"$fake_jankurai" <<'JANKURAI'
 #!/usr/bin/env bash
 set -euo pipefail
 if [[ "${1:-}" == --version ]]; then
-  printf 'jankurai 1.6.10\n'
+  printf 'jankurai 1.6.11\n'
   exit 0
 fi
 [[ "${1:-}" == audit && "${2:-}" == . ]] || exit 64
@@ -152,25 +152,32 @@ if /usr/bin/curl -fsS --max-time 1 '__FORGE_BASE__/health' >/dev/null 2>&1; then
   network_isolated=false
 fi
 head="$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-  -c diff.external= rev-parse HEAD)"
+  -c diff.external= rev-parse --short=7 HEAD)"
 mode="$(cat agent/test-auditor-mode 2>/dev/null || printf valid)"
 if [[ "$mode" == wrong-head ]]; then
   head="$(printf '0%.0s' {1..40})"
+fi
+score=92
+decision_passed=true
+if [[ "$mode" == score-failure ]]; then
+  score=84
+  decision_passed=false
 fi
 policy_sha="$(sha256sum agent/audit-policy.toml | cut -d' ' -f1)"
 jq -n --arg head "$head" --arg policy_sha "$policy_sha" \
   --arg source_read_only "$source_read_only" \
   --arg network_isolated "$network_isolated" \
-  '{score:92,repo:".",auditor_version:"1.6.10",
+  --argjson score "$score" --argjson decision_passed "$decision_passed" \
+  '{score:$score,repo:".",auditor_version:"1.6.11",
     input_fingerprint:("sha256:" + ("1" * 64)),
     policy_fingerprint:("sha256:" + $policy_sha),dirty_worktree:false,
     git:{head:$head,dirty_worktree:false},
-    decision:{passed:true,minimum_score:85,hard_findings:[],
+    decision:{passed:$decision_passed,minimum_score:85,hard_findings:[],
       ratchet:{passed:true,baseline_score:90,allowed_drop:0}},
     caps_applied:[],conformance_decision:"pass",conformance_blockers:[],
     run_id:("fixture-audit-" + $head),
     policy:{path:"agent/audit-policy.toml",minimum_score:85,
-      auditor_version:"1.6.10"},
+      auditor_version:"1.6.11"},
     fixture:{source_read_only:($source_read_only == "true"),
       network_isolated:($network_isolated == "true")}}' >"$report"
 printf '# fixture Jankurai report\n' >"$markdown"
@@ -192,13 +199,12 @@ for boundary_file in \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh; do
   install -D -m 0755 "$repo_root/$boundary_file" "$control/$boundary_file"
 done
-for boundary_file in ops/ci/host-ci-publisher.sh \
-  ops/ci/host-ci-sandbox.sh ops/ci/host-ci-boundary-preflight.sh \
-  ops/ci/host-ci-proof-evidence.sh; do
-  sed -i \
-    "s#ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0#$fake_jankurai_digest#g" \
-    "$control/$boundary_file"
-done
+# The adversarial matrix deliberately creates more than the production
+# retention window before its final inode-tamper variants. Keep those fixture
+# receipts long enough to exercise the original sealed success authority.
+sed -i \
+  's/JAIN_PROOF_EVIDENCE_RETAIN_PER_CHECK=8/JAIN_PROOF_EVIDENCE_RETAIN_PER_CHECK=32/' \
+  "$control/ops/ci/host-ci-proof-evidence.sh"
 install -D -m 0644 "$repo_root/tools/splitctl/src/main.rs" \
   "$control/tools/splitctl/src/main.rs"
 # Keep the fixture self-contained while preserving splitctl's production rule
@@ -323,10 +329,10 @@ cat >"$product/agent/audit-policy.toml" <<'POLICY'
 minimum_score = 85
 allowed_score_drop = 0
 required_tool = "jankurai"
-required_tool_version = "1.6.10"
+required_tool_version = "1.6.11"
 POLICY
 cat >"$product/agent/jankurai-baseline.json" <<'BASELINE'
-{"schema":"jain.split.jankurai-baseline/v1","score":90,"caps":[],"hard_findings":0,"auditor":"jankurai 1.6.10"}
+{"schema":"jain.split.jankurai-baseline/v1","score":90,"caps":[],"hard_findings":0,"auditor":"jankurai 1.6.11"}
 BASELINE
 printf 'valid\n' >"$product/agent/test-auditor-mode"
 cat >"$product/scripts/ci-local.sh" <<'SCRIPT'
@@ -951,6 +957,80 @@ if grep -Fq '"conclusion":"success"' <<<"$failure_tail" \
   printf 'failed worker published success\n' >&2
   exit 1
 fi
+
+# A well-formed exact-head report that fails the governed score gate is still
+# durable negative evidence. It must publish proof failure before required
+# failure, never acquire a success result, and remain one-shot.
+printf 'score-failure\n' >"$product/agent/test-auditor-mode"
+git -C "$product" add agent/test-auditor-mode
+git -C "$product" commit --quiet -m 'fixture governed score failure'
+score_failure_sha="$(git -C "$product" rev-parse HEAD)"
+git -C "$product" push --quiet "$product_remote" \
+  "$score_failure_sha:refs/heads/score-failure"
+score_failure_offset="$(stat -c '%s' "$forge_log")"
+if env \
+  JAIN_HOST_CI_SANDBOX="$sandbox" \
+  JAIN_SPLIT_ROOT="$sandbox_family_root" \
+  JAIN_TEST_ATTACK_URL="$forge_base" \
+  JAIN_TEST_REQUIRE_ISOLATION=1 \
+  JAIN_TEST_HOST_PID_NAMESPACE="$host_pid_namespace" \
+  JAIN_TEST_HOST_USER_NAMESPACE="$host_user_namespace" \
+  JAIN_TEST_ROOT_CONFIG_PATH="$publisher_config" \
+  JAIN_TEST_ROOT_REQUEST_PATH="$request_root" \
+  JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
+  JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
+  "$control/ops/ci/split-host-ci.sh" \
+    jeryu jain-report "$score_failure_sha" "$product" \
+    jain-report/required >"$tmp/score-failure.log" 2>&1; then
+  printf 'governed score failure returned publication success\n' >&2
+  exit 1
+fi
+score_failure_tail="$(tail -c "+$((score_failure_offset + 1))" "$forge_log")"
+grep -Fq 'body={"name":"jankurai/proof"' <<<"$score_failure_tail"
+grep -Fq 'proof_status=fail' <<<"$score_failure_tail"
+grep -Fq '"conclusion":"failure"' <<<"$score_failure_tail"
+grep -Fq 'body={"name":"jain-report/required"' <<<"$score_failure_tail"
+score_proof_line="$(grep -nF 'body={"name":"jankurai/proof"' \
+  <<<"$score_failure_tail" | head -n 1 | cut -d: -f1)"
+score_required_line="$(grep -nF 'body={"name":"jain-report/required"' \
+  <<<"$score_failure_tail" | head -n 1 | cut -d: -f1)"
+[[ "$score_proof_line" =~ ^[0-9]+$ && "$score_required_line" =~ ^[0-9]+$ \
+  && (( score_proof_line < score_required_line )) ]] || {
+  printf 'governed score failure did not publish proof before required\n' >&2
+  exit 1
+}
+if grep -Fq '"conclusion":"success"' <<<"$score_failure_tail" \
+  || grep -Fq '"state":"success"' <<<"$score_failure_tail"; then
+  printf 'governed score failure published success\n' >&2
+  exit 1
+fi
+
+# Repositories without a governed baseline use their policy floor directly.
+# The isolated auditor must not synthesize a baseline or reject that shape.
+git -C "$product" rm --quiet agent/test-auditor-mode \
+  agent/jankurai-baseline.json
+git -C "$product" commit --quiet -m 'fixture governed floor only'
+floor_only_sha="$(git -C "$product" rev-parse HEAD)"
+git -C "$product" push --quiet "$product_remote" \
+  "$floor_only_sha:refs/heads/floor-only"
+floor_only_offset="$(stat -c '%s' "$forge_log")"
+env \
+  JAIN_HOST_CI_SANDBOX="$sandbox" \
+  JAIN_SPLIT_ROOT="$sandbox_family_root" \
+  JAIN_TEST_ATTACK_URL="$forge_base" \
+  JAIN_TEST_REQUIRE_ISOLATION=1 \
+  JAIN_TEST_HOST_PID_NAMESPACE="$host_pid_namespace" \
+  JAIN_TEST_HOST_USER_NAMESPACE="$host_user_namespace" \
+  JAIN_TEST_ROOT_CONFIG_PATH="$publisher_config" \
+  JAIN_TEST_ROOT_REQUEST_PATH="$request_root" \
+  JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
+  JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
+  "$control/ops/ci/split-host-ci.sh" \
+    jeryu jain-report "$floor_only_sha" "$product" \
+    jain-report/required >"$tmp/floor-only.log" 2>&1
+floor_only_tail="$(tail -c "+$((floor_only_offset + 1))" "$forge_log")"
+grep -Fq 'proof_status=pass' <<<"$floor_only_tail"
+grep -Fq '"conclusion":"success"' <<<"$floor_only_tail"
 
 # An advertised product head still has no authority to forge the report's
 # audited SHA. The validator rejects it before a root result or forge POST.

@@ -37,11 +37,11 @@ for config in "$publisher_config" "$sandbox_config"; do
     || fail "unsafe installed config: $config"
 done
 jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v4")
-  | select(.jankurai_sha256 == "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0")
+  | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))' \
   "$publisher_config" >/dev/null || fail 'invalid publisher config version'
 jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v4")
-  | select(.jankurai_sha256 == "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0")
+  | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.retain_requests == false)' "$sandbox_config" >/dev/null \
   || fail 'invalid or test-only sandbox config'
@@ -55,8 +55,8 @@ jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v4")
   == "$(jq -er '.splitctl_sha256' "$sandbox_config")" ]] \
   || fail 'splitctl digest/config mismatch'
 [[ "$(sha256sum -- "$jankurai" | cut -d' ' -f1)" \
-  == 'ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0' \
-  && "$("$jankurai" --version)" == 'jankurai 1.6.10' ]] \
+  == "$(jq -er '.jankurai_sha256' "$sandbox_config")" \
+  && "$("$jankurai" --version)" == 'jankurai 1.6.11' ]] \
   || fail 'governed Jankurai binary/version mismatch'
 for field in \
   publisher_sha256 sandbox_sha256 splitctl_sha256 jankurai_sha256 \

@@ -89,14 +89,21 @@ from the authority-bound commit, Git-tree, SHA-256 tree-manifest, submodule, and
 It never executes a canonical product checkout's vendor script.
 
 After the product cgroup is dead, the v4 host boundary runs the governed, root-owned Jankurai
-1.6.10 (`sha256:ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0`) in a second
-network-isolated unit against a separate clean, read-only exact-head checkout. Root validates and
-persists the report plus `jain.jankurai-exact-sha-evidence/v1` receipt in the configured proof
+1.6.11 in a second network-isolated unit, with its re-derived provisioning digest bound identically
+in both root-owned v4 configs. It audits a separate clean, read-only exact-head checkout. Root
+validates and persists the report plus `jain.jankurai-exact-sha-evidence/v1` receipt in the configured proof
 evidence store. The root result seal binds the receipt digest. The publisher must POST and read
 back the exact `jankurai/proof` check before it can POST `<repo>/required` and its commit status.
-Any repository/SHA/auditor/policy mismatch, dirty tree, low score, ratchet failure, hard finding,
-cap, nonconformance, stale seal, linked inode, tampering, missing readback, or partial publication
-fails closed. A request is never replayed after a publication attempt.
+Any repository/SHA/auditor/policy mismatch, dirty tree, stale seal, linked inode, tampering,
+missing readback, or partial publication fails closed without publication authority. A valid
+low-score, configured-ratchet failure, hard-finding, cap, nonconformance, or product-lane failure publishes
+only proof failure followed by required failure. Repositories without a governed baseline use the
+governed policy floor and never receive a synthesized baseline. For repositories with the compact
+historical baseline, root binds its identity and computes the score ratchet without passing that
+legacy schema to Jankurai 1.6.11. A request is never replayed after
+a publication attempt.
+The digest must come from the matching protected jeryu-tool manifest/install receipt; an unmanaged
+PATH binary or a digest produced in a reviewer's different build environment is never authority.
 
 Install or update this boundary only from a protected-merged `jain-split-ops` commit, following
 [`../ops/ci/HOST_CI_BOUNDARY.md`](../ops/ci/HOST_CI_BOUNDARY.md). A source or PR lane must not run

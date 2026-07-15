@@ -9,7 +9,7 @@ namespaces, then irreversibly drops all capabilities before reviewed or
 candidate-controlled bytes execute. The sandbox fetches a root-owned immutable
 control checkout from the configured reviewed remote, derives native-evidence
 policy from it, and kills the worker cgroup. It then starts the separately
-installed, digest-pinned Jankurai 1.6.10 auditor in a second network-isolated
+installed, digest-pinned Jankurai 1.6.11 auditor in a second network-isolated
 unit. Jankurai sees a separate clean, read-only checkout at the requested full
 SHA and a bounded output `tmpfs`; it never sees the product worker checkout.
 Root kills the audit cgroup, validates and promotes the report plus receipt,
@@ -38,13 +38,20 @@ the check into failure; none can become publication authority.
 
 Jankurai proof output is independently bounded to three regular, single-link
 files in a 16 MiB, 32-inode `tmpfs`. The Rust validator binds the repository,
-full commit, clean tracked state before and after audit, report/run/attempt IDs,
-governed policy and baseline digests, installed auditor version and digest,
-score floor and ratchet, conformance, zero hard findings, and zero caps. Root
-promotes only `report.json` and the `jain.jankurai-exact-sha-evidence/v1`
-receipt into a distinct root-only durable store. Any identity mismatch, dirty
-tree, low score, ratchet failure, nonconformance, finding, cap, linked inode,
-extra file, tampering, or auditor mismatch fails closed.
+resolves Jankurai's unambiguous Git head to the full commit inside the exact
+checkout, and binds clean tracked state before and after audit, report/run/attempt
+IDs, governed policy and optional baseline identity, installed auditor version
+and digest, score floor and any configured ratchet, conformance, hard findings,
+and caps. Root computes a configured score ratchet from the committed compact
+baseline instead of passing that historical schema to Jankurai 1.6.11. The
+baseline auditor remains provenance; the current executable, report, and policy
+identities must agree. Root promotes
+only `report.json` and the `jain.jankurai-exact-sha-evidence/v1`
+receipt into a distinct root-only durable store. A valid low-score, ratchet,
+nonconformance, finding, cap, or product-lane failure becomes durable negative
+evidence and can publish only proof failure followed by required failure. Any
+identity mismatch, dirty tree, linked inode, extra file, tampering, or auditor
+mismatch gains no publication authority.
 
 Publication is strictly ordered: POST `jankurai/proof`, GET the commit's check
 runs and verify the exact receipt digest, attempt, and full SHA, POST
@@ -68,13 +75,17 @@ install -o root -g root -m 0500 ops/ci/host-ci-boundary-preflight.sh \
 cargo build --locked --release --bin splitctl
 install -o root -g root -m 0500 target/release/splitctl \
   /usr/local/libexec/jain/splitctl
-test "$(/home/ubuntu/.jeryu/bin/jankurai --version)" = 'jankurai 1.6.10'
+test "$(/home/ubuntu/.jeryu/bin/jankurai --version)" = 'jankurai 1.6.11'
+# Copy this only from the separately protected jeryu-tool provisioning result.
+# The digest is re-derived in that provisioning environment; do not reuse a
+# reviewer-local build digest or any binary found through PATH.
+governed_jankurai_sha='<64 lowercase hex from governed install receipt>'
 test "$(sha256sum /home/ubuntu/.jeryu/bin/jankurai | cut -d' ' -f1)" = \
-  ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0
+  "$governed_jankurai_sha"
 install -o root -g root -m 0555 /home/ubuntu/.jeryu/bin/jankurai \
   /usr/local/libexec/jain/jankurai
 test "$(sha256sum /usr/local/libexec/jain/jankurai | cut -d' ' -f1)" = \
-  ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0
+  "$governed_jankurai_sha"
 useradd --system --user-group --home-dir /var/lib/jain-host-ci \
   --shell /usr/sbin/nologin jain-host-ci
 install -d -o jain-host-ci -g jain-host-ci -m 0700 \
@@ -95,7 +106,7 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
   "sandbox_sha256": "<64 lowercase hex>",
   "publisher_sha256": "<64 lowercase hex>",
   "splitctl_sha256": "<64 lowercase hex>",
-  "jankurai_sha256": "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0",
+  "jankurai_sha256": "<64 lowercase hex from governed install receipt>",
   "parent_uid": 1000,
   "parent_gid": 1000,
   "worker_user": "jain-host-ci",
@@ -124,7 +135,7 @@ a command line or in an environment variable:
   "publisher_sha256": "<64 lowercase hex>",
   "sandbox_sha256": "<64 lowercase hex>",
   "splitctl_sha256": "<64 lowercase hex>",
-  "jankurai_sha256": "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0",
+  "jankurai_sha256": "<64 lowercase hex from governed install receipt>",
   "forge_base": "http://127.0.0.1:8787",
   "forge_git_base": "http://127.0.0.1:8787/git",
   "control_remote": "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
@@ -156,14 +167,16 @@ Run the installed preflight as root:
 ```
 
 It fails if modes/digests/UIDs differ, Jankurai is not the governed root-owned
-1.6.10 binary, the worker has sudo, the parent has any
+1.6.11 binary, the worker has sudo, the parent has any
 sudo rule beyond the exact sandbox command above, request/cache ownership differs,
 either durable evidence directory is missing, shared, or uses `/tmp`, or the systemd
 namespace/seccomp probe cannot run. GPU release validation is dispatched by SCQ
 to registered GPU workers; do not add nonexistent AtomicSoul GPU devices to this
 host boundary. Re-run installation and
 preflight for every immutable broker revision; never update a digest without
-installing and reviewing the matching bytes.
+installing and reviewing the matching bytes. The two v4 configs must bind the
+same freshly provisioned digest from the protected jeryu-tool manifest/install
+receipt; an environment-specific review build digest is not portable authority.
 
 These commands are a post-merge authority-owner procedure. A source/PR lane
 must not install the broker, migrate the credential, run the unmerged publisher,

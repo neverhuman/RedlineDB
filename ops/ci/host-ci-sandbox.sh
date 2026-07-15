@@ -52,7 +52,7 @@ jq -e '
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
-  | select(.jankurai_sha256 == "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0")
+  | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select(.parent_uid | type == "number")
   | select(.parent_gid | type == "number")
   | select(.worker_user | type == "string" and length > 0)
@@ -78,9 +78,7 @@ jankurai_sha="$(sha256sum -- "$jankurai_path" | cut -d' ' -f1)"
   && "$publisher_sha" == "$(jq -er '.publisher_sha256' "$config")" \
   && "$splitctl_sha" == "$(jq -er '.splitctl_sha256' "$config")" \
   && "$jankurai_sha" == "$(jq -er '.jankurai_sha256' "$config")" \
-  && "$jankurai_sha" \
-    == 'ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0' \
-  && "$("$jankurai_path" --version)" == 'jankurai 1.6.10' ]] \
+  && "$("$jankurai_path" --version)" == 'jankurai 1.6.11' ]] \
   || fail 'installed broker digest/config mismatch'
 
 parent_uid="$(jq -er '.parent_uid' "$config")"
@@ -685,7 +683,7 @@ proof_result_line="$(jain_host_ci_promote_proof_evidence \
   "$proof_staging_root" "$proof_evidence_root" \
   "${arguments[0]}" "$repo" "${arguments[2]}" "${arguments[4]}" \
   "$request_id" "$proof_attempt_id" "$worker_uid" "$worker_gid" \
-  "$audit_worktree" "$splitctl_path" "$jankurai_path" \
+  "$audit_worktree" "$splitctl_path" "$jankurai_path" "$jankurai_sha" \
   "$lane_conclusion" "$lane_failure_reason" "$audit_clean_start")" \
   || fail 'root exact-SHA proof evidence promotion failed'
 IFS=$'\t' read -r proof_evidence_dir proof_receipt_sha proof_report_sha \

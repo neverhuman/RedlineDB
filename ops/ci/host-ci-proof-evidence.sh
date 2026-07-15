@@ -1,14 +1,13 @@
 #!/usr/bin/env bash
 # Root-only exact-SHA Jankurai evidence promotion and verification helpers.
 
-JAIN_HOST_CI_JANKURAI_VERSION='jankurai 1.6.10'
-JAIN_HOST_CI_JANKURAI_SHA256='ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0'
+JAIN_HOST_CI_JANKURAI_VERSION='jankurai 1.6.11'
 JAIN_PROOF_STAGING_MAX_FILES=3
 JAIN_PROOF_STAGING_MAX_BYTES=16777216
 JAIN_PROOF_STAGING_MAX_FILE_BYTES=8388608
 JAIN_PROOF_EVIDENCE_MIN_FREE_BYTES=1073741824
 JAIN_PROOF_EVIDENCE_RETAIN_PER_CHECK=8
-readonly JAIN_HOST_CI_JANKURAI_VERSION JAIN_HOST_CI_JANKURAI_SHA256
+readonly JAIN_HOST_CI_JANKURAI_VERSION
 readonly JAIN_PROOF_STAGING_MAX_FILES JAIN_PROOF_STAGING_MAX_BYTES
 readonly JAIN_PROOF_STAGING_MAX_FILE_BYTES JAIN_PROOF_EVIDENCE_MIN_FREE_BYTES
 readonly JAIN_PROOF_EVIDENCE_RETAIN_PER_CHECK
@@ -91,19 +90,34 @@ jain_host_ci_verify_proof_payload() {
       | select(.run_id | type == "string" and length > 0)
       | select(.report == $report and .report_sha256 == $report_sha)
       | select(.policy.sha256 | test("^[0-9a-f]{64}$"))
-      | select(.baseline.sha256 | test("^[0-9a-f]{64}$"))
+      | select(.baseline.configured | type == "boolean")
+      | select(.baseline.mode == (if .baseline.configured
+          then "governed-baseline" else "policy-floor-only" end))
+      | select(if .baseline.configured
+          then ((.baseline.sha256 | test("^[0-9a-f]{64}$"))
+            and (.baseline.score | type == "number")
+            and (.baseline.auditor | type == "string" and length > 0))
+          else (.baseline.sha256 == null and .baseline.score == null
+            and .baseline.auditor == null)
+        end)
       | select(.auditor.version == $auditor_version)
       | select(.auditor.sha256 == $auditor_sha)
       | select(.score | type == "number")
-      | select(.hard_findings == 0 and .caps_applied == 0)
-      | select(.ratchet_passed == true)
+      | select(.hard_findings | type == "number")
+      | select(.caps_applied | type == "number")
       | select(.clean_tracked_tree_at_start == true)
       | select(.clean_tracked_tree_at_finish == true)
-      | select(.report_identity.conformance_decision == "pass")
-      | select(.report_identity.conformance_blockers == [])
+      | select(.authority_failures == [])
+      | select(.gate_failures | type == "array")
+      | select(.failures == (.authority_failures + .gate_failures))
       | select(if $status == "pass"
-          then (.lane.conclusion == "success" and .failures == [])
-          else (.failures | type == "array" and length > 0)
+          then (.lane.conclusion == "success" and .gate_failures == []
+            and .failures == [] and .hard_findings == 0
+            and .caps_applied == 0 and .ratchet_passed == true
+            and .report_identity.decision_passed == true
+            and .report_identity.conformance_decision == "pass"
+            and .report_identity.conformance_blockers == [])
+          else (.gate_failures | length > 0)
         end)' "$receipt" >/dev/null || return 1
 }
 
@@ -150,13 +164,15 @@ jain_host_ci_promote_proof_evidence() (
   local worker_gid="${10:?worker GID is required}"
   local worktree="${11:?audit worktree is required}"
   local splitctl="${12:?splitctl is required}" auditor="${13:?auditor is required}"
-  local lane_conclusion="${14:?lane conclusion is required}"
-  local lane_failure_reason="${15:-}" clean_start="${16:?clean start is required}"
+  local expected_auditor_sha="${14:?auditor digest is required}"
+  local lane_conclusion="${15:?lane conclusion is required}"
+  local lane_failure_reason="${16:-}" clean_start="${17:?clean start is required}"
   local resolved_store resolved_staging parent destination check_slug available required
   local validator_rc=0 status receipt_sha report_sha auditor_sha lock lock_fd name index
   local -a retained=() failure_args=()
   [[ "$(id -u)" == 0 && "$request_id" =~ ^[0-9a-f]{64}$ \
     && "$attempt_id" =~ ^[A-Za-z0-9_.-]+$ \
+    && "$expected_auditor_sha" =~ ^[0-9a-f]{64}$ \
     && "$lane_conclusion" =~ ^(success|failure)$ \
     && "$clean_start" =~ ^(true|false)$ ]] || return 1
   [[ "$lane_conclusion" == success || -n "$lane_failure_reason" ]] || return 1
@@ -164,7 +180,7 @@ jain_host_ci_promote_proof_evidence() (
   resolved_staging="$(jain_host_ci_verify_proof_staging \
     "$staging" "$worker_uid" "$worker_gid")" || return 1
   auditor_sha="$(sha256sum -- "$auditor" | cut -d' ' -f1)" || return 1
-  [[ "$auditor_sha" == "$JAIN_HOST_CI_JANKURAI_SHA256" \
+  [[ "$auditor_sha" == "$expected_auditor_sha" \
     && "$("$auditor" --version)" == "$JAIN_HOST_CI_JANKURAI_VERSION" ]] \
     || return 1
 
