@@ -2,9 +2,10 @@
 use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
-    env, fs, io,
+    env, fs,
+    io::{self, Write},
     path::{Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -157,7 +158,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | validate-deploy-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | workspace-clean [--manifest PATH] [--receipt PATH] [--bundle-dir PATH] [--claims PATH] [--scratch PATH]... [--path-proof PATH]... [--apply] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--manifest PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | validate-deploy-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | workspace-clean [--manifest PATH] [--receipt PATH] [--bundle-dir PATH] [--claims PATH] [--allowed-signers PATH] [--scratch PATH]... [--path-proof PATH]... [--apply] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--manifest PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -2248,6 +2249,7 @@ fn workspace_clean_command(args: Vec<String>) -> Result<(), Box<dyn std::error::
     let mut receipt = None;
     let mut bundle_dir = None;
     let mut claims = None;
+    let mut allowed_signers = None;
     let mut scratch = Vec::new();
     let mut path_proofs = Vec::new();
     let mut apply = false;
@@ -2264,6 +2266,11 @@ fn workspace_clean_command(args: Vec<String>) -> Result<(), Box<dyn std::error::
                 ))
             }
             "--claims" => claims = Some(PathBuf::from(iter.next().ok_or("--claims needs a path")?)),
+            "--allowed-signers" => {
+                allowed_signers = Some(PathBuf::from(
+                    iter.next().ok_or("--allowed-signers needs a path")?,
+                ))
+            }
             "--scratch" => {
                 scratch.push(PathBuf::from(iter.next().ok_or("--scratch needs a path")?))
             }
@@ -2293,13 +2300,19 @@ fn workspace_clean_command(args: Vec<String>) -> Result<(), Box<dyn std::error::
                 repository,
                 claims.as_deref(),
                 bundle_dir.as_deref(),
+                allowed_signers.as_deref(),
                 &path_proofs,
                 &mut blockers,
             )?;
             rows.push(row);
         }
-        let scratch_rows =
-            inventory_workspace_scratch(&scratch, &path_proofs, &split_root, &mut blockers)?;
+        let scratch_rows = inventory_workspace_scratch(
+            &scratch,
+            &path_proofs,
+            allowed_signers.as_deref(),
+            &split_root,
+            &mut blockers,
+        )?;
         let plan_status = if blockers.is_empty() {
             "ready"
         } else {
@@ -2318,9 +2331,19 @@ fn workspace_clean_command(args: Vec<String>) -> Result<(), Box<dyn std::error::
             return Err("workspace-clean is blocked; no cleanup was attempted".into());
         }
         for repository in &repositories {
-            apply_workspace_repository_cleanup(repository, claims.as_deref(), &path_proofs)?;
+            apply_workspace_repository_cleanup(
+                repository,
+                claims.as_deref(),
+                allowed_signers.as_deref(),
+                &path_proofs,
+            )?;
         }
-        apply_workspace_scratch_cleanup(&scratch, &path_proofs, &split_root)?;
+        apply_workspace_scratch_cleanup(
+            &scratch,
+            &path_proofs,
+            allowed_signers.as_deref(),
+            &split_root,
+        )?;
         report["action"] = json!("applied-and-verified");
         Ok(())
     })();
@@ -2331,6 +2354,7 @@ fn inventory_workspace_repository(
     repository: &ManagedRepo,
     claims: Option<&Path>,
     bundle_dir: Option<&Path>,
+    allowed_signers: Option<&Path>,
     path_proofs: &[PathBuf],
     blockers: &mut Vec<String>,
 ) -> Result<JsonValue, Box<dyn std::error::Error>> {
@@ -2403,10 +2427,15 @@ fn inventory_workspace_repository(
         let claim = branch
             .as_deref()
             .and_then(|branch| ledger_transition(claims, &repository.name, branch));
-        let bundle = head
-            .as_deref()
-            .and_then(|head| signed_bundle_receipt(bundle_dir, &repository.path, head));
-        let removal_proof = verified_removal_proof(path_proofs, &worktree.path, head.as_deref());
+        let bundle = head.as_deref().and_then(|head| {
+            signed_bundle_receipt(bundle_dir, allowed_signers, &repository.path, head)
+        });
+        let removal_proof = verified_removal_proof(
+            path_proofs,
+            allowed_signers,
+            &worktree.path,
+            head.as_deref(),
+        );
         let preservable = merged || pushed || bundle.is_some();
         let mut cleanup_blockers = Vec::new();
         if dirty {
@@ -2637,10 +2666,12 @@ fn contains_coordination_token(text: &str, token: &str) -> bool {
 
 fn signed_bundle_receipt(
     bundle_dir: Option<&Path>,
+    allowed_signers: Option<&Path>,
     repository: &Path,
     head: &str,
 ) -> Option<JsonValue> {
     let directory = bundle_dir?;
+    let allowed_signers = allowed_signers?;
     let candidates = [
         directory.join(format!("{head}.json")),
         directory.join(format!("{head}.bundle.json")),
@@ -2657,12 +2688,13 @@ fn signed_bundle_receipt(
             .get("head_sha")
             .or_else(|| report.get("head"))
             .and_then(JsonValue::as_str);
-        let signature = report.get("signature_status").and_then(JsonValue::as_str);
-        let signer = report
-            .get("signer_fingerprint")
-            .and_then(JsonValue::as_str)
-            .filter(|value| value.len() >= 16)?;
-        if receipt_head != Some(head) || signature != Some("verified") {
+        let signer_identity = report.get("signer_identity")?.as_str()?;
+        let signer_fingerprint = report.get("signer_fingerprint").and_then(JsonValue::as_str);
+        let namespace = report.get("signature_namespace")?.as_str()?;
+        if receipt_head != Some(head)
+            || signer_identity.is_empty()
+            || namespace != "jain-workspace-bundle"
+        {
             return None;
         }
         let bundle = verified_receipt_file(
@@ -2696,15 +2728,52 @@ fn signed_bundle_receipt(
         if !verified || !lists_head {
             return None;
         }
+        let bundle_bytes = fs::read(&bundle).ok()?;
+        if !verify_ssh_signature(
+            allowed_signers,
+            signer_identity,
+            namespace,
+            &signature_path,
+            &bundle_bytes,
+        ) {
+            return None;
+        }
         Some(json!({
             "path": path,
             "head": head,
             "bundle_path": bundle,
             "signature_path": signature_path,
-            "signature_status": signature,
-            "signer_fingerprint": signer,
+            "signature_status": "cryptographically-verified",
+            "signer_identity": signer_identity,
+            "signer_fingerprint": signer_fingerprint,
         }))
     })
+}
+
+fn verify_ssh_signature(
+    allowed_signers: &Path,
+    identity: &str,
+    namespace: &str,
+    signature: &Path,
+    payload: &[u8],
+) -> bool {
+    let child = Command::new("ssh-keygen")
+        .args(["-Y", "verify", "-f"])
+        .arg(allowed_signers)
+        .args(["-I", identity, "-n", namespace, "-s"])
+        .arg(signature)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn();
+    let Ok(mut child) = child else {
+        return false;
+    };
+    let wrote_payload = child
+        .stdin
+        .take()
+        .is_some_and(|mut stdin| stdin.write_all(payload).is_ok());
+    wrote_payload && child.wait().is_ok_and(|status| status.success())
 }
 
 fn verified_receipt_file(receipt: &Path, value: &str, expected_sha256: &str) -> Option<PathBuf> {
@@ -2727,45 +2796,22 @@ fn verified_receipt_file(receipt: &Path, value: &str, expected_sha256: &str) -> 
 
 fn verified_removal_proof(
     proofs: &[PathBuf],
+    allowed_signers: Option<&Path>,
     target: &Path,
     expected_head: Option<&str>,
 ) -> Option<JsonValue> {
+    let allowed_signers = allowed_signers?;
     proofs.iter().find_map(|proof| {
         let report: JsonValue = serde_json::from_slice(&fs::read(proof).ok()?).ok()?;
         if report.get("schema_version").and_then(JsonValue::as_str)
             != Some("jain.workspace-removal-proof/v1")
             || report.get("status").and_then(JsonValue::as_str) != Some("pass")
-            || report.get("signature_status").and_then(JsonValue::as_str) != Some("verified")
-            || report
-                .get("signer_fingerprint")
-                .and_then(JsonValue::as_str)
-                .is_none_or(|value| value.len() < 16)
-            || !report
-                .get("live_processes")
-                .and_then(JsonValue::as_array)
-                .is_some_and(Vec::is_empty)
-            || !report
-                .get("active_leases")
-                .and_then(JsonValue::as_array)
-                .is_some_and(Vec::is_empty)
         {
             return None;
         }
-        let proof_target = report
-            .get("path")
-            .or_else(|| report.get("scratch_path"))
-            .and_then(JsonValue::as_str)?;
-        if !same_path(Path::new(proof_target), target) {
-            return None;
-        }
-        if expected_head.is_some()
-            && report.get("head_sha").and_then(JsonValue::as_str) != expected_head
-        {
-            return None;
-        }
-        let observed = report.get("observed_at_unix")?.as_u64()?;
-        let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
-        if observed > now.saturating_add(5) || now.saturating_sub(observed) > 300 {
+        let signer_identity = report.get("signer_identity")?.as_str()?;
+        let namespace = report.get("signature_namespace")?.as_str()?;
+        if signer_identity.is_empty() || namespace != "jain-workspace-clean" {
             return None;
         }
         let payload = verified_receipt_file(
@@ -2778,13 +2824,55 @@ fn verified_removal_proof(
             report.get("signature_path")?.as_str()?,
             report.get("signature_sha256")?.as_str()?,
         )?;
+        let payload_bytes = fs::read(&payload).ok()?;
+        if !verify_ssh_signature(
+            allowed_signers,
+            signer_identity,
+            namespace,
+            &signature,
+            &payload_bytes,
+        ) {
+            return None;
+        }
+        let signed: JsonValue = serde_json::from_slice(&payload_bytes).ok()?;
+        if signed.get("schema_version").and_then(JsonValue::as_str)
+            != Some("jain.workspace-removal-proof/v1")
+            || !signed
+                .get("live_processes")
+                .and_then(JsonValue::as_array)
+                .is_some_and(Vec::is_empty)
+            || !signed
+                .get("active_leases")
+                .and_then(JsonValue::as_array)
+                .is_some_and(Vec::is_empty)
+        {
+            return None;
+        }
+        let proof_target = signed
+            .get("path")
+            .or_else(|| signed.get("scratch_path"))
+            .and_then(JsonValue::as_str)?;
+        if !same_path(Path::new(proof_target), target) {
+            return None;
+        }
+        if expected_head.is_some()
+            && signed.get("head_sha").and_then(JsonValue::as_str) != expected_head
+        {
+            return None;
+        }
+        let observed = signed.get("observed_at_unix")?.as_u64()?;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
+        if observed > now.saturating_add(5) || now.saturating_sub(observed) > 300 {
+            return None;
+        }
         Some(json!({
             "path": proof,
             "observed_at_unix": observed,
             "head_sha": expected_head,
             "payload_path": payload,
             "signature_path": signature,
-            "signature_status": "verified",
+            "signature_status": "cryptographically-verified",
+            "signer_identity": signer_identity,
             "signer_fingerprint": report["signer_fingerprint"],
         }))
     })
@@ -2793,6 +2881,7 @@ fn verified_removal_proof(
 fn inventory_workspace_scratch(
     scratch: &[PathBuf],
     proofs: &[PathBuf],
+    allowed_signers: Option<&Path>,
     split_root: &Path,
     blockers: &mut Vec<String>,
 ) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
@@ -2811,7 +2900,7 @@ fn inventory_workspace_scratch(
         let declared = (normalized.starts_with(split_root) && ci_scratch)
             || text.starts_with("/tmp/codex-")
             || text.starts_with("/tmp/redline-");
-        let proof = verified_removal_proof(proofs, &normalized, None);
+        let proof = verified_removal_proof(proofs, allowed_signers, &normalized, None);
         let mut row_blockers = Vec::new();
         if !declared {
             row_blockers.push("path is not a declared CI scratch location".to_owned());
@@ -2844,6 +2933,7 @@ fn inventory_workspace_scratch(
 fn apply_workspace_repository_cleanup(
     repository: &ManagedRepo,
     claims: Option<&Path>,
+    allowed_signers: Option<&Path>,
     path_proofs: &[PathBuf],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let worktrees = list_worktrees(&repository.path)?;
@@ -2877,7 +2967,8 @@ fn apply_workspace_repository_cleanup(
             .ok_or("auxiliary worktree has no HEAD")?;
         let branch = worktree.branch.as_deref().unwrap_or_default();
         let claim = ledger_transition(claims, &repository.name, branch);
-        let removal_proof = verified_removal_proof(path_proofs, &worktree.path, Some(head));
+        let removal_proof =
+            verified_removal_proof(path_proofs, allowed_signers, &worktree.path, Some(head));
         let remote_branch = branch.strip_prefix("refs/heads/").unwrap_or(branch);
         let pushed = ls_remote_ref(
             &worktree.path,
@@ -2906,10 +2997,12 @@ fn apply_workspace_repository_cleanup(
 fn apply_workspace_scratch_cleanup(
     scratch: &[PathBuf],
     proofs: &[PathBuf],
+    allowed_signers: Option<&Path>,
     split_root: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut blockers = Vec::new();
-    let rows = inventory_workspace_scratch(scratch, proofs, split_root, &mut blockers)?;
+    let rows =
+        inventory_workspace_scratch(scratch, proofs, allowed_signers, split_root, &mut blockers)?;
     if !blockers.is_empty() {
         return Err(blockers.join("\n").into());
     }
@@ -5740,44 +5833,70 @@ mod tests {
         serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
     }
 
-    fn write_removal_proof(root: &Path, target: &Path, head: Option<&str>) -> PathBuf {
+    fn write_removal_proof(root: &Path, target: &Path, head: Option<&str>) -> (PathBuf, PathBuf) {
+        let key = root.join(format!(
+            "removal-key-{}",
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
+        let mut generate = Command::new("ssh-keygen");
+        generate.args(["-q", "-t", "ed25519", "-N", "", "-f"]);
+        generate.arg(&key);
+        command(generate);
+        let allowed_signers = key.with_extension("allowed-signers");
+        fs::write(
+            &allowed_signers,
+            format!(
+                "workspace-test {}",
+                fs::read_to_string(key.with_extension("pub")).unwrap()
+            ),
+        )
+        .unwrap();
         let payload = root.join(format!(
             "removal-payload-{}.json",
             NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
         ));
-        let signature = payload.with_extension("sig");
-        fs::write(
-            &payload,
-            serde_json::to_vec(&json!({"path": target, "head_sha": head})).unwrap(),
-        )
-        .unwrap();
-        fs::write(&signature, "test detached signature\n").unwrap();
-        let proof = payload.with_extension("proof.json");
         let observed_at_unix = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs();
         fs::write(
-            &proof,
-            serde_json::to_vec_pretty(&json!({
+            &payload,
+            serde_json::to_vec(&json!({
                 "schema_version": "jain.workspace-removal-proof/v1",
-                "status": "pass",
                 "path": target,
                 "head_sha": head,
                 "observed_at_unix": observed_at_unix,
                 "live_processes": [],
                 "active_leases": [],
-                "payload_path": payload,
-                "payload_sha256": sha256_bytes(&fs::read(&payload).unwrap()),
-                "signature_path": signature,
-                "signature_sha256": sha256_bytes(&fs::read(&signature).unwrap()),
-                "signature_status": "verified",
-                "signer_fingerprint": "TEST-REMOVAL-SIGNER-0001",
             }))
             .unwrap(),
         )
         .unwrap();
-        proof
+        let mut sign = Command::new("ssh-keygen");
+        sign.args(["-Y", "sign", "-f"])
+            .arg(&key)
+            .args(["-n", "jain-workspace-clean"])
+            .arg(&payload);
+        command(sign);
+        let signature = PathBuf::from(format!("{}.sig", payload.display()));
+        let proof = payload.with_extension("proof.json");
+        fs::write(
+            &proof,
+            serde_json::to_vec_pretty(&json!({
+                "schema_version": "jain.workspace-removal-proof/v1",
+                "status": "pass",
+                "payload_path": payload,
+                "payload_sha256": sha256_bytes(&fs::read(&payload).unwrap()),
+                "signature_path": signature,
+                "signature_sha256": sha256_bytes(&fs::read(&signature).unwrap()),
+                "signature_namespace": "jain-workspace-clean",
+                "signer_identity": "workspace-test",
+                "signer_fingerprint": "SHA256:test-removal-signer",
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        (proof, allowed_signers)
     }
 
     #[test]
@@ -6468,7 +6587,8 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         .unwrap();
         run_git_strict(&auxiliary, &["push", "-u", "origin", "reviewed"]).unwrap();
         let auxiliary_head = resolve_commit(&auxiliary, "HEAD").unwrap();
-        let removal_proof = write_removal_proof(root.path(), &auxiliary, Some(&auxiliary_head));
+        let (removal_proof, allowed_signers) =
+            write_removal_proof(root.path(), &auxiliary, Some(&auxiliary_head));
 
         let managed = ManagedRepo {
             name: "example".to_owned(),
@@ -6486,6 +6606,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             &managed,
             None,
             None,
+            Some(&allowed_signers),
             std::slice::from_ref(&removal_proof),
             &mut blockers,
         )
@@ -6529,13 +6650,20 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             receipt.display().to_string(),
             "--path-proof".to_owned(),
             removal_proof.display().to_string(),
+            "--allowed-signers".to_owned(),
+            allowed_signers.display().to_string(),
         ])
         .unwrap();
         assert_eq!(read_json(&receipt)["status"], "pass");
         assert_eq!(read_json(&receipt)["action"], "dry-run-only");
         assert!(auxiliary.exists(), "dry-run must not remove a worktree");
-        apply_workspace_repository_cleanup(&managed, None, std::slice::from_ref(&removal_proof))
-            .unwrap();
+        apply_workspace_repository_cleanup(
+            &managed,
+            None,
+            Some(&allowed_signers),
+            std::slice::from_ref(&removal_proof),
+        )
+        .unwrap();
         assert!(
             !auxiliary.exists(),
             "apply must remove only the verified worktree"
@@ -6580,7 +6708,8 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             family_registered: true,
         };
         let mut blockers = Vec::new();
-        let _ = inventory_workspace_repository(&managed, None, None, &[], &mut blockers).unwrap();
+        let _ =
+            inventory_workspace_repository(&managed, None, None, None, &[], &mut blockers).unwrap();
         assert!(blockers.iter().any(|blocker| blocker.contains("dirty")));
 
         let protected = root.path().join("target");
@@ -6589,6 +6718,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let rows = inventory_workspace_scratch(
             std::slice::from_ref(&protected),
             &[],
+            None,
             root.path(),
             &mut scratch_blockers,
         )
@@ -6643,6 +6773,37 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         )
         .unwrap();
         assert_eq!(ledger_transition(Some(&ledger), "jain", ""), None);
+    }
+
+    #[test]
+    fn workspace_clean_rejects_a_forged_verified_envelope() {
+        let root = TestDir::new("workspace-clean-signature");
+        let target = root.path().join("scratch");
+        fs::create_dir_all(&target).unwrap();
+        let (proof, allowed_signers) = write_removal_proof(root.path(), &target, None);
+        assert!(verified_removal_proof(
+            std::slice::from_ref(&proof),
+            Some(&allowed_signers),
+            &target,
+            None,
+        )
+        .is_some());
+
+        let mut envelope = read_json(&proof);
+        let payload = PathBuf::from(envelope["payload_path"].as_str().unwrap());
+        let mut signed: JsonValue = serde_json::from_slice(&fs::read(&payload).unwrap()).unwrap();
+        signed["active_leases"] = json!([]);
+        signed["forged_after_signing"] = json!(true);
+        fs::write(&payload, serde_json::to_vec(&signed).unwrap()).unwrap();
+        envelope["payload_sha256"] = json!(sha256_bytes(&fs::read(&payload).unwrap()));
+        fs::write(&proof, serde_json::to_vec_pretty(&envelope).unwrap()).unwrap();
+        assert!(verified_removal_proof(
+            std::slice::from_ref(&proof),
+            Some(&allowed_signers),
+            &target,
+            None,
+        )
+        .is_none());
     }
 
     #[test]

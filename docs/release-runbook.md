@@ -223,8 +223,10 @@ handoff or release supersedes an earlier claim; a handoff request does not.
 Unmerged work must remain in place unless it has both the required preservation evidence and later
 becomes removal-eligible. Bundle preservation receipts use `jain.workspace-bundle/v1` and bind a
 real `git bundle`, its SHA-256, contained head, signer fingerprint, and detached-signature bytes.
-Pass removal receipts with repeated `--path-proof PATH` and bundle receipts with `--bundle-dir`.
-Only an independently reviewed dry-run with zero blockers may be repeated with `--apply`.
+Pass removal receipts with repeated `--path-proof PATH`, bundle receipts with `--bundle-dir`, and
+the authorized OpenSSH identities with `--allowed-signers PATH`. The signed payload is verified
+under the fixed cleanup namespace; an unsigned `signature_status` field grants no authority. Only
+an independently reviewed dry-run with zero blockers may be repeated with `--apply`.
 
 ## 7. AtomicSoul dry run only
 
