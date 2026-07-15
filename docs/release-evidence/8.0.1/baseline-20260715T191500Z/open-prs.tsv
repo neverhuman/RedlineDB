@@ -1,0 +1,35 @@
+repository	number	state	draft	head_branch	head_sha	base_sha	mergeable_state	title
+jeryu/jain	3	open	false	docs-user-guide	77e616ef86919219f73215df5efd82b0680e68ec	base	blocked	docs: VEOX-branded jain User Guide PDF, built in CI
+jeryu/jain	8	open	true	codex/v8-portal-rust-control-plane	d93fc0c79cdc3e3583677a0c2e7c8005cbb63e17	f15a8b33fa0a3d5f0fae0773f88b14f2e3df57b8	blocked	feat(portal): add Rust v8 control plane
+jeryu/jain-math	12	open	false	codex/canonical-sync-split2-20260715	33fcf35e6a626a3911e5d52f6633b702d1d89369	b0157e514b0e5ba53409d7555197e3852bfb1a9b	blocked	release(math): replicate reviewed Prime Lime runtime to canonical Jeryu
+jeryu/jain-catboost	4	open	true	agent/catboost-gpu-acceleration	aa0320d903fbdac80f07f02f2cab043803deefea	4717dee649d4ebeb70b5af945b9ec177d49ad2d9	blocked	feat(catboost): add adaptive GPU acceleration
+jeryu/jain-catboost	7	open	false	codex/canonical-sync-split2-20260715	056a605dc60554ddcf40c6b5b0cb07d71d68eb96	49714a2bb375b382e8e6c561a2120ec3f2b1cf4d	blocked	release(catboost): replicate reviewed split.2 identity to canonical Jeryu
+jeryu/jain-starforge	8	open	false	codex/canonical-sync-split2-20260715	3034e5c5a1422a1cf80ce65ad23d1815aea8a071	e75276edb6f90d082620a4351c8982bab7324c51	blocked	release(starforge): replicate reviewed Prime bundle to canonical Jeryu
+jeryu/jain-core	10	open	false	codex/v8-split1-corrective-20260713	48380e29b7fb3e01bd75e33d1c59ecbf04ad8911	68a68a23c705e698d560a0aa31c7df7898b4acd2	blocked	release: Jain Core 8.0.0 split.1 corrective graph
+jeryu/jain-core	12	open	false	claude/core-v8-release-landing	0a4097376f08d42a42d4a7326242bd2921e06eb8	fda3a4cbbfb75d581180093f84493a2cbf7223d8	blocked	release(core): v8 head — JOPE/Lime port + effort-gated Lime/Prime engine + fail-closed hardening
+jeryu/jain-llm	2	open	false	codex/v8.0.0-release-review	660b634a55eb9b40b09642abfacd195540d1832e	a8571241324704e07c3555941e2ecdaf6013026c	blocked	release: jain-llm 8.0.0
+jeryu/jain-agent	1	open	true	onboard/v8.0.0	8e37d46d054144ddabd6251f218bc272f4a89db6	base	blocked	onboard jain-agent for Jain v8.0.0
+jeryu/jain-jnoccio	1	open	true	onboard/v8.0.0	df9da7ea976d1047e28a44a0eb1f23dea0ea83dd	base	blocked	onboard jain-jnoccio for Jain v8.0.0
+jeryu/jain-zyal	1	open	true	onboard/v8.0.0	815ba81c7654a8b08b76e91a8197e571f6b7cd08	base	blocked	onboard jain-zyal for Jain v8.0.0
+jeryu/jain-jailgun	1	open	true	onboard/v8.0.0	f9ebf1b380227f89ff34bb538182b4113a4a90f9	base	blocked	onboard jain-jailgun for Jain v8.0.0
+jeryu/jain-research	2	open	false	codex/v8.0.0-release-review	28ffffc61c15004c7647ef8b8ad6aa6ecdad4bc5	3acabfbf15b74eca72e347e7bf2de3abf94c63d3	blocked	release: jain-research 8.0.0
+jeryu/jain-report	6	open	true	codex/v8.0.0-release-review	5cef1d0079908485857009ff18db79d8e4078068	c5e3dcbb2b348b447dcdd15af12841e126ede940	blocked	release: prepare jain-report 8.0.0 candidate
+jeryu/jain-tui	6	open	true	codex/v8.0.0-release-review	b96010d56b07c54972dd9f2d29f691b2cb1cb375	6a0b1f37025cbfd2a7abdc368af42bcf401b6d75	blocked	release: prepare jain-tui 8.0.0 candidate
+jeryu/jain-cli	6	open	true	codex/v8.0.0-release-review	8d99e46be1d11f22cad0ca3f8247b8dd67981af3	a67914aa005f190a99b96f6c90d515a52977d753	blocked	release: prepare jain-cli 8.0.0 candidate
+jeryu/jain-web	9	open	false	forkb-w2b-floor	862e4d914a6c435cdecafa7a223595f02970c746	088b1efb60010299c750e60397b67d792d92b8e5	blocked	Fork B Wave 2b: jain-web
+jeryu/jain-web	13	open	false	agent/full-run-manifest	5e70ab4b6678729b8e5d340f5931d0ec5a1911c3	cb9c886625ac3401fdc95d8f925d7a55b869c1b5	blocked	feat-web: expose full run manifest in artifacts
+jeryu/jain-web	16	open	true	agent/live-key-feature-expansion	adf5cdb4dff67e755b2dfb08ee16509de7fddff6	8c091829a3fc2b3f2e276806253f7cf90485636f	blocked	feat(web): authenticated live feature-expansion control plane
+jeryu/jain-web	21	open	true	agent/session-feed-order	faf56fdd60275fa6d4a825f39823680e778ddf52	1c80c91cb62176a6ffab62d7a62a57b8fcb712b0	blocked	fix(web): preserve chronological session feed order
+jeryu/jain-web	22	open	false	codex/jain-web-fail-closed-upload-20260714	d71265e78b0274857253fa5c3ebefaf540b92756	1c80c91cb62176a6ffab62d7a62a57b8fcb712b0	blocked	fix(web): fail closed before accepting unauthenticated uploads
+jeryu/jain-python	5	open	false	codex/jable-contract-sync	c495b6b990c563113d30cdd81998204b0b8204e4	794aa26aa47060e78adeb3a6b6e5b7c4a8d0fb9b	blocked	python: sync progress contract v11
+jeryu/jain-ops	5	open	false	codex/v8.0.0-release-review	6aedc249bdb30a5cfd5d1ea3cbff9bc03393469d	a932677664eb22d3ea7e7f84157fab4c649a56f7	blocked	release: jain-ops 8.0.0
+jeryu/jain-deploy	12	open	false	codex/jable-contract-sync	932cd623bc73c8a86e41191af0cdc25403a685b5	fc3db5eed646b39b7bbef277e2b7f0997bc6f305	blocked	deploy: sync progress contract v11
+jeryu/jain-deploy	20	open	false	codex/jain-deploy-release-tests-20260714	1decb42f7dac587a42227945e2f978d718c21f61	dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74	blocked	test(deploy): add runtime contract integration coverage
+jeryu/jain-deploy	21	open	false	codex/v8-image-authority-proof-20260714	305903dd257d084222e302ab73f936a5fbbac1e4	dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74	blocked	release(deploy): lock v8 image identity and Starforge assets
+jain-split/jain-smartcluster	1	open	true	onboard/v8.0.0	eda63ace6da63a7ee80c3ce381c2ccfb4fe8ff50	base	blocked	onboard jain-smartcluster for Jain v8.0.0
+jain-split/jain-smartcluster	2	open	true	codex/v8.0.0-release-review	ec9f7e959a6999eee45a92936c0dc8ce5a2a0014	eda63ace6da63a7ee80c3ce381c2ccfb4fe8ff50	blocked	SmartCluster v8.0.0 release review
+jain-split/jain-smartcluster	3	open	false	codex/jope-lime-smartcluster-20260713	ffd2cabea46e2b539822ba4ca7d9e1647d0c561e	ec9f7e959a6999eee45a92936c0dc8ce5a2a0014	blocked	feat: route typed JOPE and Lime workloads
+jeryu/jain-split-ops	13	open	false	claude/v8-release-fixes-20260714	be11d34294c95d1ccaf2d952525af8edb7ff0817	beb0c1957a77a9c33eeb44d03b27c07def2daa47	blocked	release: unblock v8.0.0 orchestrator (32-repo contract, sync-derived trigger, jain.3 pin, matrices)
+jeryu/jain-split-ops	14	open	false	codex/core-manifest-bind-20260714	7f5a58b36fd7747a4684433283da7bfcbcd4f6b2	beb0c1957a77a9c33eeb44d03b27c07def2daa47	blocked	release: bind Core split.1 successor
+jeryu/jain-split-ops	15	open	false	codex/v801-control-plane-prereq-20260714	b738ba98cf51ac52e8a488daf23a2044aaf58769	beb0c1957a77a9c33eeb44d03b27c07def2daa47	blocked	release(control): prepare fail-closed Jain 8.0.1 authority
+jeryu/redline-split-ops	10	open	false	codex/redline-testing-package-manifest	242b5c2433aa1d5d877e1828f3bad254ad32df13	30083338c73d4f92708f2d812a3612c577fde40d	blocked	release(redline): bind testing package identity fix (retry)

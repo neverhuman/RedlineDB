@@ -1,0 +1,433 @@
+{
+  "formal_ga": false,
+  "manifest": "repos.manifest.toml",
+  "manifest_sha256": "2942686a4416e593a990a12b982810ea16618b353cd65b8fa969585d4243cb79",
+  "release": "8.0.1",
+  "release_status": "candidate",
+  "repositories": [
+    {
+      "branch": "main",
+      "commit": "50836c741319c606546d12f55a7ae1ae63112f2d",
+      "failures": [
+        "worktree is dirty",
+        "origin does not match manifest",
+        "immutable tag jain-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain",
+      "path": "/home/ubuntu/jain-split/jain",
+      "remote": "http://127.0.0.1:8787/git/veox/jain.git",
+      "status": "fail",
+      "tag": "jain-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "claude/docs-v801-corrections",
+      "commit": "ac5be71c2d8f3a76c1c4cc6ee275937d2bd3ac17",
+      "failures": [
+        "branch is Some(\"claude/docs-v801-corrections\"), expected main",
+        "origin does not match manifest",
+        "immutable tag jain-docs-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-docs",
+      "path": "/home/ubuntu/jain-split/jain-docs",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-docs.git",
+      "status": "fail",
+      "tag": "jain-docs-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "07a6879beba68ea7efb386231376bd03621fa0a4",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-domain-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-domain",
+      "path": "/home/ubuntu/jain-split/jain-domain",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-domain.git",
+      "status": "fail",
+      "tag": "jain-domain-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "codex/jope-lime-rust-20260713",
+      "commit": "2a1e189d727a7b21c2aa68bf9b8cf5212976efd7",
+      "failures": [
+        "branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+        "worktree is dirty",
+        "origin does not match manifest",
+        "immutable tag jain-math-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-math",
+      "path": "/home/ubuntu/jain-split/jain-math",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-math.git",
+      "status": "fail",
+      "tag": "jain-math-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "ac58ea206d58a3dff3f9e2f6e2a16c03de28093f",
+      "failures": [
+        "worktree is dirty",
+        "origin does not match manifest",
+        "immutable tag jain-contracts-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-contracts",
+      "path": "/home/ubuntu/jain-split/jain-contracts",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-contracts.git",
+      "status": "fail",
+      "tag": "jain-contracts-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "49714a2bb375b382e8e6c561a2120ec3f2b1cf4d",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-catboost-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-catboost",
+      "path": "/home/ubuntu/jain-split/jain-catboost",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-catboost.git",
+      "status": "fail",
+      "tag": "jain-catboost-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "34d3534702727b463c4b00c799d06fda0f76438c",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-xgboost-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-xgboost",
+      "path": "/home/ubuntu/jain-split/jain-xgboost",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-xgboost.git",
+      "status": "fail",
+      "tag": "jain-xgboost-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "03102cb3c1fa8bda05a66b4fe072c17524fac6fc",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-lightgbm-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-lightgbm",
+      "path": "/home/ubuntu/jain-split/jain-lightgbm",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-lightgbm.git",
+      "status": "fail",
+      "tag": "jain-lightgbm-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "e119908dd4f522fdbada7ddb461fb10c0dd7f563",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-jable-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-jable",
+      "path": "/home/ubuntu/jain-split/jain-jable",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-jable.git",
+      "status": "fail",
+      "tag": "jain-jable-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "7dd5989ec0940bf9f81ebaf79cdce8f06eaec121",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-battle-gpu-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-battle-gpu",
+      "path": "/home/ubuntu/jain-split/jain-battle-gpu",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-battle-gpu.git",
+      "status": "fail",
+      "tag": "jain-battle-gpu-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "codex/jope-lime-rust-20260713",
+      "commit": "8d76be0e4429bdc0413aab5462dd44c929bc062b",
+      "failures": [
+        "branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+        "worktree is dirty",
+        "origin does not match manifest",
+        "immutable tag jain-starforge-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-starforge",
+      "path": "/home/ubuntu/jain-split/jain-starforge",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-starforge.git",
+      "status": "fail",
+      "tag": "jain-starforge-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "claude/lime-prime-core-20260713",
+      "commit": "bee548a3fa27d95b493a669ae757dc61dc4ffe09",
+      "failures": [
+        "branch is Some(\"claude/lime-prime-core-20260713\"), expected main",
+        "worktree is dirty",
+        "origin does not match manifest",
+        "immutable tag jain-core-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-core",
+      "path": "/home/ubuntu/jain-split/jain-core",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-core.git",
+      "status": "fail",
+      "tag": "jain-core-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-llm-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-llm",
+      "path": "/home/ubuntu/jain-split/jain-llm",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-llm.git",
+      "status": "fail",
+      "tag": "jain-llm-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "8818f70e04d68ae70657f6a3138d6407cbc490fb",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-agent-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-agent",
+      "path": "/home/ubuntu/jain-split/jain-agent",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-agent.git",
+      "status": "fail",
+      "tag": "jain-agent-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "4810be89abad8e4e52b9be9fa9b49a4891970891",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-jnoccio-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-jnoccio",
+      "path": "/home/ubuntu/jain-split/jain-jnoccio",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-jnoccio.git",
+      "status": "fail",
+      "tag": "jain-jnoccio-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "3aa8b9b7c4cb45163e338649bdcda1b569e6e759",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-zyal-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-zyal",
+      "path": "/home/ubuntu/jain-split/jain-zyal",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-zyal.git",
+      "status": "fail",
+      "tag": "jain-zyal-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "add7d8b7488f33780628cb0f0d10a73491b1cfa2",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-jailgun-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-jailgun",
+      "path": "/home/ubuntu/jain-split/jain-jailgun",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-jailgun.git",
+      "status": "fail",
+      "tag": "jain-jailgun-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "074d09b4382f5aeb265d1fd273669563c85836ff",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-research-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-research",
+      "path": "/home/ubuntu/jain-split/jain-research",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-research.git",
+      "status": "fail",
+      "tag": "jain-research-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "5cef1d0079908485857009ff18db79d8e4078068",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-report-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-report",
+      "path": "/home/ubuntu/jain-split/jain-report",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-report.git",
+      "status": "fail",
+      "tag": "jain-report-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "b96010d56b07c54972dd9f2d29f691b2cb1cb375",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-tui-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-tui",
+      "path": "/home/ubuntu/jain-split/jain-tui",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-tui.git",
+      "status": "fail",
+      "tag": "jain-tui-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "codex/jope-lime-rust-20260713",
+      "commit": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3",
+      "failures": [
+        "branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+        "worktree is dirty",
+        "origin does not match manifest",
+        "immutable tag jain-cli-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-cli",
+      "path": "/home/ubuntu/jain-split/jain-cli",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-cli.git",
+      "status": "fail",
+      "tag": "jain-cli-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "codex/v8-web-jope-smartcluster-20260713",
+      "commit": "144963fcb9af6d1de2cada113b8d9283ec54cd25",
+      "failures": [
+        "branch is Some(\"codex/v8-web-jope-smartcluster-20260713\"), expected main",
+        "origin does not match manifest",
+        "immutable tag jain-web-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-web",
+      "path": "/home/ubuntu/jain-split/jain-web",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-web.git",
+      "status": "fail",
+      "tag": "jain-web-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "04b75892932ed90cebf0618fcf7eebc9ddb9d433",
+      "failures": [
+        "immutable tag jain-python-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-python",
+      "path": "/home/ubuntu/jain-split/jain-python",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-python.git",
+      "status": "fail",
+      "tag": "jain-python-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-model-zoo-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-model-zoo",
+      "path": "/home/ubuntu/jain-split/jain-model-zoo",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-model-zoo.git",
+      "status": "fail",
+      "tag": "jain-model-zoo-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "main",
+      "commit": "6aedc249bdb30a5cfd5d1ea3cbff9bc03393469d",
+      "failures": [
+        "origin does not match manifest",
+        "immutable tag jain-ops-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-ops",
+      "path": "/home/ubuntu/jain-split/jain-ops",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-ops.git",
+      "status": "fail",
+      "tag": "jain-ops-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "claude/release-testdata-20260714",
+      "commit": "1a79a1bd5bc7af0cd1e7bceae8b87484a20a72cc",
+      "failures": [
+        "branch is Some(\"claude/release-testdata-20260714\"), expected main",
+        "worktree is dirty",
+        "origin does not match manifest",
+        "immutable tag jain-deploy-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "family",
+      "name": "jain-deploy",
+      "path": "/home/ubuntu/jain-split/jain-deploy",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-deploy.git",
+      "status": "fail",
+      "tag": "jain-deploy-v8.0.1-split.0",
+      "tag_commit": null
+    },
+    {
+      "branch": "codex/jope-lime-smartcluster-20260713",
+      "commit": "ffd2cabea46e2b539822ba4ca7d9e1647d0c561e",
+      "failures": [
+        "branch is Some(\"codex/jope-lime-smartcluster-20260713\"), expected main",
+        "worktree is dirty",
+        "origin does not match manifest",
+        "immutable tag jain-smartcluster-v8.0.1-split.0 is absent or does not point to HEAD"
+      ],
+      "kind": "required-infrastructure",
+      "name": "jain-smartcluster",
+      "path": "/home/ubuntu/jain-split/jain-smartcluster",
+      "remote": "http://127.0.0.1:8787/git/veox/jain-smartcluster.git",
+      "status": "fail",
+      "tag": "jain-smartcluster-v8.0.1-split.0",
+      "tag_commit": null
+    }
+  ],
+  "rollback_target": "7.0.6",
+  "sagemaker": "N/A",
+  "schema_version": "jain.release.snapshot/v1",
+  "status": "fail"
+}

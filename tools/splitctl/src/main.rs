@@ -153,10 +153,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("bootstrap-main") => bootstrap_main_command(args.collect())?,
         Some("immutable-tag") => immutable_tag_command(args.collect())?,
         Some("verify-worktrees") => verify_worktrees_command(args.collect())?,
+        Some("workspace-clean") => workspace_clean_command(args.collect())?,
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | validate-deploy-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--manifest PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | validate-deploy-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | workspace-clean [--manifest PATH] [--receipt PATH] [--bundle-dir PATH] [--claims PATH] [--scratch PATH]... [--path-proof PATH]... [--apply] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--manifest PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -2230,6 +2231,697 @@ fn verify_worktrees_command(args: Vec<String>) -> Result<(), Box<dyn std::error:
         }
     })();
     finish_receipted_operation(&receipt, &mut report, result)
+}
+
+#[derive(Debug, Clone)]
+struct WorktreeInfo {
+    path: PathBuf,
+    head: Option<String>,
+    branch: Option<String>,
+    detached: bool,
+    bare: bool,
+}
+
+fn workspace_clean_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut manifest = root.join("repos.manifest.toml");
+    let mut receipt = None;
+    let mut bundle_dir = None;
+    let mut claims = None;
+    let mut scratch = Vec::new();
+    let mut path_proofs = Vec::new();
+    let mut apply = false;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--receipt" => {
+                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            "--bundle-dir" => {
+                bundle_dir = Some(PathBuf::from(
+                    iter.next().ok_or("--bundle-dir needs a path")?,
+                ))
+            }
+            "--claims" => claims = Some(PathBuf::from(iter.next().ok_or("--claims needs a path")?)),
+            "--scratch" => {
+                scratch.push(PathBuf::from(iter.next().ok_or("--scratch needs a path")?))
+            }
+            "--path-proof" | "--scratch-proof" => path_proofs.push(PathBuf::from(
+                iter.next().ok_or("--path-proof needs a path")?,
+            )),
+            "--apply" => apply = true,
+            value => return Err(format!("unknown workspace-clean argument: {value}").into()),
+        }
+    }
+    let receipt = receipt.unwrap_or_else(|| release_evidence_path("workspace-clean.json"));
+    let mut report = receipt_header("jain.workspace-clean/v1", "workspace-clean", apply);
+    report["manifest"] = json!(manifest);
+    report["apply_requires_review"] = json!(true);
+    let result = (|| {
+        let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+        let repositories = managed_repositories(&data, &manifest)?;
+        let split_root = string(&data, "split_root")
+            .map(PathBuf::from)
+            .or_else(|| manifest.parent().map(Path::to_path_buf))
+            .unwrap_or_else(|| root.clone());
+        let claims = claims.or_else(|| Some(split_root.join("UPGRADE_CHAT.md")));
+        let mut rows = Vec::new();
+        let mut blockers = Vec::new();
+        for repository in &repositories {
+            let row = inventory_workspace_repository(
+                repository,
+                claims.as_deref(),
+                bundle_dir.as_deref(),
+                &path_proofs,
+                &mut blockers,
+            )?;
+            rows.push(row);
+        }
+        let scratch_rows =
+            inventory_workspace_scratch(&scratch, &path_proofs, &split_root, &mut blockers)?;
+        let plan_status = if blockers.is_empty() {
+            "ready"
+        } else {
+            "blocked"
+        };
+        report["split_root"] = json!(split_root);
+        report["repositories"] = json!(rows);
+        report["scratch"] = json!(scratch_rows);
+        report["blockers"] = json!(blockers);
+        report["plan_status"] = json!(plan_status);
+        if !apply {
+            report["action"] = json!("dry-run-only");
+            return Ok(());
+        }
+        if !blockers.is_empty() {
+            return Err("workspace-clean is blocked; no cleanup was attempted".into());
+        }
+        for repository in &repositories {
+            apply_workspace_repository_cleanup(repository, claims.as_deref(), &path_proofs)?;
+        }
+        apply_workspace_scratch_cleanup(&scratch, &path_proofs, &split_root)?;
+        report["action"] = json!("applied-and-verified");
+        Ok(())
+    })();
+    finish_receipted_operation(&receipt, &mut report, result)
+}
+
+fn inventory_workspace_repository(
+    repository: &ManagedRepo,
+    claims: Option<&Path>,
+    bundle_dir: Option<&Path>,
+    path_proofs: &[PathBuf],
+    blockers: &mut Vec<String>,
+) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    let worktrees = list_worktrees(&repository.path)?;
+    let primary = worktrees
+        .iter()
+        .find(|worktree| same_path(&worktree.path, &repository.path));
+    let primary_head = primary.and_then(|worktree| worktree.head.clone());
+    let primary_branch = primary.and_then(|worktree| worktree.branch.clone());
+    if primary.is_none() {
+        blockers.push(format!(
+            "{}: canonical checkout is not registered",
+            repository.name
+        ));
+    }
+    let primary_dirty = primary
+        .map(|worktree| worktree_is_dirty(&worktree.path))
+        .transpose()?
+        .unwrap_or(true);
+    if primary_dirty {
+        blockers.push(format!(
+            "{}: canonical checkout is dirty or unavailable",
+            repository.name
+        ));
+    }
+    if primary_branch.as_deref() != Some(repository.branch.as_str()) {
+        blockers.push(format!(
+            "{}: canonical branch is {:?}, expected {}",
+            repository.name, primary_branch, repository.branch
+        ));
+    }
+
+    let mut auxiliary = Vec::new();
+    for worktree in worktrees
+        .iter()
+        .filter(|worktree| !same_path(&worktree.path, &repository.path) && !worktree.bare)
+    {
+        let dirty = worktree_is_dirty(&worktree.path).unwrap_or(true);
+        let branch = worktree.branch.clone();
+        let head = worktree.head.clone();
+        let upstream = git_query(
+            &worktree.path,
+            &[
+                "rev-parse",
+                "--abbrev-ref",
+                "--symbolic-full-name",
+                "@{upstream}",
+            ],
+        );
+        let upstream_reachable = upstream
+            .as_deref()
+            .and_then(|reference| local_ref_commit(&worktree.path, reference).ok())
+            .flatten()
+            .is_some();
+        let remote_branch = branch.as_deref().and_then(|branch| {
+            let branch = branch.strip_prefix("refs/heads/").unwrap_or(branch);
+            ls_remote_ref(
+                &worktree.path,
+                &repository.remote,
+                &format!("refs/heads/{branch}"),
+            )
+            .ok()
+            .flatten()
+        });
+        let pushed = head.is_some() && remote_branch == head;
+        let merged = match (head.as_deref(), primary_head.as_deref()) {
+            (Some(head), Some(primary)) => git_is_ancestor(&repository.path, head, primary),
+            _ => false,
+        };
+        let claim = branch
+            .as_deref()
+            .and_then(|branch| ledger_transition(claims, &repository.name, branch));
+        let bundle = head
+            .as_deref()
+            .and_then(|head| signed_bundle_receipt(bundle_dir, &repository.path, head));
+        let removal_proof = verified_removal_proof(path_proofs, &worktree.path, head.as_deref());
+        let preservable = merged || pushed || bundle.is_some();
+        let mut cleanup_blockers = Vec::new();
+        if dirty {
+            cleanup_blockers.push("dirty".to_owned());
+        }
+        if claim.is_some() {
+            cleanup_blockers.push("active owner claim".to_owned());
+        }
+        if removal_proof.is_none() {
+            cleanup_blockers.push("missing fresh signed no-process/no-lease proof".to_owned());
+        }
+        if !upstream_reachable {
+            cleanup_blockers.push("unreachable upstream".to_owned());
+        }
+        if !pushed {
+            cleanup_blockers.push("head is not pushed to an exact Jeryu branch".to_owned());
+        }
+        if !preservable {
+            cleanup_blockers.push(
+                "unmerged head is neither on exact Jeryu branch nor in a verified bundle"
+                    .to_owned(),
+            );
+        }
+        if !merged {
+            cleanup_blockers
+                .push("auxiliary head is not merged into the protected primary".to_owned());
+        }
+        if !cleanup_blockers.is_empty() {
+            blockers.push(format!(
+                "{}: auxiliary {}: {}",
+                repository.name,
+                worktree.path.display(),
+                cleanup_blockers.join(", ")
+            ));
+        }
+        auxiliary.push(json!({
+            "path": worktree.path,
+            "branch": branch,
+            "head": head,
+            "detached": worktree.detached,
+            "dirty": dirty,
+            "upstream": upstream,
+            "upstream_reachable": upstream_reachable,
+            "remote_branch_head": remote_branch,
+            "pushed_exact_jeryu_head": pushed,
+            "merged_into_primary": merged,
+            "owner_claim": claim,
+            "bundle_receipt": bundle,
+            "removal_proof": removal_proof,
+            "action": if cleanup_blockers.is_empty() { "would-remove" } else { "blocked" },
+            "blockers": cleanup_blockers,
+        }));
+    }
+    Ok(json!({
+        "name": repository.name,
+        "path": repository.path,
+        "kind": repository.kind,
+        "primary": {
+            "branch": primary_branch,
+            "head": primary_head,
+            "dirty": primary_dirty,
+            "action": "preserve-canonical-checkout",
+        },
+        "auxiliary_worktrees": auxiliary,
+        "pull_requests": {
+            "status": "not-queried",
+            "reason": "workspace-clean never treats an unavailable PR lookup as permission to remove a worktree",
+        },
+    }))
+}
+
+fn list_worktrees(repository: &Path) -> Result<Vec<WorktreeInfo>, Box<dyn std::error::Error>> {
+    let text = strict_git_output(repository, &["worktree", "list", "--porcelain"])?;
+    let mut rows = Vec::new();
+    let mut current: Option<WorktreeInfo> = None;
+    for line in text.lines() {
+        if line.is_empty() {
+            if let Some(row) = current.take() {
+                rows.push(row);
+            }
+            continue;
+        }
+        if let Some(path) = line.strip_prefix("worktree ") {
+            if let Some(row) = current.take() {
+                rows.push(row);
+            }
+            current = Some(WorktreeInfo {
+                path: PathBuf::from(path),
+                head: None,
+                branch: None,
+                detached: false,
+                bare: false,
+            });
+        } else if let Some(row) = current.as_mut() {
+            if let Some(head) = line.strip_prefix("HEAD ") {
+                row.head = Some(head.to_owned());
+            } else if let Some(branch) = line.strip_prefix("branch ") {
+                row.branch = Some(
+                    branch
+                        .strip_prefix("refs/heads/")
+                        .unwrap_or(branch)
+                        .to_owned(),
+                );
+            } else if line == "detached" {
+                row.detached = true;
+            } else if line == "bare" {
+                row.bare = true;
+            }
+        }
+    }
+    if let Some(row) = current {
+        rows.push(row);
+    }
+    Ok(rows)
+}
+
+fn same_path(left: &Path, right: &Path) -> bool {
+    fs::canonicalize(left)
+        .ok()
+        .zip(fs::canonicalize(right).ok())
+        .is_some_and(|(left, right)| left == right)
+        || left == right
+}
+
+fn worktree_is_dirty(path: &Path) -> Result<bool, Box<dyn std::error::Error>> {
+    Ok(!strict_git_output(path, &["status", "--porcelain", "--untracked-files=all"])?.is_empty())
+}
+
+fn git_is_ancestor(repository: &Path, older: &str, newer: &str) -> bool {
+    Command::new("git")
+        .arg("-C")
+        .arg(repository)
+        .args(["merge-base", "--is-ancestor", older, newer])
+        .status()
+        .is_ok_and(|status| status.success())
+}
+
+fn ledger_transition(ledger: Option<&Path>, repository: &str, branch: &str) -> Option<String> {
+    let text = ledger.and_then(|path| fs::read_to_string(path).ok())?;
+    let mut sections = Vec::new();
+    let mut current = String::new();
+    for line in text.lines() {
+        if line.starts_with("## ") && !current.is_empty() {
+            sections.push(std::mem::take(&mut current));
+        }
+        current.push_str(line);
+        current.push('\n');
+    }
+    if !current.is_empty() {
+        sections.push(current);
+    }
+
+    let targets = if branch.is_empty() {
+        [repository, ""]
+    } else {
+        [branch, ""]
+    };
+    for target in targets.into_iter().filter(|target| !target.is_empty()) {
+        for section in sections.iter().rev() {
+            if !contains_coordination_token(section, target) {
+                continue;
+            }
+            let lower = section.to_ascii_lowercase();
+            let requested_handoff =
+                (lower.contains("request") || lower.contains("await")) && lower.contains("handoff");
+            let release_markers = [
+                " released",
+                " releases",
+                "handed off",
+                "hands off",
+                "handoff complete",
+                "writer stopped",
+                "writer is stopped",
+                "claim is released",
+                "does not claim",
+                "not claimed",
+            ];
+            let target_released = section.lines().any(|line| {
+                contains_coordination_token(line, target)
+                    && release_markers
+                        .iter()
+                        .any(|marker| line.to_ascii_lowercase().contains(marker))
+            });
+            let released = target_released
+                || lower.contains("leaves no source-repo writer claim")
+                || lower.contains("no source-repo writer claim")
+                || (!requested_handoff
+                    && section
+                        .lines()
+                        .next()
+                        .is_some_and(|heading| heading.to_ascii_lowercase().contains("handoff")));
+            if released {
+                return None;
+            }
+            let active_markers = [
+                " claims ",
+                " claims only",
+                " claimed ",
+                " owns ",
+                " owns only",
+                "sole writer",
+                "takes ownership",
+                "takes the prepared-lane handoff",
+            ];
+            let active = section.lines().any(|line| {
+                contains_coordination_token(line, target)
+                    && active_markers
+                        .iter()
+                        .any(|marker| line.to_ascii_lowercase().contains(marker))
+            }) || lower.contains("retains the writers")
+                || lower.contains("retains the only writer");
+            if active {
+                return section.lines().next().map(ToOwned::to_owned);
+            }
+        }
+    }
+    None
+}
+
+fn contains_coordination_token(text: &str, token: &str) -> bool {
+    let identifier = |ch: char| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.');
+    text.match_indices(token).any(|(start, _)| {
+        let before = text[..start].chars().next_back();
+        let after = text[start + token.len()..].chars().next();
+        !before.is_some_and(identifier) && !after.is_some_and(identifier)
+    })
+}
+
+fn signed_bundle_receipt(
+    bundle_dir: Option<&Path>,
+    repository: &Path,
+    head: &str,
+) -> Option<JsonValue> {
+    let directory = bundle_dir?;
+    let candidates = [
+        directory.join(format!("{head}.json")),
+        directory.join(format!("{head}.bundle.json")),
+    ];
+    candidates.into_iter().find_map(|path| {
+        let report: JsonValue = serde_json::from_slice(&fs::read(&path).ok()?).ok()?;
+        if report.get("schema_version").and_then(JsonValue::as_str)
+            != Some("jain.workspace-bundle/v1")
+            || report.get("status").and_then(JsonValue::as_str) != Some("pass")
+        {
+            return None;
+        }
+        let receipt_head = report
+            .get("head_sha")
+            .or_else(|| report.get("head"))
+            .and_then(JsonValue::as_str);
+        let signature = report.get("signature_status").and_then(JsonValue::as_str);
+        let signer = report
+            .get("signer_fingerprint")
+            .and_then(JsonValue::as_str)
+            .filter(|value| value.len() >= 16)?;
+        if receipt_head != Some(head) || signature != Some("verified") {
+            return None;
+        }
+        let bundle = verified_receipt_file(
+            &path,
+            report.get("bundle_path")?.as_str()?,
+            report.get("bundle_sha256")?.as_str()?,
+        )?;
+        let signature_path = verified_receipt_file(
+            &path,
+            report.get("signature_path")?.as_str()?,
+            report.get("signature_sha256")?.as_str()?,
+        )?;
+        let verified = Command::new("git")
+            .arg("-C")
+            .arg(repository)
+            .args(["bundle", "verify"])
+            .arg(&bundle)
+            .status()
+            .ok()
+            .is_some_and(|status| status.success());
+        let heads = Command::new("git")
+            .args(["bundle", "list-heads"])
+            .arg(&bundle)
+            .output()
+            .ok()
+            .filter(|output| output.status.success())?;
+        let lists_head = String::from_utf8(heads.stdout)
+            .ok()?
+            .lines()
+            .any(|line| line.split_whitespace().next() == Some(head));
+        if !verified || !lists_head {
+            return None;
+        }
+        Some(json!({
+            "path": path,
+            "head": head,
+            "bundle_path": bundle,
+            "signature_path": signature_path,
+            "signature_status": signature,
+            "signer_fingerprint": signer,
+        }))
+    })
+}
+
+fn verified_receipt_file(receipt: &Path, value: &str, expected_sha256: &str) -> Option<PathBuf> {
+    if expected_sha256.len() != 64
+        || !expected_sha256
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+    {
+        return None;
+    }
+    let value = PathBuf::from(value);
+    let path = if value.is_absolute() {
+        value
+    } else {
+        receipt.parent()?.join(value)
+    };
+    let bytes = fs::read(&path).ok()?;
+    (!bytes.is_empty() && sha256_bytes(&bytes) == expected_sha256).then_some(path)
+}
+
+fn verified_removal_proof(
+    proofs: &[PathBuf],
+    target: &Path,
+    expected_head: Option<&str>,
+) -> Option<JsonValue> {
+    proofs.iter().find_map(|proof| {
+        let report: JsonValue = serde_json::from_slice(&fs::read(proof).ok()?).ok()?;
+        if report.get("schema_version").and_then(JsonValue::as_str)
+            != Some("jain.workspace-removal-proof/v1")
+            || report.get("status").and_then(JsonValue::as_str) != Some("pass")
+            || report.get("signature_status").and_then(JsonValue::as_str) != Some("verified")
+            || report
+                .get("signer_fingerprint")
+                .and_then(JsonValue::as_str)
+                .is_none_or(|value| value.len() < 16)
+            || !report
+                .get("live_processes")
+                .and_then(JsonValue::as_array)
+                .is_some_and(Vec::is_empty)
+            || !report
+                .get("active_leases")
+                .and_then(JsonValue::as_array)
+                .is_some_and(Vec::is_empty)
+        {
+            return None;
+        }
+        let proof_target = report
+            .get("path")
+            .or_else(|| report.get("scratch_path"))
+            .and_then(JsonValue::as_str)?;
+        if !same_path(Path::new(proof_target), target) {
+            return None;
+        }
+        if expected_head.is_some()
+            && report.get("head_sha").and_then(JsonValue::as_str) != expected_head
+        {
+            return None;
+        }
+        let observed = report.get("observed_at_unix")?.as_u64()?;
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
+        if observed > now.saturating_add(5) || now.saturating_sub(observed) > 300 {
+            return None;
+        }
+        let payload = verified_receipt_file(
+            proof,
+            report.get("payload_path")?.as_str()?,
+            report.get("payload_sha256")?.as_str()?,
+        )?;
+        let signature = verified_receipt_file(
+            proof,
+            report.get("signature_path")?.as_str()?,
+            report.get("signature_sha256")?.as_str()?,
+        )?;
+        Some(json!({
+            "path": proof,
+            "observed_at_unix": observed,
+            "head_sha": expected_head,
+            "payload_path": payload,
+            "signature_path": signature,
+            "signature_status": "verified",
+            "signer_fingerprint": report["signer_fingerprint"],
+        }))
+    })
+}
+
+fn inventory_workspace_scratch(
+    scratch: &[PathBuf],
+    proofs: &[PathBuf],
+    split_root: &Path,
+    blockers: &mut Vec<String>,
+) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
+    let mut rows = Vec::new();
+    for path in scratch {
+        let normalized = fs::canonicalize(path).unwrap_or_else(|_| path.clone());
+        let text = normalized.to_string_lossy();
+        let protected = text.contains("/target")
+            || text.contains("/bare-mirrors")
+            || text.contains("/.cargo")
+            || text.contains("/registry");
+        let ci_scratch = text.contains("/.worktrees/")
+            || text.contains("/.work/")
+            || text.contains("/.ci-worktrees/")
+            || text.contains("/target/ci/");
+        let declared = (normalized.starts_with(split_root) && ci_scratch)
+            || text.starts_with("/tmp/codex-")
+            || text.starts_with("/tmp/redline-");
+        let proof = verified_removal_proof(proofs, &normalized, None);
+        let mut row_blockers = Vec::new();
+        if !declared {
+            row_blockers.push("path is not a declared CI scratch location".to_owned());
+        }
+        if protected {
+            row_blockers.push("protected cache/target data may never be removed".to_owned());
+        }
+        if proof.is_none() {
+            row_blockers.push("missing verified no-process/no-lease scratch proof".to_owned());
+        }
+        if !row_blockers.is_empty() {
+            blockers.push(format!(
+                "scratch {}: {}",
+                path.display(),
+                row_blockers.join(", ")
+            ));
+        }
+        rows.push(json!({
+            "path": path,
+            "declared_ci_scratch": declared,
+            "protected": protected,
+            "proof": proof,
+            "action": if row_blockers.is_empty() { "would-delete" } else { "blocked" },
+            "blockers": row_blockers,
+        }));
+    }
+    Ok(rows)
+}
+
+fn apply_workspace_repository_cleanup(
+    repository: &ManagedRepo,
+    claims: Option<&Path>,
+    path_proofs: &[PathBuf],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let worktrees = list_worktrees(&repository.path)?;
+    let primary = worktrees
+        .iter()
+        .find(|worktree| same_path(&worktree.path, &repository.path))
+        .ok_or("canonical checkout is not registered")?;
+    if primary.branch.as_deref() != Some(repository.branch.as_str())
+        || worktree_is_dirty(&primary.path)?
+    {
+        return Err(format!(
+            "{} canonical checkout changed after planning",
+            repository.name
+        )
+        .into());
+    }
+    let primary_head = primary
+        .head
+        .as_deref()
+        .ok_or("canonical checkout has no HEAD")?;
+    for worktree in worktrees
+        .iter()
+        .filter(|worktree| !same_path(&worktree.path, &repository.path) && !worktree.bare)
+    {
+        if worktree_is_dirty(&worktree.path)? {
+            return Err(format!("{} is dirty", worktree.path.display()).into());
+        }
+        let head = worktree
+            .head
+            .as_deref()
+            .ok_or("auxiliary worktree has no HEAD")?;
+        let branch = worktree.branch.as_deref().unwrap_or_default();
+        let claim = ledger_transition(claims, &repository.name, branch);
+        let removal_proof = verified_removal_proof(path_proofs, &worktree.path, Some(head));
+        let remote_branch = branch.strip_prefix("refs/heads/").unwrap_or(branch);
+        let pushed = ls_remote_ref(
+            &worktree.path,
+            &repository.remote,
+            &format!("refs/heads/{remote_branch}"),
+        )?
+        .as_deref()
+            == Some(head);
+        let merged = git_is_ancestor(&repository.path, head, primary_head);
+        if claim.is_some() || removal_proof.is_none() || !merged || !pushed {
+            return Err(format!("{} is not safe to remove", worktree.path.display()).into());
+        }
+        run_git_strict(
+            &repository.path,
+            &[
+                "worktree",
+                "remove",
+                worktree.path.to_str().ok_or("non-UTF8 worktree path")?,
+            ],
+        )?;
+    }
+    run_git_strict(&repository.path, &["worktree", "prune"])?;
+    Ok(())
+}
+
+fn apply_workspace_scratch_cleanup(
+    scratch: &[PathBuf],
+    proofs: &[PathBuf],
+    split_root: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut blockers = Vec::new();
+    let rows = inventory_workspace_scratch(scratch, proofs, split_root, &mut blockers)?;
+    if !blockers.is_empty() {
+        return Err(blockers.join("\n").into());
+    }
+    for row in rows {
+        if row["action"] == "would-delete" {
+            let path = row["path"].as_str().ok_or("scratch path is not UTF-8")?;
+            if Path::new(path).exists() {
+                fs::remove_dir_all(path)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn verify_managed_worktree(repo: &ManagedRepo) -> JsonValue {
@@ -5048,6 +5740,46 @@ mod tests {
         serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
     }
 
+    fn write_removal_proof(root: &Path, target: &Path, head: Option<&str>) -> PathBuf {
+        let payload = root.join(format!(
+            "removal-payload-{}.json",
+            NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+        ));
+        let signature = payload.with_extension("sig");
+        fs::write(
+            &payload,
+            serde_json::to_vec(&json!({"path": target, "head_sha": head})).unwrap(),
+        )
+        .unwrap();
+        fs::write(&signature, "test detached signature\n").unwrap();
+        let proof = payload.with_extension("proof.json");
+        let observed_at_unix = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        fs::write(
+            &proof,
+            serde_json::to_vec_pretty(&json!({
+                "schema_version": "jain.workspace-removal-proof/v1",
+                "status": "pass",
+                "path": target,
+                "head_sha": head,
+                "observed_at_unix": observed_at_unix,
+                "live_processes": [],
+                "active_leases": [],
+                "payload_path": payload,
+                "payload_sha256": sha256_bytes(&fs::read(&payload).unwrap()),
+                "signature_path": signature,
+                "signature_sha256": sha256_bytes(&fs::read(&signature).unwrap()),
+                "signature_status": "verified",
+                "signer_fingerprint": "TEST-REMOVAL-SIGNER-0001",
+            }))
+            .unwrap(),
+        )
+        .unwrap();
+        proof
+    }
+
     #[test]
     fn canonical_release_feature_matrices_derive_exact_cargo_commands() {
         let manifest: toml::Value = fs::read_to_string(
@@ -5708,6 +6440,209 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
 
         commit_next(&repo);
         assert_eq!(verify_managed_worktree(&managed)["status"], "fail");
+    }
+
+    #[test]
+    fn workspace_clean_is_dry_run_first_and_plans_only_merged_clean_worktrees() {
+        let root = TestDir::new("workspace-clean");
+        let (repo, _reviewed) = init_source(root.path());
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &repo,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        )
+        .unwrap();
+        run_git_strict(&repo, &["push", "-u", "origin", "main"]).unwrap();
+        let auxiliary = root.path().join("auxiliary");
+        run_git_strict(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "reviewed",
+                auxiliary.to_str().unwrap(),
+                "main",
+            ],
+        )
+        .unwrap();
+        run_git_strict(&auxiliary, &["push", "-u", "origin", "reviewed"]).unwrap();
+        let auxiliary_head = resolve_commit(&auxiliary, "HEAD").unwrap();
+        let removal_proof = write_removal_proof(root.path(), &auxiliary, Some(&auxiliary_head));
+
+        let managed = ManagedRepo {
+            name: "example".to_owned(),
+            path: repo.clone(),
+            remote: remote.display().to_string(),
+            required_check: "example/required".to_owned(),
+            branch: "main".to_owned(),
+            tag: None,
+            kind: "family".to_owned(),
+            family: "jain-split".to_owned(),
+            family_registered: true,
+        };
+        let mut blockers = Vec::new();
+        let row = inventory_workspace_repository(
+            &managed,
+            None,
+            None,
+            std::slice::from_ref(&removal_proof),
+            &mut blockers,
+        )
+        .unwrap();
+        assert!(blockers.is_empty(), "unexpected blockers: {blockers:?}");
+        assert_eq!(row["primary"]["dirty"], false);
+        assert_eq!(
+            row["auxiliary_worktrees"][0]["pushed_exact_jeryu_head"],
+            true
+        );
+        assert_eq!(row["auxiliary_worktrees"][0]["merged_into_primary"], true);
+        assert_eq!(row["auxiliary_worktrees"][0]["action"], "would-remove");
+
+        let receipt = root.path().join("workspace-clean.json");
+        let manifest = root.path().join("repos.manifest.toml");
+        let control_root = root.path().join("control-root");
+        let (control, _control_reviewed) = init_source(&control_root);
+        let control_remote = init_bare(&control_root);
+        run_git_strict(
+            &control,
+            &["remote", "add", "origin", control_remote.to_str().unwrap()],
+        )
+        .unwrap();
+        run_git_strict(&control, &["push", "-u", "origin", "main"]).unwrap();
+        fs::write(
+            &manifest,
+            format!(
+                "release_version = \"8.0.1\"\nsplit_root = \"{}\"\nrepo_family = \"jain-split\"\n[[repo]]\nname = \"example\"\npath = \"{}\"\nremote = \"{}\"\nrequired_check = \"example/required\"\ndefault_branch = \"main\"\n[control_plane]\nname = \"control\"\npath = \"{}\"\nremote = \"{}\"\nrequired_check = \"control/required\"\n",
+                root.path().display(),
+                repo.display(),
+                remote.display(),
+                control.display(),
+                control_remote.display(),
+            ),
+        )
+        .unwrap();
+        workspace_clean_command(vec![
+            "--manifest".to_owned(),
+            manifest.display().to_string(),
+            "--receipt".to_owned(),
+            receipt.display().to_string(),
+            "--path-proof".to_owned(),
+            removal_proof.display().to_string(),
+        ])
+        .unwrap();
+        assert_eq!(read_json(&receipt)["status"], "pass");
+        assert_eq!(read_json(&receipt)["action"], "dry-run-only");
+        assert!(auxiliary.exists(), "dry-run must not remove a worktree");
+        apply_workspace_repository_cleanup(&managed, None, std::slice::from_ref(&removal_proof))
+            .unwrap();
+        assert!(
+            !auxiliary.exists(),
+            "apply must remove only the verified worktree"
+        );
+        assert_eq!(list_worktrees(&repo).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn workspace_clean_refuses_dirty_unpushed_and_protected_scratch_state() {
+        let root = TestDir::new("workspace-clean-refusal");
+        let (repo, _reviewed) = init_source(root.path());
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &repo,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        )
+        .unwrap();
+        run_git_strict(&repo, &["push", "-u", "origin", "main"]).unwrap();
+        let auxiliary = root.path().join("auxiliary");
+        run_git_strict(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-b",
+                "unpublished",
+                auxiliary.to_str().unwrap(),
+                "main",
+            ],
+        )
+        .unwrap();
+        fs::write(auxiliary.join("dirty.txt"), "claimed\n").unwrap();
+        let managed = ManagedRepo {
+            name: "example".to_owned(),
+            path: repo,
+            remote: remote.display().to_string(),
+            required_check: "example/required".to_owned(),
+            branch: "main".to_owned(),
+            tag: None,
+            kind: "family".to_owned(),
+            family: "jain-split".to_owned(),
+            family_registered: true,
+        };
+        let mut blockers = Vec::new();
+        let _ = inventory_workspace_repository(&managed, None, None, &[], &mut blockers).unwrap();
+        assert!(blockers.iter().any(|blocker| blocker.contains("dirty")));
+
+        let protected = root.path().join("target");
+        fs::create_dir_all(&protected).unwrap();
+        let mut scratch_blockers = Vec::new();
+        let rows = inventory_workspace_scratch(
+            std::slice::from_ref(&protected),
+            &[],
+            root.path(),
+            &mut scratch_blockers,
+        )
+        .unwrap();
+        assert_eq!(rows[0]["protected"], true);
+        assert!(!scratch_blockers.is_empty());
+    }
+
+    #[test]
+    fn workspace_clean_uses_latest_branch_transition_and_honors_release() {
+        let root = TestDir::new("workspace-clean-ledger");
+        let ledger = root.path().join("UPGRADE_CHAT.md");
+        let branch = "codex/reviewable-work";
+        fs::write(
+            &ledger,
+            format!(
+                "## 2026-07-15 — claim\n\n- Codex claims `example` branch `{branch}` as sole writer.\n\n## 2026-07-15 — handoff request\n\n- Claude still owns `{branch}`; Codex requests an explicit handoff.\n"
+            ),
+        )
+        .unwrap();
+        assert!(ledger_transition(Some(&ledger), "example", branch).is_some());
+
+        fs::write(
+            &ledger,
+            format!(
+                "## 2026-07-15 — claim\n\n- Codex claims `example` branch `{branch}` as sole writer.\n\n## 2026-07-15 — handoff\n\n- Codex releases `{branch}` after the stopped-head handoff.\n"
+            ),
+        )
+        .unwrap();
+        assert_eq!(ledger_transition(Some(&ledger), "example", branch), None);
+
+        fs::write(
+            &ledger,
+            format!(
+                "## 2026-07-15 — old claim\n\n- Codex claims `example` branch `{branch}`.\n\n## 2026-07-15 — released\n\n- Codex releases `{branch}`.\n\n## 2026-07-15 — new claim\n\n- Claude claims only `{branch}` as sole writer.\n"
+            ),
+        )
+        .unwrap();
+        assert_eq!(
+            ledger_transition(Some(&ledger), "example", branch).as_deref(),
+            Some("## 2026-07-15 — new claim")
+        );
+    }
+
+    #[test]
+    fn workspace_clean_claim_matching_uses_repository_boundaries() {
+        let root = TestDir::new("workspace-clean-ledger-boundary");
+        let ledger = root.path().join("UPGRADE_CHAT.md");
+        fs::write(
+            &ledger,
+            "## 2026-07-15 — claim\n\n- Codex claims `jain-python` branch `codex/python-only`.\n",
+        )
+        .unwrap();
+        assert_eq!(ledger_transition(Some(&ledger), "jain", ""), None);
     }
 
     #[test]

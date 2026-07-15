@@ -1,0 +1,131 @@
+{
+  "schema_version": "jain.cloud-baseline-infrastructure/v1",
+  "capture_started_at": "2026-07-15T19:11:55Z",
+  "capture_finished_at": "2026-07-15T19:15:00Z",
+  "mode": "read-only",
+  "atomicsoul": {
+    "hostname": "atomicsoul",
+    "containers": [
+      {
+        "name": "jain-canary",
+        "container_id": "780ce7cd8e93772a92c25bd6ef988672e5f7d79ad957e8f56238e6a53f4b9d85",
+        "configured_image": "image.neverhuman.org/doug/jain_small/jain-sagemaker@sha256:7186a6c57dc8eb5d32aba336f384b5d467add8f2c17e96f8c33cb567a118c830",
+        "local_image_id": "sha256:9dcf5cb0a0d6fd6104b593141e529686b853825042db3f1e32933c2182713e06",
+        "status": "healthy",
+        "routed": false,
+        "preservation": "existing digest-pinned 7.0.5 canary; untouched"
+      },
+      {
+        "name": "jain-landing",
+        "container_id": "863b9125bbef39b4a906352256167046631bf5d7a13bf1afc6844b0fe8c6acf4",
+        "configured_image": "nginx:alpine",
+        "local_image_id": "sha256:d0c7807749103be4b1fcd09378f16ed4146c79e76e97ad26d0545004cc67474c",
+        "repo_digest": "nginx@sha256:f46cb72c7df02710e693e863a983ac42f6a9579058a59a35f1ae36c9958e4ce0",
+        "landing_sha256": "8a4faf1c6b495c93b4180e22ae974ed229dfa9737889d2a89cf69fe042d50bba",
+        "landing_bytes": 10016
+      },
+      {
+        "name": "proxy-caddy-1",
+        "container_id": "07d2becdc841a5ac091fbf6c440e49f6231efe0f4c3244d890f68dd8ef01692a",
+        "configured_image": "caddy:2-alpine",
+        "local_image_id": "sha256:818bec5261db8072f732f941ed335d7f027b1657230c0f62479a4398683e911f",
+        "version": "v2.11.1 h1:C7sQpsFOC5CH+31KqJc7EoOf8mXrOEkFyYd6GpIqm/s="
+      },
+      {
+        "name": "ecr-registry-1",
+        "container_id": "e940ebecc0555631d666ec9b15838783b0d25f14887b439ec7519c044172a621",
+        "configured_image": "registry:2",
+        "local_image_id": "sha256:26b2eb03618e749084668eaff68cff8f81dda12d06ac641be7a6398b82a6f25b",
+        "published_endpoint": "127.0.0.1:5000",
+        "identity": "local distribution registry backing image.neverhuman.org"
+      }
+    ],
+    "networks": [
+      "bridge",
+      "ei-arena_ei-net",
+      "host",
+      "neverhuman_nht_net",
+      "nht_net",
+      "none",
+      "signalhouse_signalhouse"
+    ],
+    "caddy": {
+      "config_endpoint": "http://127.0.0.1:2019/config/ inside proxy-caddy-1",
+      "route_json_sha256": "e8f3e0c9fff79a9e230e2deb51dfe8be8fbd1b31f0eeef2d632fed2ca35f556a",
+      "etag": "\"/config/ 2b1416cd59c1bef9\"",
+      "landing_fallback_preserved": true,
+      "apex_redirect_preserved": true,
+      "try_route_present": false,
+      "public_capacity_route_present": false
+    }
+  },
+  "workers": [
+    {
+      "hostname": "xbabe1",
+      "jain_worker_service": "not-found/inactive",
+      "gpu_uuid": "GPU-784030c4-b1f9-d5a3-f0eb-9337f133f503",
+      "gpu": "NVIDIA GeForce RTX 4090",
+      "gpu_memory_mib": 24564,
+      "driver": "570.153.02",
+      "active_compute_processes": [],
+      "root_disk_used_percent": 75,
+      "psi_avg10": {"cpu": 0.0, "io": 0.0, "memory": 0.0},
+      "last_24h_xid_observed": false,
+      "last_24h_aer_observed": false,
+      "production_eligible": false
+    },
+    {
+      "hostname": "xbabe2",
+      "scqd_service": "enabled/inactive",
+      "enrollment": "drained and unenrolled",
+      "gpu_uuid": "GPU-44c63d19-492a-ab46-cc6a-56e12a2ef51b",
+      "gpu": "NVIDIA GeForce RTX 3090",
+      "gpu_memory_mib": 24576,
+      "driver": "570.211.01",
+      "active_compute_processes": [
+        {"pid": 2926816, "process": "/usr/local/bin/jain-web", "gpu_memory_mib": 288}
+      ],
+      "running_jain_containers": [
+        "jain",
+        "codex-root-prime-cpu-16c06da-r3",
+        "codex-jain-candidate-20260714",
+        "codex-jain-prime-gpu-16c06da-r3"
+      ],
+      "root_disk_used_percent": 91,
+      "psi_avg10": {"cpu": 0.0, "io": 0.62, "memory": 0.0},
+      "last_24h_xid_observed": false,
+      "last_24h_aer_observed": true,
+      "latest_aer_observed_at": "2026-07-15T19:12:22Z",
+      "cleanup_blocker": "active Jain GPU compute ownership must be proven obsolete before removal",
+      "production_eligible": false
+    },
+    {
+      "hostname": "xbabe3",
+      "jain_worker_service": "not-found/inactive",
+      "gpu_uuid": "GPU-2857566c-23c5-293a-df02-7c66a7571ac4",
+      "gpu": "NVIDIA GeForce RTX 3090",
+      "gpu_memory_mib": 24576,
+      "driver": "580.126.09",
+      "active_compute_processes": [],
+      "root_disk_used_percent": 80,
+      "psi_avg10": {"cpu": 0.0, "io": 0.0, "memory": 0.0},
+      "last_24h_xid_observed": false,
+      "last_24h_aer_observed": true,
+      "latest_aer_observed_at": "2026-07-15T11:47:59Z",
+      "production_eligible": false
+    }
+  ],
+  "public_readback": {
+    "www_root_status": 200,
+    "www_root_sha256": "8a4faf1c6b495c93b4180e22ae974ed229dfa9737889d2a89cf69fe042d50bba",
+    "apex_status": 301,
+    "apex_location": "https://www.neverhuman.org/",
+    "try_status": 404,
+    "capacity_status": 404,
+    "tls_leaf_sha256_fingerprint": "49:6A:3E:41:83:0F:A7:8C:C4:27:5B:74:85:F1:D8:63:92:A4:79:02:F4:2A:2C:55:41:EC:47:16:49:12:9C:87",
+    "tls_subject": "CN = www.neverhuman.org",
+    "tls_not_before": "2026-05-22T19:48:53Z",
+    "tls_not_after": "2026-08-20T19:48:52Z"
+  },
+  "mutations_performed": []
+}

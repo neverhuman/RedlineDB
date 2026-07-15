@@ -1,0 +1,96 @@
+{
+  "schema_version": "jain.cloud-release-baseline/v1",
+  "capture_status": "pass",
+  "release_readiness": "blocked",
+  "capture_started_at": "2026-07-15T19:11:55Z",
+  "capture_finished_at": "2026-07-15T19:18:00Z",
+  "release": {
+    "version": "8.0.1",
+    "status": "candidate",
+    "formal_ga": false,
+    "sagemaker": "N/A",
+    "rollback_target": "7.0.6"
+  },
+  "authority": {
+    "manifest_path": "repos.manifest.toml",
+    "manifest_sha256": "2942686a4416e593a990a12b982810ea16618b353cd65b8fa969585d4243cb79",
+    "branch_head": "b738ba98cf51ac52e8a488daf23a2044aaf58769",
+    "branch": "codex/v801-control-plane-prereq-20260714",
+    "canonical_main": "beb0c1957a77a9c33eeb44d03b27c07def2daa47",
+    "pr": "jeryu/jain-split-ops#15"
+  },
+  "repositories": {
+    "managed_count": 33,
+    "workspace_inventory": {
+      "path": "../workspace-inventory-20260715T191500Z.json",
+      "sha256": "494d71cd868ba786515d411f484ac7dad973d9c2dbbcb14b24a06c5d116a4978",
+      "auxiliary_worktrees": 167,
+      "cleanup_blockers": 175
+    },
+    "canonical_ref_readback": {
+      "path": "repositories.tsv",
+      "sha256": "364ec02a581c93c1e4ddd7d3a0701a627f7edf735a7703a2437e5db364bb2fee"
+    },
+    "remote_tag_readback": {
+      "path": "remote-tags.tsv",
+      "sha256": "df1c247e5b2856baff62e92f67b0ba03604793248383ea065a2ad17dc956e2a6",
+      "declared_8_0_1_tags_present": 0
+    },
+    "open_pr_readback": {
+      "path": "open-prs.tsv",
+      "sha256": "d6a035dab1e734593a77aa0934251367417c8f770cd37480cf7e29695bfab9a9",
+      "open_prs": 34
+    },
+    "protection_readback": {
+      "directory": "protection",
+      "receipts": 33,
+      "passing": 33,
+      "sha256_manifest_digest": "f40a4839789ea7b96022b0ebe0f1e7407f91c4db5c3fa1e14b607dee6da5d34a"
+    },
+    "verify_worktrees": {
+      "path": "../verify-worktrees-20260715T191500Z.json",
+      "sha256": "e9dc3fe3f8d0f654987578cf674aaf681305b5776bad0eca56ffd23948adc4d7",
+      "passing": 4,
+      "failing": 29
+    }
+  },
+  "redline": {
+    "engine_tag": "redline-core-v4.1.0-jain.4",
+    "engine_commit": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+    "engine_release_tree_sha256": "b36a4ac5afd332bab7473f1007061356a991a7590eeda1336809be5dad5ce746",
+    "control_lock_sha256": "a6223759a257baec12d5bcaaa235de70823101e0b3be1898ce58ecec07c620b7",
+    "container_lock_sha256": "a6223759a257baec12d5bcaaa235de70823101e0b3be1898ce58ecec07c620b7",
+    "locks_byte_identical": true,
+    "jain_authority_binding": "pending"
+  },
+  "infrastructure": {
+    "path": "infrastructure.json",
+    "sha256": "74bb0d323ca4cb49d392f331754f1e37f189376795f2f8abc1971ef7bc8cebe4",
+    "production_routes_mutated": false,
+    "production_admission_opened": false,
+    "worker_hosts_mutated": false,
+    "existing_canary_mutated": false
+  },
+  "validators": {
+    "release_preflight": {
+      "path": "../release-preflight-20260715T191500Z.json",
+      "sha256": "67bee363d4af7f1148560527caf17d760f8b249a9af97cc3720c0584147e9f94",
+      "status": "fail"
+    },
+    "release_snapshot": {
+      "path": "../release-snapshot-20260715T191500Z.json",
+      "sha256": "801498a662fbc0b073b6b6e15e5067e2ff7b72617a87e89398972c76c3bd98d5",
+      "status": "fail"
+    }
+  },
+  "observed_preexisting_state": {
+    "local_mutable_latest_tags_on_xbabe2": [
+      "image.neverhuman.org/veox/jain:latest",
+      "image.neverhuman.org/doug/jain_small/jain-sagemaker:latest",
+      "image.neverhuman.org/doug/jain_small/jain-sagemaker-gpu:latest"
+    ],
+    "note": "These mutable local tags predate this capture. This release must not create or change them."
+  },
+  "mutations_performed_before_capture": [],
+  "certification_claim": "none; this is a machine-state baseline, not release evidence"
+}

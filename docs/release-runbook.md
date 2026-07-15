@@ -212,6 +212,20 @@ All product metadata must agree on `8.0.1`: Cargo/package manifests, CLI output,
 manifests, OCI labels, image tags, receipts, and release inventory. Split repository tag names are
 not product version strings.
 
+### Workspace cleanup is dry-run first
+
+Run `just workspace-clean` to inventory canonical and auxiliary worktrees. The receipt is blocked
+unless every canonical checkout is clean on `main` and each auxiliary path is clean, unclaimed by
+its latest branch transition, reachable, exact-head pushed to the declared Jeryu remote, merged,
+and covered by a fresh `jain.workspace-removal-proof/v1` no-process/no-lease receipt. A later
+handoff or release supersedes an earlier claim; a handoff request does not.
+
+Unmerged work must remain in place unless it has both the required preservation evidence and later
+becomes removal-eligible. Bundle preservation receipts use `jain.workspace-bundle/v1` and bind a
+real `git bundle`, its SHA-256, contained head, signer fingerprint, and detached-signature bytes.
+Pass removal receipts with repeated `--path-proof PATH` and bundle receipts with `--bundle-dir`.
+Only an independently reviewed dry-run with zero blockers may be repeated with `--apply`.
+
 ## 7. AtomicSoul dry run only
 
 Run the audited wrapper from `jain-deploy` after the dependency graph resolves:

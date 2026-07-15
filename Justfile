@@ -75,6 +75,12 @@ jeryu-protection-readback repo required_check:
 verify-worktrees:
   cargo run --locked --quiet -- verify-worktrees --manifest repos.manifest.toml
 
+workspace-clean:
+  cargo run --locked --quiet -- workspace-clean --manifest repos.manifest.toml
+
+workspace-clean-apply:
+  cargo run --locked --quiet -- workspace-clean --manifest repos.manifest.toml --apply
+
 fast:
   ./ops/ci/fast.sh
 
