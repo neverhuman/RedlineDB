@@ -1,53 +1,6 @@
 #!/usr/bin/env bash
-# Pre-commit score ratchet: run the canonical score lane and reject commits
-# that make the advisory score artifacts worse than the pre-hook baseline.
-
+# Canonical pre-commit entrypoint: delegate to the governed staged-file gate.
 set -euo pipefail
 
 repo_root="$(git rev-parse --show-toplevel)"
-cd "$repo_root"
-
-artifacts=(
-  ".jankurai/repo-score.json"
-  ".jankurai/repo-score.md"
-  ".jankurai/score-history.jsonl"
-  ".jankurai/score-history.csv"
-)
-
-tmp_dir="$(mktemp -d)"
-restore_artifacts() {
-  local artifact backup
-  for artifact in "${artifacts[@]}"; do
-    backup="$tmp_dir/original/$artifact"
-    if [[ -e "$backup" ]]; then
-      mkdir -p "$(dirname "$artifact")"
-      cp -p "$backup" "$artifact"
-    else
-      rm -f "$artifact"
-    fi
-  done
-  rm -rf "$tmp_dir"
-}
-trap restore_artifacts EXIT
-
-for artifact in "${artifacts[@]}"; do
-  if [[ -e "$artifact" ]]; then
-    mkdir -p "$tmp_dir/original/$(dirname "$artifact")"
-    cp -p "$artifact" "$tmp_dir/original/$artifact"
-  fi
-done
-
-baseline_json="$tmp_dir/original/.jankurai/repo-score.json"
-if [[ ! -f "$baseline_json" ]]; then
-  mkdir -p "$(dirname "$baseline_json")"
-  if ! git show HEAD:.jankurai/repo-score.json >"$baseline_json" 2>/dev/null; then
-    echo "ERROR: no baseline .jankurai/repo-score.json available for score ratchet" >&2
-    exit 1
-  fi
-fi
-
-echo "Running score ratchet: rtk just score"
-rtk just score
-
-bash tools/jankurai-hooks/check-score-ratchet.sh \
-  "$baseline_json" ".jankurai/repo-score.json" commit
+exec bash "$repo_root/tools/jankurai-hooks/pre-commit" "$@"

@@ -271,8 +271,8 @@ tagged release must satisfy:
 - **Backups** — kernel `Engine::backup` integration test green
   (`cargo test -p redlinedb-kernel backup`); restore round-trip
   proven by the failpoint matrix lane.
-- **Monitoring** — bench `kill_receipt.json` plus
-  `.jankurai/repo-score.json` archived per release; the
+- **Monitoring** — bench `kill_receipt.json` plus the clean-head
+  `target/jankurai/governed-evidence.json` receipt archived per release; the
   audit upload step in `jankurai.yml` is the canonical artifact.
 - **Rollback** — `gh release delete` + `cargo yank` runbook in
   `docs/release.md`; `release-bad-behavior` lane in

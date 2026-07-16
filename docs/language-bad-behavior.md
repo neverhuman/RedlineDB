@@ -59,10 +59,10 @@ repair plan.
 ## Rerunning the detector
 
 ```
-jankurai audit . --policy agent/audit-policy.toml --mode advisory \
-  --json .jankurai/repo-score.json --md .jankurai/repo-score.md
+just score
 ```
 
-The audit's `future-hostile-dead-language-in-product-code` cap and
+The governed lane writes only under `target/jankurai/`. The audit's
+`future-hostile-dead-language-in-product-code` cap and
 `repo-rot-bad-behavior` cap are the two it can lift; see
 `docs/audit-rubric.md` for the full dimension map.
