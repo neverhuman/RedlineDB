@@ -667,10 +667,11 @@ fn managed_repositories(
 
     if data.get("nested_families").is_some() {
         let topology = redline_topology(data)?;
-        let nested_path = topology.manifest_path;
-        let nested: toml::Value = fs::read_to_string(&nested_path)?.parse()?;
+        validate_redline_topology_paths(&topology)?;
+        let nested_path = &topology.manifest_path;
+        let nested: toml::Value = fs::read_to_string(nested_path)?.parse()?;
+        let nested_paths = validated_nested_redline_paths(&topology, &nested)?;
         let nested_family = string(&nested, "family").ok_or("nested manifest is missing family")?;
-        let nested_dir = nested_path.parent().unwrap_or(Path::new("."));
         for raw in nested
             .get("repo")
             .and_then(toml::Value::as_array)
@@ -678,16 +679,13 @@ fn managed_repositories(
             .flatten()
         {
             let name = string(raw, "name").ok_or("nested repository is missing its name")?;
-            let raw_path =
-                PathBuf::from(string(raw, "path").ok_or("nested repository is missing its path")?);
-            let resolved_path = if raw_path.is_absolute() {
-                raw_path
-            } else {
-                nested_dir.join(raw_path)
-            };
+            let path = nested_paths
+                .get(&name)
+                .cloned()
+                .ok_or_else(|| format!("nested repository {name} has no validated path"))?;
             managed.push(ManagedRepo {
                 name,
-                path: fs::canonicalize(&resolved_path).unwrap_or(resolved_path),
+                path,
                 remote: declared_remote(raw).ok_or("nested repository is missing its remote")?,
                 required_check: string(raw, "required_check")
                     .ok_or("nested repository is missing its required check")?,
@@ -737,9 +735,15 @@ fn managed_repositories(
 fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
     let release = string(data, "release_version")
         .ok_or_else(|| "release_version is required for Redline topology".to_owned())?;
-    let split_root = string(data, "split_root")
-        .map(PathBuf::from)
+    let split_root_raw = string(data, "split_root")
         .ok_or_else(|| "split_root is required for Redline topology".to_owned())?;
+    if split_root_raw
+        .split('/')
+        .any(|component| matches!(component, "." | ".."))
+    {
+        return Err("split_root must not contain lexical . or .. aliases".to_owned());
+    }
+    let split_root = PathBuf::from(split_root_raw);
     if !split_root.is_absolute() {
         return Err("split_root must be absolute for Redline topology".to_owned());
     }
@@ -806,11 +810,53 @@ fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
                 .to_owned(),
         );
     }
-    if release == "8.0.0"
-        && string(nested, "engine_tag").as_deref() != Some("redline-core-v4.1.0-jain.1")
-    {
+    let external = data
+        .get("external_dependencies")
+        .and_then(|value| value.get("redline"))
+        .ok_or_else(|| "manifest must declare external_dependencies.redline".to_owned())?;
+    if string(external, "repository").as_deref() != Some(engine_repository.as_str()) {
         return Err(
-            "nested_families.redline.engine_tag must be redline-core-v4.1.0-jain.1 for release 8.0.0"
+            "external_dependencies.redline.repository must match nested_families.redline.engine_repository"
+                .to_owned(),
+        );
+    }
+    if string(external, "remote") != string(nested, "engine_remote") {
+        return Err(
+            "external_dependencies.redline.remote must match nested_families.redline.engine_remote"
+                .to_owned(),
+        );
+    }
+    let external_status = string(external, "identity_status");
+    let engine_status = string(nested, "engine_identity_status");
+    let external_tag = string(external, "immutable_tag");
+    let engine_tag = string(nested, "engine_tag");
+    match (external_status.as_deref(), engine_status.as_deref()) {
+        (Some("pending"), Some("pending")) => {
+            if external_tag.is_some() || engine_tag.is_some() {
+                return Err(
+                    "pending Redline identity must omit both immutable_tag and engine_tag"
+                        .to_owned(),
+                );
+            }
+        }
+        (None, None) => {
+            if external_tag.is_none() || engine_tag.is_none() {
+                return Err(
+                    "Redline identity tags may be absent only with paired pending statuses"
+                        .to_owned(),
+                );
+            }
+        }
+        _ => {
+            return Err(
+                "bound Redline identity statuses must be absent; pending statuses must be paired"
+                    .to_owned(),
+            )
+        }
+    }
+    if external_tag != engine_tag {
+        return Err(
+            "nested_families.redline.engine_tag must match external_dependencies.redline.immutable_tag"
                 .to_owned(),
         );
     }
@@ -888,6 +934,151 @@ fn validate_redline_topology_paths(topology: &RedlineTopology) -> Result<(), Str
     Ok(())
 }
 
+fn validated_nested_redline_paths(
+    topology: &RedlineTopology,
+    nested: &toml::Value,
+) -> Result<std::collections::BTreeMap<String, PathBuf>, String> {
+    validate_redline_topology_paths(topology)?;
+    let nested_dir = topology
+        .manifest_path
+        .parent()
+        .ok_or_else(|| "nested Redline manifest has no parent".to_owned())?;
+    let control = nested
+        .get("control_plane")
+        .ok_or_else(|| "nested manifest is missing its control_plane".to_owned())?;
+    let control_raw = string(control, "path")
+        .ok_or_else(|| "nested control plane is missing its path".to_owned())?;
+    if control_raw != "." {
+        return Err("nested Redline control-plane path must be exactly .".to_owned());
+    }
+    let nested_control = physical_directory(
+        &nested_dir.join(&control_raw),
+        "nested Redline control plane",
+    )?;
+    let declared_control = physical_directory(
+        &topology.control_plane_path,
+        "declared Redline control plane",
+    )?;
+    if physical_identity(&nested_control) != physical_identity(&declared_control) {
+        return Err(format!(
+            "nested control plane path {control_raw} is not the declared physical path {}",
+            topology.control_plane_path.display()
+        ));
+    }
+    physical_directory(
+        &topology.control_plane_path.join(".git"),
+        "nested Redline control-plane Git directory",
+    )?;
+
+    let container = physical_directory(&topology.container_path, "Redline container")?;
+    let container_identity = physical_identity(&container);
+    if let Some(container_raw) = string(nested, "container") {
+        let expected = if topology.authority_mode.as_deref() == Some("child") {
+            ".."
+        } else {
+            "../redline-split"
+        };
+        if container_raw != expected {
+            return Err(format!(
+                "nested Redline container path must be exactly {expected}"
+            ));
+        }
+        let nested_container =
+            physical_directory(&nested_dir.join(&container_raw), "nested Redline container")?;
+        if physical_identity(&nested_container) != container_identity {
+            return Err(format!(
+                "nested container path {container_raw} is not the declared physical path {}",
+                topology.container_path.display()
+            ));
+        }
+    }
+    if let Some(authority) = string(nested, "manifest_authority") {
+        if authority != topology.manifest_path.display().to_string() {
+            return Err(format!(
+                "nested manifest_authority must be exactly {}",
+                topology.manifest_path.display()
+            ));
+        }
+    }
+
+    let mut identities = std::collections::BTreeMap::new();
+    if topology.authority_mode.as_deref() == Some("child") {
+        identities.insert(
+            physical_identity(&declared_control),
+            "redline-split-ops".to_owned(),
+        );
+    }
+    let mut paths = std::collections::BTreeMap::new();
+    for raw in nested
+        .get("repo")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        let name = string(raw, "name")
+            .ok_or_else(|| "nested repository is missing its name".to_owned())?;
+        if !valid_cargo_token(&name) {
+            return Err(format!(
+                "nested repository name must be one unaliased path component: {name}"
+            ));
+        }
+        let raw_path = string(raw, "path")
+            .ok_or_else(|| format!("nested repository {name} is missing its path"))?;
+        let expected = if topology.authority_mode.as_deref() == Some("child") {
+            format!("../{name}")
+        } else {
+            format!("../redline-split/{name}")
+        };
+        if raw_path != expected {
+            return Err(format!(
+                "{name}: nested repository path must be exactly {expected}"
+            ));
+        }
+        let resolved = nested_dir.join(&raw_path);
+        let metadata = physical_directory(&resolved, "nested Redline repository")?;
+        let parent = resolved
+            .parent()
+            .ok_or_else(|| format!("{name}: nested repository has no parent"))?;
+        let parent = physical_directory(parent, "nested Redline repository parent")?;
+        if physical_identity(&parent) != container_identity {
+            return Err(format!(
+                "{name}: path {} is not a direct physical child of {}",
+                resolved.display(),
+                topology.container_path.display()
+            ));
+        }
+        let identity = physical_identity(&metadata);
+        if let Some(existing) = identities.insert(identity, name.clone()) {
+            return Err(format!(
+                "nested Redline repositories {existing} and {name} share one physical path"
+            ));
+        }
+        physical_directory(
+            &resolved.join(".git"),
+            "nested Redline repository Git directory",
+        )?;
+        let canonical = fs::canonicalize(&resolved).map_err(|error| {
+            format!(
+                "cannot canonicalize {name} at {}: {error}",
+                resolved.display()
+            )
+        })?;
+        let canonical_metadata =
+            physical_directory(&canonical, "canonical nested Redline repository")?;
+        if physical_identity(&canonical_metadata) != identity {
+            return Err(format!(
+                "{name}: repository changed while validating {}",
+                resolved.display()
+            ));
+        }
+        if paths.insert(name.clone(), canonical).is_some() {
+            return Err(format!("duplicate nested repository name: {name}"));
+        }
+    }
+
+    Ok(paths)
+}
+
 fn declared_redline_lock_path(
     topology: &RedlineTopology,
     nested: &toml::Value,
@@ -925,37 +1116,16 @@ fn validate_nested_redline_local(
         return Ok(());
     }
     let nested: toml::Value = fs::read_to_string(&topology.manifest_path)?.parse()?;
-    let nested_dir = topology
-        .manifest_path
-        .parent()
-        .ok_or("nested Redline manifest has no parent")?;
+    let nested_paths = match validated_nested_redline_paths(&topology, &nested) {
+        Ok(paths) => paths,
+        Err(error) => {
+            errors.push(error);
+            return Ok(());
+        }
+    };
     let control = nested
         .get("control_plane")
         .ok_or("nested manifest is missing its control_plane")?;
-    let control_raw = string(control, "path").ok_or("nested control plane is missing its path")?;
-    let control_path = if Path::new(&control_raw).is_absolute() {
-        PathBuf::from(&control_raw)
-    } else {
-        nested_dir.join(&control_raw)
-    };
-    let nested_control = physical_directory(&control_path, "nested Redline control plane")?;
-    let declared_control = physical_directory(
-        &topology.control_plane_path,
-        "declared Redline control plane",
-    )?;
-    if physical_identity(&nested_control) != physical_identity(&declared_control) {
-        errors.push(format!(
-            "nested control plane path {} is not the declared physical path {}",
-            control_path.display(),
-            topology.control_plane_path.display()
-        ));
-    }
-    if let Err(error) = physical_directory(
-        &topology.control_plane_path.join(".git"),
-        "nested Redline control-plane Git directory",
-    ) {
-        errors.push(error);
-    }
     if !skip_remotes {
         let expected = declared_remote(control)
             .ok_or("nested control plane is missing its declared remote")?;
@@ -967,32 +1137,12 @@ fn validate_nested_redline_local(
         }
     }
 
-    let container = physical_directory(&topology.container_path, "Redline container")?;
-    let container_identity = physical_identity(&container);
-    if let Some(container_raw) = string(&nested, "container") {
-        let nested_container = if Path::new(&container_raw).is_absolute() {
-            PathBuf::from(&container_raw)
-        } else {
-            nested_dir.join(&container_raw)
-        };
-        let nested_container = physical_directory(&nested_container, "nested Redline container")?;
-        if physical_identity(&nested_container) != container_identity {
-            errors.push(format!(
-                "nested container path {container_raw} is not the declared physical path {}",
-                topology.container_path.display()
-            ));
-        }
-    }
-    if let Some(authority) = string(&nested, "manifest_authority") {
-        if authority != topology.manifest_path.display().to_string() {
-            errors.push(format!(
-                "nested manifest_authority must be exactly {}",
-                topology.manifest_path.display()
-            ));
-        }
-    }
     let mut declared = std::collections::BTreeMap::new();
     if topology.authority_mode.as_deref() == Some("child") {
+        let declared_control = physical_directory(
+            &topology.control_plane_path,
+            "declared Redline control plane",
+        )?;
         declared.insert(
             physical_identity(&declared_control),
             "redline-split-ops".to_owned(),
@@ -1005,43 +1155,17 @@ fn validate_nested_redline_local(
         .flatten()
     {
         let mut repo = repo_from(raw)?;
-        if repo.path.is_relative() {
-            repo.path = nested_dir.join(&repo.path);
-        }
-        let repo_metadata = match physical_directory(&repo.path, "nested Redline repository") {
-            Ok(metadata) => metadata,
-            Err(error) => {
-                errors.push(format!("{}: {error}", repo.name));
-                continue;
-            }
-        };
-        let parent = repo
-            .path
-            .parent()
-            .ok_or_else(|| format!("{}: nested repository has no parent", repo.name))?;
-        match physical_directory(parent, "nested Redline repository parent") {
-            Ok(metadata) if physical_identity(&metadata) == container_identity => {}
-            Ok(_) => errors.push(format!(
-                "{}: path {} is not a direct physical child of {}",
-                repo.name,
-                repo.path.display(),
-                topology.container_path.display()
-            )),
-            Err(error) => errors.push(format!("{}: {error}", repo.name)),
-        }
+        repo.path = nested_paths
+            .get(&repo.name)
+            .cloned()
+            .ok_or_else(|| format!("{} has no validated nested path", repo.name))?;
+        let repo_metadata = physical_directory(&repo.path, "nested Redline repository")?;
         let identity = physical_identity(&repo_metadata);
         if let Some(existing) = declared.insert(identity, repo.name.clone()) {
             errors.push(format!(
                 "nested Redline repositories {existing} and {} share one physical path",
                 repo.name
             ));
-        }
-        if let Err(error) = physical_directory(
-            &repo.path.join(".git"),
-            "nested Redline repository Git directory",
-        ) {
-            errors.push(format!("{}: {error}", repo.name));
-            continue;
         }
         if !skip_remotes {
             let expected = declared_remote(raw)
@@ -6231,10 +6355,12 @@ mod tests {
         } else {
             "../redline-split/redline-web"
         };
+        let nested_container = if child { ".." } else { "../redline-split" };
         fs::write(
             control.join("repos.manifest.toml"),
             format!(
                 r#"family = "redline-split"
+container = "{nested_container}"
 lock = "redline.lock.toml"
 [control_plane]
 name = "redline-split-ops"
@@ -6265,9 +6391,18 @@ required_check = "redline-web/required"
         } else {
             ""
         };
+        let engine_tag = if child {
+            "redline-core-v4.1.0-jain.4"
+        } else {
+            "redline-core-v4.1.0-jain.1"
+        };
         let parent: toml::Value = format!(
             r#"release_version = "{release}"
 split_root = "{}"
+[external_dependencies.redline]
+repository = "redline-core"
+remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
+immutable_tag = "{engine_tag}"
 [nested_families.redline]
 family = "redline-split"
 {authority}manifest_path = "{}"
@@ -6276,7 +6411,7 @@ control_plane = "{}"
 required = true
 engine_repository = "redline-core"
 engine_remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
-engine_tag = "redline-core-v4.1.0-jain.1"
+engine_tag = "{engine_tag}"
 "#,
             root.display(),
             control.join("repos.manifest.toml").display(),
@@ -7581,6 +7716,106 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     }
 
     #[test]
+    fn redline_topology_binds_engine_tag_or_requires_explicit_paired_pending_identity() {
+        let root = TestDir::new("redline-topology-engine-identity");
+        let (data, _) = synthetic_redline_topology(root.path(), "8.0.1");
+
+        let mut missing = data.clone();
+        missing["nested_families"]["redline"]
+            .as_table_mut()
+            .unwrap()
+            .remove("engine_tag");
+        assert!(redline_topology(&missing)
+            .unwrap_err()
+            .contains("tags may be absent only with paired pending statuses"));
+
+        let mut wrong = data.clone();
+        wrong["nested_families"]["redline"]["engine_tag"] =
+            toml::Value::String("redline-core-v4.1.0-jain.5".to_owned());
+        assert!(redline_topology(&wrong)
+            .unwrap_err()
+            .contains("must match external_dependencies.redline.immutable_tag"));
+
+        let mut pending = data;
+        let external = pending["external_dependencies"]["redline"]
+            .as_table_mut()
+            .unwrap();
+        external.remove("immutable_tag");
+        external.insert(
+            "identity_status".to_owned(),
+            toml::Value::String("pending".to_owned()),
+        );
+        let nested = pending["nested_families"]["redline"]
+            .as_table_mut()
+            .unwrap();
+        nested.remove("engine_tag");
+        nested.insert(
+            "engine_identity_status".to_owned(),
+            toml::Value::String("pending".to_owned()),
+        );
+        let mut unpaired = pending.clone();
+        unpaired["nested_families"]["redline"]
+            .as_table_mut()
+            .unwrap()
+            .remove("engine_identity_status");
+        assert!(redline_topology(&unpaired)
+            .unwrap_err()
+            .contains("pending statuses must be paired"));
+        redline_topology(&pending).unwrap();
+    }
+
+    #[test]
+    fn redline_topology_rejects_coherent_split_control_and_repo_lexical_aliases() {
+        let split_root = TestDir::new("redline-topology-split-alias");
+        let (mut split_alias, _) = synthetic_redline_topology(split_root.path(), "8.0.1");
+        let aliased_root = format!("{}/.", split_root.path().display());
+        split_alias["split_root"] = toml::Value::String(aliased_root.clone());
+        for (key, suffix) in [
+            (
+                "manifest_path",
+                "jain-redline/redline-split-ops/repos.manifest.toml",
+            ),
+            ("container_path", "jain-redline"),
+            ("control_plane", "jain-redline/redline-split-ops"),
+        ] {
+            split_alias["nested_families"]["redline"][key] =
+                toml::Value::String(format!("{aliased_root}/{suffix}"));
+        }
+        assert!(redline_topology(&split_alias)
+            .unwrap_err()
+            .contains("lexical . or .. aliases"));
+
+        let control_root = TestDir::new("redline-topology-control-alias");
+        let (control_data, control_topology) =
+            synthetic_redline_topology(control_root.path(), "8.0.1");
+        let mut control_manifest: toml::Value = fs::read_to_string(&control_topology.manifest_path)
+            .unwrap()
+            .parse()
+            .unwrap();
+        control_manifest["control_plane"]["path"] = toml::Value::String("./.".to_owned());
+        assert!(
+            validated_nested_redline_paths(&control_topology, &control_manifest)
+                .unwrap_err()
+                .contains("must be exactly .")
+        );
+        redline_topology(&control_data).unwrap();
+
+        let repo_root = TestDir::new("redline-topology-repo-alias");
+        let (_, repo_topology) = synthetic_redline_topology(repo_root.path(), "8.0.1");
+        let mut repo_manifest: toml::Value = fs::read_to_string(&repo_topology.manifest_path)
+            .unwrap()
+            .parse()
+            .unwrap();
+        repo_manifest["repo"][0]["path"] =
+            toml::Value::String("../redline-web/../redline-core".to_owned());
+        assert!(
+            validated_nested_redline_paths(&repo_topology, &repo_manifest)
+                .unwrap_err()
+                .contains("path must be exactly ../redline-core")
+        );
+    }
+
+    #[test]
     fn redline_local_validation_rejects_symlinks_missing_and_undeclared_git_roots() {
         let root = TestDir::new("redline-topology-path-failures");
         let (data, topology) = synthetic_redline_topology(root.path(), "8.0.1");
@@ -7625,7 +7860,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     }
 
     #[test]
-    fn redline_local_validation_compares_physical_paths_not_basenames() {
+    fn redline_local_validation_rejects_out_of_container_before_canonicalization() {
         let root = TestDir::new("redline-topology-physical-identity");
         let (data, topology) = synthetic_redline_topology(root.path(), "8.0.1");
         let elsewhere = root.path().join("elsewhere/redline-core");
@@ -7642,22 +7877,27 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         .unwrap();
         let mut errors = Vec::new();
         validate_nested_redline_local(&data, true, &mut errors).unwrap();
-        assert!(errors.iter().any(|error| {
-            error.contains("redline-core") && error.contains("not a direct physical child")
-        }));
+        assert!(errors.iter().any(|error| error
+            .contains("redline-core: nested repository path must be exactly ../redline-core")));
     }
 
     #[test]
     fn managed_repository_view_includes_both_control_planes_and_nested_family() {
         let root = TestDir::new("managed-repos");
         let nested = root.path().join("redline-split-ops/repos.manifest.toml");
-        fs::create_dir_all(nested.parent().unwrap()).unwrap();
+        standalone_physical_clone(root.path(), "managed-control", nested.parent().unwrap());
+        standalone_physical_clone(
+            root.path(),
+            "managed-core",
+            &root.path().join("redline-split/redline-core"),
+        );
         fs::write(
             &nested,
             r#"
 family = "redline-split"
 [control_plane]
 name = "redline-split-ops"
+path = "."
 remote = "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
 required_check = "redline-split-ops/required"
 [[repo]]
@@ -7680,6 +7920,10 @@ name = "jain-split-ops"
 path = "{}/jain-split-ops"
 remote = "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git"
 required_check = "jain-split-ops/required"
+[external_dependencies.redline]
+repository = "redline-core"
+remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
+immutable_tag = "redline-core-v4.1.0-jain.1"
 [nested_families.redline]
 family = "redline-split"
 manifest_path = "{}"
@@ -7728,6 +7972,31 @@ current_tag = "jain-v8.0.0-split.0"
                 .find(|repo| repo.name == "jain-smartcluster")
                 .unwrap()
                 .family_registered
+        );
+
+        let original_nested = fs::read_to_string(&nested).unwrap();
+        let mut out_of_container: toml::Value = original_nested.parse().unwrap();
+        out_of_container["repo"][0]["path"] =
+            toml::Value::String("../../elsewhere/redline-core".to_owned());
+        fs::write(&nested, toml::to_string_pretty(&out_of_container).unwrap()).unwrap();
+        assert!(
+            managed_repositories(&data, &root.path().join("repos.manifest.toml"))
+                .unwrap_err()
+                .to_string()
+                .contains("path must be exactly ../redline-split/redline-core")
+        );
+
+        fs::write(&nested, &original_nested).unwrap();
+        let core = root.path().join("redline-split/redline-core");
+        fs::remove_dir_all(&core).unwrap();
+        let outside = root.path().join("outside/redline-core");
+        standalone_physical_clone(root.path(), "managed-core-outside", &outside);
+        symlink(&outside, &core).unwrap();
+        assert!(
+            managed_repositories(&data, &root.path().join("repos.manifest.toml"))
+                .unwrap_err()
+                .to_string()
+                .contains("symlink component")
         );
     }
 
