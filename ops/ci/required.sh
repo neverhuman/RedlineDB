@@ -20,6 +20,7 @@ for f in "${sh_files[@]}"; do bash -n "$f"; done
 shellcheck -S error "${sh_files[@]}"
 bash ops/ci/native-runtime-test.sh
 bash ops/ci/native-materializer-test.sh
+bash ops/ci/jeryu-branch-push-integration-test.sh
 bash ops/ci/host-ci-integrity-test.sh
 bash ops/ci/split-host-ci-integrity-test.sh
 bash ops/ci/pinned-advisory-test.sh

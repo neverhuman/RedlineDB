@@ -9,7 +9,10 @@ use std::{
     ffi::OsStr,
     fs,
     io::{self, Read, Write},
-    os::unix::fs::{MetadataExt, OpenOptionsExt},
+    os::{
+        fd::AsRawFd,
+        unix::fs::{MetadataExt, OpenOptionsExt},
+    },
     path::{Path, PathBuf},
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
@@ -2960,8 +2963,22 @@ fn forbidden_jeryu_environment_name(name: &str) -> bool {
 }
 
 fn jeryu_git_askpass(args: Vec<std::ffi::OsString>) -> Result<(), Box<dyn std::error::Error>> {
+    let askpass = env::var_os("GIT_ASKPASS").ok_or("controlled Jeryu askpass has no executable")?;
+    let askpass_path = Path::new(&askpass);
+    let askpass_text = askpass_path
+        .to_str()
+        .ok_or("controlled Jeryu askpass path is not UTF-8")?;
+    let descriptor = askpass_text
+        .strip_prefix("/proc/self/fd/")
+        .filter(|value| !value.is_empty() && value.bytes().all(|byte| byte.is_ascii_digit()))
+        .ok_or("controlled Jeryu askpass is not a pinned descriptor")?;
+    let descriptor = descriptor.parse::<i32>()?;
+    let askpass_metadata = fs::metadata(askpass_path)?;
+    let running_metadata = fs::metadata("/proc/self/exe")?;
     if env::var(JERYU_ASKPASS_MODE).as_deref() != Ok("v1")
-        || env::var_os("GIT_ASKPASS") != Some(env::current_exe()?.into_os_string())
+        || descriptor < 3
+        || askpass_metadata.dev() != running_metadata.dev()
+        || askpass_metadata.ino() != running_metadata.ino()
         || env::var_os("GIT_TERMINAL_PROMPT").as_deref() != Some(OsStr::new("0"))
         || args.len() != 1
     {
@@ -3050,28 +3067,49 @@ fn secure_git_command(repo: Option<&Path>) -> Command {
     command
 }
 
+struct AuthenticatedGitCommand {
+    command: Command,
+    _askpass_executable: fs::File,
+}
+
 fn secure_git_authenticated_command(
     repo: Option<&Path>,
     token_file: &Path,
-) -> Result<Command, Box<dyn std::error::Error>> {
+) -> Result<AuthenticatedGitCommand, Box<dyn std::error::Error>> {
     if !token_file.is_absolute() {
         return Err("Jeryu token path must be absolute".into());
     }
-    let executable = env::current_exe()?;
-    let metadata = fs::symlink_metadata(&executable)?;
-    let running = fs::metadata("/proc/self/exe")?;
+    let executable = fs::File::open("/proc/self/exe")?;
+    let metadata = executable.metadata()?;
     if !metadata.file_type().is_file()
-        || metadata.file_type().is_symlink()
         || metadata.uid() != unsafe { libc::geteuid() }
-        || metadata.dev() != running.dev()
-        || metadata.ino() != running.ino()
         || metadata.mode() & 0o111 == 0
     {
         return Err("splitctl executable is not a trusted current-owner regular file".into());
     }
+    let descriptor = executable.as_raw_fd();
+    // SAFETY: `descriptor` is owned by `executable`; clearing only CLOEXEC deliberately
+    // pins these exact running bytes across Git's child chain until it invokes askpass.
+    let descriptor_flags = unsafe { libc::fcntl(descriptor, libc::F_GETFD) };
+    if descriptor_flags < 0
+        || unsafe {
+            libc::fcntl(
+                descriptor,
+                libc::F_SETFD,
+                descriptor_flags & !libc::FD_CLOEXEC,
+            )
+        } < 0
+    {
+        return Err(format!(
+            "cannot pin splitctl askpass descriptor: {}",
+            io::Error::last_os_error()
+        )
+        .into());
+    }
+    let executable_path = format!("/proc/self/fd/{descriptor}");
     let mut command = secure_git_command(repo);
     command
-        .env("GIT_ASKPASS", &executable)
+        .env("GIT_ASKPASS", &executable_path)
         .env(JERYU_ASKPASS_MODE, "v1")
         .env(JERYU_ASKPASS_TOKEN_FILE, token_file)
         .args([
@@ -3084,7 +3122,10 @@ fn secure_git_authenticated_command(
             "-c",
             "http.maxRequests=1",
         ]);
-    Ok(command)
+    Ok(AuthenticatedGitCommand {
+        command,
+        _askpass_executable: executable,
+    })
 }
 
 fn secure_git_output(
@@ -3110,9 +3151,8 @@ fn secure_git_authenticated_output(
     token_file: &Path,
     args: &[&str],
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let output = secure_git_authenticated_command(repo, token_file)?
-        .args(args)
-        .output()?;
+    let mut command = secure_git_authenticated_command(repo, token_file)?;
+    let output = command.command.args(args).output()?;
     if !output.status.success() {
         return Err(format!("authenticated fixed-origin Git {} failed", args[0]).into());
     }
@@ -3126,9 +3166,8 @@ fn secure_git_authenticated_status(
     token_file: &Path,
     args: &[&str],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let output = secure_git_authenticated_command(repo, token_file)?
-        .args(args)
-        .output()?;
+    let mut command = secure_git_authenticated_command(repo, token_file)?;
+    let output = command.command.args(args).output()?;
     if !output.status.success() {
         return Err(format!("authenticated fixed-origin Git {} failed", args[0]).into());
     }
@@ -6821,17 +6860,33 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
 
         let command = secure_git_authenticated_command(None, &token_file).unwrap();
         let secret = OsStr::new("fixture-token-0123456789");
-        assert!(command.get_args().all(|arg| arg != secret));
+        assert!(command.command.get_args().all(|arg| arg != secret));
         assert!(command
+            .command
             .get_envs()
             .all(|(name, value)| name != secret && value != Some(secret)));
         assert_eq!(
             command
+                .command
                 .get_envs()
                 .find(|(name, _)| *name == OsStr::new(JERYU_ASKPASS_TOKEN_FILE))
                 .and_then(|(_, value)| value),
             Some(token_file.as_os_str())
         );
+        let askpass = command
+            .command
+            .get_envs()
+            .find(|(name, _)| *name == OsStr::new("GIT_ASKPASS"))
+            .and_then(|(_, value)| value)
+            .unwrap();
+        let askpass_metadata = fs::metadata(Path::new(askpass)).unwrap();
+        let running_metadata = fs::metadata("/proc/self/exe").unwrap();
+        assert_eq!(askpass_metadata.dev(), running_metadata.dev());
+        assert_eq!(askpass_metadata.ino(), running_metadata.ino());
+        let descriptor_flags =
+            unsafe { libc::fcntl(command._askpass_executable.as_raw_fd(), libc::F_GETFD) };
+        assert!(descriptor_flags >= 0);
+        assert_eq!(descriptor_flags & libc::FD_CLOEXEC, 0);
     }
 
     #[test]
