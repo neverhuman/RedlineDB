@@ -9,7 +9,7 @@ export REDLINE_SPLIT_LOCK="${REDLINE_SPLIT_LOCK:-$ops_root/redline.lock.toml}"
 export REDLINE_SPLIT_MIRROR_LOCK="${REDLINE_SPLIT_MIRROR_LOCK:-$ops_root/../redline.lock.toml}"
 
 case "${1:-doctor}" in
-  clone|update|family-ci|ci|proof-refresh)
+  clone|update|family-ci|ci|ci-required|proof-refresh)
     exec 9>"$workspace_root/.redline-family.lock"
     flock -x 9
     ;;

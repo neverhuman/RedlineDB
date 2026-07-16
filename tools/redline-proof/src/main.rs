@@ -5240,6 +5240,14 @@ mod tests {
             Self(path)
         }
 
+        fn new_in_root(name: &str) -> Self {
+            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("target/test-tmp")
+                .join(format!("redline-proof-test-{name}-{}", unique_suffix()));
+            fs::create_dir_all(&path).unwrap();
+            Self(path)
+        }
+
         fn path(&self) -> &Path {
             &self.0
         }
@@ -5541,6 +5549,180 @@ mod tests {
         assert!(!mirror
             .with_file_name(".redline.lock.toml.ci-compatibility-mirror")
             .exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ci_required_entry_serializes_mirror_ownership_through_failed_gate_cleanup() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let fixture = TestDir::new_in_root("ci-required-flock");
+        let workspace = fixture.path().join("workspace");
+        let fake_bin = fixture.path().join("bin");
+        fs::create_dir_all(&workspace).unwrap();
+        fs::create_dir_all(&fake_bin).unwrap();
+
+        let real_flock_output = Command::new("sh")
+            .args(["-c", "command -v flock"])
+            .output()
+            .unwrap();
+        assert!(real_flock_output.status.success());
+        let real_flock = String::from_utf8(real_flock_output.stdout)
+            .unwrap()
+            .trim()
+            .to_owned();
+        assert!(Path::new(&real_flock).is_absolute());
+
+        let fake_flock = fake_bin.join("flock");
+        fs::write(
+            &fake_flock,
+            r#"#!/usr/bin/env bash
+set -euo pipefail
+: >"$REDLINE_FLOCK_TEST_ATTEMPT"
+exec "$REDLINE_FLOCK_TEST_REAL_FLOCK" "$@"
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&fake_flock, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let fake_cargo = fake_bin.join("cargo");
+        fs::write(
+            &fake_cargo,
+            r#"#!/usr/bin/env bash
+set -euo pipefail
+case "$REDLINE_FLOCK_TEST_ID" in
+  first)
+    : >"$REDLINE_FLOCK_TEST_FIRST_ENTERED"
+    for _ in $(seq 1 500); do
+      [[ ! -e "$REDLINE_FLOCK_TEST_RELEASE" ]] || exit 23
+      sleep 0.01
+    done
+    exit 70
+    ;;
+  second)
+    if [[ -e "$REDLINE_FLOCK_TEST_MIRROR" ||
+          -e "$REDLINE_FLOCK_TEST_SIDECAR" ||
+          -e "$REDLINE_FLOCK_TEST_MARKER" ]]; then
+      : >"$REDLINE_FLOCK_TEST_OVERLAP"
+      exit 31
+    fi
+    [[ -e "$REDLINE_FLOCK_TEST_CLEANED" ]] || exit 32
+    : >"$REDLINE_FLOCK_TEST_SECOND_ENTERED"
+    ;;
+  *)
+    exit 33
+    ;;
+esac
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&fake_cargo, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
+        let sidecar = checksum_path(&mirror);
+        let marker = mirror.with_file_name(".redline.lock.toml.ci-compatibility-mirror");
+        let first_attempt = fixture.path().join("first-flock-attempted");
+        let second_attempt = fixture.path().join("second-flock-attempted");
+        let first_entered = fixture.path().join("first-entered");
+        let second_entered = fixture.path().join("second-entered");
+        let overlap = fixture.path().join("overlap");
+        let cleaned = fixture.path().join("cleanup-complete");
+        let release = fixture.path().join("release-first");
+        let mut test_path = std::ffi::OsString::from(fake_bin.as_os_str());
+        test_path.push(":");
+        test_path.push(env::var_os("PATH").unwrap_or_default());
+        let redlinectl = Path::new(env!("CARGO_MANIFEST_DIR")).join("redlinectl");
+
+        let spawn_entry = |id: &str, attempt: &Path| {
+            Command::new(&redlinectl)
+                .arg("ci-required")
+                .env("PATH", &test_path)
+                .env("REDLINE_SPLIT_ROOT", &workspace)
+                .env("REDLINE_FLOCK_TEST_ID", id)
+                .env("REDLINE_FLOCK_TEST_ATTEMPT", attempt)
+                .env("REDLINE_FLOCK_TEST_REAL_FLOCK", &real_flock)
+                .env("REDLINE_FLOCK_TEST_FIRST_ENTERED", &first_entered)
+                .env("REDLINE_FLOCK_TEST_SECOND_ENTERED", &second_entered)
+                .env("REDLINE_FLOCK_TEST_RELEASE", &release)
+                .env("REDLINE_FLOCK_TEST_CLEANED", &cleaned)
+                .env("REDLINE_FLOCK_TEST_MIRROR", &mirror)
+                .env("REDLINE_FLOCK_TEST_SIDECAR", &sidecar)
+                .env("REDLINE_FLOCK_TEST_MARKER", &marker)
+                .env("REDLINE_FLOCK_TEST_OVERLAP", &overlap)
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()
+                .unwrap()
+        };
+        let wait_for = |path: &Path| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+            while !path.exists() && std::time::Instant::now() < deadline {
+                std::thread::sleep(std::time::Duration::from_millis(10));
+            }
+            path.exists()
+        };
+
+        let first = spawn_entry("first", &first_attempt);
+        let first_attempted = wait_for(&first_attempt);
+        let first_has_lock = wait_for(&first_entered);
+        if !first_attempted || !first_has_lock {
+            fs::write(&release, b"release\n").unwrap();
+            let output = first.wait_with_output().unwrap();
+            panic!(
+                "first ci-required entry did not acquire the global flock: status={} stderr={}",
+                output.status,
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+
+        let mut second = None;
+        let mut second_attempted = false;
+        let gate_result = with_ci_compatibility_mirror(
+            &authoritative,
+            &mirror,
+            &predecessor,
+            || -> Result<()> {
+                if !mirror.is_file() || !sidecar.is_file() || !marker.is_file() {
+                    return Err(error("first ci-required mirror ownership is incomplete"));
+                }
+                second = Some(spawn_entry("second", &second_attempt));
+                second_attempted = wait_for(&second_attempt);
+                if !second_attempted {
+                    return Err(error("second ci-required entry did not reach global flock"));
+                }
+                if second_entered.exists() || overlap.exists() {
+                    return Err(error(
+                        "second ci-required entry overlapped active mirror ownership",
+                    ));
+                }
+                Err(error("expected required gate failure"))
+            },
+        );
+        let cleanup_complete = !mirror.exists() && !sidecar.exists() && !marker.exists();
+        if cleanup_complete {
+            fs::write(&cleaned, b"cleaned\n").unwrap();
+        }
+        fs::write(&release, b"release\n").unwrap();
+        let first_output = first.wait_with_output().unwrap();
+        let second_output = second.map(|child| child.wait_with_output().unwrap());
+
+        let failure = gate_result.unwrap_err().to_string();
+        assert!(
+            failure.contains("expected required gate failure"),
+            "{failure}"
+        );
+        assert!(second_attempted);
+        assert!(cleanup_complete);
+        assert_eq!(first_output.status.code(), Some(23));
+        let second_output = second_output.expect("second ci-required entry was not started");
+        assert!(
+            second_output.status.success(),
+            "second ci-required entry failed: status={} stderr={}",
+            second_output.status,
+            String::from_utf8_lossy(&second_output.stderr)
+        );
+        assert!(second_entered.exists());
+        assert!(!overlap.exists());
     }
 
     #[test]
