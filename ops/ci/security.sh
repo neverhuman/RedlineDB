@@ -80,8 +80,19 @@ else
     printf 'cargo dependency audit: not applicable (no Cargo.toml or Cargo.lock)\n'
 fi
 
-# Hard gate: gitleaks must succeed for the lane to pass.
-gitleaks detect --source . --redact --no-banner
+# Hard gate: gitleaks must succeed for the lane to pass. Jankurai's strict
+# security runner consumes the structured step record; a zero-exit scanner
+# without that record is intentionally treated as missing required evidence.
+gitleaks_status=0
+gitleaks detect --source . --redact --no-banner \
+    > .jankurai/security/gitleaks.log 2>&1 || gitleaks_status=$?
+printf 'jankurai-security-step={"label":"gitleaks","tool":"gitleaks","shell_command":"gitleaks detect --source . --redact --no-banner","status":"%s","advisory":false,"exit_code":%s}\n' \
+    "$([ "$gitleaks_status" -eq 0 ] && printf ran || printf failed)" \
+    "$gitleaks_status"
+if [ "$gitleaks_status" -ne 0 ]; then
+    cat .jankurai/security/gitleaks.log >&2
+    exit "$gitleaks_status"
+fi
 
 # General SBOM generation via syft — soft-gated; produces a CycloneDX SBOM
 # for both Rust workspaces and the shell/docs-only hub. Requires syft in PATH;
