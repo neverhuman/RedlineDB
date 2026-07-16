@@ -142,8 +142,10 @@ esac
 case "$native_evidence_root/" in
   "$proof_evidence_root/"*) fail 'durable evidence directories cannot be nested' ;;
 esac
-[[ "$(systemctl show -p Version --value)" =~ ^[0-9]+([.][0-9]+)*$ ]] \
+systemd_version="$(systemctl show -p Version --value)" \
   || fail 'systemd manager unavailable'
+[[ "$systemd_version" =~ ^[0-9]+([.][0-9]+)*([-+~][0-9A-Za-z][0-9A-Za-z.+:~_-]*)?$ ]] \
+  || fail 'invalid systemd manager version'
 command -v systemd-run >/dev/null || fail 'systemd-run unavailable'
 for launcher in /usr/bin/unshare /usr/bin/setpriv /usr/bin/findmnt \
   /usr/bin/flock; do
