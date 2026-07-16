@@ -27,6 +27,11 @@ clone/update delegation, bounded family CI, and diagnostics. The four child
 repositories remain independent Git repositories and are never included in an
 umbrella Cargo workspace.
 
+`redline-central` has a separate protected onboarding review, but it is not an
+accepted family identity yet. It is intentionally absent from this manifest
+and lock until its release commit and checksum can be added without changing
+the meaning of the accepted four-repository proof.
+
 The manifest is the sole release-identity authority. Each repository declares
 its product version, corrective tag revision, exact tag, Jeryu remote,
 release commit/tree checksum binding, and protection policy. Commit/checksum
@@ -34,10 +39,13 @@ pairs may both be `PENDING` while review is underway; `proof-refresh` refuses
 them until both are exact.
 
 ```text
-redline-split-ops/              # this repository
-redline-split-ops/repos.manifest.toml # canonical child manifest
-redline-split-ops/redline.lock.toml # authoritative child pins and proof lock
-redline-split/{redline,redline-core,redline-testing,redline-web}/
+jain-redline/
+├── redline-split-ops/                 # this repository
+│   ├── repos.manifest.toml            # canonical child manifest
+│   └── redline.lock.toml              # authoritative child pins and proof lock
+├── redline{,-core,-testing,-web}/     # physical standalone repositories
+├── redline-central/                   # onboarded separately; not accepted here
+└── redline.lock.toml                  # transactional compatibility mirror
 ```
 
 The commands accept `REDLINE_SPLIT_ROOT` for copied or relocated checkouts:
@@ -64,10 +72,14 @@ consumer evidence is historical.
 
 `family-ci` refuses dirty or non-`main` checkouts and requires every local head
 to equal the forge `main` head. It runs each repository's strict CI from a
-detached worktree and writes a JSON receipt, per-repository logs, and a
-`<receipt>.sha256` sidecar. A present tag that points anywhere other than the
-reviewed head is an immutable-tag conflict; a tag may be absent during this CI
-step, but `proof-refresh` requires it locally and on Jeryu.
+temporary standalone `git clone --no-local` checked out at the exact reviewed
+SHA, and writes a JSON receipt, per-repository logs, and a `<receipt>.sha256`
+sidecar. Clone roots and Git directories must be physical, independent, full
+history repositories with no object alternates or linked-checkout metadata.
+Cleanup is marker-bound and refuses a symlinked root. A present tag that points
+anywhere other than the reviewed head is an immutable-tag conflict; a tag may
+be absent during this CI step, but `proof-refresh` requires it locally and on
+Jeryu.
 
 The runner removes the control plane's Rust toolchain override from every child
 command. It also builds Redline Testing from its reviewed commit and feeds Core

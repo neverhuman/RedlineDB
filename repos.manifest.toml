@@ -6,10 +6,10 @@ release_version = "8.0.0"
 status = "candidate"
 formal_ga = false
 sagemaker = "N/A"
-manifest_authority = "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml"
-mirror_root = "../target/bare-mirrors"
-release_evidence_root = "../jain-split-ops/docs/release-evidence/8.0.0"
-container = "../redline-split"
+manifest_authority = "/home/ubuntu/jain-split/jain-redline/redline-split-ops/repos.manifest.toml"
+mirror_root = "../../target/bare-mirrors"
+release_evidence_root = "../../jain-split-ops/docs/release-evidence/8.0.0"
+container = ".."
 lock = "redline.lock.toml"
 consumers = ["jain-split", "jeryu-split"]
 
@@ -52,7 +52,7 @@ lock_field = "nested.redline"
 
 [[repo]]
 name = "redline"
-path = "../redline-split/redline"
+path = "../redline"
 github_slug = "neverhuman/RedlineDB"
 jeryu_slug = "jeryu/redlineDB"
 remote = "http://127.0.0.1:8787/git/jeryu/redlineDB.git"
@@ -70,7 +70,7 @@ default_branch = "main"
 
 [[repo]]
 name = "redline-core"
-path = "../redline-split/redline-core"
+path = "../redline-core"
 github_slug = "neverhuman/redline-core"
 jeryu_slug = "jeryu/redline-core"
 remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
@@ -88,7 +88,7 @@ default_branch = "main"
 
 [[repo]]
 name = "redline-testing"
-path = "../redline-split/redline-testing"
+path = "../redline-testing"
 github_slug = "neverhuman/redline-testing"
 jeryu_slug = "jeryu/redline-testing"
 remote = "http://127.0.0.1:8787/git/jeryu/redline-testing.git"
@@ -106,7 +106,7 @@ default_branch = "main"
 
 [[repo]]
 name = "redline-web"
-path = "../redline-split/redline-web"
+path = "../redline-web"
 github_slug = "neverhuman/redline-web"
 jeryu_slug = "jeryu/redline-web"
 remote = "http://127.0.0.1:8787/git/jeryu/redline-web.git"

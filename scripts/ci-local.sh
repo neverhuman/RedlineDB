@@ -8,15 +8,6 @@ case "${1:-validate}" in
     exec cargo test --locked --manifest-path "$repo_root/Cargo.toml"
     ;;
   required)
-    family_container="$repo_root/../redline-split"
-    if [[ ! -d "$family_container" ]]; then
-      family_source="${REDLINE_SPLIT_CONTAINER:-}"
-      if [[ -z "$family_source" || ! -d "$family_source" ]]; then
-        printf '%s\n' 'detached required CI needs REDLINE_SPLIT_CONTAINER pointing to the reviewed family checkout' >&2
-        exit 2
-      fi
-      ln -s -- "$family_source" "$family_container"
-    fi
     unset GIT_CONFIG_GLOBAL
     exec bash "$repo_root/ops/ci/quality-gates.sh"
     ;;
