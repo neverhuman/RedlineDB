@@ -16,13 +16,12 @@ manifest, schemas, and authoritative lock from its exact standalone runner.
 Before the existing gates run, the Rust `ci-required` wrapper verifies the
 tracked predecessor and prepared authoritative digests, then constructs the
 physical predecessor compatibility mirror required by the review verifier.
-The serialized commands acquire `.redline-family.lock` in Rust through a held
-family-root descriptor. The lock is a current-owner regular file with exact
-mode `0600`, one link, no symlink traversal, and stable path/descriptor
-identity; the descriptor and exclusive lock remain live through final command
-validation. `ci-required` likewise holds and repeatedly validates descriptors
-for the control root, manifest, authoritative lock, and mirror parent across
-the gate invocation.
+The serialized commands flock the held physical family-root directory in Rust;
+a replaceable `.redline-family.lock` file is never a lock authority. The root
+path and descriptor identity remain bound through final command validation.
+`ci-required` likewise holds and repeatedly validates descriptors for the
+control root, manifest, authoritative lock, and mirror parent across the gate
+invocation.
 The mirror and sidecar are distinct from the authoritative lock and owned by a
 private sibling marker. Pre-existing, partial, aliased, symlinked, or
 wrong-digest state is rejected. Cleanup removes only the marker-bound files
@@ -73,7 +72,8 @@ both copies transactionally, and emits a `reconciled` receipt. Unrelated drift
 is rejected. Both receipt variants use `redline.proof-successor/v1` and have
 checksum sidecars.
 
-For the current successor, verify the protected artifact with:
+For a historical 8.0.0 successor-receipt audit only, verify the retained
+artifact with:
 
 ```bash
 ./redlinectl successor-receipt-verify \
@@ -94,8 +94,9 @@ Git directory, full history, no alternates, no linked-checkout registry, a clean
 detached HEAD, and the canonical Jeryu origin. Sandbox roots live only beneath
 `redline-split-ops/target/standalone-sandboxes`. Cleanup requires its private
 marker, never follows symlink targets, holds the root and marker identities,
-quarantines the root relative to its held parent, and proves both held inodes
-were unlinked.
+quarantines the root relative to its held parent, then traverses and removes
+only through held directory descriptors. A late entry at the original sandbox
+name is left untouched, and both held root and marker inodes must be unlinked.
 Child commands use each repository's pinned toolchain, never the control
 plane's `RUSTUP_TOOLCHAIN` override. Before Core CI, the runner builds the exact
 reviewed Redline Testing release package locally, verifies its commit, manifest,

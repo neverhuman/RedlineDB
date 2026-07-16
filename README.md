@@ -78,8 +78,8 @@ sidecar. Clone roots and Git directories must be physical, independent, full
 history repositories with no object alternates or linked-checkout metadata.
 The clone sandbox is rooted beneath this repository's `target/` directory.
 Cleanup is descriptor- and marker-bound and does not follow symlink targets;
-the held marker and root inodes must both be proven unlinked. A present tag
-that points
+after quarantine it never reopens the sandbox pathname, and the held marker and
+root inodes must both be proven unlinked. A present tag that points
 anywhere other than the reviewed head is an immutable-tag conflict; a tag may
 be absent during this CI step, but `proof-refresh` requires it locally and on
 Jeryu.

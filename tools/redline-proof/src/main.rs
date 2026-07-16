@@ -4,13 +4,16 @@ use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     env,
-    ffi::{CString, OsStr},
+    ffi::{CStr, CString, OsStr, OsString},
     fs,
     fs::{File, OpenOptions},
     io::{self, Read, Seek, SeekFrom, Write},
     os::{
         fd::{AsRawFd, FromRawFd},
-        unix::{ffi::OsStrExt, fs::OpenOptionsExt},
+        unix::{
+            ffi::{OsStrExt, OsStringExt},
+            fs::OpenOptionsExt,
+        },
     },
     path::{Component, Path, PathBuf},
     process::{Command, Output, Stdio},
@@ -519,6 +522,15 @@ impl HeldDirectory {
         Ok(())
     }
 
+    fn validate_descriptor(&self, context: &str) -> Result<()> {
+        if directory_identity_from_metadata(&self.file.metadata()?) != self.identity {
+            return Err(error(format!(
+                "{context} held directory descriptor identity changed"
+            )));
+        }
+        Ok(())
+    }
+
     fn stat_entry(&self, name: &OsStr, context: &str) -> Result<Option<libc::stat>> {
         let name = descriptor_name(name, context)?;
         let mut value = std::mem::MaybeUninit::<libc::stat>::uninit();
@@ -571,6 +583,11 @@ impl HeldDirectory {
 
     fn require_absent(&self, name: &OsStr, context: &str) -> Result<()> {
         self.validate(context)?;
+        self.require_absent_fd(name, context)
+    }
+
+    fn require_absent_fd(&self, name: &OsStr, context: &str) -> Result<()> {
+        self.validate_descriptor(context)?;
         if self.stat_entry(name, context)?.is_some() {
             return Err(error(format!("{context} must be absent")));
         }
@@ -625,7 +642,18 @@ impl HeldDirectory {
         context: &str,
     ) -> Result<(File, PhysicalFileIdentity)> {
         self.validate(context)?;
-        self.require_absent(name, context)?;
+        self.create_file_fd(name, data, mode, context)
+    }
+
+    fn create_file_fd(
+        &self,
+        name: &OsStr,
+        data: &[u8],
+        mode: u32,
+        context: &str,
+    ) -> Result<(File, PhysicalFileIdentity)> {
+        self.validate_descriptor(context)?;
+        self.require_absent_fd(name, context)?;
         let name_value = descriptor_name(name, context)?;
         let descriptor = unsafe {
             libc::openat(
@@ -668,7 +696,7 @@ impl HeldDirectory {
             Ok(identity) => Ok((file, identity)),
             Err(value) => {
                 let identity = identity_from_metadata(&file.metadata()?);
-                let cleanup = self.unlink_owned_file(name, &file, &identity, context);
+                let cleanup = self.unlink_owned_file_fd(name, &file, &identity, context);
                 match cleanup {
                     Ok(()) => Err(value),
                     Err(cleanup) => Err(error(format!(
@@ -687,6 +715,17 @@ impl HeldDirectory {
         context: &str,
     ) -> Result<()> {
         self.validate(context)?;
+        self.validate_owned_file_fd(name, held, expected, context)
+    }
+
+    fn validate_owned_file_fd(
+        &self,
+        name: &OsStr,
+        held: &File,
+        expected: &PhysicalFileIdentity,
+        context: &str,
+    ) -> Result<()> {
+        self.validate_descriptor(context)?;
         if self.regular_entry_identity(name, context)? != *expected
             || identity_from_metadata(&held.metadata()?) != *expected
         {
@@ -707,6 +746,16 @@ impl HeldDirectory {
         self.unlink_owned_file_with(name, held, expected, context, || Ok(()))
     }
 
+    fn unlink_owned_file_fd(
+        &self,
+        name: &OsStr,
+        held: &File,
+        expected: &PhysicalFileIdentity,
+        context: &str,
+    ) -> Result<()> {
+        self.unlink_owned_file_core(name, held, expected, context, false, || Ok(()))
+    }
+
     fn unlink_owned_file_with(
         &self,
         name: &OsStr,
@@ -715,13 +764,33 @@ impl HeldDirectory {
         context: &str,
         before_unlink: impl FnOnce() -> Result<()>,
     ) -> Result<()> {
-        self.validate_owned_file(name, held, expected, context)?;
+        self.unlink_owned_file_core(name, held, expected, context, true, before_unlink)
+    }
+
+    fn unlink_owned_file_core(
+        &self,
+        name: &OsStr,
+        held: &File,
+        expected: &PhysicalFileIdentity,
+        context: &str,
+        validate_path: bool,
+        before_unlink: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        if validate_path {
+            self.validate_owned_file(name, held, expected, context)?;
+        } else {
+            self.validate_owned_file_fd(name, held, expected, context)?;
+        }
         before_unlink()?;
         let name_value = descriptor_name(name, context)?;
-        self.validate(context)?;
+        if validate_path {
+            self.validate(context)?;
+        } else {
+            self.validate_descriptor(context)?;
+        }
         let quarantine_name =
             std::ffi::OsString::from(format!(".redline-owned-delete-{}", unique_suffix()));
-        self.require_absent(&quarantine_name, context)?;
+        self.require_absent_fd(&quarantine_name, context)?;
         let quarantine_value = descriptor_name(&quarantine_name, context)?;
         if unsafe {
             libc::renameat2(
@@ -802,9 +871,9 @@ impl HeldDirectory {
         Ok(())
     }
 
-    fn create_directory(&self, name: &OsStr, mode: u32, context: &str) -> Result<Self> {
-        self.validate(context)?;
-        self.require_absent(name, context)?;
+    fn create_directory_fd(&self, name: &OsStr, mode: u32, context: &str) -> Result<Self> {
+        self.validate_descriptor(context)?;
+        self.require_absent_fd(name, context)?;
         let name_value = descriptor_name(name, context)?;
         if unsafe {
             libc::mkdirat(
@@ -856,8 +925,158 @@ impl HeldDirectory {
             file,
             identity,
         };
-        directory.validate(context)?;
+        directory.validate_descriptor(context)?;
         Ok(directory)
+    }
+
+    fn open_directory_fd(&self, name: &OsStr, context: &str) -> Result<Self> {
+        self.validate_descriptor(context)?;
+        let expected = self.directory_entry_identity(name, context)?;
+        let name_value = descriptor_name(name, context)?;
+        let descriptor = unsafe {
+            libc::openat(
+                self.file.as_raw_fd(),
+                name_value.as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if descriptor < 0 {
+            return Err(io::Error::last_os_error().into());
+        }
+        let file = unsafe { File::from_raw_fd(descriptor) };
+        let identity = directory_identity_from_metadata(&file.metadata()?);
+        if identity != expected {
+            return Err(error(format!(
+                "{context} changed while its directory descriptor was opened"
+            )));
+        }
+        Ok(Self {
+            path: self.path.join(name),
+            file,
+            identity,
+        })
+    }
+
+    fn open_or_create_directory_fd(
+        &self,
+        name: &OsStr,
+        create_mode: u32,
+        context: &str,
+    ) -> Result<Self> {
+        self.validate_descriptor(context)?;
+        match self.stat_entry(name, context)? {
+            None => self.create_directory_fd(name, create_mode, context),
+            Some(value) if value.st_mode & libc::S_IFMT == libc::S_IFDIR => {
+                self.open_directory_fd(name, context)
+            }
+            Some(_) => Err(error(format!(
+                "{context} exists but is not a physical directory"
+            ))),
+        }
+    }
+
+    fn entry_names_fd(&self, context: &str) -> Result<Vec<OsString>> {
+        self.validate_descriptor(context)?;
+        let current = CString::new(".").expect("static directory component is valid");
+        let descriptor = unsafe {
+            libc::openat(
+                self.file.as_raw_fd(),
+                current.as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if descriptor < 0 {
+            return Err(io::Error::last_os_error().into());
+        }
+        let directory = unsafe { libc::fdopendir(descriptor) };
+        if directory.is_null() {
+            let failure = io::Error::last_os_error();
+            unsafe {
+                libc::close(descriptor);
+            }
+            return Err(failure.into());
+        }
+        let read_result = (|| -> Result<Vec<OsString>> {
+            let mut names = Vec::new();
+            loop {
+                unsafe {
+                    *libc::__errno_location() = 0;
+                }
+                let entry = unsafe { libc::readdir(directory) };
+                if entry.is_null() {
+                    let errno = unsafe { *libc::__errno_location() };
+                    if errno != 0 {
+                        return Err(io::Error::from_raw_os_error(errno).into());
+                    }
+                    break;
+                }
+                let raw = unsafe { CStr::from_ptr((*entry).d_name.as_ptr()) }.to_bytes();
+                if raw != b"." && raw != b".." {
+                    names.push(OsString::from_vec(raw.to_vec()));
+                }
+            }
+            Ok(names)
+        })();
+        let close_result = unsafe { libc::closedir(directory) };
+        match (read_result, close_result) {
+            (Ok(names), 0) => Ok(names),
+            (Err(value), _) => Err(value),
+            (Ok(_), _) => Err(io::Error::last_os_error().into()),
+        }
+    }
+
+    fn quarantine_entry_fd(
+        &self,
+        name: &OsStr,
+        expected: &libc::stat,
+        context: &str,
+    ) -> Result<OsString> {
+        self.validate_descriptor(context)?;
+        let quarantine = OsString::from(format!(".redline-owned-entry-{}", unique_suffix()));
+        self.require_absent_fd(&quarantine, context)?;
+        let source_value = descriptor_name(name, context)?;
+        let quarantine_value = descriptor_name(&quarantine, context)?;
+        if unsafe {
+            libc::renameat2(
+                self.file.as_raw_fd(),
+                source_value.as_ptr(),
+                self.file.as_raw_fd(),
+                quarantine_value.as_ptr(),
+                libc::RENAME_NOREPLACE,
+            )
+        } != 0
+        {
+            return Err(io::Error::last_os_error().into());
+        }
+        let moved = self
+            .stat_entry(&quarantine, context)?
+            .ok_or_else(|| error(format!("{context} quarantine disappeared")))?;
+        if moved.st_dev != expected.st_dev
+            || moved.st_ino != expected.st_ino
+            || moved.st_mode & libc::S_IFMT != expected.st_mode & libc::S_IFMT
+        {
+            let rollback = unsafe {
+                libc::renameat2(
+                    self.file.as_raw_fd(),
+                    quarantine_value.as_ptr(),
+                    self.file.as_raw_fd(),
+                    source_value.as_ptr(),
+                    libc::RENAME_NOREPLACE,
+                )
+            };
+            if rollback != 0 {
+                return Err(error(format!(
+                    "{context} quarantine captured a foreign entry and restoration failed: {}",
+                    io::Error::last_os_error()
+                )));
+            }
+            self.file.sync_all()?;
+            return Err(error(format!(
+                "{context} identity changed before descriptor-relative quarantine"
+            )));
+        }
+        self.file.sync_all()?;
+        Ok(quarantine)
     }
 
     fn quarantine_owned_directory(
@@ -867,6 +1086,16 @@ impl HeldDirectory {
         context: &str,
     ) -> Result<std::ffi::OsString> {
         self.validate(context)?;
+        self.quarantine_owned_directory_fd(name, held, context)
+    }
+
+    fn quarantine_owned_directory_fd(
+        &self,
+        name: &OsStr,
+        held: &HeldDirectory,
+        context: &str,
+    ) -> Result<OsString> {
+        self.validate_descriptor(context)?;
         if self.directory_entry_identity(name, context)? != held.identity
             || directory_identity_from_metadata(&held.file.metadata()?) != held.identity
         {
@@ -876,7 +1105,7 @@ impl HeldDirectory {
         }
         let quarantine =
             std::ffi::OsString::from(format!(".redline-owned-directory-{}", unique_suffix()));
-        self.require_absent(&quarantine, context)?;
+        self.require_absent_fd(&quarantine, context)?;
         let source_value = descriptor_name(name, context)?;
         let quarantine_value = descriptor_name(&quarantine, context)?;
         if unsafe {
@@ -918,7 +1147,7 @@ impl HeldDirectory {
         Ok(quarantine)
     }
 
-    fn unlink_owned_empty_directory(
+    fn unlink_owned_empty_directory_fd(
         &self,
         name: &OsStr,
         held: &HeldDirectory,
@@ -926,7 +1155,7 @@ impl HeldDirectory {
     ) -> Result<()> {
         use std::os::unix::fs::MetadataExt;
 
-        self.validate(context)?;
+        self.validate_descriptor(context)?;
         if self.directory_entry_identity(name, context)? != held.identity
             || directory_identity_from_metadata(&held.file.metadata()?) != held.identity
         {
@@ -951,7 +1180,7 @@ impl HeldDirectory {
                 "{context} unlink did not remove the held owned directory inode"
             )));
         }
-        self.require_absent(name, context)?;
+        self.require_absent_fd(name, context)?;
         self.file.sync_all()?;
         Ok(())
     }
@@ -959,9 +1188,7 @@ impl HeldDirectory {
 
 #[derive(Debug)]
 struct GlobalFamilyLock {
-    parent: HeldDirectory,
-    file: File,
-    identity: PhysicalFileIdentity,
+    family_root: HeldDirectory,
 }
 
 impl GlobalFamilyLock {
@@ -975,68 +1202,10 @@ impl GlobalFamilyLock {
     }
 
     fn acquire_with_flags(family_root: &Path, nonblocking: bool) -> Result<Self> {
-        use std::os::unix::fs::MetadataExt;
-
-        let parent = HeldDirectory::open(family_root, "Redline family lock root")?;
-        let name = OsStr::new(".redline-family.lock");
-        let name_value = descriptor_name(name, "Redline family lock")?;
-        let mut created = true;
-        let mut descriptor = unsafe {
-            libc::openat(
-                parent.file.as_raw_fd(),
-                name_value.as_ptr(),
-                libc::O_RDWR
-                    | libc::O_CREAT
-                    | libc::O_EXCL
-                    | libc::O_NOFOLLOW
-                    | libc::O_NONBLOCK
-                    | libc::O_CLOEXEC,
-                0o600,
-            )
-        };
-        if descriptor < 0 && io::Error::last_os_error().kind() == io::ErrorKind::AlreadyExists {
-            created = false;
-            descriptor = unsafe {
-                libc::openat(
-                    parent.file.as_raw_fd(),
-                    name_value.as_ptr(),
-                    libc::O_RDWR | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
-                )
-            };
-        }
-        if descriptor < 0 {
-            return Err(io::Error::last_os_error().into());
-        }
-        let file = unsafe { File::from_raw_fd(descriptor) };
-        if created {
-            file.set_permissions({
-                use std::os::unix::fs::PermissionsExt;
-                fs::Permissions::from_mode(0o600)
-            })?;
-            file.sync_all()?;
-            parent.file.sync_all()?;
-        }
-        let metadata = file.metadata()?;
-        if !metadata.is_file() || metadata.uid() != unsafe { libc::geteuid() } {
-            return Err(error(
-                "Redline family lock must be a regular file owned by the current user",
-            ));
-        }
-        let identity = identity_from_metadata(&metadata);
-        if identity.mode != 0o600 || identity.links != 1 {
-            return Err(error(format!(
-                "Redline family lock must have exact mode 0600 and one link, found {:04o} and {} links",
-                identity.mode, identity.links
-            )));
-        }
-        if parent.regular_entry_identity(name, "Redline family lock")? != identity {
-            return Err(error(
-                "Redline family lock path changed while its descriptor was opened",
-            ));
-        }
+        let family_root = HeldDirectory::open(family_root, "Redline family serialization root")?;
         let operation = libc::LOCK_EX | if nonblocking { libc::LOCK_NB } else { 0 };
         loop {
-            if unsafe { libc::flock(file.as_raw_fd(), operation) } == 0 {
+            if unsafe { libc::flock(family_root.file.as_raw_fd(), operation) } == 0 {
                 break;
             }
             let failure = io::Error::last_os_error();
@@ -1044,27 +1213,25 @@ impl GlobalFamilyLock {
                 return Err(failure.into());
             }
         }
-        let guard = Self {
-            parent,
-            file,
-            identity,
-        };
+        let guard = Self { family_root };
         guard.validate()?;
         Ok(guard)
     }
 
     fn validate(&self) -> Result<()> {
-        self.parent.validate_owned_file(
-            OsStr::new(".redline-family.lock"),
-            &self.file,
-            &self.identity,
-            "Redline family lock",
-        )?;
-        use std::os::unix::fs::MetadataExt;
-        if self.file.metadata()?.uid() != unsafe { libc::geteuid() } {
-            return Err(error("Redline family lock ownership changed while held"));
+        self.family_root
+            .validate("Redline family serialization root")
+    }
+}
+
+impl Drop for GlobalFamilyLock {
+    fn drop(&mut self) {
+        if unsafe { libc::flock(self.family_root.file.as_raw_fd(), libc::LOCK_UN) } != 0 {
+            eprintln!(
+                "redline-proof: failed to unlock held family-root descriptor: {}",
+                io::Error::last_os_error()
+            );
         }
-        Ok(())
     }
 }
 
@@ -1550,15 +1717,27 @@ fn with_ci_compatibility_mirror_in_parent<T>(
     }
 }
 
-fn remove_physical_tree_contents(path: &Path) -> Result<()> {
-    for entry in fs::read_dir(path)? {
-        let entry = entry?;
-        let child = entry.path();
-        let metadata = fs::symlink_metadata(&child)?;
-        if metadata.is_dir() {
-            fs::remove_dir_all(&child)?;
+fn remove_directory_contents_fd(directory: &HeldDirectory) -> Result<()> {
+    let context = "quarantined standalone sandbox entry";
+    for name in directory.entry_names_fd(context)? {
+        let entry = directory
+            .stat_entry(&name, context)?
+            .ok_or_else(|| error("sandbox entry disappeared during descriptor traversal"))?;
+        if entry.st_mode & libc::S_IFMT == libc::S_IFDIR {
+            let child = directory.open_directory_fd(&name, context)?;
+            remove_directory_contents_fd(&child)?;
+            let quarantine = directory.quarantine_owned_directory_fd(&name, &child, context)?;
+            directory.unlink_owned_empty_directory_fd(&quarantine, &child, context)?;
         } else {
-            fs::remove_file(&child)?;
+            let quarantine = directory.quarantine_entry_fd(&name, &entry, context)?;
+            let quarantine_value = descriptor_name(&quarantine, context)?;
+            if unsafe { libc::unlinkat(directory.file.as_raw_fd(), quarantine_value.as_ptr(), 0) }
+                != 0
+            {
+                return Err(io::Error::last_os_error().into());
+            }
+            directory.require_absent_fd(&quarantine, context)?;
+            directory.file.sync_all()?;
         }
     }
     Ok(())
@@ -1572,20 +1751,32 @@ struct StandaloneSandbox {
     marker_file: File,
     marker_identity: PhysicalFileIdentity,
     marker_bytes: Vec<u8>,
+    quarantined: bool,
     cleaned: bool,
 }
 
 impl StandaloneSandbox {
     fn new(prefix: &str) -> Result<Self> {
-        let parent_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/standalone-sandboxes");
-        fs::create_dir_all(&parent_path)?;
-        let parent = HeldDirectory::open(&parent_path, "standalone sandbox parent")?;
+        let repo = HeldDirectory::open(
+            Path::new(env!("CARGO_MANIFEST_DIR")),
+            "standalone sandbox repository root",
+        )?;
+        let target = repo.open_or_create_directory_fd(
+            OsStr::new("target"),
+            0o700,
+            "standalone sandbox target root",
+        )?;
+        let parent = target.open_or_create_directory_fd(
+            OsStr::new("standalone-sandboxes"),
+            0o700,
+            "standalone sandbox parent",
+        )?;
         let root_name = std::ffi::OsString::from(format!("{prefix}-{}", unique_suffix()));
         descriptor_name(&root_name, "standalone sandbox root")?;
-        let root = parent.create_directory(&root_name, 0o700, "standalone sandbox root")?;
+        let root = parent.create_directory_fd(&root_name, 0o700, "standalone sandbox root")?;
         let marker_bytes =
             format!("redline.standalone-sandbox/v1\n{}\n", unique_suffix()).into_bytes();
-        let marker = root.create_file(
+        let marker = root.create_file_fd(
             OsStr::new(SANDBOX_MARKER),
             &marker_bytes,
             0o600,
@@ -1595,12 +1786,12 @@ impl StandaloneSandbox {
             Ok(value) => value,
             Err(value) => {
                 let cleanup = (|| -> Result<()> {
-                    let quarantine = parent.quarantine_owned_directory(
+                    let quarantine = parent.quarantine_owned_directory_fd(
                         &root_name,
                         &root,
                         "partial standalone sandbox root",
                     )?;
-                    parent.unlink_owned_empty_directory(
+                    parent.unlink_owned_empty_directory_fd(
                         &quarantine,
                         &root,
                         "partial standalone sandbox root",
@@ -1622,6 +1813,7 @@ impl StandaloneSandbox {
             marker_file,
             marker_identity,
             marker_bytes,
+            quarantined: false,
             cleaned: false,
         })
     }
@@ -1631,45 +1823,62 @@ impl StandaloneSandbox {
     }
 
     fn cleanup(&mut self) -> Result<()> {
+        self.cleanup_with_after_quarantine(|_| Ok(()))
+    }
+
+    fn cleanup_with_after_quarantine(
+        &mut self,
+        after_quarantine: impl FnOnce(&Path) -> Result<()>,
+    ) -> Result<()> {
         if self.cleaned {
             return Ok(());
         }
-        self.parent.validate("standalone sandbox parent")?;
-        self.root.validate("standalone sandbox cleanup root")?;
-        self.root.validate_owned_file(
+        if !self.quarantined {
+            self.parent.validate("standalone sandbox parent")?;
+            self.root.validate("standalone sandbox cleanup root")?;
+            self.root.validate_owned_file(
+                OsStr::new(SANDBOX_MARKER),
+                &self.marker_file,
+                &self.marker_identity,
+                "standalone sandbox cleanup marker",
+            )?;
+            if read_held_file(&self.marker_file)? != self.marker_bytes {
+                return Err(error(format!(
+                    "standalone sandbox cleanup marker does not match: {}",
+                    self.root.path.join(SANDBOX_MARKER).display()
+                )));
+            }
+            self.current_name = self.parent.quarantine_owned_directory(
+                &self.current_name,
+                &self.root,
+                "standalone sandbox cleanup root",
+            )?;
+            self.quarantined = true;
+            let original = self.parent.path.join(&self.original_name);
+            after_quarantine(&original)?;
+        }
+        self.parent
+            .validate_descriptor("quarantined standalone sandbox parent")?;
+        self.root
+            .validate_descriptor("quarantined standalone sandbox cleanup root")?;
+        self.root.validate_owned_file_fd(
             OsStr::new(SANDBOX_MARKER),
             &self.marker_file,
             &self.marker_identity,
-            "standalone sandbox cleanup marker",
+            "quarantined standalone sandbox cleanup marker",
         )?;
         if read_held_file(&self.marker_file)? != self.marker_bytes {
-            return Err(error(format!(
-                "standalone sandbox cleanup marker does not match: {}",
-                self.root.path.join(SANDBOX_MARKER).display()
-            )));
+            return Err(error(
+                "quarantined standalone sandbox cleanup marker bytes changed",
+            ));
         }
-        let quarantine = self.parent.quarantine_owned_directory(
-            &self.current_name,
-            &self.root,
-            "standalone sandbox cleanup root",
-        )?;
-        self.current_name = quarantine;
-        self.root.path = self.parent.path.join(&self.current_name);
-        self.root
-            .validate("quarantined standalone sandbox cleanup root")?;
-        self.root.validate_owned_file(
+        self.root.unlink_owned_file_fd(
             OsStr::new(SANDBOX_MARKER),
             &self.marker_file,
             &self.marker_identity,
             "quarantined standalone sandbox cleanup marker",
         )?;
-        self.root.unlink_owned_file(
-            OsStr::new(SANDBOX_MARKER),
-            &self.marker_file,
-            &self.marker_identity,
-            "quarantined standalone sandbox cleanup marker",
-        )?;
-        remove_physical_tree_contents(&self.root.path)?;
+        remove_directory_contents_fd(&self.root)?;
         let marker_after = identity_from_metadata(&self.marker_file.metadata()?);
         if marker_after.device != self.marker_identity.device
             || marker_after.inode != self.marker_identity.inode
@@ -1680,18 +1889,19 @@ impl StandaloneSandbox {
                 "standalone sandbox cleanup did not unlink the held marker inode",
             ));
         }
-        self.parent.unlink_owned_empty_directory(
+        self.current_name = self.parent.quarantine_owned_directory_fd(
             &self.current_name,
             &self.root,
             "quarantined standalone sandbox cleanup root",
         )?;
-        self.parent.require_absent(
-            &self.original_name,
-            "original standalone sandbox cleanup root",
-        )?;
-        self.parent.require_absent(
+        self.parent.unlink_owned_empty_directory_fd(
             &self.current_name,
+            &self.root,
             "quarantined standalone sandbox cleanup root",
+        )?;
+        self.parent.require_absent_fd(
+            &self.current_name,
+            "removed standalone sandbox cleanup root",
         )?;
         self.parent.file.sync_all()?;
         self.cleaned = true;
@@ -6074,7 +6284,7 @@ mod tests {
     {
         use std::os::unix::fs::{symlink, PermissionsExt};
 
-        let victim = TestDir::new("sandbox-content-victim");
+        let victim = TestDir::new_in_root("sandbox-content-victim");
         fs::write(victim.path().join("must-survive"), b"preserved").unwrap();
         let mut sandbox = StandaloneSandbox::new("redline-content-symlink-test").unwrap();
         let link = sandbox.path().join("unsafe-link");
@@ -6096,6 +6306,51 @@ mod tests {
         assert_eq!(fs::read(&marker).unwrap(), sandbox.marker_bytes);
         fs::remove_dir_all(&root).unwrap();
         sandbox.cleaned = true;
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn standalone_fd_cleanup_preserves_late_original_replacement_and_unlinks_owned_inodes() {
+        use std::os::unix::fs::{symlink, MetadataExt};
+
+        let victim = TestDir::new_in_root("sandbox-late-replacement-victim");
+        fs::write(victim.path().join("must-survive"), b"preserved").unwrap();
+        let mut sandbox = StandaloneSandbox::new("redline-late-replacement-test").unwrap();
+        let original = sandbox.path().to_path_buf();
+        fs::create_dir(sandbox.path().join("owned-child")).unwrap();
+        fs::write(sandbox.path().join("owned-child/owned-file"), b"owned\n").unwrap();
+        symlink(victim.path(), sandbox.path().join("owned-symlink")).unwrap();
+
+        sandbox
+            .cleanup_with_after_quarantine(|replacement| {
+                fs::create_dir(replacement)?;
+                fs::write(replacement.join("foreign-file"), b"foreign\n")?;
+                fs::write(replacement.join(SANDBOX_MARKER), b"foreign marker\n")?;
+                symlink(victim.path(), replacement.join("foreign-symlink"))?;
+                Ok(())
+            })
+            .unwrap();
+
+        assert_eq!(original, sandbox.parent.path.join(&sandbox.original_name));
+        assert_eq!(
+            fs::read(original.join("foreign-file")).unwrap(),
+            b"foreign\n"
+        );
+        assert_eq!(
+            fs::read(original.join(SANDBOX_MARKER)).unwrap(),
+            b"foreign marker\n"
+        );
+        assert!(fs::symlink_metadata(original.join("foreign-symlink"))
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(
+            fs::read(victim.path().join("must-survive")).unwrap(),
+            b"preserved"
+        );
+        assert_eq!(sandbox.marker_file.metadata().unwrap().nlink(), 0);
+        assert_eq!(sandbox.root.file.metadata().unwrap().nlink(), 0);
+        fs::remove_dir_all(&original).unwrap();
     }
 
     fn ci_mirror_fixture(root: &Path) -> (PathBuf, PathBuf, PathBuf) {
@@ -6308,69 +6563,34 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn rust_family_lock_serializes_and_rejects_path_replacement() {
-        use std::os::unix::fs::PermissionsExt;
-
+    fn rust_family_root_lock_serializes_across_lock_file_replacement() {
         let fixture = TestDir::new_in_root("rust-family-lock");
-        let first = GlobalFamilyLock::acquire(fixture.path()).unwrap();
         let lock_path = fixture.path().join(".redline-family.lock");
-        let metadata = fs::metadata(&lock_path).unwrap();
-        assert_eq!(metadata.permissions().mode() & 0o7777, 0o600);
+        fs::write(&lock_path, b"old marker\n").unwrap();
+        let first = GlobalFamilyLock::acquire(fixture.path()).unwrap();
         assert!(GlobalFamilyLock::try_acquire(fixture.path()).is_err());
 
-        let displaced = fixture.path().join("held-lock");
-        fs::rename(&lock_path, &displaced).unwrap();
+        fs::rename(&lock_path, fixture.path().join("displaced-marker")).unwrap();
         fs::write(&lock_path, b"replacement\n").unwrap();
-        fs::set_permissions(&lock_path, fs::Permissions::from_mode(0o600)).unwrap();
-        let failure = first.validate().unwrap_err().to_string();
-        assert!(failure.contains("path and held descriptor identity diverged"));
+        first.validate().unwrap();
+        assert!(GlobalFamilyLock::try_acquire(fixture.path()).is_err());
         assert_eq!(fs::read(&lock_path).unwrap(), b"replacement\n");
         drop(first);
+        GlobalFamilyLock::try_acquire(fixture.path()).unwrap();
     }
 
     #[cfg(unix)]
     #[test]
-    fn rust_family_lock_rejects_symlink_hardlink_fifo_and_wrong_mode() {
-        use std::os::unix::fs::{symlink, PermissionsExt};
-
-        let symlink_fixture = TestDir::new_in_root("lock-symlink");
-        let victim = symlink_fixture.path().join("victim");
-        fs::write(&victim, b"preserved\n").unwrap();
-        symlink(&victim, symlink_fixture.path().join(".redline-family.lock")).unwrap();
-        assert!(GlobalFamilyLock::acquire(symlink_fixture.path()).is_err());
-        assert_eq!(fs::read(&victim).unwrap(), b"preserved\n");
-
-        let hardlink_fixture = TestDir::new_in_root("lock-hardlink");
-        let lock = hardlink_fixture.path().join(".redline-family.lock");
-        fs::write(&lock, b"").unwrap();
-        fs::set_permissions(&lock, fs::Permissions::from_mode(0o600)).unwrap();
-        fs::hard_link(&lock, hardlink_fixture.path().join("alias")).unwrap();
-        assert!(GlobalFamilyLock::acquire(hardlink_fixture.path()).is_err());
-
-        let fifo_fixture = TestDir::new_in_root("lock-fifo");
-        let fifo = CString::new(
-            fifo_fixture
-                .path()
-                .join(".redline-family.lock")
-                .as_os_str()
-                .as_bytes(),
-        )
-        .unwrap();
-        assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
-        assert!(GlobalFamilyLock::acquire(fifo_fixture.path()).is_err());
-
-        let mode_fixture = TestDir::new_in_root("lock-mode");
-        let lock = mode_fixture.path().join(".redline-family.lock");
-        fs::write(&lock, b"").unwrap();
-        fs::set_permissions(&lock, fs::Permissions::from_mode(0o644)).unwrap();
-        let failure = GlobalFamilyLock::acquire(mode_fixture.path())
-            .unwrap_err()
-            .to_string();
-        assert!(failure.contains("exact mode 0600"));
-        assert_eq!(
-            fs::metadata(&lock).unwrap().permissions().mode() & 0o7777,
-            0o644
-        );
+    fn rust_family_root_lock_rejects_family_root_path_replacement() {
+        let fixture = TestDir::new_in_root("family-root-replacement");
+        let family = fixture.path().join("family");
+        fs::create_dir(&family).unwrap();
+        let first = GlobalFamilyLock::acquire(&family).unwrap();
+        let displaced = fixture.path().join("displaced-family");
+        fs::rename(&family, &displaced).unwrap();
+        fs::create_dir(&family).unwrap();
+        let failure = first.validate().unwrap_err().to_string();
+        assert!(failure.contains("path and held descriptor identity diverged"));
     }
 
     #[cfg(unix)]
@@ -6389,6 +6609,50 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(failure.contains("not a regular file"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn descriptor_directory_chain_creates_physical_children_and_rejects_symlink_target() {
+        use std::os::unix::fs::{symlink, MetadataExt};
+
+        let fixture = TestDir::new_in_root("descriptor-directory-chain");
+        let repo = HeldDirectory::open(fixture.path(), "fixture repository").unwrap();
+        let target = repo
+            .open_or_create_directory_fd(OsStr::new("target"), 0o700, "fixture target")
+            .unwrap();
+        let sandboxes = target
+            .open_or_create_directory_fd(
+                OsStr::new("standalone-sandboxes"),
+                0o700,
+                "fixture sandbox parent",
+            )
+            .unwrap();
+        assert_eq!(
+            target.file.metadata().unwrap().ino(),
+            fs::metadata(fixture.path().join("target")).unwrap().ino()
+        );
+        assert_eq!(
+            sandboxes.file.metadata().unwrap().ino(),
+            fs::metadata(fixture.path().join("target/standalone-sandboxes"))
+                .unwrap()
+                .ino()
+        );
+
+        let alias_fixture = TestDir::new_in_root("descriptor-directory-alias");
+        let victim = TestDir::new_in_root("descriptor-directory-victim");
+        fs::write(victim.path().join("must-survive"), b"preserved").unwrap();
+        symlink(victim.path(), alias_fixture.path().join("target")).unwrap();
+        let repo = HeldDirectory::open(alias_fixture.path(), "alias repository").unwrap();
+        let failure = repo
+            .open_or_create_directory_fd(OsStr::new("target"), 0o700, "aliased target")
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("not a physical directory"));
+        assert_eq!(
+            fs::read(victim.path().join("must-survive")).unwrap(),
+            b"preserved"
+        );
     }
 
     #[cfg(unix)]
