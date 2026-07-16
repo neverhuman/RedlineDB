@@ -3,11 +3,15 @@ name = "db-shim"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "Switchable SQLite|RedlineDB abstraction (rusqlite-shaped, .env-driven, {ns} table prefixing)."
+description = "RedlineDB abstraction with an explicit SQLite parity/migration mode."
+
+[features]
+default = []
+sqlite-parity = ["dep:rusqlite"]
 
 [dependencies]
 redlinedb-client = { path = "../redlinedb-client" }
-rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 
 [dev-dependencies]
 proptest = "1"
@@ -15,3 +19,4 @@ proptest = "1"
 [[bin]]
 name = "db-shim-parity"
 path = "src/bin/parity.rs"
+required-features = ["sqlite-parity"]

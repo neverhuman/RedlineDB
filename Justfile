@@ -8,6 +8,9 @@ fast:
 test:
 	cargo test --locked --workspace --all-targets
 
+sqlite-parity:
+	cargo test --locked -p db-shim --all-targets --features sqlite-parity
+
 security:
 	bash ops/ci/security.sh
 

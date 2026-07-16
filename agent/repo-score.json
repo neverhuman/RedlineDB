@@ -1,17 +1,17 @@
 {
-  "report_fingerprint": "sha256:04f5698a6c17cc3021af63812f02c7d3cfeaaa2197aea455c70fbd391795f0ad",
-  "input_fingerprint": "sha256:9a98d9f1e5463890c4916da4c9fab40ad5a44aebfaa8e343c4f32b7bab2ce8e5",
+  "report_fingerprint": "sha256:d27c8b54094ad2372a234143aa36c2b468994243d5c6def2b82796fe1ae2d73a",
+  "input_fingerprint": "sha256:04deceee511874632c695a38fac62032a4bf6b73cd7cf677d023ec26d182007e",
   "policy_fingerprint": "sha256:92dfb8d9e771009cec6723aa24f8d981bdfe9004dea60545d0a40371f4a43c2e",
   "manifest_fingerprints": {
     "owner_map": "sha256:90f2bf51161bc3dc6efb1f25fd7cb18686087d30b2d9dd5abdf9858a70db2f13",
-    "test_map": "sha256:72702e831856bcabf89066c4e9a03260836fd8e67bd764ee075447e0264ce708",
+    "test_map": "sha256:2c4fe8ca9defa9f022be627666a1d3c6c5938ea901475a485acf438c284b9b80",
     "generated_zones": "sha256:3c1f00f8c3f17d1c89abd0d2b18df0907cccd4df7ccf961c356ff53b8324b38b",
     "boundaries": "sha256:35d9c25ac341324ca6f76a2cfd0db0d12c689598500faeb05d4c5605b0c1d1ab",
     "proof_lanes": "sha256:714bf010823e72c0115bebdbdedab5b8dfaab9e60eee84a3092da3ba3c1c8580",
     "standard_version": "sha256:3479d9d94209d198314f0fac07e16bd4015128b4ed8dacb4bddba90b2f381bd7"
   },
   "dirty_worktree": true,
-  "generated_at": "1784201169",
+  "generated_at": "1784240029",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784201169",
-  "started_at": "1784201169",
-  "elapsed_ms": 229,
+  "run_id": "1784240029",
+  "started_at": "1784240029",
+  "elapsed_ms": 244,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "6e96490",
+    "head": "bd6bb42",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -975,7 +975,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-16T11:26:09.555032326+00:00",
+    "generated_at": "2026-07-16T22:13:49.217282850+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "pass",
@@ -1013,7 +1013,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 53,
+      "files_scanned": 54,
       "files_considered": 4,
       "active_files": 4,
       "exact_file_classes": 0,
@@ -1299,20 +1299,20 @@
       "problem": "enum `Error` has 2 divergent definitions across modules where one consistent definition is expected",
       "agent_fix": "define `Error` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
       "evidence": [
-        "enum `Error` is defined with diverging shapes in 2 modules (crates/db-shim/src/lib.rs:19, crates/redlinedb-client/src/lib.rs:98)"
+        "enum `Error` is defined with diverging shapes in 2 modules (crates/db-shim/src/lib.rs:18, crates/redlinedb-client/src/lib.rs:98)"
       ],
       "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
       "hardness": "soft",
       "confidence": 0.88,
       "evidence_kind": "repository-scan",
       "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
-      "fingerprint": "sha256:b2f47a28d8291c973d1c20ea319a313a2143f8f362906b6dd3b415c65c74e435",
+      "fingerprint": "sha256:a9d0193ade4544874ee3dfe2fe60711c4c56fe649c4d7109ae4b557814c4f0c7",
       "rule_id": "HLT-046-UNNECESSARY-VARIETY",
       "tlr": "Maintainability entropy",
       "lane": "copy-code",
       "docs_url": "agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape",
       "owner": "adapter",
-      "line": 19,
+      "line": 18,
       "matched_term": "unnecessary-variety"
     },
     {

@@ -7,9 +7,9 @@
 - Target stack ID: `rust`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1784201169`
-- Started at: `1784201169`
-- Elapsed: `229` ms
+- Run ID: `1784240029`
+- Started at: `1784240029`
+- Elapsed: `244` ms
 - Scope: `full`
 - Raw score: `86`
 - Final score: `86`
@@ -177,7 +177,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:49dd87b3bb47929ee7676db7afb108c2861b56edf9a1ebe40d26535a1b8717f8`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present
-3. `medium` `copy-code` `crates/db-shim/src/lib.rs:19`
+3. `medium` `copy-code` `crates/db-shim/src/lib.rs:18`
    Rule: `HLT-046-UNNECESSARY-VARIETY`
    Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
    Route: TLR `Maintainability entropy`, lane `copy-code`, owner `adapter`
@@ -186,8 +186,8 @@ No audited runtime boundary reclassifications declared.
    Reason: enum `Error` has 2 divergent definitions across modules where one consistent definition is expected
    Fix: define `Error` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
    Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
-   Fingerprint: `sha256:b2f47a28d8291c973d1c20ea319a313a2143f8f362906b6dd3b415c65c74e435`
-   Evidence: enum `Error` is defined with diverging shapes in 2 modules (crates/db-shim/src/lib.rs:19, crates/redlinedb-client/src/lib.rs:98)
+   Fingerprint: `sha256:a9d0193ade4544874ee3dfe2fe60711c4c56fe649c4d7109ae4b557814c4f0c7`
+   Evidence: enum `Error` is defined with diverging shapes in 2 modules (crates/db-shim/src/lib.rs:18, crates/redlinedb-client/src/lib.rs:98)
 4. `medium` `context` `db/`
    Rule: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP`
    Check: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP:context` `soft` confidence `0.88`

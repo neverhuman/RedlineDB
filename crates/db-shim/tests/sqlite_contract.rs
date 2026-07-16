@@ -1,4 +1,7 @@
-use db_shim::{Db, Error, Result, Value};
+use db_shim::{Db, Error};
+#[cfg(feature = "sqlite-parity")]
+use db_shim::{Result, Value};
+#[cfg(feature = "sqlite-parity")]
 use proptest::prelude::*;
 
 #[test]
@@ -7,6 +10,7 @@ fn release_identity_is_native_redline_4_1_0() {
 }
 
 #[test]
+#[cfg(feature = "sqlite-parity")]
 fn sqlite_round_trip_expands_namespace() {
     let mut db = Db::open("sqlite", ":memory:", "orders").expect("open sqlite");
     db.execute("CREATE TABLE {ns}items(id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
@@ -34,6 +38,7 @@ fn sqlite_round_trip_expands_namespace() {
 }
 
 #[test]
+#[cfg(feature = "sqlite-parity")]
 fn failed_transaction_rolls_back() {
     let mut db = Db::open("sqlite", ":memory:", "tx").expect("open sqlite");
     db.execute("CREATE TABLE {ns}items(id INTEGER PRIMARY KEY)")
@@ -55,9 +60,30 @@ fn unknown_backend_fails_closed() {
         Ok(_) => panic!("unknown backend must fail"),
         Err(error) => error,
     };
-    assert!(matches!(error, Error::Config(message) if message.contains("sqlite|redline")));
+    let expected = if cfg!(feature = "sqlite-parity") {
+        "redline|sqlite"
+    } else {
+        "redline"
+    };
+    assert!(matches!(error, Error::Config(message) if message.contains(expected)));
 }
 
+#[cfg(not(feature = "sqlite-parity"))]
+#[test]
+fn default_build_rejects_sqlite_backend() {
+    let error = match Db::open("sqlite", ":memory:", "") {
+        Ok(_) => panic!("default build must not contain the SQLite backend"),
+        Err(error) => error,
+    };
+    assert!(matches!(
+        error,
+        Error::Config(message)
+            if message.contains("requires the sqlite-parity feature")
+                && message.contains("Redline-only")
+    ));
+}
+
+#[cfg(feature = "sqlite-parity")]
 proptest! {
     #[test]
     fn valid_namespaces_are_isolated(namespace in "[a-z]{1,12}") {

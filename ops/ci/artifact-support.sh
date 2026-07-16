@@ -16,7 +16,7 @@ target_directory="$(cargo metadata --locked --format-version 1 --no-deps \
   printf 'Cargo target directory must be a physical directory: %s\n' "$target_directory" >&2
   exit 1
 }
-for binary in redlinedb-client-smoke db-shim-parity; do
+for binary in redlinedb-client-smoke; do
   [[ -f "$target_directory/release/$binary" \
     && ! -L "$target_directory/release/$binary" \
     && -x "$target_directory/release/$binary" ]] || {
@@ -26,11 +26,10 @@ for binary in redlinedb-client-smoke db-shim-parity; do
 done
 version="$(tr -d '\n' < VERSION)"
 [[ "$version" == "4.1.0" ]]
+rm -rf -- target/artifact-support/package
 mkdir -p target/artifact-support/package
 install -m 0755 "$target_directory/release/redlinedb-client-smoke" \
   target/artifact-support/package/redlinedb-client-smoke
-install -m 0755 "$target_directory/release/db-shim-parity" \
-  target/artifact-support/package/db-shim-parity
 install -m 0644 README.md docs/release.md docker/Dockerfile docker/docker-compose.yml \
   target/artifact-support/package/
 tar -C target/artifact-support/package -czf \

@@ -43,7 +43,8 @@ Local release proof:
 rtk bash scripts/ci-local.sh required
 ```
 
-The artifact lane builds both Rust binaries, packages them with the Docker and
-release documentation, and records SHA-256 evidence under
+The artifact lane builds the default Redline-only graph and packages the Redline client smoke
+binary with the Docker and release documentation. The SQLite parity binary remains confined to
+its explicit feature-gated CI lane. SHA-256 evidence is recorded under
 `target/artifact-support/`. Generated evidence is not source authority; the
 accepted tag commit and tree checksum are bound by the Redline control plane.

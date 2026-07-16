@@ -50,11 +50,11 @@
       "purpose": "verify framed protocol and value contracts"
     },
     "crates/db-shim/": {
-      "command": "cargo test --locked -p db-shim --all-targets",
-      "purpose": "verify SQLite parity, namespace, and transaction behavior"
+      "command": "bash ops/ci/fast.sh",
+      "purpose": "verify the default Redline-only graph and explicit SQLite parity mode"
     },
     "db/": {
-      "command": "cargo test --locked -p db-shim --test sqlite_contract",
+      "command": "cargo test --locked -p db-shim --features sqlite-parity --test sqlite_contract",
       "purpose": "verify namespacing, constraints, and rollback behavior"
     },
     "docker/": {

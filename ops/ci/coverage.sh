@@ -9,7 +9,7 @@ cargo llvm-cov --version >/dev/null 2>&1 || {
   exit 1
 }
 mkdir -p target/jankurai/coverage
-cargo llvm-cov --workspace --all-targets --locked --lcov \
+cargo llvm-cov --workspace --all-targets --locked --features sqlite-parity --lcov \
   --output-path target/jankurai/coverage/lcov.info
 [[ -s target/jankurai/coverage/lcov.info ]]
 printf 'coverage ok: target/jankurai/coverage/lcov.info\n'

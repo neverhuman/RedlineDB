@@ -1,6 +1,7 @@
 //! db-shim parity self-test: the SAME code path must pass on both backends.
-//! Run twice:  DB_BACKEND=sqlite DB_DSN=:memory: DB_NAMESPACE=demo db-shim-parity
-//!             DB_BACKEND=redline DB_DSN=redline://127.0.0.1:6033 DB_NAMESPACE=demo db-shim-parity
+//! Build with `--features sqlite-parity`, then run twice:
+//! `DB_BACKEND=sqlite DB_DSN=:memory: DB_NAMESPACE=demo db-shim-parity`
+//! `DB_BACKEND=redline DB_DSN=redline://127.0.0.1:6033 DB_NAMESPACE=demo db-shim-parity`
 
 use db_shim::{Db, Value};
 

@@ -2,7 +2,8 @@
 
 `bash scripts/ci-local.sh required` is the one composed local contract. It runs:
 
-- Rust formatting, locked checks/tests, clippy, and SQLite parity;
+- Rust formatting, locked checks/tests, clippy, a Redline-only dependency-tree guard, and the
+  explicit SQLite parity feature;
 - secret/dependency scans plus an SPDX SBOM;
 - the governed Jankurai 1.6.11 audit;
 - native release and Docker contract checks;
@@ -10,8 +11,9 @@
 - Rust source coverage.
 
 Protocol integration tests run a loopback-only deterministic server to validate
-the magic/version handshake and invalid-magic rejection. Adapter integration
-tests use in-memory SQLite to prove namespace expansion and transaction rollback.
+the magic/version handshake and invalid-magic rejection. Default adapter tests prove SQLite is
+unavailable in the production graph. Feature-gated adapter tests use in-memory SQLite to prove
+namespace expansion and transaction rollback.
 The live Redline service smoke binary is explicit and separately scheduled; no
 required test reaches a public or shared database.
 

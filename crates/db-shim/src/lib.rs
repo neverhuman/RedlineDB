@@ -1,9 +1,8 @@
-//! `db-shim` — a switchable, rusqlite-shaped database abstraction.
+//! `db-shim` — a RedlineDB-first, rusqlite-shaped database abstraction.
 //!
-//! Consumers write SQLite-shaped code once (`execute`/`execute_batch`/`query`/`query_row`/
-//! `transaction`) and flip the backend by config, so nothing is hard-committed to RedlineDB:
-//! - `DB_BACKEND=sqlite`  → local `rusqlite` (bundled SQLite, a WAL file).
-//! - `DB_BACKEND=redline` → the central `redlinedb-server` via the proven `redlinedb-client`.
+//! Production/default builds contain only the central RedlineDB backend. The bundled SQLite
+//! backend exists solely behind the explicit `sqlite-parity` feature for parity and migration
+//! validation.
 //!
 //! Per-project namespacing keeps every project's tables distinct in the ONE central database: SQL
 //! uses a `{ns}` token before table names (e.g. `CREATE TABLE {ns}items`), which the shim expands to
@@ -17,6 +16,7 @@ pub use redlinedb_client::Value;
 /// A db-shim error: from either backend, or a config problem.
 #[derive(Debug)]
 pub enum Error {
+    #[cfg(feature = "sqlite-parity")]
     Sqlite(rusqlite::Error),
     Redline(redlinedb_client::Error),
     Config(String),
@@ -26,6 +26,7 @@ pub enum Error {
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            #[cfg(feature = "sqlite-parity")]
             Error::Sqlite(e) => write!(f, "sqlite: {e}"),
             Error::Redline(e) => write!(f, "redline: {e}"),
             Error::Config(m) => write!(f, "config: {m}"),
@@ -34,6 +35,7 @@ impl std::fmt::Display for Error {
     }
 }
 impl std::error::Error for Error {}
+#[cfg(feature = "sqlite-parity")]
 impl From<rusqlite::Error> for Error {
     fn from(e: rusqlite::Error) -> Self {
         Error::Sqlite(e)
@@ -47,6 +49,7 @@ impl From<redlinedb_client::Error> for Error {
 pub type Result<T> = std::result::Result<T, Error>;
 
 enum Inner {
+    #[cfg(feature = "sqlite-parity")]
     Sqlite(rusqlite::Connection),
     Redline(Client),
 }
@@ -67,8 +70,9 @@ impl Db {
         Db::open(&backend, &dsn, &ns)
     }
 
-    /// Open a specific backend. `dsn`: for sqlite a file path (or `:memory:`); for redline a
-    /// `redline://host:port` address. `namespace` becomes the `{ns}` table prefix (`""` = none).
+    /// Open a specific backend. Redline accepts a `redline://host:port` address. Builds with the
+    /// explicit `sqlite-parity` feature also accept a SQLite file path or `:memory:`. `namespace`
+    /// becomes the `{ns}` table prefix (`""` = none).
     pub fn open(backend: &str, dsn: &str, namespace: &str) -> Result<Db> {
         let prefix = if namespace.is_empty() {
             String::new()
@@ -76,6 +80,7 @@ impl Db {
             format!("{namespace}_")
         };
         let inner = match backend {
+            #[cfg(feature = "sqlite-parity")]
             "sqlite" => {
                 let conn = if dsn.is_empty() || dsn == ":memory:" {
                     rusqlite::Connection::open_in_memory()?
@@ -86,6 +91,13 @@ impl Db {
                 };
                 Inner::Sqlite(conn)
             }
+            #[cfg(not(feature = "sqlite-parity"))]
+            "sqlite" => {
+                return Err(Error::Config(
+                    "DB_BACKEND=sqlite requires the sqlite-parity feature; production builds are Redline-only"
+                        .to_owned(),
+                ))
+            }
             "redline" => {
                 let addr = dsn
                     .strip_prefix("redline://")
@@ -94,8 +106,13 @@ impl Db {
                 Inner::Redline(Client::connect(addr)?)
             }
             other => {
+                let expected = if cfg!(feature = "sqlite-parity") {
+                    "redline|sqlite"
+                } else {
+                    "redline"
+                };
                 return Err(Error::Config(format!(
-                    "unknown DB_BACKEND {other:?} (expected sqlite|redline)"
+                    "unknown DB_BACKEND {other:?} (expected {expected})"
                 )))
             }
         };
@@ -111,6 +128,7 @@ impl Db {
     pub fn execute(&mut self, sql: &str) -> Result<u64> {
         let sql = self.expand(sql);
         match &mut self.inner {
+            #[cfg(feature = "sqlite-parity")]
             Inner::Sqlite(c) => Ok(c.execute(&sql, [])? as u64),
             Inner::Redline(c) => Ok(c.execute(&sql)?),
         }
@@ -120,6 +138,7 @@ impl Db {
     pub fn execute_batch(&mut self, sql: &str) -> Result<()> {
         let sql = self.expand(sql);
         match &mut self.inner {
+            #[cfg(feature = "sqlite-parity")]
             Inner::Sqlite(c) => Ok(c.execute_batch(&sql)?),
             Inner::Redline(c) => {
                 for stmt in sql.split(';') {
@@ -136,6 +155,7 @@ impl Db {
     pub fn execute_params(&mut self, sql: &str, params: &[Value]) -> Result<()> {
         let sql = self.expand(sql);
         match &mut self.inner {
+            #[cfg(feature = "sqlite-parity")]
             Inner::Sqlite(c) => {
                 c.execute(
                     &sql,
@@ -151,6 +171,7 @@ impl Db {
     pub fn query(&mut self, sql: &str, params: &[Value]) -> Result<Vec<Vec<Value>>> {
         let sql = self.expand(sql);
         match &mut self.inner {
+            #[cfg(feature = "sqlite-parity")]
             Inner::Sqlite(c) => {
                 let mut stmt = c.prepare(&sql)?;
                 let ncol = stmt.column_count();
@@ -200,24 +221,28 @@ impl Db {
 
     fn begin(&mut self) -> Result<()> {
         match &mut self.inner {
+            #[cfg(feature = "sqlite-parity")]
             Inner::Sqlite(c) => Ok(c.execute_batch("BEGIN IMMEDIATE")?),
             Inner::Redline(c) => Ok(c.begin(Some("immediate"))?),
         }
     }
     fn commit(&mut self) -> Result<()> {
         match &mut self.inner {
+            #[cfg(feature = "sqlite-parity")]
             Inner::Sqlite(c) => Ok(c.execute_batch("COMMIT")?),
             Inner::Redline(c) => Ok(c.commit()?),
         }
     }
     fn rollback(&mut self) -> Result<()> {
         match &mut self.inner {
+            #[cfg(feature = "sqlite-parity")]
             Inner::Sqlite(c) => Ok(c.execute_batch("ROLLBACK")?),
             Inner::Redline(c) => Ok(c.rollback()?),
         }
     }
 }
 
+#[cfg(feature = "sqlite-parity")]
 fn to_rusqlite(v: &Value) -> rusqlite::types::Value {
     match v {
         Value::Null => rusqlite::types::Value::Null,
@@ -228,6 +253,7 @@ fn to_rusqlite(v: &Value) -> rusqlite::types::Value {
     }
 }
 
+#[cfg(feature = "sqlite-parity")]
 fn from_rusqlite(v: rusqlite::types::ValueRef<'_>) -> Value {
     use rusqlite::types::ValueRef;
     match v {
