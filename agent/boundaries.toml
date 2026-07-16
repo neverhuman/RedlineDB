@@ -15,7 +15,7 @@ forbids = ["database storage", "process launch"]
 [[boundaries]]
 path = "crates/db-shim"
 kind = "adapter"
-owns = ["backend selection", "namespace expansion", "transaction parity"]
+owns = ["neutral backend contract", "validated namespace identifiers", "governed operation corpus"]
 forbids = ["wire framing", "service lifecycle"]
 
 [[boundaries]]

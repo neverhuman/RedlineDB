@@ -3,14 +3,17 @@ name = "db-shim"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-description = "RedlineDB abstraction with an explicit SQLite parity/migration mode."
+description = "Backend-neutral database contract with isolated Redline, SQLite, and Postgres adapters."
 
 [features]
-default = []
-sqlite-parity = ["dep:rusqlite"]
+default = ["backend-redline"]
+backend-redline = ["dep:redlinedb-client"]
+oracle-postgres = ["dep:postgres"]
+oracle-sqlite = ["dep:rusqlite"]
 
 [dependencies]
-redlinedb-client = { path = "../redlinedb-client" }
+postgres = { version = "0.19.13", optional = true }
+redlinedb-client = { path = "../redlinedb-client", optional = true }
 rusqlite = { version = "0.32", features = ["bundled"], optional = true }
 
 [dev-dependencies]
@@ -19,4 +22,3 @@ proptest = "1"
 [[bin]]
 name = "db-shim-parity"
 path = "src/bin/parity.rs"
-required-features = ["sqlite-parity"]

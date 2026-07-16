@@ -1,0 +1,7 @@
+schema_version = "redline-central.backend-contract/v1"
+production_feature = "backend-redline"
+oracle_features = ["oracle-sqlite", "oracle-postgres"]
+operation_corpus = "db-shim.used-operations/v1"
+selection = "exactly-one-compile-time-feature"
+configuration = ["DB_DSN", "DB_NAMESPACE"]
+arbitrary_sql_parity = false

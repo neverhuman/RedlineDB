@@ -43,8 +43,10 @@ Local release proof:
 rtk bash scripts/ci-local.sh required
 ```
 
-The artifact lane builds the default Redline-only graph and packages the Redline client smoke
-binary with the Docker and release documentation. The SQLite parity binary remains confined to
-its explicit feature-gated CI lane. SHA-256 evidence is recorded under
+The artifact lane builds the default Redline adapter and packages the Redline client smoke binary,
+the backend-neutral corpus runner, and the machine-readable backend contract with the Docker and
+release documentation. Separate closure gates prove that neither oracle enters the production
+graph. Armed release CI runs the identical governed corpus against genuine Redline and Postgres;
+this is not an arbitrary SQL-parity claim. SHA-256 evidence is recorded under
 `target/artifact-support/`. Generated evidence is not source authority; the
 accepted tag commit and tree checksum are bound by the Redline control plane.

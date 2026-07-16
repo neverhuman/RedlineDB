@@ -29,6 +29,8 @@ expected_members="$(printf '%s\n' \
   ./ \
   ./Dockerfile \
   ./README.md \
+  ./backend-contract.toml \
+  ./db-shim-parity \
   ./docker-compose.yml \
   ./redlinedb-client-smoke \
   ./release.md)"
@@ -46,25 +48,31 @@ done <<'EOF'
 755 .
 644 Dockerfile
 644 README.md
+644 backend-contract.toml
+755 db-shim-parity
 644 docker-compose.yml
 755 redlinedb-client-smoke
 644 release.md
 EOF
 
 cmp --silent README.md "$extract_directory/README.md"
+cmp --silent db/backend-contract.toml "$extract_directory/backend-contract.toml"
 cmp --silent docs/release.md "$extract_directory/release.md"
 cmp --silent docker/Dockerfile "$extract_directory/Dockerfile"
 cmp --silent docker/docker-compose.yml "$extract_directory/docker-compose.yml"
 cmp --silent target/release/redlinedb-client-smoke \
   "$extract_directory/redlinedb-client-smoke"
+cmp --silent target/release/db-shim-parity "$extract_directory/db-shim-parity"
 jq -e \
   --arg artifact_sha256 "$second_sha256" \
   --arg commit "$(git rev-parse HEAD)" \
   --arg tree "$(git rev-parse 'HEAD^{tree}')" \
+  --arg backend_contract_sha256 "$(sha256sum db/backend-contract.toml | awk '{print $1}')" \
   '.status == "pass"
     and .artifact_sha256 == $artifact_sha256
     and .commit == $commit
-    and .tree == $tree' \
+    and .tree == $tree
+    and .backend_contract_sha256 == $backend_contract_sha256' \
   target/artifact-support/evidence.json >/dev/null
 
 printf 'artifact repeatability ok: sha256=%s\n' "$second_sha256"

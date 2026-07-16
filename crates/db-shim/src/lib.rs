@@ -1,266 +1,140 @@
-//! `db-shim` — a RedlineDB-first, rusqlite-shaped database abstraction.
+//! Backend-neutral database contract for the governed Jain/Redline operation subset.
 //!
-//! Production/default builds contain only the central RedlineDB backend. The bundled SQLite
-//! backend exists solely behind the explicit `sqlite-parity` feature for parity and migration
-//! validation.
-//!
-//! Per-project namespacing keeps every project's tables distinct in the ONE central database: SQL
-//! uses a `{ns}` token before table names (e.g. `CREATE TABLE {ns}items`), which the shim expands to
-//! `<DB_NAMESPACE>_`. All configured via `.env` (`DB_BACKEND` / `DB_DSN` / `DB_NAMESPACE`).
+//! Exactly one adapter is selected at compile time. Applications use the owned [`Value`],
+//! [`Statement`], [`SqlPart`], [`Db`], and [`Error`] types and change only their dependency feature
+//! and DSN when selecting a provider. SQLite and Postgres are oracle adapters; Redline is the
+//! production default. This crate does not claim arbitrary SQL-dialect parity beyond
+//! [`corpus::VERSION`].
 
 use std::env;
 
-use redlinedb_client::Client;
-pub use redlinedb_client::Value;
+#[cfg(feature = "oracle-postgres")]
+mod adapter_postgres;
+#[cfg(feature = "backend-redline")]
+mod adapter_redline;
+#[cfg(feature = "oracle-sqlite")]
+mod adapter_sqlite;
+mod contract;
+pub mod corpus;
 
-/// A db-shim error: from either backend, or a config problem.
-#[derive(Debug)]
-pub enum Error {
-    #[cfg(feature = "sqlite-parity")]
-    Sqlite(rusqlite::Error),
-    Redline(redlinedb_client::Error),
-    Config(String),
-    NotFound,
-}
+pub(crate) use contract::{validate_identifier, PlaceholderStyle};
+pub use contract::{
+    Backend, Capabilities, DbError, Error, Identifier, Result, SqlPart, Statement, TransactionMode,
+    Value, GOVERNED_CAPABILITIES,
+};
 
-impl std::fmt::Display for Error {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            #[cfg(feature = "sqlite-parity")]
-            Error::Sqlite(e) => write!(f, "sqlite: {e}"),
-            Error::Redline(e) => write!(f, "redline: {e}"),
-            Error::Config(m) => write!(f, "config: {m}"),
-            Error::NotFound => write!(f, "query returned no rows"),
-        }
-    }
-}
-impl std::error::Error for Error {}
-#[cfg(feature = "sqlite-parity")]
-impl From<rusqlite::Error> for Error {
-    fn from(e: rusqlite::Error) -> Self {
-        Error::Sqlite(e)
-    }
-}
-impl From<redlinedb_client::Error> for Error {
-    fn from(e: redlinedb_client::Error) -> Self {
-        Error::Redline(e)
-    }
-}
-pub type Result<T> = std::result::Result<T, Error>;
+#[cfg(not(any(
+    feature = "backend-redline",
+    feature = "oracle-postgres",
+    feature = "oracle-sqlite"
+)))]
+compile_error!("select exactly one db-shim adapter feature");
 
-enum Inner {
-    #[cfg(feature = "sqlite-parity")]
-    Sqlite(rusqlite::Connection),
-    Redline(Client),
-}
+#[cfg(any(
+    all(feature = "backend-redline", feature = "oracle-postgres"),
+    all(feature = "backend-redline", feature = "oracle-sqlite"),
+    all(feature = "oracle-postgres", feature = "oracle-sqlite")
+))]
+compile_error!("db-shim adapter features are mutually exclusive");
 
-/// A backend-agnostic database handle. Same call surface either way ⇒ switchable.
+/// Backend-neutral database handle selected once at the composition root.
 pub struct Db {
-    inner: Inner,
-    prefix: String,
+    backend: Box<dyn Backend>,
+    namespace: String,
 }
 
 impl Db {
-    /// Open from `.env`: `DB_BACKEND` (default `redline`), `DB_DSN`
-    /// (default `redline://127.0.0.1:6033`), `DB_NAMESPACE` (default empty = no prefix).
-    pub fn from_env() -> Result<Db> {
-        let backend = env::var("DB_BACKEND").unwrap_or_else(|_| "redline".into());
-        let dsn = env::var("DB_DSN").unwrap_or_else(|_| "redline://127.0.0.1:6033".into());
-        let ns = env::var("DB_NAMESPACE").unwrap_or_default();
-        Db::open(&backend, &dsn, &ns)
+    /// Open the compile-time selected adapter from neutral DSN and namespace data.
+    pub fn open(dsn: &str, namespace: &str) -> Result<Self> {
+        validate_identifier(namespace, true)?;
+        Ok(Self {
+            backend: open_selected(dsn)?,
+            namespace: namespace.to_owned(),
+        })
     }
 
-    /// Open a specific backend. Redline accepts a `redline://host:port` address. Builds with the
-    /// explicit `sqlite-parity` feature also accept a SQLite file path or `:memory:`. `namespace`
-    /// becomes the `{ns}` table prefix (`""` = none).
-    pub fn open(backend: &str, dsn: &str, namespace: &str) -> Result<Db> {
-        let prefix = if namespace.is_empty() {
-            String::new()
+    /// Open from neutral configuration: `DB_DSN` and `DB_NAMESPACE`.
+    pub fn from_env() -> Result<Self> {
+        let dsn = env::var("DB_DSN")
+            .map_err(|_| Error::Config("DB_DSN must be set for the selected adapter".to_owned()))?;
+        let namespace = env::var("DB_NAMESPACE").unwrap_or_default();
+        Self::open(&dsn, &namespace)
+    }
+
+    pub fn capabilities(&self) -> Capabilities {
+        self.backend.capabilities()
+    }
+
+    /// Construct a validated namespaced table identifier without rewriting SQL text.
+    pub fn table(&self, table: &str) -> Result<Identifier> {
+        validate_identifier(table, false)?;
+        let identifier = if self.namespace.is_empty() {
+            table.to_owned()
         } else {
-            format!("{namespace}_")
+            format!("{}_{}", self.namespace, table)
         };
-        let inner = match backend {
-            #[cfg(feature = "sqlite-parity")]
-            "sqlite" => {
-                let conn = if dsn.is_empty() || dsn == ":memory:" {
-                    rusqlite::Connection::open_in_memory()?
-                } else {
-                    let c = rusqlite::Connection::open(dsn)?;
-                    c.execute_batch("PRAGMA journal_mode=WAL; PRAGMA foreign_keys=ON;")?;
-                    c
-                };
-                Inner::Sqlite(conn)
-            }
-            #[cfg(not(feature = "sqlite-parity"))]
-            "sqlite" => {
-                return Err(Error::Config(
-                    "DB_BACKEND=sqlite requires the sqlite-parity feature; production builds are Redline-only"
-                        .to_owned(),
-                ))
-            }
-            "redline" => {
-                let addr = dsn
-                    .strip_prefix("redline://")
-                    .or_else(|| dsn.strip_prefix("redlinedb://"))
-                    .unwrap_or(dsn);
-                Inner::Redline(Client::connect(addr)?)
-            }
-            other => {
-                let expected = if cfg!(feature = "sqlite-parity") {
-                    "redline|sqlite"
-                } else {
-                    "redline"
-                };
-                return Err(Error::Config(format!(
-                    "unknown DB_BACKEND {other:?} (expected {expected})"
-                )))
-            }
-        };
-        Ok(Db { inner, prefix })
+        Identifier::new(identifier)
     }
 
-    /// Expand the `{ns}` table-prefix token.
-    fn expand(&self, sql: &str) -> String {
-        sql.replace("{ns}", &self.prefix)
+    pub fn execute(&mut self, statement: &Statement) -> Result<u64> {
+        self.backend.execute(statement)
     }
 
-    /// Execute a non-parameterized statement; returns rows affected.
-    pub fn execute(&mut self, sql: &str) -> Result<u64> {
-        let sql = self.expand(sql);
-        match &mut self.inner {
-            #[cfg(feature = "sqlite-parity")]
-            Inner::Sqlite(c) => Ok(c.execute(&sql, [])? as u64),
-            Inner::Redline(c) => Ok(c.execute(&sql)?),
+    /// Execute explicit statements in order. SQL is never split on punctuation.
+    pub fn execute_batch(&mut self, statements: &[Statement]) -> Result<()> {
+        for statement in statements {
+            self.execute(statement)?;
         }
+        Ok(())
     }
 
-    /// Execute a multi-statement batch (schema/migrations).
-    pub fn execute_batch(&mut self, sql: &str) -> Result<()> {
-        let sql = self.expand(sql);
-        match &mut self.inner {
-            #[cfg(feature = "sqlite-parity")]
-            Inner::Sqlite(c) => Ok(c.execute_batch(&sql)?),
-            Inner::Redline(c) => {
-                for stmt in sql.split(';') {
-                    if !stmt.trim().is_empty() {
-                        c.execute(stmt)?;
-                    }
-                }
-                Ok(())
-            }
-        }
+    pub fn query(&mut self, statement: &Statement) -> Result<Vec<Vec<Value>>> {
+        self.backend.query(statement)
     }
 
-    /// Execute a parameterized statement.
-    pub fn execute_params(&mut self, sql: &str, params: &[Value]) -> Result<()> {
-        let sql = self.expand(sql);
-        match &mut self.inner {
-            #[cfg(feature = "sqlite-parity")]
-            Inner::Sqlite(c) => {
-                c.execute(
-                    &sql,
-                    rusqlite::params_from_iter(params.iter().map(to_rusqlite)),
-                )?;
-                Ok(())
-            }
-            Inner::Redline(c) => Ok(c.execute_params(&sql, params)?),
-        }
-    }
-
-    /// Run a query and collect all rows (each row is the column values in order).
-    pub fn query(&mut self, sql: &str, params: &[Value]) -> Result<Vec<Vec<Value>>> {
-        let sql = self.expand(sql);
-        match &mut self.inner {
-            #[cfg(feature = "sqlite-parity")]
-            Inner::Sqlite(c) => {
-                let mut stmt = c.prepare(&sql)?;
-                let ncol = stmt.column_count();
-                let iter = stmt.query_map(
-                    rusqlite::params_from_iter(params.iter().map(to_rusqlite)),
-                    |row| {
-                        let mut out = Vec::with_capacity(ncol);
-                        for i in 0..ncol {
-                            out.push(from_rusqlite(row.get_ref(i)?));
-                        }
-                        Ok(out)
-                    },
-                )?;
-                let mut rows = Vec::new();
-                for r in iter {
-                    rows.push(r?);
-                }
-                Ok(rows)
-            }
-            Inner::Redline(c) => Ok(c.query(&sql, params)?.rows),
-        }
-    }
-
-    /// Query expecting at least one row; returns the first.
-    pub fn query_row(&mut self, sql: &str, params: &[Value]) -> Result<Vec<Value>> {
-        let mut rows = self.query(sql, params)?;
+    pub fn query_row(&mut self, statement: &Statement) -> Result<Vec<Value>> {
+        let mut rows = self.query(statement)?;
         if rows.is_empty() {
             return Err(Error::NotFound);
         }
         Ok(rows.remove(0))
     }
 
-    /// Run `op` inside an immediate transaction; commit on Ok, rollback on Err.
     pub fn transaction<T>(&mut self, op: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
-        self.begin()?;
+        self.backend.begin(TransactionMode::Atomic)?;
         match op(self) {
-            Ok(v) => {
-                self.commit()?;
-                Ok(v)
+            Ok(value) => {
+                self.backend.commit()?;
+                Ok(value)
             }
-            Err(e) => {
-                let _ = self.rollback();
-                Err(e)
+            Err(error) => {
+                let _ = self.backend.rollback();
+                Err(error)
             }
-        }
-    }
-
-    fn begin(&mut self) -> Result<()> {
-        match &mut self.inner {
-            #[cfg(feature = "sqlite-parity")]
-            Inner::Sqlite(c) => Ok(c.execute_batch("BEGIN IMMEDIATE")?),
-            Inner::Redline(c) => Ok(c.begin(Some("immediate"))?),
-        }
-    }
-    fn commit(&mut self) -> Result<()> {
-        match &mut self.inner {
-            #[cfg(feature = "sqlite-parity")]
-            Inner::Sqlite(c) => Ok(c.execute_batch("COMMIT")?),
-            Inner::Redline(c) => Ok(c.commit()?),
-        }
-    }
-    fn rollback(&mut self) -> Result<()> {
-        match &mut self.inner {
-            #[cfg(feature = "sqlite-parity")]
-            Inner::Sqlite(c) => Ok(c.execute_batch("ROLLBACK")?),
-            Inner::Redline(c) => Ok(c.rollback()?),
         }
     }
 }
 
-#[cfg(feature = "sqlite-parity")]
-fn to_rusqlite(v: &Value) -> rusqlite::types::Value {
-    match v {
-        Value::Null => rusqlite::types::Value::Null,
-        Value::Integer(i) => rusqlite::types::Value::Integer(*i),
-        Value::Real(r) => rusqlite::types::Value::Real(*r),
-        Value::Text(s) => rusqlite::types::Value::Text(s.clone()),
-        Value::Blob(b) => rusqlite::types::Value::Blob(b.clone()),
-    }
+#[cfg(all(
+    feature = "backend-redline",
+    not(any(feature = "oracle-postgres", feature = "oracle-sqlite"))
+))]
+fn open_selected(dsn: &str) -> Result<Box<dyn Backend>> {
+    adapter_redline::open(dsn)
 }
 
-#[cfg(feature = "sqlite-parity")]
-fn from_rusqlite(v: rusqlite::types::ValueRef<'_>) -> Value {
-    use rusqlite::types::ValueRef;
-    match v {
-        ValueRef::Null => Value::Null,
-        ValueRef::Integer(i) => Value::Integer(i),
-        ValueRef::Real(r) => Value::Real(r),
-        ValueRef::Text(t) => Value::Text(String::from_utf8_lossy(t).into_owned()),
-        ValueRef::Blob(b) => Value::Blob(b.to_vec()),
-    }
+#[cfg(all(
+    feature = "oracle-postgres",
+    not(any(feature = "backend-redline", feature = "oracle-sqlite"))
+))]
+fn open_selected(dsn: &str) -> Result<Box<dyn Backend>> {
+    adapter_postgres::open(dsn)
+}
+
+#[cfg(all(
+    feature = "oracle-sqlite",
+    not(any(feature = "backend-redline", feature = "oracle-postgres"))
+))]
+fn open_selected(dsn: &str) -> Result<Box<dyn Backend>> {
+    adapter_sqlite::open(dsn)
 }

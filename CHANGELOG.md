@@ -7,5 +7,5 @@
 - Add Rust behavior tests and blocking required, security, score, contract,
   artifact, and coverage lanes.
 - Pin the governed Jankurai 1.6.11 path and digest.
-- Make the default production `db-shim` graph Redline-only while retaining bundled SQLite solely
-  behind the explicit `sqlite-parity` feature and proof lane.
+- Replace named production dispatch with an owned backend-neutral contract, isolated compile-time
+  Redline/SQLite/Postgres adapters, and the governed `db-shim.used-operations/v1` corpus.

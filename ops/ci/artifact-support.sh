@@ -16,11 +16,14 @@ target_directory="$(cargo metadata --locked --format-version 1 --no-deps \
   printf 'Cargo target directory must be a physical directory: %s\n' "$target_directory" >&2
   exit 1
 }
-binary="$target_directory/release/redlinedb-client-smoke"
-[[ -f "$binary" && ! -L "$binary" && -x "$binary" ]] || {
-  printf 'missing physical release binary: %s\n' "$binary" >&2
-  exit 1
-}
+client_binary="$target_directory/release/redlinedb-client-smoke"
+corpus_binary="$target_directory/release/db-shim-parity"
+for binary in "$client_binary" "$corpus_binary"; do
+  [[ -f "$binary" && ! -L "$binary" && -x "$binary" ]] || {
+    printf 'missing physical release binary: %s\n' "$binary" >&2
+    exit 1
+  }
+done
 version="$(tr -d '\n' < VERSION)"
 [[ "$version" == "4.1.0" ]]
 source_date_epoch="$(git show -s --format=%ct HEAD)"
@@ -31,10 +34,12 @@ mkdir -p "$artifact_directory"
 rm -rf -- "$package_directory"
 mkdir -p "$package_directory"
 chmod 0755 "$package_directory"
-install -m 0755 "$target_directory/release/redlinedb-client-smoke" \
+install -m 0755 "$client_binary" \
   "$package_directory/redlinedb-client-smoke"
+install -m 0755 "$corpus_binary" "$package_directory/db-shim-parity"
 install -m 0644 README.md docs/release.md docker/Dockerfile docker/docker-compose.yml \
   "$package_directory/"
+install -m 0644 db/backend-contract.toml "$package_directory/backend-contract.toml"
 artifact="$artifact_directory/redline-central-v${version}.tar.gz"
 artifact_tmp="${artifact}.tmp"
 rm -f -- "$artifact_tmp"
@@ -43,6 +48,8 @@ archive_entries=(
   ./
   ./Dockerfile
   ./README.md
+  ./backend-contract.toml
+  ./db-shim-parity
   ./docker-compose.yml
   ./redlinedb-client-smoke
   ./release.md
@@ -62,7 +69,8 @@ jq -n \
   --arg commit "$(git rev-parse HEAD)" \
   --arg tree "$(git rev-parse 'HEAD^{tree}')" \
   --arg lock_sha256 "$(sha256sum Cargo.lock | awk '{print $1}')" \
+  --arg backend_contract_sha256 "$(sha256sum db/backend-contract.toml | awk '{print $1}')" \
   --arg artifact_sha256 "$(sha256sum "$artifact" | awk '{print $1}')" \
-  '{schema_version:"redline-central.artifact-support/v1",repo:$repo,version:$version,commit:$commit,tree:$tree,lock_sha256:$lock_sha256,artifact_sha256:$artifact_sha256,status:"pass"}' \
+  '{schema_version:"redline-central.artifact-support/v1",repo:$repo,version:$version,commit:$commit,tree:$tree,lock_sha256:$lock_sha256,backend_contract_sha256:$backend_contract_sha256,artifact_sha256:$artifact_sha256,status:"pass"}' \
   > target/artifact-support/evidence.json
 printf 'artifact support ok: redline-central v%s\n' "$version"

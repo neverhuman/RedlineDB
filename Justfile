@@ -8,8 +8,9 @@ fast:
 test:
 	cargo test --locked --workspace --all-targets
 
-sqlite-parity:
-	cargo test --locked -p db-shim --all-targets --features sqlite-parity
+backend-oracles:
+	cargo test --locked -p db-shim --all-targets --no-default-features --features oracle-sqlite
+	cargo test --locked -p db-shim --all-targets --no-default-features --features oracle-postgres
 
 security:
 	bash ops/ci/security.sh

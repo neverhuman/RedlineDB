@@ -4,25 +4,24 @@
 
 Agent entrypoint: [`AGENTS.md`](AGENTS.md).
 
-The **centralized RedlineDB for the whole system**: one shared `redlinedb-server` (in Docker) that
-every project connects to, with a Redline-only production abstraction and per-project table-name
-prefixes. Lives beside `redline-core` under `redline-split/`; the server binary stays in redline-core,
-this subrepo dockerizes it and provides the remote client + shim. Bundled SQLite is available only
-through the explicit `sqlite-parity` feature for parity and migration checks.
+The **centralized RedlineDB for the whole system**: one shared `redlinedb-server` that every project
+connects to through a backend-neutral contract and validated per-project table prefixes. The
+production composition selects `backend-redline`; SQLite and Postgres are isolated oracle features.
+Switching providers changes one dependency feature and `DB_DSN`, not application database code.
 
 ## Layout
 - `crates/redlinedb-client` — sync remote client for `redlinedb-server` (framed TCP), rusqlite-shaped.
-- `crates/db-shim` — Redline production abstraction (+ `{ns}` prefixing, `.env`) with explicit
-  SQLite parity/migration mode.
+- `crates/db-shim` — owned values/errors/capabilities/statements plus isolated provider adapters.
 - `docker/` — `Dockerfile` + `docker-compose.yml` for the central server.
-- `.env.example` — `DB_BACKEND` / `DB_DSN` / `DB_NAMESPACE` template a consumer copies.
+- `.env.example` — neutral `DB_DSN` / `DB_NAMESPACE` template a consumer copies.
+- `db/backend-contract.toml` — machine-readable feature and operation-corpus boundary.
 
 ## Quick start
 
 ```sh
 cargo test --locked --workspace --all-targets
-DB_BACKEND=sqlite DB_DSN=:memory: DB_NAMESPACE=demo \
-  cargo run --locked -p db-shim --features sqlite-parity --bin db-shim-parity
+DB_DSN=:memory: DB_NAMESPACE=demo \
+  cargo run --locked -p db-shim --no-default-features --features oracle-sqlite --bin db-shim-parity
 ```
 
 ## Run the central DB
@@ -41,10 +40,11 @@ redlinedb-server --database ./central.redline --listen 127.0.0.1:6033   # from r
   exclusive-`flock` limit (multiple processes cannot open one embedded dir; the server fixes that).
   Verify: start the server, then
   `cargo run -p redlinedb-client --bin redlinedb-client-smoke -- 127.0.0.1:6033`.
-- ✅ `db-shim` defaults to a Redline-only production dependency graph. SQLite behavior, namespace
-  expansion, commit, and rollback are covered by the explicit `sqlite-parity` host-local lane.
-  Live Redline parity remains an explicit
-  service-backed smoke lane, not a hidden dependency of the required lane.
+- ✅ `db-shim` has exact isolated Redline, SQLite, and Postgres dependency graphs. The same governed
+  `db-shim.used-operations/v1` corpus covers values, validated namespacing, parameter binding,
+  query ordering, and rollback. Host-local required runs genuine SQLite. Armed release CI requires
+  genuine Redline and Postgres services and fails closed when their DSNs are absent.
+- ⚠️ The corpus is the compatibility claim. Arbitrary SQL-dialect equivalence is not claimed.
 
 ## Validate
 

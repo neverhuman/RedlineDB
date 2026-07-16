@@ -51,11 +51,11 @@
     },
     "crates/db-shim/": {
       "command": "bash ops/ci/fast.sh",
-      "purpose": "verify the default Redline-only graph and explicit SQLite parity mode"
+      "purpose": "verify isolated adapter graphs and the governed used-operation corpus"
     },
     "db/": {
-      "command": "cargo test --locked -p db-shim --features sqlite-parity --test sqlite_contract",
-      "purpose": "verify namespacing, constraints, and rollback behavior"
+      "command": "cargo test --locked -p db-shim --no-default-features --features oracle-sqlite --test sqlite_contract",
+      "purpose": "verify validated namespacing, typed parameters, and rollback behavior"
     },
     "docker/": {
       "command": "bash ops/ci/contract-drift.sh",

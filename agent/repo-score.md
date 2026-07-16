@@ -7,12 +7,12 @@
 - Target stack ID: `rust`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1784240029`
-- Started at: `1784240029`
-- Elapsed: `244` ms
+- Run ID: `1784245366`
+- Started at: `1784245366`
+- Elapsed: `252` ms
 - Scope: `full`
-- Raw score: `86`
-- Final score: `86`
+- Raw score: `87`
+- Final score: `87`
 - Decision: `advisory`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -70,7 +70,7 @@
 
 ## Copy-Code Redundancy
 
-- Status: `pass` hard=`0` warning=`0` files=`4`
+- Status: `pass` hard=`0` warning=`0` files=`9`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
 - Duplicate volume: lines=`0` tokens=`0` bytes=`0`
 
@@ -87,17 +87,17 @@
 | Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 80 | 9.60 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 90 | 10.80 | largest authored code file: crates/redlinedb-client/src/lib.rs (328 LOC); authored code stays below hard LOC limits with no shape markers |
+| Code shape and semantic surface | 12 | 100 | 12.00 | largest authored code file: crates/redlinedb-client/src/lib.rs (328 LOC); most code files stay under 300 LOC |
 | Data truth and workflow safety | 8 | 100 | 8.00 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 73 | 5.84 | ops/observability directory present; repair receipts or raw artifact language found |
 | Context economy and agent instructions | 7 | 93 | 6.51 | root `AGENTS.md` present; root `AGENTS.md` stays short |
-| Jankurai tool adoption and CI replacement | 7 | 10 | 0.70 | control-plane files present; applicable=15 |
+| Jankurai tool adoption and CI replacement | 7 | 10 | 0.70 | control-plane files present; applicable=16 |
 | Python containment and polyglot hygiene | 4 | 100 | 4.00 | no Python files in scope |
 | Build speed signals | 4 | 60 | 2.40 | build acceleration markers found; targeted test/build commands found |
 
 ## Reference Profile Structure
 
-- Applicable cells: `2` canonical=`2` noncanonical=`0` guidance missing=`1`
+- Applicable cells: `2` canonical=`2` noncanonical=`0` guidance missing=`0`
 
 | Cell | Status | Canonical | Detected | Aliases | Guidance | Owner | Proof lane | Agent fix |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -108,7 +108,7 @@
 | `adapters` | `not_applicable` | `crates/adapters/` | `-` | `adapters/, infra/, integrations/` | `not_required` | `crates/adapters` | `adapter integration tests` | `no action` |
 | `workers` | `not_applicable` | `crates/workers/` | `-` | `workers/, jobs/, scheduler/, queue/` | `not_required` | `crates/workers` | `workflow / replay tests` | `no action` |
 | `contracts` | `not_applicable` | `contracts/` | `-` | `openapi/, protobuf/, json-schema/, generated/` | `not_required` | `contracts` | `generation / drift checks` | `no action` |
-| `db` | `canonical` | `db/` | `db` | `migrations/, constraints/, sql/` | `missing` | `db` | `migration / constraint tests` | `add `db/AGENTS.md` with owns / forbidden / proof lane guidance` |
+| `db` | `canonical` | `db/` | `db` | `migrations/, constraints/, sql/` | `present` | `db` | `migration / constraint tests` | `keep `db/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
 | `python-ai` | `not_applicable` | `python/ai-service/` | `-` | `python/, ai-service/, evals/, embeddings/, model/` | `not_required` | `python/ai-service` | `eval / contract tests` | `no action` |
 | `ops` | `canonical` | `ops/` | `.github, .github/workflows, ops` | `.github/, .github/workflows/, ci/, release/, observability/, security/` | `present` | `ops` | `security lane / workflow lint` | `keep `ops/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
 
@@ -121,12 +121,12 @@
 ## Tool Adoption
 
 - Control plane present: `true`
-- Applicable tools: `15`
+- Applicable tools: `16`
 - Configured: `0`
 - CI evidence: `0`
 - Artifact verified: `0`
 - Replaced count: `0`
-- Missing CI evidence: `audit-ci, proof-routing, proofbind, proofmark-rust, copy-code, security, ci-bad-behavior, git-bad-behavior, release-bad-behavior, contract-drift, rust-witness, authz-matrix, agent-tool-supply, release-readiness, cost-budget`
+- Missing CI evidence: `audit-ci, proof-routing, proofbind, proofmark-rust, copy-code, security, ci-bad-behavior, git-bad-behavior, release-bad-behavior, contract-drift, rust-witness, authz-matrix, input-boundary, agent-tool-supply, release-readiness, cost-budget`
 
 | Tool | Category | Mode | Status | Replaced | Artifacts |
 | --- | --- | --- | --- | --- | --- |
@@ -146,7 +146,7 @@
 | `vibe-coverage` | `audit` | `auto` | `not_applicable` | `manual vibe-coding coverage spreadsheet` | `target/jankurai/vibe-coverage.json, target/jankurai/vibe-coverage.md` |
 | `coverage-evidence` | `proof` | `auto` | `not_applicable` | `manual coverage report review, ad hoc mutation survivor review` | `target/jankurai/coverage/coverage-audit.json, target/jankurai/coverage/coverage-audit.md` |
 | `authz-matrix` | `security` | `auto` | `missing` | `manual authz matrix review` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
-| `input-boundary` | `security` | `auto` | `not_applicable` | `manual unsafe sink review` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
+| `input-boundary` | `security` | `auto` | `missing` | `manual unsafe sink review` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
 | `agent-tool-supply` | `security` | `auto` | `missing` | `manual MCP/tool trust review` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
 | `release-readiness` | `release` | `auto` | `missing` | `manual launch checklist` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
 | `cost-budget` | `release` | `auto` | `missing` | `manual spend review` | `.jankurai/repo-score.json, .jankurai/repo-score.md` |
@@ -177,28 +177,7 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:49dd87b3bb47929ee7676db7afb108c2861b56edf9a1ebe40d26535a1b8717f8`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present
-3. `medium` `copy-code` `crates/db-shim/src/lib.rs:18`
-   Rule: `HLT-046-UNNECESSARY-VARIETY`
-   Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
-   Route: TLR `Maintainability entropy`, lane `copy-code`, owner `adapter`
-   Docs: `agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape`
-   Matched term: `unnecessary-variety`
-   Reason: enum `Error` has 2 divergent definitions across modules where one consistent definition is expected
-   Fix: define `Error` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
-   Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
-   Fingerprint: `sha256:a9d0193ade4544874ee3dfe2fe60711c4c56fe649c4d7109ae4b557814c4f0c7`
-   Evidence: enum `Error` is defined with diverging shapes in 2 modules (crates/db-shim/src/lib.rs:18, crates/redlinedb-client/src/lib.rs:98)
-4. `medium` `context` `db/`
-   Rule: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP`
-   Check: `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP:context` `soft` confidence `0.88`
-   Route: TLR `Context/setup`, lane `fast`, owner `adapter`
-   Docs: `docs/audit-rubric.md#required-shape`
-   Reason: reference-profile cell `db` lacks local AGENTS.md guidance
-   Fix: add `db/AGENTS.md` with owns / forbidden / proof lane guidance
-   Rerun: `just fast`
-   Fingerprint: `sha256:6135e5d13eb5b4fe2b2a0e399b79552b144c635bdfaeebdbda66bf1289eae38a`
-   Evidence: canonical_path=db/, detected_paths=db, guidance_status=missing, owner=db, proof_lane=migration / constraint tests
-5. `medium` `observability` `docs/testing.md`
+3. `medium` `observability` `docs/testing.md`
    Rule: `HLT-017-OPAQUE-OBSERVABILITY`
    Check: `HLT-017-OPAQUE-OBSERVABILITY:observability` `soft` confidence `0.76`
    Route: TLR `Repair`, lane `observability`, owner `docs`
@@ -221,9 +200,5 @@ No audited runtime boundary reclassifications declared.
    Route: `Verification`/`fast`
 2. `medium` `HLT-017-OPAQUE-OBSERVABILITY` `docs/testing.md` - add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof
    Route: `Repair`/`observability`
-3. `medium` `HLT-038-REFERENCE-PROFILE-STRUCTURE-GAP` `db/` - add `db/AGENTS.md` with owns / forbidden / proof lane guidance
-   Route: `Context/setup`/`fast`
-4. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
+3. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
    Route: `Security, secrets, agency`/`security`
-5. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/db-shim/src/lib.rs` - define `Error` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
-   Route: `Maintainability entropy`/`copy-code`
