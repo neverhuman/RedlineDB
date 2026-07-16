@@ -34,6 +34,8 @@ const SUCCESSOR_PREDECESSOR_COMMIT: &str = "7137a1ee2d04be4eb6931d99ff78b8a52c82
 const SUCCESSOR_PREPARED_LOCK_SHA256: &str =
     "a6223759a257baec12d5bcaaa235de70823101e0b3be1898ce58ecec07c620b7";
 const SANDBOX_MARKER: &str = ".redline-standalone-sandbox";
+const CI_MIRROR_MARKER_SUFFIX: &str = ".ci-compatibility-mirror";
+const CI_PREDECESSOR_LOCK: &str = "release-evidence/8.0.0/redline-lock-jain3-predecessor.toml";
 const GIT_CONTEXT_ENV: [&str; 5] = [
     "GIT_DIR",
     "GIT_WORK_TREE",
@@ -313,6 +315,354 @@ fn require_path_absent(path: &Path, context: &str) -> Result<()> {
             path.display()
         ))),
         Err(value) => Err(value.into()),
+    }
+}
+
+fn require_physical_file(path: &Path, context: &str) -> Result<()> {
+    reject_symlink_components(path, context)?;
+    let metadata = fs::symlink_metadata(path).map_err(|value| {
+        error(format!(
+            "{context} is absent or unreadable at {}: {value}",
+            path.display()
+        ))
+    })?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() {
+        return Err(error(format!(
+            "{context} is not a physical regular file: {}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+fn require_distinct_paths(paths: &[(&str, &Path)]) -> Result<()> {
+    let mut seen = BTreeMap::new();
+    for (label, path) in paths {
+        let absolute = absolute_path(path)?;
+        if let Some(previous) = seen.insert(absolute.clone(), *label) {
+            return Err(error(format!(
+                "{label} aliases {previous} by path: {}",
+                absolute.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(unix)]
+fn require_distinct_file_ids(paths: &[(&str, &Path)]) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+
+    let mut seen = BTreeMap::new();
+    for (label, path) in paths {
+        require_physical_file(path, label)?;
+        let metadata = fs::metadata(path)?;
+        let identity = (metadata.dev(), metadata.ino());
+        if let Some(previous) = seen.insert(identity, *label) {
+            return Err(error(format!(
+                "{label} aliases {previous} by physical file identity: {}",
+                path.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn require_distinct_file_ids(paths: &[(&str, &Path)]) -> Result<()> {
+    for (label, path) in paths {
+        require_physical_file(path, label)?;
+    }
+    require_distinct_paths(paths)
+}
+
+fn create_new_synced_file(path: &Path, data: &[u8], mode: u32) -> Result<()> {
+    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
+    let written = (|| -> Result<()> {
+        file.write_all(data)?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
+        }
+        file.sync_all()?;
+        Ok(())
+    })();
+    if let Err(value) = written {
+        drop(file);
+        let _ = fs::remove_file(path);
+        return Err(value);
+    }
+    Ok(())
+}
+
+#[derive(Debug)]
+struct CiCompatibilityMirror {
+    authoritative: PathBuf,
+    predecessor: PathBuf,
+    mirror: PathBuf,
+    mirror_sidecar: PathBuf,
+    marker: PathBuf,
+    marker_bytes: Vec<u8>,
+    mirror_bytes: Vec<u8>,
+    sidecar_bytes: Vec<u8>,
+    marker_created: bool,
+    mirror_created: bool,
+    sidecar_created: bool,
+    complete: bool,
+    cleaned: bool,
+}
+
+impl CiCompatibilityMirror {
+    fn new(authoritative: &Path, mirror: &Path, predecessor: &Path) -> Result<Self> {
+        let authoritative = absolute_path(authoritative)?;
+        let predecessor = absolute_path(predecessor)?;
+        let mirror = absolute_path(mirror)?;
+        let mirror_sidecar = checksum_path(&mirror);
+        let marker = mirror.with_file_name(format!(
+            ".{}{}",
+            mirror
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("redline.lock.toml"),
+            CI_MIRROR_MARKER_SUFFIX
+        ));
+        let predecessor_sidecar = checksum_path(&predecessor);
+        let authoritative_sidecar = checksum_path(&authoritative);
+
+        require_distinct_paths(&[
+            ("authoritative lock", &authoritative),
+            ("authoritative lock sidecar", &authoritative_sidecar),
+            ("tracked predecessor lock", &predecessor),
+            ("tracked predecessor lock sidecar", &predecessor_sidecar),
+            ("CI compatibility mirror", &mirror),
+            ("CI compatibility mirror sidecar", &mirror_sidecar),
+            ("CI compatibility mirror marker", &marker),
+        ])?;
+        require_distinct_file_ids(&[
+            ("authoritative lock", &authoritative),
+            ("authoritative lock sidecar", &authoritative_sidecar),
+            ("tracked predecessor lock", &predecessor),
+            ("tracked predecessor lock sidecar", &predecessor_sidecar),
+        ])?;
+        let authoritative_digest = verify_checksum(&authoritative)?;
+        if authoritative_digest != SUCCESSOR_PREPARED_LOCK_SHA256 {
+            return Err(error(format!(
+                "authoritative lock has wrong prepared digest: expected {SUCCESSOR_PREPARED_LOCK_SHA256}, found {authoritative_digest}"
+            )));
+        }
+        let predecessor_digest = verify_checksum(&predecessor)?;
+        if predecessor_digest != SUCCESSOR_PREDECESSOR_LOCK_SHA256 {
+            return Err(error(format!(
+                "tracked predecessor lock has wrong digest: expected {SUCCESSOR_PREDECESSOR_LOCK_SHA256}, found {predecessor_digest}"
+            )));
+        }
+        require_path_absent(&mirror, "CI compatibility mirror")?;
+        require_path_absent(&mirror_sidecar, "CI compatibility mirror sidecar")?;
+        require_path_absent(&marker, "CI compatibility mirror marker")?;
+        reject_symlink_components(&mirror, "CI compatibility mirror")?;
+        reject_symlink_components(&mirror_sidecar, "CI compatibility mirror sidecar")?;
+        reject_symlink_components(&marker, "CI compatibility mirror marker")?;
+
+        let mirror_bytes = fs::read(&predecessor)?;
+        let sidecar_bytes = format!(
+            "{SUCCESSOR_PREDECESSOR_LOCK_SHA256}  {}\n",
+            mirror
+                .file_name()
+                .and_then(|value| value.to_str())
+                .unwrap_or("redline.lock.toml")
+        )
+        .into_bytes();
+        let marker_bytes =
+            format!("redline.ci-compatibility-mirror/v1\n{}\n", unique_suffix()).into_bytes();
+        let mut guard = Self {
+            authoritative,
+            predecessor,
+            mirror,
+            mirror_sidecar,
+            marker,
+            marker_bytes,
+            mirror_bytes,
+            sidecar_bytes,
+            marker_created: false,
+            mirror_created: false,
+            sidecar_created: false,
+            complete: false,
+            cleaned: false,
+        };
+        let created = (|| -> Result<()> {
+            create_new_synced_file(&guard.marker, &guard.marker_bytes, 0o600)?;
+            guard.marker_created = true;
+            create_new_synced_file(&guard.mirror, &guard.mirror_bytes, 0o644)?;
+            guard.mirror_created = true;
+            create_new_synced_file(&guard.mirror_sidecar, &guard.sidecar_bytes, 0o644)?;
+            guard.sidecar_created = true;
+            File::open(
+                guard
+                    .mirror
+                    .parent()
+                    .ok_or_else(|| error("CI compatibility mirror has no parent"))?,
+            )?
+            .sync_all()?;
+            guard.complete = true;
+            guard.validate_complete()
+        })();
+        if let Err(value) = created {
+            let cleanup = guard.cleanup();
+            return match cleanup {
+                Ok(()) => Err(value),
+                Err(cleanup) => Err(error(format!(
+                    "{value}; partial CI compatibility mirror cleanup failed: {cleanup}"
+                ))),
+            };
+        }
+        Ok(guard)
+    }
+
+    fn validate_complete(&self) -> Result<()> {
+        for (label, path) in [
+            ("CI compatibility mirror marker", self.marker.as_path()),
+            ("CI compatibility mirror", self.mirror.as_path()),
+            (
+                "CI compatibility mirror sidecar",
+                self.mirror_sidecar.as_path(),
+            ),
+        ] {
+            require_physical_file(path, label)?;
+        }
+        if fs::read(&self.marker)? != self.marker_bytes {
+            return Err(error(format!(
+                "CI compatibility mirror cleanup marker does not match: {}",
+                self.marker.display()
+            )));
+        }
+        if verify_checksum(&self.authoritative)? != SUCCESSOR_PREPARED_LOCK_SHA256 {
+            return Err(error(
+                "authoritative lock changed while the CI compatibility mirror was active",
+            ));
+        }
+        if verify_checksum(&self.predecessor)? != SUCCESSOR_PREDECESSOR_LOCK_SHA256 {
+            return Err(error(
+                "tracked predecessor lock changed while the CI compatibility mirror was active",
+            ));
+        }
+        require_distinct_file_ids(&[
+            ("authoritative lock", &self.authoritative),
+            ("tracked predecessor lock", &self.predecessor),
+            ("CI compatibility mirror marker", &self.marker),
+            ("CI compatibility mirror", &self.mirror),
+            ("CI compatibility mirror sidecar", &self.mirror_sidecar),
+        ])?;
+        if fs::read(&self.mirror)? != self.mirror_bytes
+            || sha256_file(&self.mirror)? != SUCCESSOR_PREDECESSOR_LOCK_SHA256
+        {
+            return Err(error(format!(
+                "CI compatibility mirror has wrong digest or bytes: {}",
+                self.mirror.display()
+            )));
+        }
+        if fs::read(&self.mirror_sidecar)? != self.sidecar_bytes
+            || verify_checksum(&self.mirror)? != SUCCESSOR_PREDECESSOR_LOCK_SHA256
+        {
+            return Err(error(format!(
+                "CI compatibility mirror sidecar has wrong digest or bytes: {}",
+                self.mirror_sidecar.display()
+            )));
+        }
+        if fs::read(&self.authoritative)? == self.mirror_bytes {
+            return Err(error(
+                "CI compatibility mirror must be distinct from the authoritative lock",
+            ));
+        }
+        Ok(())
+    }
+
+    fn cleanup(&mut self) -> Result<()> {
+        if self.cleaned {
+            return Ok(());
+        }
+        if !self.marker_created {
+            self.cleaned = true;
+            return Ok(());
+        }
+        require_physical_file(&self.marker, "CI compatibility mirror marker")?;
+        if fs::read(&self.marker)? != self.marker_bytes {
+            return Err(error(format!(
+                "CI compatibility mirror cleanup marker does not match: {}",
+                self.marker.display()
+            )));
+        }
+        if self.complete {
+            self.validate_complete()?;
+        } else {
+            if self.mirror_created {
+                require_physical_file(&self.mirror, "partial CI compatibility mirror")?;
+                if fs::read(&self.mirror)? != self.mirror_bytes {
+                    return Err(error("partial CI compatibility mirror bytes changed"));
+                }
+            }
+            if self.sidecar_created {
+                require_physical_file(
+                    &self.mirror_sidecar,
+                    "partial CI compatibility mirror sidecar",
+                )?;
+                if fs::read(&self.mirror_sidecar)? != self.sidecar_bytes {
+                    return Err(error("partial CI compatibility mirror sidecar changed"));
+                }
+            }
+        }
+        if self.sidecar_created {
+            fs::remove_file(&self.mirror_sidecar)?;
+        }
+        if self.mirror_created {
+            fs::remove_file(&self.mirror)?;
+        }
+        fs::remove_file(&self.marker)?;
+        File::open(
+            self.mirror
+                .parent()
+                .ok_or_else(|| error("CI compatibility mirror has no parent"))?,
+        )?
+        .sync_all()?;
+        require_path_absent(&self.mirror, "cleaned CI compatibility mirror")?;
+        require_path_absent(
+            &self.mirror_sidecar,
+            "cleaned CI compatibility mirror sidecar",
+        )?;
+        require_path_absent(&self.marker, "cleaned CI compatibility mirror marker")?;
+        self.cleaned = true;
+        Ok(())
+    }
+}
+
+impl Drop for CiCompatibilityMirror {
+    fn drop(&mut self) {
+        if !self.cleaned {
+            if let Err(value) = self.cleanup() {
+                eprintln!("redline-proof: CI compatibility mirror cleanup refused: {value}");
+            }
+        }
+    }
+}
+
+fn with_ci_compatibility_mirror<T>(
+    authoritative: &Path,
+    mirror: &Path,
+    predecessor: &Path,
+    operation: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    let mut guard = CiCompatibilityMirror::new(authoritative, mirror, predecessor)?;
+    let result = operation();
+    let cleanup = guard.cleanup();
+    match (result, cleanup) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(value), Ok(())) => Err(value),
+        (Ok(_), Err(cleanup)) => Err(error(format!(
+            "CI compatibility mirror cleanup failed: {cleanup}"
+        ))),
+        (Err(value), Err(cleanup)) => Err(error(format!(
+            "{value}; CI compatibility mirror cleanup failed: {cleanup}"
+        ))),
     }
 }
 
@@ -3045,6 +3395,7 @@ fn review_lock_verify_with(
     manifest_path: &Path,
     lock: &Path,
     mirror: &Path,
+    verify_live_repositories: bool,
     predecessor_validator: fn(&Manifest, &[u8], &toml::Value) -> Result<()>,
     state_validator: fn(&Manifest) -> Result<()>,
 ) -> Result<&'static str> {
@@ -3053,7 +3404,7 @@ fn review_lock_verify_with(
     let authoritative_bytes = fs::read(lock)?;
     let mirror_bytes = fs::read(mirror)?;
     if authoritative_bytes == mirror_bytes {
-        let value = verify_lock(manifest_path, lock, Some(mirror))?;
+        let value = verify_lock_with(manifest_path, lock, Some(mirror), verify_live_repositories)?;
         let eligible = proof_table(&value)?
             .get("cutover_eligible")
             .and_then(toml::Value::as_bool)
@@ -3087,8 +3438,38 @@ fn review_lock_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Resul
         manifest_path,
         lock,
         mirror,
+        true,
         validate_bound_predecessor,
         validate_successor_repository_state,
+    )
+}
+
+fn validate_successor_identity_only(manifest: &Manifest) -> Result<()> {
+    let core = manifest
+        .repos
+        .iter()
+        .find(|repo| repo.name == "redline-core")
+        .ok_or_else(|| error("redline-core is missing from successor manifest"))?;
+    if !is_sha1(&core.release_commit) || !is_sha256(&core.release_checksum_sha256) {
+        return Err(error(
+            "control review requires a manifest-bound successor commit and checksum",
+        ));
+    }
+    Ok(())
+}
+
+fn control_review_lock_verify(
+    manifest_path: &Path,
+    lock: &Path,
+    mirror: &Path,
+) -> Result<&'static str> {
+    review_lock_verify_with(
+        manifest_path,
+        lock,
+        mirror,
+        false,
+        validate_bound_predecessor_identity,
+        validate_successor_identity_only,
     )
 }
 
@@ -3271,7 +3652,12 @@ fn proof_table(value: &toml::Value) -> Result<&toml::value::Table> {
         .ok_or_else(|| error("Redline lock proof table is missing"))
 }
 
-fn verify_lock(manifest_path: &Path, lock: &Path, mirror: Option<&Path>) -> Result<toml::Value> {
+fn verify_lock_with(
+    manifest_path: &Path,
+    lock: &Path,
+    mirror: Option<&Path>,
+    verify_live_repositories: bool,
+) -> Result<toml::Value> {
     if !lock.is_file() {
         return Err(error("authoritative Redline lock is required"));
     }
@@ -3395,7 +3781,7 @@ fn verify_lock(manifest_path: &Path, lock: &Path, mirror: Option<&Path>) -> Resu
                     repo.name
                 )));
             }
-            if mirror.is_some() {
+            if mirror.is_some() && verify_live_repositories {
                 let state = current_reviewed_state(&manifest, repo, false)?;
                 if state.get("commit").and_then(JsonValue::as_str) != Some(commit) {
                     return Err(error(format!(
@@ -3458,6 +3844,10 @@ fn verify_lock(manifest_path: &Path, lock: &Path, mirror: Option<&Path>) -> Resu
         }
     }
     Ok(value)
+}
+
+fn verify_lock(manifest_path: &Path, lock: &Path, mirror: Option<&Path>) -> Result<toml::Value> {
+    verify_lock_with(manifest_path, lock, mirror, true)
 }
 
 fn parse_time_string(raw: Option<&str>, field: &str) -> Result<DateTime<Utc>> {
@@ -3999,7 +4389,7 @@ fn release_receipt(path: &Path, paths: &Paths) -> Result<()> {
             "release readiness requires passing security evidence",
         ));
     }
-    let transition_state = review_lock_verify(&paths.manifest, &paths.lock, &paths.mirror)?;
+    let transition_state = control_review_lock_verify(&paths.manifest, &paths.lock, &paths.mirror)?;
     let lock = load_lock(&paths.lock)?;
     let cutover_eligible = proof_table(&lock)?
         .get("cutover_eligible")
@@ -4278,6 +4668,52 @@ fn parse_consumer_assignments(values: Vec<String>) -> Result<BTreeMap<String, Pa
     Ok(result)
 }
 
+fn validate_ci_required_paths(paths: &Paths) -> Result<()> {
+    for (label, actual, expected) in [
+        (
+            "CI manifest",
+            paths.manifest.as_path(),
+            paths.root.join("repos.manifest.toml"),
+        ),
+        (
+            "CI authoritative lock",
+            paths.lock.as_path(),
+            paths.root.join("redline.lock.toml"),
+        ),
+        (
+            "CI compatibility mirror",
+            paths.mirror.as_path(),
+            paths.root.join("../redline.lock.toml"),
+        ),
+    ] {
+        if absolute_path(actual)? != absolute_path(&expected)? {
+            return Err(error(format!(
+                "{label} override is forbidden in the protected required lane: expected {}",
+                absolute_path(&expected)?.display()
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn ci_required(paths: &Paths) -> Result<()> {
+    validate_ci_required_paths(paths)?;
+    validate_physical_checkout(&paths.root)?;
+    let predecessor = paths.root.join(CI_PREDECESSOR_LOCK);
+    with_ci_compatibility_mirror(&paths.lock, &paths.mirror, &predecessor, || {
+        let status = Command::new("bash")
+            .arg(paths.root.join("ops/ci/quality-gates.sh"))
+            .current_dir(&paths.root)
+            .status()?;
+        if !status.success() {
+            return Err(error(format!(
+                "required quality gates failed with status {status}"
+            )));
+        }
+        Ok(())
+    })
+}
+
 fn real_main() -> Result<()> {
     let paths = default_paths();
     let mut args: Vec<String> = env::args().skip(1).collect();
@@ -4294,6 +4730,10 @@ fn real_main() -> Result<()> {
             println!("redline control manifest and lock ok: {count} repositories");
             Ok(())
         }
+        "ci-required" => {
+            if !args.is_empty() { return Err(error("ci-required accepts no arguments")); }
+            ci_required(&paths)
+        }
         "doctor" => { if !args.is_empty() { return Err(error("doctor accepts no arguments")); } doctor(&paths.manifest, &paths.lock, &paths.mirror) }
         "lock-verify" => {
             if !args.is_empty() { return Err(error("lock-verify accepts no arguments")); }
@@ -4305,6 +4745,12 @@ fn real_main() -> Result<()> {
             if !args.is_empty() { return Err(error("review-lock-verify accepts no arguments")); }
             let state = review_lock_verify(&paths.manifest, &paths.lock, &paths.mirror)?;
             println!("redline review lock ok: transition_state={state}");
+            Ok(())
+        }
+        "control-review-lock-verify" => {
+            if !args.is_empty() { return Err(error("control-review-lock-verify accepts no arguments")); }
+            let state = control_review_lock_verify(&paths.manifest, &paths.lock, &paths.mirror)?;
+            println!("redline control review lock ok: transition_state={state}");
             Ok(())
         }
         "family-ci" | "ci" => {
@@ -4417,7 +4863,7 @@ fn real_main() -> Result<()> {
         }
         "update" => { if !args.is_empty() { return Err(error("update accepts no arguments")); } clone_or_update(&paths.manifest, false) }
         "--version" | "version" => { println!("redline-proof 0.1.0"); Ok(()) }
-        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|control-validate|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
+        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|ci-required|control-validate|control-review-lock-verify|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
     }
 }
 
@@ -4545,6 +4991,186 @@ mod tests {
         );
         fs::remove_file(&root).unwrap();
         sandbox.cleaned = true;
+    }
+
+    fn ci_mirror_fixture(root: &Path) -> (PathBuf, PathBuf, PathBuf) {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let control = root.join("redline-split-ops");
+        let evidence = control.join("release-evidence/8.0.0");
+        fs::create_dir_all(&evidence).unwrap();
+        let authoritative = control.join("redline.lock.toml");
+        let predecessor = evidence.join("redline-lock-jain3-predecessor.toml");
+        for (from, to) in [
+            (source.join("redline.lock.toml"), authoritative.clone()),
+            (
+                source.join("redline.lock.toml.sha256"),
+                checksum_path(&authoritative),
+            ),
+            (source.join(CI_PREDECESSOR_LOCK), predecessor.clone()),
+            (
+                checksum_path(&source.join(CI_PREDECESSOR_LOCK)),
+                checksum_path(&predecessor),
+            ),
+        ] {
+            fs::copy(from, to).unwrap();
+        }
+        let mirror = root.join("redline.lock.toml");
+        (authoritative, predecessor, mirror)
+    }
+
+    #[test]
+    fn ci_compatibility_mirror_is_physical_distinct_and_cleaned() {
+        let fixture = TestDir::new("ci-mirror-clean");
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
+        let marker = mirror.with_file_name(".redline.lock.toml.ci-compatibility-mirror");
+        let sidecar = checksum_path(&mirror);
+        let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
+
+        for path in [&mirror, &sidecar, &marker] {
+            let metadata = fs::symlink_metadata(path).unwrap();
+            assert!(metadata.is_file());
+            assert!(!metadata.file_type().is_symlink());
+        }
+        assert_eq!(
+            sha256_file(&mirror).unwrap(),
+            SUCCESSOR_PREDECESSOR_LOCK_SHA256
+        );
+        assert_ne!(
+            fs::read(&mirror).unwrap(),
+            fs::read(&authoritative).unwrap()
+        );
+        guard.cleanup().unwrap();
+        assert!(!mirror.exists());
+        assert!(!sidecar.exists());
+        assert!(!marker.exists());
+    }
+
+    #[test]
+    fn ci_compatibility_mirror_rejects_absent_or_partial_inputs() {
+        let missing = TestDir::new("ci-mirror-missing");
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(missing.path());
+        fs::remove_file(&predecessor).unwrap();
+        let failure = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor)
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("absent or unreadable"));
+        assert!(!mirror.exists());
+
+        let partial = TestDir::new("ci-mirror-partial");
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(partial.path());
+        let sidecar = checksum_path(&mirror);
+        fs::write(&sidecar, b"owned elsewhere\n").unwrap();
+        let failure = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor)
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("CI compatibility mirror sidecar must be absent"));
+        assert_eq!(fs::read(&sidecar).unwrap(), b"owned elsewhere\n");
+        assert!(!mirror.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ci_compatibility_mirror_rejects_symlink_target() {
+        use std::os::unix::fs::symlink;
+
+        let fixture = TestDir::new("ci-mirror-symlink");
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
+        let victim = fixture.path().join("must-survive");
+        fs::write(&victim, b"preserved").unwrap();
+        symlink(&victim, &mirror).unwrap();
+        let failure = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor)
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("CI compatibility mirror must be absent"));
+        assert_eq!(fs::read(&victim).unwrap(), b"preserved");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ci_compatibility_mirror_refuses_aliased_cleanup() {
+        let fixture = TestDir::new("ci-mirror-alias");
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
+        let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
+        fs::remove_file(&mirror).unwrap();
+        fs::hard_link(&authoritative, &mirror).unwrap();
+        let failure = guard.cleanup().unwrap_err().to_string();
+        assert!(failure.contains("aliases authoritative lock"));
+        assert_eq!(
+            sha256_file(&authoritative).unwrap(),
+            SUCCESSOR_PREPARED_LOCK_SHA256
+        );
+
+        fs::remove_file(&mirror).unwrap();
+        fs::write(&mirror, &guard.mirror_bytes).unwrap();
+        guard.cleanup().unwrap();
+    }
+
+    #[test]
+    fn ci_compatibility_mirror_refuses_wrong_digest_cleanup() {
+        let fixture = TestDir::new("ci-mirror-wrong-digest");
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
+        let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
+        fs::write(&mirror, b"tampered\n").unwrap();
+        let failure = guard.cleanup().unwrap_err().to_string();
+        assert!(failure.contains("wrong digest or bytes"));
+        assert!(mirror.exists());
+
+        fs::write(&mirror, &guard.mirror_bytes).unwrap();
+        guard.cleanup().unwrap();
+    }
+
+    #[test]
+    fn ci_compatibility_mirror_refuses_unsafe_marker_cleanup() {
+        let fixture = TestDir::new("ci-mirror-marker");
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
+        let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
+        fs::write(&guard.marker, b"not-owner\n").unwrap();
+        let failure = guard.cleanup().unwrap_err().to_string();
+        assert!(failure.contains("cleanup marker does not match"));
+        assert!(mirror.exists());
+
+        fs::write(&guard.marker, &guard.marker_bytes).unwrap();
+        guard.cleanup().unwrap();
+    }
+
+    #[test]
+    fn ci_compatibility_mirror_cleans_after_gate_failure() {
+        let fixture = TestDir::new("ci-mirror-gate-failure");
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
+        let failure = with_ci_compatibility_mirror(
+            &authoritative,
+            &mirror,
+            &predecessor,
+            || -> Result<()> { Err(error("expected required gate failure")) },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(failure.contains("expected required gate failure"));
+        assert!(!mirror.exists());
+        assert!(!checksum_path(&mirror).exists());
+        assert!(!mirror
+            .with_file_name(".redline.lock.toml.ci-compatibility-mirror")
+            .exists());
+    }
+
+    #[test]
+    fn ci_required_rejects_path_overrides() {
+        let fixture = TestDir::new("ci-required-paths");
+        let root = fixture.path().join("redline-split-ops");
+        let valid = Paths {
+            manifest: root.join("repos.manifest.toml"),
+            lock: root.join("redline.lock.toml"),
+            mirror: root.join("../redline.lock.toml"),
+            root: root.clone(),
+        };
+        validate_ci_required_paths(&valid).unwrap();
+
+        let mut overridden = valid.clone();
+        overridden.mirror = fixture.path().join("elsewhere/redline.lock.toml");
+        let failure = validate_ci_required_paths(&overridden)
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("CI compatibility mirror override is forbidden"));
     }
 
     fn testing_repo() -> Repo {
@@ -4923,6 +5549,7 @@ mod tests {
                 &manifest,
                 &authoritative,
                 &mirror,
+                false,
                 validate_bound_predecessor_identity,
                 |_| Ok(()),
             )
@@ -4967,6 +5594,7 @@ mod tests {
                 &manifest,
                 &authoritative,
                 &mirror,
+                false,
                 validate_bound_predecessor_identity,
                 |_| Ok(()),
             )
@@ -5444,6 +6072,23 @@ mod tests {
         .unwrap_err()
         .to_string()
         .contains("compatibility lock mirror is required"));
+        let predecessor = source.join(CI_PREDECESSOR_LOCK);
+        let mirror = family_root.join("redline.lock.toml");
+        fs::copy(&predecessor, &mirror).unwrap();
+        fs::write(
+            checksum_path(&mirror),
+            format!("{SUCCESSOR_PREDECESSOR_LOCK_SHA256}  redline.lock.toml\n"),
+        )
+        .unwrap();
+        assert_eq!(
+            control_review_lock_verify(
+                &control.join("repos.manifest.toml"),
+                &control.join("redline.lock.toml"),
+                &mirror,
+            )
+            .unwrap(),
+            "prepared-successor"
+        );
         assert!(!family_root.join("redline").exists());
     }
 }

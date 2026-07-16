@@ -9,7 +9,7 @@ case "${1:-validate}" in
     ;;
   required)
     unset GIT_CONFIG_GLOBAL
-    exec bash "$repo_root/ops/ci/quality-gates.sh"
+    exec "$repo_root/redlinectl" ci-required
     ;;
   family-ci) exec "$repo_root/redlinectl" family-ci ;;
   test) exec cargo test --locked --manifest-path "$repo_root/Cargo.toml" ;;

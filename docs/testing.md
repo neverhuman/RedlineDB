@@ -13,6 +13,22 @@ readiness all pass on the exact detached commit. It accepts the narrower
 The protected control-plane lane never creates a family-container symlink and
 does not need the child checkouts: `control-validate` reads only the canonical
 manifest, schemas, and authoritative lock from its exact standalone runner.
+Before the existing gates run, the Rust `ci-required` wrapper verifies the
+tracked predecessor and prepared authoritative digests, then constructs the
+physical predecessor compatibility mirror required by the review verifier.
+The mirror and sidecar are distinct from the authoritative lock and owned by a
+private sibling marker. Pre-existing, partial, aliased, symlinked, or
+wrong-digest state is rejected. Cleanup removes only the marker-bound files
+after revalidating their physical identity and bytes, on both gate success and
+failure.
+The required lane uses `control-review-lock-verify`, which validates the exact
+manifest, derived lock transition, and tracked predecessor binding
+without consulting sibling checkouts. The operational `review-lock-verify`
+retains live clean-main and immutable-tag readback; `family-ci` remains the
+authority for running every child lane.
+The retained 8.0.0 successor operation receipts describe the pre-relocation
+checkout paths and manifest digest, so the 8.0.1 control lane does not credit
+them as current release evidence.
 The required entrypoint removes a parent runner's temporary global Git-config
 override before release readiness. This prevents mirror-cache rewrites from
 disguising canonical local-Jeryu remote identity while retaining the operator's
