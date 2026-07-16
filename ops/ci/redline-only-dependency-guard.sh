@@ -4,14 +4,14 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-default_tree="$(cargo tree --locked -p db-shim --edges normal --prefix none)"
+default_tree="$(cargo tree --locked -p db-shim --edges normal,build --prefix none)"
 if grep -Eq '^(rusqlite|libsqlite3-sys) v' <<<"$default_tree"; then
   printf 'default db-shim dependency graph must be Redline-only\n' >&2
   printf '%s\n' "$default_tree" >&2
   exit 1
 fi
 
-parity_tree="$(cargo tree --locked -p db-shim --edges normal --prefix none \
+parity_tree="$(cargo tree --locked -p db-shim --edges normal,build --prefix none \
   --features sqlite-parity)"
 for dependency in rusqlite libsqlite3-sys; do
   if ! grep -Eq "^${dependency} v" <<<"$parity_tree"; then

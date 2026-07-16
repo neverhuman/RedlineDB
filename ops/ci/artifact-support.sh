@@ -16,14 +16,11 @@ target_directory="$(cargo metadata --locked --format-version 1 --no-deps \
   printf 'Cargo target directory must be a physical directory: %s\n' "$target_directory" >&2
   exit 1
 }
-for binary in redlinedb-client-smoke; do
-  [[ -f "$target_directory/release/$binary" \
-    && ! -L "$target_directory/release/$binary" \
-    && -x "$target_directory/release/$binary" ]] || {
-    printf 'missing physical release binary: %s\n' "$target_directory/release/$binary" >&2
-    exit 1
-  }
-done
+binary="$target_directory/release/redlinedb-client-smoke"
+[[ -f "$binary" && ! -L "$binary" && -x "$binary" ]] || {
+  printf 'missing physical release binary: %s\n' "$binary" >&2
+  exit 1
+}
 version="$(tr -d '\n' < VERSION)"
 [[ "$version" == "4.1.0" ]]
 rm -rf -- target/artifact-support/package
