@@ -2,6 +2,19 @@
 
 # redline-testing Agent Router
 
+## Zero-worktree policy — absolute
+
+- Do not create or move a Git worktree anywhere, including under `/tmp`. Never
+  run `git worktree add` or `git worktree move`.
+- Work only in the existing primary checkout. If it is dirty, busy, or held by
+  another owner, stop and wait for a clean stopped-head handoff.
+- Existing worktrees are cleanup inputs only. Never force-remove or prune one.
+  Removal requires separate authority, proof that no regression or unmerged
+  work would be lost, and a fresh recursive scan proving the path has no
+  symlink.
+- Exact-SHA CI may use only an automatically removed standalone clone/sandbox
+  that is not registered with `git worktree`.
+
 Mission: keep the external RedlineDB conformance runner deterministic,
 release-packaged, and compatible with RedlineDB's pinned artifact consumer.
 
