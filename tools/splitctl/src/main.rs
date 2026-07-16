@@ -51,7 +51,7 @@ struct ManagedRepo {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-struct RedlineTopology {
+struct NestedEngineTopology {
     dependency_name: String,
     family: String,
     split_root: PathBuf,
@@ -60,6 +60,7 @@ struct RedlineTopology {
     control_plane_path: PathBuf,
     engine_repository: String,
     engine_remote: String,
+    engine_required_check: String,
     bound_identity: Option<BoundEngineIdentity>,
 }
 
@@ -69,6 +70,7 @@ struct BoundEngineIdentity {
     product_version: String,
     tag_revision: i64,
     release_commit: String,
+    release_tree: String,
     release_checksum_sha256: String,
 }
 
@@ -624,6 +626,10 @@ fn valid_cargo_token(value: &str) -> bool {
             .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_'))
 }
 
+fn declared_release_tag(value: &toml::Value) -> Option<String> {
+    string(value, "immutable_tag").or_else(|| string(value, "current_tag"))
+}
+
 fn managed_repositories(
     data: &toml::Value,
     _manifest: &Path,
@@ -641,7 +647,7 @@ fn managed_repositories(
             required_check: string(raw, "required_check")
                 .ok_or("managed repository is missing its required check")?,
             branch: string(raw, "default_branch").unwrap_or_else(|| "main".to_owned()),
-            tag: string(raw, "immutable_tag").or_else(|| string(raw, "current_tag")),
+            tag: declared_release_tag(raw),
             kind: if infrastructure {
                 "required-infrastructure".to_owned()
             } else {
@@ -670,8 +676,7 @@ fn managed_repositories(
         required_check: string(control, "required_check")
             .ok_or("control plane is missing its required check")?,
         branch: string(control, "branch").unwrap_or_else(|| "main".to_owned()),
-        tag: string(control, "immutable_tag")
-            .or_else(|| string(control, "current_tag"))
+        tag: declared_release_tag(control)
             .or_else(|| Some(format!("{control_name}-v{release}-split.0"))),
         kind: "control-plane".to_owned(),
         family: family.clone(),
@@ -679,11 +684,12 @@ fn managed_repositories(
     });
 
     if data.get("nested_families").is_some() {
-        let topology = redline_topology(data)?;
-        validate_redline_topology_paths(&topology)?;
+        let topology = nested_engine_topology(data)?;
+        validate_nested_engine_topology_paths(&topology)?;
         let nested_path = &topology.manifest_path;
         let nested: toml::Value = fs::read_to_string(nested_path)?.parse()?;
-        let nested_paths = validated_nested_redline_paths(&topology, &nested)?;
+        validate_child_family_authority(&topology, &nested)?;
+        let nested_paths = validated_nested_repository_paths(&topology, &nested)?;
         let nested_family = string(&nested, "family").ok_or("nested manifest is missing family")?;
         for raw in nested
             .get("repo")
@@ -703,7 +709,7 @@ fn managed_repositories(
                 required_check: string(raw, "required_check")
                     .ok_or("nested repository is missing its required check")?,
                 branch: string(raw, "default_branch").unwrap_or_else(|| "main".to_owned()),
-                tag: string(raw, "immutable_tag").or_else(|| string(raw, "current_tag")),
+                tag: declared_release_tag(raw),
                 kind: "nested-family".to_owned(),
                 family: nested_family.clone(),
                 family_registered: true,
@@ -722,8 +728,7 @@ fn managed_repositories(
             required_check: string(nested_control, "required_check")
                 .ok_or("nested control plane is missing its required check")?,
             branch: string(nested_control, "branch").unwrap_or_else(|| "main".to_owned()),
-            tag: string(nested_control, "immutable_tag")
-                .or_else(|| string(nested_control, "current_tag")),
+            tag: declared_release_tag(nested_control),
             kind: "nested-control-plane".to_owned(),
             family: nested_family,
             family_registered: true,
@@ -819,7 +824,7 @@ fn valid_bound_engine_tag(
         && revision == tag_revision.to_string()
 }
 
-fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
+fn nested_engine_topology(data: &toml::Value) -> Result<NestedEngineTopology, String> {
     let split_root_raw = string(data, "split_root")
         .ok_or_else(|| "split_root is required for nested-family topology".to_owned())?;
     let split_root = exact_absolute_path(&split_root_raw, "split_root")?;
@@ -909,6 +914,17 @@ fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
             "{external_key}.remote must match {nested_key}.engine_remote"
         ));
     }
+    let engine_required_check = optional_typed_string(
+        external,
+        "required_check",
+        &format!("{external_key}.required_check"),
+    )?
+    .unwrap_or_else(|| format!("{engine_repository}/required"));
+    if engine_required_check != format!("{engine_repository}/required") {
+        return Err(format!(
+            "{external_key}.required_check must be {engine_repository}/required when present"
+        ));
+    }
     let external_status = optional_typed_string(
         external,
         "identity_status",
@@ -941,10 +957,20 @@ fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
         "release_commit",
         &format!("{external_key}.release_commit"),
     )?;
+    let release_tree = optional_typed_string(
+        external,
+        "release_tree",
+        &format!("{external_key}.release_tree"),
+    )?;
     let release_checksum_sha256 = optional_typed_string(
         external,
         "release_checksum_sha256",
         &format!("{external_key}.release_checksum_sha256"),
+    )?;
+    let engine_release_tree = optional_typed_string(
+        nested,
+        "engine_release_tree",
+        &format!("{nested_key}.engine_release_tree"),
     )?;
     let mut bound_identity = None;
     match (external_status.as_deref(), engine_status.as_deref()) {
@@ -954,11 +980,13 @@ fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
                 || product_version.is_some()
                 || tag_revision.is_some()
                 || release_commit.is_some()
+                || release_tree.is_some()
                 || release_checksum_sha256.is_some()
                 || [
                     "engine_product_version",
                     "engine_tag_revision",
                     "engine_release_commit",
+                    "engine_release_tree",
                     "engine_release_checksum_sha256",
                 ]
                 .iter()
@@ -988,6 +1016,16 @@ fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
                 .ok_or_else(|| {
                     format!("bound {external_key}.release_commit must be 40 lowercase hex")
                 })?;
+            let release_tree = release_tree
+                .filter(|value| is_full_hex(value, 40))
+                .ok_or_else(|| {
+                    format!("bound {external_key}.release_tree must be 40 lowercase hex")
+                })?;
+            if engine_release_tree.as_deref() != Some(release_tree.as_str()) {
+                return Err(format!(
+                    "{nested_key}.engine_release_tree must match {external_key}.release_tree"
+                ));
+            }
             let release_checksum_sha256 = release_checksum_sha256
                 .filter(|value| is_full_hex(value, 64))
                 .ok_or_else(|| {
@@ -1010,6 +1048,7 @@ fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
                 product_version,
                 tag_revision,
                 release_commit,
+                release_tree,
                 release_checksum_sha256,
             });
         }
@@ -1019,7 +1058,7 @@ fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
             ))
         }
     }
-    Ok(RedlineTopology {
+    Ok(NestedEngineTopology {
         dependency_name: dependency_name.to_owned(),
         family,
         split_root,
@@ -1028,6 +1067,7 @@ fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
         control_plane_path,
         engine_repository,
         engine_remote,
+        engine_required_check,
         bound_identity,
     })
 }
@@ -1105,7 +1145,7 @@ fn exact_relative_path(from: &Path, to: &Path) -> Result<String, String> {
     }
 }
 
-fn validate_redline_topology_paths(topology: &RedlineTopology) -> Result<(), String> {
+fn validate_nested_engine_topology_paths(topology: &NestedEngineTopology) -> Result<(), String> {
     physical_directory(&topology.split_root, "split root")?;
     let control = physical_directory(&topology.control_plane_path, "nested control plane")?;
     physical_directory(&topology.container_path, "nested family container")?;
@@ -1129,11 +1169,11 @@ fn validate_redline_topology_paths(topology: &RedlineTopology) -> Result<(), Str
     Ok(())
 }
 
-fn validated_nested_redline_paths(
-    topology: &RedlineTopology,
+fn validated_nested_repository_paths(
+    topology: &NestedEngineTopology,
     nested: &toml::Value,
 ) -> Result<std::collections::BTreeMap<String, PathBuf>, String> {
-    validate_redline_topology_paths(topology)?;
+    validate_nested_engine_topology_paths(topology)?;
     let nested_dir = topology
         .manifest_path
         .parent()
@@ -1243,12 +1283,12 @@ fn validated_nested_redline_paths(
         let identity = physical_identity(&metadata);
         if let Some(existing) = identities.insert(identity, name.clone()) {
             return Err(format!(
-                "nested Redline repositories {existing} and {name} share one physical path"
+                "nested family repositories {existing} and {name} share one physical path"
             ));
         }
         physical_directory(
             &resolved.join(".git"),
-            "nested Redline repository Git directory",
+            "nested family repository Git directory",
         )?;
         let canonical = fs::canonicalize(&resolved).map_err(|error| {
             format!(
@@ -1272,12 +1312,12 @@ fn validated_nested_redline_paths(
     Ok(paths)
 }
 
-fn declared_redline_lock_path(
-    topology: &RedlineTopology,
+fn declared_nested_lock_path(
+    topology: &NestedEngineTopology,
     nested: &toml::Value,
 ) -> Result<PathBuf, String> {
     let raw = string(nested, "lock")
-        .ok_or_else(|| "nested Redline manifest must declare lock".to_owned())?;
+        .ok_or_else(|| "nested family manifest must declare lock".to_owned())?;
     let relative = Path::new(&raw);
     if raw.is_empty()
         || relative.is_absolute()
@@ -1286,14 +1326,30 @@ fn declared_redline_lock_path(
             .any(|component| !matches!(component, std::path::Component::Normal(_)))
     {
         return Err(format!(
-            "nested Redline lock must be an unaliased relative path: {raw}"
+            "nested family lock must be an unaliased relative path: {raw}"
         ));
     }
     Ok(topology.control_plane_path.join(relative))
 }
 
+fn validate_child_family_authority(
+    topology: &NestedEngineTopology,
+    nested: &toml::Value,
+) -> Result<(), String> {
+    let child_family = string(nested, "family")
+        .filter(|family| valid_cargo_token(family))
+        .ok_or_else(|| "nested family manifest must declare one family token".to_owned())?;
+    if child_family != topology.family {
+        return Err(format!(
+            "nested family {child_family} must match parent declaration {}",
+            topology.family
+        ));
+    }
+    Ok(())
+}
+
 fn validate_child_engine_authority(
-    topology: &RedlineTopology,
+    topology: &NestedEngineTopology,
     nested: &toml::Value,
 ) -> Result<(), String> {
     let rows = nested
@@ -1325,13 +1381,13 @@ fn validate_child_engine_authority(
         return Ok(());
     };
     let child_tag =
-        optional_typed_string(engine, "current_tag", &format!("{row_key}.current_tag"))?
+        optional_typed_string(engine, "immutable_tag", &format!("{row_key}.immutable_tag"))?
             .or(optional_typed_string(
                 engine,
-                "immutable_tag",
-                &format!("{row_key}.immutable_tag"),
+                "current_tag",
+                &format!("{row_key}.current_tag"),
             )?)
-            .ok_or_else(|| format!("{row_key} must declare current_tag or immutable_tag"))?;
+            .ok_or_else(|| format!("{row_key} must declare immutable_tag or current_tag"))?;
     let child_version = optional_typed_string(
         engine,
         "product_version",
@@ -1347,6 +1403,9 @@ fn validate_child_engine_authority(
         &format!("{row_key}.release_commit"),
     )?
     .ok_or_else(|| format!("{row_key}.release_commit is required"))?;
+    let child_tree =
+        optional_typed_string(engine, "release_tree", &format!("{row_key}.release_tree"))?
+            .ok_or_else(|| format!("{row_key}.release_tree is required"))?;
     let child_checksum = optional_typed_string(
         engine,
         "release_checksum_sha256",
@@ -1357,6 +1416,7 @@ fn validate_child_engine_authority(
         || child_version != bound.product_version
         || child_revision != bound.tag_revision
         || child_commit != bound.release_commit
+        || child_tree != bound.release_tree
         || child_checksum != bound.release_checksum_sha256
     {
         return Err(format!(
@@ -1366,24 +1426,28 @@ fn validate_child_engine_authority(
     Ok(())
 }
 
-fn validate_nested_redline_local(
+fn validate_nested_family_local(
     data: &toml::Value,
     skip_remotes: bool,
     errors: &mut Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let topology = match redline_topology(data) {
+    let topology = match nested_engine_topology(data) {
         Ok(topology) => topology,
         Err(error) => {
             errors.push(error);
             return Ok(());
         }
     };
-    if let Err(error) = validate_redline_topology_paths(&topology) {
+    if let Err(error) = validate_nested_engine_topology_paths(&topology) {
         errors.push(error);
         return Ok(());
     }
     let nested: toml::Value = fs::read_to_string(&topology.manifest_path)?.parse()?;
-    let nested_paths = match validated_nested_redline_paths(&topology, &nested) {
+    if let Err(error) = validate_child_family_authority(&topology, &nested) {
+        errors.push(error);
+        return Ok(());
+    }
+    let nested_paths = match validated_nested_repository_paths(&topology, &nested) {
         Ok(paths) => paths,
         Err(error) => {
             errors.push(error);
@@ -1402,8 +1466,10 @@ fn validate_nested_redline_local(
             .ok_or("nested control plane is missing its declared remote")?;
         let remotes = git_remotes(&topology.control_plane_path)?;
         if remotes.len() != 1 || remotes.get("origin") != Some(&vec![expected.clone()]) {
+            let control_name =
+                string(control, "name").unwrap_or_else(|| "nested-control-plane".to_owned());
             errors.push(format!(
-                "redline-split-ops: nested remotes must contain exactly origin -> {expected}"
+                "{control_name}: nested remotes must contain exactly origin -> {expected}"
             ));
         }
     }
@@ -1440,7 +1506,7 @@ fn validate_nested_redline_local(
         let identity = physical_identity(&repo_metadata);
         if let Some(existing) = declared.insert(identity, repo.name.clone()) {
             errors.push(format!(
-                "nested Redline repositories {existing} and {} share one physical path",
+                "nested family repositories {existing} and {} share one physical path",
                 repo.name
             ));
         }
@@ -1778,7 +1844,48 @@ fn jankurai_evidence_command(args: Vec<String>) -> Result<(), Box<dyn std::error
         return Err("Jankurai auditor must be a regular single-link file".into());
     }
     let auditor_bytes = fs::read(&auditor)?;
-    let auditor_output = Command::new(&auditor).arg("--version").output()?;
+    let auditor_identity = (
+        physical_identity(&auditor_metadata),
+        auditor_metadata.len(),
+        auditor_metadata.mode(),
+        auditor_metadata.nlink(),
+    );
+    let mut busy_retries = 0_u8;
+    let auditor_output = loop {
+        match Command::new(&auditor).arg("--version").output() {
+            Ok(output) => break output,
+            Err(error) if error.raw_os_error() == Some(26) => {
+                if busy_retries == 3 {
+                    return Err(error.into());
+                }
+                busy_retries += 1;
+                let current = fs::symlink_metadata(&auditor)?;
+                if (
+                    physical_identity(&current),
+                    current.len(),
+                    current.mode(),
+                    current.nlink(),
+                ) != auditor_identity
+                    || fs::read(&auditor)? != auditor_bytes
+                {
+                    return Err("Jankurai auditor changed while execution was busy".into());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(5));
+            }
+            Err(error) => return Err(error.into()),
+        }
+    };
+    let auditor_metadata_after = fs::symlink_metadata(&auditor)?;
+    if (
+        physical_identity(&auditor_metadata_after),
+        auditor_metadata_after.len(),
+        auditor_metadata_after.mode(),
+        auditor_metadata_after.nlink(),
+    ) != auditor_identity
+        || fs::read(&auditor)? != auditor_bytes
+    {
+        return Err("Jankurai auditor changed during version verification".into());
+    }
     if !auditor_output.status.success() {
         return Err("Jankurai auditor did not report its version".into());
     }
@@ -2383,10 +2490,10 @@ fn validate_manifest_data(
         errors.push("control_plane.required_check must be jain-split-ops/required".to_owned());
     }
     if check_paths {
-        if let Err(error) = validate_nested_redline_local(data, true, &mut errors) {
-            errors.push(format!("nested Redline path validation failed: {error}"));
+        if let Err(error) = validate_nested_family_local(data, true, &mut errors) {
+            errors.push(format!("nested family path validation failed: {error}"));
         }
-    } else if let Err(error) = redline_topology(data) {
+    } else if let Err(error) = nested_engine_topology(data) {
         errors.push(error);
     }
     if !errors.is_empty() {
@@ -2486,7 +2593,7 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
             .flatten(),
     ) {
         let name = string(raw, "name").unwrap_or_default();
-        let tag = string(raw, "immutable_tag").or_else(|| string(raw, "current_tag"));
+        let tag = declared_release_tag(raw);
         let found = lock_repos
             .iter()
             .chain(
@@ -2555,8 +2662,7 @@ fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
     );
     for raw in manifest_repos(&data)? {
         let repo = repo_from(raw)?;
-        let tag = string(raw, "immutable_tag")
-            .or_else(|| string(raw, "current_tag"))
+        let tag = declared_release_tag(raw)
             .ok_or_else(|| format!("{} missing immutable tag", repo.name))?;
         let tag_ref = format!("refs/tags/{tag}^{{}}");
         let commit = git_query(&repo.path, &["rev-parse", &tag_ref])
@@ -2574,15 +2680,10 @@ fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
             string(raw, "required_check").unwrap_or_else(|| format!("{}/required", repo.name))
         ));
     }
-    if let Some(redline) = data
-        .get("external_dependencies")
-        .and_then(|value| value.get("redline"))
-    {
-        text.push_str(&format!(
-            "[nested.redline]\nfamily = \"redline-split\"\nremote = \"{}\"\ntag = \"{}\"\n\n",
-            string(redline, "remote").unwrap_or_default(),
-            string(redline, "immutable_tag").unwrap_or_default()
-        ));
+    if data.get("nested_families").is_some() {
+        text.push_str(&render_nested_lock_section(&nested_engine_topology(
+            &data,
+        )?)?);
     }
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
@@ -2590,6 +2691,28 @@ fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
     fs::write(&output, text)?;
     println!("regenerated family lock: {}", output.display());
     Ok(())
+}
+
+fn render_nested_lock_section(topology: &NestedEngineTopology) -> Result<String, String> {
+    let identity = topology.bound_identity.as_ref().ok_or_else(|| {
+        format!(
+            "cannot render pending nested dependency {} into a release lock",
+            topology.dependency_name
+        )
+    })?;
+    Ok(format!(
+        "[nested.{}]\nfamily = \"{}\"\nproduct_version = \"{}\"\ntag_revision = {}\nremote = \"{}\"\ntag = \"{}\"\ncommit = \"{}\"\ntree = \"{}\"\nchecksum_sha256 = \"{}\"\nrequired_check = \"{}\"\n\n",
+        topology.dependency_name,
+        topology.family,
+        identity.product_version,
+        identity.tag_revision,
+        topology.engine_remote,
+        identity.tag,
+        identity.release_commit,
+        identity.release_tree,
+        identity.release_checksum_sha256,
+        topology.engine_required_check,
+    ))
 }
 
 fn release_preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -2705,9 +2828,7 @@ fn snapshot_rows(data: &toml::Value) -> Result<Vec<JsonValue>, Box<dyn std::erro
         if origin.as_deref() != Some(expected.as_str()) {
             failures.push("origin does not match manifest".to_owned());
         }
-        let tag = string(raw, "immutable_tag")
-            .or_else(|| string(raw, "current_tag"))
-            .unwrap_or_default();
+        let tag = declared_release_tag(raw).unwrap_or_default();
         let commit = git_query(&repo.path, &["rev-parse", "HEAD"]);
         let tag_ref = format!("refs/tags/{tag}^{{}}");
         let tag_commit = git_query(&repo.path, &["rev-parse", &tag_ref]);
@@ -5206,9 +5327,7 @@ fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                 .push("remote policy does not resolve to exactly local-Jeryu origin".to_owned());
         }
 
-        let tag = string(raw, "immutable_tag")
-            .or_else(|| string(raw, "current_tag"))
-            .unwrap_or_default();
+        let tag = declared_release_tag(raw).unwrap_or_default();
         let tag_arg = format!("refs/tags/{tag}^{{}}");
         let tag_commit = git_query(&repo.path, &["rev-parse", tag_arg.as_str()]);
         let tag_ok = commit.is_some() && tag_commit == commit;
@@ -5431,7 +5550,7 @@ fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
 
 fn external_dependency_failures(data: &toml::Value) -> Vec<String> {
     let mut failures = Vec::new();
-    let topology = match redline_topology(data) {
+    let topology = match nested_engine_topology(data) {
         Ok(topology) => topology,
         Err(error) => return vec![error],
     };
@@ -5444,7 +5563,7 @@ fn external_dependency_failures(data: &toml::Value) -> Vec<String> {
     let tag = &bound.tag;
     let remote = &topology.engine_remote;
     let label = &topology.engine_repository;
-    if let Err(error) = validate_redline_topology_paths(&topology) {
+    if let Err(error) = validate_nested_engine_topology_paths(&topology) {
         return vec![error];
     }
     let core_path = topology.container_path.join(&topology.engine_repository);
@@ -5476,6 +5595,14 @@ fn external_dependency_failures(data: &toml::Value) -> Vec<String> {
             bound.release_commit
         ));
     }
+    let tag_tree_ref = format!("refs/tags/{tag}^{{tree}}");
+    let local_tree = git_query(&core_path, &["rev-parse", &tag_tree_ref]);
+    if local_tree.as_deref() != Some(bound.release_tree.as_str()) {
+        failures.push(format!(
+            "{label} immutable tag {tag} tree must resolve locally to {}",
+            bound.release_tree
+        ));
+    }
     match git_archive_sha256(&core_path, &bound.release_commit) {
         Some(actual) if actual == bound.release_checksum_sha256 => {}
         Some(actual) => failures.push(format!(
@@ -5501,14 +5628,14 @@ fn external_dependency_failures(data: &toml::Value) -> Vec<String> {
             return failures;
         }
     };
-    let lock_path = match declared_redline_lock_path(&topology, &nested) {
+    let lock_path = match declared_nested_lock_path(&topology, &nested) {
         Ok(path) => path,
         Err(error) => {
             failures.push(error);
             return failures;
         }
     };
-    if physical_regular_file(&lock_path, "Redline family lock").is_ok() {
+    if physical_regular_file(&lock_path, "nested family lock").is_ok() {
         if let Ok(lock) = fs::read_to_string(&lock_path).and_then(|text| {
             text.parse::<toml::Value>()
                 .map_err(|error| io::Error::new(io::ErrorKind::InvalidData, error))
@@ -5519,7 +5646,10 @@ fn external_dependency_failures(data: &toml::Value) -> Vec<String> {
                 .and_then(toml::Value::as_bool)
                 != Some(true)
             {
-                failures.push("Redline proof lock is not cutover_eligible".to_owned());
+                failures.push(format!(
+                    "{} proof lock is not cutover_eligible",
+                    topology.family
+                ));
             }
             if let (Some(expected), Some(actual)) = (string(&lock, "engine_commit"), local_commit) {
                 if expected != actual {
@@ -5530,13 +5660,15 @@ fn external_dependency_failures(data: &toml::Value) -> Vec<String> {
             }
         } else {
             failures.push(format!(
-                "unable to parse Redline lock {}",
+                "unable to parse {} lock {}",
+                topology.family,
                 lock_path.display()
             ));
         }
     } else {
         failures.push(format!(
-            "Redline family lock is missing or non-physical: {}",
+            "{} family lock is missing or non-physical: {}",
+            topology.family,
             lock_path.display()
         ));
     }
@@ -5686,7 +5818,7 @@ fn validate_local_jeryu(
         }
         check_cargo_sources(&repo, &mut errors)?;
     }
-    validate_nested_redline_local(&data, skip_remotes, &mut errors)?;
+    validate_nested_family_local(&data, skip_remotes, &mut errors)?;
     if !skip_remotes {
         let split_root = repos
             .first()
@@ -5815,10 +5947,7 @@ fn check_cargo_sources(
             if !line.contains("git") {
                 continue;
             }
-            if line.contains(FAMILY_REMOTE_PREFIX)
-                || line.contains(INFRA_REMOTE_PREFIX)
-                || line.contains("http://127.0.0.1:8787/git/jeryu/redline-core/")
-            {
+            if line.contains(FAMILY_REMOTE_PREFIX) || line.contains(INFRA_REMOTE_PREFIX) {
                 continue;
             }
             if line.contains("git =") || line.starts_with("source = \"git+") {
@@ -6630,7 +6759,10 @@ mod tests {
         run_git_strict(destination, &["remote", "remove", "origin"]).unwrap();
     }
 
-    fn synthetic_redline_topology(root: &Path, release: &str) -> (toml::Value, RedlineTopology) {
+    fn synthetic_nested_engine_topology(
+        root: &Path,
+        release: &str,
+    ) -> (toml::Value, NestedEngineTopology) {
         let child = release == "8.0.1";
         let container = if child {
             root.join("jain-redline")
@@ -6664,6 +6796,11 @@ mod tests {
         };
         let engine_commit =
             git_query(&container.join("redline-core"), &["rev-parse", "HEAD"]).unwrap();
+        let engine_tree = git_query(
+            &container.join("redline-core"),
+            &["rev-parse", "HEAD^{tree}"],
+        )
+        .unwrap();
         let engine_checksum =
             git_archive_sha256(&container.join("redline-core"), &engine_commit).unwrap();
         fs::write(
@@ -6686,6 +6823,7 @@ product_version = "4.1.0"
 tag_revision = {}
 current_tag = "{engine_tag}"
 release_commit = "{engine_commit}"
+release_tree = "{engine_tree}"
 release_checksum_sha256 = "{engine_checksum}"
 required_check = "redline-core/required"
 [[repo]]
@@ -6718,6 +6856,7 @@ immutable_tag = "{engine_tag}"
 product_version = "4.1.0"
 tag_revision = {}
 release_commit = "{engine_commit}"
+release_tree = "{engine_tree}"
 release_checksum_sha256 = "{engine_checksum}"
 [nested_families.redline]
 family = "redline-split"
@@ -6728,6 +6867,7 @@ required = true
 engine_repository = "redline-core"
 engine_remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
 engine_tag = "{engine_tag}"
+engine_release_tree = "{engine_tree}"
 "#,
             root.display(),
             if child { 4 } else { 1 },
@@ -6737,7 +6877,7 @@ engine_tag = "{engine_tag}"
         )
         .parse()
         .unwrap();
-        let topology = redline_topology(&parent).unwrap();
+        let topology = nested_engine_topology(&parent).unwrap();
         (parent, topology)
     }
 
@@ -7965,29 +8105,29 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     }
 
     #[test]
-    fn redline_topology_accepts_exact_legacy_and_child_physical_families() {
+    fn nested_engine_topology_accepts_exact_legacy_and_child_physical_families() {
         for release in ["8.0.0", "8.0.1"] {
             let root = TestDir::new(&format!("redline-topology-{release}"));
-            let (data, topology) = synthetic_redline_topology(root.path(), release);
-            validate_redline_topology_paths(&topology).unwrap();
+            let (data, topology) = synthetic_nested_engine_topology(root.path(), release);
+            validate_nested_engine_topology_paths(&topology).unwrap();
             let nested: toml::Value = fs::read_to_string(&topology.manifest_path)
                 .unwrap()
                 .parse()
                 .unwrap();
             assert_eq!(
-                declared_redline_lock_path(&topology, &nested).unwrap(),
+                declared_nested_lock_path(&topology, &nested).unwrap(),
                 topology.control_plane_path.join("redline.lock.toml")
             );
             let mut errors = Vec::new();
-            validate_nested_redline_local(&data, true, &mut errors).unwrap();
+            validate_nested_family_local(&data, true, &mut errors).unwrap();
             assert!(errors.is_empty(), "{release}: {errors:?}");
         }
     }
 
     #[test]
-    fn redline_topology_rejects_mixed_alias_and_unsupported_mode_tuples() {
+    fn nested_engine_topology_rejects_mixed_alias_and_unsupported_mode_tuples() {
         let root = TestDir::new("redline-topology-invalid");
-        let (legacy, _) = synthetic_redline_topology(root.path(), "8.0.0");
+        let (legacy, _) = synthetic_nested_engine_topology(root.path(), "8.0.0");
 
         let mut mixed = legacy.clone();
         mixed["nested_families"]["redline"]["control_plane"] = toml::Value::String(
@@ -7996,8 +8136,8 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 .display()
                 .to_string(),
         );
-        let mixed = redline_topology(&mixed).unwrap();
-        assert!(validate_redline_topology_paths(&mixed)
+        let mixed = nested_engine_topology(&mixed).unwrap();
+        assert!(validate_nested_engine_topology_paths(&mixed)
             .unwrap_err()
             .contains("nested control plane"));
 
@@ -8008,7 +8148,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 .display()
                 .to_string(),
         );
-        assert!(redline_topology(&alias)
+        assert!(nested_engine_topology(&alias)
             .unwrap_err()
             .contains("manifest_path"));
 
@@ -8020,37 +8160,37 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 "authority_mode".to_owned(),
                 toml::Value::String("parent".to_owned()),
             );
-        assert!(redline_topology(&mode)
+        assert!(nested_engine_topology(&mode)
             .unwrap_err()
             .contains("authority_mode must be child when present"));
 
         let child_root = TestDir::new("redline-topology-invalid-child-mode");
-        let (mut child, _) = synthetic_redline_topology(child_root.path(), "8.0.1");
+        let (mut child, _) = synthetic_nested_engine_topology(child_root.path(), "8.0.1");
         child["nested_families"]["redline"]["authority_mode"] =
             toml::Value::String("parent".to_owned());
-        assert!(redline_topology(&child)
+        assert!(nested_engine_topology(&child)
             .unwrap_err()
             .contains("authority_mode must be child"));
     }
 
     #[test]
-    fn redline_topology_binds_engine_tag_or_requires_explicit_paired_pending_identity() {
+    fn nested_engine_topology_binds_engine_tag_or_requires_explicit_paired_pending_identity() {
         let root = TestDir::new("redline-topology-engine-identity");
-        let (data, _) = synthetic_redline_topology(root.path(), "8.0.1");
+        let (data, _) = synthetic_nested_engine_topology(root.path(), "8.0.1");
 
         let mut missing = data.clone();
         missing["nested_families"]["redline"]
             .as_table_mut()
             .unwrap()
             .remove("engine_tag");
-        assert!(redline_topology(&missing)
+        assert!(nested_engine_topology(&missing)
             .unwrap_err()
             .contains("must match external_dependencies.redline.immutable_tag"));
 
         let mut wrong = data.clone();
         wrong["nested_families"]["redline"]["engine_tag"] =
             toml::Value::String("redline-core-v4.1.0-jain.5".to_owned());
-        assert!(redline_topology(&wrong)
+        assert!(nested_engine_topology(&wrong)
             .unwrap_err()
             .contains("must match external_dependencies.redline.immutable_tag"));
 
@@ -8063,6 +8203,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             "product_version",
             "tag_revision",
             "release_commit",
+            "release_tree",
             "release_checksum_sha256",
         ] {
             external.remove(key);
@@ -8075,6 +8216,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             .as_table_mut()
             .unwrap();
         nested.remove("engine_tag");
+        nested.remove("engine_release_tree");
         nested.insert(
             "engine_identity_status".to_owned(),
             toml::Value::String("pending".to_owned()),
@@ -8084,17 +8226,17 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             .as_table_mut()
             .unwrap()
             .remove("engine_identity_status");
-        assert!(redline_topology(&unpaired)
+        assert!(nested_engine_topology(&unpaired)
             .unwrap_err()
             .contains("identity statuses must be paired"));
-        redline_topology(&pending).unwrap();
+        nested_engine_topology(&pending).unwrap();
 
         let mut numeric_external_tag = pending.clone();
         numeric_external_tag["external_dependencies"]["redline"]
             .as_table_mut()
             .unwrap()
             .insert("immutable_tag".to_owned(), toml::Value::Integer(4));
-        assert!(redline_topology(&numeric_external_tag)
+        assert!(nested_engine_topology(&numeric_external_tag)
             .unwrap_err()
             .contains("external_dependencies.redline.immutable_tag must be a string"));
 
@@ -8103,7 +8245,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             .as_table_mut()
             .unwrap()
             .insert("engine_tag".to_owned(), toml::Value::Integer(4));
-        assert!(redline_topology(&numeric_engine_tag)
+        assert!(nested_engine_topology(&numeric_engine_tag)
             .unwrap_err()
             .contains("nested_families.redline.engine_tag must be a string"));
 
@@ -8115,7 +8257,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 "release_commit".to_owned(),
                 toml::Value::String("0".repeat(40)),
             );
-        assert!(redline_topology(&stale_pending)
+        assert!(nested_engine_topology(&stale_pending)
             .unwrap_err()
             .contains("must omit every bound-only identity field"));
 
@@ -8134,14 +8276,14 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 "engine_identity_status".to_owned(),
                 toml::Value::String("bound".to_owned()),
             );
-        redline_topology(&explicit_bound).unwrap();
+        nested_engine_topology(&explicit_bound).unwrap();
 
         let mut malformed_tag = data.clone();
         malformed_tag["external_dependencies"]["redline"]["immutable_tag"] =
             toml::Value::String("redline-core-v4.1-jain.4".to_owned());
         malformed_tag["nested_families"]["redline"]["engine_tag"] =
             toml::Value::String("redline-core-v4.1-jain.4".to_owned());
-        assert!(redline_topology(&malformed_tag)
+        assert!(nested_engine_topology(&malformed_tag)
             .unwrap_err()
             .contains("must match repository, product_version, and tag_revision"));
 
@@ -8150,16 +8292,32 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             .as_table_mut()
             .unwrap()
             .remove("release_commit");
-        assert!(redline_topology(&missing_commit)
+        assert!(nested_engine_topology(&missing_commit)
             .unwrap_err()
             .contains("release_commit must be 40 lowercase hex"));
+
+        let mut missing_tree = data.clone();
+        missing_tree["external_dependencies"]["redline"]
+            .as_table_mut()
+            .unwrap()
+            .remove("release_tree");
+        assert!(nested_engine_topology(&missing_tree)
+            .unwrap_err()
+            .contains("release_tree must be 40 lowercase hex"));
+
+        let mut wrong_nested_tree = data.clone();
+        wrong_nested_tree["nested_families"]["redline"]["engine_release_tree"] =
+            toml::Value::String("0".repeat(40));
+        assert!(nested_engine_topology(&wrong_nested_tree)
+            .unwrap_err()
+            .contains("engine_release_tree must match"));
 
         let mut typed_external_status = data.clone();
         typed_external_status["external_dependencies"]["redline"]
             .as_table_mut()
             .unwrap()
             .insert("identity_status".to_owned(), toml::Value::Boolean(false));
-        assert!(redline_topology(&typed_external_status)
+        assert!(nested_engine_topology(&typed_external_status)
             .unwrap_err()
             .contains("external_dependencies.redline.identity_status must be a string"));
 
@@ -8171,7 +8329,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 "engine_identity_status".to_owned(),
                 toml::Value::Boolean(false),
             );
-        assert!(redline_topology(&typed_engine_status)
+        assert!(nested_engine_topology(&typed_engine_status)
             .unwrap_err()
             .contains("nested_families.redline.engine_identity_status must be a string"));
     }
@@ -8179,7 +8337,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     #[test]
     fn nested_engine_identity_is_generic_and_matches_one_child_authority_row() {
         let root = TestDir::new("nested-engine-authority-binding");
-        let (mut data, _) = synthetic_redline_topology(root.path(), "8.0.1");
+        let (mut data, _) = synthetic_nested_engine_topology(root.path(), "8.0.1");
         let external = data["external_dependencies"]
             .as_table_mut()
             .unwrap()
@@ -8201,18 +8359,52 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         data["nested_families"]["database"]["family"] =
             toml::Value::String("storage-family".to_owned());
 
-        let topology = redline_topology(&data).unwrap();
+        let topology = nested_engine_topology(&data).unwrap();
         assert_eq!(topology.dependency_name, "database");
         assert_eq!(topology.family, "storage-family");
-        let nested: toml::Value = fs::read_to_string(&topology.manifest_path)
+        let mut nested: toml::Value = fs::read_to_string(&topology.manifest_path)
             .unwrap()
             .parse()
             .unwrap();
+        nested["family"] = toml::Value::String("storage-family".to_owned());
+        validate_child_family_authority(&topology, &nested).unwrap();
         validate_child_engine_authority(&topology, &nested).unwrap();
+        let lock = render_nested_lock_section(&topology).unwrap();
+        assert!(lock.starts_with("[nested.database]\nfamily = \"storage-family\"\n"));
+        assert!(lock.contains(&format!(
+            "tree = \"{}\"",
+            topology.bound_identity.as_ref().unwrap().release_tree
+        )));
+        assert!(lock.contains("required_check = \"redline-core/required\""));
+
+        let mut wrong_family = nested.clone();
+        wrong_family["family"] = toml::Value::String("different-family".to_owned());
+        assert!(validate_child_family_authority(&topology, &wrong_family)
+            .unwrap_err()
+            .contains("must match parent declaration storage-family"));
+
+        let mut immutable_wins = nested.clone();
+        immutable_wins["repo"][0].as_table_mut().unwrap().insert(
+            "immutable_tag".to_owned(),
+            toml::Value::String(topology.bound_identity.as_ref().unwrap().tag.clone()),
+        );
+        immutable_wins["repo"][0]["current_tag"] =
+            toml::Value::String("redline-core-v4.1.0-jain.999".to_owned());
+        validate_child_engine_authority(&topology, &immutable_wins).unwrap();
+        assert_eq!(
+            declared_release_tag(&immutable_wins["repo"][0]),
+            Some(topology.bound_identity.as_ref().unwrap().tag.clone())
+        );
 
         let mut mismatch = nested.clone();
         mismatch["repo"][0]["release_commit"] = toml::Value::String("0".repeat(40));
         assert!(validate_child_engine_authority(&topology, &mismatch)
+            .unwrap_err()
+            .contains("must exactly match"));
+
+        let mut tree_mismatch = nested.clone();
+        tree_mismatch["repo"][0]["release_tree"] = toml::Value::String("0".repeat(40));
+        assert!(validate_child_engine_authority(&topology, &tree_mismatch)
             .unwrap_err()
             .contains("must exactly match"));
 
@@ -8239,9 +8431,52 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     }
 
     #[test]
-    fn redline_topology_rejects_coherent_split_control_and_repo_lexical_aliases() {
+    fn nested_family_validation_binds_child_family_and_immutable_tag_tree() {
+        let root = TestDir::new("nested-family-and-tree-binding");
+        let (data, topology) = synthetic_nested_engine_topology(root.path(), "8.0.1");
+        let engine_path = topology.container_path.join(&topology.engine_repository);
+        let bound = topology.bound_identity.as_ref().unwrap();
+        run_git_strict(&engine_path, &["tag", &bound.tag, &bound.release_commit]).unwrap();
+
+        let failures = external_dependency_failures(&data);
+        assert!(
+            failures
+                .iter()
+                .all(|failure| !failure.contains("tree must resolve locally")),
+            "{failures:?}"
+        );
+
+        let mut wrong_tree = data.clone();
+        wrong_tree["external_dependencies"]["redline"]["release_tree"] =
+            toml::Value::String("0".repeat(40));
+        wrong_tree["nested_families"]["redline"]["engine_release_tree"] =
+            toml::Value::String("0".repeat(40));
+        let failures = external_dependency_failures(&wrong_tree);
+        assert!(failures
+            .iter()
+            .any(|failure| failure.contains("tree must resolve locally")));
+
+        let mut nested: toml::Value = fs::read_to_string(&topology.manifest_path)
+            .unwrap()
+            .parse()
+            .unwrap();
+        nested["family"] = toml::Value::String("wrong-family".to_owned());
+        fs::write(
+            &topology.manifest_path,
+            toml::to_string_pretty(&nested).unwrap(),
+        )
+        .unwrap();
+        let mut errors = Vec::new();
+        validate_nested_family_local(&data, true, &mut errors).unwrap();
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("must match parent declaration redline-split")));
+    }
+
+    #[test]
+    fn nested_engine_topology_rejects_coherent_split_control_and_repo_lexical_aliases() {
         let split_root = TestDir::new("redline-topology-split-alias");
-        let (split_data, _) = synthetic_redline_topology(split_root.path(), "8.0.1");
+        let (split_data, _) = synthetic_nested_engine_topology(split_root.path(), "8.0.1");
         let raw_root = split_root.path().display().to_string();
         let (root_parent, root_name) = raw_root.rsplit_once('/').unwrap();
         for aliased_root in [
@@ -8264,28 +8499,28 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 split_alias["nested_families"]["redline"][key] =
                     toml::Value::String(format!("{aliased_root}/{suffix}"));
             }
-            assert!(redline_topology(&split_alias)
+            assert!(nested_engine_topology(&split_alias)
                 .unwrap_err()
                 .contains("exact normalized absolute spelling"));
         }
 
         let control_root = TestDir::new("redline-topology-control-alias");
         let (control_data, control_topology) =
-            synthetic_redline_topology(control_root.path(), "8.0.1");
+            synthetic_nested_engine_topology(control_root.path(), "8.0.1");
         let mut control_manifest: toml::Value = fs::read_to_string(&control_topology.manifest_path)
             .unwrap()
             .parse()
             .unwrap();
         control_manifest["control_plane"]["path"] = toml::Value::String("./.".to_owned());
         assert!(
-            validated_nested_redline_paths(&control_topology, &control_manifest)
+            validated_nested_repository_paths(&control_topology, &control_manifest)
                 .unwrap_err()
                 .contains("must be exactly .")
         );
-        redline_topology(&control_data).unwrap();
+        nested_engine_topology(&control_data).unwrap();
 
         let repo_root = TestDir::new("redline-topology-repo-alias");
-        let (_, repo_topology) = synthetic_redline_topology(repo_root.path(), "8.0.1");
+        let (_, repo_topology) = synthetic_nested_engine_topology(repo_root.path(), "8.0.1");
         let mut repo_manifest: toml::Value = fs::read_to_string(&repo_topology.manifest_path)
             .unwrap()
             .parse()
@@ -8293,7 +8528,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         repo_manifest["repo"][0]["path"] =
             toml::Value::String("../redline-web/../redline-core".to_owned());
         assert!(
-            validated_nested_redline_paths(&repo_topology, &repo_manifest)
+            validated_nested_repository_paths(&repo_topology, &repo_manifest)
                 .unwrap_err()
                 .contains("path must be exactly ../redline-core")
         );
@@ -8302,12 +8537,12 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     #[test]
     fn redline_local_validation_rejects_symlinks_missing_and_undeclared_git_roots() {
         let root = TestDir::new("redline-topology-path-failures");
-        let (data, topology) = synthetic_redline_topology(root.path(), "8.0.1");
+        let (data, topology) = synthetic_nested_engine_topology(root.path(), "8.0.1");
 
         let missing = topology.container_path.join("redline-web");
         fs::remove_dir_all(&missing).unwrap();
         let mut errors = Vec::new();
-        validate_nested_redline_local(&data, true, &mut errors).unwrap();
+        validate_nested_family_local(&data, true, &mut errors).unwrap();
         assert!(errors.iter().any(|error| error.contains("redline-web")));
 
         standalone_physical_clone(root.path(), "redline-web-replacement", &missing);
@@ -8317,7 +8552,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             &topology.container_path.join("undeclared"),
         );
         errors.clear();
-        validate_nested_redline_local(&data, true, &mut errors).unwrap();
+        validate_nested_family_local(&data, true, &mut errors).unwrap();
         assert!(errors
             .iter()
             .any(|error| error.contains("undeclared nested-family Git root")));
@@ -8337,8 +8572,8 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             alias_data["nested_families"]["redline"][key] =
                 toml::Value::String(alias_root.join(suffix).display().to_string());
         }
-        let alias_topology = redline_topology(&alias_data).unwrap();
-        assert!(validate_redline_topology_paths(&alias_topology)
+        let alias_topology = nested_engine_topology(&alias_data).unwrap();
+        assert!(validate_nested_engine_topology_paths(&alias_topology)
             .unwrap_err()
             .contains("symlink component"));
     }
@@ -8346,7 +8581,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     #[test]
     fn redline_local_validation_rejects_out_of_container_before_canonicalization() {
         let root = TestDir::new("redline-topology-physical-identity");
-        let (data, topology) = synthetic_redline_topology(root.path(), "8.0.1");
+        let (data, topology) = synthetic_nested_engine_topology(root.path(), "8.0.1");
         let elsewhere = root.path().join("elsewhere/redline-core");
         standalone_physical_clone(root.path(), "same-basename-source", &elsewhere);
         let mut nested: toml::Value = fs::read_to_string(&topology.manifest_path)
@@ -8360,7 +8595,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         )
         .unwrap();
         let mut errors = Vec::new();
-        validate_nested_redline_local(&data, true, &mut errors).unwrap();
+        validate_nested_family_local(&data, true, &mut errors).unwrap();
         assert!(errors.iter().any(|error| error
             .contains("redline-core: nested repository path must be exactly ../redline-core")));
     }
@@ -8377,6 +8612,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         );
         let engine_path = root.path().join("redline-split/redline-core");
         let engine_commit = git_query(&engine_path, &["rev-parse", "HEAD"]).unwrap();
+        let engine_tree = git_query(&engine_path, &["rev-parse", "HEAD^{tree}"]).unwrap();
         let engine_checksum = git_archive_sha256(&engine_path, &engine_commit).unwrap();
         fs::write(
             &nested,
@@ -8399,6 +8635,7 @@ product_version = "4.1.0"
 tag_revision = 1
 current_tag = "redline-core-v4.1.0-jain.1"
 release_commit = "{engine_commit}"
+release_tree = "{engine_tree}"
 release_checksum_sha256 = "{engine_checksum}"
 "#,
             ),
@@ -8421,6 +8658,7 @@ immutable_tag = "redline-core-v4.1.0-jain.1"
 product_version = "4.1.0"
 tag_revision = 1
 release_commit = "{engine_commit}"
+release_tree = "{engine_tree}"
 release_checksum_sha256 = "{engine_checksum}"
 [nested_families.redline]
 family = "redline-split"
@@ -8431,6 +8669,7 @@ required = true
 engine_repository = "redline-core"
 engine_remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
 engine_tag = "redline-core-v4.1.0-jain.1"
+engine_release_tree = "{engine_tree}"
 [[infrastructure_repo]]
 name = "jain-smartcluster"
 path = "{}/jain-smartcluster"

@@ -21,11 +21,15 @@ control_commit="$("$OPS_ROOT/ops/ci/host-ci-integrity.sh" "$OPS_ROOT")" \
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
 
 bootstrap_parent="$split_root/target/host-ci-sandboxes"
-mkdir -p -m 0700 -- "$bootstrap_parent" || exit 2
+mkdir -p -- "$bootstrap_parent" || exit 2
 bootstrap_parent="$(realpath -e -- "$bootstrap_parent")" || exit 2
 [[ "$bootstrap_parent" == "$split_root/target/host-ci-sandboxes" \
   && ! -L "$bootstrap_parent" \
-  && "$(stat -c '%u:%a' -- "$bootstrap_parent")" == "$(id -u):700" ]] || exit 2
+  && "$(stat -c '%u' -- "$bootstrap_parent")" == "$(id -u)" ]] || exit 2
+# The private worker UID must traverse to the root-owned, separately bound
+# bootstrap directory without being able to enumerate sibling attempts.
+chmod 0711 -- "$bootstrap_parent" || exit 2
+[[ "$(stat -c '%u:%a' -- "$bootstrap_parent")" == "$(id -u):711" ]] || exit 2
 bootstrap_root="$(mktemp -d "$bootstrap_parent/split-host-ci-bootstrap.XXXXXX")" || exit 2
 sandbox_request="$bootstrap_root/sandbox-request.json"
 staged_product="$bootstrap_root/product-source"

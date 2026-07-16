@@ -4,6 +4,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 mkdir -p "$repo_root/target/test-tmp"
 tmp="$(mktemp -d "$repo_root/target/test-tmp/jain-split-host-integrity-test.XXXXXX")"
+# The worker traverses to separately bind-mounted fixture roots beneath this
+# directory. Allow traversal without granting directory listing or file access.
+chmod 0711 "$tmp"
 native_evidence_root="$(mktemp -d "$repo_root/target/test-tmp/jain-native-evidence-test.XXXXXX")"
 proof_evidence_root="$(mktemp -d "$repo_root/target/test-tmp/jain-proof-evidence-test.XXXXXX")"
 forged_root=""
@@ -133,6 +136,7 @@ done
   exit 1
 }
 forge_base="$(tr -d '\n' <"$forge_address_file")"
+forge_port="${forge_base##*:}"
 touch "$forge_log"
 
 # A deterministic stand-in exercises the installed-auditor boundary without
@@ -242,11 +246,31 @@ install -D -m 0644 "$repo_root/tools/splitctl/src/jeryu_client.rs" \
   "$control/tools/splitctl/src/jeryu_client.rs"
 git init --quiet --bare "$control_remote"
 sed -i \
-  "s#remote = \"http://127.0.0.1:8787/git/jeryu/jain-split-ops.git\"#remote = \"$control_remote\"#" \
-  "$control/repos.manifest.toml"
-sed -i \
   "s#/home/ubuntu/jain-split#$sandbox_family_root#g" \
   "$control/repos.manifest.toml"
+sed -i \
+  "s#remote = \"http://127.0.0.1:8787/git/jeryu/jain-split-ops.git\"#remote = \"$control_remote\"#" \
+  "$control/repos.manifest.toml"
+# The production controller is intentionally fixed to the live local forge.
+# This standalone fixture compiles and validates against its own ephemeral
+# loopback server so required CI never contends with or mutates that service.
+sed -i \
+  "s#http://127.0.0.1:8787#$forge_base#g" \
+  "$control/repos.manifest.toml" \
+  "$control/tools/splitctl/src/main.rs" \
+  "$sandbox_family_root/redline-split-ops/repos.manifest.toml"
+# This broker fixture needs a schema-complete identity, not a real release
+# dependency. Its synthetic immutable values are deliberately confined to the
+# standalone control clone and are never used as product or tag authority.
+sed -i \
+  '/^immutable_tag = "redline-core-v4.1.0-jain.1"$/a\product_version = "4.1.0"\ntag_revision = 1\nrelease_commit = "0000000000000000000000000000000000000000"\nrelease_tree = "1111111111111111111111111111111111111111"\nrelease_checksum_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' \
+  "$control/repos.manifest.toml"
+sed -i \
+  '/^engine_tag = "redline-core-v4.1.0-jain.1"$/a\engine_release_tree = "1111111111111111111111111111111111111111"' \
+  "$control/repos.manifest.toml"
+sed -i \
+  "s#8787#$forge_port#g" \
+  "$control/tools/splitctl/src/jeryu_client.rs"
 git -C "$control" add repos.manifest.toml ops/ci tools/splitctl/src
 git -C "$control" commit --quiet -m 'fixture reviewed host-CI boundary'
 git -C "$control" switch -C main --quiet
@@ -643,24 +667,24 @@ JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
   exit 1
 }
 success_tail="$(tail -c "+$((success_offset + 1))" "$forge_log")"
-grep -Fq 'body={"name":"jain-report/required"' <<<"$success_tail" \
-  && grep -Fq '"conclusion":"success"' "$forge_log" || {
+grep -Fq '"name":"jain-report/required"' <<<"$success_tail" \
+  && grep -Fq '"conclusion":"success"' <<<"$success_tail" || {
   cat "$forge_log" >&2
   printf 'publisher did not publish a success check\n' >&2
   exit 1
 }
-grep -Fq 'body={"name":"jankurai/proof"' <<<"$success_tail" \
+grep -Fq '"name":"jankurai/proof"' <<<"$success_tail" \
   && grep -Fq 'receipt_sha256=' <<<"$success_tail" \
   && grep -Fq 'attempt_id=' <<<"$success_tail" || {
   printf 'publisher did not publish SHA-bound proof evidence\n' >&2
   exit 1
 }
-proof_post_line="$(grep -nF 'body={"name":"jankurai/proof"' \
+proof_post_line="$(grep -nF '"name":"jankurai/proof"' \
   <<<"$success_tail" | head -1 | cut -d: -f1)"
 proof_get_line="$(grep -nF \
   "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
   <<<"$success_tail" | head -1 | cut -d: -f1)"
-required_post_line="$(grep -nF 'body={"name":"jain-report/required"' \
+required_post_line="$(grep -nF '"name":"jain-report/required"' \
   <<<"$success_tail" | head -1 | cut -d: -f1)"
 required_get_line="$(grep -nF \
   "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
@@ -690,7 +714,7 @@ grep -Fq 'root-seal=' "$forge_log" || {
   printf 'publisher success did not bind the root one-shot seal\n' >&2
   exit 1
 }
-jq -e 'has("token") | not' "$publisher_config" >/dev/null || {
+sudo -n jq -e 'has("token") | not' "$publisher_config" >/dev/null || {
   printf 'publisher configuration retained an embedded credential\n' >&2
   exit 1
 }
@@ -920,6 +944,10 @@ exercise_partial_publication() {
   local expected_state="${2:?state required}"
   local stage="${3:?stage required}"
   local offset tail request replay_offset
+  # Every injected transition starts from a clean fake-forge state. Otherwise
+  # a prior successful run can make a later proof readback appear to contain a
+  # required check and collapse the intended state-machine boundary.
+  printf '' >"$forge_state"
   printf '%s\n' "$behavior" >"$forge_behavior"
   offset="$(stat -c '%s' "$forge_log")"
   if run_fixture_lane "$tmp/$behavior.log"; then
@@ -928,7 +956,7 @@ exercise_partial_publication() {
     exit 1
   fi
   tail="$(tail -c "+$((offset + 1))" "$forge_log")"
-  grep -Fq 'body={"name":"jankurai/proof"' <<<"$tail" || {
+  grep -Fq '"name":"jankurai/proof"' <<<"$tail" || {
     printf '%s did not attempt proof publication\n' "$behavior" >&2
     exit 1
   }
@@ -943,8 +971,8 @@ exercise_partial_publication() {
     exit 1
   fi
   if (( stage >= 3 )); then
-    grep -Fq 'body={"name":"jain-report/required"' <<<"$tail"
-  elif grep -Fq 'body={"name":"jain-report/required"' <<<"$tail"; then
+    grep -Fq '"name":"jain-report/required"' <<<"$tail"
+  elif grep -Fq '"name":"jain-report/required"' <<<"$tail"; then
     printf '%s reached required-check publication too early\n' "$behavior" >&2
     exit 1
   fi
@@ -1002,6 +1030,7 @@ exercise_partial_publication required-post-fail consumed 3
 exercise_partial_publication required-readback-missing consumed 4
 exercise_partial_publication status-post-fail consumed 5
 exercise_partial_publication status-readback-missing consumed 6
+printf '' >"$forge_state"
 
 # A nonzero reviewed worker exit is independently sealed and can publish only
 # failure; it cannot reuse the prior success result.
@@ -1060,13 +1089,13 @@ if env \
   exit 1
 fi
 score_failure_tail="$(tail -c "+$((score_failure_offset + 1))" "$forge_log")"
-grep -Fq 'body={"name":"jankurai/proof"' <<<"$score_failure_tail"
+grep -Fq '"name":"jankurai/proof"' <<<"$score_failure_tail"
 grep -Fq 'proof_status=fail' <<<"$score_failure_tail"
 grep -Fq '"conclusion":"failure"' <<<"$score_failure_tail"
-grep -Fq 'body={"name":"jain-report/required"' <<<"$score_failure_tail"
-score_proof_line="$(grep -nF 'body={"name":"jankurai/proof"' \
+grep -Fq '"name":"jain-report/required"' <<<"$score_failure_tail"
+score_proof_line="$(grep -nF '"name":"jankurai/proof"' \
   <<<"$score_failure_tail" | head -n 1 | cut -d: -f1)"
-score_required_line="$(grep -nF 'body={"name":"jain-report/required"' \
+score_required_line="$(grep -nF '"name":"jain-report/required"' \
   <<<"$score_failure_tail" | head -n 1 | cut -d: -f1)"
 [[ "$score_proof_line" =~ ^[0-9]+$ && "$score_required_line" =~ ^[0-9]+$ \
   && (( score_proof_line < score_required_line )) ]] || {
@@ -1204,6 +1233,7 @@ malicious_request="$(jq -c \
   '.environment.JAIN_TEST_FORCE_FAILURE="1"' "$fd_attack_request")"
 attack_complete="$tmp/retained-fd-mutated"
 worker_uid="$(id -u xbwork)"
+printf '' >"$forge_state"
 exec {request_fd}<>"$fd_attack_request"
 (
   for _ in $(seq 1 3000); do

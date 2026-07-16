@@ -20,7 +20,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     fs::write(&state_file, "")?;
     fs::write(&behavior_file, "ok\n")?;
-    let listener = TcpListener::bind("127.0.0.1:8787")?;
+    let listener = TcpListener::bind("127.0.0.1:0")?;
     let address = listener.local_addr()?;
     fs::write(&address_file, format!("http://{address}\n"))?;
     for stream in listener.incoming() {
