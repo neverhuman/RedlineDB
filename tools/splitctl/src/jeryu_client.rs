@@ -4,7 +4,7 @@ use std::{
     fmt,
     fs::File,
     io::{self, Read, Write},
-    net::{Ipv4Addr, Shutdown, SocketAddr, SocketAddrV4, TcpStream},
+    net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpStream},
     os::{
         fd::{AsRawFd, FromRawFd, OwnedFd},
         unix::{ffi::OsStrExt, fs::MetadataExt},
@@ -405,8 +405,6 @@ impl JeryuClient {
             stream.set_write_timeout(Some(remaining))?;
             stream.write(bytes)
         })?;
-        remaining_until(deadline, "request shutdown")?;
-        stream.shutdown(Shutdown::Write)?;
         drop(wire);
 
         let response = read_response(&mut stream, deadline)?;
@@ -1526,29 +1524,13 @@ mod tests {
         let address = listener.local_addr().unwrap();
         let handle = thread::spawn(move || {
             let (mut stream, _) = listener.accept().unwrap();
-            let mut request = Vec::new();
-            stream
-                .set_read_timeout(Some(Duration::from_secs(2)))
-                .unwrap();
-            loop {
-                let mut buffer = [0_u8; 4096];
-                match stream.read(&mut buffer) {
-                    Ok(0) => break,
-                    Ok(count) => request.extend_from_slice(&buffer[..count]),
-                    Err(error)
-                        if matches!(
-                            error.kind(),
-                            io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
-                        ) =>
-                    {
-                        break
-                    }
-                    Err(error) => panic!("server read failed: {error}"),
-                }
-            }
+            let request = read_fixture_request(&mut stream);
             for part in response_parts {
                 if let Err(error) = stream.write_all(&part) {
-                    assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+                    assert!(matches!(
+                        error.kind(),
+                        io::ErrorKind::BrokenPipe | io::ErrorKind::ConnectionReset
+                    ));
                     break;
                 }
                 thread::yield_now();
@@ -1556,6 +1538,58 @@ mod tests {
             request
         });
         (address, handle)
+    }
+
+    fn read_fixture_request(stream: &mut TcpStream) -> Vec<u8> {
+        stream
+            .set_read_timeout(Some(Duration::from_secs(2)))
+            .unwrap();
+        let mut request = Vec::new();
+        let mut expected = None;
+        loop {
+            let mut buffer = [0_u8; 4096];
+            let count = stream.read(&mut buffer).unwrap();
+            assert_ne!(count, 0, "client half-closed before the fixture response");
+            request.extend_from_slice(&buffer[..count]);
+            if expected.is_none() {
+                if let Some(index) = find_bytes(&request, b"\r\n\r\n") {
+                    let header_end = index + 4;
+                    let headers = std::str::from_utf8(&request[..index]).unwrap();
+                    let content_length = headers
+                        .lines()
+                        .find_map(|line| {
+                            let (name, value) = line.split_once(':')?;
+                            name.eq_ignore_ascii_case("content-length")
+                                .then(|| value.trim().parse::<usize>().unwrap())
+                        })
+                        .unwrap_or(0);
+                    expected = Some(header_end + content_length);
+                }
+            }
+            if expected.is_some_and(|length| request.len() == length) {
+                stream
+                    .set_read_timeout(Some(Duration::from_millis(25)))
+                    .unwrap();
+                let mut extra = [0_u8; 1];
+                match stream.read(&mut extra) {
+                    Err(error)
+                        if matches!(
+                            error.kind(),
+                            io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
+                        ) =>
+                    {
+                        return request
+                    }
+                    Ok(0) => panic!("client half-closed before the fixture response"),
+                    Ok(_) => panic!("client sent bytes beyond its declared request framing"),
+                    Err(error) => panic!("fixture post-request probe failed: {error}"),
+                }
+            }
+            assert!(
+                expected.is_none_or(|length| request.len() < length),
+                "fixture request exceeded its declared framing"
+            );
+        }
     }
 
     fn execute_response(
@@ -1579,11 +1613,7 @@ mod tests {
             let mut request_lines = Vec::new();
             for response in responses {
                 let (mut stream, _) = listener.accept().unwrap();
-                let mut request = Vec::new();
-                stream
-                    .set_read_timeout(Some(Duration::from_secs(2)))
-                    .unwrap();
-                stream.read_to_end(&mut request).unwrap();
+                let request = read_fixture_request(&mut stream);
                 assert_proc_non_disclosure(token_value());
                 let request = String::from_utf8(request).unwrap();
                 request_lines.push(request.lines().next().unwrap_or_default().to_owned());
