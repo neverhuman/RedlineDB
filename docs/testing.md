@@ -10,6 +10,18 @@ It runs the same lanes `.github/workflows/ci.yml` runs. Run a single lane with
 `bash scripts/ci-local.sh <lane>` (`fast|web|backend|security|e2e|jankurai|…`),
 and check your toolchain with `bash scripts/ci-doctor.sh`.
 
+## Governed Jankurai 1.6.11
+
+Every active Jankurai command routes through `bash ops/ci/run-jankurai.sh`.
+It accepts only `/home/ubuntu/.jeryu/bin/jankurai` with version
+`jankurai 1.6.11`, binary SHA-256
+`fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e`,
+and a content-addressed production receipt for local-forge tag
+`v1.6.11-deadlang-precision-split.1` at commit
+`dface7397fe24d46b0b1885ddd5782c34edbff49`. Missing or mismatched identity
+fails the lane; no PATH, environment, or per-repository install fallback is
+allowed.
+
 ## Lanes
 
 | Lane | Script | What it proves |

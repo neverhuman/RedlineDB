@@ -4,6 +4,9 @@
 # parity). Every ops/ci/<lane>.sh sources this file via common.sh.
 set -Eeuo pipefail
 
+# shellcheck source=ops/ci/jankurai-identity.sh
+source "$(dirname "${BASH_SOURCE[0]}")/jankurai-identity.sh"
+
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 WEB_DIR="${ROOT_DIR}/apps/web"
 API_DIR="${ROOT_DIR}/apps/api"
@@ -12,9 +15,6 @@ ARTIFACT_DIR="${ROOT_DIR}/target/jankurai"
 # When set to 1, missing tools are a hard failure instead of a skip. CI sets
 # this on the runners that have the full toolchain installed.
 STRICT_TOOLS="${REDLINE_STRICT_TOOLS:-0}"
-
-# Pinned auditor: never the stale ~/.local/bin shadow.
-JANKURAI_BIN="${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}"
 
 # Tool version pins (documented for ci-doctor / supply-chain parity).
 NODE_PIN="${REDLINE_NODE_PIN:-22}"
@@ -69,15 +69,8 @@ cargo_workspace_ready() {
 }
 
 jankurai_bin() {
-  if [[ -x "$JANKURAI_BIN" ]]; then
-    printf '%s' "$JANKURAI_BIN"
-    return 0
-  fi
-  if command -v jankurai >/dev/null 2>&1; then
-    command -v jankurai
-    return 0
-  fi
-  return 1
+  require_governed_jankurai
+  printf '%s' "$REDLINE_JANKURAI_BIN"
 }
 
 ensure_artifacts() {

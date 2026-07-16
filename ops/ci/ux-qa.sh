@@ -8,13 +8,10 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd "$ROOT_DIR"
 ensure_artifacts
 
-if JBIN="$(jankurai_bin)"; then
-  log "ux-qa: jankurai ux audit"
-  "$JBIN" ux audit --config agent/ux-qa.toml --out "${ARTIFACT_DIR}/ux-qa.json" \
-    || warn "ux-qa: jankurai ux audit emitted a non-zero status (supplementary lane)"
-else
-  missing_tool jankurai "rendered UX audit"
-fi
+require_governed_jankurai
+log "ux-qa: bash ops/ci/run-jankurai.sh ux audit"
+bash ops/ci/run-jankurai.sh ux audit --config agent/ux-qa.toml --out "${ARTIFACT_DIR}/ux-qa.json" \
+  || warn "ux-qa: bash ops/ci/run-jankurai.sh ux audit emitted a non-zero status (supplementary lane)"
 
 log "ux-qa: recording rendered-UX evidence receipt"
 if [[ ! -s "${ARTIFACT_DIR}/ux-qa.json" ]]; then

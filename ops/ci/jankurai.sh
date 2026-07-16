@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Jankurai tool-suite evidence lane. Runs the applicable jankurai tools and
 # writes their artifacts under target/jankurai/** so CI can upload one evidence
-# bundle. Supplementary lanes are best-effort; the audit score gate is the only
-# hard gate (run via `just score` / ops/ci/pr-ci.sh).
+# bundle. The governed 1.6.11 identity is a hard prerequisite; supplementary
+# analysis failures are recorded only after that verification.
 set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd "$ROOT_DIR"
@@ -10,10 +10,7 @@ ensure_artifacts
 mkdir -p "${ARTIFACT_DIR}/proofbind" "${ARTIFACT_DIR}/proofmark" \
   "${ARTIFACT_DIR}/security" "${ARTIFACT_DIR}/rust"
 
-if ! JBIN="$(jankurai_bin)"; then
-  missing_tool jankurai "tool-suite evidence"
-  exit 0
-fi
+require_governed_jankurai
 
 status=0
 base_ref="${JANKURAI_BASE_REF:-origin/main}"
@@ -34,39 +31,39 @@ run_step_soft() {
 }
 
 run_step "audit-ci (score)" \
-  "$JBIN" audit . --mode advisory \
+  bash ops/ci/run-jankurai.sh audit . --mode advisory \
     --json "${ARTIFACT_DIR}/repo-score.json" \
     --md "${ARTIFACT_DIR}/repo-score.md" \
     --repair-queue-jsonl "${ARTIFACT_DIR}/repair-queue.jsonl"
 
 run_step_soft "proof-routing" \
-  "$JBIN" proof . --changed-from "$base_ref" \
+  bash ops/ci/run-jankurai.sh proof . --changed-from "$base_ref" \
     --out "${ARTIFACT_DIR}/proof-routing.json" --md "${ARTIFACT_DIR}/proof-routing.md"
 
 run_step_soft "proofbind" \
-  "$JBIN" proofbind verify . --changed-from "$base_ref" \
+  bash ops/ci/run-jankurai.sh proofbind verify . --changed-from "$base_ref" \
     --out "${ARTIFACT_DIR}/proofbind/surface-witness.json" \
     --obligations-out "${ARTIFACT_DIR}/proofbind/obligations.json"
 
 run_step_soft "proofmark-rust" \
-  "$JBIN" proofmark rust . --obligations "${ARTIFACT_DIR}/proofbind/obligations.json" \
+  bash ops/ci/run-jankurai.sh proofmark rust . --obligations "${ARTIFACT_DIR}/proofbind/obligations.json" \
     --out "${ARTIFACT_DIR}/proofmark/proofmark-receipt.json"
 
 run_step "copy-code" \
-  "$JBIN" copy-code . --json "${ARTIFACT_DIR}/copy-code.json" --md "${ARTIFACT_DIR}/copy-code.md"
+  bash ops/ci/run-jankurai.sh copy-code . --json "${ARTIFACT_DIR}/copy-code.json" --md "${ARTIFACT_DIR}/copy-code.md"
 
 run_step "security evidence" \
-  "$JBIN" security run . --script ops/ci/security.sh --out "${ARTIFACT_DIR}/security/evidence.json"
+  bash ops/ci/run-jankurai.sh security run . --script ops/ci/security.sh --out "${ARTIFACT_DIR}/security/evidence.json"
 
 run_step "language bad-behavior" bash ops/ci/language-bad-behavior.sh
 
 run_step_soft "rust-witness" \
-  "$JBIN" rust witness build . --out "${ARTIFACT_DIR}/rust/witness-graph.json"
+  bash ops/ci/run-jankurai.sh rust witness build . --out "${ARTIFACT_DIR}/rust/witness-graph.json"
 
 # authz-matrix / input-boundary / agent-tool-supply are audit detectors; the
 # audit run below produces their evidence in the repo score JSON.
 run_step_soft "authz-matrix + input-boundary + agent-tool-supply (audit detectors)" \
-  "$JBIN" audit . --mode advisory \
+  bash ops/ci/run-jankurai.sh audit . --mode advisory \
     --json "${ARTIFACT_DIR}/authz-matrix.json" --md "${ARTIFACT_DIR}/authz-matrix.md"
 
 run_step "contract-drift" bash ops/ci/contract-drift.sh
