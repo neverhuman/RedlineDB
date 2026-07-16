@@ -6,5 +6,5 @@ source "$repo_root/ops/ci/lib.sh"
 for tool in git cargo rustc flock cargo-audit cargo-deny gitleaks actionlint zizmor syft; do
   require_tool "$tool"
 done
-require_jankurai
+bash "$repo_root/ops/ci/jankurai-doctor.sh"
 "$repo_root/redlinectl" doctor

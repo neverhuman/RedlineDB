@@ -5,7 +5,7 @@ Acceptance requires the configured minimum score, zero hard findings, zero
 caps, clean-worktree evidence, security scans, coverage evidence, and the
 release-readiness receipt.
 
-Local repair loops may run `jankurai diff-audit . --base-ref <reviewed-base>`,
+Local repair loops may run `bash ops/ci/jankurai.sh diff-audit . --base-ref <reviewed-base>`,
 but changed-fast output never replaces the full audit. Any new cap blocks the
 PR until the changed surface includes the missing test, release, ownership, or
 agent-readable documentation evidence; operators do not waive or manually

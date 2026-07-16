@@ -4,8 +4,6 @@
     ".github/**": "ops",
     ".gitignore": "workspace",
     ".gitleaks.toml": "ops",
-    ".jankurai/": "audit",
-    ".jankurai/**": "audit",
     "AGENTS.md": "agent",
     "Cargo.lock": "tools",
     "Cargo.toml": "tools",

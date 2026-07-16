@@ -4,8 +4,11 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly repo_root
-readonly JANKURAI_VERSION="1.6.10"
-readonly JANKURAI_REV="3c804453e6c7a6e0e4028d95cc3bccea467277ef"
+readonly JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
+readonly JANKURAI_VERSION="1.6.11"
+readonly JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+readonly JANKURAI_TAG="v1.6.11-deadlang-precision"
+readonly JANKURAI_REV="dface7397fe24d46b0b1885ddd5782c34edbff49"
 readonly JANKURAI_GIT="http://127.0.0.1:8787/git/jeryu/jankurai.git"
 readonly CARGO_AUDIT_VERSION="0.22.1"
 readonly CARGO_DENY_VERSION="0.19.8"
@@ -22,16 +25,22 @@ require_tool() {
 }
 
 require_jankurai() {
-  local binary="${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}"
-  [[ -x "$binary" ]] || {
-    printf 'pinned Jankurai binary is unavailable: %s\n' "$binary" >&2
+  [[ -f "$JANKURAI_BIN" && ! -L "$JANKURAI_BIN" && -x "$JANKURAI_BIN" ]] || {
+    printf 'governed Jankurai must be an executable regular non-symlink: %s\n' \
+      "$JANKURAI_BIN" >&2
     return 1
   }
-  [[ "$($binary --version)" == "jankurai $JANKURAI_VERSION" ]] || {
-    printf 'expected jankurai %s\n' "$JANKURAI_VERSION" >&2
+  [[ "$(realpath -e -- "$JANKURAI_BIN")" == "$JANKURAI_BIN" ]] || {
+    printf 'governed Jankurai resolved outside its exact path\n' >&2
     return 1
   }
-  local binary_dir
-  binary_dir="$(dirname "$binary")"
-  export PATH="$binary_dir:$PATH"
+  [[ "$($JANKURAI_BIN --version)" == "jankurai $JANKURAI_VERSION" ]] || {
+    printf 'governed Jankurai version mismatch: expected %s\n' "$JANKURAI_VERSION" >&2
+    return 1
+  }
+  [[ "$(sha256sum -- "$JANKURAI_BIN" | awk '{print $1}')" == "$JANKURAI_SHA256" ]] || {
+    printf 'governed Jankurai digest mismatch\n' >&2
+    return 1
+  }
+  export JANKURAI_BIN
 }

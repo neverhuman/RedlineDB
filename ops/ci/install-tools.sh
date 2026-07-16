@@ -8,4 +8,3 @@ cargo install --locked zizmor --version "$ZIZMOR_VERSION"
 GOBIN="$HOME/.local/bin" go install "github.com/rhysd/actionlint/cmd/actionlint@v$ACTIONLINT_VERSION"
 GOBIN="$HOME/.local/bin" go install "github.com/gitleaks/gitleaks/v8@v$GITLEAKS_VERSION"
 GOBIN="$HOME/.local/bin" go install "github.com/anchore/syft/cmd/syft@v$SYFT_VERSION"
-cargo install --locked --git "$JANKURAI_GIT" --rev "$JANKURAI_REV" jankurai

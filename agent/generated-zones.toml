@@ -6,13 +6,6 @@ read_only = true
 write_policy = "auditor_output"
 
 [[zone]]
-path = ".jankurai/"
-source = "pinned Jankurai audit"
-command = "just score"
-read_only = true
-write_policy = "auditor_output"
-
-[[zone]]
 path = "schemas/"
 source = "Rust receipt and lock validators"
 command = "cargo test --locked"

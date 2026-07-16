@@ -40,7 +40,7 @@ jobs:
         run: bash ops/ci/install-tools.sh
       - name: Secret, dependency, workflow, and SBOM scans
         env:
-          REQUIRED_SECURITY_COMMANDS: "cargo audit; cargo deny; gitleaks; actionlint; zizmor; syft SBOM"
+          REQUIRED_SECURITY_COMMANDS: "cargo audit --no-fetch; cargo deny --frozen; gitleaks; actionlint; zizmor --offline; syft offline SBOM"
         run: bash ops/ci/security.sh
       - name: Upload security and SBOM evidence
         if: always()
@@ -65,30 +65,35 @@ jobs:
           cache: false
       - name: Install exact audit toolchain
         run: bash ops/ci/install-tools.sh
+      - name: Verify governed Jankurai
+        run: bash ops/ci/jankurai-doctor.sh
       - name: Prepare exact Jankurai source and reviewed baseline
         run: |
           bash ops/ci/prepare-jankurai-source.sh
-          install -d target/jankurai .jankurai
+          install -d target/jankurai
           install -m 0644 agent/jankurai-baseline.json target/jankurai/accepted-baseline.json
       - name: Bind strict security evidence
         run: |
-          jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json --script ops/ci/security.sh
-          jankurai security run . --out target/jankurai/security/evidence.json --strict --profile ci --script ops/ci/security.sh
+          bash ops/ci/jankurai-doctor.sh
+          /home/ubuntu/.jeryu/bin/jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json --script ops/ci/security.sh
+          /home/ubuntu/.jeryu/bin/jankurai security run . --out target/jankurai/security/evidence.json --strict --profile ci --script ops/ci/security.sh
       - name: Bind changed surfaces to proof obligations
         run: |
+          bash ops/ci/jankurai-doctor.sh
           git fetch --no-tags origin main:refs/remotes/origin/main
-          jankurai proofbind verify . --changed-from origin/main --out target/jankurai/proofbind/surface-witness.json --obligations-out target/jankurai/proofbind/obligations.json
+          /home/ubuntu/.jeryu/bin/jankurai proofbind verify . --changed-from origin/main --out target/jankurai/proofbind/surface-witness.json --obligations-out target/jankurai/proofbind/obligations.json
       - name: Run exact language bad-behavior suite
         run: |
           set -o pipefail
-          (cd target/jankurai-source-1.6.10 && cargo test -p jankurai --test language_bad_behavior) 2>&1 | tee target/jankurai/language-bad-behavior.log
+          (cd target/jankurai-source-1.6.11 && cargo test -p jankurai --test language_bad_behavior) 2>&1 | tee target/jankurai/language-bad-behavior.log
       - name: Verify coverage and evidence sources
-        run: jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md
+        run: |
+          bash ops/ci/jankurai-doctor.sh
+          /home/ubuntu/.jeryu/bin/jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md
       - name: Jankurai score and hard-finding gate
         run: |
-          jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml --repair-queue-jsonl target/jankurai/repair-queue.jsonl
-          install -m 0644 target/jankurai/repo-score.json .jankurai/repo-score.json
-          install -m 0644 target/jankurai/repo-score.md .jankurai/repo-score.md
+          bash ops/ci/jankurai-doctor.sh
+          /home/ubuntu/.jeryu/bin/jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml --repair-queue-jsonl target/jankurai/repair-queue.jsonl --no-score-history
           ./redlinectl audit-verify target/jankurai/repo-score.json
       - name: Upload JSON and Markdown audit evidence
         if: always()
@@ -96,8 +101,6 @@ jobs:
         with:
           name: redline-split-ops-audit
           path: |
-            .jankurai/repo-score.json
-            .jankurai/repo-score.md
             target/jankurai/repo-score.json
             target/jankurai/repo-score.md
             target/jankurai/repair-queue.jsonl
@@ -126,7 +129,7 @@ jobs:
         run: bash ops/ci/install-tools.sh
       - name: Reproduce security evidence in the release snapshot
         env:
-          REQUIRED_SECURITY_COMMANDS: "cargo audit; cargo deny; gitleaks; actionlint; zizmor; syft SBOM"
+          REQUIRED_SECURITY_COMMANDS: "cargo audit --no-fetch; cargo deny --frozen; gitleaks; actionlint; zizmor --offline; syft offline SBOM"
         run: bash ops/ci/security.sh
       - name: Release readiness
         run: bash ops/ci/release-readiness.sh

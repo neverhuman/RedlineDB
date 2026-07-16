@@ -1,6 +1,6 @@
 # Redline split control-plane standard
 
-This independent control plane uses pinned Jankurai 1.6.10 and the protected
+This independent control plane uses fixed-path, digest-governed Jankurai 1.6.11 and the protected
 check `redline-split-ops/required`. `just required`, `just security`, and
 `just score` are merge evidence. `just family-ci` and `just cutover-verify` are
 additional cutover gates and may correctly remain red while reviewed child

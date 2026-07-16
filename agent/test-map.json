@@ -4,8 +4,6 @@
     ".github/**": {"command": "just security", "lane": "security", "purpose": "lint pinned read-only workflows"},
     ".gitignore": {"command": "just check", "lane": "check", "purpose": "verify generated-output boundaries"},
     ".gitleaks.toml": {"command": "just security", "lane": "security", "purpose": "verify secret scan policy"},
-    ".jankurai/": {"command": "just score", "lane": "score", "purpose": "regenerate governed audit evidence"},
-    ".jankurai/**": {"command": "just score", "lane": "score", "purpose": "regenerate governed audit evidence"},
     "AGENTS.md": {"command": "just check", "lane": "check", "purpose": "verify routed control-plane guidance"},
     "Cargo.lock": {"command": "just required && just security", "lane": "required", "purpose": "verify locked dependencies and advisories"},
     "Cargo.toml": {"command": "just required", "lane": "required", "purpose": "verify the standalone Rust tool package"},
