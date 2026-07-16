@@ -16,7 +16,7 @@ while IFS= read -r file; do
     .jankurai/score-history.csv|.jankurai/score-history.jsonl)
       continue
       ;;
-    docs/archive/*|paper/figs/*.eps|target/*)
+    .jankurai/archive/*|docs/archive/*|paper/figs/*.eps|target/*)
       continue
       ;;
     tips/feedback/*|tips/performance/*)
