@@ -23,15 +23,39 @@ binary="$target_directory/release/redlinedb-client-smoke"
 }
 version="$(tr -d '\n' < VERSION)"
 [[ "$version" == "4.1.0" ]]
-rm -rf -- target/artifact-support/package
-mkdir -p target/artifact-support/package
+source_date_epoch="$(git show -s --format=%ct HEAD)"
+[[ "$source_date_epoch" =~ ^[0-9]+$ ]]
+artifact_directory="target/artifact-support"
+package_directory="$artifact_directory/package"
+mkdir -p "$artifact_directory"
+rm -rf -- "$package_directory"
+mkdir -p "$package_directory"
+chmod 0755 "$package_directory"
 install -m 0755 "$target_directory/release/redlinedb-client-smoke" \
-  target/artifact-support/package/redlinedb-client-smoke
+  "$package_directory/redlinedb-client-smoke"
 install -m 0644 README.md docs/release.md docker/Dockerfile docker/docker-compose.yml \
-  target/artifact-support/package/
-tar -C target/artifact-support/package -czf \
-  "target/artifact-support/redline-central-v${version}.tar.gz" .
-artifact="target/artifact-support/redline-central-v${version}.tar.gz"
+  "$package_directory/"
+artifact="$artifact_directory/redline-central-v${version}.tar.gz"
+artifact_tmp="${artifact}.tmp"
+rm -f -- "$artifact_tmp"
+trap 'rm -f -- "$artifact_tmp"' EXIT
+archive_entries=(
+  ./
+  ./Dockerfile
+  ./README.md
+  ./docker-compose.yml
+  ./redlinedb-client-smoke
+  ./release.md
+)
+(
+  cd "$package_directory"
+  printf '%s\0' "${archive_entries[@]}" \
+    | tar --create --file=- --no-recursion --sort=name --format=gnu --null \
+      --mtime="@${source_date_epoch}" --owner=0 --group=0 --numeric-owner \
+      --mode='u+rwX,go+rX,go-w' --files-from=-
+) | gzip -n -9 > "$artifact_tmp"
+mv -- "$artifact_tmp" "$artifact"
+trap - EXIT
 jq -n \
   --arg repo "redline-central" \
   --arg version "$version" \
