@@ -6165,24 +6165,40 @@ mod tests {
     struct TestDir(PathBuf);
 
     impl TestDir {
-        fn new(name: &str) -> Self {
-            let path =
-                env::temp_dir().join(format!("redline-proof-test-{name}-{}", unique_suffix()));
-            fs::create_dir_all(&path).unwrap();
-            Self(path)
-        }
-
         fn new_in_root(name: &str) -> Self {
-            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("target/test-tmp")
+            let repository = Path::new(env!("CARGO_MANIFEST_DIR"));
+            let target = repository.join("target");
+            let path = target
+                .join("test-tmp")
                 .join(format!("redline-proof-test-{name}-{}", unique_suffix()));
             fs::create_dir_all(&path).unwrap();
+            let canonical_repository = fs::canonicalize(repository).unwrap();
+            let canonical_target = fs::canonicalize(&target).unwrap();
+            let canonical_path = fs::canonicalize(&path).unwrap();
+            assert!(canonical_target.starts_with(&canonical_repository));
+            assert!(canonical_path.starts_with(&canonical_target));
             Self(path)
         }
 
         fn path(&self) -> &Path {
             &self.0
         }
+    }
+
+    #[test]
+    fn test_fixtures_are_repository_target_rooted() {
+        let fixture = TestDir::new_in_root("fixture-root-guard");
+        let repository = fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap();
+        let target = fs::canonicalize(repository.join("target")).unwrap();
+        let fixture_path = fs::canonicalize(fixture.path()).unwrap();
+        assert!(target.starts_with(&repository));
+        assert!(fixture_path.starts_with(&target));
+
+        let source = include_str!("main.rs");
+        let ambient_temp_allocator = ["env::temp", "_dir()"].concat();
+        let legacy_test_allocator = ["TestDir::", "new("].concat();
+        assert!(!source.contains(&ambient_temp_allocator));
+        assert!(!source.contains(&legacy_test_allocator));
     }
 
     impl Drop for TestDir {
@@ -6223,7 +6239,7 @@ mod tests {
 
     #[test]
     fn standalone_checkout_is_exact_and_independent() {
-        let fixture = TestDir::new("standalone-checkout");
+        let fixture = TestDir::new_in_root("standalone-checkout");
         let source = fixture.path().join("source");
         let commit = initialize_test_repo(&source);
         with_standalone_sandbox("redline-clone-test", |sandbox| {
@@ -6261,7 +6277,7 @@ mod tests {
     fn standalone_sandbox_refuses_symlink_root_cleanup() {
         use std::os::unix::fs::symlink;
 
-        let victim = TestDir::new("sandbox-victim");
+        let victim = TestDir::new_in_root("sandbox-victim");
         fs::write(victim.path().join("must-survive"), b"preserved").unwrap();
         let mut sandbox = StandaloneSandbox::new("redline-symlink-test").unwrap();
         let root = sandbox.path().to_path_buf();
@@ -6380,7 +6396,7 @@ mod tests {
 
     #[test]
     fn ci_compatibility_mirror_is_physical_distinct_and_cleaned() {
-        let fixture = TestDir::new("ci-mirror-clean");
+        let fixture = TestDir::new_in_root("ci-mirror-clean");
         let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
         let marker = mirror.with_file_name(".redline.lock.toml.ci-compatibility-mirror");
         let sidecar = checksum_path(&mirror);
@@ -6426,7 +6442,7 @@ mod tests {
 
     #[test]
     fn ci_compatibility_mirror_rejects_absent_or_partial_inputs() {
-        let missing = TestDir::new("ci-mirror-missing");
+        let missing = TestDir::new_in_root("ci-mirror-missing");
         let (authoritative, predecessor, mirror) = ci_mirror_fixture(missing.path());
         fs::remove_file(&predecessor).unwrap();
         let failure = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor)
@@ -6435,7 +6451,7 @@ mod tests {
         assert!(failure.contains("absent or unreadable"));
         assert!(!mirror.exists());
 
-        let partial = TestDir::new("ci-mirror-partial");
+        let partial = TestDir::new_in_root("ci-mirror-partial");
         let (authoritative, predecessor, mirror) = ci_mirror_fixture(partial.path());
         let sidecar = checksum_path(&mirror);
         fs::write(&sidecar, b"owned elsewhere\n").unwrap();
@@ -6452,7 +6468,7 @@ mod tests {
     fn ci_compatibility_mirror_rejects_symlink_target() {
         use std::os::unix::fs::symlink;
 
-        let fixture = TestDir::new("ci-mirror-symlink");
+        let fixture = TestDir::new_in_root("ci-mirror-symlink");
         let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
         let victim = fixture.path().join("must-survive");
         fs::write(&victim, b"preserved").unwrap();
@@ -6467,7 +6483,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn ci_compatibility_mirror_refuses_aliased_cleanup() {
-        let fixture = TestDir::new("ci-mirror-alias");
+        let fixture = TestDir::new_in_root("ci-mirror-alias");
         let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
         let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
         let external_link = fixture.path().join("external-link");
@@ -6490,7 +6506,7 @@ mod tests {
     fn ci_compatibility_mirror_refuses_same_byte_replacements() {
         use std::os::unix::fs::PermissionsExt;
 
-        let mirror_fixture = TestDir::new("ci-mirror-replaced");
+        let mirror_fixture = TestDir::new_in_root("ci-mirror-replaced");
         let (authoritative, predecessor, mirror) = ci_mirror_fixture(mirror_fixture.path());
         let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
         fs::remove_file(&mirror).unwrap();
@@ -6501,7 +6517,7 @@ mod tests {
         assert!(mirror.exists());
         guard.cleaned = true;
 
-        let marker_fixture = TestDir::new("ci-marker-replaced");
+        let marker_fixture = TestDir::new_in_root("ci-marker-replaced");
         let (authoritative, predecessor, mirror) = ci_mirror_fixture(marker_fixture.path());
         let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
         fs::remove_file(&guard.marker).unwrap();
@@ -6515,7 +6531,7 @@ mod tests {
 
     #[test]
     fn ci_compatibility_mirror_refuses_wrong_digest_cleanup() {
-        let fixture = TestDir::new("ci-mirror-wrong-digest");
+        let fixture = TestDir::new_in_root("ci-mirror-wrong-digest");
         let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
         let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
         fs::write(&mirror, b"tampered\n").unwrap();
@@ -6529,7 +6545,7 @@ mod tests {
 
     #[test]
     fn ci_compatibility_mirror_refuses_unsafe_marker_cleanup() {
-        let fixture = TestDir::new("ci-mirror-marker");
+        let fixture = TestDir::new_in_root("ci-mirror-marker");
         let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
         let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
         fs::write(&guard.marker, b"not-owner\n").unwrap();
@@ -6543,7 +6559,7 @@ mod tests {
 
     #[test]
     fn ci_compatibility_mirror_cleans_after_gate_failure() {
-        let fixture = TestDir::new("ci-mirror-gate-failure");
+        let fixture = TestDir::new_in_root("ci-mirror-gate-failure");
         let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
         let failure = with_ci_compatibility_mirror(
             &authoritative,
@@ -6685,7 +6701,7 @@ mod tests {
 
     #[test]
     fn ci_required_rejects_path_overrides() {
-        let fixture = TestDir::new("ci-required-paths");
+        let fixture = TestDir::new_in_root("ci-required-paths");
         let root = fixture.path().join("redline-split-ops");
         let valid = Paths {
             manifest: root.join("repos.manifest.toml"),
@@ -6850,7 +6866,7 @@ mod tests {
 
     #[test]
     fn redline_core_uses_only_hash_bound_local_testing_artifact() {
-        let root = TestDir::new("artifact-env");
+        let root = TestDir::new_in_root("artifact-env");
         let artifact = testing_artifact(root.path());
         let mut command = Command::new("true");
         configure_redline_core_artifact(&mut command, &artifact).unwrap();
@@ -6882,7 +6898,7 @@ mod tests {
 
     #[test]
     fn dependency_receipt_is_bound_to_reviewed_testing_commit_and_log() {
-        let root = TestDir::new("artifact-receipt");
+        let root = TestDir::new_in_root("artifact-receipt");
         let artifact = testing_artifact(root.path());
         let repo = testing_repo();
         let value = artifact.receipt_json(root.path()).unwrap();
@@ -6903,7 +6919,7 @@ mod tests {
 
     #[test]
     fn testing_package_verification_rejects_manifest_commit_drift() {
-        let root = TestDir::new("testing-package");
+        let root = TestDir::new_in_root("testing-package");
         let repo = testing_repo();
         let package = "redline-testing-1.0.1-linux-x86_64";
         let dist = root.path().join("dist");
@@ -7124,7 +7140,7 @@ mod tests {
         let predecessor =
             fs::read(root.join("release-evidence/8.0.0/redline-lock-jain3-predecessor.toml"))
                 .unwrap();
-        let fixture = TestDir::new("successor-operation");
+        let fixture = TestDir::new_in_root("successor-operation");
         let authoritative = fixture.path().join("authoritative/redline.lock.toml");
         let mirror = fixture.path().join("mirror/redline.lock.toml");
         fs::create_dir_all(authoritative.parent().unwrap()).unwrap();
@@ -7261,7 +7277,7 @@ mod tests {
     #[test]
     fn manifest_rejects_implicit_old_revision() {
         let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
-        let fixture = TestDir::new("old-revision");
+        let fixture = TestDir::new_in_root("old-revision");
         let path = fixture.path().join("repos.manifest.toml");
         let text = fs::read_to_string(source)
             .unwrap()
@@ -7276,7 +7292,7 @@ mod tests {
     #[test]
     fn manifest_requires_atomic_commit_checksum_binding() {
         let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
-        let fixture = TestDir::new("half-bound");
+        let fixture = TestDir::new_in_root("half-bound");
         let path = fixture.path().join("repos.manifest.toml");
         let text = fs::read_to_string(source).unwrap().replacen(
             "release_commit = \"PENDING\"",
@@ -7301,7 +7317,7 @@ mod tests {
 
     #[test]
     fn checksum_sidecar_detects_tampering() {
-        let root = TestDir::new("tamper");
+        let root = TestDir::new_in_root("tamper");
         let path = root.path().join("receipt.json");
         write_checksummed_json(&path, &json!({"status": "pass"})).unwrap();
         assert!(is_sha256(&verify_checksum(&path).unwrap()));
@@ -7326,7 +7342,7 @@ mod tests {
 
     #[test]
     fn consumer_evidence_rejects_manual_eligibility_boolean() {
-        let root = TestDir::new("manual-bool");
+        let root = TestDir::new_in_root("manual-bool");
         let path = root.path().join("jain.json");
         let now = Utc::now();
         let payload = json!({
@@ -7364,7 +7380,7 @@ mod tests {
 
     #[test]
     fn consumer_evidence_binds_manifests_policy_and_fresh_test_log() {
-        let root = TestDir::new("consumer-bindings");
+        let root = TestDir::new_in_root("consumer-bindings");
         let evidence_path = root.path().join("jain.json");
         let test_log = root.path().join("jain-consumer.test.log");
         fs::write(&test_log, b"test result: ok. 1 passed; 0 failed\n").unwrap();
@@ -7419,7 +7435,7 @@ mod tests {
 
     #[test]
     fn transaction_restores_every_prior_output() {
-        let root = TestDir::new("rollback");
+        let root = TestDir::new_in_root("rollback");
         let first = root.path().join("control.lock");
         let second = root.path().join("mirror.lock");
         atomic_write(&first, b"old-control\n").unwrap();
@@ -7446,7 +7462,7 @@ mod tests {
 
     #[test]
     fn proof_refresh_rejects_output_input_collisions() {
-        let root = TestDir::new("collision");
+        let root = TestDir::new_in_root("collision");
         let lock = root.path().join("redline.lock.toml");
         let found = ensure_distinct_paths(&[
             ("manifest", root.path().join("manifest.toml")),
@@ -7466,7 +7482,7 @@ mod tests {
 
     #[test]
     fn derived_lock_uses_relocatable_paths_and_eligibility() {
-        let root = TestDir::new("derived-lock");
+        let root = TestDir::new_in_root("derived-lock");
         let names = ["redline", "redline-core", "redline-testing", "redline-web"];
         let tags = [
             "redline-v4.1.0-jain.2",
@@ -7546,7 +7562,7 @@ mod tests {
 
     #[test]
     fn audit_gate_requires_score_hard_and_cap_acceptance() {
-        let root = TestDir::new("audit-gate");
+        let root = TestDir::new_in_root("audit-gate");
         let report = root.path().join("score.json");
         fs::write(
             &report,
@@ -7611,7 +7627,7 @@ mod tests {
         );
         load_manifest(&manifest_path).unwrap();
 
-        let fixture = TestDir::new("legacy-control-identity");
+        let fixture = TestDir::new_in_root("legacy-control-identity");
         for (index, (current, legacy)) in [
             ("release_version = \"8.0.1\"", "release_version = \"8.0.0\""),
             (
@@ -7639,7 +7655,7 @@ mod tests {
 
     #[test]
     fn control_validation_does_not_require_family_checkouts() {
-        let fixture = TestDir::new("standalone-control");
+        let fixture = TestDir::new_in_root("standalone-control");
         let control = fixture.path().join("redline-split-ops");
         let family_root = fixture.path();
         fs::create_dir_all(control.join("schemas")).unwrap();
