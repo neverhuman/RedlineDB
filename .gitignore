@@ -40,6 +40,7 @@ agent/*
 !agent/JANKURAI_STANDARD.md
 !agent/audit-policy.toml
 !agent/boundaries.toml
+!agent/standard-version.toml
 !agent/tool-adoption.toml
 :memory:/
 FUCKIT.md

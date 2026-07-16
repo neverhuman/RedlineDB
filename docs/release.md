@@ -17,16 +17,18 @@ commit consumed by Jain.
 Tags are immutable. In particular, existing `redline-v4.1.0-jain.*` tags must
 never be moved or recreated on a different commit. A new hub tag is permitted
 only when a reviewed control-plane release record names it and the forge proves
-that the tag is absent. The Jain 8.0.0 cutover names a new `redline-core` tag;
+that the tag is absent. The Jain 8.0.1 cutover names a new `redline-core` tag;
 it does not authorize moving an existing hub tag.
 
 ## Candidate workflow
 
 1. Start from a clean branch whose base is the current Jeryu `main` head. The
    checkout must have exactly one managed `origin` pointing to Jeryu.
-2. Run `just check`, then the pinned Jankurai audit and security lane from a
-   clean detached snapshot. The thin-hub guard must prove that no Cargo
-   workspace or engine source has returned.
+2. Run `just check`, then the governed Jankurai 1.6.11 audit and security lane
+   from a clean exact-head checkout. The lane verifies the fixed executable's
+   SHA-256, writes evidence only under `target/jankurai/`, and never installs or
+   fetches Jankurai source. The thin-hub guard must prove that no Cargo workspace
+   or engine source has returned.
 3. Run the Redline family CI through `redline-split-ops`. Its proof-refresh
    command must consume fresh core, testing, web, hub, and Jain-consumer
    receipts. Never edit `redline.lock.toml` by hand.
