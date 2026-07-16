@@ -128,8 +128,23 @@ fn required_lane_runs_security_with_strict_tool_checks() {
 
 #[test]
 fn jankurai_lane_routes_existing_paths_from_diffs_or_clean_snapshots() {
+    let library = repo_file("ops/ci/lib.sh");
     let lane = repo_file("ops/ci/jankurai.sh");
+    let workflow = repo_file(".github/workflows/ci.yml");
 
+    assert!(library.contains("readonly JANKURAI_BIN=\"/home/ubuntu/.jeryu/bin/jankurai\""));
+    assert!(library.contains("readonly JANKURAI_VERSION=\"jankurai 1.6.11\""));
+    assert!(library.contains("fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"));
+    assert!(library.contains("verify_jankurai_identity"));
+    assert!(library.contains("[ -L \"$path\" ]"));
+    assert!(library.contains("\"$JANKURAI_BIN\" \"$@\""));
+    assert!(!lane.contains("JANKURAI_BIN:-"));
+    assert!(!lane.contains("skipping lane"));
+    assert!(!lane.contains("run_step_soft"));
+    assert!(lane.contains("require_jankurai"));
+    assert!(workflow.contains("jankurai audit . --mode ratchet"));
+    assert!(workflow.contains("cargo audit --db \"${CARGO_HOME}/advisory-db\" --no-fetch"));
+    assert!(workflow.contains("SYFT_CHECK_FOR_APP_UPDATE=false syft"));
     assert!(lane.contains("--full"));
     assert!(lane.contains("--mode ratchet"));
     assert!(lane.contains("--baseline .jankurai/baselines/accepted-baseline.json"));
@@ -141,4 +156,34 @@ fn jankurai_lane_routes_existing_paths_from_diffs_or_clean_snapshots() {
     assert!(lane.contains("proofbind verify . \"${proofbind_changed_args[@]}\""));
     assert!(lane.contains("proofmark rust . \"${proofbind_changed_args[@]}\""));
     assert!(lane.contains("fail \"proofbind has no existing changed paths to verify\""));
+}
+
+#[test]
+fn governed_jankurai_rejects_missing_linked_wrong_digest_and_wrong_version() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let status = Command::new("bash")
+        .arg("ops/ci/governed-jankurai-test.sh")
+        .current_dir(&root)
+        .status()
+        .expect("run governed Jankurai negative probes");
+    assert!(status.success());
+}
+
+#[test]
+fn security_lane_uses_pinned_local_rustsec_and_rejects_bad_inputs() {
+    let security = repo_file("ops/ci/security.sh");
+    let library = repo_file("ops/ci/lib.sh");
+    assert!(library.contains("9f3e138091487e69144f536d36976e427a7a3307"));
+    assert!(library.contains("verify_rustsec_db_identity"));
+    assert!(security.contains("export CARGO_NET_OFFLINE=true"));
+    assert!(security.contains("cargo audit --db \"$rustsec_db\" --no-fetch"));
+    assert!(security.contains("SYFT_CHECK_FOR_APP_UPDATE=false"));
+
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let status = Command::new("bash")
+        .arg("ops/ci/governed-security-inputs-test.sh")
+        .current_dir(&root)
+        .status()
+        .expect("run governed RustSec negative probes");
+    assert!(status.success());
 }
