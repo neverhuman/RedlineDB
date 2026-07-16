@@ -125,27 +125,35 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
 }
 ```
 
-Create `/usr/local/libexec/jain/host-ci-publisher.config.json` as root mode
-`0600`. Supply the token through a root-only editor or stdin; never place it on
-a command line or in an environment variable:
+Create `/usr/local/libexec/jain/jeryu-merge-token` as a canonical root-owned,
+single-link regular file at exact mode `0600`. Supply the token through a
+root-only editor or stdin; never place it on a command line, in an environment
+variable, or inside publisher configuration. Then create
+`/usr/local/libexec/jain/host-ci-publisher.config.json` as root mode `0600`:
 
 ```json
 {
-  "schema_version": "jain.host-ci-publisher-config/v4",
+  "schema_version": "jain.host-ci-publisher-config/v5",
   "publisher_sha256": "<64 lowercase hex>",
   "sandbox_sha256": "<64 lowercase hex>",
   "splitctl_sha256": "<64 lowercase hex>",
   "jankurai_sha256": "<64 lowercase hex from governed install receipt>",
-  "forge_base": "http://127.0.0.1:8787",
   "forge_git_base": "http://127.0.0.1:8787/git",
   "control_remote": "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
   "request_root": "/run/jain-host-ci",
   "native_evidence_root": "/var/lib/jain-host-ci/native-evidence",
   "proof_evidence_root": "/var/lib/jain-host-ci/proof-evidence",
   "max_seal_age_seconds": 300,
-  "token": "<root-only Jeryu merge token>"
+  "token_file": "/usr/local/libexec/jain/jeryu-merge-token"
 }
 ```
+
+The installed `splitctl` opens every token path component with no-follow
+directory descriptors, opens the final file nonblocking/no-follow/close-on-exec,
+requires root ownership, exact mode `0600`, one link and stable inode identity,
+and talks only to numeric `127.0.0.1:8787` with an exact Host header. After the
+protected successor is installed, rotate the credential and prove the former
+credential no longer authenticates before using this publisher for release CI.
 
 Remove/revoke any legacy user-readable merge token. Replace broad passwordless
 sudo for the parent account with only the argument-validating sandbox:

@@ -36,10 +36,17 @@ for config in "$publisher_config" "$sandbox_config"; do
     && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
     || fail "unsafe installed config: $config"
 done
-jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v4")
+jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v5")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
-  | select(.proof_evidence_root | type == "string" and startswith("/"))' \
+  | select(.proof_evidence_root | type == "string" and startswith("/"))
+  | select(.token_file | type == "string" and startswith("/"))
+  | select(has("token") | not)' \
   "$publisher_config" >/dev/null || fail 'invalid publisher config version'
+token_file="$(jq -er '.token_file' "$publisher_config")"
+[[ ! -L "$token_file" \
+  && "$(realpath -e -- "$token_file" 2>/dev/null)" == "$token_file" \
+  && "$(stat -c '%u:%g:%a:%h' -- "$token_file" 2>/dev/null)" == '0:0:600:1' ]] \
+  || fail 'publisher token file must be canonical root:root mode 0600 single-link'
 jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v4")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))

@@ -12,8 +12,8 @@ set -uo pipefail
 
 # Status authority is never accepted from the caller. Even a rejected
 # credential must not survive long enough to reach the reviewed worker.
-if [[ -v JERYU_MERGE_TOKEN || -v JERYU_MERGE_TOKEN_FILE ]]; then
-  unset JERYU_MERGE_TOKEN JERYU_MERGE_TOKEN_FILE
+if [[ -v JERYU_BASE || -v JERYU_MERGE_TOKEN || -v JERYU_MERGE_TOKEN_FILE ]]; then
+  unset JERYU_BASE JERYU_MERGE_TOKEN JERYU_MERGE_TOKEN_FILE
   printf '[split-host-ci] caller-provided forge credentials are forbidden; use the root publisher\n' >&2
   exit 2
 fi

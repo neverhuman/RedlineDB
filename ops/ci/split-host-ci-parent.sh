@@ -3,8 +3,8 @@
 # the sole privileged transition is the exact root sandbox command.
 set -uo pipefail
 unset JAIN_BASE JAIN_HOST_CI_PUBLISHER
-if [[ -v JERYU_MERGE_TOKEN || -v JERYU_MERGE_TOKEN_FILE ]]; then
-  unset JERYU_MERGE_TOKEN JERYU_MERGE_TOKEN_FILE
+if [[ -v JERYU_BASE || -v JERYU_MERGE_TOKEN || -v JERYU_MERGE_TOKEN_FILE ]]; then
+  unset JERYU_BASE JERYU_MERGE_TOKEN JERYU_MERGE_TOKEN_FILE
   printf '[split-host-ci] caller-provided forge credentials are forbidden\n' >&2
   exit 2
 fi

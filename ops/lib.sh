@@ -8,11 +8,9 @@
 # and OUTSIDE the jeryu source tree (which Codex actively edits).
 #
 # Override via env:
-#   JERYU_BASE      base URL of the jeryu-api server   (default canonical :8787)
 #   JERYU_GIT_ROOT  on-disk <data-dir>/git for bare repos
 set -uo pipefail
 
-JERYU_BASE="${JERYU_BASE:-http://127.0.0.1:8787}"
 JERYU_GIT_ROOT="${JERYU_GIT_ROOT:-/home/ubuntu/.local/share/jeryu/git}"
 JERYU_CTL_STATE="${JERYU_CTL_STATE:-/home/ubuntu/.jeryu/agent-review}"
 
@@ -24,52 +22,6 @@ die()  { printf '%s[jeryu-ctl]%s %s%s%s\n' "$c_cyn" "$c_off" "$c_red" "$*" "$c_o
 
 # Bare repo path on disk for direct git reads (diff, merge-base, FF push target).
 bare_path() { printf '%s/%s/%s.git' "$JERYU_GIT_ROOT" "$1" "$2"; }
-
-j_health() { curl -fsS --max-time 5 "$JERYU_BASE/health" >/dev/null 2>&1; }
-
-# All check-runs for a commit, as compact JSON array.
-check_runs_json() {
-  local owner="$1" repo="$2" sha="$3"
-  curl -fsS --max-time 10 \
-    "$JERYU_BASE/repos/$owner/$repo/commits/$sha/check-runs?per_page=100"
-}
-
-# NOTE: the jeryu /commits/{sha}/check-runs endpoint returns ALL of the repo's
-# check-runs (it does NOT filter by sha), and a (sha,name) pair can have several
-# entries from re-runs. So every helper below filters by head_sha client-side and
-# takes the LATEST entry per name (by completed_at/started_at).
-
-# Conclusion of a single named check on a sha (empty if absent).
-check_conclusion() {
-  local owner="$1" repo="$2" sha="$3" name="$4"
-  check_runs_json "$owner" "$repo" "$sha" |
-    jq -r --arg sha "$sha" --arg name "$name" '
-      [.check_runs[]? | select(.head_sha == $sha and .name == $name)]
-      | sort_by(.completed_at // .started_at // "") | last.conclusion // empty'
-}
-
-# True iff (for THIS sha) at least one ci/* check exists and ALL ci/* latest=success.
-ci_green() {
-  local owner="$1" repo="$2" sha="$3"
-  check_runs_json "$owner" "$repo" "$sha" |
-    jq -e --arg sha "$sha" '
-      [.check_runs[]? | select(.head_sha == $sha)]
-      | sort_by(.completed_at // .started_at // "")
-      | group_by(.name) | map(last)
-      | map(select(.name | startswith("ci/")))
-      | (length > 0 and all(.conclusion == "success"))' >/dev/null
-}
-
-# Post a completed check-run with a conclusion (success|failure|neutral).
-post_check() {
-  local owner="$1" repo="$2" sha="$3" name="$4" conclusion="$5"
-  curl -fsS --max-time 10 -X POST \
-    "$JERYU_BASE/repos/$owner/$repo/check-runs" \
-    -H 'content-type: application/json' \
-    -d "$(jq -cn --arg name "$name" --arg sha "$sha" --arg conclusion "$conclusion" \
-      '{name:$name,head_sha:$sha,status:"completed",conclusion:$conclusion}')" \
-    >/dev/null 2>&1
-}
 
 # Resolve a GitHub token for the offsite relay (neverhuman identity): the explicit
 # env override, else the live gh-authenticated token. Deliberately NO credential-file

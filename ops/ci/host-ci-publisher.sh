@@ -42,20 +42,26 @@ jankurai_path="$install_dir/jankurai"
   && "$(stat -c '%u:%a:%h' -- "$jankurai_path" 2>/dev/null)" == '0:555:1' ]] \
   || fail 'Jankurai must be root-owned mode 0555'
 jq -e '
-  select(.schema_version == "jain.host-ci-publisher-config/v4")
+  select(.schema_version == "jain.host-ci-publisher-config/v5")
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
-  | select(.forge_base | type == "string")
   | select(.forge_git_base | type == "string" and length > 0)
   | select(.control_remote | type == "string" and length > 0)
   | select(.request_root | type == "string" and startswith("/"))
   | select(.native_evidence_root | type == "string" and startswith("/"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.max_seal_age_seconds | type == "number" and . >= 1 and . <= 300)
-  | select(.token | type == "string")' "$config" >/dev/null \
+  | select(.token_file | type == "string" and startswith("/"))
+  | select(has("token") | not)' "$config" >/dev/null \
   || fail 'invalid publisher config schema'
+
+token_file="$(jq -er '.token_file' "$config")"
+[[ ! -L "$token_file" \
+  && "$(realpath -e -- "$token_file" 2>/dev/null)" == "$token_file" \
+  && "$(stat -c '%u:%a:%h' -- "$token_file" 2>/dev/null)" == '0:600:1' ]] \
+  || fail 'publisher token file must be canonical, root-owned mode 0600, and single-link'
 
 publisher_sha="$(sha256sum -- "$publisher_path" | cut -d' ' -f1)"
 expected_publisher_sha="$(jq -er '.publisher_sha256' "$config")"
@@ -197,7 +203,8 @@ if find "$control_root" -xdev \( -type f -o -type d \) \
 fi
 for critical in repos.manifest.toml ops/ci/host-ci-publisher.sh \
   ops/ci/host-ci-sandbox.sh ops/ci/native-runtime.sh \
-  ops/ci/host-ci-evidence.sh ops/ci/host-ci-proof-evidence.sh; do
+  ops/ci/host-ci-evidence.sh ops/ci/host-ci-proof-evidence.sh \
+  tools/splitctl/src/main.rs tools/splitctl/src/jeryu_client.rs; do
   [[ -f "$control_root/$critical" && ! -L "$control_root/$critical" \
     && "$(stat -c '%u' -- "$control_root/$critical")" == 0 ]] \
     || fail "unsafe immutable control input: $critical"
@@ -343,67 +350,26 @@ write_status() {
 }
 write_status publishing
 
-# Only now, after one-shot transition and all root authority checks, read the
-# credential. It remains in root memory and curl stdin, never argv/environment.
-forge_base="$(jq -er '.forge_base' "$config")"
-token="$(jq -er '.token' "$config")"
-[[ "$forge_base" =~ ^http://127\.0\.0\.1:[0-9]{1,5}$ \
-  && "$token" =~ ^[A-Za-z0-9._~+/-]{16,512}$ ]] \
-  || fail 'invalid root publication endpoint or credential'
-curl -fsS --max-time 5 "$forge_base/health" >/dev/null \
-  || { write_status failed; fail 'forge is not healthy'; }
-post_json() {
-  local url="$1" payload="$2"
-  printf 'header = "Authorization: Bearer %s"\n' "$token" \
-    | curl --config - -fsS --max-time 10 -X POST "$url" \
-      -H 'content-type: application/json' -d "$payload" >/dev/null
-}
-get_json() {
-  local url="$1"
-  printf 'header = "Authorization: Bearer %s"\n' "$token" \
-    | curl --config - -fsS --max-time 10 "$url"
-}
-proof_check='jankurai/proof'
 proof_run_id="$(jq -er '.run_id' "$proof_evidence_resolved/receipt.json")"
 proof_score="$(jq -er '.score' "$proof_evidence_resolved/receipt.json")"
 proof_hard="$(jq -er '.hard_findings' "$proof_evidence_resolved/receipt.json")"
 proof_caps="$(jq -er '.caps_applied' "$proof_evidence_resolved/receipt.json")"
 proof_summary="receipt_sha256=$proof_receipt_sha attempt_id=$proof_attempt_id run_id=$proof_run_id auditor_sha256=$jankurai_sha proof_status=$proof_status score=$proof_score hard_findings=$proof_hard caps_applied=$proof_caps root_seal=$(jq -er '.root_seal' "$state")"
-post_json "$forge_base/repos/$owner/$repo/check-runs" \
-  "$(jq -cn --arg name "$proof_check" --arg sha "$head_sha" \
-    --arg conclusion "$conclusion" --arg summary "$proof_summary" \
-    '{name:$name,head_sha:$sha,status:"completed",conclusion:$conclusion,
-      output:{title:"Root-sealed exact-SHA Jankurai proof",summary:$summary}}')" \
-  || { write_status failed; fail 'Jankurai proof publication failed'; }
-proof_readback="$(get_json \
-  "$forge_base/repos/$owner/$repo/commits/$head_sha/check-runs")" \
-  || { write_status consumed; fail 'Jankurai proof readback failed'; }
-jq -e --arg name "$proof_check" --arg sha "$head_sha" \
-  --arg conclusion "$conclusion" --arg receipt "$proof_receipt_sha" \
-  --arg attempt "$proof_attempt_id" '
-    select(.check_runs | type == "array")
-    | [.check_runs[]
-       | select(.name == $name and .head_sha == $sha
-           and .status == "completed" and .conclusion == $conclusion
-           and ((.output.summary // "")
-             | contains("receipt_sha256=" + $receipt))
-           and ((.output.summary // "")
-             | contains("attempt_id=" + $attempt)))]
-    | length == 1' <<<"$proof_readback" >/dev/null \
-  || { write_status consumed; fail 'Jankurai proof readback mismatch'; }
-post_json "$forge_base/repos/$owner/$repo/check-runs" \
-  "$(jq -cn --arg name "$required_check" --arg sha "$head_sha" \
-    --arg conclusion "$conclusion" \
-    '{name:$name,head_sha:$sha,status:"completed",conclusion:$conclusion}')" \
-  || { write_status consumed; fail 'check-run publication failed'; }
-state_value=failure
-[[ "$conclusion" == success ]] && state_value=success
 description="$required_check root-seal=$(jq -er '.root_seal' "$state" | cut -c1-16)"
-post_json "$forge_base/repos/$owner/$repo/statuses/$head_sha" \
-  "$(jq -cn --arg state "$state_value" --arg context "$required_check" \
-    --arg description "$description" \
-    '{state:$state,context:$context,description:$description}')" \
-  || { write_status consumed; fail 'commit-status publication failed'; }
+publish_rc=0
+"$splitctl_path" jeryu-publish-host-ci \
+  --token-file "$token_file" --repo "$owner/$repo" --head-sha "$head_sha" \
+  --required-check "$required_check" --conclusion "$conclusion" \
+  --proof-summary "$proof_summary" \
+  --proof-receipt-sha256 "$proof_receipt_sha" \
+  --proof-attempt-id "$proof_attempt_id" \
+  --status-description "$description" --apply || publish_rc=$?
+case "$publish_rc" in
+  0) ;;
+  41) write_status failed; fail 'Jankurai proof publication failed before proof POST' ;;
+  42) write_status consumed; fail 'publication failed after proof POST; request consumed' ;;
+  *) write_status consumed; fail "publisher returned unexpected status $publish_rc; request consumed" ;;
+esac
 write_status consumed
 printf '[host-ci-publisher] consumed one-shot %s for %s/%s @ %.12s\n' \
   "$request_id" "$owner" "$repo" "$head_sha" >&2

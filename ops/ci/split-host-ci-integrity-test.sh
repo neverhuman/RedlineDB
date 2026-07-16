@@ -207,6 +207,8 @@ sed -i \
   "$control/ops/ci/host-ci-proof-evidence.sh"
 install -D -m 0644 "$repo_root/tools/splitctl/src/main.rs" \
   "$control/tools/splitctl/src/main.rs"
+install -D -m 0644 "$repo_root/tools/splitctl/src/jeryu_client.rs" \
+  "$control/tools/splitctl/src/jeryu_client.rs"
 # Keep the fixture self-contained while preserving splitctl's production rule
 # that the reviewed nested-family path is exact rather than caller-selected.
 sed -i \
@@ -219,7 +221,7 @@ sed -i \
 sed -i \
   "s#manifest_path = \"/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml\"#manifest_path = \"$sandbox_family_root/redline-split-ops/repos.manifest.toml\"#" \
   "$control/repos.manifest.toml"
-git -C "$control" add repos.manifest.toml ops/ci tools/splitctl/src/main.rs
+git -C "$control" add repos.manifest.toml ops/ci tools/splitctl/src
 git -C "$control" commit --quiet -m 'fixture reviewed host-CI boundary'
 git -C "$control" switch -C main --quiet
 git -C "$control" remote set-url origin "$control_remote"
@@ -255,22 +257,26 @@ sudo -n install -o root -g root -m 0500 \
   "$tmp/direct-control-target/debug/splitctl" "$splitctl"
 sudo -n install -o root -g root -m 0555 "$fake_jankurai" "$jankurai"
 publisher_token="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+publisher_token_file="$publisher_root/jeryu-merge-token"
+printf '%s' "$publisher_token" | sudo -n tee "$publisher_token_file" >/dev/null
+sudo -n chown root:root "$publisher_token_file"
+sudo -n chmod 0600 "$publisher_token_file"
 jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d' ' -f1)" \
   --arg sandbox_digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
   --arg splitctl_digest "$splitctl_digest" --arg jankurai_digest "$fake_jankurai_digest" \
-  --arg base "$forge_base" --arg token "$publisher_token" \
+  --arg token_file "$publisher_token_file" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
-  '{schema_version:"jain.host-ci-publisher-config/v4",
+  '{schema_version:"jain.host-ci-publisher-config/v5",
     publisher_sha256:$digest,sandbox_sha256:$sandbox_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
-    forge_base:$base,forge_git_base:$git_base,
+    forge_git_base:$git_base,
     control_remote:$remote,request_root:$requests,
     native_evidence_root:$native_evidence_root,
     proof_evidence_root:$proof_evidence_root,
-    max_seal_age_seconds:300,token:$token}' \
+    max_seal_age_seconds:300,token_file:$token_file}' \
   | sudo -n tee "$publisher_config" >/dev/null
 sudo -n chown root:root "$publisher_config"
 sudo -n chmod 0600 "$publisher_config"
@@ -297,7 +303,6 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
     device_allow:[]}' | sudo -n tee "$sandbox_config" >/dev/null
 sudo -n chown root:root "$sandbox_config"
 sudo -n chmod 0600 "$sandbox_config"
-unset publisher_token
 
 # The installed root snapshotter must reject special or over-limit request
 # inodes promptly. In particular, a FIFO cannot stall the sudo boundary.
@@ -650,6 +655,18 @@ grep -Fq 'root-seal=' "$forge_log" || {
   printf 'publisher success did not bind the root one-shot seal\n' >&2
   exit 1
 }
+jq -e 'has("token") | not' "$publisher_config" >/dev/null || {
+  printf 'publisher configuration retained an embedded credential\n' >&2
+  exit 1
+}
+if printf '%s\n' "$publisher_token" \
+  | sudo -n grep -R -F -l -f - -- "$publisher_config" "$request_root" \
+    "$native_evidence_root" "$proof_evidence_root" "$success_log" \
+    "$runner_log" "$forge_log" "$tmp/forge.stderr" >/dev/null 2>&1; then
+  printf 'publisher credential escaped into config, receipts, evidence, or logs\n' >&2
+  exit 1
+fi
+unset publisher_token
 grep -Fq 'boundary_no_new_privs=1' "$success_log"
 grep -Fq 'boundary_cap_inheritable=0000000000000000' "$success_log"
 grep -Fq 'boundary_cap_permitted=0000000000000000' "$success_log"
@@ -723,21 +740,21 @@ sudo -n jq -e '
     and .fixture.network_isolated == true)' \
   "$success_proof_dir/report.json" >/dev/null
 # Installed protocol versions are mandatory trust inputs, not advisory parser
-# hints. A v3 publisher config is rejected even for an otherwise sealed v4
-# request, and restoring the exact v4 bytes does not make that request replayable.
-sudo -n cp -- "$publisher_config" "$tmp/publisher-config.v4"
-sudo -n jq '.schema_version="jain.host-ci-publisher-config/v3"' \
-  "$publisher_config" >"$tmp/publisher-config.v3"
+# hints. A v4 publisher config is rejected even for an otherwise sealed v4
+# request, and restoring the exact v5 bytes does not make that request replayable.
+sudo -n cp -- "$publisher_config" "$tmp/publisher-config.v5"
+sudo -n jq '.schema_version="jain.host-ci-publisher-config/v4"' \
+  "$publisher_config" >"$tmp/publisher-config.v4"
 sudo -n install -o root -g root -m 0600 \
-  "$tmp/publisher-config.v3" "$publisher_config"
+  "$tmp/publisher-config.v4" "$publisher_config"
 if sudo -n "$publisher" "$success_request" \
   >"$tmp/old-publisher-config.log" 2>&1; then
-  printf 'publisher accepted a v3 config protocol\n' >&2
+  printf 'publisher accepted a v4 config protocol\n' >&2
   exit 1
 fi
 grep -Fq 'invalid publisher config schema' "$tmp/old-publisher-config.log"
 sudo -n install -o root -g root -m 0600 \
-  "$tmp/publisher-config.v4" "$publisher_config"
+  "$tmp/publisher-config.v5" "$publisher_config"
 if "$publisher" "$success_request" >/dev/null 2>&1; then
   printf 'unprivileged parent directly executed the root-only publisher\n' >&2
   exit 1

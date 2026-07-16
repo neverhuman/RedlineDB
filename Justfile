@@ -12,11 +12,11 @@ jeryu-ready:
 jeryu-ready-apply:
   cargo run --locked --quiet -- jeryu-doctor --manifest repos.manifest.toml --fix-remotes --register-family --install-hooks
 
-jeryu-repos:
-  cargo run --locked --quiet -- jeryu-local repo-list
+jeryu-repos token_file:
+  cargo run --locked --quiet -- jeryu-local repo-list --token-file "{{token_file}}"
 
-jeryu-prs repo:
-  cargo run --locked --quiet -- jeryu-local pr-list --repo "{{repo}}"
+jeryu-prs repo token_file:
+  cargo run --locked --quiet -- jeryu-local pr-list --repo "{{repo}}" --token-file "{{token_file}}"
 
 managed-repos:
   cargo run --locked --quiet -- managed-repos --manifest repos.manifest.toml --json
@@ -42,35 +42,35 @@ immutable-tag-apply repo remote tag commit:
 jeryu-pr-ready repo number:
   cargo run --locked --quiet -- jeryu-local pr-ready --repo "{{repo}}" --number "{{number}}"
 
-jeryu-pr-ready-apply repo number:
-  cargo run --locked --quiet -- jeryu-local pr-ready --repo "{{repo}}" --number "{{number}}" --apply
+jeryu-pr-ready-apply repo number token_file:
+  cargo run --locked --quiet -- jeryu-local pr-ready --repo "{{repo}}" --number "{{number}}" --token-file "{{token_file}}" --apply
 
 jeryu-pr-close repo number:
   cargo run --locked --quiet -- jeryu-local pr-close --repo "{{repo}}" --number "{{number}}"
 
-jeryu-pr-close-apply repo number:
-  cargo run --locked --quiet -- jeryu-local pr-close --repo "{{repo}}" --number "{{number}}" --apply
+jeryu-pr-close-apply repo number token_file:
+  cargo run --locked --quiet -- jeryu-local pr-close --repo "{{repo}}" --number "{{number}}" --token-file "{{token_file}}" --apply
 
 jeryu-pr-merge repo number:
   cargo run --locked --quiet -- jeryu-local pr-merge --repo "{{repo}}" --number "{{number}}"
 
-jeryu-pr-merge-apply repo number:
-  cargo run --locked --quiet -- jeryu-local pr-merge --repo "{{repo}}" --number "{{number}}" --apply
+jeryu-pr-merge-apply repo number token_file:
+  cargo run --locked --quiet -- jeryu-local pr-merge --repo "{{repo}}" --number "{{number}}" --token-file "{{token_file}}" --apply
 
 jeryu-pr-approve repo number expected_head body="Reviewed release-critical change.":
   cargo run --locked --quiet -- jeryu-local pr-approve --repo "{{repo}}" --number "{{number}}" --expected-head "{{expected_head}}" --body "{{body}}"
 
-jeryu-pr-approve-apply repo number expected_head body="Reviewed release-critical change.":
-  cargo run --locked --quiet -- jeryu-local pr-approve --repo "{{repo}}" --number "{{number}}" --expected-head "{{expected_head}}" --body "{{body}}" --apply
+jeryu-pr-approve-apply repo number expected_head token_file body="Reviewed release-critical change.":
+  cargo run --locked --quiet -- jeryu-local pr-approve --repo "{{repo}}" --number "{{number}}" --expected-head "{{expected_head}}" --body "{{body}}" --token-file "{{token_file}}" --apply
 
 jeryu-protection repo required_check:
   cargo run --locked --quiet -- jeryu-local protection-apply --repo "{{repo}}" --required-check "{{required_check}}"
 
-jeryu-protection-apply repo required_check:
-  cargo run --locked --quiet -- jeryu-local protection-apply --repo "{{repo}}" --required-check "{{required_check}}" --apply
+jeryu-protection-apply repo required_check token_file:
+  cargo run --locked --quiet -- jeryu-local protection-apply --repo "{{repo}}" --required-check "{{required_check}}" --token-file "{{token_file}}" --apply
 
-jeryu-protection-readback repo required_check:
-  cargo run --locked --quiet -- jeryu-local protection-readback --repo "{{repo}}" --required-check "{{required_check}}"
+jeryu-protection-readback repo required_check token_file:
+  cargo run --locked --quiet -- jeryu-local protection-readback --repo "{{repo}}" --required-check "{{required_check}}" --token-file "{{token_file}}"
 
 verify-worktrees:
   cargo run --locked --quiet -- verify-worktrees --manifest repos.manifest.toml

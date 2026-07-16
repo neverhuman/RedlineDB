@@ -1,4 +1,7 @@
 // Repository-local release and Jeryu control-plane CLI.
+mod jeryu_client;
+
+use jeryu_client::{HostCiPublication, JeryuClient, JeryuRequest};
 use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
@@ -11,7 +14,7 @@ use std::{
 };
 
 const RELEASE_VERSION: &str = "8.0.0";
-const LOCAL_JERYU_BASE: &str = "http://127.0.0.1:8787";
+const LOCAL_JERYU_ORIGIN: &str = "http://127.0.0.1:8787";
 const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
 const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
 
@@ -37,13 +40,6 @@ struct ManagedRepo {
     kind: String,
     family: String,
     family_registered: bool,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-struct JeryuRequest {
-    method: &'static str,
-    path: String,
-    body: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -122,29 +118,24 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     value => return Err(format!("unknown argument: {value}").into()),
                 }
             }
+            if register_family {
+                return Err("family registration is unsupported until it is migrated to the typed Rust Jeryu transport".into());
+            }
             if fix_remotes {
                 fix_local_remotes(manifest.clone())?;
             }
             if install_hooks {
                 install_worktree_ban_hooks(manifest.clone())?;
             }
-            if register_family {
-                let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-                let manifest_path = manifest
-                    .clone()
-                    .unwrap_or_else(|| root.join("repos.manifest.toml"));
-                let status = Command::new("bash")
-                    .arg(root.join("ops/split/register-family.sh"))
-                    .arg("--manifest")
-                    .arg(&manifest_path)
-                    .status()?;
-                if !status.success() {
-                    return Err("family registration failed".into());
-                }
-            }
             validate_local_jeryu(manifest, skip_remotes)?;
         }
         Some("jeryu-local") => jeryu_local(args.collect())?,
+        Some("jeryu-publish-host-ci") => {
+            if let Err(error) = jeryu_publish_host_ci(args.collect()) {
+                eprintln!("splitctl: {}", error.message);
+                std::process::exit(if error.publication_started { 42 } else { 41 });
+            }
+        }
         Some("manifest") => manifest_command(args.collect())?,
         Some("managed-repos") => managed_repos_command(args.collect())?,
         Some("release-cargo-commands") => release_cargo_commands_command(args.collect())?,
@@ -2133,7 +2124,7 @@ fn create_remote_main_cas(
 
 fn local_jeryu_bare_repo(remote: &str) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
     let Some(slug) = remote
-        .strip_prefix(&format!("{LOCAL_JERYU_BASE}/git/"))
+        .strip_prefix(&format!("{LOCAL_JERYU_ORIGIN}/git/"))
         .and_then(|value| value.strip_suffix(".git"))
     else {
         return Ok(None);
@@ -2588,20 +2579,11 @@ fn strict_git_output(repo: &Path, args: &[&str]) -> Result<String, Box<dyn std::
 }
 
 fn run_git_strict(repo: &Path, args: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
-    let mut command = Command::new("git");
-    command.arg("-C").arg(repo).args(args);
-    if args.first() == Some(&"push") {
-        if let Ok(token) = local_jeryu_token() {
-            command
-                .env("GIT_CONFIG_COUNT", "1")
-                .env("GIT_CONFIG_KEY_0", "http.extraHeader")
-                .env(
-                    "GIT_CONFIG_VALUE_0",
-                    format!("Authorization: Bearer {token}"),
-                );
-        }
-    }
-    let output = command.output()?;
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output()?;
     if !output.status.success() {
         return Err(format!(
             "git {} failed in {}: {}",
@@ -2681,6 +2663,7 @@ fn run_git_at(root: &Path, args: &[&str]) -> Result<(), Box<dyn std::error::Erro
 }
 
 fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    reject_legacy_jeryu_environment()?;
     let command = args
         .first()
         .ok_or("jeryu-local needs a subcommand")?
@@ -2696,9 +2679,8 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     ) {
         return jeryu_lifecycle(args);
     }
-    let base = env::var("JERYU_BASE").unwrap_or_else(|_| LOCAL_JERYU_BASE.to_owned());
-    let token = local_jeryu_token()?;
     let json_output = args.iter().any(|arg| arg == "--json");
+    let apply = args.iter().any(|arg| arg == "--apply");
     let value = |flag: &str| -> Result<String, Box<dyn std::error::Error>> {
         args.iter()
             .position(|arg| arg == flag)
@@ -2706,108 +2688,167 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
             .cloned()
             .ok_or_else(|| format!("{flag} needs a value").into())
     };
-    let (method, path, body) = match command {
-        "repo-list" => ("GET", "/api/v1/repos?host=jeryu".to_owned(), None),
+    let request = match command {
+        "repo-list" => JeryuRequest::repo_list()?,
         "pr-list" => {
             let repo = value("--repo")?;
-            (
-                "GET",
-                format!(
-                    "/repos/{repo}/pulls?state={}",
-                    value("--state").unwrap_or_else(|_| "open".to_owned())
-                ),
-                None,
-            )
+            JeryuRequest::pr_list(
+                &repo,
+                &value("--state").unwrap_or_else(|_| "open".to_owned()),
+            )?
         }
         "pr-open" => {
             let repo = value("--repo")?;
-            let payload = json!({
-                "title": value("--title")?,
-                "head": value("--head")?,
-                "base": value("--base").unwrap_or_else(|_| "main".to_owned()),
-                "body": value("--body").unwrap_or_default(),
-                "draft": args.iter().any(|arg| arg == "--draft"),
-                "actor": value("--actor").unwrap_or_else(|_| "codex".to_owned())
-            });
-            (
-                "POST",
-                format!("/repos/{repo}/pulls"),
-                Some(payload.to_string()),
-            )
+            JeryuRequest::pr_open(
+                &repo,
+                &value("--title")?,
+                &value("--head")?,
+                &value("--base").unwrap_or_else(|_| "main".to_owned()),
+                &value("--body").unwrap_or_default(),
+                args.iter().any(|arg| arg == "--draft"),
+                &value("--actor").unwrap_or_else(|_| "codex".to_owned()),
+            )?
         }
         "checks" => {
             let repo = value("--repo")?;
-            (
-                "GET",
-                format!("/repos/{repo}/commits/{}/check-runs", value("--sha")?),
-                None,
-            )
+            JeryuRequest::checks(&repo, &value("--sha")?)?
         }
         _ => return Err(format!("unsupported jeryu-local command: {command}").into()),
     };
-    let mut curl = Command::new("curl");
-    curl.args([
-        "-fsS",
-        "--max-time",
-        "15",
-        "-H",
-        "accept: application/json",
-        "-H",
-        &format!("authorization: Bearer {token}"),
-    ]);
-    if let Some(body) = body {
-        curl.args([
-            "-H",
-            "content-type: application/json",
-            "-X",
-            method,
-            "--data",
-            &body,
-        ]);
-    } else if method != "GET" {
-        curl.args(["-X", method]);
-    }
-    let output = curl
-        .arg(format!("{}{}", base.trim_end_matches('/'), path))
-        .output()?;
-    if !output.status.success() {
-        return Err(format!(
-            "local Jeryu request failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )
-        .into());
-    }
-    let raw = String::from_utf8(output.stdout)?;
-    if json_output {
+    if command == "pr-open" && !apply {
         println!(
             "{}",
-            serde_json::from_str::<JsonValue>(&raw)
-                .map(|value| serde_json::to_string_pretty(&value).unwrap_or(raw.clone()))
-                .unwrap_or(raw)
+            serde_json::to_string_pretty(&json!({
+                "action": "would-apply",
+                "request": jeryu_request_json(&request),
+            }))?
         );
+        return Ok(());
+    }
+    let token_file = PathBuf::from(
+        value("--token-file")
+            .map_err(|_| "Jeryu API operations require an explicit --token-file path")?,
+    );
+    let response = JeryuClient::from_token_file(&token_file)?.execute(&request)?;
+    if json_output {
+        println!("{}", serde_json::to_string_pretty(&response)?);
     } else {
-        println!("{}", raw.trim());
+        println!("{}", compact_json_output(&response));
     }
     Ok(())
 }
 
-fn local_jeryu_token() -> Result<String, Box<dyn std::error::Error>> {
-    env::var("JERYU_MERGE_TOKEN")
-        .ok()
-        .filter(|value| !value.trim().is_empty())
-        .or_else(|| {
-            let path = env::var_os("JERYU_MERGE_TOKEN_FILE")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| {
-                    PathBuf::from(env::var_os("HOME").unwrap_or_default())
-                        .join(".jeryu/secrets/merge-token")
-                });
-            fs::read_to_string(path)
-                .ok()
-                .map(|value| value.trim().to_owned())
+fn reject_legacy_jeryu_environment() -> Result<(), Box<dyn std::error::Error>> {
+    for name in ["JERYU_BASE", "JERYU_MERGE_TOKEN", "JERYU_MERGE_TOKEN_FILE"] {
+        if env::var_os(name).is_some() {
+            return Err(format!(
+                "{name} is forbidden; use the fixed loopback origin and explicit --token-file"
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
+fn compact_json_output(value: &JsonValue) -> String {
+    if value.is_null() {
+        String::new()
+    } else {
+        value.to_string()
+    }
+}
+
+struct HostCiPublishCommandError {
+    publication_started: bool,
+    message: String,
+}
+
+impl HostCiPublishCommandError {
+    fn before(message: impl Into<String>) -> Self {
+        Self {
+            publication_started: false,
+            message: message.into(),
+        }
+    }
+}
+
+fn jeryu_publish_host_ci(args: Vec<String>) -> Result<(), HostCiPublishCommandError> {
+    reject_legacy_jeryu_environment()
+        .map_err(|error| HostCiPublishCommandError::before(error.to_string()))?;
+    let mut token_file = None;
+    let mut repo = None;
+    let mut head_sha = None;
+    let mut required_check = None;
+    let mut conclusion = None;
+    let mut proof_summary = None;
+    let mut proof_receipt_sha256 = None;
+    let mut proof_attempt_id = None;
+    let mut status_description = None;
+    let mut apply = false;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        let value = |iter: &mut std::vec::IntoIter<String>| {
+            iter.next()
+                .ok_or_else(|| HostCiPublishCommandError::before(format!("{arg} needs a value")))
+        };
+        match arg.as_str() {
+            "--token-file" => token_file = Some(PathBuf::from(value(&mut iter)?)),
+            "--repo" => repo = Some(value(&mut iter)?),
+            "--head-sha" => head_sha = Some(value(&mut iter)?),
+            "--required-check" => required_check = Some(value(&mut iter)?),
+            "--conclusion" => conclusion = Some(value(&mut iter)?),
+            "--proof-summary" => proof_summary = Some(value(&mut iter)?),
+            "--proof-receipt-sha256" => proof_receipt_sha256 = Some(value(&mut iter)?),
+            "--proof-attempt-id" => proof_attempt_id = Some(value(&mut iter)?),
+            "--status-description" => status_description = Some(value(&mut iter)?),
+            "--apply" => apply = true,
+            value => {
+                return Err(HostCiPublishCommandError::before(format!(
+                    "unknown jeryu-publish-host-ci argument: {value}"
+                )))
+            }
+        }
+    }
+    let required = |value: Option<String>, name: &str| {
+        value.ok_or_else(|| HostCiPublishCommandError::before(format!("{name} is required")))
+    };
+    let token_file =
+        token_file.ok_or_else(|| HostCiPublishCommandError::before("--token-file is required"))?;
+    let publication = HostCiPublication {
+        repo: required(repo, "--repo")?,
+        head_sha: required(head_sha, "--head-sha")?,
+        required_check: required(required_check, "--required-check")?,
+        conclusion: required(conclusion, "--conclusion")?,
+        proof_summary: required(proof_summary, "--proof-summary")?,
+        proof_receipt_sha256: required(proof_receipt_sha256, "--proof-receipt-sha256")?,
+        proof_attempt_id: required(proof_attempt_id, "--proof-attempt-id")?,
+        status_description: required(status_description, "--status-description")?,
+    };
+    publication
+        .validate()
+        .map_err(|error| HostCiPublishCommandError::before(error.to_string()))?;
+    if !apply {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "action": "would-publish",
+                "repository": publication.repo,
+                "head_sha": publication.head_sha,
+                "required_check": publication.required_check,
+                "conclusion": publication.conclusion,
+            }))
+            .map_err(|error| HostCiPublishCommandError::before(error.to_string()))?
+        );
+        return Ok(());
+    }
+    let client = JeryuClient::from_token_file(&token_file)
+        .map_err(|error| HostCiPublishCommandError::before(error.to_string()))?;
+    client
+        .publish_host_ci(&publication)
+        .map_err(|error| HostCiPublishCommandError {
+            publication_started: error.publication_started(),
+            message: error.to_string(),
         })
-        .filter(|value| !value.is_empty())
-        .ok_or_else(|| "local Jeryu API credential is unavailable; repair it through the supported Jeryu token workflow".into())
 }
 
 fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -2822,6 +2863,7 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
     let mut branch = "main".to_owned();
     let mut required_check = None;
     let mut receipt = None;
+    let mut token_file = None;
     let mut apply = false;
     let mut iter = args.into_iter().skip(1);
     while let Some(arg) = iter.next() {
@@ -2838,6 +2880,11 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
             }
             "--receipt" => {
                 receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
             }
             "--apply" => apply = true,
             value => return Err(format!("unknown {command} argument: {value}").into()),
@@ -2891,9 +2938,11 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
             report["action"] = json!("would-apply");
             return Ok(());
         }
-        let base = env::var("JERYU_BASE").unwrap_or_else(|_| LOCAL_JERYU_BASE.to_owned());
-        let token = local_jeryu_token()?;
-        let response = execute_jeryu_request(&base, &token, &request)?;
+        let token_file = token_file
+            .as_deref()
+            .ok_or("Jeryu API operations require an explicit --token-file path")?;
+        let client = JeryuClient::from_token_file(token_file)?;
+        let response = client.execute(&request)?;
         report["response"] = response.clone();
         match command.as_str() {
             "pr-ready" if response.get("draft").and_then(JsonValue::as_bool) != Some(false) => {
@@ -2903,12 +2952,12 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
                 return Err("Jeryu PR close readback does not report state=closed".into())
             }
             "pr-approve" => {
-                let readback = JeryuRequest {
-                    method: "GET",
-                    path: request.path.trim_end_matches("/reviews").to_owned(),
-                    body: None,
-                };
-                let approval = execute_jeryu_request(&base, &token, &readback)?;
+                let number = number
+                    .as_deref()
+                    .ok_or("missing PR number")?
+                    .parse::<u64>()?;
+                let readback = JeryuRequest::pr_readback(&repo, number)?;
+                let approval = client.execute(&readback)?;
                 validate_approval_readback(
                     &approval,
                     expected_head.as_deref().ok_or("missing expected head")?,
@@ -2923,12 +2972,8 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
                 return Err("Jeryu PR merge response does not prove a merged commit".into())
             }
             "protection-apply" => {
-                let readback = JeryuRequest {
-                    method: "GET",
-                    path: request.path.clone(),
-                    body: None,
-                };
-                let policy = execute_jeryu_request(&base, &token, &readback)?;
+                let readback = JeryuRequest::protection(&repo, &branch, None)?;
+                let policy = client.execute(&readback)?;
                 report["readback"] = policy.clone();
                 validate_protection_policy(
                     &policy,
@@ -2968,21 +3013,7 @@ fn plan_jeryu_approval_request(
     if expected_head.len() != 40 || !expected_head.chars().all(|ch| ch.is_ascii_hexdigit()) {
         return Err("--expected-head must be a full 40-character commit SHA".into());
     }
-    let repo_id = repo.replace('/', "%2F");
-    Ok(JeryuRequest {
-        method: "POST",
-        path: format!("/api/v1/repos/{repo_id}/pulls/{number}/reviews"),
-        body: Some(
-            json!({
-                "verdict": "approve",
-                "expected_head_sha": expected_head,
-                "body_markdown": body,
-                "thread_comments": [],
-                "evidence": JsonValue::Null,
-            })
-            .to_string(),
-        ),
-    })
+    JeryuRequest::pr_approval(repo, number, expected_head, body).map_err(Into::into)
 }
 
 fn validate_approval_readback(
@@ -3015,26 +3046,16 @@ fn plan_jeryu_lifecycle_request(
     match command {
         "pr-ready" | "pr-close" | "pr-merge" => {
             let number = number.ok_or("PR lifecycle command requires --number")?;
-            number
+            let number = number
                 .parse::<u64>()
                 .map_err(|_| "--number must be a positive integer")?;
-            Ok(JeryuRequest {
-                method: if command == "pr-merge" {
-                    "PUT"
-                } else {
-                    "PATCH"
-                },
-                path: if command == "pr-merge" {
-                    format!("/repos/{repo}/pulls/{number}/merge")
-                } else {
-                    format!("/repos/{repo}/pulls/{number}")
-                },
-                body: Some(match command {
-                    "pr-ready" => json!({"draft": false}).to_string(),
-                    "pr-close" => json!({"state": "closed"}).to_string(),
-                    _ => "{}".to_owned(),
-                }),
-            })
+            match command {
+                "pr-ready" => JeryuRequest::pr_update(repo, number, json!({"draft": false})),
+                "pr-close" => JeryuRequest::pr_update(repo, number, json!({"state": "closed"})),
+                "pr-merge" => JeryuRequest::pr_merge(repo, number),
+                _ => unreachable!(),
+            }
+            .map_err(Into::into)
         }
         "protection-apply" | "protection-readback" => {
             let required_check =
@@ -3042,19 +3063,16 @@ fn plan_jeryu_lifecycle_request(
             if required_check.trim().is_empty() {
                 return Err("--required-check must not be empty".into());
             }
-            Ok(JeryuRequest {
-                method: if command == "protection-apply" {
-                    "PUT"
-                } else {
-                    "GET"
-                },
-                path: format!("/repos/{repo}/branches/{branch}/protection"),
-                body: if command == "protection-apply" {
-                    Some(immutable_main_policy(required_check).to_string())
+            JeryuRequest::protection(
+                repo,
+                branch,
+                if command == "protection-apply" {
+                    Some(immutable_main_policy(required_check))
                 } else {
                     None
                 },
-            })
+            )
+            .map_err(Into::into)
         }
         value => Err(format!("unsupported Jeryu lifecycle command: {value}").into()),
     }
@@ -3093,55 +3111,10 @@ fn validate_jeryu_repo_slug(repo: &str) -> Result<(), Box<dyn std::error::Error>
 
 fn jeryu_request_json(request: &JeryuRequest) -> JsonValue {
     json!({
-        "method": request.method,
-        "path": request.path,
-        "body": request.body.as_deref().and_then(|body| serde_json::from_str::<JsonValue>(body).ok()),
+        "method": request.method(),
+        "path": request.path(),
+        "body": request.body().and_then(|body| serde_json::from_str::<JsonValue>(body).ok()),
     })
-}
-
-fn execute_jeryu_request(
-    base: &str,
-    token: &str,
-    request: &JeryuRequest,
-) -> Result<JsonValue, Box<dyn std::error::Error>> {
-    let mut curl = Command::new("curl");
-    curl.args([
-        "-fsS",
-        "--max-time",
-        "15",
-        "-H",
-        "accept: application/json",
-        "-H",
-        &format!("authorization: Bearer {token}"),
-    ]);
-    if let Some(body) = &request.body {
-        curl.args([
-            "-H",
-            "content-type: application/json",
-            "-X",
-            request.method,
-            "--data",
-            body,
-        ]);
-    } else if request.method != "GET" {
-        curl.args(["-X", request.method]);
-    }
-    let output = curl
-        .arg(format!("{}{}", base.trim_end_matches('/'), request.path))
-        .output()?;
-    if !output.status.success() {
-        return Err(format!(
-            "local Jeryu request failed: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
-        )
-        .into());
-    }
-    let raw = String::from_utf8(output.stdout)?;
-    if raw.trim().is_empty() {
-        Ok(JsonValue::Null)
-    } else {
-        serde_json::from_str(&raw).map_err(Into::into)
-    }
 }
 
 fn validate_protection_policy(
@@ -4545,7 +4518,7 @@ fn manifest_repos(data: &toml::Value) -> Result<Vec<&toml::Value>, Box<dyn std::
 
 fn declared_remote(value: &toml::Value) -> Option<String> {
     string(value, "remote").or_else(|| {
-        string(value, "jeryu_slug").map(|slug| format!("{LOCAL_JERYU_BASE}/git/{slug}.git"))
+        string(value, "jeryu_slug").map(|slug| format!("{LOCAL_JERYU_ORIGIN}/git/{slug}.git"))
     })
 }
 
@@ -5875,25 +5848,25 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let ready =
             plan_jeryu_lifecycle_request("pr-ready", "jeryu/example", Some("7"), "main", None)
                 .unwrap();
-        assert_eq!(ready.method, "PATCH");
-        assert_eq!(ready.path, "/repos/jeryu/example/pulls/7");
+        assert_eq!(ready.method(), "PATCH");
+        assert_eq!(ready.path(), "/repos/jeryu/example/pulls/7");
         assert_eq!(
-            serde_json::from_str::<JsonValue>(ready.body.as_deref().unwrap()).unwrap(),
+            serde_json::from_str::<JsonValue>(ready.body().unwrap()).unwrap(),
             json!({"draft": false})
         );
         let close =
             plan_jeryu_lifecycle_request("pr-close", "jeryu/example", Some("7"), "main", None)
                 .unwrap();
         assert_eq!(
-            serde_json::from_str::<JsonValue>(close.body.as_deref().unwrap()).unwrap(),
+            serde_json::from_str::<JsonValue>(close.body().unwrap()).unwrap(),
             json!({"state": "closed"})
         );
         let merge =
             plan_jeryu_lifecycle_request("pr-merge", "jeryu/example", Some("7"), "main", None)
                 .unwrap();
-        assert_eq!(merge.method, "PUT");
-        assert_eq!(merge.path, "/repos/jeryu/example/pulls/7/merge");
-        assert_eq!(merge.body.as_deref(), Some("{}"));
+        assert_eq!(merge.method(), "PUT");
+        assert_eq!(merge.path(), "/repos/jeryu/example/pulls/7/merge");
+        assert_eq!(merge.body(), Some("{}"));
         let protection = plan_jeryu_lifecycle_request(
             "protection-apply",
             "jeryu/example",
@@ -5902,7 +5875,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             Some("example/required"),
         )
         .unwrap();
-        let policy: JsonValue = serde_json::from_str(protection.body.as_deref().unwrap()).unwrap();
+        let policy: JsonValue = serde_json::from_str(protection.body().unwrap()).unwrap();
         validate_protection_policy(&policy, "example/required").unwrap();
         assert!(validate_protection_policy(&json!({}), "example/required").is_err());
     }
@@ -5917,12 +5890,12 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             Some("Reviewed release-critical change."),
         )
         .unwrap();
-        assert_eq!(request.method, "POST");
+        assert_eq!(request.method(), "POST");
         assert_eq!(
-            request.path,
+            request.path(),
             "/api/v1/repos/jeryu%2Fexample/pulls/7/reviews"
         );
-        let body: JsonValue = serde_json::from_str(request.body.as_deref().unwrap()).unwrap();
+        let body: JsonValue = serde_json::from_str(request.body().unwrap()).unwrap();
         assert_eq!(body["verdict"], "approve");
         assert_eq!(body["expected_head_sha"], expected_head);
         assert_eq!(body["thread_comments"], json!([]));
