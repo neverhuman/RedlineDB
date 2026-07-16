@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/neverhuman/redline-testing/schemas/release-manifest.schema.json",
+  "$comment": "Authored release-integrity contract; validate with cargo test --locked --test release_manifest_integrity and package with just release-local.",
   "title": "redline-testing release manifest",
   "type": "object",
   "required": [

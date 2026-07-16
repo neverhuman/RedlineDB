@@ -85,6 +85,12 @@ bash ops/ci/jankurai.sh  # jankurai tool-suite evidence -> target/jankurai/**
 Agent-readable docs: [docs/architecture.md](docs/architecture.md),
 [docs/boundaries.md](docs/boundaries.md), [docs/testing.md](docs/testing.md),
 [docs/operations.md](docs/operations.md), and per-cell `ops/AGENTS.md`.
+The release-control surface is [docs/release.md](docs/release.md). It names the
+canonical version source, immutable-tag process, package-integrity evidence,
+provenance, rollback, and the separate Jain local-forge corrective lifecycle.
+For exact PR parity, run the governed Jankurai changed-fast command documented
+in [docs/testing.md](docs/testing.md#forge-proof-parity); a full-tree ratchet
+score never substitutes for that changed-head proof.
 
 ---
 

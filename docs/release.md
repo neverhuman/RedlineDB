@@ -83,6 +83,24 @@ so downstream consumers that pinned it keep working. RedlineDB's pin lives
 in `redlineDB/scripts/ci_install_redline_testing.sh` (or equivalent); ask the
 RedlineDB team to bump the pin to the desired version.
 
+## Jain local-forge corrective lifecycle
+
+The Jain release path is 100% local and does not publish through GitHub. From
+an ordinary branch based directly on protected local-Jeryu `main`, run the
+same `bash ops/ci/pr-ci.sh`, governed Jankurai proof, security, package, and
+manifest-integrity lanes. The forge must independently publish a successful
+exact-head `jankurai/proof` check and the repository required check before one
+independent approval and protected fast-forward merge. A null check output is
+not success and must never be replaced with a synthetic check.
+
+After forge `main` reads back the reviewed commit, the family controller cuts
+the next unused immutable `redline-testing-v<product-version>-jain.<revision>`
+tag and verifies its object. Existing tags never move. The Jain authority then
+binds that commit and checksum through its own protected PR. Rollback restores
+the previous known-good consumer pin by a reviewed source change and, when a
+new artifact is required, uses the next unused corrective tag; it never moves
+the old tag or edits the Redline lock by hand.
+
 ## Contract
 
 Downstream RedlineDB CI consumes:

@@ -20,6 +20,23 @@ bash ops/ci/pr-ci.sh         # the single validate command (fmt, check, test, pa
 | ship-gate | `cargo run -p xtask -- ship-gate` | each SQLite-parity shard self-compares against `sqlite3` |
 | beyond-postgres | `cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact` | every published case passes the `psql` ↔ `psql` oracle self-compare with zero skips |
 
+### Forge proof parity
+
+Before pushing a proof-control successor, reproduce the local forge's exact
+changed-head decision with the regular, non-symlink governed binary:
+
+```bash
+/home/ubuntu/.jeryu/bin/jankurai diff-audit . \
+  --base-ref origin/main \
+  --json target/jankurai/forge-parity-diff-audit.json \
+  --advisory-only
+```
+
+Acceptance is score at least 85, zero hard findings, and zero applied caps.
+The full-tree ratchet is a separate gate and cannot waive this result. The
+forge runs the same decision in an automatically removed standalone clone;
+CI and local validation never use `git worktree`.
+
 ### Unit, integration, and property tests
 
 - Unit tests live next to the code in `src/**`.
@@ -35,6 +52,17 @@ Runtime errors are modeled by the typed `HarnessError` surface in
 `common_fixes`, `docs_url`, and `repair_hint`, so a failing run tells the next
 agent exactly where to rerun proof. Jankurai evidence (audit score, security
 evidence, copy-code, witness graph) is written under `target/jankurai/**`.
+Those structured errors are the CLI telemetry boundary: command status,
+elapsed-time metrics, case identifiers, and repair hints remain machine
+readable without a remote observability service. A repair receipt records the
+exact head, command, exit status, and artifact digest; never infer success from
+an absent or null receipt. The stable machine contract is
+[`schemas/repair-receipt.schema.json`](../schemas/repair-receipt.schema.json),
+which is packaged and integrity-hashed with every release. Jankurai's JSONL
+repair tasks are separately described by
+[`schemas/repair-queue.schema.json`](../schemas/repair-queue.schema.json), and
+[`schemas/repo-score.schema.json`](../schemas/repo-score.schema.json) defines
+the score attestation fields that must never be silently defaulted.
 
 ## Cost budget
 
@@ -42,6 +70,9 @@ evidence, copy-code, witness graph) is written under `target/jankurai/**`.
 network egress. `agent/cost-budget.toml` declares the budgets, quota caps, and
 stop conditions (all zero / fail-closed); `bash ops/ci/cost-budget.sh` proves
 them and writes `target/jankurai/cost-budget.json`.
+The explicit kill switch is `REDLINE_TESTING_KILL_SWITCH`; a set switch,
+unknown paid tool, missing receipt, or nonzero quota stops the lane. This is a
+hard budget and rate-limit boundary, not advisory accounting.
 
 ## Release readiness
 

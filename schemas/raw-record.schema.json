@@ -1,6 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/neverhuman/redline-testing/schemas/raw-record.schema.json",
+  "$comment": "Authored public JSONL contract; validate with cargo test --locked --test timing_memory_invariants and package with just release-local.",
   "title": "redline-testing raw JSONL record",
   "type": "object",
   "required": [

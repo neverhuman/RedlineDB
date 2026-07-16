@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/neverhuman/redline-testing/schemas/repair-queue.schema.json",
+  "title": "redline-testing Jankurai repair queue item",
+  "type": "object",
+  "required": ["rule_id", "severity", "path", "rerun_command"],
+  "properties": {
+    "rule_id": { "type": "string", "minLength": 1 },
+    "severity": {
+      "enum": ["critical", "high", "medium", "low", "info"]
+    },
+    "path": { "type": "string", "minLength": 1 },
+    "task": { "type": "string" },
+    "owner": { "type": "string" },
+    "lane": { "type": "string" },
+    "rerun_command": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": true
+}

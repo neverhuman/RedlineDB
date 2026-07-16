@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/neverhuman/redline-testing/schemas/repair-receipt.schema.json",
+  "title": "redline-testing repair receipt",
+  "description": "Machine-readable attestation for a failed or successful proof rerun.",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "head_sha",
+    "command",
+    "exit_code",
+    "artifact_sha256",
+    "rerun_command"
+  ],
+  "properties": {
+    "schema_version": { "const": "redline-testing.repair-receipt/v1" },
+    "head_sha": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "command": { "type": "string", "minLength": 1 },
+    "exit_code": { "type": "integer", "minimum": 0, "maximum": 255 },
+    "artifact_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "rerun_command": { "type": "string", "minLength": 1 }
+  },
+  "additionalProperties": false
+}

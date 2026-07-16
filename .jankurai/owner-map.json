@@ -15,7 +15,7 @@
       "scripts/**",
       "templates/**",
       "README.md",
-      "justfile"
+      "Justfile"
     ],
     "control-plane": [
       "AGENTS.md",

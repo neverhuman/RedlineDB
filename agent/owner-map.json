@@ -12,7 +12,7 @@
     "Cargo.toml": "runner",
     "Cargo.lock": "runner",
     "rust-toolchain.toml": "runner",
-    "justfile": "runner",
+    "Justfile": "runner",
     "ops/": "ops",
     "scripts/": "ops",
     ".github/": "ops",

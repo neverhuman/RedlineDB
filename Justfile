@@ -1,6 +1,6 @@
 set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 
-# Default recipe runs the same lane CI runs.
+# Canonical root command surface; the default recipe runs the same lane CI runs.
 default: pr-ci
 
 # One-command setup: install/build everything needed to validate.

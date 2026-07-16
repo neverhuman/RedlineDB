@@ -94,6 +94,7 @@ const CATALOG: &[Classified] = &[
             "not found",
             "cannot find",
             "no such program",
+            "canonicalize executable",
         ],
         exception: HarnessException {
             code: "MISSING_REFERENCE_CLI",
