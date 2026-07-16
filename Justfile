@@ -3,6 +3,10 @@ set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 required:
   ./ops/ci/required.sh
 
+# Privileged pre-install namespace acceptance; never run inside the unprivileged CI worker.
+jeryu-transport-acceptance:
+  ./ops/ci/jeryu-branch-push-integration-test.sh
+
 jeryu-doctor:
   cargo run --locked --quiet -- jeryu-doctor --manifest repos.manifest.toml
 
