@@ -61,3 +61,11 @@ artifact-backed proof of every launch concern:
 
 The release-readiness lane (`bash ops/ci/release-readiness.sh`) asserts this
 surface and writes `target/jankurai/release-readiness.json`.
+
+## Agent-readable failures
+
+Every blocking lane must explain a failure as a structured exception with its
+`purpose`, concrete `reason`, bounded `common fixes`, local `docs_url`, and a
+copyable `repair_hint`. The phase completion receipt records the exact-head
+artifact and rerun command so the next owner can reproduce the failure without
+guessing or using network services.

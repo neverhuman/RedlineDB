@@ -30,6 +30,10 @@ required:
 fast:
     bash ops/ci/fast.sh
 
+# Narrow backend compile proof for API-only changes.
+fast-api:
+    cargo check -p redline-web-server --locked
+
 # Doctor: confirm the local toolchain matches CI.
 doctor:
     bash scripts/ci-doctor.sh

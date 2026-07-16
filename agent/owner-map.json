@@ -1,0 +1,18 @@
+{
+  "workspace": "redline-web",
+  "owners": {
+    ".github/": "ops",
+    ".gitignore": "ops",
+    ".jankurai/": "ops",
+    "AGENTS.md": "maintainers",
+    "Justfile": "ops",
+    "README.md": "maintainers",
+    "agent/": "ops",
+    "db/": "api",
+    "deny.toml": "ops",
+    "docs/": "maintainers",
+    "ops/": "ops",
+    "schemas/": "ops",
+    "scripts/": "ops"
+  }
+}

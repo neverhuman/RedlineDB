@@ -1,0 +1,57 @@
+{
+  "workspace": "redline-web",
+  "tests": {
+    ".github/": {
+      "command": "bash ops/ci/fast.sh",
+      "purpose": "verify workflow syntax and local-CI routing"
+    },
+    ".gitignore": {
+      "command": "bash ops/ci/score.sh",
+      "purpose": "verify proof outputs remain target-only and the source tree stays clean"
+    },
+    ".jankurai/": {
+      "command": "bash ops/ci/score.sh",
+      "purpose": "verify governed Jankurai policy and version metadata"
+    },
+    "AGENTS.md": {
+      "command": "bash ops/ci/score.sh",
+      "purpose": "verify agent guidance remains visible to the auditor"
+    },
+    "Justfile": {
+      "command": "bash ops/ci/fast.sh",
+      "purpose": "verify the canonical command surface"
+    },
+    "README.md": {
+      "command": "bash ops/ci/score.sh",
+      "purpose": "verify repository and agent routing remains visible"
+    },
+    "agent/": {
+      "command": "bash ops/ci/jankurai.sh",
+      "purpose": "verify machine-readable proof, boundary, and ownership policy"
+    },
+    "db/": {
+      "command": "cargo test -p redline-web-server --test property --locked",
+      "purpose": "verify the connector boundary and read-only data policy"
+    },
+    "deny.toml": {
+      "command": "bash ops/ci/security.sh",
+      "purpose": "verify dependency and license policy"
+    },
+    "docs/": {
+      "command": "bash ops/ci/release-readiness.sh",
+      "purpose": "verify release and repair guidance"
+    },
+    "ops/": {
+      "command": "REDLINE_STRICT_TOOLS=1 bash ops/ci/pr-ci.sh",
+      "purpose": "verify the full governed CI and evidence surface"
+    },
+    "schemas/": {
+      "command": "bash ops/ci/jankurai.sh",
+      "purpose": "verify evidence schema production and proof routing"
+    },
+    "scripts/": {
+      "command": "bash scripts/ci-doctor.sh",
+      "purpose": "verify local tool identity and CI parity"
+    }
+  }
+}
