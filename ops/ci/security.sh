@@ -17,6 +17,8 @@ readonly SYFT_SHA256="eb9714fb8e4b8f2a647e7bb312f1e0b9f83a7aa30418658bf46583cfa8
 readonly SYFT_CONFIG="${ROOT_DIR}/ops/ci/syft.yaml"
 readonly RUSTSEC_DB="/home/ubuntu/.cargo/advisory-db"
 readonly RUSTSEC_DB_COMMIT="9f3e138091487e69144f536d36976e427a7a3307"
+readonly HOST_CARGO_CACHE_PARENT="/home/ubuntu/.cargo/registry/cache"
+readonly HOST_CARGO_CACHE="${HOST_CARGO_CACHE_PARENT}/index.crates.io-1949cf8c6b5b557f"
 readonly EXPECTED_SECURITY_COMMANDS="gitleaks detect; cargo audit; cargo deny; npm audit; zizmor; syft"
 
 [[ "${REDLINE_SECURITY_COMMANDS:-$EXPECTED_SECURITY_COMMANDS}" == "$EXPECTED_SECURITY_COMMANDS" ]] \
@@ -69,8 +71,17 @@ jq -e '.vulnerabilities.found == false and (.vulnerabilities.list | length) == 0
   and ((.warnings // {}) | length == 0)' "$artifact_root/cargo-audit.json" >/dev/null
 
 log "security: pinned local cargo-deny"
-"$CARGO_DENY_BIN" check --disable-fetch --deny warnings \
-  >"$artifact_root/cargo-deny.log" 2>&1
+cargo_deny_home="${CARGO_HOME:-${HOME}/.cargo}"
+jain_seed_locked_cargo_archives \
+  "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_CACHE_PARENT" "$HOST_CARGO_CACHE" \
+  "$cargo_deny_home" valuable 0.1.1 anstyle-wincon 3.0.11 \
+  || fail "security: exact locked cargo-deny cache seed failed"
+cargo_deny_log="$artifact_root/cargo-deny.log"
+if ! "$CARGO_DENY_BIN" check --disable-fetch --deny warnings \
+  >"$cargo_deny_log" 2>&1; then
+  cat "$cargo_deny_log" >&2
+  fail "security: cargo-deny failed; log preserved at $cargo_deny_log"
+fi
 
 log "security: offline npm advisory cache"
 (cd "$WEB_DIR" && npm audit --offline --audit-level=high --json) \
