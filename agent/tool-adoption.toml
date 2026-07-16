@@ -1,11 +1,27 @@
 schema_version = "1.0.0"
 
 [[tools]]
+id = "audit-ci"
+mode = "auto"
+
+[[tools]]
 id = "proof-routing"
 mode = "auto"
 
 [[tools]]
 id = "proofbind"
+mode = "auto"
+
+[[tools]]
+id = "security"
+mode = "auto"
+
+[[tools]]
+id = "ci-bad-behavior"
+mode = "auto"
+
+[[tools]]
+id = "git-bad-behavior"
 mode = "auto"
 
 [[tools]]

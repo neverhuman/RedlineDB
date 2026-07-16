@@ -36,10 +36,15 @@ CI_REDLINE_TESTING_VERSION="${CI_REDLINE_TESTING_VERSION:-latest}"
 CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256="${CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256:-}"
 CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256="${CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256:-}"
 readonly CI_REDLINE_TESTING_ATTESTATION_REPO="${CI_REDLINE_TESTING_ATTESTATION_REPO:-neverhuman/redline-testing}"
-readonly CI_JANKURAI_VERSION="${CI_JANKURAI_VERSION:-1.6.10}"
-readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-http://127.0.0.1:8787/git/jeryu/jankurai.git}"
-readonly CI_JANKURAI_TAG="${CI_JANKURAI_TAG:-v${CI_JANKURAI_VERSION}}"
-readonly CI_JANKURAI_REV="${CI_JANKURAI_REV:-3c804453e6c7a6e0e4028d95cc3bccea467277ef}"
+readonly CI_JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
+readonly CI_JANKURAI_VERSION="1.6.11"
+readonly CI_JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+
+# Keep literal `jankurai` commands visible to the tool-adoption auditor while
+# making PATH unable to select different bytes after this library is sourced.
+jankurai() {
+    "$CI_JANKURAI_BIN" "$@"
+}
 
 ci_redline_testing_version_from_tag() {
     local tag="${1:?release tag required}"
@@ -753,113 +758,127 @@ ci_soft_gate() {
     return 0
 }
 
-# Verify the pinned upstream tag resolves to the exact commit we expect
-# before any install path uses it.
-ci_verify_jankurai_source() {
-    local resolved_rev
-    resolved_rev="$(
-        git ls-remote "${CI_JANKURAI_GIT}" \
-            "refs/tags/${CI_JANKURAI_TAG}" \
-            "refs/tags/${CI_JANKURAI_TAG}^{}" \
-            | awk '
-                $2 ~ /\^\{\}$/ { peeled = $1 }
-                $2 !~ /\^\{\}$/ { direct = $1 }
-                END { print (peeled != "" ? peeled : direct) }
-            ' || true
-    )"
+# Validate arbitrary bytes for hostile tests. Production callers use only the
+# fixed constants above; no environment or PATH override reaches this helper.
+ci_validate_jankurai_binary() {
+    local binary="${1:?jankurai binary path required}"
+    local expected_version="${2:?jankurai version required}"
+    local expected_sha256="${3:?jankurai sha256 required}"
+    local actual_sha256 actual_version
 
-    if [ -z "$resolved_rev" ]; then
-        printf 'expected jankurai tag %s to resolve at %s\n' \
-            "$CI_JANKURAI_TAG" "$CI_JANKURAI_GIT" >&2
+    command -v realpath >/dev/null 2>&1 || {
+        printf 'missing required tool: realpath\n' >&2
+        return 1
+    }
+    command -v sha256sum >/dev/null 2>&1 || {
+        printf 'missing required tool: sha256sum\n' >&2
+        return 1
+    }
+    if [ ! -f "$binary" ] || [ ! -x "$binary" ] || [ -L "$binary" ]; then
+        printf 'governed Jankurai path is missing, non-executable, non-regular, or symlinked: %s\n' \
+            "$binary" >&2
         return 1
     fi
-
-    if [ "$resolved_rev" != "$CI_JANKURAI_REV" ]; then
-        printf 'jankurai tag %s resolved to %s, expected %s\n' \
-            "$CI_JANKURAI_TAG" "$resolved_rev" "$CI_JANKURAI_REV" >&2
+    [ "$(realpath -e "$binary")" = "$binary" ] || {
+        printf 'governed Jankurai path contains a symlink: %s\n' "$binary" >&2
         return 1
-    fi
+    }
+    actual_sha256="$(sha256sum "$binary" | awk '{print $1}')"
+    [ "$actual_sha256" = "$expected_sha256" ] || {
+        printf 'governed Jankurai digest mismatch: expected %s, got %s\n' \
+            "$expected_sha256" "$actual_sha256" >&2
+        return 1
+    }
+    actual_version="$("$binary" --version 2>/dev/null || true)"
+    [ "$actual_version" = "jankurai $expected_version" ] || {
+        printf 'governed Jankurai version mismatch: expected %s, got %s\n' \
+            "jankurai $expected_version" "${actual_version:-no output}" >&2
+        return 1
+    }
 }
 
-# Build and install the exact reviewed Jeryu commit. Cargo retains its verified
-# source checkout under CARGO_HOME, which is also where the binary's embedded
-# runtime schema path points.
-ci_install_jankurai() {
-    ci_verify_jankurai_source
-
-    local install_dir
-    local cargo_home
-    install_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
-    cargo_home="${CARGO_HOME:-$HOME/.cargo}"
-    mkdir -p "$install_dir"
-    export PATH="$install_dir:$PATH"
-
-    local tmp_dir
-    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/jankurai-release.XXXXXX")"
-    (
-        trap 'rm -rf "$tmp_dir"' EXIT
-        cargo install \
-            --git "$CI_JANKURAI_GIT" \
-            --rev "$CI_JANKURAI_REV" \
-            --locked \
-            --root "$tmp_dir/install-root" \
-            jankurai
-
-        local built_binary="$tmp_dir/install-root/bin/jankurai"
-        if [ ! -x "$built_binary" ]; then
-            printf 'jankurai source install missing executable: %s\n' "$built_binary" >&2
-            return 1
-        fi
-
-        local source_root=""
-        local candidate
-        while IFS= read -r candidate; do
-            if [ "$(git -C "$candidate" rev-parse HEAD 2>/dev/null || true)" != "$CI_JANKURAI_REV" ]; then
-                continue
-            fi
-            if [ ! -s "$candidate/schemas/proofbind-witness.schema.json" ]; then
-                continue
-            fi
-            if ! LC_ALL=C grep -a -q -F "$candidate/crates/jankurai" "$built_binary"; then
-                continue
-            fi
-            source_root="$candidate"
-            break
-        done < <(find "$cargo_home/git/checkouts" -mindepth 2 -maxdepth 2 -type d 2>/dev/null)
-
-        if [ -z "$source_root" ]; then
-            printf 'jankurai binary has no retained, exact-revision runtime schema root\n' >&2
-            return 1
-        fi
-
-        install -m 0755 "$built_binary" "$install_dir/jankurai"
-        printf 'jankurai runtime schemas verified: %s/schemas\n' "$source_root"
-    )
-    hash -r 2>/dev/null || true
-
-    local version_output
-    version_output="$(jankurai --version)"
-    case "$version_output" in
-        "jankurai ${CI_JANKURAI_VERSION}"*) ;;
-        *)
-            printf 'installed jankurai version mismatch: got %s, expected %s\n' \
-                "$version_output" "$CI_JANKURAI_VERSION" >&2
-            return 1
-            ;;
-    esac
-    printf 'jankurai source verified: %s %s %s\n' \
-        "$CI_JANKURAI_GIT" "$CI_JANKURAI_TAG" "$CI_JANKURAI_REV"
-    printf 'jankurai installed: %s (%s)\n' "$(command -v jankurai)" "$version_output"
+ci_require_governed_jankurai() {
+    ci_validate_jankurai_binary \
+        "$CI_JANKURAI_BIN" \
+        "$CI_JANKURAI_VERSION" \
+        "$CI_JANKURAI_SHA256"
+    printf 'governed Jankurai verified: %s version=%s sha256=%s\n' \
+        "$CI_JANKURAI_BIN" "$CI_JANKURAI_VERSION" "$CI_JANKURAI_SHA256"
 }
 
-ci_install_jankurai_logged() {
-    local log_path="$1"
+ci_require_governed_jankurai_logged() {
+    local log_path="${1:?Jankurai verification log path required}"
     mkdir -p "$(dirname "$log_path")"
-
-    if ! ci_install_jankurai >"$log_path" 2>&1; then
-        cat "$log_path"
+    if ! ci_require_governed_jankurai >"$log_path" 2>&1; then
+        cat "$log_path" >&2
         return 1
     fi
-
     cat "$log_path"
+}
+
+ci_require_clean_head() {
+    local status
+    status="$(git status --porcelain=v1 --untracked-files=all)"
+    [ -z "$status" ] || {
+        printf 'Jankurai evidence requires a clean source checkout:\n%s\n' "$status" >&2
+        return 1
+    }
+}
+
+ci_verify_jankurai_report() {
+    local report="${1:?Jankurai report path required}"
+    local receipt="${2:?Jankurai identity receipt path required}"
+    local head tree report_head dirty auditor passed hard caps report_sha256
+
+    command -v jq >/dev/null 2>&1 || {
+        printf 'missing required tool: jq\n' >&2
+        return 1
+    }
+    if [ ! -f "$report" ] || [ -L "$report" ]; then
+        printf 'Jankurai report is missing, non-regular, or symlinked: %s\n' "$report" >&2
+        return 1
+    fi
+    ci_require_clean_head
+    head="$(git rev-parse HEAD)"
+    tree="$(git rev-parse 'HEAD^{tree}')"
+    report_head="$(jq -r '.git.head // empty' "$report")"
+    dirty="$(jq -r '.git.dirty_worktree // true' "$report")"
+    auditor="$(jq -r '.auditor_version // empty' "$report")"
+    passed="$(jq -r '.decision.passed // false' "$report")"
+    hard="$(jq -r '(.decision.hard_findings // .hard_findings // 0) | if type == "array" then length else . end' "$report")"
+    caps="$(jq -r '[.hard_rule_caps[]? | select(.applied == true)] | length' "$report")"
+    if [[ ! "$report_head" =~ ^[0-9a-f]{7,40}$ ]] \
+        || [ "${head:0:${#report_head}}" != "$report_head" ]
+    then
+        printf 'Jankurai report head mismatch: expected prefix of %s, got %s\n' \
+            "$head" "${report_head:-missing}" >&2
+        return 1
+    fi
+    [ "$dirty" = "false" ] || {
+        printf 'Jankurai report records a dirty source checkout\n' >&2
+        return 1
+    }
+    [ "$auditor" = "$CI_JANKURAI_VERSION" ] || {
+        printf 'Jankurai report auditor mismatch: expected %s, got %s\n' \
+            "$CI_JANKURAI_VERSION" "${auditor:-missing}" >&2
+        return 1
+    }
+    if [ "$passed" != "true" ] || [ "$hard" != "0" ] || [ "$caps" != "0" ]; then
+        printf 'Jankurai report is not release-clean: passed=%s hard=%s caps=%s\n' \
+            "$passed" "$hard" "$caps" >&2
+        return 1
+    fi
+    report_sha256="$(sha256sum "$report" | awk '{print $1}')"
+    mkdir -p "$(dirname "$receipt")"
+    jq -n \
+        --arg head_sha "$head" \
+        --arg tree_sha "$tree" \
+        --arg report "$report" \
+        --arg report_sha256 "$report_sha256" \
+        --arg auditor_version "$auditor" \
+        --arg governed_binary "$CI_JANKURAI_BIN" \
+        --arg governed_binary_sha256 "$CI_JANKURAI_SHA256" \
+        '{schema_version:"redline.governed-jankurai-evidence/v1",status:"pass",head_sha:$head_sha,tree_sha:$tree_sha,source_clean:true,report:$report,report_sha256:$report_sha256,auditor_version:$auditor_version,governed_binary:$governed_binary,governed_binary_sha256:$governed_binary_sha256}' \
+        > "$receipt"
+    ci_require_clean_head
 }
