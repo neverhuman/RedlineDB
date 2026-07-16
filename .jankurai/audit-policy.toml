@@ -1,4 +1,4 @@
-# jankurai audit policy for redline-testing
+# Governed Jankurai 1.6.11 audit policy for redline-testing
 #
 # redline-testing is a satellite repo that produces signed reference test
 # artifacts consumed by RedlineDB CI. It is NOT itself a product binary, so
@@ -6,10 +6,10 @@
 #
 # When tightening to a ratcheted gate later, set `mode = "ratchet"`, populate
 # `minimum_score`, and generate `.jankurai/accepted-baseline.json` via
-# `jankurai audit . --baseline`.
+# The governed wrapper's `audit . --baseline` mode.
 #
 # MIRROR: this file must stay byte-identical to `agent/audit-policy.toml`
-# (jankurai 1.5.1 reads from `agent/audit-policy.toml`; we keep the canonical
+# (governed Jankurai 1.6.11 reads from `agent/audit-policy.toml`; the canonical
 # copy in `.jankurai/`). `scripts/check_audit_policy_mirror.sh` enforces the
 # mirror in `pr-ci`. The redlineDB sibling repo uses the same pattern.
 

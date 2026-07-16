@@ -4,7 +4,7 @@
 # dependency-policy/license enforcement, and GitHub Actions workflow linting.
 # Wired into CI (.github/workflows/ci.yml), into the validate entrypoint
 # (ops/ci/pr-ci.sh), and captured as jankurai evidence via
-# `jankurai security run --strict --profile ci --script ops/ci/security.sh`.
+# `bash ops/ci/run-jankurai.sh security run --strict --profile ci --script ops/ci/security.sh`.
 
 set -euo pipefail
 

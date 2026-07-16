@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Language bad-behavior evidence: records the CI / git / release scan surfaces
-# the jankurai ci-bad-behavior, git-bad-behavior, and release-bad-behavior
+# the governed Jankurai ci-bad-behavior, git-bad-behavior, and release-bad-behavior
 # tools cover for this repo.
 
 set -euo pipefail

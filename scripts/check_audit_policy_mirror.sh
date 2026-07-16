@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Verify that .jankurai/audit-policy.toml and agent/audit-policy.toml are
-# byte-identical. jankurai 1.5.1 reads from `./agent/audit-policy.toml`
+# byte-identical. Governed Jankurai 1.6.11 reads from `./agent/audit-policy.toml`
 # (see the `policy.path` field in the audit JSON output); the canonical
 # source-of-truth copy lives at `.jankurai/audit-policy.toml`. If the two
 # drift, an editor can update one and silently leave the other behind,

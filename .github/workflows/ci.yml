@@ -166,8 +166,8 @@ jobs:
 
   # Jankurai tool-suite lane: runs the adopted jankurai tools and uploads their
   # evidence artifacts. The CI evidence catalog records the exact commands so
-  # the audit can verify tool adoption; the lane itself degrades gracefully
-  # when the jankurai binary is not installed on the runner.
+  # the audit can verify tool adoption. A missing or wrong governed Jankurai
+  # identity is a hard failure.
   jankurai:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -190,15 +190,15 @@ jobs:
         run: |
           mkdir -p target/jankurai
           cat > target/jankurai/ci-evidence-catalog.txt <<'EOF'
-          jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md
-          jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md
-          jankurai proof . --changed-from origin/main --out target/jankurai/proof-routing.json --md target/jankurai/proof-routing.md
-          jankurai proofbind verify . --changed-from origin/main
-          jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
-          jankurai copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
+          bash ops/ci/run-jankurai.sh audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md
+          bash ops/ci/run-jankurai.sh audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md
+          bash ops/ci/run-jankurai.sh proof . --changed-from origin/main --out target/jankurai/proof-routing.json --md target/jankurai/proof-routing.md
+          bash ops/ci/run-jankurai.sh proofbind verify . --changed-from origin/main
+          bash ops/ci/run-jankurai.sh proofmark rust . --obligations target/jankurai/proofbind/obligations.json
+          bash ops/ci/run-jankurai.sh copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
           cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
-          jankurai security run . --out target/jankurai/security/evidence.json
-          jankurai security run . --strict --profile ci --script ops/ci/security.sh --out target/jankurai/security/evidence.json
+          bash ops/ci/run-jankurai.sh security run . --out target/jankurai/security/evidence.json
+          bash ops/ci/run-jankurai.sh security run . --strict --profile ci --script ops/ci/security.sh --out target/jankurai/security/evidence.json
           gitleaks detect --source . --config gitleaks.toml --no-banner --redact --no-git
           cargo audit
           cargo deny check
@@ -206,16 +206,16 @@ jobs:
           zizmor .github/workflows
           syft dir:. -o spdx-json=target/security/redline-testing.spdx.json
           cargo test -p jankurai --test language_bad_behavior
-          jankurai ci-bad-behavior . --out target/jankurai/language-bad-behavior.log
-          jankurai git-bad-behavior . --out target/jankurai/language-bad-behavior.log
-          jankurai release-bad-behavior . --out target/jankurai/language-bad-behavior.log
-          jankurai contract-drift . --out target/jankurai/contract-drift.json
-          jankurai rust witness build .
-          jankurai authz-matrix . --out target/jankurai/authz-matrix.json
-          jankurai input-boundary . --out target/jankurai/input-boundary.json
-          jankurai agent-tool-supply . --out target/jankurai/agent-tool-supply.json
-          jankurai release-readiness . --out target/jankurai/release-readiness.json
-          jankurai cost-budget . --out target/jankurai/cost-budget.json
+          bash ops/ci/run-jankurai.sh ci-bad-behavior . --out target/jankurai/language-bad-behavior.log
+          bash ops/ci/run-jankurai.sh git-bad-behavior . --out target/jankurai/language-bad-behavior.log
+          bash ops/ci/run-jankurai.sh release-bad-behavior . --out target/jankurai/language-bad-behavior.log
+          bash ops/ci/run-jankurai.sh contract-drift . --out target/jankurai/contract-drift.json
+          bash ops/ci/run-jankurai.sh rust witness build .
+          bash ops/ci/run-jankurai.sh authz-matrix . --out target/jankurai/authz-matrix.json
+          bash ops/ci/run-jankurai.sh input-boundary . --out target/jankurai/input-boundary.json
+          bash ops/ci/run-jankurai.sh agent-tool-supply . --out target/jankurai/agent-tool-supply.json
+          bash ops/ci/run-jankurai.sh release-readiness . --out target/jankurai/release-readiness.json
+          bash ops/ci/run-jankurai.sh cost-budget . --out target/jankurai/cost-budget.json
           EOF
       - name: Upload jankurai evidence artifacts
         if: always()

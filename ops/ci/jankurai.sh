@@ -3,8 +3,8 @@
 # Jankurai tool-suite lane: runs the adopted jankurai tools and writes their
 # evidence artifacts under target/jankurai/**. Wired as a CI job in
 # .github/workflows/ci.yml and runnable locally via `scripts/ci-local.sh
-# jankurai`. Supplementary lanes that need a base ref or optional schemas are
-# best-effort so a fork/detached checkout still produces the core evidence.
+# jankurai`. The exact governed 1.6.11 identity is a hard prerequisite;
+# supplementary analysis failures are recorded only after that verification.
 
 set -euo pipefail
 
@@ -15,14 +15,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 mkdir -p target/jankurai
 
-JANKURAI="${JANKURAI_BIN:-jankurai}"
 status=0
-
-if ! has "$JANKURAI"; then
-    missing_tool "$JANKURAI" "jankurai tool suite"
-    log "jankurai: binary unavailable; skipping lane"
-    exit 0
-fi
+require_governed_jankurai
 
 base_ref="${JANKURAI_BASE_REF:-origin/main}"
 proofbind_changed_file="target/jankurai/proofbind-existing-paths"
@@ -74,7 +68,7 @@ run_step_soft() {
 
 # audit-ci / contract-drift / authz-matrix / input-boundary / agent-tool-supply
 run_step "jankurai: audit" \
-    "$JANKURAI" audit . \
+    bash ops/ci/run-jankurai.sh audit . \
     --full \
     --mode ratchet \
     --baseline .jankurai/baselines/accepted-baseline.json \
@@ -86,15 +80,15 @@ run_step "jankurai: audit" \
     --repair-queue-jsonl target/jankurai/repair-queue.jsonl
 
 run_step "jankurai: copy-code" \
-    "$JANKURAI" copy-code . \
+    bash ops/ci/run-jankurai.sh copy-code . \
     --json target/jankurai/copy-code.json \
     --md target/jankurai/copy-code.md
 
 run_step "jankurai: rust witness build" \
-    "$JANKURAI" rust witness build .
+    bash ops/ci/run-jankurai.sh rust witness build .
 
 run_step "jankurai: security evidence (strict, ci profile)" \
-    "$JANKURAI" security run . \
+    bash ops/ci/run-jankurai.sh security run . \
     --strict --profile ci \
     --script ops/ci/security.sh \
     --out target/jankurai/security/evidence.json
@@ -109,15 +103,15 @@ run_step "jankurai: release readiness" \
     bash ops/ci/release-readiness.sh
 
 run_step_soft "jankurai: proof routing" \
-    "$JANKURAI" proof . "${proofbind_changed_args[@]}" \
+    bash ops/ci/run-jankurai.sh proof . "${proofbind_changed_args[@]}" \
     --out target/jankurai/proof-routing.json \
     --md target/jankurai/proof-routing.md
 
 run_step_soft "jankurai: proofbind verify" \
-    "$JANKURAI" proofbind verify . "${proofbind_changed_args[@]}"
+    bash ops/ci/run-jankurai.sh proofbind verify . "${proofbind_changed_args[@]}"
 
 run_step_soft "jankurai: proofmark rust" \
-    "$JANKURAI" proofmark rust . "${proofbind_changed_args[@]}" \
+    bash ops/ci/run-jankurai.sh proofmark rust . "${proofbind_changed_args[@]}" \
     --obligations target/jankurai/proofbind/obligations.json
 
 exit "$status"

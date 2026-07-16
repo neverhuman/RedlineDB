@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# shellcheck source=ops/ci/jankurai-identity.sh
+. "$(dirname "${BASH_SOURCE[0]}")/jankurai-identity.sh"
+
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 if [ "${CI:-}" = "true" ]; then

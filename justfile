@@ -41,9 +41,9 @@ security:
 jankurai:
     bash ops/ci/jankurai.sh
 
-# Run the jankurai audit and refresh the local score.
+# Run the governed Jankurai 1.6.11 audit and refresh the local score.
 score:
-    jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md
+    bash ops/ci/run-jankurai.sh audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md
 
 # Build + package the release tarball + manifest. Refactored to invoke
 # scripts/release-package.sh so the artifact_hashes set is glob-driven (every
