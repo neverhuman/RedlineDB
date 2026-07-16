@@ -1,6 +1,14 @@
 {
   "workspace": "redline-hub",
   "tests": {
+    ".agents/": {
+      "command": "just score",
+      "purpose": "validate legacy agent guidance against the governed repository controls"
+    },
+    ".bundles/": {
+      "command": "just check",
+      "purpose": "validate retained custody evidence without executing archived content"
+    },
     ".github/": {
       "command": "actionlint .github/workflows/*.yml",
       "purpose": "validate workflow syntax and pinned action structure"

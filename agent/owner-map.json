@@ -1,6 +1,8 @@
 {
   "workspace": "redline-hub",
   "owners": {
+    ".agents/": "agent",
+    ".bundles/": "workspace",
     ".github/": "ops",
     ".gitignore": "workspace",
     ".jankurai/": "agent",
