@@ -9,6 +9,18 @@
       "command": "just check",
       "purpose": "validate retained custody evidence without executing archived content"
     },
+    ".cargo/": {
+      "command": "just check",
+      "purpose": "validate repository-local Cargo configuration"
+    },
+    ".cursor/": {
+      "command": "just score",
+      "purpose": "validate editor guidance against governed audit policy"
+    },
+    ".editorconfig": {
+      "command": "just check",
+      "purpose": "validate workspace formatting controls"
+    },
     ".github/": {
       "command": "actionlint .github/workflows/*.yml",
       "purpose": "validate workflow syntax and pinned action structure"
@@ -16,6 +28,10 @@
     ".gitignore": {
       "command": "just check",
       "purpose": "validate source and generated-evidence boundaries"
+    },
+    ".gitlab-ci.yml": {
+      "command": "just check",
+      "purpose": "validate retained CI configuration against the thin-hub guard"
     },
     ".jankurai/": {
       "command": "just score",
@@ -25,13 +41,53 @@
       "command": "just check",
       "purpose": "validate hub ownership and proof routing"
     },
+    "AGENT_CHAT.md": {
+      "command": "just score",
+      "purpose": "audit retained coordination guidance"
+    },
     "CHANGELOG.md": {
       "command": "just score",
       "purpose": "keep release changes visible to the governed audit"
     },
+    "CLAUDE.md": {
+      "command": "just score",
+      "purpose": "audit retained agent guidance"
+    },
+    "CONTRIBUTING.md": {
+      "command": "just check",
+      "purpose": "validate contributor instructions against required gates"
+    },
+    "EXTERNAL_REVIEW_MASTER_PROMPT.md": {
+      "command": "just score",
+      "purpose": "audit external review guidance"
+    },
+    "EXTERNAL_REVIEW_SUPERPROMPT.md": {
+      "command": "just score",
+      "purpose": "audit external review guidance"
+    },
+    "FEATURE_GAPS.md": {
+      "command": "just score",
+      "purpose": "audit documented product gaps"
+    },
+    "GEMINI.md": {
+      "command": "just score",
+      "purpose": "audit retained agent guidance"
+    },
+    "LICENSE": {
+      "command": "just check",
+      "purpose": "validate repository metadata and required checks"
+    },
+    "README-jankurai-scaffold.md": {
+      "command": "just score",
+      "purpose": "audit retained Jankurai scaffold guidance"
+    },
     "README.md": {
       "command": "just check",
       "purpose": "validate the public hub entrypoint"
+    },
+    "SECURITY.md": {
+      "command": "just security",
+      "purpose": "validate security policy and dependency controls"
     },
     "VERSION": {
       "command": "just check",
@@ -41,25 +97,65 @@
       "command": "just score",
       "purpose": "validate agent control manifests"
     },
+    "apps/": {
+      "command": "just check",
+      "purpose": "validate retained application material against the thin-hub guard"
+    },
     "assets/": {
       "command": "just score",
       "purpose": "audit committed hub evidence assets"
+    },
+    "benchmark-results/": {
+      "command": "just score",
+      "purpose": "audit retained benchmark evidence"
+    },
+    "branch_recovery_ledger.md": {
+      "command": "just check",
+      "purpose": "validate retained branch custody documentation"
     },
     "db/": {
       "command": "just check",
       "purpose": "enforce the hub no-database-truth boundary"
     },
+    "deny.toml": {
+      "command": "just security",
+      "purpose": "validate dependency and license policy"
+    },
     "docs/": {
       "command": "just score",
       "purpose": "validate release and audit guidance"
+    },
+    "install.sh": {
+      "command": "just check",
+      "purpose": "validate retained installation entrypoint"
+    },
+    "just/": {
+      "command": "just check",
+      "purpose": "validate task-runner support files"
     },
     "justfile": {
       "command": "just test",
       "purpose": "run the canonical hub test lane"
     },
+    "metadata/": {
+      "command": "just score",
+      "purpose": "audit retained repository metadata"
+    },
     "ops/": {
       "command": "just check",
       "purpose": "run required CI control-plane proof"
+    },
+    "paper/": {
+      "command": "just score",
+      "purpose": "audit retained design papers"
+    },
+    "python/": {
+      "command": "just check",
+      "purpose": "enforce the no-Python thin-hub source boundary"
+    },
+    "rust-toolchain.toml": {
+      "command": "just check",
+      "purpose": "validate the pinned Rust toolchain"
     },
     "schemas/": {
       "command": "just score",
@@ -68,6 +164,22 @@
     "scripts/": {
       "command": "just check",
       "purpose": "validate hub guard and audit dispatch scripts"
+    },
+    "speed_up_workplan_FINAL.md": {
+      "command": "just score",
+      "purpose": "audit retained execution planning"
+    },
+    "speed_up_workplan_pending.md": {
+      "command": "just score",
+      "purpose": "audit retained execution planning"
+    },
+    "super_tasks.md": {
+      "command": "just score",
+      "purpose": "audit retained task inventory"
+    },
+    "tips/": {
+      "command": "just score",
+      "purpose": "audit retained operational guidance"
     },
     "tools/": {
       "command": "just security",
