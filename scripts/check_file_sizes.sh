@@ -10,9 +10,6 @@ while IFS= read -r file; do
     Cargo.lock)
       continue
       ;;
-    .jankurai/repo-score.json|.jankurai/repo-score.md)
-      continue
-      ;;
     .jankurai/score-history.csv|.jankurai/score-history.jsonl)
       continue
       ;;

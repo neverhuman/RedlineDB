@@ -36,8 +36,8 @@ remote="${JANKURAI_MAIN_REMOTE:-origin}"
 current_branch="$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)"
 if [ -n "$current_branch" ] && [ "$current_branch" != "$main_branch" ]; then
   echo "Checking whether '$current_branch' is up to date with $remote/$main_branch..." >&2
-  if ! git fetch "$remote" "$main_branch" --quiet; then
-    echo "Unable to fetch $remote/$main_branch; commit blocked." >&2
+  if ! git rev-parse --verify "$remote/$main_branch" >/dev/null 2>&1; then
+    echo "Missing local $remote/$main_branch; commit blocked without a network fetch." >&2
     exit 1
   fi
   main_ref="$remote/$main_branch"
@@ -62,15 +62,13 @@ if [ -n "${JANKURAI_PRE_COMMIT_CHAIN:-}" ] && [ -x "$JANKURAI_PRE_COMMIT_CHAIN" 
   JANKURAI_CHAINED_HOOK=1 "$JANKURAI_PRE_COMMIT_CHAIN" "$@"
 fi
 
-if [ -n "${JANKURAI_BIN:-}" ] && [ -x "$JANKURAI_BIN" ]; then
-  jankurai_cmd="$JANKURAI_BIN"
-else
-  jankurai_cmd="${JANKURAI_FALLBACK_BIN:-jankurai}"
-fi
-
 cd "$repo_root"
+# shellcheck source=ops/ci/lib.sh
+. ops/ci/lib.sh
+ci_require_governed_jankurai >/dev/null
+jankurai_cmd="$CI_JANKURAI_BIN"
 
-report_dir="${JANKURAI_HOOK_REPORT_DIR:-.jankurai/hooks}"
+report_dir="${JANKURAI_HOOK_REPORT_DIR:-target/jankurai/hooks}"
 mkdir -p "$report_dir"
 agg_report="$report_dir/pre-commit-staged.json"
 agg_log="$report_dir/pre-commit-staged.log"

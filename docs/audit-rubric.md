@@ -1,6 +1,6 @@
 # Audit Rubric — RedlineDB
 
-This repo follows the jankurai standard. The audit at `.jankurai/repo-score.md`
+This repo follows the jankurai standard. The audit at `target/jankurai/repo-score.md`
 scores 11 dimensions; this doc maps each dimension to where the proof lives
 in this codebase and which proof lane an agent should rerun to verify a
 repair. Pair this with `.jankurai/owner-map.json` (who owns the file) and
@@ -105,10 +105,9 @@ zones and intentional carve-outs are listed in
 ## Rerun the audit
 
 ```
-jankurai audit . --policy agent/audit-policy.toml --mode advisory \
-  --json .jankurai/repo-score.json --md .jankurai/repo-score.md
+just score
 ```
 
-Compare the new score line in `.jankurai/repo-score.md` against the
-preceding entry in `.jankurai/score-history.csv` to confirm motion in the
-expected direction.
+The lane validates the fixed Jankurai 1.6.11 binary, compares the target-only
+report with `.jankurai/baselines/main.repo-score.json`, and binds the clean
+HEAD/tree and report digest in `target/jankurai/governed-evidence.json`.
