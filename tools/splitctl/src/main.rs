@@ -732,20 +732,32 @@ fn managed_repositories(
     Ok(managed)
 }
 
+fn optional_typed_string(
+    value: &toml::Value,
+    key: &str,
+    qualified_key: &str,
+) -> Result<Option<String>, String> {
+    match value.get(key) {
+        None => Ok(None),
+        Some(raw) => raw
+            .as_str()
+            .map(|text| Some(text.to_owned()))
+            .ok_or_else(|| format!("{qualified_key} must be a string when present")),
+    }
+}
+
 fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
     let release = string(data, "release_version")
         .ok_or_else(|| "release_version is required for Redline topology".to_owned())?;
     let split_root_raw = string(data, "split_root")
         .ok_or_else(|| "split_root is required for Redline topology".to_owned())?;
-    if split_root_raw
-        .split('/')
-        .any(|component| matches!(component, "." | ".."))
-    {
-        return Err("split_root must not contain lexical . or .. aliases".to_owned());
-    }
-    let split_root = PathBuf::from(split_root_raw);
+    let split_root = PathBuf::from(&split_root_raw);
     if !split_root.is_absolute() {
         return Err("split_root must be absolute for Redline topology".to_owned());
+    }
+    let normalized = split_root.components().collect::<PathBuf>();
+    if normalized.as_os_str() != OsStr::new(&split_root_raw) {
+        return Err("split_root must use exact normalized absolute spelling".to_owned());
     }
     let nested = data
         .get("nested_families")
@@ -826,10 +838,23 @@ fn redline_topology(data: &toml::Value) -> Result<RedlineTopology, String> {
                 .to_owned(),
         );
     }
-    let external_status = string(external, "identity_status");
-    let engine_status = string(nested, "engine_identity_status");
-    let external_tag = string(external, "immutable_tag");
-    let engine_tag = string(nested, "engine_tag");
+    let external_status = optional_typed_string(
+        external,
+        "identity_status",
+        "external_dependencies.redline.identity_status",
+    )?;
+    let engine_status = optional_typed_string(
+        nested,
+        "engine_identity_status",
+        "nested_families.redline.engine_identity_status",
+    )?;
+    let external_tag = optional_typed_string(
+        external,
+        "immutable_tag",
+        "external_dependencies.redline.immutable_tag",
+    )?;
+    let engine_tag =
+        optional_typed_string(nested, "engine_tag", "nested_families.redline.engine_tag")?;
     match (external_status.as_deref(), engine_status.as_deref()) {
         (Some("pending"), Some("pending")) => {
             if external_tag.is_some() || engine_tag.is_some() {
@@ -7736,7 +7761,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             .unwrap_err()
             .contains("must match external_dependencies.redline.immutable_tag"));
 
-        let mut pending = data;
+        let mut pending = data.clone();
         let external = pending["external_dependencies"]["redline"]
             .as_table_mut()
             .unwrap();
@@ -7762,28 +7787,76 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             .unwrap_err()
             .contains("pending statuses must be paired"));
         redline_topology(&pending).unwrap();
+
+        let mut numeric_external_tag = pending.clone();
+        numeric_external_tag["external_dependencies"]["redline"]
+            .as_table_mut()
+            .unwrap()
+            .insert("immutable_tag".to_owned(), toml::Value::Integer(4));
+        assert!(redline_topology(&numeric_external_tag)
+            .unwrap_err()
+            .contains("external_dependencies.redline.immutable_tag must be a string"));
+
+        let mut numeric_engine_tag = pending;
+        numeric_engine_tag["nested_families"]["redline"]
+            .as_table_mut()
+            .unwrap()
+            .insert("engine_tag".to_owned(), toml::Value::Integer(4));
+        assert!(redline_topology(&numeric_engine_tag)
+            .unwrap_err()
+            .contains("nested_families.redline.engine_tag must be a string"));
+
+        let mut typed_external_status = data.clone();
+        typed_external_status["external_dependencies"]["redline"]
+            .as_table_mut()
+            .unwrap()
+            .insert("identity_status".to_owned(), toml::Value::Boolean(false));
+        assert!(redline_topology(&typed_external_status)
+            .unwrap_err()
+            .contains("external_dependencies.redline.identity_status must be a string"));
+
+        let mut typed_engine_status = data;
+        typed_engine_status["nested_families"]["redline"]
+            .as_table_mut()
+            .unwrap()
+            .insert(
+                "engine_identity_status".to_owned(),
+                toml::Value::Boolean(false),
+            );
+        assert!(redline_topology(&typed_engine_status)
+            .unwrap_err()
+            .contains("nested_families.redline.engine_identity_status must be a string"));
     }
 
     #[test]
     fn redline_topology_rejects_coherent_split_control_and_repo_lexical_aliases() {
         let split_root = TestDir::new("redline-topology-split-alias");
-        let (mut split_alias, _) = synthetic_redline_topology(split_root.path(), "8.0.1");
-        let aliased_root = format!("{}/.", split_root.path().display());
-        split_alias["split_root"] = toml::Value::String(aliased_root.clone());
-        for (key, suffix) in [
-            (
-                "manifest_path",
-                "jain-redline/redline-split-ops/repos.manifest.toml",
-            ),
-            ("container_path", "jain-redline"),
-            ("control_plane", "jain-redline/redline-split-ops"),
+        let (split_data, _) = synthetic_redline_topology(split_root.path(), "8.0.1");
+        let raw_root = split_root.path().display().to_string();
+        let (root_parent, root_name) = raw_root.rsplit_once('/').unwrap();
+        for aliased_root in [
+            format!("{raw_root}/."),
+            format!("{raw_root}/"),
+            format!("/{raw_root}"),
+            format!("{root_parent}//{root_name}"),
         ] {
-            split_alias["nested_families"]["redline"][key] =
-                toml::Value::String(format!("{aliased_root}/{suffix}"));
+            let mut split_alias = split_data.clone();
+            split_alias["split_root"] = toml::Value::String(aliased_root.clone());
+            for (key, suffix) in [
+                (
+                    "manifest_path",
+                    "jain-redline/redline-split-ops/repos.manifest.toml",
+                ),
+                ("container_path", "jain-redline"),
+                ("control_plane", "jain-redline/redline-split-ops"),
+            ] {
+                split_alias["nested_families"]["redline"][key] =
+                    toml::Value::String(format!("{aliased_root}/{suffix}"));
+            }
+            assert!(redline_topology(&split_alias)
+                .unwrap_err()
+                .contains("exact normalized absolute spelling"));
         }
-        assert!(redline_topology(&split_alias)
-            .unwrap_err()
-            .contains("lexical . or .. aliases"));
 
         let control_root = TestDir::new("redline-topology-control-alias");
         let (control_data, control_topology) =
