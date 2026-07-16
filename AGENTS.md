@@ -1,5 +1,18 @@
 # redline-web — agent guide
 
+## Zero-worktree policy — absolute
+
+- Do not create or move a Git worktree anywhere, including under `/tmp`. Never
+  run `git worktree add` or `git worktree move`.
+- Work only in the existing primary checkout. If it is dirty, busy, or held by
+  another owner, stop and wait for a clean stopped-head handoff.
+- Existing worktrees are cleanup inputs only. Never force-remove or prune one.
+  Removal requires separate authority, proof that no regression or unmerged
+  work would be lost, and a fresh recursive scan proving the path has no
+  symlink.
+- Exact-SHA CI may use only an automatically removed standalone clone/sandbox
+  that is not registered with `git worktree`.
+
 Rust (Axum) backend in `apps/api/` + Vite/TS/React frontend in `apps/web/`. It is
 a SQL console + observability dashboard over any SQLite-compatible database.
 
@@ -19,8 +32,10 @@ operations, release).
 - **Stay independent.** No workspace spanning sibling repos. `ops/ci/pr-ci.sh` is
   the green gate.
 - **Jankurai standard.** Audit only through `bash ops/ci/run-jankurai.sh`, which
-  verifies governed 1.6.11 at `/home/ubuntu/.jeryu/bin/jankurai`; user-local and
-  ambient-PATH binaries are forbidden. `just score`.
+  verifies governed `/home/ubuntu/.jeryu/bin/jankurai` reports `jankurai 1.6.11`
+  with SHA-256
+  `fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e`.
+  User-local and ambient-`PATH` auditors are forbidden. `just score`.
 - **MR-only.** Land via a jeryu PR (`gh pr create` → `jeryu.propose_patch`);
   `main` advances on forge merge and mirrors to `github.com/neverhuman/redline-web`.
 
