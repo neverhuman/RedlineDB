@@ -2,18 +2,80 @@
 set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-tmp_parent="${ROOT_DIR}/target/ci-tmp"
-mkdir -p -- "$tmp_parent"
-[[ -d "$tmp_parent" && ! -L "$tmp_parent" \
-  && "$(realpath -e -- "$tmp_parent")" == "$tmp_parent" ]] \
-  || fail "CI scratch root must be a physical directory inside the repository"
-tmp="$(mktemp -d "${tmp_parent}/redline-web-cargo-deny-cache.XXXXXX")"
+jain_ci_scratch_create "$ROOT_DIR" redline-web-cargo-deny-cache \
+  || fail "unable to create a custody-safe in-repository scratch directory"
+tmp="$JAIN_CI_SCRATCH_PATH"
 cleanup() {
   local rc=$?
-  rm -rf -- "$tmp"
-  return "$rc"
+  trap - EXIT
+  jain_ci_scratch_remove || exit 1
+  exit "$rc"
 }
 trap cleanup EXIT
+
+jain_ci_scratch_hostile_tests() {
+  local hostile="$tmp/scratch-custody"
+  local repo outside saved_parent saved_child sentinel
+  mkdir -m 0700 -- "$hostile"
+
+  repo="$hostile/symlinked-target"
+  outside="$hostile/symlinked-target-outside"
+  mkdir -m 0700 -- "$repo" "$outside"
+  ln -s -- "$outside" "$repo/target"
+  if (jain_ci_scratch_create "$repo" hostile); then
+    fail "symlinked target was accepted before scratch creation"
+  fi
+  [[ ! -e "$outside/ci-tmp" ]] || fail "symlinked target received an out-of-root write"
+
+  repo="$hostile/symlinked-parent"
+  outside="$hostile/symlinked-parent-outside"
+  mkdir -m 0700 -- "$repo" "$repo/target" "$outside"
+  ln -s -- "$outside" "$repo/target/ci-tmp"
+  if (jain_ci_scratch_create "$repo" hostile); then
+    fail "symlinked scratch parent was accepted before scratch creation"
+  fi
+  [[ -z "$(find "$outside" -mindepth 1 -print -quit)" ]] \
+    || fail "symlinked scratch parent received an out-of-root write"
+
+  repo="$hostile/wrong-parent-mode"
+  mkdir -m 0700 -- "$repo" "$repo/target" "$repo/target/ci-tmp"
+  chmod 0777 -- "$repo/target/ci-tmp"
+  if (jain_ci_scratch_create "$repo" hostile); then
+    fail "world-writable scratch parent was accepted"
+  fi
+  [[ -z "$(find "$repo/target/ci-tmp" -mindepth 1 -print -quit)" ]] \
+    || fail "wrong-mode scratch parent received a child write"
+
+  repo="$hostile/parent-swap"
+  mkdir -m 0700 -- "$repo"
+  (
+    jain_ci_scratch_create "$repo" hostile
+    saved_parent="${JAIN_CI_SCRATCH_PARENT}.saved"
+    mv -- "$JAIN_CI_SCRATCH_PARENT" "$saved_parent"
+    outside="$repo/outside"
+    mkdir -m 0700 -- "$outside" "$outside/$JAIN_CI_SCRATCH_LEAF"
+    sentinel="$outside/$JAIN_CI_SCRATCH_LEAF/sentinel"
+    printf 'preserve\n' >"$sentinel"
+    ln -s -- ../outside "$JAIN_CI_SCRATCH_PARENT"
+    ! jain_ci_scratch_remove
+    [[ -f "$sentinel" ]]
+  ) || fail "parent-swap cleanup did not fail closed"
+
+  repo="$hostile/child-swap"
+  mkdir -m 0700 -- "$repo"
+  (
+    jain_ci_scratch_create "$repo" hostile
+    saved_child="${JAIN_CI_SCRATCH_PATH}.saved"
+    mv -- "$JAIN_CI_SCRATCH_PATH" "$saved_child"
+    mkdir -m 0700 -- "$JAIN_CI_SCRATCH_PATH"
+    sentinel="$JAIN_CI_SCRATCH_PATH/sentinel"
+    printf 'preserve\n' >"$sentinel"
+    ! jain_ci_scratch_remove
+    [[ -f "$sentinel" ]]
+  ) || fail "child-swap cleanup did not fail closed"
+}
+
+jain_ci_scratch_hostile_tests
 
 export GIT_CONFIG_NOSYSTEM=1
 export GIT_CONFIG_GLOBAL=/dev/null

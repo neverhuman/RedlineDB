@@ -2,16 +2,14 @@
 set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-tmp_parent="${ROOT_DIR}/target/ci-tmp"
-mkdir -p -- "$tmp_parent"
-[[ -d "$tmp_parent" && ! -L "$tmp_parent" \
-  && "$(realpath -e -- "$tmp_parent")" == "$tmp_parent" ]] \
-  || fail "CI scratch root must be a physical directory inside the repository"
-tmp="$(mktemp -d "${tmp_parent}/redline-web-governed-jankurai.XXXXXX")"
+jain_ci_scratch_create "$ROOT_DIR" redline-web-governed-jankurai \
+  || fail "unable to create a custody-safe in-repository scratch directory"
+tmp="$JAIN_CI_SCRATCH_PATH"
 cleanup() {
   local rc=$?
-  rm -rf -- "$tmp"
-  return "$rc"
+  trap - EXIT
+  jain_ci_scratch_remove || exit 1
+  exit "$rc"
 }
 trap cleanup EXIT
 

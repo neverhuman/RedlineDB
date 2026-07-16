@@ -74,6 +74,100 @@ jain_sha256() {
   sha256sum -- "${1:?file is required}" | awk '{print $1}'
 }
 
+jain_ci_dir_identity() {
+  stat -Lc '%d:%i' -- "${1:?directory is required}"
+}
+
+jain_ci_scratch_dir_safe() {
+  local path="${1:?directory is required}" policy="${2:?mode policy is required}"
+  local mode
+  [[ -d "$path" && ! -L "$path" \
+    && "$(realpath -e -- "$path")" == "$path" \
+    && "$(stat -Lc '%u' -- "$path")" -eq "$EUID" ]] || return 1
+  mode="$(stat -Lc '%a' -- "$path")"
+  if [[ "$policy" == private ]]; then
+    [[ "$mode" == 700 ]]
+  else
+    (( (8#$mode & 0002) == 0 ))
+  fi
+}
+
+jain_ci_scratch_chain_matches() {
+  jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_ROOT" shared \
+    && [[ "$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_ROOT")" == "$JAIN_CI_SCRATCH_ROOT_ID" ]] \
+    && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_ROOT_FD}/.")" == "$JAIN_CI_SCRATCH_ROOT_ID" ]] \
+    && jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_TARGET" shared \
+    && [[ "$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_TARGET")" == "$JAIN_CI_SCRATCH_TARGET_ID" ]] \
+    && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_TARGET_FD}/.")" == "$JAIN_CI_SCRATCH_TARGET_ID" ]] \
+    && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_ROOT_FD}/target")" == "$JAIN_CI_SCRATCH_TARGET_ID" ]] \
+    && jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_PARENT" private \
+    && [[ "$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_PARENT")" == "$JAIN_CI_SCRATCH_PARENT_ID" ]] \
+    && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/.")" == "$JAIN_CI_SCRATCH_PARENT_ID" ]] \
+    && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_TARGET_FD}/ci-tmp")" == "$JAIN_CI_SCRATCH_PARENT_ID" ]] \
+    && jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_PATH" private \
+    && [[ "$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_PATH")" == "$JAIN_CI_SCRATCH_PATH_ID" ]] \
+    && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_PATH_FD}/.")" == "$JAIN_CI_SCRATCH_PATH_ID" ]] \
+    && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/${JAIN_CI_SCRATCH_LEAF}")" == "$JAIN_CI_SCRATCH_PATH_ID" ]]
+}
+
+jain_ci_scratch_create() {
+  local root="${1:?repository root is required}" label="${2:?scratch label is required}"
+  local created
+  [[ "$label" =~ ^[A-Za-z0-9._-]+$ ]] || return 1
+  JAIN_CI_SCRATCH_ROOT="$root"
+  jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_ROOT" shared || return 1
+  JAIN_CI_SCRATCH_ROOT_ID="$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_ROOT")"
+  exec {JAIN_CI_SCRATCH_ROOT_FD}<"$JAIN_CI_SCRATCH_ROOT" || return 1
+  [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_ROOT_FD}/.")" == "$JAIN_CI_SCRATCH_ROOT_ID" ]] \
+    || return 1
+
+  JAIN_CI_SCRATCH_TARGET="${JAIN_CI_SCRATCH_ROOT}/target"
+  if [[ ! -e "$JAIN_CI_SCRATCH_TARGET" && ! -L "$JAIN_CI_SCRATCH_TARGET" ]]; then
+    mkdir -m 0750 -- "/proc/self/fd/${JAIN_CI_SCRATCH_ROOT_FD}/target" || return 1
+  fi
+  jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_TARGET" shared || return 1
+  JAIN_CI_SCRATCH_TARGET_ID="$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_TARGET")"
+  exec {JAIN_CI_SCRATCH_TARGET_FD}<"/proc/self/fd/${JAIN_CI_SCRATCH_ROOT_FD}/target" \
+    || return 1
+  [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_TARGET_FD}/.")" == "$JAIN_CI_SCRATCH_TARGET_ID" ]] \
+    || return 1
+
+  JAIN_CI_SCRATCH_PARENT="${JAIN_CI_SCRATCH_TARGET}/ci-tmp"
+  if [[ ! -e "$JAIN_CI_SCRATCH_PARENT" && ! -L "$JAIN_CI_SCRATCH_PARENT" ]]; then
+    mkdir -m 0700 -- "/proc/self/fd/${JAIN_CI_SCRATCH_TARGET_FD}/ci-tmp" || return 1
+  fi
+  jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_PARENT" private || return 1
+  JAIN_CI_SCRATCH_PARENT_ID="$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_PARENT")"
+  exec {JAIN_CI_SCRATCH_PARENT_FD}<"/proc/self/fd/${JAIN_CI_SCRATCH_TARGET_FD}/ci-tmp" \
+    || return 1
+  [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/.")" == "$JAIN_CI_SCRATCH_PARENT_ID" ]] \
+    || return 1
+
+  created="$(mktemp -d "/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/${label}.XXXXXX")" \
+    || return 1
+  JAIN_CI_SCRATCH_LEAF="${created##*/}"
+  JAIN_CI_SCRATCH_PATH="${JAIN_CI_SCRATCH_PARENT}/${JAIN_CI_SCRATCH_LEAF}"
+  jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_PATH" private || return 1
+  JAIN_CI_SCRATCH_PATH_ID="$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_PATH")"
+  exec {JAIN_CI_SCRATCH_PATH_FD}<"/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/${JAIN_CI_SCRATCH_LEAF}" \
+    || return 1
+  jain_ci_scratch_chain_matches
+}
+
+jain_ci_scratch_remove() {
+  jain_ci_scratch_chain_matches || {
+    printf 'refusing scratch cleanup: directory custody changed\n' >&2
+    return 1
+  }
+  find -P "/proc/self/fd/${JAIN_CI_SCRATCH_PATH_FD}/." -xdev -depth -mindepth 1 -delete \
+    || return 1
+  jain_ci_scratch_chain_matches || {
+    printf 'refusing scratch removal: directory custody changed\n' >&2
+    return 1
+  }
+  rmdir -- "/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/${JAIN_CI_SCRATCH_LEAF}"
+}
+
 jain_verify_cargo_deny_clean_log() {
   local log_file="${1:?cargo-deny log is required}"
   local expected_sha256="f1a0fca39d4280363937aabd77783990ea6480bd9ca257816de3b68fc8efa845"
