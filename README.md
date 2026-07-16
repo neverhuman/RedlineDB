@@ -16,6 +16,8 @@
 `redline-web` is the observability surface of the **redline** family. It is 100%
 Rust (Axum backend) + Vite/TypeScript/React (frontend), with **no** dependency on
 the engine's internal crates: it speaks to any SQLite-compatible database.
+Agents and maintainers must read the canonical [AGENTS.md](AGENTS.md) ownership
+and proof guide before changing this repository.
 
 ## What it does
 

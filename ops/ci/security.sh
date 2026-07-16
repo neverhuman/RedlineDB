@@ -17,6 +17,10 @@ readonly SYFT_SHA256="eb9714fb8e4b8f2a647e7bb312f1e0b9f83a7aa30418658bf46583cfa8
 readonly SYFT_CONFIG="${ROOT_DIR}/ops/ci/syft.yaml"
 readonly RUSTSEC_DB="/home/ubuntu/.cargo/advisory-db"
 readonly RUSTSEC_DB_COMMIT="9f3e138091487e69144f536d36976e427a7a3307"
+readonly EXPECTED_SECURITY_COMMANDS="gitleaks detect; cargo audit; cargo deny; npm audit; zizmor; syft"
+
+[[ "${REDLINE_SECURITY_COMMANDS:-$EXPECTED_SECURITY_COMMANDS}" == "$EXPECTED_SECURITY_COMMANDS" ]] \
+  || fail "security command manifest does not match the governed release lane"
 
 for tool in git jq npm sha256sum realpath tar; do
   has "$tool" || fail "required local security tool is missing: $tool"
