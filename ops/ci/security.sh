@@ -14,6 +14,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 cd "$repo_root"
 mkdir -p target/security
+export CARGO_NET_OFFLINE=true
 
 # --- secret scanning ---------------------------------------------------------
 if has gitleaks; then
@@ -25,7 +26,11 @@ fi
 
 # --- dependency advisory review ---------------------------------------------
 if repo_has Cargo.lock; then
-    run_if_has cargo-audit "RustSec advisory scanning" cargo audit
+    rustsec_db="${CARGO_HOME:-/home/ubuntu/.cargo}/advisory-db"
+    verify_rustsec_db_identity "$rustsec_db" "$RUSTSEC_DB_COMMIT" \
+        || fail "pinned local RustSec database verification failed"
+    run_if_has cargo-audit "RustSec advisory scanning" \
+        cargo audit --db "$rustsec_db" --no-fetch
 elif repo_has Cargo.toml; then
     warn "skipping cargo-audit: Cargo.lock not present"
 fi
@@ -56,7 +61,8 @@ fi
 # --- SBOM / provenance -------------------------------------------------------
 if has syft; then
     log "security: SBOM generation"
-    ci_run syft dir:. -o "spdx-json=target/security/redline-testing.spdx.json"
+    ci_run env SYFT_CHECK_FOR_APP_UPDATE=false \
+        syft dir:. -o "spdx-json=target/security/redline-testing.spdx.json"
 else
     missing_tool syft "SBOM generation"
 fi
