@@ -1,0 +1,21 @@
+{
+  "error": "local Jeryu request failed: curl: (28) Operation timed out after 15002 milliseconds with 0 bytes received",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "repository": "root/jankurai-deploy",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codex/zero-worktree-policy-20260716",
+      "title": "Prohibit Git worktrees"
+    },
+    "method": "POST",
+    "path": "/repos/root/jankurai-deploy/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "fail",
+  "timestamp_unix": 1784166339
+}

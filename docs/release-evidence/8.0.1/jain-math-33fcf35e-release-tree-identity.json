@@ -1,0 +1,11 @@
+{
+  "commit": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+  "commit_input": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+  "mode": "dry-run",
+  "operation": "release-tree-identity",
+  "release_checksum_sha256": "97a0d01bc58e6427fefee23cc708139af711957ded69b697dd90ed7d52e97278",
+  "repository": "/home/ubuntu/jain-split/jain-math",
+  "schema_version": "jain.release-tree-identity/v1",
+  "status": "pass",
+  "timestamp_unix": 1784176107
+}

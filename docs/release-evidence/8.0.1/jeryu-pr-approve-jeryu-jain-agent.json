@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T04:59:12.398921548+00:00",
+      "head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:78dcae7d1121c80e44ae6f150f2f99e531cb851e:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "8818f70e04d68ae70657f6a3138d6407cbc490fb",
+      "checks": {
+        "failing": 1,
+        "passing": 0,
+        "pending": 0,
+        "skipped": 0,
+        "total": 1
+      },
+      "draft": false,
+      "entity": {
+        "id": "ddd44256-9604-4121-aaf4-7879d783f7cb#3",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 3,
+      "passport_hash": "passport:78dcae7d1121c80e44ae6f150f2f99e531cb851e:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "ddd44256-9604-4121-aaf4-7879d783f7cb",
+        "name": "jain-agent",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "docs: prohibit Git worktrees",
+      "updated_at": "2026-07-16T01:46:29.622836331+00:00"
+    }
+  },
+  "repository": "jeryu/jain-agent",
+  "request": {
+    "body": {
+      "body_markdown": "Independent review: clean-additive +13/-0 doc-only No-Git-Worktrees AGENTS.md policy block (sha256 342294d8), symlink-free, FF-able from main, owner-mandated. Ledger fingerprint corrected.",
+      "evidence": null,
+      "expected_head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-agent/pulls/3/reviews"
+  },
+  "response": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T04:59:12.390296082+00:00",
+      "head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:78dcae7d1121c80e44ae6f150f2f99e531cb851e:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "8818f70e04d68ae70657f6a3138d6407cbc490fb",
+      "checks": {
+        "failing": 1,
+        "passing": 0,
+        "pending": 0,
+        "skipped": 0,
+        "total": 1
+      },
+      "draft": false,
+      "entity": {
+        "id": "ddd44256-9604-4121-aaf4-7879d783f7cb#3",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 3,
+      "passport_hash": "passport:78dcae7d1121c80e44ae6f150f2f99e531cb851e:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "ddd44256-9604-4121-aaf4-7879d783f7cb",
+        "name": "jain-agent",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "docs: prohibit Git worktrees",
+      "updated_at": "2026-07-16T01:46:29.622836331+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784177948
+}

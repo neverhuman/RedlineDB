@@ -1,0 +1,1650 @@
+{
+  "control_plane": {
+    "branch": "main",
+    "current_tag": "jain-split-ops-v8.0.1-split.0",
+    "name": "jain-split-ops",
+    "path": "/home/ubuntu/jain-split/jain-split-ops",
+    "product_version": "8.0.1",
+    "protection_policy": "immutable-main-v1",
+    "release_checksum_sha256": "PENDING",
+    "release_commit": "PENDING",
+    "remote": "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
+    "required_check": "jain-split-ops/required",
+    "role": "family-control-plane",
+    "tag_revision": 0
+  },
+  "excluded_paths": [
+    {
+      "name": "jain-tools",
+      "owner": "workspace-ops",
+      "path": "/home/ubuntu/jain-split/jain-tools",
+      "reason": "local tooling checkout; not a managed Jain family product"
+    },
+    {
+      "name": "jain-feature-expansion",
+      "owner": "feature-expansion",
+      "path": "/home/ubuntu/jain-split/jain-feature-expansion",
+      "reason": "feature branch checkout; promotion requires reviewed family repository work"
+    },
+    {
+      "name": "jain-web-brand-favicon",
+      "owner": "web",
+      "path": "/home/ubuntu/jain-split/jain-web-brand-favicon",
+      "reason": "branding worktree; excluded from release source coverage"
+    },
+    {
+      "name": "jain-python",
+      "owner": "release-engineering",
+      "path": "/home/ubuntu/jain-split/jain-python",
+      "reason": "deferred from v8: product Python is outside the Rust-parity-only policy; branch and Jeryu history are preserved"
+    }
+  ],
+  "external_dependency_failures": [
+    "Redline proof lock is not cutover_eligible"
+  ],
+  "extras": [],
+  "family_repo_count": 25,
+  "infrastructure_failures": [
+    "jain-smartcluster: branch is Some(\"codex/jope-lime-smartcluster-20260713\"), expected main",
+    "jain-smartcluster: worktree is dirty",
+    "jain-smartcluster: immutable tag \"jain-smartcluster-v8.0.1-split.0\" is absent or does not point at HEAD"
+  ],
+  "infrastructure_repo_count": 1,
+  "managed_family_failures": [
+    "jain: branch is Some(\"codex/derived-manifest-sync-20260716\"), expected main",
+    "jain: worktree is dirty",
+    "jain: immutable tag \"jain-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-docs: worktree is dirty",
+    "jain-docs: immutable tag \"jain-docs-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-domain: branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+    "jain-domain: worktree is dirty",
+    "jain-domain: immutable tag \"jain-domain-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-math: branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+    "jain-math: worktree is dirty",
+    "jain-math: immutable tag \"jain-math-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-contracts: worktree is dirty",
+    "jain-contracts: immutable tag \"jain-contracts-v8.0.1-split.1\" is absent or does not point at HEAD",
+    "jain-catboost: branch is Some(\"release/v8.0.1/catboost-identity\"), expected main",
+    "jain-catboost: immutable tag \"jain-catboost-v8.0.1-split.2\" is absent or does not point at HEAD",
+    "jain-xgboost: branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+    "jain-xgboost: worktree is dirty",
+    "jain-xgboost: immutable tag \"jain-xgboost-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-lightgbm: branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+    "jain-lightgbm: worktree is dirty",
+    "jain-lightgbm: immutable tag \"jain-lightgbm-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-jable: branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+    "jain-jable: worktree is dirty",
+    "jain-jable: immutable tag \"jain-jable-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-battle-gpu: worktree is dirty",
+    "jain-battle-gpu: immutable tag \"jain-battle-gpu-v8.0.1-split.1\" is absent or does not point at HEAD",
+    "jain-starforge: branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+    "jain-starforge: worktree is dirty",
+    "jain-starforge: immutable tag \"jain-starforge-v8.0.1-split.2\" is absent or does not point at HEAD",
+    "jain-core: branch is Some(\"claude/lime-prime-core-v2-20260716\"), expected main",
+    "jain-core: worktree is dirty",
+    "jain-core: immutable tag \"jain-core-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-llm: branch is Some(\"release/v8.0.1/llm-identity-20260716\"), expected main",
+    "jain-llm: immutable tag \"jain-llm-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-agent: branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+    "jain-agent: worktree is dirty",
+    "jain-agent: immutable tag \"jain-agent-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-jnoccio: branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+    "jain-jnoccio: worktree is dirty",
+    "jain-jnoccio: immutable tag \"jain-jnoccio-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-zyal: branch is Some(\"release/v8.0.1/zyal-identity\"), expected main",
+    "jain-zyal: immutable tag \"jain-zyal-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-jailgun: branch is Some(\"release/v8.0.1/jailgun-identity\"), expected main",
+    "jain-jailgun: immutable tag \"jain-jailgun-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-research: branch is Some(\"release/v8.0.1/research-identity\"), expected main",
+    "jain-research: immutable tag \"jain-research-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-report: worktree is dirty",
+    "jain-report: immutable tag \"jain-report-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-tui: branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+    "jain-tui: worktree is dirty",
+    "jain-tui: immutable tag \"jain-tui-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-cli: branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+    "jain-cli: worktree is dirty",
+    "jain-cli: immutable tag \"jain-cli-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-web: branch is Some(\"codex/v8-web-jope-smartcluster-20260713\"), expected main",
+    "jain-web: worktree is dirty",
+    "jain-web: immutable tag \"jain-web-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-model-zoo: branch is Some(\"release/v8.0.1/model-zoo-identity\"), expected main",
+    "jain-model-zoo: immutable tag \"jain-model-zoo-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-ops: branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+    "jain-ops: worktree is dirty",
+    "jain-ops: immutable tag \"jain-ops-v8.0.1-split.0\" is absent or does not point at HEAD",
+    "jain-deploy: branch is Some(\"claude/release-testdata-20260714\"), expected main",
+    "jain-deploy: worktree is dirty",
+    "jain-deploy: immutable tag \"jain-deploy-v8.0.1-split.0\" is absent or does not point at HEAD"
+  ],
+  "managed_release_worktrees": [
+    {
+      "branch": "codex/derived-manifest-sync-20260716",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain.git",
+      "failures": [
+        "branch is Some(\"codex/derived-manifest-sync-20260716\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "ecd65f65effe4c279a7845c7fbcd39cc12c1a1d9",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain.git"
+      ],
+      "origin_main": "50836c741319c606546d12f55a7ae1ae63112f2d",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain",
+      "remote_main": "50836c741319c606546d12f55a7ae1ae63112f2d",
+      "remote_tag": "50836c741319c606546d12f55a7ae1ae63112f2d",
+      "required_check": "jain/required",
+      "status": "fail",
+      "tag": "jain-v8.0.1-split.0"
+    },
+    {
+      "branch": "main",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-docs.git",
+      "failures": [
+        "worktree is dirty",
+        "local and remote immutable tag jain-docs-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "b0245456d73d99a6698db053bf49300d6bbbac12",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-docs",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-docs.git"
+      ],
+      "origin_main": "b0245456d73d99a6698db053bf49300d6bbbac12",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-docs.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-docs",
+      "remote_main": "b0245456d73d99a6698db053bf49300d6bbbac12",
+      "remote_tag": "b0245456d73d99a6698db053bf49300d6bbbac12",
+      "required_check": "jain-docs/required",
+      "status": "fail",
+      "tag": "jain-docs-v8.0.1-split.0"
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-domain.git",
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-domain-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "4383aef8b23dd194db12778db3fc378ab526b145",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-domain",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-domain.git"
+      ],
+      "origin_main": "07a6879beba68ea7efb386231376bd03621fa0a4",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-domain.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-domain",
+      "remote_main": "07a6879beba68ea7efb386231376bd03621fa0a4",
+      "remote_tag": "07a6879beba68ea7efb386231376bd03621fa0a4",
+      "required_check": "jain-domain/required",
+      "status": "fail",
+      "tag": "jain-domain-v8.0.1-split.0"
+    },
+    {
+      "branch": "codex/jope-lime-rust-20260713",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-math.git",
+      "failures": [
+        "branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-math-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "edf5b53acd540e71dc0d2690e97d6a8199cb57d1",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-math",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-math.git"
+      ],
+      "origin_main": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-math.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-math",
+      "remote_main": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+      "remote_tag": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+      "required_check": "jain-math/required",
+      "status": "fail",
+      "tag": "jain-math-v8.0.1-split.0"
+    },
+    {
+      "branch": "main",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-contracts.git",
+      "failures": [
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-contracts-v8.0.1-split.1 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "ac58ea206d58a3dff3f9e2f6e2a16c03de28093f",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-contracts",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-contracts.git"
+      ],
+      "origin_main": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-contracts.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-contracts",
+      "remote_main": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+      "remote_tag": null,
+      "required_check": "jain-contracts/required",
+      "status": "fail",
+      "tag": "jain-contracts-v8.0.1-split.1"
+    },
+    {
+      "branch": "release/v8.0.1/catboost-identity",
+      "dirty": false,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-catboost.git",
+      "failures": [
+        "branch is Some(\"release/v8.0.1/catboost-identity\"), expected main",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-catboost-v8.0.1-split.2 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "8ba6b347071dfbd04e2fdc7b6cd3440587404e56",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-catboost",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-catboost.git"
+      ],
+      "origin_main": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-catboost.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-catboost",
+      "remote_main": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "remote_tag": null,
+      "required_check": "jain-catboost/required",
+      "status": "fail",
+      "tag": "jain-catboost-v8.0.1-split.2"
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-xgboost.git",
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-xgboost-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "8457e1906850c0cf48cd9547c01f9161b6db5484",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-xgboost",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-xgboost.git"
+      ],
+      "origin_main": "34d3534702727b463c4b00c799d06fda0f76438c",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-xgboost.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-xgboost",
+      "remote_main": "34d3534702727b463c4b00c799d06fda0f76438c",
+      "remote_tag": "34d3534702727b463c4b00c799d06fda0f76438c",
+      "required_check": "jain-xgboost/required",
+      "status": "fail",
+      "tag": "jain-xgboost-v8.0.1-split.0"
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-lightgbm.git",
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-lightgbm-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "84a1c776903b64d32c10d375e21bb876b921405b",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-lightgbm",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-lightgbm.git"
+      ],
+      "origin_main": "03102cb3c1fa8bda05a66b4fe072c17524fac6fc",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-lightgbm.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-lightgbm",
+      "remote_main": "03102cb3c1fa8bda05a66b4fe072c17524fac6fc",
+      "remote_tag": "03102cb3c1fa8bda05a66b4fe072c17524fac6fc",
+      "required_check": "jain-lightgbm/required",
+      "status": "fail",
+      "tag": "jain-lightgbm-v8.0.1-split.0"
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-jable.git",
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-jable-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "9a38221906d8918efa3b8d8ef582423f2a23dafc",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-jable",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-jable.git"
+      ],
+      "origin_main": "e119908dd4f522fdbada7ddb461fb10c0dd7f563",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-jable.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-jable",
+      "remote_main": "e119908dd4f522fdbada7ddb461fb10c0dd7f563",
+      "remote_tag": "e119908dd4f522fdbada7ddb461fb10c0dd7f563",
+      "required_check": "jain-jable/required",
+      "status": "fail",
+      "tag": "jain-jable-v8.0.1-split.0"
+    },
+    {
+      "branch": "main",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git",
+      "failures": [
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-battle-gpu-v8.0.1-split.1 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "7dd5989ec0940bf9f81ebaf79cdce8f06eaec121",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-battle-gpu",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git"
+      ],
+      "origin_main": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-battle-gpu",
+      "remote_main": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+      "remote_tag": null,
+      "required_check": "jain-battle-gpu/required",
+      "status": "fail",
+      "tag": "jain-battle-gpu-v8.0.1-split.1"
+    },
+    {
+      "branch": "codex/jope-lime-rust-20260713",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-starforge.git",
+      "failures": [
+        "branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-starforge-v8.0.1-split.2 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "8d76be0e4429bdc0413aab5462dd44c929bc062b",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-starforge",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-starforge.git"
+      ],
+      "origin_main": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-starforge.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-starforge",
+      "remote_main": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+      "remote_tag": null,
+      "required_check": "jain-starforge/required",
+      "status": "fail",
+      "tag": "jain-starforge-v8.0.1-split.2"
+    },
+    {
+      "branch": "claude/lime-prime-core-v2-20260716",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-core.git",
+      "failures": [
+        "branch is Some(\"claude/lime-prime-core-v2-20260716\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-core-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "e7850b47e1beaa808f11f9e6f528f34504ee7284",
+      "kind": "family",
+      "local_tag": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "name": "jain-core",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-core.git"
+      ],
+      "origin_main": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-core.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-core",
+      "remote_main": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "remote_tag": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "required_check": "jain-core/required",
+      "status": "fail",
+      "tag": "jain-core-v8.0.1-split.0"
+    },
+    {
+      "branch": "release/v8.0.1/llm-identity-20260716",
+      "dirty": false,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-llm.git",
+      "failures": [
+        "branch is Some(\"release/v8.0.1/llm-identity-20260716\"), expected main",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-llm-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-llm",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-llm.git"
+      ],
+      "origin_main": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-llm.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-llm",
+      "remote_main": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+      "remote_tag": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+      "required_check": "jain-llm/required",
+      "status": "fail",
+      "tag": "jain-llm-v8.0.1-split.0"
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-agent.git",
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-agent-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-agent",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-agent.git"
+      ],
+      "origin_main": "8818f70e04d68ae70657f6a3138d6407cbc490fb",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-agent.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-agent",
+      "remote_main": "8818f70e04d68ae70657f6a3138d6407cbc490fb",
+      "remote_tag": null,
+      "required_check": "jain-agent/required",
+      "status": "fail",
+      "tag": "jain-agent-v8.0.1-split.0"
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-jnoccio.git",
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-jnoccio-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "8ce171cb7dbae2fb454a5ca08bdbb92aad56428d",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-jnoccio",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-jnoccio.git"
+      ],
+      "origin_main": "4810be89abad8e4e52b9be9fa9b49a4891970891",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-jnoccio.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-jnoccio",
+      "remote_main": "4810be89abad8e4e52b9be9fa9b49a4891970891",
+      "remote_tag": null,
+      "required_check": "jain-jnoccio/required",
+      "status": "fail",
+      "tag": "jain-jnoccio-v8.0.1-split.0"
+    },
+    {
+      "branch": "release/v8.0.1/zyal-identity",
+      "dirty": false,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-zyal.git",
+      "failures": [
+        "branch is Some(\"release/v8.0.1/zyal-identity\"), expected main",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-zyal-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "f385b20ab613fbc691f985c4d7489133512878b0",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-zyal",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-zyal.git"
+      ],
+      "origin_main": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-zyal.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-zyal",
+      "remote_main": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
+      "remote_tag": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
+      "required_check": "jain-zyal/required",
+      "status": "fail",
+      "tag": "jain-zyal-v8.0.1-split.0"
+    },
+    {
+      "branch": "release/v8.0.1/jailgun-identity",
+      "dirty": false,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-jailgun.git",
+      "failures": [
+        "branch is Some(\"release/v8.0.1/jailgun-identity\"), expected main",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-jailgun-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "6c51a10dda78cac94f2355c0bf032665887ba218",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-jailgun",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-jailgun.git"
+      ],
+      "origin_main": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-jailgun.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-jailgun",
+      "remote_main": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+      "remote_tag": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+      "required_check": "jain-jailgun/required",
+      "status": "fail",
+      "tag": "jain-jailgun-v8.0.1-split.0"
+    },
+    {
+      "branch": "release/v8.0.1/research-identity",
+      "dirty": false,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-research.git",
+      "failures": [
+        "branch is Some(\"release/v8.0.1/research-identity\"), expected main",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-research-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-research",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-research.git"
+      ],
+      "origin_main": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-research.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-research",
+      "remote_main": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+      "remote_tag": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+      "required_check": "jain-research/required",
+      "status": "fail",
+      "tag": "jain-research-v8.0.1-split.0"
+    },
+    {
+      "branch": "main",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-report.git",
+      "failures": [
+        "worktree is dirty",
+        "local and remote immutable tag jain-report-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "5cef1d0079908485857009ff18db79d8e4078068",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-report",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-report.git"
+      ],
+      "origin_main": "5cef1d0079908485857009ff18db79d8e4078068",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-report.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-report",
+      "remote_main": "5cef1d0079908485857009ff18db79d8e4078068",
+      "remote_tag": null,
+      "required_check": "jain-report/required",
+      "status": "fail",
+      "tag": "jain-report-v8.0.1-split.0"
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-tui.git",
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-tui-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "33d45089a107cc1eebd95b233b0dcf4a20e8c9e3",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-tui",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-tui.git"
+      ],
+      "origin_main": "b96010d56b07c54972dd9f2d29f691b2cb1cb375",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-tui.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-tui",
+      "remote_main": "b96010d56b07c54972dd9f2d29f691b2cb1cb375",
+      "remote_tag": null,
+      "required_check": "jain-tui/required",
+      "status": "fail",
+      "tag": "jain-tui-v8.0.1-split.0"
+    },
+    {
+      "branch": "codex/jope-lime-rust-20260713",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-cli.git",
+      "failures": [
+        "branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+        "worktree is dirty",
+        "local and remote immutable tag jain-cli-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-cli",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-cli.git"
+      ],
+      "origin_main": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-cli.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-cli",
+      "remote_main": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3",
+      "remote_tag": null,
+      "required_check": "jain-cli/required",
+      "status": "fail",
+      "tag": "jain-cli-v8.0.1-split.0"
+    },
+    {
+      "branch": "codex/v8-web-jope-smartcluster-20260713",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-web.git",
+      "failures": [
+        "branch is Some(\"codex/v8-web-jope-smartcluster-20260713\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-web-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "144963fcb9af6d1de2cada113b8d9283ec54cd25",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-web",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-web.git"
+      ],
+      "origin_main": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-web.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-web",
+      "remote_main": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "remote_tag": null,
+      "required_check": "jain-web/required",
+      "status": "fail",
+      "tag": "jain-web-v8.0.1-split.0"
+    },
+    {
+      "branch": "release/v8.0.1/model-zoo-identity",
+      "dirty": false,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-model-zoo.git",
+      "failures": [
+        "branch is Some(\"release/v8.0.1/model-zoo-identity\"), expected main",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-model-zoo-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-model-zoo",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-model-zoo.git"
+      ],
+      "origin_main": "fd00a3df96d9769e0282582aba0c3579e568db6c",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-model-zoo.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-model-zoo",
+      "remote_main": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+      "remote_tag": "fd00a3df96d9769e0282582aba0c3579e568db6c",
+      "required_check": "jain-model-zoo/required",
+      "status": "fail",
+      "tag": "jain-model-zoo-v8.0.1-split.0"
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-ops.git",
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-ops-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "68569a9344164b76e880fbb54f74839acc598a08",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-ops",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-ops.git"
+      ],
+      "origin_main": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-ops.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-ops",
+      "remote_main": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "remote_tag": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "required_check": "jain-ops/required",
+      "status": "fail",
+      "tag": "jain-ops-v8.0.1-split.0"
+    },
+    {
+      "branch": "claude/release-testdata-20260714",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-deploy.git",
+      "failures": [
+        "branch is Some(\"claude/release-testdata-20260714\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-deploy-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "f7c760443a497f86138fc16b480335dcd2d8b2ac",
+      "kind": "family",
+      "local_tag": null,
+      "name": "jain-deploy",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-deploy.git"
+      ],
+      "origin_main": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-deploy.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-deploy",
+      "remote_main": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "remote_tag": null,
+      "required_check": "jain-deploy/required",
+      "status": "fail",
+      "tag": "jain-deploy-v8.0.1-split.0"
+    },
+    {
+      "branch": "codex/jope-lime-smartcluster-20260713",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git",
+      "failures": [
+        "branch is Some(\"codex/jope-lime-smartcluster-20260713\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-smartcluster-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "ffd2cabea46e2b539822ba4ca7d9e1647d0c561e",
+      "kind": "required-infrastructure",
+      "local_tag": "c28c5c8348ec58b39cde0e8d510f26fec3cbfb06",
+      "name": "jain-smartcluster",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git"
+      ],
+      "origin_main": "c28c5c8348ec58b39cde0e8d510f26fec3cbfb06",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-smartcluster",
+      "remote_main": "c28c5c8348ec58b39cde0e8d510f26fec3cbfb06",
+      "remote_tag": "c28c5c8348ec58b39cde0e8d510f26fec3cbfb06",
+      "required_check": "jain-smartcluster/required",
+      "status": "fail",
+      "tag": "jain-smartcluster-v8.0.1-split.0"
+    },
+    {
+      "branch": "claude/v8-release-fixes-20260714",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
+      "failures": [
+        "branch is Some(\"claude/v8-release-fixes-20260714\"), expected main",
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag jain-split-ops-v8.0.1-split.0 must both resolve to HEAD"
+      ],
+      "family": "jain-split",
+      "family_registered": true,
+      "head": "7eeff1ceb6876c0fe83b6fadb3d013580ecc7f4c",
+      "kind": "control-plane",
+      "local_tag": null,
+      "name": "jain-split-ops",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git"
+      ],
+      "origin_main": "88a673c6c0e829721eebf8265036c1b18f2ef139",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git"
+      ],
+      "path": "/home/ubuntu/jain-split/jain-split-ops",
+      "remote_main": "88a673c6c0e829721eebf8265036c1b18f2ef139",
+      "remote_tag": null,
+      "required_check": "jain-split-ops/required",
+      "status": "fail",
+      "tag": "jain-split-ops-v8.0.1-split.0"
+    },
+    {
+      "branch": "main",
+      "dirty": false,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/redlineDB.git",
+      "failures": [],
+      "family": "redline-split",
+      "family_registered": true,
+      "head": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "kind": "nested-family",
+      "local_tag": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "name": "redline",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/redlineDB.git"
+      ],
+      "origin_main": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/redlineDB.git"
+      ],
+      "path": "/home/ubuntu/jain-split/redline-split/redline",
+      "remote_main": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "remote_tag": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "required_check": "redline/required",
+      "status": "pass",
+      "tag": "redline-v4.1.0-jain.2"
+    },
+    {
+      "branch": "main",
+      "dirty": false,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/redline-core.git",
+      "failures": [],
+      "family": "redline-split",
+      "family_registered": true,
+      "head": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+      "kind": "nested-family",
+      "local_tag": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+      "name": "redline-core",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/redline-core.git"
+      ],
+      "origin_main": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/redline-core.git"
+      ],
+      "path": "/home/ubuntu/jain-split/redline-split/redline-core",
+      "remote_main": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+      "remote_tag": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+      "required_check": "redline-core/required",
+      "status": "pass",
+      "tag": "redline-core-v4.1.0-jain.4"
+    },
+    {
+      "branch": "main",
+      "dirty": false,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/redline-testing.git",
+      "failures": [],
+      "family": "redline-split",
+      "family_registered": true,
+      "head": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "kind": "nested-family",
+      "local_tag": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "name": "redline-testing",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/redline-testing.git"
+      ],
+      "origin_main": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/redline-testing.git"
+      ],
+      "path": "/home/ubuntu/jain-split/redline-split/redline-testing",
+      "remote_main": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "remote_tag": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "required_check": "redline-testing/required",
+      "status": "pass",
+      "tag": "redline-testing-v1.0.1-jain.1"
+    },
+    {
+      "branch": "main",
+      "dirty": false,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/redline-web.git",
+      "failures": [],
+      "family": "redline-split",
+      "family_registered": true,
+      "head": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+      "kind": "nested-family",
+      "local_tag": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+      "name": "redline-web",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/redline-web.git"
+      ],
+      "origin_main": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/redline-web.git"
+      ],
+      "path": "/home/ubuntu/jain-split/redline-split/redline-web",
+      "remote_main": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+      "remote_tag": "09fd93be10238cd85abc164b0b01cf0f681ea304",
+      "required_check": "redline-web/required",
+      "status": "pass",
+      "tag": "redline-web-v0.1.0-jain.1"
+    },
+    {
+      "branch": "main",
+      "dirty": true,
+      "expected_branch": "main",
+      "expected_remote": "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git",
+      "failures": [
+        "worktree is dirty",
+        "HEAD, origin/main, and remote main are not equal",
+        "local and remote immutable tag redline-split-ops-v8.0.0-split.0 must both resolve to HEAD"
+      ],
+      "family": "redline-split",
+      "family_registered": true,
+      "head": "d698fa18650802d13c404ce8aa8977446639bb9d",
+      "kind": "nested-control-plane",
+      "local_tag": null,
+      "name": "redline-split-ops",
+      "origin_fetch_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
+      ],
+      "origin_main": "b192d5229a911d6bdd185589b6cd6cc652271139",
+      "origin_push_endpoints": [
+        "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
+      ],
+      "path": "/home/ubuntu/jain-split/redline-split-ops",
+      "remote_main": "d698fa18650802d13c404ce8aa8977446639bb9d",
+      "remote_tag": null,
+      "required_check": "redline-split-ops/required",
+      "status": "fail",
+      "tag": "redline-split-ops-v8.0.0-split.0"
+    }
+  ],
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "manifest_failures": [],
+  "repo_count": 26,
+  "repositories": [
+    {
+      "branch": "codex/derived-manifest-sync-20260716",
+      "commit": "ecd65f65effe4c279a7845c7fbcd39cc12c1a1d9",
+      "dependency_resolution": [],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/derived-manifest-sync-20260716\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain",
+      "path": "/home/ubuntu/jain-split/jain",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain.git",
+      "status": "fail",
+      "tag": "jain-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "main",
+      "commit": "b0245456d73d99a6698db053bf49300d6bbbac12",
+      "dependency_resolution": [],
+      "dirty": true,
+      "failures": [
+        "worktree is dirty",
+        "immutable tag \"jain-docs-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-docs",
+      "path": "/home/ubuntu/jain-split/jain-docs",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-docs.git",
+      "status": "fail",
+      "tag": "jain-docs-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "commit": "4383aef8b23dd194db12778db3fc378ab526b145",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-domain-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-domain",
+      "path": "/home/ubuntu/jain-split/jain-domain",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-domain.git",
+      "status": "fail",
+      "tag": "jain-domain-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "codex/jope-lime-rust-20260713",
+      "commit": "edf5b53acd540e71dc0d2690e97d6a8199cb57d1",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-math-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-math",
+      "path": "/home/ubuntu/jain-split/jain-math",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-math.git",
+      "status": "fail",
+      "tag": "jain-math-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "main",
+      "commit": "ac58ea206d58a3dff3f9e2f6e2a16c03de28093f",
+      "dependency_resolution": [],
+      "dirty": true,
+      "failures": [
+        "worktree is dirty",
+        "immutable tag \"jain-contracts-v8.0.1-split.1\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-contracts",
+      "path": "/home/ubuntu/jain-split/jain-contracts",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-contracts.git",
+      "status": "fail",
+      "tag": "jain-contracts-v8.0.1-split.1",
+      "tag_commit": null,
+      "untracked": true
+    },
+    {
+      "branch": "release/v8.0.1/catboost-identity",
+      "commit": "8ba6b347071dfbd04e2fdc7b6cd3440587404e56",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": false,
+      "failures": [
+        "branch is Some(\"release/v8.0.1/catboost-identity\"), expected main",
+        "immutable tag \"jain-catboost-v8.0.1-split.2\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-catboost",
+      "path": "/home/ubuntu/jain-split/jain-catboost",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-catboost.git",
+      "status": "fail",
+      "tag": "jain-catboost-v8.0.1-split.2",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "commit": "8457e1906850c0cf48cd9547c01f9161b6db5484",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-xgboost-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-xgboost",
+      "path": "/home/ubuntu/jain-split/jain-xgboost",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-xgboost.git",
+      "status": "fail",
+      "tag": "jain-xgboost-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "commit": "84a1c776903b64d32c10d375e21bb876b921405b",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-lightgbm-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-lightgbm",
+      "path": "/home/ubuntu/jain-split/jain-lightgbm",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-lightgbm.git",
+      "status": "fail",
+      "tag": "jain-lightgbm-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "commit": "9a38221906d8918efa3b8d8ef582423f2a23dafc",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-jable-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-jable",
+      "path": "/home/ubuntu/jain-split/jain-jable",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-jable.git",
+      "status": "fail",
+      "tag": "jain-jable-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "main",
+      "commit": "7dd5989ec0940bf9f81ebaf79cdce8f06eaec121",
+      "dependency_resolution": [
+        "git",
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "worktree is dirty",
+        "immutable tag \"jain-battle-gpu-v8.0.1-split.1\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-battle-gpu",
+      "path": "/home/ubuntu/jain-split/jain-battle-gpu",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git",
+      "status": "fail",
+      "tag": "jain-battle-gpu-v8.0.1-split.1",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "codex/jope-lime-rust-20260713",
+      "commit": "8d76be0e4429bdc0413aab5462dd44c929bc062b",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-starforge-v8.0.1-split.2\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-starforge",
+      "path": "/home/ubuntu/jain-split/jain-starforge",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-starforge.git",
+      "status": "fail",
+      "tag": "jain-starforge-v8.0.1-split.2",
+      "tag_commit": null,
+      "untracked": true
+    },
+    {
+      "branch": "claude/lime-prime-core-v2-20260716",
+      "commit": "e7850b47e1beaa808f11f9e6f528f34504ee7284",
+      "dependency_resolution": [
+        "git",
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"claude/lime-prime-core-v2-20260716\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-core-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-core",
+      "path": "/home/ubuntu/jain-split/jain-core",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-core.git",
+      "status": "fail",
+      "tag": "jain-core-v8.0.1-split.0",
+      "tag_commit": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "untracked": false
+    },
+    {
+      "branch": "release/v8.0.1/llm-identity-20260716",
+      "commit": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": false,
+      "failures": [
+        "branch is Some(\"release/v8.0.1/llm-identity-20260716\"), expected main",
+        "immutable tag \"jain-llm-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-llm",
+      "path": "/home/ubuntu/jain-split/jain-llm",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-llm.git",
+      "status": "fail",
+      "tag": "jain-llm-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "commit": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "dependency_resolution": [
+        "git",
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-agent-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-agent",
+      "path": "/home/ubuntu/jain-split/jain-agent",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-agent.git",
+      "status": "fail",
+      "tag": "jain-agent-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "commit": "8ce171cb7dbae2fb454a5ca08bdbb92aad56428d",
+      "dependency_resolution": [
+        "git",
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-jnoccio-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-jnoccio",
+      "path": "/home/ubuntu/jain-split/jain-jnoccio",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-jnoccio.git",
+      "status": "fail",
+      "tag": "jain-jnoccio-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "release/v8.0.1/zyal-identity",
+      "commit": "f385b20ab613fbc691f985c4d7489133512878b0",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": false,
+      "failures": [
+        "branch is Some(\"release/v8.0.1/zyal-identity\"), expected main",
+        "immutable tag \"jain-zyal-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-zyal",
+      "path": "/home/ubuntu/jain-split/jain-zyal",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-zyal.git",
+      "status": "fail",
+      "tag": "jain-zyal-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "release/v8.0.1/jailgun-identity",
+      "commit": "6c51a10dda78cac94f2355c0bf032665887ba218",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": false,
+      "failures": [
+        "branch is Some(\"release/v8.0.1/jailgun-identity\"), expected main",
+        "immutable tag \"jain-jailgun-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-jailgun",
+      "path": "/home/ubuntu/jain-split/jain-jailgun",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-jailgun.git",
+      "status": "fail",
+      "tag": "jain-jailgun-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "release/v8.0.1/research-identity",
+      "commit": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": false,
+      "failures": [
+        "branch is Some(\"release/v8.0.1/research-identity\"), expected main",
+        "immutable tag \"jain-research-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-research",
+      "path": "/home/ubuntu/jain-split/jain-research",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-research.git",
+      "status": "fail",
+      "tag": "jain-research-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "main",
+      "commit": "5cef1d0079908485857009ff18db79d8e4078068",
+      "dependency_resolution": [
+        "git",
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "worktree is dirty",
+        "immutable tag \"jain-report-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-report",
+      "path": "/home/ubuntu/jain-split/jain-report",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-report.git",
+      "status": "fail",
+      "tag": "jain-report-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": true
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "commit": "33d45089a107cc1eebd95b233b0dcf4a20e8c9e3",
+      "dependency_resolution": [
+        "git",
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-tui-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-tui",
+      "path": "/home/ubuntu/jain-split/jain-tui",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-tui.git",
+      "status": "fail",
+      "tag": "jain-tui-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "codex/jope-lime-rust-20260713",
+      "commit": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3",
+      "dependency_resolution": [
+        "git",
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/jope-lime-rust-20260713\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-cli-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-cli",
+      "path": "/home/ubuntu/jain-split/jain-cli",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-cli.git",
+      "status": "fail",
+      "tag": "jain-cli-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": true
+    },
+    {
+      "branch": "codex/v8-web-jope-smartcluster-20260713",
+      "commit": "144963fcb9af6d1de2cada113b8d9283ec54cd25",
+      "dependency_resolution": [
+        "git",
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/v8-web-jope-smartcluster-20260713\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-web-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-web",
+      "path": "/home/ubuntu/jain-split/jain-web",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-web.git",
+      "status": "fail",
+      "tag": "jain-web-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": true
+    },
+    {
+      "branch": "release/v8.0.1/model-zoo-identity",
+      "commit": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+      "dependency_resolution": [],
+      "dirty": false,
+      "failures": [
+        "branch is Some(\"release/v8.0.1/model-zoo-identity\"), expected main",
+        "immutable tag \"jain-model-zoo-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-model-zoo",
+      "path": "/home/ubuntu/jain-split/jain-model-zoo",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-model-zoo.git",
+      "status": "fail",
+      "tag": "jain-model-zoo-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "codex/zero-worktree-policy-20260716",
+      "commit": "68569a9344164b76e880fbb54f74839acc598a08",
+      "dependency_resolution": [],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/zero-worktree-policy-20260716\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-ops-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-ops",
+      "path": "/home/ubuntu/jain-split/jain-ops",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-ops.git",
+      "status": "fail",
+      "tag": "jain-ops-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "claude/release-testdata-20260714",
+      "commit": "f7c760443a497f86138fc16b480335dcd2d8b2ac",
+      "dependency_resolution": [
+        "path",
+        "git",
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"claude/release-testdata-20260714\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-deploy-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "family",
+      "name": "jain-deploy",
+      "path": "/home/ubuntu/jain-split/jain-deploy",
+      "remote": "http://127.0.0.1:8787/git/jeryu/jain-deploy.git",
+      "status": "fail",
+      "tag": "jain-deploy-v8.0.1-split.0",
+      "tag_commit": null,
+      "untracked": false
+    },
+    {
+      "branch": "codex/jope-lime-smartcluster-20260713",
+      "commit": "ffd2cabea46e2b539822ba4ca7d9e1647d0c561e",
+      "dependency_resolution": [
+        "registry"
+      ],
+      "dirty": true,
+      "failures": [
+        "branch is Some(\"codex/jope-lime-smartcluster-20260713\"), expected main",
+        "worktree is dirty",
+        "immutable tag \"jain-smartcluster-v8.0.1-split.0\" is absent or does not point at HEAD"
+      ],
+      "generated": true,
+      "kind": "required-infrastructure",
+      "name": "jain-smartcluster",
+      "path": "/home/ubuntu/jain-split/jain-smartcluster",
+      "remote": "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git",
+      "status": "fail",
+      "tag": "jain-smartcluster-v8.0.1-split.0",
+      "tag_commit": "c28c5c8348ec58b39cde0e8d510f26fec3cbfb06",
+      "untracked": true
+    }
+  ],
+  "schema_version": "jain-split-ops.preflight/v1",
+  "status": "fail",
+  "unmanaged_extras": []
+}

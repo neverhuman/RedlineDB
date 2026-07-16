@@ -257,3 +257,56 @@ fn bare_mirror_refresh_is_dry_run_by_default_and_verifies_applied_refs() {
         .expect("mirror head UTF-8");
     assert_eq!(source_head.trim(), mirror_head.trim());
 }
+
+#[test]
+fn active_control_plane_ci_has_zero_worktree_and_linked_sibling_policy() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    for path in [root.join("AGENTS.md"), root.join("ops/AGENTS.md")] {
+        let instructions = fs::read_to_string(&path).expect("read control-plane instructions");
+        assert!(
+            instructions.contains("zero-worktree rule")
+                || instructions.contains("Do not create Git worktrees"),
+            "{} omits the zero-worktree rule",
+            path.display()
+        );
+        assert!(
+            instructions.contains("independent clone"),
+            "{} omits the independent-sibling-clone rule",
+            path.display()
+        );
+    }
+
+    fn visit(path: &Path, files: &mut Vec<PathBuf>) {
+        for entry in fs::read_dir(path).expect("read active control-plane source") {
+            let entry = entry.expect("read source entry");
+            let path = entry.path();
+            if path.is_dir() {
+                visit(&path, files);
+            } else if path.is_file() {
+                files.push(path);
+            }
+        }
+    }
+
+    let mut files = Vec::new();
+    for path in [
+        root.join("ops/ci"),
+        root.join("ops/split"),
+        root.join("scripts"),
+    ] {
+        visit(&path, &mut files);
+    }
+    for path in files {
+        let source = fs::read_to_string(&path).expect("read active control-plane helper");
+        assert!(
+            !source.contains("git worktree add"),
+            "{} invokes prohibited registered checkout creation",
+            path.display()
+        );
+        assert!(
+            !source.contains("ln -s") && !source.contains("ln --symbolic"),
+            "{} creates a linked sibling or artifact path",
+            path.display()
+        );
+    }
+}

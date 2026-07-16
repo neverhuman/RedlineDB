@@ -1,0 +1,11 @@
+{
+  "commit": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+  "commit_input": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+  "mode": "dry-run",
+  "operation": "release-tree-identity",
+  "release_checksum_sha256": "00c9eda87505ed94d6cca797f371206699fe5c1f6bbcfab8ee5a9b1045554269",
+  "repository": "/home/ubuntu/jain-split/jain-model-zoo",
+  "schema_version": "jain.release-tree-identity/v1",
+  "status": "pass",
+  "timestamp_unix": 1784174342
+}

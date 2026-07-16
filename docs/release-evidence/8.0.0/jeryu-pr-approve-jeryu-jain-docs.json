@@ -3,14 +3,20 @@
   "mode": "apply",
   "operation": "jeryu-local pr-approve",
   "readback": {
-    "description": "Candidate-only corrective release. Adds fail-closed documentation, artifact, contract, security, SBOM, and Jankurai gates. No publication or production mutation.",
+    "description": "",
     "merge_passport": {
-      "blockers": [],
-      "evaluated_at": "2026-07-14T01:44:43.702523191+00:00",
-      "head_sha": "af84a049bfd4ea959ecf1657edf63c7cc5c60e48",
-      "status": "pass"
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T03:10:33.202477727+00:00",
+      "head_sha": "b0245456d73d99a6698db053bf49300d6bbbac12",
+      "status": "blocked"
     },
-    "passport_hash": "passport:af84a049bfd4ea959ecf1657edf63c7cc5c60e48:Pass:0:0:0:1",
+    "passport_hash": "passport:b0245456d73d99a6698db053bf49300d6bbbac12:Blocked:1:1:0:1",
     "summary": {
       "agents": {
         "active_sessions": 0,
@@ -32,31 +38,31 @@
         }
       ],
       "base_ref": "main",
-      "base_sha": "908d0e6b316e56ff03faf88ccafffc33a9ebf7d6",
+      "base_sha": "af84a049bfd4ea959ecf1657edf63c7cc5c60e48",
       "checks": {
-        "failing": 0,
-        "passing": 2,
+        "failing": 1,
+        "passing": 1,
         "pending": 0,
         "skipped": 0,
         "total": 2
       },
       "draft": false,
       "entity": {
-        "id": "9bfcef8e-0239-4420-9942-6ad366b4b635#9",
+        "id": "9bfcef8e-0239-4420-9942-6ad366b4b635#10",
         "kind": "pull_request"
       },
-      "head_ref": "codex/v8-split1-corrective-20260713",
-      "head_sha": "af84a049bfd4ea959ecf1657edf63c7cc5c60e48",
+      "head_ref": "claude/docs-v801-corrections",
+      "head_sha": "b0245456d73d99a6698db053bf49300d6bbbac12",
       "labels": [],
       "mergeable": {
-        "can_merge": true,
-        "exact_head_sha": "af84a049bfd4ea959ecf1657edf63c7cc5c60e48",
-        "level": "mergeable",
-        "reason": null,
-        "required_gate": null
+        "can_merge": false,
+        "exact_head_sha": "b0245456d73d99a6698db053bf49300d6bbbac12",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
       },
-      "number": 9,
-      "passport_hash": "passport:af84a049bfd4ea959ecf1657edf63c7cc5c60e48:Pass:0:0:0:1",
+      "number": 10,
+      "passport_hash": "passport:b0245456d73d99a6698db053bf49300d6bbbac12:Blocked:1:1:0:1",
       "repo": {
         "host": "jeryu",
         "id": "9bfcef8e-0239-4420-9942-6ad366b4b635",
@@ -71,31 +77,37 @@
         "user_review_state": null
       },
       "state": "open",
-      "title": "release: re-cut Jain Docs 8.0.0 split.1",
-      "updated_at": "2026-07-13T19:11:48.961370940+00:00"
+      "title": "manual: GPU image is GPU-only; ch6 pull/dump + port env reality",
+      "updated_at": "2026-07-16T02:59:15.561662343+00:00"
     }
   },
   "repository": "jeryu/jain-docs",
   "request": {
     "body": {
-      "body_markdown": "Reviewed exact head and green required/Jankurai evidence.",
+      "body_markdown": null,
       "evidence": null,
-      "expected_head_sha": "af84a049bfd4ea959ecf1657edf63c7cc5c60e48",
+      "expected_head_sha": "b0245456d73d99a6698db053bf49300d6bbbac12",
       "thread_comments": [],
       "verdict": "approve"
     },
     "method": "POST",
-    "path": "/api/v1/repos/jeryu%2Fjain-docs/pulls/9/reviews"
+    "path": "/api/v1/repos/jeryu%2Fjain-docs/pulls/10/reviews"
   },
   "response": {
-    "description": "Candidate-only corrective release. Adds fail-closed documentation, artifact, contract, security, SBOM, and Jankurai gates. No publication or production mutation.",
+    "description": "",
     "merge_passport": {
-      "blockers": [],
-      "evaluated_at": "2026-07-14T01:44:43.692065057+00:00",
-      "head_sha": "af84a049bfd4ea959ecf1657edf63c7cc5c60e48",
-      "status": "pass"
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T03:10:33.192870237+00:00",
+      "head_sha": "b0245456d73d99a6698db053bf49300d6bbbac12",
+      "status": "blocked"
     },
-    "passport_hash": "passport:af84a049bfd4ea959ecf1657edf63c7cc5c60e48:Pass:0:0:0:1",
+    "passport_hash": "passport:b0245456d73d99a6698db053bf49300d6bbbac12:Blocked:1:1:0:1",
     "summary": {
       "agents": {
         "active_sessions": 0,
@@ -117,31 +129,31 @@
         }
       ],
       "base_ref": "main",
-      "base_sha": "908d0e6b316e56ff03faf88ccafffc33a9ebf7d6",
+      "base_sha": "af84a049bfd4ea959ecf1657edf63c7cc5c60e48",
       "checks": {
-        "failing": 0,
-        "passing": 2,
+        "failing": 1,
+        "passing": 1,
         "pending": 0,
         "skipped": 0,
         "total": 2
       },
       "draft": false,
       "entity": {
-        "id": "9bfcef8e-0239-4420-9942-6ad366b4b635#9",
+        "id": "9bfcef8e-0239-4420-9942-6ad366b4b635#10",
         "kind": "pull_request"
       },
-      "head_ref": "codex/v8-split1-corrective-20260713",
-      "head_sha": "af84a049bfd4ea959ecf1657edf63c7cc5c60e48",
+      "head_ref": "claude/docs-v801-corrections",
+      "head_sha": "b0245456d73d99a6698db053bf49300d6bbbac12",
       "labels": [],
       "mergeable": {
-        "can_merge": true,
-        "exact_head_sha": "af84a049bfd4ea959ecf1657edf63c7cc5c60e48",
-        "level": "mergeable",
-        "reason": null,
-        "required_gate": null
+        "can_merge": false,
+        "exact_head_sha": "b0245456d73d99a6698db053bf49300d6bbbac12",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
       },
-      "number": 9,
-      "passport_hash": "passport:af84a049bfd4ea959ecf1657edf63c7cc5c60e48:Pass:0:0:0:1",
+      "number": 10,
+      "passport_hash": "passport:b0245456d73d99a6698db053bf49300d6bbbac12:Blocked:1:1:0:1",
       "repo": {
         "host": "jeryu",
         "id": "9bfcef8e-0239-4420-9942-6ad366b4b635",
@@ -156,11 +168,11 @@
         "user_review_state": null
       },
       "state": "open",
-      "title": "release: re-cut Jain Docs 8.0.0 split.1",
-      "updated_at": "2026-07-13T19:11:48.961370940+00:00"
+      "title": "manual: GPU image is GPU-only; ch6 pull/dump + port env reality",
+      "updated_at": "2026-07-16T02:59:15.561662343+00:00"
     }
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1783993481
+  "timestamp_unix": 1784171431
 }

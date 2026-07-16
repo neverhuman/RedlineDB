@@ -1,0 +1,984 @@
+Cloning into '/tmp/split-host-ci.FMrMiu/jain-web'...
+HEAD is now at 4dbe861 web-control: grant-safe layered identity + abuse fingerprint (never conflates users)
+lock_blob=0894936e5eba5efa46b9014786e6a1defca909a5
+name=jain-web
+ref=4dbe8614a025d880f9154439378e934f32e0979c
+commit=4dbe8614a025d880f9154439378e934f32e0979c
+tree=8c95eb5cda905e9cbe743c12e1f5a2da8f9fb0fc
+release_checksum_sha256=273ecfa63b57b6103763ae3ef63e39393c685b72689aeee19c9850f8c6959101
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Python boundary ok: no files or runtime invocations
+check ok: /tmp/split-host-ci.FMrMiu/jain-web
+[ci] Redline Jain-family consumer contract and evidence controls
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/redline-core.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/redline-core
+ * [new branch]      claude/redline-split-onboard -> origin/claude/redline-split-onboard
+ * [new branch]      codex/redline-core-proof-routing-complete -> origin/codex/redline-core-proof-routing-complete
+ * [new branch]      codex/redline-core-rust-bench-tools -> origin/codex/redline-core-rust-bench-tools
+ * [new branch]      codex/redline-core-testing-v101-evidence -> origin/codex/redline-core-testing-v101-evidence
+ * [new branch]      codex/v8-redline-core-ci   -> origin/codex/v8-redline-core-ci
+ * [new branch]      main                       -> origin/main
+ * [new ref]         HEAD                       -> origin/HEAD
+ * [new tag]         phase11-fused              -> phase11-fused
+ * [new tag]         redline-core-v4.1.0-jain.0 -> redline-core-v4.1.0-jain.0
+ * [new tag]         redline-core-v4.1.0-jain.1 -> redline-core-v4.1.0-jain.1
+ * [new tag]         redline-core-v4.1.0-jain.2 -> redline-core-v4.1.0-jain.2
+ * [new tag]         redline-core-v4.1.0-jain.3 -> redline-core-v4.1.0-jain.3
+ * [new tag]         redline-core-v4.1.0-jain.4 -> redline-core-v4.1.0-jain.4
+ * [new tag]         v1.0.1                     -> v1.0.1
+ * [new tag]         v1.0.17                    -> v1.0.17
+ * [new tag]         v2.0.5                     -> v2.0.5
+ * [new tag]         v4.0.3                     -> v4.0.3
+ * [new tag]         v4.0.4                     -> v4.0.4
+ * [new tag]         v4.0.5                     -> v4.0.5
+ * [new tag]         v4.0.6                     -> v4.0.6
+ * [new tag]         v4.0.7                     -> v4.0.7
+ * [new tag]         v4.0.8                     -> v4.0.8
+ * [new tag]         v4.0.9                     -> v4.0.9
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded bitflags v2.13.0
+  Downloaded ar_archive_writer v0.5.2
+  Downloaded crypto-common v0.1.7
+  Downloaded ahash v0.8.12
+  Downloaded crossbeam-utils v0.8.22
+  Downloaded recursive-proc-macro-impl v0.1.1
+  Downloaded either v1.16.0
+  Downloaded digest v0.10.7
+  Downloaded shlex v2.0.1
+  Downloaded version_check v0.9.5
+  Downloaded zmij v1.0.22
+  Downloaded tempfile v3.27.0
+  Downloaded serde_derive v1.0.228
+  Downloaded lock_api v0.4.14
+  Downloaded getrandom v0.4.3
+  Downloaded getrandom v0.3.4
+  Downloaded crossbeam-epoch v0.9.20
+  Downloaded parking_lot_core v0.9.12
+  Downloaded thiserror-impl v2.0.18
+  Downloaded unicode-ident v1.0.24
+  Downloaded proc-macro2 v1.0.106
+  Downloaded typenum v1.20.1
+  Downloaded bumpalo v3.20.3
+  Downloaded aho-corasick v1.1.4
+  Downloaded rayon-core v1.13.0
+  Downloaded regex v1.13.0
+  Downloaded rayon v1.12.0
+  Downloaded libm v0.2.16
+  Downloaded syn v2.0.118
+  Downloaded cc v1.2.67
+  Downloaded log v0.4.33
+  Downloaded thiserror v2.0.18
+  Downloaded zerocopy v0.8.54
+  Downloaded stacker v0.1.24
+  Downloaded once_cell v1.21.4
+  Downloaded crc32fast v1.5.0
+  Downloaded regex-syntax v0.8.11
+  Downloaded object v0.37.3
+  Downloaded cfg-if v1.0.4
+  Downloaded rustix v1.1.4
+  Downloaded sqlparser v0.61.0
+  Downloaded smallvec v1.15.2
+  Downloaded num_cpus v1.17.0
+  Downloaded find-msvc-tools v0.1.9
+  Downloaded fastrand v2.4.1
+  Downloaded errno v0.3.14
+  Downloaded crossbeam-deque v0.8.7
+  Downloaded sha2 v0.10.9
+  Downloaded scopeguard v1.2.0
+  Downloaded regex-automata v0.4.15
+  Downloaded rustversion v1.0.23
+  Downloaded recursive v0.1.1
+  Downloaded quote v1.0.46
+  Downloaded psm v0.1.31
+  Downloaded parking_lot v0.12.5
+  Downloaded crossbeam-queue v0.3.13
+  Downloaded block-buffer v0.10.4
+  Downloaded generic-array v0.14.7
+  Downloaded cpufeatures v0.2.17
+  Downloaded arc-swap v1.9.2
+  Downloaded libc v0.2.186
+  Downloaded linux-raw-sys v0.12.1
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling libc v0.2.186
+   Compiling syn v2.0.118
+    Checking cfg-if v1.0.4
+   Compiling version_check v0.9.5
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling object v0.37.3
+   Compiling cc v1.2.67
+   Compiling memchr v2.8.3
+   Compiling crossbeam-utils v0.8.22
+    Checking serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling ar_archive_writer v0.5.2
+   Compiling serde_derive v1.0.228
+   Compiling psm v0.1.31
+   Compiling generic-array v0.14.7
+    Checking equivalent v1.0.2
+   Compiling crossbeam-epoch v0.9.20
+    Checking hashbrown v0.17.1
+    Checking indexmap v2.14.0
+   Compiling stacker v0.1.24
+   Compiling rustversion v1.0.23
+   Compiling zerocopy v0.8.54
+   Compiling zmij v1.0.22
+    Checking typenum v1.20.1
+   Compiling getrandom v0.3.4
+   Compiling crossbeam-deque v0.8.7
+   Compiling parking_lot_core v0.9.12
+   Compiling ahash v0.8.12
+    Checking scopeguard v1.2.0
+   Compiling thiserror v2.0.18
+   Compiling crc32fast v1.5.0
+   Compiling getrandom v0.4.3
+    Checking smallvec v1.15.2
+    Checking once_cell v1.21.4
+   Compiling serde_json v1.0.150
+   Compiling rayon-core v1.13.0
+   Compiling rustix v1.1.4
+    Checking lock_api v0.4.14
+    Checking aho-corasick v1.1.4
+   Compiling recursive-proc-macro-impl v0.1.1
+   Compiling thiserror-impl v2.0.18
+    Checking bitflags v2.13.0
+    Checking regex-syntax v0.8.11
+    Checking itoa v1.0.18
+    Checking linux-raw-sys v0.12.1
+   Compiling libm v0.2.16
+    Checking regex-automata v0.4.15
+    Checking recursive v0.1.1
+    Checking arc-swap v1.9.2
+    Checking parking_lot v0.12.5
+    Checking crypto-common v0.1.7
+    Checking block-buffer v0.10.4
+    Checking crossbeam-queue v0.3.13
+    Checking log v0.4.33
+    Checking either v1.16.0
+    Checking bumpalo v3.20.3
+    Checking fastrand v2.4.1
+    Checking redlinedb-domain v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking redlinedb-kernel v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking tempfile v3.27.0
+    Checking rayon v1.12.0
+    Checking sqlparser v0.61.0
+    Checking digest v0.10.7
+    Checking regex v1.13.0
+    Checking serde_spanned v0.6.9
+    Checking toml_datetime v0.6.11
+    Checking cpufeatures v0.2.17
+    Checking toml_write v0.1.2
+    Checking winnow v0.7.15
+    Checking toml_edit v0.22.27
+    Checking sha2 v0.10.9
+    Checking redlinedb-sql v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking num_cpus v1.17.0
+    Checking redlinedb v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking toml v0.8.23
+    Checking jain-redline-consumer-contract v8.0.0 (/tmp/split-host-ci.FMrMiu/jain-web/ops/ci/redline-consumer)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 46.82s
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling crossbeam-utils v0.8.22
+   Compiling serde v1.0.228
+   Compiling memchr v2.8.3
+   Compiling typenum v1.20.1
+   Compiling generic-array v0.14.7
+   Compiling psm v0.1.31
+   Compiling crossbeam-epoch v0.9.20
+   Compiling smallvec v1.15.2
+   Compiling scopeguard v1.2.0
+   Compiling once_cell v1.21.4
+   Compiling lock_api v0.4.14
+   Compiling parking_lot_core v0.9.12
+   Compiling crossbeam-deque v0.8.7
+   Compiling stacker v0.1.24
+   Compiling zerocopy v0.8.54
+   Compiling zmij v1.0.22
+   Compiling getrandom v0.3.4
+   Compiling aho-corasick v1.1.4
+   Compiling linux-raw-sys v0.12.1
+   Compiling regex-syntax v0.8.11
+   Compiling bitflags v2.13.0
+   Compiling serde_json v1.0.150
+   Compiling rustix v1.1.4
+   Compiling regex-automata v0.4.15
+   Compiling recursive v0.1.1
+   Compiling thiserror v2.0.18
+   Compiling ahash v0.8.12
+   Compiling arc-swap v1.9.2
+   Compiling rayon-core v1.13.0
+   Compiling crc32fast v1.5.0
+   Compiling parking_lot v0.12.5
+   Compiling getrandom v0.4.3
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling crossbeam-queue v0.3.13
+   Compiling fastrand v2.4.1
+   Compiling bumpalo v3.20.3
+   Compiling redlinedb-domain v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling either v1.16.0
+   Compiling log v0.4.33
+   Compiling sqlparser v0.61.0
+   Compiling rayon v1.12.0
+   Compiling redlinedb-kernel v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling tempfile v3.27.0
+   Compiling digest v0.10.7
+   Compiling regex v1.13.0
+   Compiling libm v0.2.16
+   Compiling toml_datetime v0.6.11
+   Compiling serde_spanned v0.6.9
+   Compiling cpufeatures v0.2.17
+   Compiling toml_edit v0.22.27
+   Compiling sha2 v0.10.9
+   Compiling redlinedb-sql v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling num_cpus v1.17.0
+   Compiling redlinedb v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling toml v0.8.23
+   Compiling jain-redline-consumer-contract v8.0.0 (/tmp/split-host-ci.FMrMiu/jain-web/ops/ci/redline-consumer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 51.14s
+     Running unittests src/lib.rs (/tmp/split-host-ci.FMrMiu/cargo-target/debug/deps/jain_redline_consumer_contract-ed9e11d4effb448e)
+
+running 4 tests
+test tests::lowercase_hash_validation_is_exact ... ok
+test tests::release_identity_rejects_floating_or_mismatched_tag ... ok
+test tests::release_identity_rejects_half_bound_release ... ok
+test tests::release_identity_uses_declared_revision ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/validate_jain_release_manifest.rs (/tmp/split-host-ci.FMrMiu/cargo-target/debug/deps/validate_jain_release_manifest-264a63eec4bf4020)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/durable_contract.rs (/tmp/split-host-ci.FMrMiu/cargo-target/debug/deps/durable_contract-bf4be5bd1ce6a573)
+
+running 1 test
+test jain_model_and_release_state_survives_transaction_checkpoint_and_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.21s
+
+   Doc-tests jain_redline_consumer_contract
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[ci] web Rust required lane: ci-smoke
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/command.rs:75:
+             Self::UnknownCommand(verb) => {
+                 write!(f, "unknown command {verb:?}; valid: /start /next /stop")
+             }
+[31m-            Self::UnexpectedArguments { command, arguments } => write!(
+(B[m[31m-                f,
+(B[m[31m-                "{command} takes no arguments (got {arguments:?})"
+(B[m[31m-            ),
+(B[m[32m+            Self::UnexpectedArguments { command, arguments } => {
+(B[m[32m+                write!(f, "{command} takes no arguments (got {arguments:?})")
+(B[m[32m+            }
+(B[m         }
+     }
+ }
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/command.rs:132:
+ 
+     #[test]
+     fn surrounding_whitespace_is_the_only_forgiveness() {
+[31m-        assert_eq!("  /stop\n".parse::<RemoteCommand>(), Ok(RemoteCommand::Stop));
+(B[m[32m+        assert_eq!(
+(B[m[32m+            "  /stop\n".parse::<RemoteCommand>(),
+(B[m[32m+            Ok(RemoteCommand::Stop)
+(B[m[32m+        );
+(B[m         assert_eq!("\t/next ".parse::<RemoteCommand>(), Ok(RemoteCommand::Next));
+     }
+ 
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/command.rs:139:
+     #[test]
+     fn case_matters_no_aliases_no_prefixes() {
+[31m-        for bad in ["/Start", "/START", "/sto", "/stopp", "/restart", "/run", "//start"] {
+(B[m[32m+        for bad in [
+(B[m[32m+            "/Start", "/START", "/sto", "/stopp", "/restart", "/run", "//start",
+(B[m[32m+        ] {
+(B[m             assert!(
+                 matches!(
+                     bad.parse::<RemoteCommand>(),
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/identity.rs:64:
+     if let Some(existing) = cookie_header.and_then(|c| cookie_field(c, VISITOR_COOKIE)) {
+         // Accept only well-formed ids (32 lowercase hex) so a junk cookie can't wedge state.
+         if existing.len() == 32 && existing.bytes().all(|b| b.is_ascii_hexdigit()) {
+[31m-            return Visitor { id: existing, minted: false };
+(B[m[32m+            return Visitor {
+(B[m[32m+                id: existing,
+(B[m[32m+                minted: false,
+(B[m[32m+            };
+(B[m         }
+     }
+[31m-    Visitor { id: mint_128(), minted: true }
+(B[m[32m+    Visitor {
+(B[m[32m+        id: mint_128(),
+(B[m[32m+        minted: true,
+(B[m[32m+    }
+(B[m }
+ 
+ /// The `Set-Cookie` line for a minted visitor id. Long-lived (1 year), HttpOnly so scripts can't
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/identity.rs:219:
+         assert_ne!(a.id, b.id);
+         assert!(a.minted && b.minted);
+         // And their fingerprint bucket is identical (correct — it only rate-limits, never identifies).
+[31m-        assert_eq!(abuse_fingerprint(SECRET, &sig("iPhone Safari")), abuse_fingerprint(SECRET, &sig("iPhone Safari")));
+(B[m[32m+        assert_eq!(
+(B[m[32m+            abuse_fingerprint(SECRET, &sig("iPhone Safari")),
+(B[m[32m+            abuse_fingerprint(SECRET, &sig("iPhone Safari"))
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/identity.rs:226:
+     fn malformed_visitor_cookie_is_reminted_not_trusted() {
+[31m-        for junk in ["jain_visitor=", "jain_visitor=notlonghex", "jain_visitor=ZZZZ", "other=1"] {
+(B[m[32m+        for junk in [
+(B[m[32m+            "jain_visitor=",
+(B[m[32m+            "jain_visitor=notlonghex",
+(B[m[32m+            "jain_visitor=ZZZZ",
+(B[m[32m+            "other=1",
+(B[m[32m+        ] {
+(B[m             let v = resolve_visitor(Some(junk));
+             assert!(v.minted, "junk {junk:?} must mint fresh");
+             assert_eq!(v.id.len(), 32);
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/identity.rs:236:
+     #[test]
+     fn fingerprint_is_keyed_stable_and_family_coarse() {
+         let mac = abuse_fingerprint(SECRET, &sig("Chrome macOS"));
+[31m-        assert_eq!(mac, abuse_fingerprint(SECRET, &sig("Chrome macOS")), "deterministic");
+(B[m[31m-        assert_ne!(mac, abuse_fingerprint(SECRET, &sig("Chrome Windows")), "different UA -> different bucket");
+(B[m[31m-        assert_ne!(mac, abuse_fingerprint(b"other-secret", &sig("Chrome macOS")), "keyed by the secret");
+(B[m[32m+        assert_eq!(
+(B[m[32m+            mac,
+(B[m[32m+            abuse_fingerprint(SECRET, &sig("Chrome macOS")),
+(B[m[32m+            "deterministic"
+(B[m[32m+        );
+(B[m[32m+        assert_ne!(
+(B[m[32m+            mac,
+(B[m[32m+            abuse_fingerprint(SECRET, &sig("Chrome Windows")),
+(B[m[32m+            "different UA -> different bucket"
+(B[m[32m+        );
+(B[m[32m+        assert_ne!(
+(B[m[32m+            mac,
+(B[m[32m+            abuse_fingerprint(b"other-secret", &sig("Chrome macOS")),
+(B[m[32m+            "keyed by the secret"
+(B[m[32m+        );
+(B[m         // Not the raw signal (it is a hash, not a stored identifier).
+         assert_ne!(mac.to_vec(), b"Chrome macOS".to_vec());
+     }
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/identity.rs:252:
+         let now = 1_000_000;
+         // A device clearing cookies to mint fresh sessions is throttled after the budget.
+         for i in 0..FRESH_MINT_MAX {
+[31m-            assert!(lim.allow_fresh_mint(fp, now + i as u64), "mint {i} within budget");
+(B[m[32m+            assert!(
+(B[m[32m+                lim.allow_fresh_mint(fp, now + i as u64),
+(B[m[32m+                "mint {i} within budget"
+(B[m[32m+            );
+(B[m         }
+[31m-        assert!(!lim.allow_fresh_mint(fp, now), "over budget -> throttle the FRESH visit");
+(B[m[32m+        assert!(
+(B[m[32m+            !lim.allow_fresh_mint(fp, now),
+(B[m[32m+            "over budget -> throttle the FRESH visit"
+(B[m[32m+        );
+(B[m         // The limiter only ever sees FRESH mints. A returning visitor presents a cookie and is
+         // never passed to allow_fresh_mint at all — so no returning user can be throttled. (Proven
+         // at the router layer; here we prove the window resets so it can only ADD friction.)
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/identity.rs:261:
+         let later = now + FRESH_MINT_WINDOW.as_millis() as u64 + 1;
+[31m-        assert!(lim.allow_fresh_mint(fp, later), "window resets -> friction is bounded, never permanent");
+(B[m[32m+        assert!(
+(B[m[32m+            lim.allow_fresh_mint(fp, later),
+(B[m[32m+            "window resets -> friction is bounded, never permanent"
+(B[m[32m+        );
+(B[m     }
+ }
+ 
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:26:
+     routing::{delete, get, post},
+     Json, Router,
+ };
+[31m-use serde::Serialize;
+(B[m use identity::{FingerprintSignals, FreshMintLimiter};
+[32m+use serde::Serialize;
+(B[m use slots::{now_unix_ms, AllocError, Granted, Lease, SlotPool};
+ 
+ /// Cookie carrying the anonymous lease credential. Never appears in a URL or response body echo.
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:239:
+     // Cookie-clearing defense: only FRESH mints (no valid visitor cookie) are budgeted, per coarse
+     // device-family fingerprint. A returning visitor is never checked and never throttled.
+     if visitor.minted {
+[31m-        let fp = identity::abuse_fingerprint(state.fp_secret.as_ref(), &fingerprint_signals(&headers));
+(B[m[32m+        let fp =
+(B[m[32m+            identity::abuse_fingerprint(state.fp_secret.as_ref(), &fingerprint_signals(&headers));
+(B[m         if !state.fresh_mints.allow_fresh_mint(fp, now) {
+             return (
+                 StatusCode::TOO_MANY_REQUESTS,
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:262:
+                     Granted::Fresh => StatusCode::CREATED,
+                     Granted::Existing => StatusCode::OK,
+                 };
+[31m-                let mut response =
+(B[m[31m-                    (status, Json(AllocationV1::from_lease(&lease))).into_response();
+(B[m[32m+                let mut response = (status, Json(AllocationV1::from_lease(&lease))).into_response();
+(B[m                 let hdrs = response.headers_mut();
+                 // Two Set-Cookie headers are valid; append (never insert) so neither is dropped.
+                 hdrs.append(
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:270:
+                     header::SET_COOKIE,
+[31m-                    lease_cookie(&lease).parse().expect("lease cookie is a valid header value"),
+(B[m[32m+                    lease_cookie(&lease)
+(B[m[32m+                        .parse()
+(B[m[32m+                        .expect("lease cookie is a valid header value"),
+(B[m                 );
+                 if visitor.minted {
+                     hdrs.append(
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:416:
+         .route("/api/public/capacity", get(public_capacity))
+         .route("/api/public/allocations", post(allocate))
+         .route("/api/public/allocation", get(current_allocation))
+[31m-        .route("/api/public/allocations/current", delete(release_allocation))
+(B[m[32m+        .route(
+(B[m[32m+            "/api/public/allocations/current",
+(B[m[32m+            delete(release_allocation),
+(B[m[32m+        )
+(B[m         .with_state(state)
+ }
+ 
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:465:
+     async fn capacity_is_honest_zero_warm_until_supervisor_reports() {
+         let state = AppState::default();
+         let response = app_with_state(state.clone())
+[31m-            .oneshot(Request::get("/api/public/capacity").body(Body::empty()).unwrap())
+(B[m[32m+            .oneshot(
+(B[m[32m+                Request::get("/api/public/capacity")
+(B[m[32m+                    .body(Body::empty())
+(B[m[32m+                    .unwrap(),
+(B[m[32m+            )
+(B[m             .await
+             .unwrap();
+         let v = body_json(response).await;
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:476:
+ 
+         state.set_warm_ready(3);
+         let response = app_with_state(state)
+[31m-            .oneshot(Request::get("/api/public/capacity").body(Body::empty()).unwrap())
+(B[m[32m+            .oneshot(
+(B[m[32m+                Request::get("/api/public/capacity")
+(B[m[32m+                    .body(Body::empty())
+(B[m[32m+                    .unwrap(),
+(B[m[32m+            )
+(B[m             .await
+             .unwrap();
+         assert_eq!(body_json(response).await["warm"], 3);
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:498:
+         // The SAME browser re-POSTs — carrying its cookies — from CHANGING IPs (café → tether →
+         // home). Identity is the cookie, not the IP, so it is idempotent every time: same slot,
+         // one active lease. Never a second grant, never split by the IP change.
+[31m-        for (i, ip) in ["203.0.113.7", "198.51.100.9", "192.0.2.44"].iter().cycle().take(15).enumerate() {
+(B[m[32m+        for (i, ip) in ["203.0.113.7", "198.51.100.9", "192.0.2.44"]
+(B[m[32m+            .iter()
+(B[m[32m+            .cycle()
+(B[m[32m+            .take(15)
+(B[m[32m+            .enumerate()
+(B[m[32m+        {
+(B[m             let again = app_with_state(state.clone())
+                 .oneshot(post_alloc_with_cookies(ip, &cookies))
+                 .await
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:505:
+                 .unwrap();
+[31m-            assert_eq!(again.status(), StatusCode::OK, "repeat {i} idempotent, not a new grant");
+(B[m[32m+            assert_eq!(
+(B[m[32m+                again.status(),
+(B[m[32m+                StatusCode::OK,
+(B[m[32m+                "repeat {i} idempotent, not a new grant"
+(B[m[32m+            );
+(B[m             assert_eq!(body_json(again).await["slot"].as_str().unwrap(), first_slot);
+         }
+         let cap = app_with_state(state)
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:510:
+[31m-            .oneshot(Request::get("/api/public/capacity").body(Body::empty()).unwrap())
+(B[m[32m+            .oneshot(
+(B[m[32m+                Request::get("/api/public/capacity")
+(B[m[32m+                    .body(Body::empty())
+(B[m[32m+                    .unwrap(),
+(B[m[32m+            )
+(B[m             .await
+             .unwrap();
+[31m-        assert_eq!(body_json(cap).await["active"], 1, "one browser => exactly one slot");
+(B[m[32m+        assert_eq!(
+(B[m[32m+            body_json(cap).await["active"],
+(B[m[32m+            1,
+(B[m[32m+            "one browser => exactly one slot"
+(B[m[32m+        );
+(B[m     }
+ 
+     #[tokio::test]
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:519:
+         // identical phones). The OLD IP-identity model wrongly merged them; now each mints its own
+         // visitor id and gets its OWN slot — they are never conflated.
+         let state = AppState::default();
+[31m-        let a = app_with_state(state.clone()).oneshot(post_alloc("203.0.113.7")).await.unwrap();
+(B[m[31m-        let b = app_with_state(state.clone()).oneshot(post_alloc("203.0.113.7")).await.unwrap();
+(B[m[32m+        let a = app_with_state(state.clone())
+(B[m[32m+            .oneshot(post_alloc("203.0.113.7"))
+(B[m[32m+            .await
+(B[m[32m+            .unwrap();
+(B[m[32m+        let b = app_with_state(state.clone())
+(B[m[32m+            .oneshot(post_alloc("203.0.113.7"))
+(B[m[32m+            .await
+(B[m[32m+            .unwrap();
+(B[m         assert_eq!(a.status(), StatusCode::CREATED);
+         assert_eq!(b.status(), StatusCode::CREATED);
+         let sa = body_json(a).await["slot"].as_str().unwrap().to_owned();
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:527:
+         let sb = body_json(b).await["slot"].as_str().unwrap().to_owned();
+[31m-        assert_ne!(sa, sb, "distinct browsers get distinct slots even behind one NAT");
+(B[m[32m+        assert_ne!(
+(B[m[32m+            sa, sb,
+(B[m[32m+            "distinct browsers get distinct slots even behind one NAT"
+(B[m[32m+        );
+(B[m         let cap = app_with_state(state)
+[31m-            .oneshot(Request::get("/api/public/capacity").body(Body::empty()).unwrap())
+(B[m[32m+            .oneshot(
+(B[m[32m+                Request::get("/api/public/capacity")
+(B[m[32m+                    .body(Body::empty())
+(B[m[32m+                    .unwrap(),
+(B[m[32m+            )
+(B[m             .await
+             .unwrap();
+         assert_eq!(body_json(cap).await["active"], 2);
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:541:
+         let state = AppState::default();
+         let common = [
+             (IDENTITY_HEADER, "203.0.113.7"),
+[31m-            ("user-agent", "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0) Safari"),
+(B[m[32m+            (
+(B[m[32m+                "user-agent",
+(B[m[32m+                "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0) Safari",
+(B[m[32m+            ),
+(B[m             ("accept-language", "en-US,en;q=0.9"),
+         ];
+         let mk = || {
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:557:
+         let b = app_with_state(state.clone()).oneshot(mk()).await.unwrap();
+         assert_eq!(b.status(), StatusCode::CREATED);
+         let b_slot = body_json(b).await["slot"].as_str().unwrap().to_owned();
+[31m-        assert_ne!(a_slot, b_slot, "identical fingerprint MUST NOT restore A's lease to B");
+(B[m[32m+        assert_ne!(
+(B[m[32m+            a_slot, b_slot,
+(B[m[32m+            "identical fingerprint MUST NOT restore A's lease to B"
+(B[m[32m+        );
+(B[m     }
+ 
+     #[tokio::test]
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:662:
+                 .unwrap()
+         };
+         for i in 0..identity::FRESH_MINT_MAX {
+[31m-            let g = app_with_state(state.clone()).oneshot(flood()).await.unwrap();
+(B[m[31m-            assert_eq!(g.status(), StatusCode::CREATED, "fresh mint {i} within budget");
+(B[m[32m+            let g = app_with_state(state.clone())
+(B[m[32m+                .oneshot(flood())
+(B[m[32m+                .await
+(B[m[32m+                .unwrap();
+(B[m[32m+            assert_eq!(
+(B[m[32m+                g.status(),
+(B[m[32m+                StatusCode::CREATED,
+(B[m[32m+                "fresh mint {i} within budget"
+(B[m[32m+            );
+(B[m         }
+         let over = app_with_state(state).oneshot(flood()).await.unwrap();
+         assert_eq!(over.status(), StatusCode::TOO_MANY_REQUESTS);
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:688:
+             .unwrap()
+             .to_owned();
+         for attr in ["Secure", "HttpOnly", "SameSite=Strict"] {
+[31m-            assert!(cookie_has(&state, &cookie, attr).await, "cookie missing {attr}");
+(B[m[32m+            assert!(
+(B[m[32m+                cookie_has(&state, &cookie, attr).await,
+(B[m[32m+                "cookie missing {attr}"
+(B[m[32m+            );
+(B[m         }
+ 
+         let response = app_with_state(state.clone())
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:704:
+         let v = body_json(response).await;
+         assert_eq!(v["slot"], "g01");
+         // Idle + absolute deadlines are both present and ordered.
+[31m-        assert!(v["idle_deadline_unix_ms"].as_u64().unwrap() <= v["absolute_deadline_unix_ms"].as_u64().unwrap());
+(B[m[32m+        assert!(
+(B[m[32m+            v["idle_deadline_unix_ms"].as_u64().unwrap()
+(B[m[32m+                <= v["absolute_deadline_unix_ms"].as_u64().unwrap()
+(B[m[32m+        );
+(B[m 
+         let response = app_with_state(state.clone())
+             .oneshot(
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:718:
+         assert_eq!(response.status(), StatusCode::NO_CONTENT);
+ 
+         let response = app_with_state(state)
+[31m-            .oneshot(Request::get("/api/public/capacity").body(Body::empty()).unwrap())
+(B[m[32m+            .oneshot(
+(B[m[32m+                Request::get("/api/public/capacity")
+(B[m[32m+                    .body(Body::empty())
+(B[m[32m+                    .unwrap(),
+(B[m[32m+            )
+(B[m             .await
+             .unwrap();
+         assert_eq!(body_json(response).await["active"], 0);
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:773:
+             .unwrap()
+             .to_owned();
+         assert!(content_type.starts_with("text/html"));
+[31m-        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20).await.unwrap();
+(B[m[32m+        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+(B[m[32m+            .await
+(B[m[32m+            .unwrap();
+(B[m         // Budget: the whole landing page stays under a few KB (no framework, no bundle).
+[31m-        assert!(bytes.len() < 4096, "landing page is {} bytes, budget 4 KiB", bytes.len());
+(B[m[32m+        assert!(
+(B[m[32m+            bytes.len() < 4096,
+(B[m[32m+            "landing page is {} bytes, budget 4 KiB",
+(B[m[32m+            bytes.len()
+(B[m[32m+        );
+(B[m         let html = std::str::from_utf8(&bytes).unwrap();
+[31m-        assert!(html.contains("/api/public/allocations"), "bootstrap POST target");
+(B[m[31m-        assert!(html.contains("launch_path"), "bootstrap navigates to launch_path");
+(B[m[31m-        assert!(!html.to_ascii_lowercase().contains("<script src"), "no external scripts");
+(B[m[32m+        assert!(
+(B[m[32m+            html.contains("/api/public/allocations"),
+(B[m[32m+            "bootstrap POST target"
+(B[m[32m+        );
+(B[m[32m+        assert!(
+(B[m[32m+            html.contains("launch_path"),
+(B[m[32m+            "bootstrap navigates to launch_path"
+(B[m[32m+        );
+(B[m[32m+        assert!(
+(B[m[32m+            !html.to_ascii_lowercase().contains("<script src"),
+(B[m[32m+            "no external scripts"
+(B[m[32m+        );
+(B[m     }
+ 
+     #[tokio::test]
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:805:
+             .await
+             .unwrap();
+         assert_eq!(response.status(), StatusCode::OK);
+[31m-        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20).await.unwrap();
+(B[m[32m+        let bytes = axum::body::to_bytes(response.into_body(), 1 << 20)
+(B[m[32m+            .await
+(B[m[32m+            .unwrap();
+(B[m         let html = std::str::from_utf8(&bytes).unwrap();
+         assert!(html.contains("slot g01"));
+         // The lease credential never appears in a page body.
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:824:
+                 )
+                 .await
+                 .unwrap();
+[31m-            assert_eq!(response.status(), StatusCode::NOT_FOUND, "{path} with g01 cookie");
+(B[m[32m+            assert_eq!(
+(B[m[32m+                response.status(),
+(B[m[32m+                StatusCode::NOT_FOUND,
+(B[m[32m+                "{path} with g01 cookie"
+(B[m[32m+            );
+(B[m         }
+     }
+ 
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:852:
+             .await
+             .unwrap();
+         assert_ne!(response.status(), StatusCode::NOT_FOUND);
+[31m-        assert!(response.status().is_client_error(), "non-WS request rejected by upgrade");
+(B[m[32m+        assert!(
+(B[m[32m+            response.status().is_client_error(),
+(B[m[32m+            "non-WS request rejected by upgrade"
+(B[m[32m+        );
+(B[m 
+         // Wrong slot with a live cookie: 404 again, indistinguishable.
+         let response = app_with_state(state)
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/lib.rs:872:
+         let response = app()
+             .oneshot(
+                 Request::get("/api/public/allocation")
+[31m-                    .header(header::COOKIE, "jain_lease=deadbeefdeadbeefdeadbeefdeadbeef")
+(B[m[32m+                    .header(
+(B[m[32m+                        header::COOKIE,
+(B[m[32m+                        "jain_lease=deadbeefdeadbeefdeadbeefdeadbeef",
+(B[m[32m+                    )
+(B[m                     .body(Body::empty())
+                     .unwrap(),
+             )
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/live.rs:27:
+         FromRequestParts, Path, State, WebSocketUpgrade,
+     },
+     http::{request::Parts, StatusCode},
+[31m-    response::Response,
+(B[m     response::Html,
+[32m+    response::Response,
+(B[m };
+ use tokio::sync::Notify;
+ 
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/live.rs:310:
+     COCKPIT_TEMPLATE
+         .replace("__SLOT__", lease.slot)
+         .replace("__EPOCH__", &lease.epoch.to_string())
+[31m-        .replace("__EXPIRES_MS__", &lease.effective_deadline_unix_ms().to_string())
+(B[m[32m+        .replace(
+(B[m[32m+            "__EXPIRES_MS__",
+(B[m[32m+            &lease.effective_deadline_unix_ms().to_string(),
+(B[m[32m+        )
+(B[m }
+ 
+ const COCKPIT_TEMPLATE: &str = r#"<!doctype html>
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/live.rs:374:
+ /// `GET /live/:slot/ws` — slot-scoped auth runs BEFORE the upgrade (the [`WsAuth`] extractor):
+ /// no cookie / unknown slot / wrong slot are 404 and never upgraded; a presented-but-dead cookie
+ /// upgrades and closes with the typed 4001 LEASE_EXPIRED code; a live lease enters [`session`].
+[31m-pub async fn live_ws(State(state): State<AppState>, auth: WsAuth, ws: WebSocketUpgrade) -> Response {
+(B[m[32m+pub async fn live_ws(
+(B[m[32m+    State(state): State<AppState>,
+(B[m[32m+    auth: WsAuth,
+(B[m[32m+    ws: WebSocketUpgrade,
+(B[m[32m+) -> Response {
+(B[m     match auth.0 {
+         SlotAuth::Live { lease, token } => {
+             ws.on_upgrade(move |socket| session(socket, state, lease, token))
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/live.rs:568:
+         assert_eq!(ring.dropped(), 100);
+         // Oldest retained is exactly the first survivor; newest is the last push.
+         assert_eq!(ring.iter().next().unwrap().offset, 100);
+[31m-        assert_eq!(ring.iter().last().unwrap().offset, EVENT_RING_CAP as u64 + 99);
+(B[m[32m+        assert_eq!(
+(B[m[32m+            ring.iter().last().unwrap().offset,
+(B[m[32m+            EVENT_RING_CAP as u64 + 99
+(B[m[32m+        );
+(B[m     }
+ 
+     #[test]
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/live.rs:589:
+             assert_eq!(ring.push(i, "k", "p"), i, "offsets are assigned in order");
+         }
+         let offsets: Vec<u64> = ring.iter().map(|e| e.offset).collect();
+[31m-        assert_eq!(offsets.first(), Some(&250), "oldest survivor after 250 evictions");
+(B[m[32m+        assert_eq!(
+(B[m[32m+            offsets.first(),
+(B[m[32m+            Some(&250),
+(B[m[32m+            "oldest survivor after 250 evictions"
+(B[m[32m+        );
+(B[m         assert_eq!(offsets.last(), Some(&(EVENT_RING_CAP as u64 + 249)));
+         assert!(
+             offsets.windows(2).all(|w| w[1] == w[0] + 1),
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/live.rs:633:
+         assert!(html.contains("slot g03"));
+         assert!(html.contains("/live/g03/ws"));
+         assert!(html.contains("epoch 4"));
+[31m-        assert!(html.contains("const end = 1000;"), "effective (min) deadline rendered");
+(B[m[32m+        assert!(
+(B[m[32m+            html.contains("const end = 1000;"),
+(B[m[32m+            "effective (min) deadline rendered"
+(B[m[32m+        );
+(B[m         // The lease credential must never appear in a page body.
+         assert!(!html.contains("never-rendered"));
+         // No placeholder left behind.
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/live.rs:640:
+[31m-        assert!(!html.contains("__SLOT__") && !html.contains("__EPOCH__") && !html.contains("__EXPIRES_MS__"));
+(B[m[32m+        assert!(
+(B[m[32m+            !html.contains("__SLOT__")
+(B[m[32m+                && !html.contains("__EPOCH__")
+(B[m[32m+                && !html.contains("__EXPIRES_MS__")
+(B[m[32m+        );
+(B[m     }
+ }
+ 
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/slots.rs:62:
+ impl Lease {
+     /// The sooner of the two deadlines — what the client should display.
+     pub fn effective_deadline_unix_ms(&self) -> u64 {
+[31m-        self.idle_deadline_unix_ms.min(self.absolute_deadline_unix_ms)
+(B[m[32m+        self.idle_deadline_unix_ms
+(B[m[32m+            .min(self.absolute_deadline_unix_ms)
+(B[m     }
+ }
+ 
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/slots.rs:288:
+     pub fn capacity(&self, warm_ready: u32, now_ms: u64) -> CapacitySnapshot {
+         let mut inner = self.inner.lock().expect("slot pool poisoned");
+         reap_expired(&mut inner, now_ms);
+[31m-        let active = inner
+(B[m[31m-            .by_slot
+(B[m[31m-            .values()
+(B[m[31m-            .filter(|s| s.lease.is_some())
+(B[m[31m-            .count() as u32;
+(B[m[32m+        let active = inner.by_slot.values().filter(|s| s.lease.is_some()).count() as u32;
+(B[m         CapacitySnapshot {
+             max_active: MAX_ACTIVE,
+             warm: warm_ready,
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/slots.rs:327:
+                 None
+             };
+             if let Some(reason) = reason {
+[31m-                freed.push((rec.token.clone(), rec.identity_hash, slot, state.epoch, reason));
+(B[m[32m+                freed.push((
+(B[m[32m+                    rec.token.clone(),
+(B[m[32m+                    rec.identity_hash,
+(B[m[32m+                    slot,
+(B[m[32m+                    state.epoch,
+(B[m[32m+                    reason,
+(B[m[32m+                ));
+(B[m                 state.lease = None;
+             }
+         }
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/slots.rs:335:
+     for (token, identity, slot, epoch, reason) in freed {
+         inner.by_token.remove(&token);
+         inner.by_identity.remove(&identity);
+[31m-        inner.reaped.push(ReapedLease { slot, epoch, reason });
+(B[m[32m+        inner.reaped.push(ReapedLease {
+(B[m[32m+            slot,
+(B[m[32m+            epoch,
+(B[m[32m+            reason,
+(B[m[32m+        });
+(B[m     }
+ }
+ 
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/slots.rs:390:
+         let pool = SlotPool::new();
+         // allocate -> release repeatedly: the grant budget (3/min) must bound it.
+         for i in 0..GRANT_BUDGET_MAX {
+[31m-            let (lease, _) = pool.allocate("churner", tok(i), NOW + i as u64).expect("grant");
+(B[m[32m+            let (lease, _) = pool
+(B[m[32m+                .allocate("churner", tok(i), NOW + i as u64)
+(B[m[32m+                .expect("grant");
+(B[m             assert!(pool.revoke(&lease.token));
+         }
+         assert_eq!(
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/slots.rs:405:
+     #[test]
+     fn duplicate_token_is_rejected_never_orphaning() {
+         let pool = SlotPool::new();
+[31m-        pool.allocate(&idn(0), "same-token".into(), NOW).expect("grant");
+(B[m[32m+        pool.allocate(&idn(0), "same-token".into(), NOW)
+(B[m[32m+            .expect("grant");
+(B[m         assert_eq!(
+[31m-            pool.allocate(&idn(1), "same-token".into(), NOW).unwrap_err(),
+(B[m[32m+            pool.allocate(&idn(1), "same-token".into(), NOW)
+(B[m[32m+                .unwrap_err(),
+(B[m             AllocError::TokenCollision
+         );
+         // The original lease is intact — not overwritten, not orphaned.
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/slots.rs:420:
+         let pool = SlotPool::new();
+         pool.allocate(&idn(0), tok(0), NOW).expect("grant");
+         let after_idle = NOW + IDLE_TTL.as_millis() as u64 + 1;
+[31m-        assert!(pool.touch(&tok(0), after_idle).is_none(), "idle deadline passed");
+(B[m[32m+        assert!(
+(B[m[32m+            pool.touch(&tok(0), after_idle).is_none(),
+(B[m[32m+            "idle deadline passed"
+(B[m[32m+        );
+(B[m         let reaped = pool.drain_expired(after_idle);
+         assert_eq!(reaped.len(), 1);
+[31m-        assert_eq!((reaped[0].slot, reaped[0].reason), ("g01", ReapReason::IdleDeadline));
+(B[m[32m+        assert_eq!(
+(B[m[32m+            (reaped[0].slot, reaped[0].reason),
+(B[m[32m+            ("g01", ReapReason::IdleDeadline)
+(B[m[32m+        );
+(B[m         // Drain is consumed exactly once (supervisor contract).
+         assert!(pool.drain_expired(after_idle + 1).is_empty());
+         assert_eq!(pool.capacity(0, after_idle).active, 0);
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/slots.rs:440:
+             if t >= NOW + ABSOLUTE_TTL.as_millis() as u64 {
+                 break;
+             }
+[31m-            let lease = pool.touch(&tok(0), t).expect("still live inside absolute window");
+(B[m[32m+            let lease = pool
+(B[m[32m+                .touch(&tok(0), t)
+(B[m[32m+                .expect("still live inside absolute window");
+(B[m             // Idle refresh is clamped to the absolute deadline: no touch extends past it.
+             assert!(lease.idle_deadline_unix_ms <= lease.absolute_deadline_unix_ms);
+         }
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/slots.rs:473:
+         // Same identity → same lease; different identity → different slot.
+         let (again, granted) = pool.allocate("alice", tok(1), NOW + 1).expect("repeat");
+         assert_eq!((again.slot, granted), (lease.slot, Granted::Existing));
+[31m-        let (other, granted) = pool.allocate("bob", tok(2), NOW + 2).expect("second identity");
+(B[m[32m+        let (other, granted) = pool
+(B[m[32m+            .allocate("bob", tok(2), NOW + 2)
+(B[m[32m+            .expect("second identity");
+(B[m         assert_eq!(granted, Granted::Fresh);
+         assert_ne!(other.slot, lease.slot);
+         // And the hash is not the raw identity (spot-check the hasher).
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/main.rs:30:
+ const MAX_BLOCKING_THREADS: usize = 4;
+ 
+ #[derive(Parser)]
+[31m-#[command(name = "jain-web-control", about = "Model-free cloud guest control runtime")]
+(B[m[32m+#[command(
+(B[m[32m+    name = "jain-web-control",
+(B[m[32m+    about = "Model-free cloud guest control runtime"
+(B[m[32m+)]
+(B[m struct Args {
+     #[arg(long, default_value = "127.0.0.1")]
+     host: String,
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/main.rs:75:
+ /// Serve `app()` until `shutdown` resolves, then drain in-flight connections — but never longer than
+ /// [`SHUTDOWN_DRAIN_LIMIT`] past the signal. Factored to take the shutdown future so the drain
+ /// timing is unit-testable without sending a real signal.
+[31m-async fn run_server(listener: TcpListener, shutdown: impl Future<Output = ()> + Send + 'static) -> Result<()> {
+(B[m[32m+async fn run_server(
+(B[m[32m+    listener: TcpListener,
+(B[m[32m+    shutdown: impl Future<Output = ()> + Send + 'static,
+(B[m[32m+) -> Result<()> {
+(B[m     // `draining` fires the moment the shutdown trigger resolves; the watchdog then starts the
+     // bounded timer. This keeps the timer anchored to the SIGNAL, not to server start — so a
+     // healthy long-running server is never force-exited.
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/main.rs:131:
+ 
+ fn probe_once(url: &str) -> Result<bool> {
+     use std::io::{Read, Write};
+[31m-    let rest = url.strip_prefix("http://").context("probe url must be http://")?;
+(B[m[32m+    let rest = url
+(B[m[32m+        .strip_prefix("http://")
+(B[m[32m+        .context("probe url must be http://")?;
+(B[m     let (authority, path) = match rest.find('/') {
+         Some(i) => (&rest[..i], &rest[i..]),
+         None => (rest, "/"),
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/src/main.rs:164:
+     fn idle_shutdown_returns_promptly() {
+         let rt = build_runtime().expect("runtime");
+         rt.block_on(async {
+[31m-            let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind ephemeral");
+(B[m[32m+            let listener = TcpListener::bind("127.0.0.1:0")
+(B[m[32m+                .await
+(B[m[32m+                .expect("bind ephemeral");
+(B[m             let start = tokio::time::Instant::now();
+             // Shutdown trigger that is already resolved: graceful drain starts at once and, with no
+             // in-flight connections, the server future completes before the drain window.
+Diff in /tmp/split-host-ci.FMrMiu/jain-web/crates/jain-web-control/tests/ws_transport.rs:108:
+             .expect("ws error");
+         match message {
+             Message::Close(Some(frame)) => {
+[31m-                assert_eq!(u16::from(frame.code), 4001, "close code must be LEASE_EXPIRED");
+(B[m[32m+                assert_eq!(
+(B[m[32m+                    u16::from(frame.code),
+(B[m[32m+                    4001,
+(B[m[32m+                    "close code must be LEASE_EXPIRED"
+(B[m[32m+                );
+(B[m                 assert_eq!(frame.reason, "lease_expired");
+                 return;
+             }

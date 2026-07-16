@@ -1,0 +1,71 @@
+{
+  "schema_version": "jain.model-zoo-closeout/v1",
+  "status": "blocked",
+  "release_identity_status": "pass",
+  "repository": "jain-model-zoo",
+  "forge_repository": "jeryu/jain-model-zoo",
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-model-zoo.git",
+  "product_version": "8.0.0",
+  "family_source_tag": "jain-model-zoo-v8.0.0-split.0",
+  "commit": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+  "tree": "39b8e34fa3b78ec695b71f2dd4c3dcba872c9e75",
+  "release_checksum_sha256": "00c9eda87505ed94d6cca797f371206699fe5c1f6bbcfab8ee5a9b1045554269",
+  "local": {
+    "branch": "main",
+    "head": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+    "worktree_clean": true,
+    "tag_commit": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+    "tag_tree": "39b8e34fa3b78ec695b71f2dd4c3dcba872c9e75"
+  },
+  "forge_readback": {
+    "remote_tag_commit": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+    "remote_main": "fd00a3df96d9769e0282582aba0c3579e568db6c",
+    "required_check": {
+      "name": "jain-model-zoo/required",
+      "head_sha": "66c5cfec7304db1a0ff048fc944fb7df0fcc4789",
+      "conclusion": "success",
+      "host_ci_log_sha256": "01bc2b14ab65d621f1187d827aee410e8266a439f40b1a3bf2330c6f194d5bbc",
+      "receipt": "docs/release-evidence/8.0.0/ci/host/jain-model-zoo-66c5cfec7304db1a0ff048fc944fb7df0fcc4789-01bc2b14ab65d621f1187d827aee410e8266a439f40b1a3bf2330c6f194d5bbc.json"
+    },
+    "historical_checks": {
+      "jankurai/proof": "failure",
+      "jeryu/autonomy": "action_required"
+    }
+  },
+  "local_gates": {
+    "fast": "pass",
+    "check": "pass",
+    "required": "pass",
+    "required_manifest_count": 486,
+    "oracle_npy_count": 23,
+    "score": "pass",
+    "score_value": 87,
+    "score_hard_findings": 0,
+    "security": "pass",
+    "security_tabpfn_hits": 0,
+    "security_fallback_advisory_files": 23,
+    "contract_drift": "pass",
+    "artifact_support": "pass",
+    "tool_adoption": "pass",
+    "tool_adoption_score": 90
+  },
+  "jankurai": {
+    "active_path": "/home/ubuntu/.local/bin/jankurai",
+    "active_version": "1.6.11",
+    "active_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "shadow_path": "/home/ubuntu/.cargo/bin/jankurai",
+    "shadow_version": "1.6.10",
+    "shadow_sha256": "c70749ebe8c61e4b46143fd1a97f32eb9f7eb321928d2508207c409bdb5e69a0"
+  },
+  "blockers": [
+    "protected Jeryu main advanced to fd00a3df after split.0 was tagged; no split.1 tag is present",
+    "the exact tagged head retains historical jankurai/proof=failure and jeryu/autonomy=action_required readbacks",
+    "authority manifest still has release_commit/release_checksum_sha256=PENDING and declares veox/jain-model-zoo while the canonical checkout uses jeryu",
+    "the host still contains a non-active Jankurai 1.6.10 shadow binary outside the Model Zoo repository"
+  ],
+  "excluded_mutations": [
+    "no worktree created or removed",
+    "no source, branch, tag, manifest, Redline, host, cloud, image, route, or promotion mutation"
+  ],
+  "checked_at": "2026-07-16T04:07:10Z"
+}

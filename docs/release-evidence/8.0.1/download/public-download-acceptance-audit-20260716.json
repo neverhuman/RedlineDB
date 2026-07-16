@@ -1,0 +1,428 @@
+{
+  "schema": "jain.public-download-acceptance-audit/v1",
+  "generated_at": "2026-07-16T04:18:17Z",
+  "release_target": "8.0.1",
+  "historical_evidence_superseded": false,
+  "claim": {
+    "owner": "/root/jankurai_identity",
+    "token": "codex-mcp-download-acceptance-20260716T0455Z",
+    "mode": "read-only",
+    "publication_owner": "Claude(prod-deploy)",
+    "mutations_performed": []
+  },
+  "decision": {
+    "status": "blocked",
+    "http_bundle_live": true,
+    "listed_checksums_match": true,
+    "published_image_signature_valid": true,
+    "downloaded_dockerfile_is_self_contained": false,
+    "downloaded_dockerfile_is_reviewed_protected_main": false,
+    "downloaded_dockerfile_has_file_signature": false,
+    "df_01_through_df_09_complete": false,
+    "summary": "The interim public GPU-image bundle is reachable and internally checksum-consistent, and the advertised OCI image signature verifies. It is not the requested single-Dockerfile appliance: the served file requires a monorepo build context, reaches a loopback-only forge, remains GPU/root/multi-port oriented, is served from an unmerged obsolete PR head, and has no detached file signature or immutable versioned route."
+  },
+  "external_http": {
+    "base_url": "https://downloads.neverhuman.org/jain/",
+    "observed_last_modified": "Thu, 16 Jul 2026 03:57:54 GMT",
+    "payloads": [
+      {
+        "name": "jain.sh",
+        "status": 200,
+        "content_type": "application/x-sh",
+        "size_bytes": 65945,
+        "sha256": "996ec1a079e522a461cad2cf858b28b3554af967c61c369c5f2d77630365a1b6"
+      },
+      {
+        "name": "Dockerfile.sagemaker.gpu",
+        "status": 200,
+        "content_type": null,
+        "size_bytes": 10424,
+        "sha256": "8863305584dfa154feb319ece024aaa05a962d866f739cca27f5550f9d109f36"
+      },
+      {
+        "name": "cosign.pub",
+        "status": 200,
+        "content_type": "application/vnd.exstream-package",
+        "size_bytes": 178,
+        "sha256": "2385a8bc4a19af419973768a346eaf9452bdc2d5602d58e648232be974a696cf"
+      },
+      {
+        "name": "README.md",
+        "status": 200,
+        "content_type": "text/markdown; charset=utf-8",
+        "size_bytes": 1294,
+        "sha256": "4fac21bdeccc646faed189d99979bb6798d11da898ea5effe93823a24a27905e"
+      },
+      {
+        "name": "sha256sums.txt",
+        "status": 200,
+        "content_type": "text/plain; charset=utf-8",
+        "size_bytes": 318,
+        "sha256": "276279b0c16706f120e3af65a9ec6c82a64dd4b937d99bc10d04294f85a74716"
+      }
+    ],
+    "checksum_manifest": {
+      "entries": 4,
+      "matched": 4,
+      "failed": 0,
+      "names": [
+        "jain.sh",
+        "Dockerfile.sagemaker.gpu",
+        "cosign.pub",
+        "README.md"
+      ],
+      "self_covered": false,
+      "readme_claim_every_file_is_covered": false
+    },
+    "missing_expected_paths": [
+      {
+        "path": "https://downloads.neverhuman.org/jain/Dockerfile",
+        "status": 404
+      },
+      {
+        "path": "https://downloads.neverhuman.org/jain/8.0.1/Dockerfile",
+        "status": 404
+      },
+      {
+        "path": "https://downloads.neverhuman.org/jain/8.0.1/sha256sums.txt",
+        "status": 404
+      },
+      {
+        "path": "https://downloads.neverhuman.org/jain/Dockerfile.sagemaker.gpu.sig",
+        "status": 404
+      },
+      {
+        "path": "https://downloads.neverhuman.org/jain/sha256sums.txt.sig",
+        "status": 404
+      }
+    ],
+    "legacy_aliases": [
+      {
+        "path": "https://downloads.neverhuman.org/jain/README",
+        "status": 404
+      },
+      {
+        "path": "https://downloads.neverhuman.org/jain/sha256sums",
+        "status": 404
+      }
+    ]
+  },
+  "signature_verification": {
+    "public_key_url": "https://downloads.neverhuman.org/jain/cosign.pub",
+    "www_key_url": "https://www.neverhuman.org/cosign.pub",
+    "keys_byte_identical": true,
+    "key_sha256": "2385a8bc4a19af419973768a346eaf9452bdc2d5602d58e648232be974a696cf",
+    "image_reference": "image.neverhuman.org/veox/jain:8.0.1-gpu",
+    "verified_manifest_digest": "sha256:ffbbaf48bda7253785b2d32436eb0cbf1d0ff927a41593b907f7307e07075871",
+    "cosign_verify_exit_success": true,
+    "signature_type": "cosign container image signature",
+    "docker_reference_in_signature": "image.neverhuman.org/veox/jain",
+    "file_or_checksum_manifest_signature_found": false,
+    "classification": "The OCI image is signed. The downloaded Dockerfile, installer, README, and checksum manifest are not signed blobs."
+  },
+  "customer_only_dockerfile_test": {
+    "artifact": "https://downloads.neverhuman.org/jain/Dockerfile.sagemaker.gpu",
+    "method": "Static Dockerfile context dependency analysis; no image build or execution was performed under the read-only claim.",
+    "result": "fail",
+    "copy_or_add_instructions": 27,
+    "stage_copy_instructions": 11,
+    "local_build_context_copy_instructions": 16,
+    "remote_add_instructions": 0,
+    "first_missing_customer_context_input": "apps/web/package.json",
+    "required_context_inputs": [
+      "apps/web/package.json",
+      "apps/web/pnpm-lock.yaml",
+      "apps/web/pnpm-workspace.yaml",
+      "apps/web/",
+      "Cargo.toml",
+      "Cargo.lock",
+      "rust-toolchain.toml",
+      ".cargo/",
+      "crates/",
+      "deployment/ops/sagemaker-ci/",
+      "deployment/ops/supervisor/",
+      "deployment/ops/assemble-runtime-assets.sh",
+      "deployment/ops/scqd.toml",
+      "deployment/ops/handlers.manifest.toml",
+      "scripts/",
+      "vendor/",
+      "artifacts/starforge/",
+      "artifacts/foundation/",
+      "artifacts/model-bundle/",
+      "apps/web/installer/"
+    ],
+    "conclusion": "A customer who downloads only this Dockerfile cannot reach the first build stage. The file is source for a monorepo-context image build, not a self-contained downloadable appliance."
+  },
+  "served_payload_provenance": [
+    {
+      "public_name": "jain.sh",
+      "source_path": "jain-deploy/deployment/landing/jain.sh",
+      "served_sha256": "996ec1a079e522a461cad2cf858b28b3554af967c61c369c5f2d77630365a1b6",
+      "served_content_commit": "f7c760443a497f86138fc16b480335dcd2d8b2ac",
+      "originating_commit": "39cee45cab8f41ef50d4e4d2987945763ccf95dd",
+      "source_branch": "claude/release-testdata-20260714",
+      "current_branch_head": "3e85a6b93e875bfa028a8990834e4a3b481e8139",
+      "current_branch_sha256": "25597b2b13c542286d508b40b7e2adc01d16ad75f6a4e0261a4af67339686841",
+      "served_equals_current_branch": false,
+      "protected_main_contains_path": false,
+      "owner_map_owner": "split",
+      "active_lane_owner": "Claude(prod-deploy)"
+    },
+    {
+      "public_name": "Dockerfile.sagemaker.gpu",
+      "source_path": "jain-deploy/deployment/ops/Dockerfile.sagemaker.gpu",
+      "served_sha256": "8863305584dfa154feb319ece024aaa05a962d866f739cca27f5550f9d109f36",
+      "served_content_commit": "f7c760443a497f86138fc16b480335dcd2d8b2ac",
+      "source_branch": "claude/release-testdata-20260714",
+      "current_branch_head": "3e85a6b93e875bfa028a8990834e4a3b481e8139",
+      "current_branch_sha256": "ea1ac75f5556f0f00014f80a324210e5b8c6f54afd019dfba83aa5271d0912cc",
+      "served_equals_current_branch": false,
+      "protected_main_sha256": "48dc860d382455183ebbad4fe2a5cca73648a74d014d16c0fab036674d5c6308",
+      "served_equals_protected_main": false,
+      "owner_map_owner": "jain-deploy",
+      "active_lane_owner": "Claude(prod-deploy)"
+    },
+    {
+      "public_name": "cosign.pub",
+      "source_path": "jain-deploy/deployment/landing/cosign.pub",
+      "served_sha256": "2385a8bc4a19af419973768a346eaf9452bdc2d5602d58e648232be974a696cf",
+      "originating_commit": "a0197b66a5aa08ba08a16f018e547202346893fd",
+      "protected_main_contains_identical_file": true,
+      "owner_map_owner": "split",
+      "active_lane_owner": "Claude(prod-deploy)"
+    },
+    {
+      "public_name": "README.md",
+      "source_path": null,
+      "served_sha256": "4fac21bdeccc646faed189d99979bb6798d11da898ea5effe93823a24a27905e",
+      "canonical_candidate_path": "jain-deploy/deployment/landing/README.md",
+      "canonical_candidate_sha256": "0c5cb5ef3c573871ff79207cff180cd1afd43de573c5bb76bf07165c2ab24155",
+      "served_equals_canonical_candidate": false,
+      "classification": "Host-materialized publication text with no matching tracked source found in the canonical or active worker checkouts.",
+      "active_lane_owner": "Claude(prod-deploy)"
+    },
+    {
+      "public_name": "sha256sums.txt",
+      "source_path": null,
+      "served_sha256": "276279b0c16706f120e3af65a9ec6c82a64dd4b937d99bc10d04294f85a74716",
+      "classification": "Host-generated manifest; no tracked reviewed source or detached signature.",
+      "active_lane_owner": "Claude(prod-deploy)"
+    }
+  ],
+  "publication_host_readback": {
+    "host": "atomicsoul",
+    "root": "/home/ubuntu/nht-storage/downloads/jain",
+    "regular_files": [
+      "Dockerfile.sagemaker.gpu",
+      "README.md",
+      "cosign.pub",
+      "jain.sh",
+      "sha256sums.txt"
+    ],
+    "symlinks": [],
+    "file_signature_present": false,
+    "files_match_external_http": true
+  },
+  "current_source_heads": {
+    "protected_main": {
+      "branch": "main",
+      "head": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "tree": "5b72e730a216f13c984b83d7603277a6e40227e9"
+    },
+    "release_identity_pr": {
+      "pr_number": 23,
+      "branch": "claude/release-testdata-20260714",
+      "head": "3e85a6b93e875bfa028a8990834e4a3b481e8139",
+      "tree": "2932f49f7e332728063c696ad926716d240fdc71",
+      "commits_ahead_of_main": 8,
+      "branch_owner": "Claude(prod-deploy)",
+      "note": "The initial PR receipt recorded f7c7604; the loopback forge now advertises 3e85a6b. Its jain.sh is 8.0.1-correct but is not the file currently served."
+    },
+    "guestd_appliance_pr": {
+      "pr_number": 22,
+      "branch": "claude/guestd-20260715",
+      "head": "f8afefce3c0e5c7face360fde3f89205fdac1910",
+      "tree": "e8ccd10da4eb9bb84c5d45fedad2e68bbc974d6d",
+      "commits_ahead_of_main": 13,
+      "branch_owner": "Claude(prod-deploy)",
+      "artifact_shape": "four role Dockerfiles plus Compose; no deployment/appliance/Dockerfile"
+    },
+    "guestd_supervisor_successor": {
+      "branch": "claude/guestd-supervisor-20260716",
+      "head": "76461de0daac075da4a97843544fb557e78c6ec1",
+      "tree": "dc26e82854f3163a81e9218472b16ce4afd4e6a2",
+      "branch_owner": "Claude W2-guestd",
+      "base_contains": "51e732d4c8a7fd90777b16cf6939460ee021e84a",
+      "note": "This successor contains the real DockerLifecycle/supervisor work but must be reconciled with the newer PR #22 head f8afefc."
+    }
+  },
+  "stale_or_unsafe_references": [
+    {
+      "payload": "jain.sh",
+      "lines": [2, 27, 1473, 1582, 1609],
+      "finding": "Public text and default image still say 8.0.0 / image.neverhuman.org/veox/jain:8.0.0-gpu."
+    },
+    {
+      "payload": "jain.sh",
+      "lines": [404, 405, 406, 420, 423, 424],
+      "finding": "Missing cosign and signature verification failure are warning-only; installation continues and no expected ffbbaf48 digest is enforced."
+    },
+    {
+      "payload": "jain.sh",
+      "lines": [831, 836, 845],
+      "finding": "GPU start failure silently changes to CPU-only mode, while README says the published image is unsupported on CPU-only hosts."
+    },
+    {
+      "payload": "Dockerfile.sagemaker.gpu",
+      "lines": [35, 36],
+      "finding": "Build depends on loopback-only http://127.0.0.1:8787 and stale jain-smartcluster-v8.0.0-split.0. A public customer cannot resolve the source from a normal host."
+    },
+    {
+      "payload": "Dockerfile.sagemaker.gpu",
+      "lines": [17, 21, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 114],
+      "finding": "Sixteen local-context COPY instructions make the one-file download non-buildable."
+    },
+    {
+      "payload": "Dockerfile.sagemaker.gpu",
+      "lines": [95, 96, 97, 120, 202, 204],
+      "finding": "Root cache/runtime paths and USER 0 violate the requested hardened non-root appliance boundary."
+    },
+    {
+      "payload": "Dockerfile.sagemaker.gpu",
+      "lines": [166, 210],
+      "finding": "OCI source points at external GitHub and the image exposes both 8080 and 4180 instead of one bounded appliance Web port."
+    },
+    {
+      "payload": "Dockerfile.sagemaker.gpu",
+      "lines": [47, 48, 49, 50, 51, 52, 53, 63, 64, 65, 66, 67, 68],
+      "finding": "APT packages and the fetched LLVM repository key are not version/checksum pinned; digest-pinned base images alone do not make the build reproducible."
+    },
+    {
+      "payload": "README.md",
+      "finding": "Calls Dockerfile.sagemaker.gpu the source Dockerfile without disclosing the required monorepo context, claims every file is checksum-covered although sha256sums.txt is not self-covered, and documents a GPU-only contract contradicted by jain.sh CPU fallback."
+    },
+    {
+      "payload": "https://www.neverhuman.org/install-jain.sh",
+      "status": 200,
+      "sha256": "e719d923ec8c041f267e028657d348759e1f474441954d25b176983b0aa1b64b",
+      "finding": "The website installer still defaults to image.neverhuman.org/doug/jain_small/jain-sagemaker:latest with no default digest. Its served bytes match /home/ubuntu/jain-landing/install-jain.sh, not either current canonical installer source."
+    }
+  ],
+  "df_acceptance": [
+    {
+      "id": "DF-01",
+      "status": "fail",
+      "reason": "deployment/appliance/Dockerfile does not exist on protected main or either current Deploy PR; the public name is the legacy Dockerfile.sagemaker.gpu."
+    },
+    {
+      "id": "DF-02",
+      "status": "fail",
+      "reason": "Local source context, loopback forge, stale 8.0.0 SmartCluster tag, and unpinned APT inputs remain."
+    },
+    {
+      "id": "DF-03",
+      "status": "partial",
+      "reason": "The legacy image starts a Rust supervisor and embeds Web/scqd/worker pieces, but it is not the reviewed guestd/supervisor appliance contract and the current appliance PR remains a four-image Compose design."
+    },
+    {
+      "id": "DF-04",
+      "status": "fail",
+      "reason": "The served Dockerfile is GPU/CUDA-first and README rejects CPU-only hosts; jain.sh merely falls back at runtime instead of providing a CPU-safe default build with explicit GPU enablement."
+    },
+    {
+      "id": "DF-05",
+      "status": "fail",
+      "reason": "Final USER is 0 and the public launcher does not enforce read-only root, capability drop, no-new-privileges, or bounded resources/logging."
+    },
+    {
+      "id": "DF-06",
+      "status": "fail",
+      "reason": "The legacy image exposes 8080 and 4180. Its scqd config is UDS-only, but the downloadable surface is not the single bounded Web-port appliance contract."
+    },
+    {
+      "id": "DF-07",
+      "status": "fail",
+      "reason": "No two-build proof exists from two independent contexts containing only the downloaded Dockerfile, and network/package inputs are not fully pinned."
+    },
+    {
+      "id": "DF-08",
+      "status": "fail",
+      "reason": "The artifact cannot pass a one-file clean-box build because its required context is absent; no corresponding CPU/GPU clean-box receipt exists."
+    },
+    {
+      "id": "DF-09",
+      "status": "fail",
+      "reason": "The mutable unversioned path is live with matching checksums and a signed OCI image, but the Dockerfile/checksum manifest lack blob signatures, versioned immutable URLs are 404, and three of four content payloads are not protected-main artifacts."
+    }
+  ],
+  "minimal_small_pr_sequence": [
+    {
+      "order": 0,
+      "kind": "existing-owner-lane reconciliation",
+      "action": "Claude must finish or explicitly supersede Deploy PR #23 at 3e85a6b and PR #22 at f8afefc, then rebase the guestd supervisor successor 76461de onto the resulting protected main. Stop publishing bytes from f7c7604. This prevents the new DF work from colliding with the currently claimed landing, ops Dockerfile, and appliance paths.",
+      "df_ids": []
+    },
+    {
+      "order": 1,
+      "proposed_branch": "release/8.0.1-df-contract",
+      "title": "deploy: codify the one-file appliance contract",
+      "changes": [
+        "Add a Rust-only Dockerfile contract validator with positive and negative fixtures.",
+        "Bind canonical name deployment/appliance/Dockerfile and ownership to jain-deploy in owner-map/test-map.",
+        "Fail on local-context COPY/ADD, unpinned FROM, 127.0.0.1/localhost source, stale version, USER 0, Docker socket, more than one EXPOSE, missing UDS policy, or missing CPU-default/GPU-explicit targets."
+      ],
+      "df_ids": ["DF-01", "DF-02", "DF-04", "DF-05", "DF-06"]
+    },
+    {
+      "order": 2,
+      "proposed_branch": "release/8.0.1-single-dockerfile",
+      "title": "deploy: add the digest-pinned CPU-default single-file appliance",
+      "changes": [
+        "Add deployment/appliance/Dockerfile with zero local build-context dependencies.",
+        "Import reviewed role artifacts only through external digest-pinned stages or checksum-pinned release assets.",
+        "Use the merged Rust supervisor as PID 1 for Web, UDS-only scqd, guestd/admission, and CPU worker; make CPU the default final target and GPU an explicit target/flag using the same source file.",
+        "Use a non-root final UID, one Web port, read-only-compatible paths, tmpfs state, dropped-capability/no-new-privileges launch contract, bounded health/readiness, and no Docker socket."
+      ],
+      "depends_on": [
+        "protected merge of the final guestd/supervisor runtime",
+        "final W1 role-image digest and signature receipts"
+      ],
+      "df_ids": ["DF-01", "DF-02", "DF-03", "DF-04", "DF-05", "DF-06"]
+    },
+    {
+      "order": 3,
+      "proposed_branch": "release/8.0.1-df-qualification",
+      "title": "deploy: qualify the one-file appliance from empty contexts",
+      "changes": [
+        "Add Rust-driven tests that create two clean independent directories containing only the reviewed Dockerfile, build twice, and compare content digests.",
+        "Run CPU clean-box build/start/health/command/lease/restart tests and an xbabe3 GPU target qualification without CPU fallback for GPU-required work.",
+        "Emit exact source/Dockerfile/base/artifact/image hashes, SBOM, scan, signature readback, and clean-box receipts under 8.0.1 evidence."
+      ],
+      "df_ids": ["DF-07", "DF-08"]
+    },
+    {
+      "order": 4,
+      "proposed_branch": "release/8.0.1-download-publication",
+      "title": "deploy: render and verify the immutable signed 8.0.1 download bundle",
+      "changes": [
+        "Add reviewed README and manifest sources plus a Rust-only bundle renderer; eliminate host-authored README/checksum truth.",
+        "Make jain.sh and the website installer default to the exact 8.0.1 digest and fail closed when cosign is absent or verification/digest comparison fails.",
+        "Generate SHA-256 plus cosign sign-blob signatures/bundles for Dockerfile and sha256sums.txt, and verify with the published key before staging.",
+        "Stage immutable /jain/8.0.1/Dockerfile, signature, bundle, README, key, and checksums; keep /jain/Dockerfile only as a documented redirect or exact alias after versioned acceptance."
+      ],
+      "df_ids": ["DF-09"]
+    },
+    {
+      "order": 5,
+      "kind": "owner-gated publication acceptance",
+      "action": "After all four PRs are protected-merged, Claude publishes only files reconstructed from the final tagged commit, performs Caddy compare-and-swap, and records external 200/hash/signature/versioned-route readback. Publication is not complete until a clean customer fetch with only the versioned Dockerfile passes DF-01 through DF-09.",
+      "df_ids": ["DF-01", "DF-02", "DF-03", "DF-04", "DF-05", "DF-06", "DF-07", "DF-08", "DF-09"]
+    }
+  ],
+  "verification_limits": {
+    "image_build_or_run_performed": false,
+    "host_or_route_mutation_performed": false,
+    "source_or_forge_mutation_performed": false,
+    "reason": "The active publication and appliance implementation paths are exclusively owned by Claude; this claim was evidence-only."
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "action": "would-apply",
+  "mode": "dry-run",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/jain-web",
+  "request": {
+    "body": {
+      "body_markdown": "Independent review dry-run preview",
+      "evidence": null,
+      "expected_head_sha": "f235a471ff716c3d8bd5577f3f241d2ce07a09ed",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-web/pulls/25/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784177278
+}

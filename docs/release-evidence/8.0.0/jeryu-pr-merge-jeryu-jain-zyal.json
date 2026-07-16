@@ -6,14 +6,14 @@
   "request": {
     "body": {},
     "method": "PUT",
-    "path": "/repos/jeryu/jain-zyal/pulls/4/merge"
+    "path": "/repos/jeryu/jain-zyal/pulls/5/merge"
   },
   "response": {
     "merged": true,
     "message": "Pull Request successfully merged",
-    "sha": "cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d"
+    "sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288"
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1783993521
+  "timestamp_unix": 1784173646
 }

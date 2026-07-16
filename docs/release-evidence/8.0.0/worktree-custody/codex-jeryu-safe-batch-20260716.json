@@ -1,0 +1,144 @@
+{
+  "schema": "jain.worktree-custody/v1",
+  "status": "pass",
+  "claim_token": "codex-zero-worktree-jeryu-safe-batch-20260716T0348Z",
+  "owner": "Codex",
+  "completed_at_utc": "2026-07-16T04:09:33Z",
+  "release_scope": {
+    "kind": "version-neutral workspace custody",
+    "historical_receipt_location": "docs/release-evidence/8.0.0/worktree-custody/codex-jeryu-safe-batch-20260716.json",
+    "current_release_target": "8.0.1",
+    "note": "The claim predated the owner decision making 8.0.1 the sole release target. The cleanup changes no release source, manifest, tag, lock, evidence binding, or runtime and remains applicable to 8.0.1. The historical 8.0.0 evidence path is intentionally preserved."
+  },
+  "policy": {
+    "created_worktree": false,
+    "used_force": false,
+    "ran_worktree_prune": false,
+    "deleted_branch_or_ref": false,
+    "edited_source": false,
+    "touched_release_or_host_state": false,
+    "removal_command": "git -C <canonical-common-repository> worktree remove <path>"
+  },
+  "inventory": {
+    "roots": [
+      "/home/ubuntu/jain-split",
+      "/home/ubuntu/jeryu-split",
+      "/home/ubuntu/jankurai",
+      "/tmp"
+    ],
+    "before": {
+      "common_git_dirs_with_auxiliary_entries": 13,
+      "auxiliary_admin_entries": 33,
+      "present": 27,
+      "missing": 6
+    },
+    "after": {
+      "common_git_dirs_with_auxiliary_entries": 12,
+      "auxiliary_admin_entries": 30,
+      "present": 24,
+      "missing": 6
+    },
+    "exact_delta": {
+      "auxiliary_admin_entries": -3,
+      "present": -3,
+      "missing": 0
+    },
+    "target_common_dirs": {
+      "before": {
+        "jeryu-tool_total_registrations": 2,
+        "jeryu-tool_auxiliary_registrations": 1,
+        "jeryu-deploy_total_registrations": 8,
+        "jeryu-deploy_auxiliary_registrations": 7
+      },
+      "after": {
+        "jeryu-tool_total_registrations": 1,
+        "jeryu-tool_auxiliary_registrations": 0,
+        "jeryu-deploy_total_registrations": 6,
+        "jeryu-deploy_auxiliary_registrations": 5
+      }
+    },
+    "global_zero_worktree_complete": false
+  },
+  "preconditions": {
+    "all_paths_present_and_registered": true,
+    "all_porcelain_statuses_empty": true,
+    "all_binary_diffs_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "internal_symlinks": 0,
+    "inbound_or_broken_symlink_target_matches": 0,
+    "symlink_scan_roots": [
+      "/home/ubuntu/jain-split",
+      "/home/ubuntu/jeryu-split",
+      "/home/ubuntu/jankurai",
+      "/tmp"
+    ],
+    "open_fd_records": 0,
+    "process_refs": 0,
+    "proc_symlinks_examined": 9898,
+    "git_lock_files": 0,
+    "all_exact_branch_heads_present_on_loopback_forge": true,
+    "all_heads_ancestor_of_live_forge_main": true
+  },
+  "retired": [
+    {
+      "path": "/home/ubuntu/jeryu-split/.worktrees/jeryu-tool-jankurai-1.6.11-20260715",
+      "canonical_repository": "/home/ubuntu/jeryu-split/jeryu-tool",
+      "origin": "http://127.0.0.1:8787/git/jeryu/jeryu-tool.git",
+      "branch": "codex/jankurai-1.6.11-governed-20260715",
+      "head": "de80b657e1be5580289dfecdc0cd3c71348261e0",
+      "tree": "8dd6f773dce3ec2e5a82c8f0b606c240760489f9",
+      "forge_branch_head": "de80b657e1be5580289dfecdc0cd3c71348261e0",
+      "forge_main": "de80b657e1be5580289dfecdc0cd3c71348261e0",
+      "head_ancestor_of_forge_main": true,
+      "removed_non_force": true,
+      "path_absent_after": true,
+      "remote_ref_preserved_after": true
+    },
+    {
+      "path": "/home/ubuntu/jeryu-split/.worktrees/jeryu-deploy-lfs-batch-download-auth-20260715",
+      "canonical_repository": "/home/ubuntu/jeryu-split/jeryu-deploy",
+      "origin": "http://127.0.0.1:8787/git/jeryu/jeryu-deploy.git",
+      "branch": "codex/lfs-batch-download-auth-20260715",
+      "head": "2acf4384f2bc358677aaf52738a2d1b3c52ae953",
+      "tree": "7effd0d6eebf0ded9f2850534db002557c07d526",
+      "forge_branch_head": "2acf4384f2bc358677aaf52738a2d1b3c52ae953",
+      "forge_main": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "head_ancestor_of_forge_main": true,
+      "removed_non_force": true,
+      "path_absent_after": true,
+      "remote_ref_preserved_after": true
+    },
+    {
+      "path": "/home/ubuntu/jeryu-split/.worktrees/jeryu-deploy-passport-latest-check-20260715",
+      "canonical_repository": "/home/ubuntu/jeryu-split/jeryu-deploy",
+      "origin": "http://127.0.0.1:8787/git/jeryu/jeryu-deploy.git",
+      "branch": "codex/passport-latest-check-20260715",
+      "head": "a98f087ad3c9c331f3aba70562f8d65beca5c75b",
+      "tree": "210e94c43754569dbffdbb9310a46759a71bb47b",
+      "forge_branch_head": "a98f087ad3c9c331f3aba70562f8d65beca5c75b",
+      "forge_main": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "head_ancestor_of_forge_main": true,
+      "removed_non_force": true,
+      "path_absent_after": true,
+      "remote_ref_preserved_after": true
+    }
+  ],
+  "postconditions": {
+    "all_three_paths_absent": true,
+    "all_three_administrative_entries_absent": true,
+    "post_removal_inbound_or_broken_symlink_target_matches": 0,
+    "jeryu_tool_canonical": {
+      "branch": "main",
+      "head": "de80b657e1be5580289dfecdc0cd3c71348261e0",
+      "forge_main": "de80b657e1be5580289dfecdc0cd3c71348261e0",
+      "porcelain_entries": 0
+    },
+    "jeryu_deploy_canonical_observation": {
+      "branch": "main",
+      "head": "81a40601fecd2205005d4ac4707545772d51f104",
+      "forge_main": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "porcelain_entries": 26,
+      "note": "Observed after removal and outside this claim's mutation scope. No attempt was made to rewrite, clean, stage, commit, fetch, merge, or otherwise alter this concurrently active canonical checkout."
+    }
+  },
+  "acceptance": "The exact three claimed auxiliary worktrees were clean, symlink-free, process-free, lock-free, and already protected by live forge history; each was removed without force. Thirty auxiliary administrative entries remain in the inventoried roots and require separate custody claims."
+}

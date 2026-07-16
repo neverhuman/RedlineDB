@@ -1,0 +1,453 @@
+Cloning into '/tmp/split-host-ci.SsDaDU/jain-core'...
+HEAD is now at 2d9166f style: sort web_transport module declaration
+lock_blob=55f5b27ba5e518ba7deac1e15eb2c75055e0276d
+name=jain-core
+ref=2d9166fc33a1f1a60c377587fc18ee8c8295b15a
+commit=2d9166fc33a1f1a60c377587fc18ee8c8295b15a
+tree=5f599179ed4d8d171e3d31f10c2bda39584133ab
+release_checksum_sha256=844c789948ea288445b43690f39af89519aae38d8fb75668cf8147896fa917e7
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: /tmp/split-host-ci.SsDaDU/jain-core
+    Updating crates.io index
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-battle-gpu
+ * [new branch]      agent/math-split-alignment -> origin/agent/math-split-alignment
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-battle-gpu -> origin/codex/release-7.0.5-battle-gpu
+ * [new branch]      codex/release-7.0.6-battle-gpu-align -> origin/codex/release-7.0.6-battle-gpu-align
+ * [new branch]      codex/v8-split2-corrective-20260713 -> origin/codex/v8-split2-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-battle-gpu-v7.0.1-split.0 -> jain-battle-gpu-v7.0.1-split.0
+ * [new tag]         jain-battle-gpu-v7.0.1-split.1 -> jain-battle-gpu-v7.0.1-split.1
+ * [new tag]         jain-battle-gpu-v7.0.1-split.2 -> jain-battle-gpu-v7.0.1-split.2
+ * [new tag]         jain-battle-gpu-v8.0.0-split.0 -> jain-battle-gpu-v8.0.0-split.0
+ * [new tag]         jain-battle-gpu-v8.0.0-split.1 -> jain-battle-gpu-v8.0.0-split.1
+ * [new tag]         jain-battle-gpu-v8.0.0-split.2 -> jain-battle-gpu-v8.0.0-split.2
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-catboost.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-catboost
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-mainline-release -> origin/codex/v8.0.0-mainline-release
+ * [new branch]      main       -> origin/main
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-catboost-v7.0.1-split.0 -> jain-catboost-v7.0.1-split.0
+ * [new tag]         jain-catboost-v7.0.1-split.1 -> jain-catboost-v7.0.1-split.1
+ * [new tag]         jain-catboost-v8.0.0-split.0 -> jain-catboost-v8.0.0-split.0
+ * [new tag]         jain-catboost-v8.0.0-split.1 -> jain-catboost-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-domain.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-domain
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD                       -> origin/HEAD
+ * [new tag]         jain-domain-v7.0.1-split.0 -> jain-domain-v7.0.1-split.0
+ * [new tag]         jain-domain-v7.0.1-split.1 -> jain-domain-v7.0.1-split.1
+ * [new tag]         jain-domain-v8.0.0-split.0 -> jain-domain-v8.0.0-split.0
+ * [new tag]         jain-domain-v8.0.0-split.1 -> jain-domain-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-math.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-math
+ * [new branch]      codex/deferred-math-sandbox-followup -> origin/codex/deferred-math-sandbox-followup
+ * [new branch]      codex/evolve-report-ledger -> origin/codex/evolve-report-ledger
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/release-7.0.6-math-evolve-report -> origin/codex/release-7.0.6-math-evolve-report
+ * [new branch]      codex/release-7.0.6-math-sandbox-main -> origin/codex/release-7.0.6-math-sandbox-main
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                     -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD                     -> origin/HEAD
+ * [new tag]         jain-math-v7.0.1-split.0 -> jain-math-v7.0.1-split.0
+ * [new tag]         jain-math-v7.0.1-split.1 -> jain-math-v7.0.1-split.1
+ * [new tag]         jain-math-v7.0.1-split.2 -> jain-math-v7.0.1-split.2
+ * [new tag]         jain-math-v7.0.1-split.3 -> jain-math-v7.0.1-split.3
+ * [new tag]         jain-math-v8.0.0-split.0 -> jain-math-v8.0.0-split.0
+ * [new tag]         jain-math-v8.0.0-split.1 -> jain-math-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-jable.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-jable
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                      -> origin/main
+ * [new ref]         HEAD                      -> origin/HEAD
+ * [new tag]         jain-jable-v7.0.1-split.0 -> jain-jable-v7.0.1-split.0
+ * [new tag]         jain-jable-v8.0.0-split.0 -> jain-jable-v8.0.0-split.0
+ * [new tag]         jain-jable-v8.0.0-split.1 -> jain-jable-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-lightgbm.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-lightgbm
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/native-vendor-schema-split2-20260713 -> origin/codex/native-vendor-schema-split2-20260713
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-lightgbm-v7.0.1-split.0 -> jain-lightgbm-v7.0.1-split.0
+ * [new tag]         jain-lightgbm-v7.0.1-split.1 -> jain-lightgbm-v7.0.1-split.1
+ * [new tag]         jain-lightgbm-v8.0.0-split.0 -> jain-lightgbm-v8.0.0-split.0
+ * [new tag]         jain-lightgbm-v8.0.0-split.1 -> jain-lightgbm-v8.0.0-split.1
+ * [new tag]         jain-lightgbm-v8.0.0-split.2 -> jain-lightgbm-v8.0.0-split.2
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-starforge.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-starforge
+ * [new branch]      codex/deferred-starforge-foundation -> origin/codex/deferred-starforge-foundation
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/release-7.0.6-starforge-foundation-main -> origin/codex/release-7.0.6-starforge-foundation-main
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-starforge-v7.0.1-split.0 -> jain-starforge-v7.0.1-split.0
+ * [new tag]         jain-starforge-v7.0.1-split.1 -> jain-starforge-v7.0.1-split.1
+ * [new tag]         jain-starforge-v7.0.1-split.2 -> jain-starforge-v7.0.1-split.2
+ * [new tag]         jain-starforge-v8.0.0-split.0 -> jain-starforge-v8.0.0-split.0
+ * [new tag]         jain-starforge-v8.0.0-split.1 -> jain-starforge-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-xgboost.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-xgboost
+ * [new branch]      codex/fleet-clean-20260708  -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/native-vendor-schema-split2-20260713 -> origin/codex/native-vendor-schema-split2-20260713
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                        -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD                        -> origin/HEAD
+ * [new tag]         jain-xgboost-v7.0.1-split.0 -> jain-xgboost-v7.0.1-split.0
+ * [new tag]         jain-xgboost-v7.0.1-split.1 -> jain-xgboost-v7.0.1-split.1
+ * [new tag]         jain-xgboost-v8.0.0-split.0 -> jain-xgboost-v8.0.0-split.0
+ * [new tag]         jain-xgboost-v8.0.0-split.1 -> jain-xgboost-v8.0.0-split.1
+ * [new tag]         jain-xgboost-v8.0.0-split.2 -> jain-xgboost-v8.0.0-split.2
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/redline-core.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/redline-core
+ * [new branch]      claude/redline-split-onboard -> origin/claude/redline-split-onboard
+ * [new branch]      codex/redline-core-proof-routing-complete -> origin/codex/redline-core-proof-routing-complete
+ * [new branch]      codex/redline-core-rust-bench-tools -> origin/codex/redline-core-rust-bench-tools
+ * [new branch]      codex/redline-core-testing-v101-evidence -> origin/codex/redline-core-testing-v101-evidence
+ * [new branch]      codex/v8-redline-core-ci   -> origin/codex/v8-redline-core-ci
+ * [new branch]      main                       -> origin/main
+ * [new ref]         HEAD                       -> origin/HEAD
+ * [new tag]         phase11-fused              -> phase11-fused
+ * [new tag]         redline-core-v4.1.0-jain.0 -> redline-core-v4.1.0-jain.0
+ * [new tag]         redline-core-v4.1.0-jain.1 -> redline-core-v4.1.0-jain.1
+ * [new tag]         redline-core-v4.1.0-jain.2 -> redline-core-v4.1.0-jain.2
+ * [new tag]         redline-core-v4.1.0-jain.3 -> redline-core-v4.1.0-jain.3
+ * [new tag]         redline-core-v4.1.0-jain.4 -> redline-core-v4.1.0-jain.4
+ * [new tag]         v1.0.1                     -> v1.0.1
+ * [new tag]         v1.0.17                    -> v1.0.17
+ * [new tag]         v2.0.5                     -> v2.0.5
+ * [new tag]         v4.0.3                     -> v4.0.3
+ * [new tag]         v4.0.4                     -> v4.0.4
+ * [new tag]         v4.0.5                     -> v4.0.5
+ * [new tag]         v4.0.6                     -> v4.0.6
+ * [new tag]         v4.0.7                     -> v4.0.7
+ * [new tag]         v4.0.8                     -> v4.0.8
+ * [new tag]         v4.0.9                     -> v4.0.9
+ Downloading crates ...
+  Downloaded adler2 v2.0.1
+  Downloaded ahash v0.8.12
+  Downloaded pulp-wasm-simd-flag v0.1.1
+  Downloaded crypto-common v0.1.7
+  Downloaded gemm-f32 v0.19.0
+  Downloaded nano-gemm-f32 v0.2.1
+  Downloaded cfg-if v1.0.4
+  Downloaded nano-gemm-c64 v0.2.1
+  Downloaded gemm-c64 v0.19.0
+  Downloaded quote v1.0.46
+  Downloaded rand_core v0.9.5
+  Downloaded parking_lot_core v0.9.12
+  Downloaded private-gemm-x86 v0.1.20
+  Downloaded rand_core v0.6.4
+  Downloaded num-complex v0.4.6
+  Downloaded getrandom v0.4.3
+  Downloaded rand v0.8.7
+  Downloaded raw-cpuid v11.6.0
+  Downloaded rand_chacha v0.3.1
+  Downloaded r-efi v6.0.0
+  Downloaded proc-macro2 v1.0.106
+  Downloaded nano-gemm v0.2.2
+  Downloaded memchr v2.8.3
+  Downloaded rand v0.9.5
+  Downloaded hermit-abi v0.5.2
+  Downloaded getrandom v0.3.4
+  Downloaded parking_lot v0.12.5
+  Downloaded wasi v0.11.1+wasi-snapshot-preview1
+  Downloaded thiserror v1.0.69
+  Downloaded scopeguard v1.2.0
+  Downloaded reborrow v0.5.5
+  Downloaded shlex v2.0.1
+  Downloaded rand_xorshift v0.4.0
+  Downloaded libm v0.2.16
+  Downloaded unarray v0.1.4
+  Downloaded once_cell v1.21.4
+  Downloaded r-efi v5.3.0
+  Downloaded object v0.37.3
+  Downloaded seq-macro v0.3.6
+  Downloaded crc32fast v1.5.0
+  Downloaded winapi-util v0.1.11
+  Downloaded walkdir v2.5.0
+  Downloaded recursive v0.1.1
+  Downloaded version_check v0.9.5
+  Downloaded thiserror v2.0.18
+  Downloaded windows-link v0.2.1
+  Downloaded hashbrown v0.17.1
+  Downloaded qd v0.8.0
+  Downloaded getrandom v0.2.17
+  Downloaded arc-swap v1.9.2
+  Downloaded proptest v1.11.0
+  Downloaded paste v1.0.15
+  Downloaded serde v1.0.228
+  Downloaded wait-timeout v0.2.1
+  Downloaded redox_syscall v0.5.18
+  Downloaded thiserror-impl v2.0.18
+  Downloaded equivalent v1.0.2
+  Downloaded libc v0.2.186
+  Downloaded thiserror-impl v1.0.69
+  Downloaded rusty-fork v0.3.1
+  Downloaded crossbeam-epoch v0.9.20
+  Downloaded nano-gemm-codegen v0.2.1
+  Downloaded half v2.7.1
+  Downloaded crunchy v0.2.4
+  Downloaded byteorder v1.5.0
+  Downloaded same-file v1.0.6
+  Downloaded rustversion v1.0.23
+  Downloaded simd-adler32 v0.3.9
+  Downloaded csv v1.4.0
+  Downloaded sysctl v0.6.0
+  Downloaded recursive-proc-macro-impl v0.1.1
+  Downloaded rand_chacha v0.9.0
+  Downloaded pulp v0.22.3
+  Downloaded num_cpus v1.17.0
+  Downloaded tempfile v3.27.0
+  Downloaded zopfli v0.8.3
+  Downloaded gemm-f64 v0.19.0
+  Downloaded cc v1.2.67
+  Downloaded stacker v0.1.24
+  Downloaded bitflags v2.13.0
+  Downloaded gemm-f16 v0.19.0
+  Downloaded flate2 v1.1.9
+  Downloaded zmij v1.0.22
+  Downloaded smallvec v1.15.2
+  Downloaded sha2 v0.10.9
+  Downloaded autocfg v1.5.1
+  Downloaded crossbeam-utils v0.8.22
+  Downloaded find-msvc-tools v0.1.9
+  Downloaded either v1.16.0
+  Downloaded digest v0.10.7
+  Downloaded csv-core v0.1.13
+  Downloaded cpufeatures v0.2.17
+  Downloaded bytemuck v1.25.1
+  Downloaded bumpalo v3.20.3
+  Downloaded aho-corasick v1.1.4
+  Downloaded nano-gemm-c32 v0.2.1
+  Downloaded interpol v0.2.1
+  Downloaded generativity v1.2.1
+  Downloaded serde_core v1.0.228
+  Downloaded unicode-ident v1.0.24
+  Downloaded ryu v1.0.23
+  Downloaded gemm-c32 v0.19.0
+  Downloaded gemm v0.19.0
+  Downloaded faer-traits v0.24.0
+  Downloaded errno v0.3.14
+  Downloaded equator-macro v0.2.1
+  Downloaded enum-as-inner v0.6.1
+  Downloaded dyn-stack v0.13.2
+  Downloaded log v0.4.33
+  Downloaded equator v0.6.0
+  Downloaded wit-bindgen v0.57.1
+  Downloaded zerocopy-derive v0.8.54
+  Downloaded rayon-core v1.13.0
+  Downloaded ar_archive_writer v0.5.2
+  Downloaded quick-error v1.2.3
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded num-traits v0.2.19
+  Downloaded nano-gemm-f64 v0.2.1
+  Downloaded miniz_oxide v0.8.9
+  Downloaded indexmap v2.14.0
+  Downloaded gemm-common v0.19.0
+  Downloaded nano-gemm-core v0.2.1
+  Downloaded bit-vec v0.8.0
+  Downloaded itoa v1.0.18
+  Downloaded crossbeam-deque v0.8.7
+  Downloaded bit-set v0.8.0
+  Downloaded psm v0.1.31
+  Downloaded lock_api v0.4.14
+  Downloaded faer v0.24.4
+  Downloaded typed-path v0.12.3
+  Downloaded serde_derive v1.0.228
+  Downloaded generic-array v0.14.7
+  Downloaded equator v0.2.2
+  Downloaded bytemuck_derive v1.11.0
+  Downloaded block-buffer v0.10.4
+  Downloaded crossbeam-queue v0.3.13
+  Downloaded anyhow v1.0.103
+  Downloaded fastrand v2.4.1
+  Downloaded dyn-stack-macros v0.1.3
+  Downloaded typenum v1.20.1
+  Downloaded equator-macro v0.6.0
+  Downloaded heck v0.5.0
+  Downloaded fnv v1.0.7
+  Downloaded defer v0.2.1
+  Downloaded linux-raw-sys v0.12.1
+  Downloaded serde_json v1.0.150
+  Downloaded rayon v1.12.0
+  Downloaded zip v8.6.0
+  Downloaded wasip2 v1.0.4+wasi-0.2.12
+  Downloaded zlib-rs v0.6.6
+  Downloaded regex v1.13.0
+  Downloaded syn v1.0.109
+  Downloaded syn v2.0.118
+  Downloaded zerocopy v0.8.54
+  Downloaded regex-syntax v0.8.11
+  Downloaded rustix v1.1.4
+  Downloaded sqlparser v0.61.0
+  Downloaded regex-automata v0.4.15
+  Downloaded windows-sys v0.61.2
+dependency lock ok: 9 immutable local-Jeryu sources
+[ci] Rust required lane: fmt + workspace clippy/test
+    Checking cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling version_check v0.9.5
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+    Checking bitflags v2.13.0
+   Compiling syn v2.0.118
+   Compiling autocfg v1.5.1
+   Compiling num-traits v0.2.19
+   Compiling libm v0.2.16
+    Checking once_cell v1.21.4
+    Checking bytemuck v1.25.1
+   Compiling nano-gemm-codegen v0.2.1
+    Checking num-complex v0.4.6
+    Checking memchr v2.8.3
+   Compiling crossbeam-utils v0.8.22
+   Compiling serde_core v1.0.228
+   Compiling zerocopy v0.8.54
+   Compiling paste v1.0.15
+    Checking raw-cpuid v11.6.0
+   Compiling pulp v0.22.3
+   Compiling getrandom v0.3.4
+    Checking reborrow v0.5.5
+   Compiling crossbeam-epoch v0.9.20
+    Checking pulp-wasm-simd-flag v0.1.1
+   Compiling generic-array v0.14.7
+   Compiling serde v1.0.228
+   Compiling crossbeam-deque v0.8.7
+   Compiling zmij v1.0.22
+   Compiling dyn-stack-macros v0.1.3
+    Checking hashbrown v0.17.1
+    Checking equivalent v1.0.2
+    Checking indexmap v2.14.0
+    Checking dyn-stack v0.13.2
+   Compiling serde_derive v1.0.228
+    Checking itoa v1.0.18
+   Compiling crc32fast v1.5.0
+    Checking typenum v1.20.1
+   Compiling rayon-core v1.13.0
+   Compiling serde_json v1.0.150
+   Compiling seq-macro v0.3.6
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+   Compiling syn v1.0.109
+    Checking gemm-common v0.19.0
+    Checking nano-gemm-core v0.2.1
+    Checking bumpalo v3.20.3
+    Checking linux-raw-sys v0.12.1
+    Checking either v1.16.0
+    Checking log v0.4.33
+    Checking rayon v1.12.0
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking num_cpus v1.17.0
+    Checking regex-syntax v0.8.11
+    Checking fastrand v2.4.1
+    Checking tempfile v3.27.0
+    Checking digest v0.10.7
+   Compiling interpol v0.2.1
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling nano-gemm-f64 v0.2.1
+    Checking cpufeatures v0.2.17
+   Compiling defer v0.2.1
+   Compiling private-gemm-x86 v0.1.20
+    Checking sha2 v0.10.9
+    Checking ppv-lite86 v0.2.21
+   Compiling equator-macro v0.2.1
+   Compiling anyhow v1.0.103
+    Checking equator v0.2.2
+    Checking gemm-c32 v0.19.0
+    Checking gemm-c64 v0.19.0
+    Checking gemm-f32 v0.19.0
+    Checking gemm-f64 v0.19.0
+    Checking rand_core v0.9.5
+    Checking qd v0.8.0
+    Checking getrandom v0.2.17
+    Checking generativity v1.2.1
+   Compiling equator-macro v0.6.0
+    Checking equator v0.6.0
+    Checking faer-traits v0.24.0
+    Checking rand_core v0.6.4
+    Checking gemm v0.19.0
+    Checking nano-gemm v0.2.2
+    Checking simd-adler32 v0.3.9
+    Checking zlib-rs v0.6.6
+    Checking flate2 v1.1.9
+    Checking zopfli v0.8.3
+    Checking faer v0.24.4
+    Checking rand_chacha v0.3.1
+    Checking csv-core v0.1.13
+    Checking wait-timeout v0.2.1
+    Checking quick-error v1.2.3
+    Checking typed-path v0.12.3
+    Checking fnv v1.0.7
+    Checking ryu v1.0.23
+    Checking bit-vec v0.8.0
+    Checking bit-set v0.8.0
+    Checking csv v1.4.0
+    Checking rusty-fork v0.3.1
+    Checking zip v8.6.0
+    Checking rand v0.8.7
+    Checking jable v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-jable.git?tag=jain-jable-v8.0.0-split.1#e119908d)
+    Checking feat-math v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.0-split.1#2a1e189d)
+    Checking rand v0.9.5
+    Checking rand_chacha v0.9.0
+    Checking rand_xorshift v0.4.0
+    Checking domain v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-domain.git?tag=jain-domain-v8.0.0-split.1#07a6879b)
+    Checking unarray v0.1.4
+    Checking proptest v1.11.0
+    Checking feat-core v8.0.0 (/tmp/split-host-ci.SsDaDU/jain-core/crates/feat-core)
+error: large size difference between variants
+   --> crates/feat-core/src/web_transport.rs:317:1
+    |
+317 | / pub enum ServerEvent {
+318 | |     JobTransition(JobTransition),
+319 | |     Progress(Progress),
+    | |     ------------------ the largest variant contains at least 1192 bytes
+320 | |     Metric(Metric),
+...   |
+323 | |     ArtifactReady(ArtifactReady),
+    | |     ---------------------------- the second-largest variant contains at least 200 bytes
+324 | |     Capacity(Capacity),
+325 | |     ExpiryWarning(ExpiryWarning),
+326 | | }
+    | |_^ the entire enum is at least 1192 bytes
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#large_enum_variant
+    = note: `-D clippy::large-enum-variant` implied by `-D warnings`
+    = help: to override `-D warnings` add `#[allow(clippy::large_enum_variant)]`
+help: consider boxing the large fields or introducing indirection in some other way to reduce the total size of the enum
+    |
+319 -     Progress(Progress),
+319 +     Progress(Box<Progress>),
+    |
+
+error: could not compile `feat-core` (lib) due to 1 previous error

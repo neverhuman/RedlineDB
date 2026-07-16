@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-close",
+  "repository": "jeryu/jain-tui",
+  "request": {
+    "body": {
+      "state": "closed"
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-tui/pulls/9"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-tui"
+      },
+      "sha": "b96010d56b07c54972dd9f2d29f691b2cb1cb375"
+    },
+    "body": "",
+    "created_at": "2026-07-16T01:47:42.956273316Z",
+    "draft": false,
+    "head": {
+      "label": "codex/zero-worktree-policy-20260716",
+      "ref": "codex/zero-worktree-policy-20260716",
+      "repo": {
+        "full_name": "jeryu/jain-tui"
+      },
+      "sha": "33d45089a107cc1eebd95b233b0dcf4a20e8c9e3"
+    },
+    "html_url": "/jeryu/jain-tui/pull/9",
+    "id": "18c8ca56-4f8e-4e52-9f36-415e974ed1e2",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "closed",
+    "merged": false,
+    "merged_at": null,
+    "number": 9,
+    "source_repository": "jeryu/jain-tui",
+    "state": "closed",
+    "title": "docs: prohibit Git worktrees",
+    "updated_at": "2026-07-16T04:55:45.874023886Z",
+    "url": "/repos/jeryu/jain-tui/pulls/9",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784177745
+}

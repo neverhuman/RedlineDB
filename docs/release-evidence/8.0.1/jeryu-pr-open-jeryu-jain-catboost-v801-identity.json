@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-catboost"
+      },
+      "sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96"
+    },
+    "body": "Align active CatBoost release identity to corrective jain-catboost-v8.0.1-split.1. This is one commit directly over protected main, limited to release identity, workspace/package lock, documentation, and changelog surfaces. Existing split.0 history remains immutable; required, security, score, contract, artifact, and exact-head review gates must pass before merge.",
+    "created_at": "2026-07-16T05:00:12.660759464Z",
+    "draft": false,
+    "head": {
+      "label": "release/v8.0.1/catboost-identity",
+      "ref": "release/v8.0.1/catboost-identity",
+      "repo": {
+        "full_name": "jeryu/jain-catboost"
+      },
+      "sha": "8ba6b347071dfbd04e2fdc7b6cd3440587404e56"
+    },
+    "html_url": "/jeryu/jain-catboost/pull/8",
+    "id": "1a87e2d2-ac20-4947-86b6-6faf93286da8",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 8,
+    "source_repository": "jeryu/jain-catboost",
+    "state": "open",
+    "title": "chore(release): align CatBoost identity to 8.0.1",
+    "updated_at": "2026-07-16T05:00:12.660759464Z",
+    "url": "/repos/jeryu/jain-catboost/pulls/8",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-catboost",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Align active CatBoost release identity to corrective jain-catboost-v8.0.1-split.1. This is one commit directly over protected main, limited to release identity, workspace/package lock, documentation, and changelog surfaces. Existing split.0 history remains immutable; required, security, score, contract, artifact, and exact-head review gates must pass before merge.",
+      "draft": false,
+      "head": "release/v8.0.1/catboost-identity",
+      "title": "chore(release): align CatBoost identity to 8.0.1"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-catboost/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-catboost"
+      },
+      "sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96"
+    },
+    "body": "Align active CatBoost release identity to corrective jain-catboost-v8.0.1-split.1. This is one commit directly over protected main, limited to release identity, workspace/package lock, documentation, and changelog surfaces. Existing split.0 history remains immutable; required, security, score, contract, artifact, and exact-head review gates must pass before merge.",
+    "created_at": "2026-07-16T05:00:12.660759464Z",
+    "draft": false,
+    "head": {
+      "label": "release/v8.0.1/catboost-identity",
+      "ref": "release/v8.0.1/catboost-identity",
+      "repo": {
+        "full_name": "jeryu/jain-catboost"
+      },
+      "sha": "8ba6b347071dfbd04e2fdc7b6cd3440587404e56"
+    },
+    "html_url": "/jeryu/jain-catboost/pull/8",
+    "id": "1a87e2d2-ac20-4947-86b6-6faf93286da8",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 8,
+    "source_repository": "jeryu/jain-catboost",
+    "state": "open",
+    "title": "chore(release): align CatBoost identity to 8.0.1",
+    "updated_at": "2026-07-16T05:00:12.660759464Z",
+    "url": "/repos/jeryu/jain-catboost/pulls/8",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784178012
+}

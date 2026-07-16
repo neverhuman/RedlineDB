@@ -12,7 +12,7 @@ entrypoint = "release-candidate.sh"
 owner = "tools/splitctl/src/release_candidate.rs"
 shell_policy = "thin-exec-only"
 production_mode = false
-receipt_root = "docs/release-evidence/8.0.0/orchestrator"
+receipt_root = "docs/release-evidence/8.0.1/orchestrator"
 
 cargo_members = [
 

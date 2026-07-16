@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-close",
+  "repository": "jeryu/jain-jnoccio",
+  "request": {
+    "body": {
+      "state": "closed"
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-jnoccio/pulls/4"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-jnoccio"
+      },
+      "sha": "4810be89abad8e4e52b9be9fa9b49a4891970891"
+    },
+    "body": "",
+    "created_at": "2026-07-16T01:47:27.473009646Z",
+    "draft": false,
+    "head": {
+      "label": "codex/zero-worktree-policy-20260716",
+      "ref": "codex/zero-worktree-policy-20260716",
+      "repo": {
+        "full_name": "jeryu/jain-jnoccio"
+      },
+      "sha": "8ce171cb7dbae2fb454a5ca08bdbb92aad56428d"
+    },
+    "html_url": "/jeryu/jain-jnoccio/pull/4",
+    "id": "d3e375a5-c08e-4722-8f25-0b7b19101ac4",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "closed",
+    "merged": false,
+    "merged_at": null,
+    "number": 4,
+    "source_repository": "jeryu/jain-jnoccio",
+    "state": "closed",
+    "title": "docs: prohibit Git worktrees",
+    "updated_at": "2026-07-16T04:55:08.255464899Z",
+    "url": "/repos/jeryu/jain-jnoccio/pulls/4",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784177708
+}

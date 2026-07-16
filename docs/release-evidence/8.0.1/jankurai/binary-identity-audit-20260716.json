@@ -1,0 +1,311 @@
+{
+  "schema": "jain.jankurai-binary-identity-audit/v1",
+  "generated_at": "2026-07-16T04:03:37Z",
+  "release_target": "8.0.1",
+  "historical_evidence_superseded": false,
+  "claim": {
+    "owner": "/root/jankurai_identity",
+    "token": "codex-mcp-jankurai-identity-20260716T0530Z",
+    "mode": "read-only",
+    "forbidden_actions_observed": {
+      "governed_proof_run": false,
+      "host_ci_run": false,
+      "redline_family_ci_run": false,
+      "proof_refresh_run": false,
+      "release_candidate_run": false,
+      "source_or_config_change": false,
+      "host_or_service_change": false
+    }
+  },
+  "decision": {
+    "status": "pass_with_identity_caveat",
+    "jain_governed_jankurai_1_6_11_is_installed": true,
+    "jain_governed_jankurai_1_6_11_is_the_version_blocker": false,
+    "summary": "The Jain governed proof boundary is pinned to and invokes the release-authoritative Jankurai 1.6.11 binary with SHA-256 fdb42e5f...014e. The interactive PATH binary also reports 1.6.11 but is a different, non-governed ELF and must not be substituted by version string alone.",
+    "remaining_identity_risk": "The direct split-host-ci release score lane resolves bare jankurai through the caller PATH and therefore selects the distinct .local build on this host. The installed governed proof boundary does not: it binds and executes the exact root-owned fdb42e5f build."
+  },
+  "audit_host": {
+    "hostname": "xbabe2",
+    "addresses": [
+      "127.0.1.1",
+      "192.168.68.87"
+    ],
+    "shell_resolution": {
+      "command": "command -v jankurai",
+      "path": "/home/ubuntu/.local/bin/jankurai",
+      "path_order_relevant_prefix": [
+        "/home/ubuntu/.local/bin",
+        "/home/ubuntu/.jeryu/bin",
+        "/home/ubuntu/.cargo/bin"
+      ]
+    }
+  },
+  "binaries": [
+    {
+      "path": "/home/ubuntu/.local/bin/jankurai",
+      "resolved_path": "/home/ubuntu/.local/bin/jankurai",
+      "role": "interactive PATH and current direct split-host-ci bare-command selection",
+      "version_output": "jankurai 1.6.11",
+      "sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+      "size_bytes": 21268904,
+      "file_type": "ELF 64-bit LSB PIE executable, x86-64, dynamically linked, not stripped",
+      "build_id_sha1": "d7a7116148a0b023a166ec709811b145bc6dcb7c",
+      "mode": "0755",
+      "owner": "ubuntu:ubuntu",
+      "governed_for_jain_proof": false,
+      "source_receipt_found": false
+    },
+    {
+      "path": "/home/ubuntu/.jeryu/bin/jankurai",
+      "resolved_path": "/home/ubuntu/.jeryu/bin/jankurai",
+      "role": "release-authoritative governed installation",
+      "version_output": "jankurai 1.6.11",
+      "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+      "size_bytes": 19371840,
+      "file_type": "ELF 64-bit LSB PIE executable, x86-64, dynamically linked, not stripped",
+      "build_id_sha1": "ea75f0d50583102326d391167bd5c473d285c490",
+      "mode": "0755",
+      "owner": "ubuntu:ubuntu",
+      "governed_for_jain_proof": true,
+      "source_receipt_found": true
+    },
+    {
+      "path": "/usr/local/libexec/jain/jankurai",
+      "resolved_path": "/usr/local/libexec/jain/jankurai",
+      "role": "root-owned installed Jain governed proof auditor",
+      "version_output": "jankurai 1.6.11",
+      "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+      "size_bytes": 19371840,
+      "file_type": "ELF 64-bit LSB PIE executable, x86-64, dynamically linked, not stripped",
+      "build_id_sha1": "ea75f0d50583102326d391167bd5c473d285c490",
+      "mode": "0555",
+      "owner": "root:root",
+      "byte_identical_to": "/home/ubuntu/.jeryu/bin/jankurai",
+      "governed_for_jain_proof": true
+    },
+    {
+      "path": "/home/ubuntu/.cargo/bin/jankurai",
+      "resolved_path": "/home/ubuntu/.cargo/bin/jankurai",
+      "role": "legacy explicitly selected Jeryu and Redline family auditor",
+      "version_output": "jankurai 1.6.10",
+      "sha256": "c70749ebe8c61e4b46143fd1a97f32eb9f7eb321928d2508207c409bdb5e69a0",
+      "size_bytes": 18941624,
+      "file_type": "ELF 64-bit LSB PIE executable, x86-64, dynamically linked, not stripped",
+      "build_id_sha1": "eb95cccddf9c7a2e50106ce3b85be89eaac7f023",
+      "mode": "0755",
+      "owner": "ubuntu:ubuntu",
+      "governed_for_jain_proof": false
+    }
+  ],
+  "binary_comparison": {
+    "paths": [
+      "/home/ubuntu/.local/bin/jankurai",
+      "/home/ubuntu/.jeryu/bin/jankurai"
+    ],
+    "byte_identical": false,
+    "cmp_exit_code": 1,
+    "same_version_output": true,
+    "same_root_help_output": true,
+    "subcommand_help_surfaces_compared": 53,
+    "subcommand_help_surfaces_identical": 53,
+    "subcommand_help_surfaces_different": 0,
+    "behavioral_equivalence_limit": "Version and complete CLI help surfaces match, but semantic audit equivalence was not asserted because the binaries differ and this claim forbids running governed audits. The governed boundary intentionally accepts only fdb42e5f...014e."
+  },
+  "governed_source_identity": {
+    "manifest_path": "/home/ubuntu/jeryu-split/jeryu-tool/tool-manifest.toml",
+    "manifest_sha256": "707f57b7f60b65025303315b050cc1c138c7fb2e2080e775ef97a971f286e9b5",
+    "manifest_git_commit": "de80b657e1be5580289dfecdc0cd3c71348261e0",
+    "manifest_git_tree": "8dd6f773dce3ec2e5a82c8f0b606c240760489f9",
+    "installation_receipt_path": "/home/ubuntu/.jeryu/receipts/jankurai/sha256/494ea02af28e6aa7fb2f817831dc8f00df102398677779f7decfce55b3b20b98.json",
+    "installation_receipt_sha256": "494ea02af28e6aa7fb2f817831dc8f00df102398677779f7decfce55b3b20b98",
+    "source_remote": "http://127.0.0.1:8787/git/jeryu/jankurai.git",
+    "source_commit": "dface7397fe24d46b0b1885ddd5782c34edbff49",
+    "source_tag": "v1.6.11-deadlang-precision-split.1",
+    "source_tree": "34a8a1fb59bc4ebfadf12c45d95f169d06acc781",
+    "source_archive_sha256": "2fbca5d04083e3c8d32f383d5b6b4520b8911690b26968c6fbcb210e1202b938",
+    "cargo_lock_sha256": "b9acb981c326226a687d0b6703e4f7ee303148e9e1a6dda1aa03d77988820f6a",
+    "build_mode": "cargo-install-locked-offline-path-v1",
+    "rust_toolchain": "1.95.0",
+    "protection_policy": "immutable-main-v1",
+    "protected_main": true,
+    "governance_status": "governed"
+  },
+  "governed_ci_selection": {
+    "sandbox_config": {
+      "path": "/usr/local/libexec/jain/host-ci-sandbox.config.json",
+      "file_sha256": "b2b8c430378ad0bee5f472c4667d5851f741e78595082eff2a9014db4b31230e",
+      "configured_jankurai_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+    },
+    "publisher_config": {
+      "path": "/usr/local/libexec/jain/host-ci-publisher.config.json",
+      "file_sha256": "02d988eda96f165a2004c90b5292fc26971183917f8333ffe6555bc53685d180",
+      "configured_jankurai_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+    },
+    "installed_programs": {
+      "host_ci_sandbox_sha256": "389533ca19cc86fbd2736a1d688a1a0203f7c03905dc3f40f1317223d810e16e",
+      "host_ci_publisher_sha256": "ff328d10091fca3d38c00137a6a02c8281ee5b2e77ea4fef520c999e3bd42b92",
+      "boundary_preflight_sha256": "bc66723972e3fd8828a78082ccd74e109951af9d062779b4cab204602a7486ad"
+    },
+    "selection_proof": [
+      "host-ci-sandbox hashes /usr/local/libexec/jain/jankurai and compares it with the configured fdb42e5f digest",
+      "host-ci-sandbox also requires exact version output jankurai 1.6.11",
+      "host-ci-sandbox bind-mounts that exact file read-only as /opt/jain-ci/jankurai",
+      "the proof auditor execs /opt/jain-ci/jankurai directly instead of resolving PATH",
+      "host-ci-publisher independently re-hashes the same installed file and rejects a digest or version mismatch"
+    ]
+  },
+  "other_invocation_sources": [
+    {
+      "source": "/home/ubuntu/jain-split/jain-split-ops/ops/ci/split-host-ci.sh",
+      "behavior": "Prefixes a new empty per-run CARGO_HOME/bin to the inherited PATH, then release score scripts invoke bare jankurai.",
+      "observed_resolution_on_xbabe2": "/home/ubuntu/.local/bin/jankurai",
+      "observed_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+      "governed_digest_binding": false
+    },
+    {
+      "source": "/home/ubuntu/.config/systemd/user/jankurai-fleet.service",
+      "enabled": true,
+      "timer_active": true,
+      "environment_path_prefix": "/home/ubuntu/.local/bin:/home/ubuntu/.cargo/bin",
+      "script": "/home/ubuntu/veox-split/jeryu-ctl/jankurai-fleet.sh",
+      "observed_resolution": "/home/ubuntu/.local/bin/jankurai",
+      "scope": "fleet-board aggregation, not the Jain governed proof boundary"
+    },
+    {
+      "source": "/home/ubuntu/jeryu-split/jeryu-tool/ops/ci/lib.sh",
+      "behavior": "Pins the absolute governed binary /home/ubuntu/.jeryu/bin/jankurai plus exact version, digest, source, tree, lock, and installation receipt."
+    },
+    {
+      "source": "legacy Jeryu and Redline CI libraries",
+      "behavior": "Select /home/ubuntu/.cargo/bin/jankurai or prepend its directory to PATH because those families remain explicitly pinned to 1.6.10."
+    }
+  ],
+  "reachable_host_observations": [
+    {
+      "host": "xbabe2",
+      "address": "192.168.68.87",
+      "ssh_read_only": true,
+      "jankurai": [
+        "/home/ubuntu/.local/bin/jankurai: 1.6.11, sha256 0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+        "/home/ubuntu/.jeryu/bin/jankurai: 1.6.11, sha256 fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+        "/home/ubuntu/.cargo/bin/jankurai: 1.6.10, sha256 c70749ebe8c61e4b46143fd1a97f32eb9f7eb321928d2508207c409bdb5e69a0",
+        "/usr/local/libexec/jain/jankurai: 1.6.11, sha256 fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+      ]
+    },
+    {
+      "host": "atomicsoul",
+      "address": "192.168.68.78",
+      "ssh_read_only": true,
+      "jankurai": [],
+      "note": "No executable exists at the four audited standard paths and the non-login PATH does not resolve jankurai."
+    },
+    {
+      "host": "xbabe1",
+      "address": "192.168.68.86",
+      "ssh_read_only": true,
+      "jankurai": [],
+      "note": "No executable exists at the four audited standard paths and the non-login PATH does not resolve jankurai."
+    },
+    {
+      "host": "xbabe3",
+      "address": "192.168.68.54",
+      "ssh_read_only": true,
+      "jankurai": [
+        "/home/ubuntu/.cargo/bin/jankurai: v1.4.0, sha256 933dcd841b40886ba1234546e12180843b50e14e625b04766d25adcd569e3795"
+      ],
+      "note": "The non-login PATH does not resolve jankurai; this old binary is not the Jain governed proof auditor."
+    }
+  ],
+  "active_version_references": {
+    "search_scope": "Canonical current checkouts and installed invocation configuration; excluded .git, target, vendor, archive, release-evidence, .jankurai generated history, agent/baselines when counting runtime pins, node_modules, scratch worktrees, and dataset numeric false positives.",
+    "jain_managed_family": {
+      "repos_checked": 26,
+      "repo_names": [
+        "jain-smartcluster",
+        "jain",
+        "jain-docs",
+        "jain-domain",
+        "jain-math",
+        "jain-contracts",
+        "jain-catboost",
+        "jain-xgboost",
+        "jain-lightgbm",
+        "jain-jable",
+        "jain-battle-gpu",
+        "jain-starforge",
+        "jain-core",
+        "jain-llm",
+        "jain-agent",
+        "jain-jnoccio",
+        "jain-zyal",
+        "jain-jailgun",
+        "jain-research",
+        "jain-report",
+        "jain-tui",
+        "jain-cli",
+        "jain-web",
+        "jain-model-zoo",
+        "jain-ops",
+        "jain-deploy"
+      ],
+      "audit_policies_requiring_1_6_11": 26,
+      "ci_libs_checking_jankurai_1_6_11": 25,
+      "smartcluster_ci_lib_absent": true,
+      "active_semantic_runtime_pins_to_1_6_10": 0,
+      "classification": "The active Jain family is uniformly on the 1.6.11 policy. Remaining 1.6.10 text occurs in historical prose, generated badges/data, or old evidence rather than an active Jain runtime pin."
+    },
+    "jain_control_plane": {
+      "active_policy": "/home/ubuntu/jain-split/jain-split-ops/agent/audit-policy.toml requires 1.6.11",
+      "old_non_runtime_references": [
+        "/home/ubuntu/jain-split/jain-split-ops/agent/jankurai-baseline.json records auditor jankurai 1.6.10",
+        "/home/ubuntu/jain-split/jain-split-ops/ops/split/preflight-report.md records an observed jankurai 1.6.10",
+        "split planning and audit prose describes the earlier 1.6.10 bootstrap"
+      ],
+      "governed_proof_uses_baseline_file": false
+    },
+    "nested_redline_family": {
+      "classification": "separate active 1.6.10 family pin; not changed by this audit",
+      "references": [
+        "/home/ubuntu/jain-split/redline-split-ops/ops/ci/lib.sh",
+        "/home/ubuntu/jain-split/redline-split-ops/agent/audit-policy.toml",
+        "/home/ubuntu/jain-split/redline-split/redline/ops/ci/lib.sh",
+        "/home/ubuntu/jain-split/redline-split/redline-core/ops/ci/lib.sh",
+        "/home/ubuntu/jain-split/redline-split/redline-web/agent/standard-version.toml"
+      ],
+      "selection_note": "redline-split-ops explicitly defaults JANKURAI_BIN to $HOME/.cargo/bin/jankurai; other Redline libraries include bare-command checks and must retain their owner-controlled PATH discipline until their own governed cutover."
+    },
+    "jeryu_family": {
+      "classification": "separate family cutover state; not changed by this audit",
+      "repos_still_pinning_1_6_10": [
+        "jeryu",
+        "jeryu-core",
+        "jeryu-ci-runner",
+        "jeryu-cache",
+        "jeryu-intelligence",
+        "jeryu-jira",
+        "jeryu-web",
+        "jeryu-release-ops",
+        "jeryu-deploy",
+        "jeryu-tool-finder"
+      ],
+      "repos_governed_on_1_6_11": [
+        "jeryu-tool"
+      ],
+      "selection_note": "The 1.6.10 Jeryu PR scripts intentionally prepend $HOME/.cargo/bin. A global replacement would break their explicit version checks; they require a reviewed family-wide render/cutover rather than a PATH mutation."
+    }
+  },
+  "minimal_follow_up": [
+    {
+      "priority": "none_for_jain_governed_proof_identity",
+      "action": "Do not reinstall Jankurai and do not point the governed boundary at the .local binary. The required fdb42e5f build is already installed, receipt-bound, root-copied, and config-bound."
+    },
+    {
+      "priority": "owner_lane_review",
+      "action": "The jain-split-ops owner should decide whether the direct split-host-ci release score lane must also bind an exact Jankurai digest instead of relying on a version-only PATH lookup. This audit made no source or config change."
+    },
+    {
+      "priority": "separate_family_work",
+      "action": "Do not mechanically bump Jeryu or Redline 1.6.10 pins. Their owners must perform their existing governed family cutovers with exact binary identity and receipts."
+    }
+  ]
+}

@@ -1,0 +1,182 @@
+{
+  "schema": "jain.worktree-custody-mutation-precheck/v1",
+  "status": "blocked_no_mutation",
+  "owner": "Codex",
+  "observed_at_utc": "2026-07-16T04:48:07Z",
+  "release_scope": {
+    "kind": "version-neutral workspace custody",
+    "current_release_target": "8.0.1"
+  },
+  "requested_batch": [
+    {
+      "path": "/tmp/codex-core-native-diagnose/native-source/catboost",
+      "common_git_dir": "/home/ubuntu/jain-split/vendor/catboost/.git",
+      "admin_entry": "catboost"
+    },
+    {
+      "path": "/tmp/codex-jain-native-pristine-0954/catboost",
+      "common_git_dir": "/home/ubuntu/jain-split/vendor/catboost/.git",
+      "admin_entry": "catboost1"
+    },
+    {
+      "path": "/tmp/codex-core-native-diagnose/native-source/lightgbm",
+      "common_git_dir": "/home/ubuntu/jain-split/vendor/lightgbm/.git",
+      "admin_entry": "lightgbm"
+    },
+    {
+      "path": "/tmp/codex-jain-native-pristine-0954/lightgbm",
+      "common_git_dir": "/home/ubuntu/jain-split/vendor/lightgbm/.git",
+      "admin_entry": "lightgbm1"
+    }
+  ],
+  "required_mutation_gate": {
+    "canonical_primary_present": true,
+    "canonical_primary_clean": false,
+    "canonical_primary_forge_equal": false,
+    "result": "fail_closed",
+    "reason": "Both canonical primaries differ materially from their pinned HEAD trees. The clean auxiliary checkouts are therefore retained as custody copies until an owner classifies and preserves or reproducibly regenerates the canonical changes."
+  },
+  "policy": {
+    "fresh_mutation_claim_appended": false,
+    "claim_reason": "The read-only preclaim gate failed; no removal lane was claimed and no removal command was permitted.",
+    "created_worktree": false,
+    "removed_worktree": false,
+    "ran_worktree_prune": false,
+    "used_force": false,
+    "manually_deleted_path": false,
+    "deleted_ref": false,
+    "changed_source_index_ref_or_forge": false
+  },
+  "hash_conventions": {
+    "empty_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "porcelain_sha256": "SHA-256 of newline-delimited git status --porcelain=v1 --untracked-files=all",
+    "diff_binary_sha256": "SHA-256 of raw git diff --binary HEAD",
+    "untracked_paths_sha256": "SHA-256 of NUL-delimited git ls-files --others --exclude-standard"
+  },
+  "canonical_primaries": [
+    {
+      "path": "/home/ubuntu/jain-split/vendor/catboost",
+      "present": true,
+      "common_git_dir": "/home/ubuntu/jain-split/vendor/catboost/.git",
+      "head": "b1bd2a6d77219e82a1acfcedfccb8e6f6c1ee084",
+      "tree": "7da64b65183cd767998e63c63c56cd529229267d",
+      "detached": true,
+      "origin": "https://github.com/catboost/catboost.git",
+      "status_count": 6857,
+      "status_counts": {
+        "worktree_deleted": 6842,
+        "worktree_modified": 10,
+        "untracked": 5
+      },
+      "porcelain_sha256": "76742c4b302c211386eb25533d37fda093043562d693474f199f267a54604bf5",
+      "diff_binary_sha256": "2f6da34e97d7474bac4fa96e2622865ca6d5f9dd56b3ca1fd0a93f7e9770c089",
+      "untracked_paths_sha256": "71682bad8f8239f74ceb52db48c607738abea476150757cc0010d0cae5e6de20",
+      "untracked": [
+        {
+          "path": "CMakeUserPresets.json",
+          "sha256": "ccd6be4478926b46ec9fc2201dc59175128d0f87e0331e896648cba33f524709"
+        },
+        {
+          "path": "catboost/libs/train_interface/catboost_c_api.cpp",
+          "sha256": "d1cfb70e5b6351f0c48e740863d6ea828b7211f1ee96180899ed112e384818a4"
+        },
+        {
+          "path": "catboost/libs/train_interface/catboost_c_api.h",
+          "sha256": "4890a7315473b676c9990b73bcedfa12fe5a3d094f472bbefdfc6faca55163f7"
+        },
+        {
+          "path": "catboost/libs/train_interface/cb_shim.cpp",
+          "sha256": "7a3db99341141e5c343a0ad89b4f730d63cbd3391b5d0992ec8aefe985e6c9a2"
+        },
+        {
+          "path": "catboost/libs/train_interface/cb_shim.h",
+          "sha256": "ec755b0648e3e73312f3ec7a7e2b99fd8bd28785187fe414994c54cbe2be25ba"
+        }
+      ],
+      "pinned_commit_local_ref_readback": {
+        "refs/tags/v1.2.10^{}": "b1bd2a6d77219e82a1acfcedfccb8e6f6c1ee084",
+        "refs/tags/v1.2.10rc0^{}": "b1bd2a6d77219e82a1acfcedfccb8e6f6c1ee084"
+      },
+      "clean": false,
+      "forge_equal": false
+    },
+    {
+      "path": "/home/ubuntu/jain-split/vendor/lightgbm",
+      "present": true,
+      "common_git_dir": "/home/ubuntu/jain-split/vendor/lightgbm/.git",
+      "head": "d02a01ac6f51d36c9e62388243bcb75c3b1b1774",
+      "tree": "d2cca7c9da1bbe184be03acf824d0bde358bfae0",
+      "detached": true,
+      "origin": "https://github.com/microsoft/LightGBM",
+      "status_count": 305,
+      "status_counts": {
+        "worktree_deleted": 305,
+        "worktree_modified": 0,
+        "untracked": 0
+      },
+      "porcelain_sha256": "d995468add0b809483ca395bc595edc134d17c5cfd912097c13bca2469b22a42",
+      "diff_binary_sha256": "a9776befbe6a020a806f7b195012f1ebf2df2c3c1aedbcd417e44aef72855de0",
+      "untracked_paths_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "pinned_commit_local_ref_readback": {
+        "refs/tags/stable": "d02a01ac6f51d36c9e62388243bcb75c3b1b1774",
+        "refs/tags/v4.6.0": "d02a01ac6f51d36c9e62388243bcb75c3b1b1774"
+      },
+      "clean": false,
+      "forge_equal": false
+    }
+  ],
+  "auxiliary_readback": [
+    {
+      "path": "/tmp/codex-core-native-diagnose/native-source/catboost",
+      "present": true,
+      "registered": true,
+      "head": "b1bd2a6d77219e82a1acfcedfccb8e6f6c1ee084",
+      "tree": "7da64b65183cd767998e63c63c56cd529229267d",
+      "status_count": 0,
+      "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "removed": false
+    },
+    {
+      "path": "/tmp/codex-jain-native-pristine-0954/catboost",
+      "present": true,
+      "registered": true,
+      "head": "b1bd2a6d77219e82a1acfcedfccb8e6f6c1ee084",
+      "tree": "7da64b65183cd767998e63c63c56cd529229267d",
+      "status_count": 0,
+      "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "removed": false
+    },
+    {
+      "path": "/tmp/codex-core-native-diagnose/native-source/lightgbm",
+      "present": true,
+      "registered": true,
+      "head": "d02a01ac6f51d36c9e62388243bcb75c3b1b1774",
+      "tree": "d2cca7c9da1bbe184be03acf824d0bde358bfae0",
+      "status_count": 0,
+      "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "removed": false
+    },
+    {
+      "path": "/tmp/codex-jain-native-pristine-0954/lightgbm",
+      "present": true,
+      "registered": true,
+      "head": "d02a01ac6f51d36c9e62388243bcb75c3b1b1774",
+      "tree": "d2cca7c9da1bbe184be03acf824d0bde358bfae0",
+      "status_count": 0,
+      "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "removed": false
+    }
+  ],
+  "supersession": {
+    "prior_receipt": "docs/release-evidence/8.0.1/worktree-custody/codex-remaining-admin-blocker-matrix-20260716.json",
+    "prior_receipt_sha256": "e5d9d8fd898dfd80b9059fee06c52521d2a8e37c05047ebacca55e025fcccaf0",
+    "superseded_classification": "The four vendor entries are not safe_next_non_force_batch while either canonical primary is dirty. All other historical inventory facts remain unchanged.",
+    "corrected_disposition": "canonical_primary_dirty_custody_blocked"
+  },
+  "terminal_result": {
+    "removed_count": 0,
+    "requested_auxiliaries_remaining_present_and_registered": 4,
+    "worktree_remove_invoked": false,
+    "next_action": "Obtain an owner handoff for both canonical vendor primaries; classify and preserve the CatBoost tracked/untracked native-build work and the LightGBM deletions, then restore or replace each canonical primary through an independently reviewed custody action. Only after both primaries are present, clean, and pinned-ref-equal may the four auxiliary registrations be re-evaluated for non-force removal."
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "schema_version": "jain.jeryu-independent-review/v1",
+  "generated_at_utc": "2026-07-16T04:49:16Z",
+  "status": "review_pass_mutation_superseded",
+  "repository": "jeryu/jain-model-zoo",
+  "pull_request": 6,
+  "claim": "codex-mcp-model-zoo-v801-independent-review-merge-20260716T0447Z",
+  "reviewer_lane": "/root/docs_v801_identity",
+  "expected_base": "fd00a3df96d9769e0282582aba0c3579e568db6c",
+  "expected_head": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+  "head_tree": "744e4b3da7e08e1f04d00a39742bd70f1944916d",
+  "lineage": {
+    "commit_count_over_base": 1,
+    "head_parent": "fd00a3df96d9769e0282582aba0c3579e568db6c",
+    "fast_forward": true
+  },
+  "diff": {
+    "paths": 13,
+    "insertions": 23,
+    "deletions": 18,
+    "binary_diff_sha256": "9b94444ed90e6217cc61a6e15337755556b2d41b23b6d76e9583ecfa054fd79e",
+    "diff_check": "pass",
+    "changed_path_modes": [
+      "100644",
+      "100755"
+    ],
+    "symlink_entries": 0,
+    "assessment": "surgical 8.0.1 self-identity, evidence-contract, and release-documentation update; prior immutable history and candidate/rollback boundaries preserved"
+  },
+  "required_exact_head_checks": [
+    {
+      "name": "jankurai/proof",
+      "head": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+      "status": "completed",
+      "conclusion": "success",
+      "completed_at": "2026-07-16T04:18:25.135547099Z"
+    },
+    {
+      "name": "jain-model-zoo/required",
+      "head": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+      "status": "completed",
+      "conclusion": "success",
+      "completed_at": "2026-07-16T04:44:52.338222883Z"
+    }
+  ],
+  "non_required_check_observation": {
+    "name": "jeryu/autonomy",
+    "conclusion": "action_required",
+    "required_by_main_protection": false
+  },
+  "protection": {
+    "required_approvals": 1,
+    "required_contexts": [
+      "jain-model-zoo/required"
+    ],
+    "strict": true,
+    "linear_history": true,
+    "enforce_admins": true,
+    "force_push": false,
+    "branch_deletion": false
+  },
+  "forge_race_readback": {
+    "observed_pr_state": "closed",
+    "observed_merged": true,
+    "merged_at": "2026-07-16T04:47:27.255630427Z",
+    "merge_commit": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+    "forge_main_after_readback": "0e7dd974f01fa76905d392e92fcee23089ba5bd3"
+  },
+  "decision": "The change passed independent content review, but PR #6 was concurrently merged before this lane could approve. Do not issue a post-merge approval or repeat the merge.",
+  "approval_performed_by_this_claim": false,
+  "merge_performed_by_this_claim": false,
+  "actions_not_performed": [
+    "source edit",
+    "protection change",
+    "CI execution",
+    "approval",
+    "merge",
+    "tag",
+    "authority binding",
+    "worktree creation"
+  ]
+}

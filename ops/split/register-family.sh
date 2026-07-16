@@ -6,7 +6,7 @@ manifest="${ops_root}/repos.manifest.toml"
 base="${JERYU_BASE:-http://127.0.0.1:8787}"
 family_filter=""
 check_only=0
-receipt="${ops_root}/docs/release-evidence/8.0.0/forge-family-registration.json"
+receipt="${ops_root}/docs/release-evidence/8.0.1/forge-family-registration.json"
 rows=()
 
 usage() {

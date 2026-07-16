@@ -1,0 +1,13 @@
+{
+  "commit_input": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+  "error": "jain-model-zoo: immutable-tag request differs from canonical manifest (remote=http://127.0.0.1:8787/git/jeryu/jain-model-zoo.git, tag=jain-model-zoo-v8.0.1-split.1, commit=0e7dd974f01fa76905d392e92fcee23089ba5bd3, checksum=f60eba58380464a9dada6fdfcf02600e0665b16ce7f7313b7b9c0c9fa5215f5c)",
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "dry-run",
+  "operation": "immutable-tag",
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-model-zoo.git",
+  "repository": "/home/ubuntu/jain-split/jain-model-zoo",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "fail",
+  "tag": "jain-model-zoo-v8.0.1-split.1",
+  "timestamp_unix": 1784177409
+}

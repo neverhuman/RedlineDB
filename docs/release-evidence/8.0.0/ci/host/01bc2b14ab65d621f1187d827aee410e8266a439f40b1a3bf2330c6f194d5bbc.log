@@ -1,0 +1,21 @@
+Cloning into '/tmp/split-host-ci.gEp9JI/jain-model-zoo'...
+HEAD is now at 66c5cfe ci: move model-zoo operations to Rust
+lock_blob=absent
+name=jain-model-zoo
+ref=66c5cfec7304db1a0ff048fc944fb7df0fcc4789
+commit=66c5cfec7304db1a0ff048fc944fb7df0fcc4789
+tree=39b8e34fa3b78ec695b71f2dd4c3dcba872c9e75
+release_checksum_sha256=00c9eda87505ed94d6cca797f371206699fe5c1f6bbcfab8ee5a9b1045554269
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Python boundary ok: 13 exact Rust-parity files
+check ok: /tmp/split-host-ci.gEp9JI/jain-model-zoo
+[ci] model-zoo required lane: manifest integrity + oracle checksums
+model-zoo: 486 manifests parse, 23 oracle .npy present
+required ok: jain-model-zoo

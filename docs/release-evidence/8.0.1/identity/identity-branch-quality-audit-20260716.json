@@ -1,0 +1,226 @@
+{
+  "schema_version": "jain.identity-branch-quality-audit/v1",
+  "status": "blocked",
+  "generated_at": "2026-07-16T04:32:59Z",
+  "release_version": "8.0.1",
+  "auditor": "/root/smartcluster_node_pr",
+  "scope": [
+    "jeryu/jain-model-zoo",
+    "jeryu/jain-catboost",
+    "jeryu/jain-zyal",
+    "jeryu/jain-jailgun",
+    "jeryu/jain-research"
+  ],
+  "excluded": [
+    "jeryu/jain-llm"
+  ],
+  "method": {
+    "canonical_product_checkouts_read_or_mutated": false,
+    "forge_mutated": false,
+    "forge_refs_read_twice": true,
+    "inspection": "local-Jeryu ref/PR/check readback plus exact objects fetched into temporary bare repositories cloned from target/bare-mirrors",
+    "temporary_bare_root": "/tmp/codex-v801-identity-quality-20260716",
+    "temporary_bare_root_removed_after_audit": true,
+    "worktrees_created": 0,
+    "ci_run": false
+  },
+  "summary": {
+    "repositories_audited": 5,
+    "identity_branches_present": 1,
+    "identity_branches_absent": 4,
+    "identity_prs_present": 0,
+    "duplicate_identity_prs": 0,
+    "branch_quality_pass": 1,
+    "release_ready": 0,
+    "blocking_findings": 8
+  },
+  "repositories": [
+    {
+      "repository": "jeryu/jain-model-zoo",
+      "verdict": "branch_quality_pass_pr_and_required_check_missing",
+      "protected_main": "fd00a3df96d9769e0282582aba0c3579e568db6c",
+      "protected_main_tree": "236d63f10ee16472e3410cc281c1c134001ee289",
+      "expected_branch": "release/v8.0.1/model-zoo-identity",
+      "branch_present": true,
+      "branch_head": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+      "branch_tree": "744e4b3da7e08e1f04d00a39742bd70f1944916d",
+      "branch_parent": "fd00a3df96d9769e0282582aba0c3579e568db6c",
+      "based_on_current_protected_main": true,
+      "commits_ahead": 1,
+      "changed_paths": [
+        "AGENTS.md",
+        "CHANGELOG.md",
+        "README.md",
+        "VERSION",
+        "agent/standard-version.toml",
+        "db/README.md",
+        "docs/AGENTS.md",
+        "docs/release.md",
+        "ops/ci/artifact_support.sh",
+        "ops/ci/required.sh",
+        "schemas/release-artifact.schema.json",
+        "tools/model-zoo-ops/Cargo.lock",
+        "tools/model-zoo-ops/Cargo.toml"
+      ],
+      "diff": {
+        "files": 13,
+        "insertions": 23,
+        "deletions": 18,
+        "surgical": true,
+        "history_rewritten": false,
+        "changelog_change": "one additive 8.0.1-split.1 entry; all prior entries byte-unchanged",
+        "third_party_or_reference_cargo_changed": false,
+        "dependency_versions_changed": false
+      },
+      "identity_surfaces": [
+        {"path": "VERSION", "blob": "6f6229a78380cd6316caee9fc116cc385f7b5a30", "value": "jain-model-zoo-v8.0.1-split.1"},
+        {"path": "PRODUCT_VERSION", "present": false, "applicable": false},
+        {"path": "agent/standard-version.toml", "blob": "08546222a760b0c3a22a7397c57cb65e7c772629", "value": "jain-model-zoo-v8.0.1-split.1"},
+        {"path": "tools/model-zoo-ops/Cargo.toml", "blob": "662314e41dece1a2a003d569b04ce492a2d477f1", "package_version": "8.0.1"},
+        {"path": "tools/model-zoo-ops/Cargo.lock", "blob": "896c027e2a3871fb35a805b7802a4d13f4e24667", "package": "jain-model-zoo-ops", "package_version": "8.0.1"},
+        {"path": "ops/ci/artifact_support.sh", "blob": "bc60bd6e97221bb850458a1314ae0bb0ca794375", "release_version": "8.0.1"},
+        {"path": "ops/ci/required.sh", "blob": "9580f24eec3b049ebe2c79bae21d2bc160739520", "expected_tag": "jain-model-zoo-v8.0.1-split.1"},
+        {"path": "schemas/release-artifact.schema.json", "blob": "42ab0bd3666cf31a6cdf0e6a1f0a0f4c6657cfb4", "release_version": "8.0.1"}
+      ],
+      "active_8_0_0_hits_excluding_changelog_and_archives": 0,
+      "tag_readback": {
+        "invalid_tag": "jain-model-zoo-v8.0.1-split.0",
+        "commit": "fd00a3df96d9769e0282582aba0c3579e568db6c",
+        "version_blob_value": "jain-model-zoo-v8.0.0-split.1",
+        "matches_logged_pre_branch_commit": true,
+        "two_readbacks_equal": true,
+        "corrective_split_1_tag_present": false
+      },
+      "pull_requests": {
+        "matching_branch_all_states": [],
+        "duplicate_count": 0
+      },
+      "checks": [
+        {"name": "jankurai/proof", "status": "completed", "conclusion": "success"}
+      ],
+      "required_check_present": false,
+      "blockers": [
+        "No PR exists for the pushed identity branch.",
+        "jain-model-zoo/required is absent on the exact branch head."
+      ]
+    },
+    {
+      "repository": "jeryu/jain-catboost",
+      "verdict": "identity_branch_absent",
+      "protected_main": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "protected_main_tree": "0e0cf721a2eac6911c9a4903946cebc2d084ca66",
+      "expected_branch": "release/v8.0.1/catboost-identity",
+      "branch_present": false,
+      "pull_requests": {
+        "matching_branch_all_states": [],
+        "duplicate_count": 0,
+        "unrelated_open": [{"number": 4, "draft": true, "head": "aa0320d903fbdac80f07f02f2cab043803deefea", "title": "feat(catboost): add adaptive GPU acceleration"}]
+      },
+      "current_main_identity": [
+        {"path": "VERSION", "blob": "453e5ca2862847c9672bcd1ce9606fe05a40f961", "value": "jain-catboost-v8.0.0-split.2"},
+        {"path": "PRODUCT_VERSION", "present": false, "applicable": false},
+        {"path": "agent/standard-version.toml", "blob": "7b614c197049c24ee42c86701790b3d77ae96ac0", "value": "jain-catboost-v8.0.0-split.1"},
+        {"path": "Cargo.toml", "blob": "8dc8efb0a92ac57b479cbd23e4a532184a6b2e59", "workspace_version": "8.0.0"},
+        {"path": "Cargo.lock", "blob": "4e3170b4945b335d6910f1e37aabceec51755270", "package_versions": {"catboost": "8.0.0", "catboost-sys": "8.0.0"}}
+      ],
+      "current_main_internal_consistency": false,
+      "tag_readback": {"invalid_tag": "jain-catboost-v8.0.1-split.0", "commit": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96", "version_blob_value": "jain-catboost-v8.0.0-split.2", "two_readbacks_equal": true, "corrective_split_1_tag_present": false},
+      "identity_head_checks": [],
+      "current_main_checks_not_identity_evidence": [
+        {"name": "jankurai/proof", "conclusion": "success"},
+        {"name": "jain-catboost/required", "conclusion": "success"}
+      ],
+      "blockers": [
+        "The claimed identity branch and PR do not exist on the forge.",
+        "Current main remains 8.0.0 and VERSION split.2 disagrees with standard-version split.1."
+      ]
+    },
+    {
+      "repository": "jeryu/jain-zyal",
+      "verdict": "identity_branch_absent",
+      "protected_main": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
+      "protected_main_tree": "2db4ea9b7a5f8c9394548f2f783f8ecfa703292e",
+      "expected_branch": "release/v8.0.1/zyal-identity",
+      "branch_present": false,
+      "pull_requests": {"matching_branch_all_states": [], "duplicate_count": 0},
+      "current_main_identity": [
+        {"path": "VERSION", "blob": "d52e840e3ecefb671540e8dd98c3d05421a2f918", "value": "jain-zyal-v8.0.0-split.1"},
+        {"path": "PRODUCT_VERSION", "present": false, "applicable": false},
+        {"path": "agent/standard-version.toml", "blob": "9d847b9cd27264eda6490587a482c2ca76d80a2c", "value": "jain-zyal-v8.0.0-split.1"},
+        {"path": "Cargo.toml", "blob": "77768f462eaa705927517872416c9031ff9e6e70", "workspace_version": "8.0.0", "candidate_tag": "jain-zyal-v8.0.0-split.1"},
+        {"path": "Cargo.lock", "blob": "b3746f2c8519e8aef67c2448af6d4c09e1051793", "package_version": "8.0.0"},
+        {"path": "ops/ci/package-identity.sh", "blob": "878a5f301a58d41f7e41795a696957044010c9ff", "release_version": "8.0.0"},
+        {"path": "ops/ci/artifact_support.sh", "blob": "1b3a336b23730a25906b6f09327b7e1da7156c60", "release_version": "8.0.0"}
+      ],
+      "tag_readback": {"invalid_tag": "jain-zyal-v8.0.1-split.0", "commit": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288", "version_blob_value": "jain-zyal-v8.0.0-split.1", "two_readbacks_equal": true, "corrective_split_1_tag_present": false},
+      "identity_head_checks": [],
+      "current_main_checks_not_identity_evidence": [
+        {"name": "jankurai/proof", "conclusion": "failure"},
+        {"name": "jain-zyal/required", "conclusion": "success"}
+      ],
+      "blockers": ["The claimed identity branch and PR do not exist on the forge; every active self-identity surface on current main remains 8.0.0."]
+    },
+    {
+      "repository": "jeryu/jain-jailgun",
+      "verdict": "identity_branch_absent",
+      "protected_main": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+      "protected_main_tree": "28fb59fbef9b2d10df1e55b497266caab58e2c42",
+      "expected_branch": "release/v8.0.1/jailgun-identity",
+      "branch_present": false,
+      "pull_requests": {"matching_branch_all_states": [], "duplicate_count": 0},
+      "current_main_identity": [
+        {"path": "VERSION", "blob": "01204abf31842a7dab682432745e46913eeb3d15", "value": "jain-jailgun-v8.0.0-split.1"},
+        {"path": "PRODUCT_VERSION", "present": false, "applicable": false},
+        {"path": "agent/standard-version.toml", "blob": "295e47dbfab5b4819a19141e54a50de5958e5d6e", "value": "jain-jailgun-v8.0.0-split.1"},
+        {"path": "Cargo.toml", "blob": "c4fd560e23039d2a384fb3fcd53a4ab4ba65c142", "workspace_version": "8.0.0", "candidate_tag": "jain-jailgun-v8.0.0-split.1"},
+        {"path": "Cargo.lock", "blob": "602200db1f83313ae6a87b3212a685819a172c54", "package_version": "8.0.0"},
+        {"path": "ops/ci/package-identity.sh", "blob": "669c7e47f38d993392642c05f781862095eafafd", "release_version": "8.0.0"},
+        {"path": "ops/ci/artifact_support.sh", "blob": "b73b973e3b68187f60831d812ad5c6472664275c", "release_version": "8.0.0"}
+      ],
+      "tag_readback": {"invalid_tag": "jain-jailgun-v8.0.1-split.0", "commit": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e", "version_blob_value": "jain-jailgun-v8.0.0-split.1", "two_readbacks_equal": true, "corrective_split_1_tag_present": false},
+      "identity_head_checks": [],
+      "current_main_checks_not_identity_evidence": [
+        {"name": "jankurai/proof", "conclusion": "success"},
+        {"name": "jain-jailgun/required", "latest_conclusion": "success", "earlier_conclusion": "failure"}
+      ],
+      "blockers": ["The claimed identity branch and PR do not exist on the forge; every active self-identity surface on current main remains 8.0.0."]
+    },
+    {
+      "repository": "jeryu/jain-research",
+      "verdict": "identity_branch_absent_and_standard_metadata_missing",
+      "protected_main": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+      "protected_main_tree": "053f1702bc6e77a8ed553ff6a7ad6fe3dce2420b",
+      "expected_branch": "release/v8.0.1/research-identity",
+      "branch_present": false,
+      "pull_requests": {"matching_branch_all_states": [], "duplicate_count": 0},
+      "current_main_identity": [
+        {"path": "VERSION", "blob": "8ea60323d7f35e3f49359aa7093c33ce557deef8", "value": "jain-research-v8.0.0-split.1"},
+        {"path": "PRODUCT_VERSION", "present": false, "applicable": false},
+        {"path": "agent/standard-version.toml", "present": false, "missing_surface": true},
+        {"path": "Cargo.toml", "blob": "26f2d48e75ec687ba7dd8372bd03dbcea343c6c4", "workspace_version": "8.0.0"},
+        {"path": "Cargo.lock", "blob": "009680d43c52ee962facb37efe3cd8d313376456", "package_version": "8.0.0"},
+        {"path": "ops/ci/package-identity.sh", "blob": "8c976a51d13b5fe484fe84e9cddbab9f526645aa", "release_version": "8.0.0"},
+        {"path": "ops/ci/artifact_support.sh", "blob": "23826d28c34fe0b86f5002c8745117edb41c6cb4", "release_version": "8.0.0"}
+      ],
+      "tag_readback": {"invalid_tag": "jain-research-v8.0.1-split.0", "commit": "c61504a7e25ce62c71100865ef52f49a12c59e1b", "version_blob_value": "jain-research-v8.0.0-split.1", "two_readbacks_equal": true, "corrective_split_1_tag_present": false},
+      "identity_head_checks": [],
+      "current_main_checks_not_identity_evidence": [
+        {"name": "jankurai/proof", "conclusion": "success"},
+        {"name": "jain-research/required", "conclusion": "success"},
+        {"name": "jeryu/autonomy", "conclusion": "action_required"}
+      ],
+      "blockers": [
+        "The claimed identity branch and PR do not exist on the forge; active current-main identity remains 8.0.0.",
+        "agent/standard-version.toml is absent and requires an owner decision before treating it as a mandatory new surface."
+      ]
+    }
+  ],
+  "global_blockers": [
+    "Open a reviewed PR for the existing model-zoo identity branch and run exact-head jain-model-zoo/required.",
+    "Materialize and push the claimed CatBoost, Zyal, Jailgun, and Research identity branches from their current protected mains before any review or CI can occur.",
+    "Resolve CatBoost's pre-existing VERSION split.2 versus standard-version split.1 inconsistency in its identity patch.",
+    "Decide whether Research must add the family-standard agent/standard-version.toml surface; do not synthesize it in an audit lane.",
+    "Cut only new split.1 corrective tags after protected merge; all current split.0 tags still point to commits whose VERSION blobs advertise 8.0.0."
+  ],
+  "acceptance": false
+}

@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-docs"
+      },
+      "sha": "af84a049bfd4ea959ecf1657edf63c7cc5c60e48"
+    },
+    "body": "",
+    "created_at": "2026-07-16T02:59:15.561662343Z",
+    "draft": false,
+    "head": {
+      "label": "claude/docs-v801-corrections",
+      "ref": "claude/docs-v801-corrections",
+      "repo": {
+        "full_name": "jeryu/jain-docs"
+      },
+      "sha": "b0245456d73d99a6698db053bf49300d6bbbac12"
+    },
+    "html_url": "/jeryu/jain-docs/pull/10",
+    "id": "43091532-0f97-4e65-b42a-04bc22ec8df0",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 10,
+    "source_repository": "jeryu/jain-docs",
+    "state": "open",
+    "title": "manual: GPU image is GPU-only; ch6 pull/dump + port env reality",
+    "updated_at": "2026-07-16T02:59:15.561662343Z",
+    "url": "/repos/jeryu/jain-docs/pulls/10",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-docs",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "claude/docs-v801-corrections",
+      "title": "manual: GPU image is GPU-only; ch6 pull/dump + port env reality"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-docs/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-docs"
+      },
+      "sha": "af84a049bfd4ea959ecf1657edf63c7cc5c60e48"
+    },
+    "body": "",
+    "created_at": "2026-07-16T02:59:15.561662343Z",
+    "draft": false,
+    "head": {
+      "label": "claude/docs-v801-corrections",
+      "ref": "claude/docs-v801-corrections",
+      "repo": {
+        "full_name": "jeryu/jain-docs"
+      },
+      "sha": "b0245456d73d99a6698db053bf49300d6bbbac12"
+    },
+    "html_url": "/jeryu/jain-docs/pull/10",
+    "id": "43091532-0f97-4e65-b42a-04bc22ec8df0",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 10,
+    "source_repository": "jeryu/jain-docs",
+    "state": "open",
+    "title": "manual: GPU image is GPU-only; ch6 pull/dump + port env reality",
+    "updated_at": "2026-07-16T02:59:15.561662343Z",
+    "url": "/repos/jeryu/jain-docs/pulls/10",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784170755
+}

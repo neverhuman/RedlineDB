@@ -1,0 +1,978 @@
+Cloning into '/tmp/split-host-ci.ZyqoAE/jain-core'...
+HEAD is now at e7850b4 feat-core: JAIN_INVENTION_ENGINE runtime override (legacy|gp / lime / prime) (ported to governed main)
+lock_blob=55f5b27ba5e518ba7deac1e15eb2c75055e0276d
+name=jain-core
+ref=e7850b47e1beaa808f11f9e6f528f34504ee7284
+commit=e7850b47e1beaa808f11f9e6f528f34504ee7284
+tree=0d77d644bccb3bf95074373b5a28c423685dad43
+release_checksum_sha256=da2bc2080ab3b98c119ff0263bd7fd2c4e16d73112bfa79523bc643fdc14bef3
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: /tmp/split-host-ci.ZyqoAE/jain-core
+    Updating crates.io index
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-battle-gpu
+ * [new branch]      agent/math-split-alignment -> origin/agent/math-split-alignment
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-battle-gpu -> origin/codex/release-7.0.5-battle-gpu
+ * [new branch]      codex/release-7.0.6-battle-gpu-align -> origin/codex/release-7.0.6-battle-gpu-align
+ * [new branch]      codex/v8-split2-corrective-20260713 -> origin/codex/v8-split2-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-battle-gpu-v7.0.1-split.0 -> jain-battle-gpu-v7.0.1-split.0
+ * [new tag]         jain-battle-gpu-v7.0.1-split.1 -> jain-battle-gpu-v7.0.1-split.1
+ * [new tag]         jain-battle-gpu-v7.0.1-split.2 -> jain-battle-gpu-v7.0.1-split.2
+ * [new tag]         jain-battle-gpu-v8.0.0-split.0 -> jain-battle-gpu-v8.0.0-split.0
+ * [new tag]         jain-battle-gpu-v8.0.0-split.1 -> jain-battle-gpu-v8.0.0-split.1
+ * [new tag]         jain-battle-gpu-v8.0.0-split.2 -> jain-battle-gpu-v8.0.0-split.2
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-catboost.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-catboost
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-mainline-release -> origin/codex/v8.0.0-mainline-release
+ * [new branch]      main       -> origin/main
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-catboost-v7.0.1-split.0 -> jain-catboost-v7.0.1-split.0
+ * [new tag]         jain-catboost-v7.0.1-split.1 -> jain-catboost-v7.0.1-split.1
+ * [new tag]         jain-catboost-v8.0.0-split.0 -> jain-catboost-v8.0.0-split.0
+ * [new tag]         jain-catboost-v8.0.0-split.1 -> jain-catboost-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-domain.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-domain
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD                       -> origin/HEAD
+ * [new tag]         jain-domain-v7.0.1-split.0 -> jain-domain-v7.0.1-split.0
+ * [new tag]         jain-domain-v7.0.1-split.1 -> jain-domain-v7.0.1-split.1
+ * [new tag]         jain-domain-v8.0.0-split.0 -> jain-domain-v8.0.0-split.0
+ * [new tag]         jain-domain-v8.0.0-split.1 -> jain-domain-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-math.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-math
+ * [new branch]      codex/deferred-math-sandbox-followup -> origin/codex/deferred-math-sandbox-followup
+ * [new branch]      codex/evolve-report-ledger -> origin/codex/evolve-report-ledger
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/release-7.0.6-math-evolve-report -> origin/codex/release-7.0.6-math-evolve-report
+ * [new branch]      codex/release-7.0.6-math-sandbox-main -> origin/codex/release-7.0.6-math-sandbox-main
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                     -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD                     -> origin/HEAD
+ * [new tag]         jain-math-v7.0.1-split.0 -> jain-math-v7.0.1-split.0
+ * [new tag]         jain-math-v7.0.1-split.1 -> jain-math-v7.0.1-split.1
+ * [new tag]         jain-math-v7.0.1-split.2 -> jain-math-v7.0.1-split.2
+ * [new tag]         jain-math-v7.0.1-split.3 -> jain-math-v7.0.1-split.3
+ * [new tag]         jain-math-v8.0.0-split.0 -> jain-math-v8.0.0-split.0
+ * [new tag]         jain-math-v8.0.0-split.1 -> jain-math-v8.0.0-split.1
+ * [new tag]         jain-math-v8.0.1-split.0 -> jain-math-v8.0.1-split.0
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-jable.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-jable
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                      -> origin/main
+ * [new ref]         HEAD                      -> origin/HEAD
+ * [new tag]         jain-jable-v7.0.1-split.0 -> jain-jable-v7.0.1-split.0
+ * [new tag]         jain-jable-v8.0.0-split.0 -> jain-jable-v8.0.0-split.0
+ * [new tag]         jain-jable-v8.0.0-split.1 -> jain-jable-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-lightgbm.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-lightgbm
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/native-vendor-schema-split2-20260713 -> origin/codex/native-vendor-schema-split2-20260713
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-lightgbm-v7.0.1-split.0 -> jain-lightgbm-v7.0.1-split.0
+ * [new tag]         jain-lightgbm-v7.0.1-split.1 -> jain-lightgbm-v7.0.1-split.1
+ * [new tag]         jain-lightgbm-v8.0.0-split.0 -> jain-lightgbm-v8.0.0-split.0
+ * [new tag]         jain-lightgbm-v8.0.0-split.1 -> jain-lightgbm-v8.0.0-split.1
+ * [new tag]         jain-lightgbm-v8.0.0-split.2 -> jain-lightgbm-v8.0.0-split.2
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-starforge.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-starforge
+ * [new branch]      codex/deferred-starforge-foundation -> origin/codex/deferred-starforge-foundation
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/release-7.0.6-starforge-foundation-main -> origin/codex/release-7.0.6-starforge-foundation-main
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-starforge-v7.0.1-split.0 -> jain-starforge-v7.0.1-split.0
+ * [new tag]         jain-starforge-v7.0.1-split.1 -> jain-starforge-v7.0.1-split.1
+ * [new tag]         jain-starforge-v7.0.1-split.2 -> jain-starforge-v7.0.1-split.2
+ * [new tag]         jain-starforge-v8.0.0-split.0 -> jain-starforge-v8.0.0-split.0
+ * [new tag]         jain-starforge-v8.0.0-split.1 -> jain-starforge-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-xgboost.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-xgboost
+ * [new branch]      codex/fleet-clean-20260708  -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/native-vendor-schema-split2-20260713 -> origin/codex/native-vendor-schema-split2-20260713
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                        -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD                        -> origin/HEAD
+ * [new tag]         jain-xgboost-v7.0.1-split.0 -> jain-xgboost-v7.0.1-split.0
+ * [new tag]         jain-xgboost-v7.0.1-split.1 -> jain-xgboost-v7.0.1-split.1
+ * [new tag]         jain-xgboost-v8.0.0-split.0 -> jain-xgboost-v8.0.0-split.0
+ * [new tag]         jain-xgboost-v8.0.0-split.1 -> jain-xgboost-v8.0.0-split.1
+ * [new tag]         jain-xgboost-v8.0.0-split.2 -> jain-xgboost-v8.0.0-split.2
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/redline-core.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/redline-core
+ * [new branch]      claude/redline-split-onboard -> origin/claude/redline-split-onboard
+ * [new branch]      codex/redline-core-proof-routing-complete -> origin/codex/redline-core-proof-routing-complete
+ * [new branch]      codex/redline-core-rust-bench-tools -> origin/codex/redline-core-rust-bench-tools
+ * [new branch]      codex/redline-core-testing-v101-evidence -> origin/codex/redline-core-testing-v101-evidence
+ * [new branch]      codex/v8-redline-core-ci   -> origin/codex/v8-redline-core-ci
+ * [new branch]      main                       -> origin/main
+ * [new ref]         HEAD                       -> origin/HEAD
+ * [new tag]         phase11-fused              -> phase11-fused
+ * [new tag]         redline-core-v4.1.0-jain.0 -> redline-core-v4.1.0-jain.0
+ * [new tag]         redline-core-v4.1.0-jain.1 -> redline-core-v4.1.0-jain.1
+ * [new tag]         redline-core-v4.1.0-jain.2 -> redline-core-v4.1.0-jain.2
+ * [new tag]         redline-core-v4.1.0-jain.3 -> redline-core-v4.1.0-jain.3
+ * [new tag]         redline-core-v4.1.0-jain.4 -> redline-core-v4.1.0-jain.4
+ * [new tag]         v1.0.1                     -> v1.0.1
+ * [new tag]         v1.0.17                    -> v1.0.17
+ * [new tag]         v2.0.5                     -> v2.0.5
+ * [new tag]         v4.0.3                     -> v4.0.3
+ * [new tag]         v4.0.4                     -> v4.0.4
+ * [new tag]         v4.0.5                     -> v4.0.5
+ * [new tag]         v4.0.6                     -> v4.0.6
+ * [new tag]         v4.0.7                     -> v4.0.7
+ * [new tag]         v4.0.8                     -> v4.0.8
+ * [new tag]         v4.0.9                     -> v4.0.9
+ Downloading crates ...
+  Downloaded ahash v0.8.12
+  Downloaded anyhow v1.0.103
+  Downloaded adler2 v2.0.1
+  Downloaded rand_core v0.9.5
+  Downloaded crunchy v0.2.4
+  Downloaded itoa v1.0.18
+  Downloaded defer v0.2.1
+  Downloaded num_cpus v1.17.0
+  Downloaded quote v1.0.46
+  Downloaded dyn-stack v0.13.2
+  Downloaded crc32fast v1.5.0
+  Downloaded gemm-c32 v0.19.0
+  Downloaded dyn-stack-macros v0.1.3
+  Downloaded reborrow v0.5.5
+  Downloaded digest v0.10.7
+  Downloaded recursive v0.1.1
+  Downloaded rand_chacha v0.3.1
+  Downloaded fnv v1.0.7
+  Downloaded cfg-if v1.0.4
+  Downloaded csv-core v0.1.13
+  Downloaded winapi-util v0.1.11
+  Downloaded nano-gemm-core v0.2.1
+  Downloaded rand_xorshift v0.4.0
+  Downloaded crypto-common v0.1.7
+  Downloaded gemm-f64 v0.19.0
+  Downloaded seq-macro v0.3.6
+  Downloaded walkdir v2.5.0
+  Downloaded windows-link v0.2.1
+  Downloaded scopeguard v1.2.0
+  Downloaded same-file v1.0.6
+  Downloaded rand_chacha v0.9.0
+  Downloaded qd v0.8.0
+  Downloaded pulp-wasm-simd-flag v0.1.1
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded nano-gemm-f64 v0.2.1
+  Downloaded nano-gemm-f32 v0.2.1
+  Downloaded nano-gemm-c64 v0.2.1
+  Downloaded gemm-f16 v0.19.0
+  Downloaded gemm-c64 v0.19.0
+  Downloaded unarray v0.1.4
+  Downloaded rand_core v0.6.4
+  Downloaded recursive-proc-macro-impl v0.1.1
+  Downloaded gemm v0.19.0
+  Downloaded fastrand v2.4.1
+  Downloaded rand v0.8.7
+  Downloaded zmij v1.0.22
+  Downloaded wasi v0.11.1+wasi-snapshot-preview1
+  Downloaded redox_syscall v0.5.18
+  Downloaded zopfli v0.8.3
+  Downloaded unicode-ident v1.0.24
+  Downloaded wit-bindgen v0.57.1
+  Downloaded aho-corasick v1.1.4
+  Downloaded pulp v0.22.3
+  Downloaded serde_core v1.0.228
+  Downloaded typed-path v0.12.3
+  Downloaded zerocopy-derive v0.8.54
+  Downloaded zip v8.6.0
+  Downloaded typenum v1.20.1
+  Downloaded wasip2 v1.0.4+wasi-0.2.12
+  Downloaded serde_json v1.0.150
+  Downloaded regex v1.13.0
+  Downloaded zlib-rs v0.6.6
+  Downloaded syn v1.0.109
+  Downloaded object v0.37.3
+  Downloaded proptest v1.11.0
+  Downloaded zerocopy v0.8.54
+  Downloaded syn v2.0.118
+  Downloaded serde v1.0.228
+  Downloaded raw-cpuid v11.6.0
+  Downloaded regex-syntax v0.8.11
+  Downloaded libm v0.2.16
+  Downloaded serde_derive v1.0.228
+  Downloaded rustix v1.1.4
+  Downloaded sqlparser v0.61.0
+  Downloaded ryu v1.0.23
+  Downloaded rayon-core v1.13.0
+  Downloaded hashbrown v0.17.1
+  Downloaded bumpalo v3.20.3
+  Downloaded rustversion v1.0.23
+  Downloaded rayon v1.12.0
+  Downloaded rand v0.9.5
+  Downloaded memchr v2.8.3
+  Downloaded indexmap v2.14.0
+  Downloaded miniz_oxide v0.8.9
+  Downloaded flate2 v1.1.9
+  Downloaded thiserror-impl v2.0.18
+  Downloaded shlex v2.0.1
+  Downloaded regex-automata v0.4.15
+  Downloaded libc v0.2.186
+  Downloaded proc-macro2 v1.0.106
+  Downloaded parking_lot_core v0.9.12
+  Downloaded csv v1.4.0
+  Downloaded num-traits v0.2.19
+  Downloaded log v0.4.33
+  Downloaded half v2.7.1
+  Downloaded getrandom v0.4.3
+  Downloaded gemm-common v0.19.0
+  Downloaded find-msvc-tools v0.1.9
+  Downloaded crossbeam-epoch v0.9.20
+  Downloaded bitflags v2.13.0
+  Downloaded bit-vec v0.8.0
+  Downloaded thiserror v2.0.18
+  Downloaded thiserror v1.0.69
+  Downloaded tempfile v3.27.0
+  Downloaded sysctl v0.6.0
+  Downloaded stacker v0.1.24
+  Downloaded smallvec v1.15.2
+  Downloaded simd-adler32 v0.3.9
+  Downloaded sha2 v0.10.9
+  Downloaded rusty-fork v0.3.1
+  Downloaded r-efi v6.0.0
+  Downloaded r-efi v5.3.0
+  Downloaded private-gemm-x86 v0.1.20
+  Downloaded parking_lot v0.12.5
+  Downloaded num-complex v0.4.6
+  Downloaded getrandom v0.2.17
+  Downloaded crossbeam-deque v0.8.7
+  Downloaded cc v1.2.67
+  Downloaded bytemuck v1.25.1
+  Downloaded autocfg v1.5.1
+  Downloaded psm v0.1.31
+  Downloaded paste v1.0.15
+  Downloaded once_cell v1.21.4
+  Downloaded nano-gemm v0.2.2
+  Downloaded lock_api v0.4.14
+  Downloaded crossbeam-utils v0.8.22
+  Downloaded crossbeam-queue v0.3.13
+  Downloaded byteorder v1.5.0
+  Downloaded arc-swap v1.9.2
+  Downloaded ar_archive_writer v0.5.2
+  Downloaded nano-gemm-codegen v0.2.1
+  Downloaded nano-gemm-c32 v0.2.1
+  Downloaded hermit-abi v0.5.2
+  Downloaded heck v0.5.0
+  Downloaded getrandom v0.3.4
+  Downloaded generativity v1.2.1
+  Downloaded equator-macro v0.2.1
+  Downloaded either v1.16.0
+  Downloaded bytemuck_derive v1.11.0
+  Downloaded faer v0.24.4
+  Downloaded equator-macro v0.6.0
+  Downloaded wait-timeout v0.2.1
+  Downloaded version_check v0.9.5
+  Downloaded thiserror-impl v1.0.69
+  Downloaded quick-error v1.2.3
+  Downloaded interpol v0.2.1
+  Downloaded generic-array v0.14.7
+  Downloaded faer-traits v0.24.0
+  Downloaded equivalent v1.0.2
+  Downloaded equator v0.2.2
+  Downloaded enum-as-inner v0.6.1
+  Downloaded cpufeatures v0.2.17
+  Downloaded bit-set v0.8.0
+  Downloaded gemm-f32 v0.19.0
+  Downloaded errno v0.3.14
+  Downloaded equator v0.6.0
+  Downloaded block-buffer v0.10.4
+  Downloaded windows-sys v0.61.2
+  Downloaded linux-raw-sys v0.12.1
+dependency lock ok: 9 immutable local-Jeryu sources
+[ci] Rust required lane: fmt + workspace clippy/test
+    Checking cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling version_check v0.9.5
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+    Checking bitflags v2.13.0
+   Compiling syn v2.0.118
+   Compiling autocfg v1.5.1
+   Compiling num-traits v0.2.19
+    Checking once_cell v1.21.4
+   Compiling libm v0.2.16
+    Checking bytemuck v1.25.1
+   Compiling nano-gemm-codegen v0.2.1
+    Checking num-complex v0.4.6
+    Checking memchr v2.8.3
+   Compiling crossbeam-utils v0.8.22
+   Compiling paste v1.0.15
+   Compiling zerocopy v0.8.54
+   Compiling serde_core v1.0.228
+    Checking raw-cpuid v11.6.0
+   Compiling pulp v0.22.3
+   Compiling getrandom v0.3.4
+   Compiling crossbeam-epoch v0.9.20
+    Checking pulp-wasm-simd-flag v0.1.1
+    Checking reborrow v0.5.5
+   Compiling generic-array v0.14.7
+   Compiling serde v1.0.228
+   Compiling crossbeam-deque v0.8.7
+   Compiling zmij v1.0.22
+    Checking hashbrown v0.17.1
+   Compiling dyn-stack-macros v0.1.3
+    Checking equivalent v1.0.2
+    Checking indexmap v2.14.0
+    Checking dyn-stack v0.13.2
+   Compiling serde_derive v1.0.228
+    Checking typenum v1.20.1
+   Compiling rayon-core v1.13.0
+   Compiling serde_json v1.0.150
+    Checking itoa v1.0.18
+   Compiling crc32fast v1.5.0
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+   Compiling seq-macro v0.3.6
+   Compiling syn v1.0.109
+    Checking gemm-common v0.19.0
+    Checking nano-gemm-core v0.2.1
+    Checking log v0.4.33
+    Checking linux-raw-sys v0.12.1
+    Checking bumpalo v3.20.3
+    Checking either v1.16.0
+    Checking rayon v1.12.0
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking num_cpus v1.17.0
+    Checking regex-syntax v0.8.11
+    Checking fastrand v2.4.1
+    Checking tempfile v3.27.0
+    Checking digest v0.10.7
+   Compiling interpol v0.2.1
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling nano-gemm-f64 v0.2.1
+    Checking cpufeatures v0.2.17
+   Compiling defer v0.2.1
+   Compiling private-gemm-x86 v0.1.20
+    Checking sha2 v0.10.9
+    Checking ppv-lite86 v0.2.21
+   Compiling equator-macro v0.2.1
+   Compiling anyhow v1.0.103
+    Checking equator v0.2.2
+    Checking gemm-c32 v0.19.0
+    Checking gemm-f32 v0.19.0
+    Checking gemm-f64 v0.19.0
+    Checking gemm-c64 v0.19.0
+    Checking rand_core v0.9.5
+    Checking qd v0.8.0
+    Checking getrandom v0.2.17
+   Compiling equator-macro v0.6.0
+    Checking generativity v1.2.1
+    Checking faer-traits v0.24.0
+    Checking equator v0.6.0
+    Checking rand_core v0.6.4
+    Checking gemm v0.19.0
+    Checking nano-gemm v0.2.2
+    Checking simd-adler32 v0.3.9
+    Checking zlib-rs v0.6.6
+    Checking flate2 v1.1.9
+    Checking zopfli v0.8.3
+    Checking faer v0.24.4
+    Checking rand_chacha v0.3.1
+    Checking csv-core v0.1.13
+    Checking wait-timeout v0.2.1
+    Checking quick-error v1.2.3
+    Checking ryu v1.0.23
+    Checking fnv v1.0.7
+    Checking typed-path v0.12.3
+    Checking bit-vec v0.8.0
+    Checking bit-set v0.8.0
+    Checking zip v8.6.0
+    Checking rusty-fork v0.3.1
+    Checking csv v1.4.0
+    Checking rand v0.8.7
+    Checking jable v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-jable.git?tag=jain-jable-v8.0.0-split.1#e119908d)
+    Checking feat-math v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.0-split.1#2a1e189d)
+    Checking rand_chacha v0.9.0
+    Checking rand v0.9.5
+    Checking rand_xorshift v0.4.0
+    Checking domain v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-domain.git?tag=jain-domain-v8.0.0-split.1#07a6879b)
+    Checking unarray v0.1.4
+    Checking proptest v1.11.0
+    Checking feat-core v8.0.0 (/tmp/split-host-ci.ZyqoAE/jain-core/crates/feat-core)
+   Compiling object v0.37.3
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling cc v1.2.67
+   Compiling ar_archive_writer v0.5.2
+   Compiling psm v0.1.31
+   Compiling stacker v0.1.24
+   Compiling rustversion v1.0.23
+   Compiling parking_lot_core v0.9.12
+   Compiling ahash v0.8.12
+   Compiling thiserror v2.0.18
+    Checking smallvec v1.15.2
+    Checking scopeguard v1.2.0
+    Checking lock_api v0.4.14
+    Checking aho-corasick v1.1.4
+   Compiling recursive-proc-macro-impl v0.1.1
+   Compiling thiserror-impl v2.0.18
+    Checking recursive v0.1.1
+    Checking regex-automata v0.4.15
+    Checking arc-swap v1.9.2
+    Checking parking_lot v0.12.5
+    Checking crossbeam-queue v0.3.13
+    Checking redlinedb-domain v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking redlinedb-kernel v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking regex v1.13.0
+    Checking sqlparser v0.61.0
+    Checking redlinedb-sql v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking redlinedb v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking jain-redline-store v8.0.0 (/tmp/split-host-ci.ZyqoAE/jain-core/crates/jain-redline-store)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3m 01s
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling bitflags v2.13.0
+   Compiling once_cell v1.21.4
+   Compiling num-traits v0.2.19
+   Compiling libm v0.2.16
+   Compiling bytemuck v1.25.1
+   Compiling memchr v2.8.3
+   Compiling num-complex v0.4.6
+   Compiling crossbeam-utils v0.8.22
+   Compiling zerocopy v0.8.54
+   Compiling serde_core v1.0.228
+   Compiling raw-cpuid v11.6.0
+   Compiling getrandom v0.3.4
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling pulp-wasm-simd-flag v0.1.1
+   Compiling reborrow v0.5.5
+   Compiling pulp v0.22.3
+   Compiling indexmap v2.14.0
+   Compiling crossbeam-epoch v0.9.20
+   Compiling itoa v1.0.18
+   Compiling typenum v1.20.1
+   Compiling dyn-stack v0.13.2
+   Compiling generic-array v0.14.7
+   Compiling serde v1.0.228
+   Compiling crossbeam-deque v0.8.7
+   Compiling zmij v1.0.22
+   Compiling serde_json v1.0.150
+   Compiling rayon-core v1.13.0
+   Compiling crc32fast v1.5.0
+   Compiling either v1.16.0
+   Compiling log v0.4.33
+   Compiling linux-raw-sys v0.12.1
+   Compiling bumpalo v3.20.3
+   Compiling rustix v1.1.4
+   Compiling gemm-common v0.19.0
+   Compiling rayon v1.12.0
+   Compiling getrandom v0.4.3
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling num_cpus v1.17.0
+   Compiling regex-syntax v0.8.11
+   Compiling nano-gemm-core v0.2.1
+   Compiling fastrand v2.4.1
+   Compiling tempfile v3.27.0
+   Compiling digest v0.10.7
+   Compiling cpufeatures v0.2.17
+   Compiling sha2 v0.10.9
+   Compiling ppv-lite86 v0.2.21
+   Compiling equator v0.2.2
+   Compiling nano-gemm-f64 v0.2.1
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling gemm-f64 v0.19.0
+   Compiling gemm-c32 v0.19.0
+   Compiling gemm-c64 v0.19.0
+   Compiling gemm-f32 v0.19.0
+   Compiling qd v0.8.0
+   Compiling rand_core v0.9.5
+   Compiling getrandom v0.2.17
+   Compiling generativity v1.2.1
+   Compiling faer-traits v0.24.0
+   Compiling equator v0.6.0
+   Compiling rand_core v0.6.4
+   Compiling gemm v0.19.0
+   Compiling private-gemm-x86 v0.1.20
+   Compiling nano-gemm v0.2.2
+   Compiling anyhow v1.0.103
+   Compiling zlib-rs v0.6.6
+   Compiling simd-adler32 v0.3.9
+   Compiling zopfli v0.8.3
+   Compiling flate2 v1.1.9
+   Compiling faer v0.24.4
+   Compiling rand_chacha v0.3.1
+   Compiling csv-core v0.1.13
+   Compiling wait-timeout v0.2.1
+   Compiling bit-vec v0.8.0
+   Compiling typed-path v0.12.3
+   Compiling quick-error v1.2.3
+   Compiling fnv v1.0.7
+   Compiling ryu v1.0.23
+   Compiling csv v1.4.0
+   Compiling rusty-fork v0.3.1
+   Compiling zip v8.6.0
+   Compiling bit-set v0.8.0
+   Compiling rand v0.8.7
+   Compiling jable v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-jable.git?tag=jain-jable-v8.0.0-split.1#e119908d)
+   Compiling feat-math v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.0-split.1#2a1e189d)
+   Compiling rand_xorshift v0.4.0
+   Compiling rand_chacha v0.9.0
+   Compiling rand v0.9.5
+   Compiling domain v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-domain.git?tag=jain-domain-v8.0.0-split.1#07a6879b)
+   Compiling unarray v0.1.4
+   Compiling proptest v1.11.0
+   Compiling feat-core v8.0.0 (/tmp/split-host-ci.ZyqoAE/jain-core/crates/feat-core)
+   Compiling psm v0.1.31
+   Compiling smallvec v1.15.2
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling parking_lot_core v0.9.12
+   Compiling stacker v0.1.24
+   Compiling aho-corasick v1.1.4
+   Compiling thiserror v2.0.18
+   Compiling recursive v0.1.1
+   Compiling regex-automata v0.4.15
+   Compiling arc-swap v1.9.2
+   Compiling ahash v0.8.12
+   Compiling parking_lot v0.12.5
+   Compiling crossbeam-queue v0.3.13
+   Compiling redlinedb-domain v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling redlinedb-kernel v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling regex v1.13.0
+   Compiling sqlparser v0.61.0
+   Compiling redlinedb-sql v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling redlinedb v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling jain-redline-store v8.0.0 (/tmp/split-host-ci.ZyqoAE/jain-core/crates/jain-redline-store)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3m 18s
+     Running unittests src/lib.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/feat_core-fef4f33de313d01a)
+
+running 103 tests
+test artifact::feature_importance::tests::member_importance_rejects_invalid_vectors ... ok
+test bench::tests::gate_catches_real_regression_only ... ok
+test artifact::feature_importance::tests::member_importance_normalizes_and_sorts ... ok
+test bench::tests::win_loss_bands ... ok
+test canary::tests::continuous_profile_stays_within_training_range ... ok
+test canary::tests::canary_generation_shape_names_and_determinism ... ok
+test calibration::tests::isotonic_is_monotone_and_auc_preserving ... ok
+test calibration::tests::platt_improves_logloss_on_miscalibrated ... ok
+test canary::tests::discrete_profile_uses_empirical_support_and_missingness ... ok
+test checkpoint::tests::state_reference_rejects_corrupt_bytes ... ok
+test canary::tests::domains_are_reproducible_but_distinct ... ok
+test data::matrix_oob_tests::out_of_range_col_is_nan_not_panic ... ok
+test dsl::tests::col_beyond_width_is_missing_not_panic ... ok
+test dsl::tests::col_refs_collects_all_column_leaves ... ok
+test ensemble::ges::row_stability_lock::fuser_default_blends_raw_probabilities_not_batch_ranks ... ok
+test ensemble::selection::regression::tests::serving_pick_demotes_plan_less_top_scorer_to_best_persistable ... ok
+test ensemble::selection::regression::tests::serving_pick_keeps_plan_backed_top_scorer ... ok
+test ensemble::selection::regression::tests::serving_pick_never_returns_plan_less_when_any_persistable_exists ... ok
+test ensemble::selection::regression::tests::serving_pick_picks_highest_lcb_among_persistable ... ok
+test ensemble::selection::tests::served_champion_is_order_independent_and_lcb_ranked ... ok
+test ensemble::selection::tests::served_champion_none_when_no_serve_eligible_finalist ... ok
+test ensemble::selection::tests::served_champion_skips_non_serve_eligible_even_with_higher_lcb ... ok
+test ensemble::selection::tests::served_champion_ties_break_by_name ... ok
+test artifact::publish::tests::publish_artifact_preserves_starforge_context_dir ... ok
+test gp::run::tests::final_top_winners_skip_canary_refs_and_backfill ... ok
+test gp::run::tests::live_winners_emit_canary_candidates_with_flag ... ok
+test hyperion::tests::default_sweeps_is_thirty_and_env_override_still_works ... ok
+test hyperion::tests::left_prepend_places_hyperion_before_base_columns ... ok
+test hyperion::tests::degenerate_matrices_encode_to_valid_values ... ok
+test hyperion::tests::missing_weights_modes_differ ... ok
+test hyperion::tests::model_bundle_root_supplies_packaged_hyperion_defaults ... ok
+test hyperion::tests::output_names_are_stable ... ok
+test hyperion::tests::old_state_defaults_to_right_append_placement ... ok
+test hyperion::tests::preview_flags_robust_row_concerns_without_raw_values ... ok
+test hyperion_v7::config::tests::default_sweep_plan_uses_thirty_sweeps ... ok
+test hyperion::tests::train_bounds_replay_holdout_shape_and_order ... ok
+test calibration::tests::best_calibrator_runs ... ok
+test hyperion_v7::sweep::tests::invalid_plan_errors ... ok
+test invention::tests::finalist_ranking_uses_fold_pure_cv_not_gate_order_or_holdout ... ok
+test invention::tests::finalist_ranking_ties_by_name_not_holdout ... ok
+test jope_embed::tests::embedding_matches_python_reference ... ok
+test hyperion_v7::sweep::tests::raw_dataset_vector_matches_weighted_patch_mean ... ok
+test hyperion_v7::sweep::tests::sweep_zero_uses_identity_permutation ... ok
+test invention::tests::invention_export_writes_finalists_and_evaluated_ledger ... ok
+test hyperion_v7::sweep::tests::confidence_in_unit_interval_and_vector_is_row_mean ... ok
+test learners::math::tests::importance_without_sample_is_zero_not_panic ... ok
+test lime::tests::candidate_assembly_is_capped_and_deduplicated ... ok
+test learners::glm::tests::gaussian_fits_linear_target ... ok
+test lime::tests::expired_budget_fails_closed ... ok
+test lime::tests::regression_ties_prefer_lower_rmse ... ok
+test linalg::tests::cholesky_rejects_non_pd ... ok
+test linalg::tests::cholesky_solves_known_spd ... ok
+test linalg::tests::nnls_clamps_negative ... ok
+test linalg::tests::nnls_matches_unconstrained_when_positive ... ok
+test linalg::tests::spd_solve_with_ridge ... ok
+test metrics::metric_label_tests::metric_name_matches_task_score_family ... ok
+test naming::tests::maps_catboost_family_only ... ok
+test operation::tests::artifact_references_reject_traversal_and_nested_filenames ... ok
+test operation::tests::lime_batch_is_capped ... ok
+test operation::tests::lime_require_gpu_is_fail_closed ... ok
+test operation::tests::lime_run_rejects_partial_inline_payload_with_artifact ... ok
+test operation::tests::operation_requires_one_input_and_bounds_proposals ... ok
+test pipeline::tests::gp_holdout_guard_rejects_and_counts_canary_survivor ... ok
+test pipeline::tests::gp_holdout_guard_keeps_matching_fit_and_audit_signal ... ok
+test pipeline::tests::gp_holdout_guard_rejects_fit_only_signal ... ok
+test pipeline::tests::invention_engine_env_override_parses_and_falls_back ... ok
+test learners::glm::tests::logistic_separates_linear_data ... ok
+test learners::math::tests::importance_survives_save_load_round_trip ... ok
+test preprocess::tests::standardizes_and_imputes ... ok
+test progress::tests::human_progress_formats_gp_phase2_mvp_and_final_events ... ok
+test pipeline::tests::gp_holdout_split_is_deterministic_stratified_and_disjoint ... ok
+test progress::tests::human_progress_throttles_repetitive_progress_but_not_done ... ok
+test progress::tests::jsonl_sink_round_trips_an_event ... ok
+test standard_flow::tests::cv_scores_use_same_fold_count_for_binary_and_regression ... ok
+test standard_flow::tests::gate_requires_strict_lift ... ok
+test learners::math::tests::permutation_importance_ranks_signal_above_noise ... ok
+test starforge_integration::config::dtype_tests::default_classification_engine_is_chimera ... ok
+test starforge_integration::config::dtype_tests::default_regression_engine_is_chimera ... ok
+test starforge_integration::config::dtype_tests::effective_dtype_never_uses_bf16_on_cpu ... ok
+test starforge_integration::config::governor_tests::adaptive_query_batch_scales_with_the_gpu ... ok
+test starforge_integration::config::governor_tests::max_features_matches_the_documented_gpu_table ... ok
+test starforge_integration::config::governor_tests::oversized_column_count_is_unfittable_triggering_guidance ... ok
+test starforge_integration::config::governor_tests::peak_grows_with_features_squared_and_rows ... ok
+test targets::tests::auto_target_uses_last_column_without_metadata ... ok
+test targets::tests::explicit_target_is_preserved_without_metadata ... ok
+test targets::tests::primary_target_metadata_stays_authoritative ... ok
+test task::tests::multiclass_full_width_softmaxes_normally ... ok
+test task::tests::multiclass_short_output_does_not_overrun ... ok
+test task::tests::softmax_rows_never_overruns ... ok
+test lime::tests::regression_run_emits_prediction_and_report_hashes ... ok
+test hyperion_v7::sweep::tests::batch_size_does_not_change_output ... ok
+test hyperion_v7::sweep::tests::streaming_output_matches_materialized_weighted_mean ... ok
+test meta::tests::bma_weights_sum_to_one_and_favor_better_member ... ok
+test hyperion_v7::sweep::tests::frames_identity_vs_binned_and_caps ... ok
+test jope_embed::tests::versioned_encoder_rejects_missing_target_sidecar ... ok
+test checkpoint::tests::file_store_round_trips_only_complete_atomic_record ... ok
+test ensemble::starforge::tests::required_starforge_rejects_missing_compile_support - should panic ... ok
+test data::matrix_oob_tests::col_and_at_out_of_range_are_nan_not_panic ... ok
+test jope_embed::tests::versioned_encoder_assembles_blocks_deterministically ... ok
+test meta::tests::bbc_keeps_best_single_when_blend_is_noise ... ok
+test meta::tests::bbc_picks_dominant_candidate ... ok
+test learners::rff::tests::rff_learns_nonlinear_circle ... ok
+test learners::bma::tests::bma_save_load_round_trips_predictions ... ok
+
+test result: ok. 103 passed; 0 failed; 0 ignored; 0 measured; 2 filtered out; finished in 2.68s
+
+     Running tests/apex_bench.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/apex_bench-4a2efdf4f896393f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/apex_canary_guard.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/apex_canary_guard-3b4006d0e6ac31f0)
+
+running 1 test
+test canary_referencing_survivors_are_quarantined_before_feature_reduction ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/apex_diagnose.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/apex_diagnose-7fc83a6e50ff5b90)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/apex_elo_bench.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/apex_elo_bench-f4bda865f1be7c65)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/apex_leak_guard.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/apex_leak_guard-2ab1c423bf0a67c9)
+
+running 1 test
+test leak_guard_drops_perfect_separator ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/apex_real_bench.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/apex_real_bench-72f4d14213db8f3f)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/apex_triage.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/apex_triage-7e59628c75d619f6)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 1 filtered out; finished in 0.00s
+
+     Running tests/api_contract.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/api_contract-95414087e1edc53b)
+
+running 4 tests
+test starforge_context_helpers_round_trip_without_inference ... ok
+test internal_holdout_split_handles_tiny_and_degenerate_targets ... ok
+test regression_target_scaler_round_trips_values ... ok
+test data_encoding_artifact_metrics_and_diagnostics_stay_rust_only ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/artifact.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/artifact-ba3dab4398de3972)
+
+running 10 tests
+test residual_fuser_metadata_round_trips ... ok
+test feature_importance_artifact_round_trips ... ok
+test manifest_accepts_native_and_starforge_members ... ok
+test scoring_fails_when_artifact_requires_unavailable_hyperion ... ok
+test canary_features_materialize_and_manifest_round_trip ... ok
+test manifest_round_trips_full_run_manifest_and_legacy_minimal ... ok
+test artifact_manifest_and_preprocessing_replay_round_trip ... ok
+test math_artifact_model_round_trips_with_prediction_parity ... ok
+test artifact_load_reports_failure_modes ... ok
+test bma_artifact_model_round_trips_with_prediction_parity ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.75s
+
+     Running tests/bakeoff.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/bakeoff-20b6f8b1582a3eb3)
+
+running 1 test
+test bakeoff_reports_five_strategies_and_ships_cv_winner ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.66s
+
+     Running tests/checkpoint_pipeline.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/checkpoint_pipeline-1f78382d60ea6efc)
+
+running 5 tests
+test commits_only_the_last_fully_completed_phase ... ok
+test cancellation_never_publishes_partial_feature_state ... ok
+test no_op_checkpoint_store_preserves_run_pipeline_results ... ok
+test resumes_from_importance_boundary_and_reruns_selection_only ... ok
+test invalid_fingerprint_or_version_safely_reruns_from_the_start ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/foundation.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/foundation-c581181c3c5b23e4)
+
+running 10 tests
+test hashing_is_deterministic_and_sensitive ... ok
+test fold_auc_lcb_perfect_predictor ... ok
+test missing_features_are_target_free_and_appended ... ok
+test rank01_is_monotone_in_unit_interval ... ok
+test regime_inference_and_defaults ... ok
+test foldscope_root_is_deterministic_and_partitions ... ok
+test leakage_clean_data_has_no_blockers ... ok
+test leakage_flags_exact_target_copy ... ok
+test oof_member_is_covered_and_separable ... ok
+test ges_is_deterministic_and_prefers_better_member ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/glm_row_isolation.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/glm_row_isolation-f6602408dc19f036)
+
+running 2 tests
+test gaussian_glm_prediction_is_isolated_from_other_rows_in_the_batch ... ok
+test logistic_glm_prediction_is_isolated_from_other_rows_in_the_batch ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/headerless_csv.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/headerless_csv-dfe47367c9df3e10)
+
+running 2 tests
+test sniff_distinguishes_numeric_and_mixed_first_rows ... ok
+test headerless_frame_matches_equivalent_header_frame ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/hyperion_v7_weights.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/hyperion_v7_weights-a75e8927f5fea397)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/ingest_encode.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/ingest_encode-ce1d5ac02b830446)
+
+running 6 tests
+test all_numeric_is_scaled_finite ... ok
+test auto_last_column_binary_routes_to_binary_task ... ok
+test auto_last_column_bounded_integer_routes_to_multiclass_task ... ok
+test categorical_is_encoded_not_dropped ... ok
+test auto_last_column_continuous_routes_to_regression_task ... ok
+test task_detection_regression_and_binary ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/metrics_task.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/metrics_task-1a3f3803e4c1f70a)
+
+running 5 tests
+test multiclass_ovr_auc_perfect ... ok
+test objective_from_task_keeps_binary_logloss ... ok
+test task_score_dispatch ... ok
+test regression_metrics ... ok
+test task_spec_prevalence_round_trips_null_for_non_classification ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/model_artifacts.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/model_artifacts-e1c0f01ac9867ba9)
+
+running 3 tests
+test model_artifacts_are_declared_for_lfs ... ok
+test checkpoint_artifacts_are_not_tracked ... ok
+test tracked_model_artifacts_are_lfs_pointers ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/order_invariance.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/order_invariance-3066e497d7d60e84)
+
+running 5 tests
+test rank01_is_equivariant ... ok
+test auc_is_permutation_invariant ... ok
+test dsl_rank_has_no_row_position_leak ... ok
+test adversarial_auc_self_is_half ... ok
+test adversarial_auc_detects_covariate_shift ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/pipeline_mock.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/pipeline_mock-3ffd4070fc6a8113)
+
+running 13 tests
+test phase4_mimo_scorer_scores_tiny_multi_target_data ... ok
+test eda_advance_continues_with_current_champion ... ok
+test eda_without_advance_runs_all_configured_generations ... ok
+test gp_advance_stops_after_current_generation_and_still_emits_done ... ok
+test gp_without_advance_runs_all_configured_generations ... ok
+test pipeline_preemptive_cancel_skips_final_and_baseline ... ok
+test pipeline_mvp_fast_respects_max_features_with_mock ... ok
+test pipeline_keeps_hyperion_and_canaries_search_only_unless_gp_selects_them ... ok
+test pipeline_streams_gp_winners_and_task_metric_with_mock ... ok
+test pipeline_mvp_advance_is_not_cancelled_and_keeps_final_artifacts ... ok
+test pipeline_runs_end_to_end_with_mock ... ok
+test pipeline_records_router_decision_when_assets_are_enabled ... ok
+test dominance_falls_back_for_regression_and_keeps_best_single_gate ... ok
+
+test result: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.69s
+
+     Running tests/progress_contract.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/progress_contract-7b8688428563004c)
+
+running 3 tests
+test event_keys_match_committed_schema ... ok
+test schema_version_matches_code_and_fixtures ... ok
+test fixtures_round_trip_and_use_only_schema_keys ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/properties.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/properties-0d519bcddaafcabd)
+
+running 3 tests
+test perfect_regression_has_zero_rmse ... ok
+test logloss_is_finite_for_probabilities ... ok
+test auc_is_invariant_under_reversal ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+     Running tests/robust_csv.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/robust_csv-41fe2885f9172d60)
+
+running 3 tests
+test robust_csv_ingestion_is_finite_and_lossy_safe ... ok
+test high_cardinality_uses_hash_and_unseen_categories_stay_finite ... ok
+test width_cap_shrinks_then_frequency_backup ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/router.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/router-173bbbb4c2284125)
+
+running 5 tests
+test external_best_npz_parity_placeholder ... ignored
+test family_smoothing_moves_lifts_toward_family_mean ... ok
+test starlight_anchor_and_route_mapping_are_internal ... ok
+test v301_routes_and_certifies_anchor ... ok
+test router_artifact_loads_shape_and_tiny_elo_scores ... ok
+
+test result: ok. 4 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/stacking.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/stacking-05aaa8e219b1bf59)
+
+running 3 tests
+test sibling_library_full_coverage ... ok
+test k1_is_inert ... ok
+test gate_is_consistent ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+     Running tests/unit.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/unit-57f211ce3fab3010)
+
+running 29 tests
+test auc_perfect_and_inverse_and_ties ... ok
+test dsl_eval_basic_ops ... ok
+test dsl_safediv_and_erf_and_rank ... ok
+test dsl_zscore_and_where ... ok
+test kfold_disjoint_and_complete ... ok
+test mvp_fast_accepts_gp_by_percentile_and_keeps_top_fraction ... ok
+test mvp_fast_reduces_base_when_base_exceeds_cap ... ok
+test load_csv_and_split ... ok
+test phase2_smoothed_percentile_ranks_importance_within_block ... ok
+test standardize_and_corr ... ok
+test mock_backend_learns_separable_signal ... ok
+test starforge_top_importance_cols_are_sorted_and_capped ... ok
+test stratified_subsample_preserves_ratio ... ok
+test phase2_detailed_returns_importance_percentiles ... ok
+test phase2_memory_vector_normalized_with_floor ... ok
+test buildmatrix_no_nan_and_correct_shape ... ok
+test residual_starforge_fusion_skips_when_weights_are_unavailable ... ok
+test degenerate_math_fit_falls_back_to_native_not_constant_zero ... ok
+test eda_champion_valid_and_finite ... ok
+test final_selection_keeps_native_when_invented_cv_is_lower ... ok
+test ensemble_select_returns_valid ... ok
+test final_selection_keeps_native_when_invented_lcb_is_low_despite_high_cv_mean ... ok
+test gp_survivors_are_pairwise_decorrelated ... ok
+test final_selection_ships_higher_cv_invented_math_standalone ... ok
+test invent_serve_off_keeps_native_even_when_finalist_would_win_lcb_gate ... ok
+test invent_serve_on_serves_winning_finalist ... ok
+test served_invented_reports_real_lcb_and_disclosure_flag ... ok
+test mvp_fast_caps_large_augmented_pool_deterministically ... ok
+test regression_selection_serves_persistable_bma_winner ... ok
+
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.40s
+
+     Running unittests src/lib.rs (/tmp/split-host-ci.ZyqoAE/cargo-target/debug/deps/jain_redline_store-d79890cf4eefc972)
+
+running 2 tests
+test tests::pooled_transaction_and_read_only_open_work ... ok
+test tests::checkpointed_backup_recovers_rows_and_migration_ledger ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.54s
+
+   Doc-tests feat_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests jain_redline_store
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+required ok: jain-core
+Error: "manifest validation failed (/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml):\njain-smartcluster: forge_owner must be jain-split\njain-smartcluster: forge_slug must be jain-split/jain-smartcluster\njain-smartcluster: remote must use the jain-split namespace"

@@ -6,7 +6,7 @@ split="${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}"
 ops_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 deploy="${split}/jain-deploy"
 bin_src="${JAIN_BIN_SRC:-${deploy}/target/release/jain}"
-receipt="${ops_root}/docs/release-evidence/8.0.0/local-cutover-dry-run.json"
+receipt="${ops_root}/docs/release-evidence/8.0.1/local-cutover-dry-run.json"
 dry_run=0
 
 usage() {
@@ -34,7 +34,7 @@ command -v jq >/dev/null 2>&1 || { printf 'jq is required\n' >&2; exit 1; }
 [[ -x "$bin_src" ]] || { printf 'missing release binary: %s\n' "$bin_src" >&2; exit 1; }
 version="$($bin_src --version)"
 grep -Eq '(^|[[:space:]])8\.0\.0([[:space:]]|$)' <<<"$version" || {
-  printf 'release binary does not report product version 8.0.0: %s\n' "$version" >&2
+  printf 'release binary does not report product version 8.0.1: %s\n' "$version" >&2
   exit 1
 }
 [[ -f "${deploy}/jain-split.lock.toml" ]] || { printf 'missing deploy lock\n' >&2; exit 1; }
@@ -44,7 +44,7 @@ printf '[dry-run] no systemd unit, process, route, alias, or production state wa
 mkdir -p "$(dirname "$receipt")"
 jq -n \
   --arg schema_version 'jain.cutover.dry-run/v1' \
-  --arg release '8.0.0' --arg status 'pass' --arg binary "$bin_src" \
+  --arg release '8.0.1' --arg status 'pass' --arg binary "$bin_src" \
   --arg version_output "$version" --arg rollback_target '7.0.6' \
   --arg generated_at "$(date -u '+%Y-%m-%dT%H:%M:%SZ')" \
   '{schema_version:$schema_version,release:$release,mode:"dry-run",status:$status,binary:$binary,version_output:$version_output,rollback_target:$rollback_target,external_mutations:[],generated_at:$generated_at}' \

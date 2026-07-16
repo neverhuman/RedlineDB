@@ -11,6 +11,11 @@ member of `repos.manifest.toml` (so `splitctl materialize --force` never touches
 Each family member remains an independent git repo with its own CI and forge
 remote; this repo only orchestrates them.
 
+This control plane has the same zero-worktree rule as the family root: do not
+create Git worktrees anywhere. Exact-SHA CI must use an automatically removed,
+standalone checkout that is not registered with Git, and sibling dependencies
+must be independent clones rather than symlinks.
+
 ## Runtime contract (no symlinks, explicit roots)
 - The family root (where the sibling repos + `target/bare-mirrors/` live) is the
   EXPLICIT `JAIN_SPLIT_ROOT` (default `/home/ubuntu/jain-split`), never derived

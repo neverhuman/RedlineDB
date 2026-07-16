@@ -1,0 +1,23 @@
+{
+  "schema_version": "jain.jeryu-merge-readback/v1",
+  "generated_at_utc": "2026-07-16T04:49:16Z",
+  "status": "pass",
+  "repository": "jeryu/jain-model-zoo",
+  "pull_request": 6,
+  "reviewed_base": "fd00a3df96d9769e0282582aba0c3579e568db6c",
+  "reviewed_head": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+  "pr_state": "closed",
+  "merged": true,
+  "merged_at": "2026-07-16T04:47:27.255630427Z",
+  "merge_commit_sha": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+  "forge_main": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+  "forge_head_branch": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+  "fast_forward_exact_head": true,
+  "exact_head_checks": {
+    "jankurai/proof": "success",
+    "jain-model-zoo/required": "success"
+  },
+  "protection_readback_receipt": "jain-split-ops/docs/release-evidence/8.0.1/identity/jeryu-protection-review-jeryu-jain-model-zoo-pr6.json",
+  "merge_performed_by_this_claim": false,
+  "note": "Another authorized merge owner completed the protected fast-forward during this independent review window. This receipt records live forge state and does not claim the mutation. No tag or authority binding was performed."
+}

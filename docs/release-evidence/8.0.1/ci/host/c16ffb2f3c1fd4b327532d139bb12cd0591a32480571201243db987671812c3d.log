@@ -1,0 +1,298 @@
+Cloning into '/tmp/split-host-ci.OmbqAa/jain-web'...
+HEAD is now at d34ab11 docs: bind the protected Web release gate
+lock_blob=63cbfaacfff7d4a7d8982a25738b80f446fe9397
+name=jain-web
+ref=d34ab1149858d5fdd81d02d66a07d5a9c9a64903
+commit=d34ab1149858d5fdd81d02d66a07d5a9c9a64903
+tree=b5ee5ffd9d18eb95bb3db375f36d32a631b38f1b
+release_checksum_sha256=3652a08d9671233c41ec4365b8a1004b12f2d5b14786be5b613b3f6b0ec66851
+Cloning into '/tmp/split-host-ci.OmbqAa/jain-smartcluster'...
+HEAD is now at ffd2cab feat(smartcluster): route typed JOPE and Lime workloads
+lock_blob=250090eb63b885c5c57a7f4caaf7d54b1b450275
+name=jain-smartcluster
+ref=refs/heads/main
+commit=ffd2cabea46e2b539822ba4ca7d9e1647d0c561e
+tree=9aae6d92092d16bfd592262070bb60f4bfb1eb48
+release_checksum_sha256=13c8e527897f8c28213068964813fd66448d984a02403ed4a4905bf7c02e21dd
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Python boundary ok: no files or runtime invocations
+check ok: /tmp/split-host-ci.OmbqAa/jain-web
+[ci] Redline Jain-family consumer contract and evidence controls
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/redline-core.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/redline-core
+ * [new branch]      claude/redline-split-onboard -> origin/claude/redline-split-onboard
+ * [new branch]      codex/redline-core-proof-routing-complete -> origin/codex/redline-core-proof-routing-complete
+ * [new branch]      codex/redline-core-rust-bench-tools -> origin/codex/redline-core-rust-bench-tools
+ * [new branch]      codex/redline-core-testing-v101-evidence -> origin/codex/redline-core-testing-v101-evidence
+ * [new branch]      codex/v8-redline-core-ci   -> origin/codex/v8-redline-core-ci
+ * [new branch]      main                       -> origin/main
+ * [new ref]         HEAD                       -> origin/HEAD
+ * [new tag]         phase11-fused              -> phase11-fused
+ * [new tag]         redline-core-v4.1.0-jain.0 -> redline-core-v4.1.0-jain.0
+ * [new tag]         redline-core-v4.1.0-jain.1 -> redline-core-v4.1.0-jain.1
+ * [new tag]         redline-core-v4.1.0-jain.2 -> redline-core-v4.1.0-jain.2
+ * [new tag]         redline-core-v4.1.0-jain.3 -> redline-core-v4.1.0-jain.3
+ * [new tag]         redline-core-v4.1.0-jain.4 -> redline-core-v4.1.0-jain.4
+ * [new tag]         v1.0.1                     -> v1.0.1
+ * [new tag]         v1.0.17                    -> v1.0.17
+ * [new tag]         v2.0.5                     -> v2.0.5
+ * [new tag]         v4.0.3                     -> v4.0.3
+ * [new tag]         v4.0.4                     -> v4.0.4
+ * [new tag]         v4.0.5                     -> v4.0.5
+ * [new tag]         v4.0.6                     -> v4.0.6
+ * [new tag]         v4.0.7                     -> v4.0.7
+ * [new tag]         v4.0.8                     -> v4.0.8
+ * [new tag]         v4.0.9                     -> v4.0.9
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded ahash v0.8.12
+  Downloaded block-buffer v0.10.4
+  Downloaded bitflags v2.13.0
+  Downloaded generic-array v0.14.7
+  Downloaded version_check v0.9.5
+  Downloaded zmij v1.0.22
+  Downloaded lock_api v0.4.14
+  Downloaded crossbeam-utils v0.8.22
+  Downloaded crossbeam-queue v0.3.13
+  Downloaded quote v1.0.46
+  Downloaded sha2 v0.10.9
+  Downloaded parking_lot_core v0.9.12
+  Downloaded parking_lot v0.12.5
+  Downloaded once_cell v1.21.4
+  Downloaded crossbeam-deque v0.8.7
+  Downloaded crc32fast v1.5.0
+  Downloaded ar_archive_writer v0.5.2
+  Downloaded thiserror-impl v2.0.18
+  Downloaded thiserror v2.0.18
+  Downloaded stacker v0.1.24
+  Downloaded unicode-ident v1.0.24
+  Downloaded rayon-core v1.13.0
+  Downloaded typenum v1.20.1
+  Downloaded bumpalo v3.20.3
+  Downloaded cc v1.2.67
+  Downloaded aho-corasick v1.1.4
+  Downloaded proc-macro2 v1.0.106
+  Downloaded regex v1.13.0
+  Downloaded rayon v1.12.0
+  Downloaded libm v0.2.16
+  Downloaded zerocopy v0.8.54
+  Downloaded getrandom v0.4.3
+  Downloaded getrandom v0.3.4
+  Downloaded syn v2.0.118
+  Downloaded tempfile v3.27.0
+  Downloaded serde_derive v1.0.228
+  Downloaded log v0.4.33
+  Downloaded object v0.37.3
+  Downloaded crossbeam-epoch v0.9.20
+  Downloaded rustix v1.1.4
+  Downloaded regex-syntax v0.8.11
+  Downloaded sqlparser v0.61.0
+  Downloaded smallvec v1.15.2
+  Downloaded shlex v2.0.1
+  Downloaded rustversion v1.0.23
+  Downloaded psm v0.1.31
+  Downloaded find-msvc-tools v0.1.9
+  Downloaded fastrand v2.4.1
+  Downloaded errno v0.3.14
+  Downloaded either v1.16.0
+  Downloaded regex-automata v0.4.15
+  Downloaded digest v0.10.7
+  Downloaded crypto-common v0.1.7
+  Downloaded cpufeatures v0.2.17
+  Downloaded cfg-if v1.0.4
+  Downloaded arc-swap v1.9.2
+  Downloaded scopeguard v1.2.0
+  Downloaded recursive-proc-macro-impl v0.1.1
+  Downloaded recursive v0.1.1
+  Downloaded num_cpus v1.17.0
+  Downloaded libc v0.2.186
+  Downloaded linux-raw-sys v0.12.1
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.46
+   Compiling libc v0.2.186
+   Compiling syn v2.0.118
+    Checking cfg-if v1.0.4
+   Compiling version_check v0.9.5
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling object v0.37.3
+   Compiling cc v1.2.67
+   Compiling crossbeam-utils v0.8.22
+   Compiling memchr v2.8.3
+    Checking serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling ar_archive_writer v0.5.2
+   Compiling serde_derive v1.0.228
+   Compiling psm v0.1.31
+   Compiling generic-array v0.14.7
+   Compiling crossbeam-epoch v0.9.20
+    Checking equivalent v1.0.2
+    Checking hashbrown v0.17.1
+    Checking indexmap v2.14.0
+   Compiling stacker v0.1.24
+   Compiling getrandom v0.3.4
+   Compiling zmij v1.0.22
+   Compiling zerocopy v0.8.54
+   Compiling crossbeam-deque v0.8.7
+   Compiling parking_lot_core v0.9.12
+    Checking typenum v1.20.1
+   Compiling rustversion v1.0.23
+   Compiling ahash v0.8.12
+   Compiling crc32fast v1.5.0
+   Compiling rayon-core v1.13.0
+   Compiling getrandom v0.4.3
+    Checking once_cell v1.21.4
+    Checking smallvec v1.15.2
+   Compiling thiserror v2.0.18
+   Compiling rustix v1.1.4
+   Compiling serde_json v1.0.150
+    Checking scopeguard v1.2.0
+    Checking lock_api v0.4.14
+    Checking aho-corasick v1.1.4
+   Compiling recursive-proc-macro-impl v0.1.1
+   Compiling thiserror-impl v2.0.18
+    Checking linux-raw-sys v0.12.1
+    Checking itoa v1.0.18
+   Compiling libm v0.2.16
+    Checking regex-syntax v0.8.11
+    Checking bitflags v2.13.0
+    Checking regex-automata v0.4.15
+    Checking recursive v0.1.1
+    Checking arc-swap v1.9.2
+    Checking parking_lot v0.12.5
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking crossbeam-queue v0.3.13
+    Checking redlinedb-domain v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.4#3567bdce)
+    Checking either v1.16.0
+    Checking log v0.4.33
+    Checking bumpalo v3.20.3
+    Checking fastrand v2.4.1
+    Checking tempfile v3.27.0
+    Checking redlinedb-kernel v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.4#3567bdce)
+    Checking sqlparser v0.61.0
+    Checking rayon v1.12.0
+    Checking digest v0.10.7
+    Checking regex v1.13.0
+    Checking toml_datetime v0.6.11
+    Checking serde_spanned v0.6.9
+    Checking winnow v0.7.15
+    Checking toml_write v0.1.2
+    Checking cpufeatures v0.2.17
+    Checking sha2 v0.10.9
+    Checking toml_edit v0.22.27
+    Checking redlinedb-sql v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.4#3567bdce)
+    Checking num_cpus v1.17.0
+    Checking redlinedb v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.4#3567bdce)
+    Checking toml v0.8.23
+    Checking jain-redline-consumer-contract v8.0.0 (/tmp/split-host-ci.OmbqAa/jain-web/ops/ci/redline-consumer)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 09s
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling crossbeam-utils v0.8.22
+   Compiling serde v1.0.228
+   Compiling memchr v2.8.3
+   Compiling typenum v1.20.1
+   Compiling generic-array v0.14.7
+   Compiling psm v0.1.31
+   Compiling crossbeam-epoch v0.9.20
+   Compiling scopeguard v1.2.0
+   Compiling once_cell v1.21.4
+   Compiling smallvec v1.15.2
+   Compiling parking_lot_core v0.9.12
+   Compiling lock_api v0.4.14
+   Compiling crossbeam-deque v0.8.7
+   Compiling stacker v0.1.24
+   Compiling getrandom v0.3.4
+   Compiling zerocopy v0.8.54
+   Compiling zmij v1.0.22
+   Compiling aho-corasick v1.1.4
+   Compiling bitflags v2.13.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling regex-syntax v0.8.11
+   Compiling regex-automata v0.4.15
+   Compiling rustix v1.1.4
+   Compiling serde_json v1.0.150
+   Compiling thiserror v2.0.18
+   Compiling recursive v0.1.1
+   Compiling arc-swap v1.9.2
+   Compiling ahash v0.8.12
+   Compiling rayon-core v1.13.0
+   Compiling parking_lot v0.12.5
+   Compiling getrandom v0.4.3
+   Compiling crc32fast v1.5.0
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling crossbeam-queue v0.3.13
+   Compiling bumpalo v3.20.3
+   Compiling either v1.16.0
+   Compiling redlinedb-domain v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.4#3567bdce)
+   Compiling fastrand v2.4.1
+   Compiling log v0.4.33
+   Compiling sqlparser v0.61.0
+   Compiling tempfile v3.27.0
+   Compiling redlinedb-kernel v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.4#3567bdce)
+   Compiling rayon v1.12.0
+   Compiling digest v0.10.7
+   Compiling libm v0.2.16
+   Compiling regex v1.13.0
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling cpufeatures v0.2.17
+   Compiling sha2 v0.10.9
+   Compiling toml_edit v0.22.27
+   Compiling redlinedb-sql v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.4#3567bdce)
+   Compiling num_cpus v1.17.0
+   Compiling redlinedb v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.4#3567bdce)
+   Compiling toml v0.8.23
+   Compiling jain-redline-consumer-contract v8.0.0 (/tmp/split-host-ci.OmbqAa/jain-web/ops/ci/redline-consumer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 00s
+     Running unittests src/lib.rs (/tmp/split-host-ci.OmbqAa/cargo-target/debug/deps/jain_redline_consumer_contract-61449c4992626de1)
+
+running 5 tests
+test tests::lowercase_hash_validation_is_exact ... ok
+test tests::dependency_proof_accepts_paired_pending_split_zero_identity ... ok
+test tests::release_identity_rejects_half_bound_release ... ok
+test tests::release_identity_uses_declared_revision ... ok
+test tests::release_identity_rejects_floating_or_mismatched_tag ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/validate_jain_release_manifest.rs (/tmp/split-host-ci.OmbqAa/cargo-target/debug/deps/validate_jain_release_manifest-3f672e196c68e6fa)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/durable_contract.rs (/tmp/split-host-ci.OmbqAa/cargo-target/debug/deps/durable_contract-bfad1cb9a1a31901)
+
+running 1 test
+test jain_model_and_release_state_survives_transaction_checkpoint_and_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.23s
+
+   Doc-tests jain_redline_consumer_contract
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[ci] web Rust required lane: ci-smoke
+error: failed to load source for dependency `feat-core`
+
+Caused by:
+  unable to update /tmp/split-host-ci.OmbqAa/jain-core/crates/feat-core
+
+Caused by:
+  failed to read `/tmp/split-host-ci.OmbqAa/jain-core/crates/feat-core/Cargo.toml`
+
+Caused by:
+  No such file or directory (os error 2)

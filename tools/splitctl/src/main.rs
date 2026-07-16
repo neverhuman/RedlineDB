@@ -10,10 +10,12 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const RELEASE_VERSION: &str = "8.0.0";
+const RELEASE_VERSION: &str = "8.0.1";
+const FAMILY_SOURCE_VERSION: &str = "8.0.0";
+const FAMILY_SOURCE_TAG_SERIES: &str = "v8.0.0-split.N";
 const LOCAL_JERYU_BASE: &str = "http://127.0.0.1:8787";
-const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/veox/";
-const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/veox/";
+const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
+const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
 const RELEASE_PROTECTION_POLICY: &str = "immutable-main-v1";
 
 #[derive(Debug, Clone)]
@@ -332,7 +334,9 @@ fn managed_repo_json(repo: &ManagedRepo) -> JsonValue {
 fn release_inventory(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut manifest = root.join("repos.manifest.toml");
-    let mut output = root.join("docs/release-evidence/8.0.0/orchestrator/release-inventory.json");
+    let mut output = root.join(format!(
+        "docs/release-evidence/{RELEASE_VERSION}/orchestrator/release-inventory.json"
+    ));
     let mut patch_dir = output
         .parent()
         .unwrap_or(Path::new("."))
@@ -1484,6 +1488,23 @@ fn validate_manifest_data(
     if string(data, "release_version").as_deref() != Some(RELEASE_VERSION) {
         errors.push(format!("release_version must be {RELEASE_VERSION}"));
     }
+    if string(data, "family_source_version").as_deref() != Some(FAMILY_SOURCE_VERSION) {
+        errors.push(format!(
+            "family_source_version must be {FAMILY_SOURCE_VERSION}"
+        ));
+    }
+    if string(data, "family_source_tag_series").as_deref() != Some(FAMILY_SOURCE_TAG_SERIES) {
+        errors.push(format!(
+            "family_source_tag_series must be {FAMILY_SOURCE_TAG_SERIES}"
+        ));
+    }
+    if string(data, "dependency_tag_suffix").as_deref()
+        != Some(format!("v{RELEASE_VERSION}-split.0").as_str())
+    {
+        errors.push(format!(
+            "dependency_tag_suffix must be v{RELEASE_VERSION}-split.0"
+        ));
+    }
     if string(data, "status").as_deref() != Some("candidate") {
         errors.push("status must be candidate".to_owned());
     }
@@ -1630,8 +1651,8 @@ fn validate_manifest_data(
     } else if let Some(raw) = smartcluster {
         for (key, expected) in [
             ("kind", "required-infrastructure"),
-            ("forge_owner", "veox"),
-            ("forge_slug", "veox/jain-smartcluster"),
+            ("forge_owner", "jain-split"),
+            ("forge_slug", "jain-split/jain-smartcluster"),
             ("required_check", "jain-smartcluster/required"),
             ("default_branch", "main"),
         ] {
@@ -1912,7 +1933,9 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
         errors.push("source_manifest_sha256 does not match the canonical manifest".to_owned());
     }
     if string(&lock_data, "release").as_deref() != Some(RELEASE_VERSION) {
-        errors.push("lock release is not the 8.0.0 product version".to_owned());
+        errors.push(format!(
+            "lock release is not the {RELEASE_VERSION} product version"
+        ));
     }
     let family = family_repos(&data)?;
     let lock_repos = lock_data
@@ -1969,9 +1992,20 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
                     errors.push(format!("{name}: lock tag does not match the manifest"));
                 }
                 let commit = string(entry, "commit").unwrap_or_default();
-                if commit.len() != 40 || !commit.chars().all(|ch| ch.is_ascii_hexdigit()) {
+                let checksum = string(entry, "checksum_sha256").unwrap_or_default();
+                let pending_identity = commit == "PENDING" && checksum == "PENDING";
+                if !pending_identity
+                    && (commit.len() != 40 || !commit.chars().all(|ch| ch.is_ascii_hexdigit()))
+                {
                     errors.push(format!(
                         "{name}: lock commit is not an immutable 40-character SHA"
+                    ));
+                }
+                if !pending_identity
+                    && (checksum.len() != 64 || !checksum.chars().all(|ch| ch.is_ascii_hexdigit()))
+                {
+                    errors.push(format!(
+                        "{name}: lock checksum is not an immutable 64-character SHA-256"
                     ));
                 }
                 if string(raw, "release_commit").as_deref() != Some(commit.as_str()) {
@@ -2086,28 +2120,45 @@ fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
         let tag = string(raw, "immutable_tag")
             .or_else(|| string(raw, "current_tag"))
             .ok_or_else(|| format!("{} missing immutable tag", repo.name))?;
-        let tag_ref = format!("refs/tags/{tag}^{{}}");
-        let commit = git_query(&repo.path, &["rev-parse", &tag_ref])
-            .ok_or_else(|| format!("{} is missing immutable tag {tag}", repo.name))?;
         let declared_commit = string(raw, "release_commit")
             .ok_or_else(|| format!("{} missing release_commit", repo.name))?;
-        if commit != declared_commit {
-            return Err(format!(
-                "{} tag {tag} resolves to {commit}, manifest declares {declared_commit}",
-                repo.name
-            )
-            .into());
-        }
-        let checksum = release_tree_checksum(&repo.path, &commit)?;
         let declared_checksum = string(raw, "release_checksum_sha256")
             .ok_or_else(|| format!("{} missing release checksum", repo.name))?;
-        if checksum != declared_checksum {
+        let pending_commit = declared_commit == "PENDING";
+        let pending_checksum = declared_checksum == "PENDING";
+        if pending_commit != pending_checksum {
             return Err(format!(
-                "{} checksum {checksum} differs from manifest {declared_checksum}",
+                "{} release identity must keep commit/checksum PENDING as a pair",
                 repo.name
             )
             .into());
         }
+        let (commit, checksum) = if pending_commit {
+            // A staged 8.0.1 lock is useful before fresh immutable tags exist,
+            // but carries no invented identity. Regenerate again after each
+            // protected tag/checksum bind.
+            ("PENDING".to_owned(), "PENDING".to_owned())
+        } else {
+            let tag_ref = format!("refs/tags/{tag}^{{}}");
+            let resolved_commit = git_query(&repo.path, &["rev-parse", &tag_ref])
+                .ok_or_else(|| format!("{} is missing immutable tag {tag}", repo.name))?;
+            if resolved_commit != declared_commit {
+                return Err(format!(
+                    "{} tag {tag} resolves to {resolved_commit}, manifest declares {declared_commit}",
+                    repo.name
+                )
+                .into());
+            }
+            let resolved_checksum = release_tree_checksum(&repo.path, &resolved_commit)?;
+            if resolved_checksum != declared_checksum {
+                return Err(format!(
+                    "{} checksum {resolved_checksum} differs from manifest {declared_checksum}",
+                    repo.name
+                )
+                .into());
+            }
+            (resolved_commit, resolved_checksum)
+        };
         let product_version = string(raw, "product_version")
             .ok_or_else(|| format!("{} missing product_version", repo.name))?;
         let tag_revision = raw
@@ -3397,7 +3448,7 @@ fn receipt_header(schema: &str, operation: &str, apply: bool) -> JsonValue {
 
 fn release_evidence_path(filename: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("docs/release-evidence/8.0.0")
+        .join(format!("docs/release-evidence/{RELEASE_VERSION}"))
         .join(filename)
 }
 
@@ -5444,10 +5495,10 @@ fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if raw.get("kind").and_then(toml::Value::as_str) == Some("required-infrastructure") {
-            if string(raw, "forge_owner").as_deref() != Some("veox") {
-                failures.push("infrastructure forge_owner must be veox".to_owned());
+            if string(raw, "forge_owner").as_deref() != Some("jain-split") {
+                failures.push("infrastructure forge_owner must be jain-split".to_owned());
             }
-            if string(raw, "forge_slug").as_deref() != Some("veox/jain-smartcluster") {
+            if string(raw, "forge_slug").as_deref() != Some("jain-split/jain-smartcluster") {
                 failures.push("infrastructure forge_slug does not match the manifest".to_owned());
             }
             if raw.get("family_registered").and_then(toml::Value::as_bool) != Some(true) {
@@ -5560,8 +5611,25 @@ fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut manifest_failures = Vec::new();
-    if string(&data, "release_version").as_deref() != Some("8.0.0") {
-        manifest_failures.push("release_version must be 8.0.0".to_owned());
+    if string(&data, "release_version").as_deref() != Some(RELEASE_VERSION) {
+        manifest_failures.push(format!("release_version must be {RELEASE_VERSION}"));
+    }
+    if string(&data, "family_source_version").as_deref() != Some(FAMILY_SOURCE_VERSION) {
+        manifest_failures.push(format!(
+            "family_source_version must be {FAMILY_SOURCE_VERSION}"
+        ));
+    }
+    if string(&data, "family_source_tag_series").as_deref() != Some(FAMILY_SOURCE_TAG_SERIES) {
+        manifest_failures.push(format!(
+            "family_source_tag_series must be {FAMILY_SOURCE_TAG_SERIES}"
+        ));
+    }
+    if string(&data, "dependency_tag_suffix").as_deref()
+        != Some(format!("v{RELEASE_VERSION}-split.0").as_str())
+    {
+        manifest_failures.push(format!(
+            "dependency_tag_suffix must be v{RELEASE_VERSION}-split.0"
+        ));
     }
     let family_names = family_repos(&data)?
         .iter()
@@ -6145,10 +6213,9 @@ fn check_cargo_sources(
             if !line.contains("git") {
                 continue;
             }
-            // Local-forge-only: any owner namespace on the local forge is a valid
-            // internal source. veox/* is canonical; jeryu/* (and the old
-            // jain-split/* infra home) remain frozen aliases until the naming-RFC
-            // wave rewrites dependency URLs. External hosts stay rejected.
+            // Local-forge-only: family dependencies use jeryu/* and the
+            // SmartCluster infrastructure dependency uses jain-split/*. External
+            // hosts and owner aliases remain rejected by manifest validation.
             if line.contains("http://127.0.0.1:8787/git/") {
                 continue;
             }
@@ -7142,9 +7209,9 @@ allow_deletions = false
 name = "{name}"
 path = "{}"
 remote = "{}"
-product_version = "8.0.0"
+product_version = "8.0.1"
 tag_revision = {revision}
-current_tag = "{name}-v8.0.0-split.{revision}"
+current_tag = "{name}-v8.0.1-split.{revision}"
 release_commit = "{commit}"
 release_checksum_sha256 = "{checksum}"
 protection_policy = "immutable-main-v1"
@@ -7448,7 +7515,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 "--remote".to_owned(),
                 remote.display().to_string(),
                 "--tag".to_owned(),
-                "example-v8.0.0-split.0".to_owned(),
+                "example-v8.0.1-split.0".to_owned(),
                 "--commit".to_owned(),
                 reviewed.clone(),
                 "--receipt".to_owned(),
@@ -7457,7 +7524,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         };
         immutable_tag_command_impl(args(), false).unwrap();
         assert_eq!(
-            local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
+            local_ref_commit(&repo, "refs/tags/example-v8.0.1-split.0").unwrap(),
             None
         );
         let mut apply = args();
@@ -7473,14 +7540,14 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         refuse.push("--apply".to_owned());
         assert!(immutable_tag_command_impl(refuse, false).is_err());
         assert_eq!(
-            local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
+            local_ref_commit(&repo, "refs/tags/example-v8.0.1-split.0").unwrap(),
             Some(reviewed.clone())
         );
         assert_eq!(
             ls_remote_ref(
                 &repo,
                 remote.to_str().unwrap(),
-                "refs/tags/example-v8.0.0-split.0"
+                "refs/tags/example-v8.0.1-split.0"
             )
             .unwrap(),
             Some(reviewed)
@@ -7518,9 +7585,9 @@ allow_deletions = false
 name = "source"
 path = "{}"
 remote = "{}"
-product_version = "8.0.0"
+product_version = "8.0.1"
 tag_revision = 1
-current_tag = "source-v8.0.0-split.1"
+current_tag = "source-v8.0.1-split.1"
 release_commit = "{}"
 release_checksum_sha256 = "{}"
 protection_policy = "immutable-main-v1"
@@ -7543,7 +7610,7 @@ protection_policy = "immutable-main-v1"
                 "--remote".to_owned(),
                 remote.display().to_string(),
                 "--tag".to_owned(),
-                "source-v8.0.0-split.1".to_owned(),
+                "source-v8.0.1-split.1".to_owned(),
                 "--commit".to_owned(),
                 reviewed.clone(),
                 "--receipt".to_owned(),
@@ -7557,7 +7624,7 @@ protection_policy = "immutable-main-v1"
         assert_eq!(
             local_ref_commit(
                 &root.path().join("target/bare-mirrors/source.git"),
-                "refs/tags/source-v8.0.0-split.1"
+                "refs/tags/source-v8.0.1-split.1"
             )
             .unwrap(),
             Some(reviewed)
@@ -7571,7 +7638,7 @@ protection_policy = "immutable-main-v1"
         fs::create_dir_all(repo.join("crates/example")).unwrap();
         fs::write(
             repo.join("Cargo.toml"),
-            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n\n[workspace.package]\nversion = \"8.0.0\"\n",
+            "[workspace]\nmembers = [\"crates/*\"]\nresolver = \"2\"\n\n[workspace.package]\nversion = \"8.0.1\"\n",
         )
         .unwrap();
         fs::write(
@@ -7580,7 +7647,7 @@ protection_policy = "immutable-main-v1"
         )
         .unwrap();
         fs::write(repo.join("crates/example/src.rs"), "pub fn example() {}\n").unwrap();
-        fs::write(repo.join("VERSION"), "example-v8.0.0-split.0\n").unwrap();
+        fs::write(repo.join("VERSION"), "example-v8.0.1-split.0\n").unwrap();
         run_git_strict(&repo, &["add", "Cargo.toml", "VERSION", "crates/example"]).unwrap();
         run_git_strict(&repo, &["commit", "-m", "candidate metadata"]).unwrap();
         let reviewed = resolve_commit(&repo, "HEAD").unwrap();
@@ -7598,7 +7665,7 @@ protection_policy = "immutable-main-v1"
                 "--remote".to_owned(),
                 remote.display().to_string(),
                 "--tag".to_owned(),
-                "example-v8.0.0-split.0".to_owned(),
+                "example-v8.0.1-split.0".to_owned(),
                 "--commit".to_owned(),
                 reviewed,
                 "--receipt".to_owned(),
@@ -7612,14 +7679,14 @@ protection_policy = "immutable-main-v1"
         assert_eq!(report["status"], "fail");
         assert_eq!(report["release_identity"]["mismatch"]["version"], "0.1.0");
         assert_eq!(
-            local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
+            local_ref_commit(&repo, "refs/tags/example-v8.0.1-split.0").unwrap(),
             None
         );
         assert_eq!(
             ls_remote_ref(
                 &repo,
                 remote.to_str().unwrap(),
-                "refs/tags/example-v8.0.0-split.0"
+                "refs/tags/example-v8.0.1-split.0"
             )
             .unwrap(),
             None
@@ -7640,9 +7707,9 @@ allow_deletions = false
         .parse()
         .unwrap();
         let valid: toml::Value = r#"
-product_version = "8.0.0"
+product_version = "8.0.1"
 tag_revision = 1
-current_tag = "example-v8.0.0-split.1"
+current_tag = "example-v8.0.1-split.1"
 release_commit = "PENDING"
 release_checksum_sha256 = "PENDING"
 protection_policy = "immutable-main-v1"
@@ -7656,7 +7723,7 @@ protection_policy = "immutable-main-v1"
         let mut invalid = valid.clone();
         invalid.as_table_mut().unwrap().insert(
             "current_tag".to_owned(),
-            toml::Value::String("example-v8.0.0-split.0".to_owned()),
+            toml::Value::String("example-v8.0.1-split.0".to_owned()),
         );
         validate_release_metadata(&manifest, &invalid, "example", "split", None, &mut errors);
         assert!(errors.iter().any(|error| error.contains("split.1")));
@@ -7826,7 +7893,7 @@ protection_policy = "immutable-main-v1"
         create_or_verify_immutable_tag(
             &repo,
             remote.to_str().unwrap(),
-            "example-v8.0.0-split.0",
+            "example-v8.0.1-split.0",
             &reviewed,
             true,
             &mut tag_report,
@@ -7838,7 +7905,7 @@ protection_policy = "immutable-main-v1"
             remote: remote.display().to_string(),
             required_check: "example/required".to_owned(),
             branch: "main".to_owned(),
-            tag: Some("example-v8.0.0-split.0".to_owned()),
+            tag: Some("example-v8.0.1-split.0".to_owned()),
             kind: "family".to_owned(),
             family: "jain-split".to_owned(),
             family_registered: true,
@@ -7986,7 +8053,7 @@ current_tag = "redline-core-v4.1.0-jain.3"
         .unwrap();
         let canonical = format!(
             r#"
-release_version = "8.0.0"
+release_version = "8.0.1"
 repo_family = "jain-split"
 split_root = "{}"
 [control_plane]
@@ -7994,7 +8061,7 @@ name = "jain-split-ops"
 path = "{}/jain-split-ops"
 remote = "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git"
 required_check = "jain-split-ops/required"
-current_tag = "jain-split-ops-v8.0.0-split.0"
+current_tag = "jain-split-ops-v8.0.1-split.0"
 [nested_families.redline]
 manifest_path = "{}"
 control_plane = "{}/redline-split-ops"
@@ -8002,10 +8069,10 @@ control_plane = "{}/redline-split-ops"
 name = "jain-smartcluster"
 path = "{}/jain-smartcluster"
 profile = "rust-workspace"
-remote = "http://127.0.0.1:8787/git/veox/jain-smartcluster.git"
+remote = "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git"
 required_check = "jain-smartcluster/required"
 default_branch = "main"
-immutable_tag = "jain-smartcluster-v8.0.0-split.0"
+immutable_tag = "jain-smartcluster-v8.0.1-split.0"
 kind = "required-infrastructure"
 family_registered = true
 [[repo]]
@@ -8015,7 +8082,7 @@ profile = "custom"
 jeryu_slug = "jeryu/jain"
 required_check = "jain/required"
 default_branch = "main"
-current_tag = "jain-v8.0.0-split.0"
+current_tag = "jain-v8.0.1-split.0"
 "#,
             root.path().display(),
             root.path().display(),
@@ -8142,7 +8209,7 @@ current_tag = "jain-v8.0.0-split.0"
         fs::write(&manifest, "schema_version = \"1\"\n").unwrap();
         let canonical: toml::Value = r#"
 schema_version = "1"
-release_version = "8.0.0"
+release_version = "8.0.1"
 split_root = "/tmp/example"
 required_repos = ["one", "two"]
 [[repo]]
@@ -8162,7 +8229,7 @@ name = "two"
 
         let subset: toml::Value = r#"
 schema_version = "1"
-release_version = "8.0.0"
+release_version = "8.0.1"
 split_root = "/tmp/example"
 required_repos = ["one", "two"]
 [derived_manifests.portal]
@@ -8187,7 +8254,7 @@ name = "two"
     #[test]
     fn derived_manifest_sync_is_dry_run_by_default_and_apply_is_explicit() {
         assert!(release_evidence_path("receipt.json")
-            .ends_with("docs/release-evidence/8.0.0/receipt.json"));
+            .ends_with("docs/release-evidence/8.0.1/receipt.json"));
         let root = TestDir::new("derived-sync");
         let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
         let mut canonical: toml::Value = fs::read_to_string(source).unwrap().parse().unwrap();

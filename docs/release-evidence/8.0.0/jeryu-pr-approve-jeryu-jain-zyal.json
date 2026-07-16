@@ -3,7 +3,7 @@
   "mode": "apply",
   "operation": "jeryu-local pr-approve",
   "readback": {
-    "description": "Corrective candidate-only split.1 release. Complete package identity, required, security, score, contract, artifact, and tool-adoption lanes pass at exact head; no production mutation.",
+    "description": "Exact preserved candidate promotion. Full canonical local CI is green at 5737cb78bd4378ba9c4f85cf13868a7c34b2f288. Check publication and merge remain blocked pending protected publisher authority.",
     "merge_passport": {
       "blockers": [
         {
@@ -12,11 +12,11 @@
           "message": "One or more checks are failing."
         }
       ],
-      "evaluated_at": "2026-07-14T01:45:21.415409290+00:00",
-      "head_sha": "cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d",
+      "evaluated_at": "2026-07-16T03:47:26.304723801+00:00",
+      "head_sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
       "status": "blocked"
     },
-    "passport_hash": "passport:cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d:Blocked:1:1:0:1",
+    "passport_hash": "passport:5737cb78bd4378ba9c4f85cf13868a7c34b2f288:Blocked:1:1:0:1",
     "summary": {
       "agents": {
         "active_sessions": 0,
@@ -38,31 +38,31 @@
         }
       ],
       "base_ref": "main",
-      "base_sha": "3aa8b9b7c4cb45163e338649bdcda1b569e6e759",
+      "base_sha": "cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d",
       "checks": {
         "failing": 1,
-        "passing": 2,
+        "passing": 1,
         "pending": 0,
         "skipped": 0,
-        "total": 3
+        "total": 2
       },
       "draft": false,
       "entity": {
-        "id": "90f3a8ab-83c3-446f-984a-83ca46549f26#4",
+        "id": "90f3a8ab-83c3-446f-984a-83ca46549f26#5",
         "kind": "pull_request"
       },
-      "head_ref": "codex/v8-split1-corrective-20260713",
-      "head_sha": "cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d",
+      "head_ref": "codex/wave4-jain-zyal-split1-20260715",
+      "head_sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
       "labels": [],
       "mergeable": {
         "can_merge": false,
-        "exact_head_sha": "cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d",
+        "exact_head_sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
         "level": "blocked",
         "reason": "failing checks",
         "required_gate": "merge_passport"
       },
-      "number": 4,
-      "passport_hash": "passport:cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d:Blocked:1:1:0:1",
+      "number": 5,
+      "passport_hash": "passport:5737cb78bd4378ba9c4f85cf13868a7c34b2f288:Blocked:1:1:0:1",
       "repo": {
         "host": "jeryu",
         "id": "90f3a8ab-83c3-446f-984a-83ca46549f26",
@@ -77,24 +77,24 @@
         "user_review_state": null
       },
       "state": "open",
-      "title": "release: corrective Jain 8.0.0 split.1",
-      "updated_at": "2026-07-13T18:09:00.470262734+00:00"
+      "title": "release(jain-zyal): bind 8.0.0 split.1 identity",
+      "updated_at": "2026-07-15T20:30:56.280021333+00:00"
     }
   },
   "repository": "jeryu/jain-zyal",
   "request": {
     "body": {
-      "body_markdown": "Reviewed exact head and green required/Jankurai evidence.",
+      "body_markdown": null,
       "evidence": null,
-      "expected_head_sha": "cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d",
+      "expected_head_sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
       "thread_comments": [],
       "verdict": "approve"
     },
     "method": "POST",
-    "path": "/api/v1/repos/jeryu%2Fjain-zyal/pulls/4/reviews"
+    "path": "/api/v1/repos/jeryu%2Fjain-zyal/pulls/5/reviews"
   },
   "response": {
-    "description": "Corrective candidate-only split.1 release. Complete package identity, required, security, score, contract, artifact, and tool-adoption lanes pass at exact head; no production mutation.",
+    "description": "Exact preserved candidate promotion. Full canonical local CI is green at 5737cb78bd4378ba9c4f85cf13868a7c34b2f288. Check publication and merge remain blocked pending protected publisher authority.",
     "merge_passport": {
       "blockers": [
         {
@@ -103,11 +103,11 @@
           "message": "One or more checks are failing."
         }
       ],
-      "evaluated_at": "2026-07-14T01:45:21.404696484+00:00",
-      "head_sha": "cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d",
+      "evaluated_at": "2026-07-16T03:47:26.293201378+00:00",
+      "head_sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
       "status": "blocked"
     },
-    "passport_hash": "passport:cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d:Blocked:1:1:0:1",
+    "passport_hash": "passport:5737cb78bd4378ba9c4f85cf13868a7c34b2f288:Blocked:1:1:0:1",
     "summary": {
       "agents": {
         "active_sessions": 0,
@@ -129,31 +129,31 @@
         }
       ],
       "base_ref": "main",
-      "base_sha": "3aa8b9b7c4cb45163e338649bdcda1b569e6e759",
+      "base_sha": "cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d",
       "checks": {
         "failing": 1,
-        "passing": 2,
+        "passing": 1,
         "pending": 0,
         "skipped": 0,
-        "total": 3
+        "total": 2
       },
       "draft": false,
       "entity": {
-        "id": "90f3a8ab-83c3-446f-984a-83ca46549f26#4",
+        "id": "90f3a8ab-83c3-446f-984a-83ca46549f26#5",
         "kind": "pull_request"
       },
-      "head_ref": "codex/v8-split1-corrective-20260713",
-      "head_sha": "cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d",
+      "head_ref": "codex/wave4-jain-zyal-split1-20260715",
+      "head_sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
       "labels": [],
       "mergeable": {
         "can_merge": false,
-        "exact_head_sha": "cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d",
+        "exact_head_sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
         "level": "blocked",
         "reason": "failing checks",
         "required_gate": "merge_passport"
       },
-      "number": 4,
-      "passport_hash": "passport:cd8652bed81bf1860a8a2e7dcf9a2e7a7ab8c83d:Blocked:1:1:0:1",
+      "number": 5,
+      "passport_hash": "passport:5737cb78bd4378ba9c4f85cf13868a7c34b2f288:Blocked:1:1:0:1",
       "repo": {
         "host": "jeryu",
         "id": "90f3a8ab-83c3-446f-984a-83ca46549f26",
@@ -168,11 +168,11 @@
         "user_review_state": null
       },
       "state": "open",
-      "title": "release: corrective Jain 8.0.0 split.1",
-      "updated_at": "2026-07-13T18:09:00.470262734+00:00"
+      "title": "release(jain-zyal): bind 8.0.0 split.1 identity",
+      "updated_at": "2026-07-15T20:30:56.280021333+00:00"
     }
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1783993519
+  "timestamp_unix": 1784173642
 }

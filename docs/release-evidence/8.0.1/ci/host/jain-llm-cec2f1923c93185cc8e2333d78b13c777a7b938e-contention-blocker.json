@@ -1,0 +1,115 @@
+{
+  "schema_version": "jain.host-ci-contention-blocker/v1",
+  "status": "blocked",
+  "observed_at": "2026-07-16T04:52:02Z",
+  "claim": "codex-mcp-jain-llm-v801-identity-20260716T0417Z",
+  "repository": "jeryu/jain-llm",
+  "pull_request": 7,
+  "expected_identity": {
+    "head": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+    "tree": "5cbc7040a0dd1c545e2e83862e209786122141e9",
+    "base": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+    "branch": "release/v8.0.1/llm-identity-20260716",
+    "required_check": "jain-llm/required"
+  },
+  "readback": {
+    "pr_state": "open",
+    "pr_draft": false,
+    "pr_merged": false,
+    "pr_head": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+    "pr_base": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+    "checkout_head": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+    "checkout_tree": "5cbc7040a0dd1c545e2e83862e209786122141e9",
+    "checkout_clean": true,
+    "checkout_upstream_ahead": 0,
+    "checkout_upstream_behind": 0,
+    "forge_branch_head": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+    "forge_main_head": "9eb84f0e498ee512ac7a38b9b879f984763b68af"
+  },
+  "checks": [
+    {
+      "name": "jankurai/proof",
+      "head_sha": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+      "status": "completed",
+      "conclusion": "failure",
+      "completed_at": "2026-07-16T04:22:24.030367626Z",
+      "output": null
+    }
+  ],
+  "proof_diagnosis": {
+    "governed_binary": "/home/ubuntu/.local/bin/jankurai",
+    "governed_binary_version": "jankurai 1.6.11",
+    "local_exact_head_proof_generated_at": "2026-07-16T04:21:45Z",
+    "local_proof_command_exit_code": 0,
+    "local_proof_worktree_dirty": false,
+    "proofbind_mode": "advisory",
+    "proofbind_verdict": "review",
+    "proofmark_mode": "advisory",
+    "proofmark_verdict": "review",
+    "proofmark_total_obligations": 5,
+    "proofmark_review_obligations": 5,
+    "proofmark_satisfied_obligations": 0,
+    "reason": "The forge failure has no check output or corresponding host-CI log, while the exact-head local Jankurai command exited zero. Available evidence therefore identifies a fail-closed or incomplete proof publication state, with advisory review obligations for unavailable changed-line coverage and focused mutation evidence; it does not identify a missing or wrong Jankurai binary.",
+    "artifacts": [
+      {
+        "path": "jain-llm/target/jankurai/proof-plan.json",
+        "sha256": "75dcffd827dac36c9b5d6ae502b118c6ac80877b408372af4a5763ac0c54cd54"
+      },
+      {
+        "path": "jain-llm/target/jankurai/proofbind/surface-witness.json",
+        "sha256": "4e597587cce4bbb8ad5aecf2e6f0ba542d35583f9de1fa6a98b495b3b9dc31e4"
+      },
+      {
+        "path": "jain-llm/target/jankurai/proofmark/proofmark-receipt.json",
+        "sha256": "56e27a799f4dd4557bd2dff1cd179e47eae27ab0d9d11be3c4fd1a2657f52e67"
+      },
+      {
+        "path": "jain-llm/target/jankurai/proofmark/proof-receipt.json",
+        "sha256": "e322c1b5896ecf2e0df6582116bfe2030d705875f9f9834cbe909b4ae5e0dfa8"
+      }
+    ]
+  },
+  "active_heavy_processes": [
+    {
+      "pid": 482927,
+      "kind": "split-host-ci",
+      "repository": "jain-web",
+      "head": "f235a471ff716c3d8bd5577f3f241d2ce07a09ed"
+    },
+    {
+      "pid": 3255597,
+      "kind": "split-host-ci",
+      "repository": "jain-core",
+      "head": "e446c4076e29651ec787d2828ca4ad4f0ac8d071"
+    },
+    {
+      "pid": 3539683,
+      "kind": "split-host-ci",
+      "repository": "jain-web",
+      "head": "d505b6ccf208a36b24ab6f2ad66dab56329ea45d"
+    },
+    {
+      "pid": 3570113,
+      "kind": "required-lane",
+      "repository": "review-sandbox",
+      "head": null
+    },
+    {
+      "pid": 3608470,
+      "kind": "split-host-ci",
+      "repository": "jain-web",
+      "head": "e793e37fe652ad3fa350515b04daa183047dd2f6"
+    },
+    {
+      "pid": 3609458,
+      "kind": "split-host-ci",
+      "repository": "jain-core",
+      "head": "09823c4012d228c8d73df625329340afc1bc27f4"
+    }
+  ],
+  "decision": "BLOCK",
+  "host_ci_started": false,
+  "required_check_posted": false,
+  "source_or_forge_mutation": false,
+  "next_action": "Retry only after a fresh owner and process scan proves the heavy host-CI lane is unoccupied; then use the canonical split-host-ci.sh exact-SHA standalone sandbox with PATH beginning at /home/ubuntu/.local/bin and verify automatic cleanup before reading back both checks."
+}

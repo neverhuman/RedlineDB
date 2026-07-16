@@ -1,0 +1,337 @@
+{
+  "schema": "jain.website-502-diagnostic/v1",
+  "audited_at_utc": "2026-07-16T04:39:44Z",
+  "auditor": "/root/jankurai_identity",
+  "claim_token": "codex-mcp-website-502-20260716T0427Z",
+  "scope": "Read-only diagnosis of transient public 502 responses for /try and /api/public/capacity. Claude owns all Web, Deploy, Caddy, route, Docker, service, firewall, certificate, and host mutation.",
+  "decision": {
+    "current_public_reachability": "PASS_POINT_IN_TIME",
+    "root_cause_identified": true,
+    "production_acceptance": "BLOCK",
+    "classification": "recovered_transient_outage_not_durable_or_release_qualified",
+    "summary": "Caddy continued proxying public traffic to xbabe3:8080 while the jain-web-control container was manually stopped. The listener is healthy now, but its image is an unbound local build, its route is absent from the persisted Caddyfile, readiness and guestd are absent, capacity has zero warm guests, and required restart/capacity/compute/soak qualification is incomplete."
+  },
+  "mutation_boundary": {
+    "source_or_checkout_mutation": false,
+    "forge_mutation": false,
+    "container_or_image_mutation": false,
+    "service_or_process_mutation": false,
+    "route_or_caddy_mutation": false,
+    "firewall_or_certificate_mutation": false,
+    "diagnostic_actions": [
+      "external DNS, TLS, HTTP, and repeated endpoint reads",
+      "read-only SSH to AtomicSoul and xbabe3",
+      "read-only Docker inspect, logs, admin-config GET, file-stream hashing, and system journal reads",
+      "read-only listener, process, unit, and forge-ref inspection"
+    ]
+  },
+  "public_endpoint": {
+    "hostname": "www.neverhuman.org",
+    "dns_a": [
+      "162.218.217.123"
+    ],
+    "tls": {
+      "subject": "CN=www.neverhuman.org",
+      "issuer": "C=US,O=Let's Encrypt,CN=E7",
+      "serial": "060E31365099DD6F38A24417E4DE2694451E",
+      "not_before": "2026-05-22T19:48:53Z",
+      "not_after": "2026-08-20T19:48:52Z",
+      "sha256_fingerprint": "49:6A:3E:41:83:0F:A7:8C:C4:27:5B:74:85:F1:D8:63:92:A4:79:02:F4:2A:2C:55:41:EC:47:16:49:12:9C:87",
+      "sans": [
+        "DNS:www.neverhuman.org"
+      ]
+    },
+    "latest_sample": {
+      "window_utc": "2026-07-16T04:36:01.786Z/2026-07-16T04:36:12.054Z",
+      "requests": 20,
+      "http_200": 20,
+      "http_502": 0,
+      "try": {
+        "samples": 10,
+        "status": 200,
+        "content_length": 2518,
+        "body_sha256": "20789af15c280428e308a82e851ee3d4d7c03481a0f614c87c3c1f85fa6e680b",
+        "response_headers": {
+          "via": "1.1 Caddy",
+          "content_type": "text/html; charset=utf-8"
+        }
+      },
+      "capacity": {
+        "samples": 10,
+        "status": 200,
+        "content_length": 54,
+        "body_sha256": "1d11694b5f65174ed9f37ad9dd8a482b81ff594ac952cca4862b475ec83909f2",
+        "body": {
+          "max_active": 10,
+          "warm": 0,
+          "active": 0,
+          "available": true
+        }
+      }
+    }
+  },
+  "failure_timeline": {
+    "route_patch_received_utc": "2026-07-16T04:17:31.779700Z",
+    "route_patch": {
+      "method": "PATCH",
+      "admin_uri": "/config/apps/http/servers/srv0/routes",
+      "remote_ip": "127.0.0.1"
+    },
+    "backend_manual_stop_utc": "2026-07-16T04:18:02.442183Z",
+    "docker_restart_decision_utc": "2026-07-16T04:18:02.454499Z",
+    "docker_restart_decision": {
+      "message": "ShouldRestart failed, container will not be restarted",
+      "error": "restart canceled",
+      "exit_status": 137,
+      "exec_duration": "5m17.709587886s",
+      "has_been_manually_stopped": true,
+      "restart_count_at_event": 0
+    },
+    "proxy_errors": {
+      "error": "dial tcp 192.168.68.54:8080: connect: connection refused",
+      "count": 61,
+      "first_utc": "2026-07-16T04:18:02.665811Z",
+      "last_utc": "2026-07-16T04:20:26.662985Z",
+      "duration_seconds": 143.997174,
+      "by_path": [
+        {
+          "path": "/try",
+          "count": 60,
+          "first_utc": "2026-07-16T04:18:02.665811Z",
+          "last_utc": "2026-07-16T04:20:26.662985Z"
+        },
+        {
+          "path": "/api/public/capacity",
+          "count": 1,
+          "first_utc": "2026-07-16T04:19:04.434621Z",
+          "last_utc": "2026-07-16T04:19:04.434621Z"
+        }
+      ]
+    },
+    "current_container_started_utc": "2026-07-16T04:20:26.839909Z",
+    "current_container_restart_count": 1,
+    "causal_finding": "The first proxy refusal followed the proven manual stop by 0.224 seconds. The last refusal preceded the current container start by 0.177 seconds. Public routing was not withdrawn or health-gated while the sole upstream was unavailable. The reason for the additional immediate restart at recovery is not observable: the container emitted no bounded application logs."
+  },
+  "atomicsoul_caddy": {
+    "host": {
+      "hostname": "atomicsoul",
+      "private_ip": "192.168.68.78"
+    },
+    "container": {
+      "name": "proxy-caddy-1",
+      "id": "07d2becdc841a5ac091fbf6c440e49f6231efe0f4c3244d890f68dd8ef01692a",
+      "image_ref": "caddy:2-alpine",
+      "image_id": "sha256:818bec5261db8072f732f941ed335d7f027b1657230c0f62479a4398683e911f",
+      "started_at": "2026-07-13T15:49:10.263346Z",
+      "restart_count": 0,
+      "restart_policy": "unless-stopped",
+      "command": [
+        "caddy",
+        "run",
+        "--config",
+        "/etc/caddy/Caddyfile",
+        "--adapter",
+        "caddyfile"
+      ]
+    },
+    "live_config": {
+      "root_etag": "\"/config/ ae3d2633649b120e\"",
+      "sha256": "58dd8068a1ccdaaee56cdfa4d9a498b9d471d0c34da3aef73fc49e18f7394279",
+      "routes": [
+        {
+          "id": "jain-web-try",
+          "index": 6,
+          "match": "host=www.neverhuman.org,path=/try",
+          "upstream": "192.168.68.54:8080",
+          "etag": "\"/config/apps/http/servers/srv0/routes/6 8731719f5bcb6c5c\""
+        },
+        {
+          "id": "jain-web-api-public",
+          "index": 7,
+          "match": "host=www.neverhuman.org,path=/api/public/*",
+          "upstream": "192.168.68.54:8080",
+          "etag": "\"/config/apps/http/servers/srv0/routes/7 56686f5cbc3eaa84\""
+        },
+        {
+          "id": "jain-web-live-slots",
+          "index": 8,
+          "match": "host=www.neverhuman.org,path_regexp=^/live/g([0-9]{2})(/.*)?$",
+          "upstream": "192.168.68.54:8080",
+          "etag": "\"/config/apps/http/servers/srv0/routes/8 f535b42eed832aba\""
+        }
+      ],
+      "fallback": "www.neverhuman.org -> jain-landing:80"
+    },
+    "persisted_config": {
+      "path": "/home/ubuntu/NHT/Proxy/Caddyfile",
+      "mounted_read_only_at": "/etc/caddy/Caddyfile",
+      "sha256": "1c1541069702fedd4a633db73abc2f05da2d47acb49b91d8f0a911a936739444",
+      "mode": "0644",
+      "owner": "ubuntu:ubuntu",
+      "size_bytes": 2368,
+      "mtime": "2026-07-06T23:07:08.680489-06:00",
+      "www_route": "www.neverhuman.org -> jain-landing:80",
+      "contains_try_api_live_routes": false
+    },
+    "durability_finding": "The running Caddy command explicitly loads /etc/caddy/Caddyfile. The approved /try, /api/public/*, and /live/gNN/* routes exist in live admin state but not in that file; a container restart or file-based reload therefore does not have proof that these routes survive or are replayed safely."
+  },
+  "xbabe3_backend": {
+    "host": {
+      "hostname": "xbabe3",
+      "private_ip": "192.168.68.54",
+      "observed_uptime": "3 days 5 hours 18 minutes"
+    },
+    "listener": {
+      "addresses": [
+        "0.0.0.0:8080",
+        "[::]:8080"
+      ],
+      "owner": "docker-proxy"
+    },
+    "container": {
+      "name": "jain-web-control",
+      "id": "2fa014b56481504a59fecc7528f13a896a5b71ed31344f31ce25dc6377415b4b",
+      "created_at": "2026-07-16T04:12:44.661505Z",
+      "started_at": "2026-07-16T04:20:26.839909Z",
+      "status": "running",
+      "health": "healthy",
+      "restart_count": 1,
+      "restart_policy": "unless-stopped",
+      "image_ref": "image.local/jain/web-control:build",
+      "image_id": "sha256:388e20bc5ea98ab7f689739c2f8fefbcb25a9b972b388b28635cb2a33d68b069",
+      "repo_digest": "image.local/jain/web-control@sha256:388e20bc5ea98ab7f689739c2f8fefbcb25a9b972b388b28635cb2a33d68b069",
+      "image_created_at": "2026-07-16T02:04:14Z",
+      "binary_path": "/jain-web-control",
+      "binary_sha256": "be15c969cd241d4af80f7d50785196eb382fcb3889c09e12c6ee0f54180e0271",
+      "binary_size_bytes": 1762152,
+      "user": "65534:65534",
+      "read_only_rootfs": false,
+      "cap_drop": [],
+      "security_opt": [],
+      "memory_limit_bytes": 0,
+      "nano_cpus": 0,
+      "mounts": [],
+      "source_or_release_labels": {},
+      "command": [
+        "/jain-web-control",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8080"
+      ],
+      "healthcheck": "/jain-web-control --probe http://127.0.0.1:8080/health"
+    },
+    "endpoint_readback": {
+      "from_xbabe3_loopback": {
+        "/health": "200 body=ok sha256=2689367b205c16ce32ed4200942b8b8b1e262dfc70d9bc9fbc77c49699a4f1df",
+        "/readiness": "404 empty-body",
+        "/try": "200 bytes=2518 sha256=20789af15c280428e308a82e851ee3d4d7c03481a0f614c87c3c1f85fa6e680b",
+        "/api/public/capacity": "200 body={max_active:10,warm:0,active:0,available:true} sha256=1d11694b5f65174ed9f37ad9dd8a482b81ff594ac952cca4862b475ec83909f2"
+      },
+      "from_atomicsoul_to_192_168_68_54_8080": {
+        "/health": "200 body=ok",
+        "/readiness": "404 empty-body",
+        "/try": "200 bytes=2518",
+        "/api/public/capacity": "200 body={max_active:10,warm:0,active:0,available:true}"
+      }
+    }
+  },
+  "source_and_artifact_binding": {
+    "protected_main": {
+      "forge_ref": "refs/heads/main",
+      "commit": "6adcda48e5711dcf5934934236be09fcc959ff10"
+    },
+    "current_web_control_feature_ref": {
+      "forge_ref": "refs/heads/claude/web-control-20260715",
+      "commit": "d505b6ccf208a36b24ab6f2ad66dab56329ea45d",
+      "tree": "b7b98cff84618c39a285a6655ddfb433e9ed39e8",
+      "committed_at": "2026-07-16T03:22:47Z",
+      "parent": "4dbe8614a025d880f9154439378e934f32e0979c",
+      "subject": "style: cargo fmt over web-control crate"
+    },
+    "binding_result": "UNPROVEN",
+    "reason": "The deployed image has no OCI source, revision, tree, release, SBOM, provenance, or configuration labels. It uses the mutable :build reference and cannot be cryptographically tied to protected main or the current feature head. The production image must be rebuilt once from the protected merged/tagged SHA, published by digest, and bound in CloudReleaseSpecV1 before qualification."
+  },
+  "adjacent_runtime_readback": {
+    "guestd_systemd_unit_present": false,
+    "guestd_process_present": false,
+    "guest_containers_g01_through_g10_present": false,
+    "scq_gateway_systemd_unit_present": false,
+    "scq_gateway_process_present": false,
+    "tcp_7443_listener_present": false,
+    "tcp_7444_listener_present": false,
+    "scqd_uds": "/run/jain-smartcluster/scqd.sock",
+    "scqd_service": {
+      "active": true,
+      "enabled": true,
+      "restart": "on-failure",
+      "restart_delay": "2s",
+      "watchdog_usec": 0,
+      "exec_start": "/usr/local/bin/scqd-launch.sh",
+      "user": "root",
+      "no_new_privileges": false
+    }
+  },
+  "blockers": [
+    {
+      "id": "WEB-502-01",
+      "severity": "P0",
+      "status": "OPEN",
+      "blocker": "The public route remained active while its sole upstream was intentionally stopped, producing 61 proven connection-refused failures. No admission-close, maintenance response, health-gated route withdrawal, or CAS rollback was used."
+    },
+    {
+      "id": "WEB-502-02",
+      "severity": "P0",
+      "status": "OPEN",
+      "blocker": "The deployed image is an unlabeled mutable local build and is not cryptographically bound to a protected merged/tagged source SHA, SBOM, provenance, scan set, or CloudReleaseSpecV1."
+    },
+    {
+      "id": "WEB-502-03",
+      "severity": "P0",
+      "status": "OPEN",
+      "blocker": "The three public Jain routes are absent from the Caddyfile that the running container loads. Restart/reload durability and replay/CAS behavior are not qualified."
+    },
+    {
+      "id": "WEB-502-04",
+      "severity": "P0",
+      "status": "OPEN",
+      "blocker": "The backend has a liveness endpoint but /readiness returns 404. Route activation was not held until a distinct readiness contract passed from both xbabe3 and AtomicSoul."
+    },
+    {
+      "id": "WEB-502-05",
+      "severity": "P0",
+      "status": "OPEN",
+      "blocker": "Capacity says max_active=10 but warm=0. No guestd service/process and no g01-g10 guest containers exist, so the required three-warm/ten-maximum real Docker lifecycle and eleventh-lease behavior are unproven."
+    },
+    {
+      "id": "WEB-502-06",
+      "severity": "P0",
+      "status": "OPEN",
+      "blocker": "The Web container does not meet the production containment contract: rootfs is writable, capabilities are not explicitly dropped, no-new-privileges is absent, and CPU/memory limits are unset."
+    },
+    {
+      "id": "WEB-502-07",
+      "severity": "P0",
+      "status": "OPEN",
+      "blocker": "The SmartCluster production path is incomplete on xbabe3: no scq-gateway or :7443 listener, no node-v1.3 :7444 listener, and scqd still starts as root through a shell launcher without watchdog."
+    },
+    {
+      "id": "WEB-502-08",
+      "severity": "P0",
+      "status": "OPEN",
+      "blocker": "No unchanged-digest public-path qualification receipt covers restart recovery, ten concurrent guests, bounded eleventh capacity, exact cockpit commands, WebSocket/live routes, CPU/GPU acquire-cancel-release, network partition, rollback, and the required 24-hour soak."
+    }
+  ],
+  "smallest_owner_safe_fix_and_qualification_sequence": [
+    "Keep or CAS-remove the public Jain routes before any deliberate backend stop; do not repeat a stop while traffic still targets the sole upstream.",
+    "Protected-land the Web control, guestd, guest image, gateway, and deployment changes through exact-head required CI and independent approval. Do not qualify an unmerged feature checkout.",
+    "Build once from the exact merged/tagged SHAs. Publish immutable image digests with source revision/tree labels, SBOM, provenance, vulnerability/license scan receipts, configuration hash, and CloudReleaseSpecV1 binding.",
+    "Stage xbabe3 unrouted. Start host-managed guestd as sole slot authority, g01-g10 with three warm, the Web control service, scq-gateway mTLS :7443, node edge :7444, and Rust scqd-supervisor/scqd UDS. Apply the required container and systemd containment controls.",
+    "Require distinct liveness and readiness. From xbabe3 and AtomicSoul, prove Web readiness, capacity warm=3/max=10, guestd readiness/WAL epoch, gateway mTLS, scqd CPU/GPU capacity, and exact digest/config readback before touching Caddy.",
+    "Make approved route state restart-durable, or implement a reviewed boot-time CAS replay bound to the expected root ETag. Preserve stable route IDs. Dry-run the patch and use compare-and-swap against the current expected Caddy ETag.",
+    "CAS-add routes only after unrouted readiness passes. Immediately read back the root ETag/config hash and route IDs, then verify public /try, /api/public/capacity, and epoch-bound /live/gNN routes.",
+    "Exercise individual Web, guest, guestd, gateway, scqd, Docker, and host restarts. During every deliberate outage, close admission and prove bounded fail-closed behavior without public 502s, duplicate leases, stale epochs, cross-guest state, or CPU fallback for GPU-required work.",
+    "Prove exact /start, /next, and /stop parsing; ten isolated concurrent leases; bounded eleventh response; CPU and RTX 3090 allocate-run-cancel-release; AtomicSoul-xbabe3 partition recovery; and CAS rollback to 7.0.6.",
+    "Run the unchanged-digest 24-hour canary soak. Any image, binary, configuration, certificate, or Caddy change resets the soak. Promote only the same digests after two owner signatures over the exact release specification and expected Caddy ETag."
+  ]
+}

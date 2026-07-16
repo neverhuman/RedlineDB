@@ -21,8 +21,8 @@ That single resumable command reads the canonical manifest, runs Redline and
 every selected Jain repository from detached exact commits in rollout-wave
 order, binds `PENDING` identities only from clean reviewed forge `main`, applies
 only manifest-bound compare-and-swap tags, and finishes with the
-AtomicSoul 8.0.0 dry run. It records every result under
-`docs/release-evidence/8.0.0/orchestrator/` and stops on dirty work, missing
+AtomicSoul 8.0.1 dry run. It records every result under
+`docs/release-evidence/8.0.1/orchestrator/` and stops on dirty work, missing
 review identities, failed gates, or host capability blockers. Use
 `./release-candidate.sh --plan` for a no-execution inventory.
 
@@ -45,7 +45,7 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
 - `cargo run --locked -- validate-local-jeryu`: local-source policy validator.
 - `ops/ci/split-host-ci.sh`: detached local Jeryu required-check worker invoked by the Rust fleet runner.
 - `docs/local-jeryu-forge-agent-workflow.md`: PR and status workflow.
-- `docs/release-runbook.md`: canonical v8.0.0 release, SmartCluster, Redline,
+- `docs/release-runbook.md`: canonical v8.0.1 release, SmartCluster, Redline,
   artifact, canary, promotion, and rollback workflow.
 
 SmartCluster is managed as required infrastructure under the declared

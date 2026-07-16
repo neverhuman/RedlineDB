@@ -1,0 +1,118 @@
+{
+  "error": "release Cargo command failed: build-feature-set-1",
+  "executed": [
+    {
+      "args": [
+        "build",
+        "--locked",
+        "--release",
+        "--workspace",
+        "--no-default-features",
+        "--features",
+        "feat-core/ci-smoke,feat-core/catboost,feat-core/xgboost,feat-core/lightgbm,feat-core/jable,feat-core/jable_required_smoke,feat-core/starforge-cpu,feat-core/hyperion-cpu,feat-core/jope,feat-core/invention-gpu",
+        "--all-targets"
+      ],
+      "exit_code": 101,
+      "label": "build-feature-set-1",
+      "program": "cargo",
+      "status": "fail"
+    }
+  ],
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "run-release-cargo-commands",
+  "policy": {
+    "commands": [
+      {
+        "args": [
+          "build",
+          "--locked",
+          "--release",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "feat-core/ci-smoke,feat-core/catboost,feat-core/xgboost,feat-core/lightgbm,feat-core/jable,feat-core/jable_required_smoke,feat-core/starforge-cpu,feat-core/hyperion-cpu,feat-core/jope,feat-core/invention-gpu",
+          "--all-targets"
+        ],
+        "label": "build-feature-set-1",
+        "program": "cargo"
+      },
+      {
+        "args": [
+          "test",
+          "--locked",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "feat-core/ci-smoke,feat-core/catboost,feat-core/xgboost,feat-core/lightgbm,feat-core/jable,feat-core/jable_required_smoke,feat-core/starforge-cpu,feat-core/hyperion-cpu,feat-core/jope,feat-core/invention-gpu",
+          "--all-targets"
+        ],
+        "label": "test-feature-set-1",
+        "program": "cargo"
+      },
+      {
+        "args": [
+          "build",
+          "--locked",
+          "--release",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "feat-core/ci-smoke,feat-core/catboost,feat-core/xgboost,feat-core/lightgbm,feat-core/jable,feat-core/jable_required_smoke,feat-core/starforge-cpu,feat-core/starforge-cuda,feat-core/hyperion-cpu,feat-core/hyperion-cuda,feat-core/jope",
+          "--all-targets"
+        ],
+        "label": "build-feature-set-2",
+        "program": "cargo"
+      },
+      {
+        "args": [
+          "test",
+          "--locked",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "feat-core/ci-smoke,feat-core/catboost,feat-core/xgboost,feat-core/lightgbm,feat-core/jable,feat-core/jable_required_smoke,feat-core/starforge-cpu,feat-core/starforge-cuda,feat-core/hyperion-cpu,feat-core/hyperion-cuda,feat-core/jope",
+          "--all-targets"
+        ],
+        "label": "test-feature-set-2",
+        "program": "cargo"
+      }
+    ],
+    "mode": "feature-matrix",
+    "release_feature_sets": [
+      [
+        "ci-smoke",
+        "catboost",
+        "xgboost",
+        "lightgbm",
+        "jable",
+        "jable_required_smoke",
+        "starforge-cpu",
+        "hyperion-cpu",
+        "jope",
+        "invention-gpu"
+      ],
+      [
+        "ci-smoke",
+        "catboost",
+        "xgboost",
+        "lightgbm",
+        "jable",
+        "jable_required_smoke",
+        "starforge-cpu",
+        "starforge-cuda",
+        "hyperion-cpu",
+        "hyperion-cuda",
+        "jope"
+      ]
+    ],
+    "release_package": "feat-core",
+    "repo": "jain-core",
+    "schema_version": "jain.split.release-cargo-commands/v1"
+  },
+  "repository": "jain-core",
+  "schema_version": "jain.release-cargo-execution/v1",
+  "status": "fail",
+  "timestamp_unix": 1784177354,
+  "working_directory": "/tmp/split-host-ci.SW21U1/jain-core"
+}

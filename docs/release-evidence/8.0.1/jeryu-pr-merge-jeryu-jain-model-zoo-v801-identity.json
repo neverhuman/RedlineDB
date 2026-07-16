@@ -1,0 +1,14 @@
+{
+  "error": "local Jeryu request failed: curl: (28) Operation timed out after 15002 milliseconds with 0 bytes received",
+  "mode": "apply",
+  "operation": "jeryu-local pr-merge",
+  "repository": "jeryu/jain-model-zoo",
+  "request": {
+    "body": {},
+    "method": "PUT",
+    "path": "/repos/jeryu/jain-model-zoo/pulls/6/merge"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "fail",
+  "timestamp_unix": 1784177241
+}

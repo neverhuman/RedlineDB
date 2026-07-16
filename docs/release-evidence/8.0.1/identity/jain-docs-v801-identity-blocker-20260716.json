@@ -1,0 +1,98 @@
+{
+  "schema_version": "jain.split.identity-blocker/v1",
+  "generated_at_utc": "2026-07-16T04:45:09Z",
+  "status": "blocked",
+  "repo": "jeryu/jain-docs",
+  "scope": "8.0.1 repository-local release identity",
+  "decision": "do_not_create_duplicate_branch_or_pr",
+  "canonical_checkout": {
+    "path": "/home/ubuntu/jain-split/jain-docs",
+    "branch": "main",
+    "head": "b0245456d73d99a6698db053bf49300d6bbbac12",
+    "tree": "ba0e86b3e45b21a406969a6e8a859279ad6abb29",
+    "forge_main": "b0245456d73d99a6698db053bf49300d6bbbac12",
+    "ahead": 0,
+    "behind": 0,
+    "dirty": true,
+    "untracked_paths": [],
+    "dirty_paths": [
+      "PRODUCT_VERSION",
+      "VERSION",
+      "agent/boundaries.toml",
+      "agent/standard-version.toml",
+      "ops/ci/artifact_support.sh",
+      "ops/ci/required.sh",
+      "schemas/docs-artifact.schema.json"
+    ],
+    "dirty_diff_stat": "9 insertions, 9 deletions across 7 paths",
+    "dirty_binary_diff_sha256": "dbce707a07b06e86f4173dedf50f92feb27f8a1223513dad0bb4729ef426939d",
+    "dirty_path_list_sha256": "4dda302ee054e44714da264fd6c8ff85c099acc3d9dbe0c58f4610f1cefc7025"
+  },
+  "merged_main_identity_readback": {
+    "PRODUCT_VERSION": "8.0.0",
+    "VERSION": "jain-docs-v8.0.0-split.1",
+    "agent_boundaries_stack_version": "8.0.0",
+    "agent_standard_version": "jain-docs-v8.0.0-split.1",
+    "accepted_as_8_0_1": false
+  },
+  "immutable_tag_readback": {
+    "tag": "jain-docs-v8.0.1-split.0",
+    "commit": "b0245456d73d99a6698db053bf49300d6bbbac12",
+    "commit_PRODUCT_VERSION": "8.0.0",
+    "commit_VERSION": "jain-docs-v8.0.0-split.1",
+    "valid_8_0_1_identity": false,
+    "remediation": "never move split.0; cut jain-docs-v8.0.1-split.1 from the governed merged 8.0.1 identity commit"
+  },
+  "existing_forge_work": {
+    "merged_pr_10": {
+      "state": "closed",
+      "merged": true,
+      "head": "b0245456d73d99a6698db053bf49300d6bbbac12",
+      "title": "manual: GPU image is GPU-only; ch6 pull/dump + port env reality",
+      "identity_fix": false
+    },
+    "open_pr_11": {
+      "state": "open",
+      "draft": false,
+      "base": "b0245456d73d99a6698db053bf49300d6bbbac12",
+      "head_branch": "claude/docs-v801-version-sweep",
+      "head": "1002b27254f1c7b72ef239c3e21950dc38df3815",
+      "title": "release: v8.0.1 product-version sweep (PRODUCT_VERSION, CI assertions, artifact schema)",
+      "mergeable_state": "blocked",
+      "checks": [
+        {
+          "name": "jankurai/proof",
+          "status": "completed",
+          "conclusion": "failure",
+          "completed_at": "2026-07-16T04:07:39.989380997Z"
+        }
+      ],
+      "required_check_present": false
+    }
+  },
+  "blockers": [
+    "The canonical primary checkout is dirty with another owner's seven-path 8.0.1 version sweep, so it is not safe to branch or edit.",
+    "An existing open identity PR (#11) already owns the same bounded lane; creating another branch or PR would duplicate and conflict with it.",
+    "Protected main and immutable v8.0.1-split.0 still contain 8.0.0 identity and cannot be accepted as 8.0.1.",
+    "PR #11 currently has jankurai/proof=failure and no jain-docs/required check, so it is not merge-ready."
+  ],
+  "next_owner_actions": [
+    "Obtain a stopped-head handoff for the dirty canonical checkout and reconcile it with PR #11 without discarding either copy.",
+    "Repair PR #11's exact-head proof failure, run and read back jain-docs/required after the shared heavy-CI lane is free, and obtain independent approval.",
+    "Protected fast-forward merge PR #11 only after all governed checks pass.",
+    "Cut the next unused immutable corrective tag jain-docs-v8.0.1-split.1 and bind its merged commit and checksum through the authority lifecycle."
+  ],
+  "actions_not_performed": [
+    "source edit",
+    "branch creation",
+    "fetch",
+    "push",
+    "PR creation",
+    "host CI",
+    "approval",
+    "merge",
+    "tag",
+    "authority mutation",
+    "worktree creation"
+  ]
+}

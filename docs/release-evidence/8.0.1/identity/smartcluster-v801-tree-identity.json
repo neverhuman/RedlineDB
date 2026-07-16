@@ -1,0 +1,11 @@
+{
+  "commit": "c28c5c8348ec58b39cde0e8d510f26fec3cbfb06",
+  "commit_input": "c28c5c8348ec58b39cde0e8d510f26fec3cbfb06",
+  "mode": "dry-run",
+  "operation": "release-tree-identity",
+  "release_checksum_sha256": "e706b2c6fd097bf5057619807a63c3ae398684fc0bfab5c3928233502a658eac",
+  "repository": "../jain-smartcluster",
+  "schema_version": "jain.release-tree-identity/v1",
+  "status": "pass",
+  "timestamp_unix": 1784177642
+}

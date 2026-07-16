@@ -106,7 +106,7 @@ release-preflight:
   cargo run --locked --quiet -- release-preflight --manifest repos.manifest.toml --json target/release-preflight.json
 
 release-snapshot:
-  cargo run --locked --quiet -- release-snapshot --manifest repos.manifest.toml --json docs/release-evidence/8.0.0/release-snapshot.json --apply
+  cargo run --locked --quiet -- release-snapshot --manifest repos.manifest.toml --json docs/release-evidence/8.0.1/release-snapshot.json --apply
 
 release-ci:
   ./ops/ci/required.sh
@@ -122,20 +122,20 @@ release-plan:
 release:
   ./release-candidate.sh
 
-release-artifacts version="8.0.0":
+release-artifacts version="8.0.1":
   ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="{{version}}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- build-local --version "{{version}}" --gate-dir "target/release-evidence/{{version}}"
 
-release-canary-dry-run version="8.0.0":
+release-canary-dry-run version="8.0.1":
   ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="{{version}}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- canary-e2e --version "{{version}}" --slot jain-a --dry-run --gate-dir "target/release-evidence/{{version}}"
 
-release-promote-dry-run digest version="8.0.0":
+release-promote-dry-run digest version="8.0.1":
   ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="{{version}}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- promote-prod --version "{{version}}" --digest "{{digest}}" --dry-run --gate-dir "target/release-evidence/{{version}}"
 
 release-rollback-dry-run to="7.0.6":
-  ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION=8.0.0 cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- rollback --to "{{to}}" --dry-run
+  ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION=8.0.1 cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- rollback --to "{{to}}" --dry-run
 
 release-status:
-  cargo run --locked --quiet -- release-status --manifest repos.manifest.toml --json docs/release-evidence/8.0.0/release-status.json
+  cargo run --locked --quiet -- release-status --manifest repos.manifest.toml --json docs/release-evidence/8.0.1/release-status.json
 
 refresh-authored:
   cargo run --locked --quiet -- refresh-ci-contract --authored
@@ -156,7 +156,7 @@ refresh-mirrors-apply:
   cargo run --locked --quiet -- refresh-bare-mirrors --manifest repos.manifest.toml --apply
 
 atomicsoul-dry-run:
-  cd ../jain-deploy && ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION=8.0.0 ./scripts/atomicsoul-dry-run.sh --evidence-dir ../jain-split-ops/docs/release-evidence/8.0.0/atomicsoul
+  cd ../jain-deploy && ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION=8.0.1 ./scripts/atomicsoul-dry-run.sh --evidence-dir ../jain-split-ops/docs/release-evidence/8.0.1/atomicsoul
 
 profile:
   printf '%s\n' "split-ops-control-plane"

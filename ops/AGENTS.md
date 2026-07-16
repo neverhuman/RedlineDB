@@ -4,6 +4,10 @@ The `ops/` tree is the executable control plane for the split family. Before
 editing host CI, materialization, or release scripts, read `README.md`,
 `SPLIT.md`, and `docs/local-jeryu-forge-agent-workflow.md`.
 
+Do not create Git worktrees anywhere. Host CI uses an unregistered standalone
+exact-SHA checkout, and any sibling checkout used by an integration lane must
+be an independent clone with no symlinked paths.
+
 All generated operational sources must use local Jeryu:
 `http://127.0.0.1:8787/git/jeryu/<repo>.git`.
 

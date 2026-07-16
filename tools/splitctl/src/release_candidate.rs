@@ -10,7 +10,9 @@ use std::{
     time::{Instant, SystemTime, UNIX_EPOCH},
 };
 
-const RELEASE_VERSION: &str = "8.0.0";
+const RELEASE_VERSION: &str = "8.0.1";
+const FAMILY_SOURCE_VERSION: &str = "8.0.0";
+const FAMILY_SOURCE_TAG_SERIES: &str = "v8.0.0-split.N";
 const TOOL_VERSION: &str = "splitctl 0.1.0";
 const PENDING: &str = "PENDING";
 const DEFAULT_MAX_AGE_HOURS: u64 = 24;
@@ -459,7 +461,9 @@ fn parse_options(args: Vec<String>) -> Result<Options, Box<dyn std::error::Error
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut options = Options {
         manifest: root.join("repos.manifest.toml"),
-        evidence_dir: root.join("docs/release-evidence/8.0.0/orchestrator"),
+        evidence_dir: root.join(format!(
+            "docs/release-evidence/{RELEASE_VERSION}/orchestrator"
+        )),
         plan: false,
         force: false,
         apply_tags: true,
@@ -539,12 +543,16 @@ fn reject_unsafe_environment() -> Result<(), Box<dyn std::error::Error>> {
 fn validate_candidate_header(manifest: &toml::Value) -> Result<(), Box<dyn std::error::Error>> {
     let string = |key: &str| manifest.get(key).and_then(toml::Value::as_str);
     if string("release_version") != Some(RELEASE_VERSION)
+        || string("family_source_version") != Some(FAMILY_SOURCE_VERSION)
+        || string("family_source_tag_series") != Some("v8.0.0-split.N")
+        || string("dependency_tag_suffix") != Some("v8.0.1-split.0")
         || string("status") != Some("candidate")
         || manifest.get("formal_ga").and_then(toml::Value::as_bool) != Some(false)
         || string("sagemaker") != Some("N/A")
     {
         return Err(
-            "manifest must declare release 8.0.0, candidate, formal_ga=false, sagemaker=N/A".into(),
+            format!("manifest must declare product {RELEASE_VERSION}, source {FAMILY_SOURCE_VERSION}/{FAMILY_SOURCE_TAG_SERIES}, dependency v8.0.1-split.0, candidate, formal_ga=false, sagemaker=N/A")
+            .into(),
         );
     }
     Ok(())
@@ -915,8 +923,9 @@ fn rerun_command(options: &Options) -> Vec<String> {
         ]);
     }
     if options.evidence_dir
-        != PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("docs/release-evidence/8.0.0/orchestrator")
+        != PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(format!(
+            "docs/release-evidence/{RELEASE_VERSION}/orchestrator"
+        ))
     {
         command.extend([
             "--evidence-dir".to_owned(),
@@ -1304,7 +1313,8 @@ fn release_relevant_dirty_paths(repo: &FleetRepo, porcelain: &str) -> Vec<String
                 .unwrap_or(path)
         })
         .filter(|path| {
-            repo.name != "jain-split-ops" || !path.starts_with("docs/release-evidence/8.0.0/")
+            repo.name != "jain-split-ops"
+                || !path.starts_with(format!("docs/release-evidence/{RELEASE_VERSION}/").as_str())
         })
         .map(str::to_owned)
         .collect()
@@ -2269,7 +2279,10 @@ mod tests {
     #[test]
     fn candidate_header_is_fail_closed() {
         let valid: toml::Value = r#"
-release_version = "8.0.0"
+release_version = "8.0.1"
+family_source_version = "8.0.0"
+family_source_tag_series = "v8.0.0-split.N"
+dependency_tag_suffix = "v8.0.1-split.0"
 status = "candidate"
 formal_ga = false
 sagemaker = "N/A"
@@ -2278,7 +2291,7 @@ sagemaker = "N/A"
         .unwrap();
         validate_candidate_header(&valid).unwrap();
         let invalid: toml::Value = r#"
-release_version = "8.0.0"
+release_version = "8.0.1"
 status = "ga"
 formal_ga = true
 sagemaker = "passed"
@@ -2396,7 +2409,7 @@ cross_repo_deps = ["typo"]
         assert_eq!(
             release_relevant_dirty_paths(
                 &repo,
-                "?? docs/release-evidence/8.0.0/orchestrator/run.json\n M tools/splitctl/src/main.rs\n"
+                "?? docs/release-evidence/8.0.1/orchestrator/run.json\n M tools/splitctl/src/main.rs\n"
             ),
             vec!["tools/splitctl/src/main.rs"]
         );
@@ -2405,9 +2418,9 @@ cross_repo_deps = ["typo"]
         assert_eq!(
             release_relevant_dirty_paths(
                 &member,
-                "?? docs/release-evidence/8.0.0/orchestrator/run.json\n"
+                "?? docs/release-evidence/8.0.1/orchestrator/run.json\n"
             ),
-            vec!["docs/release-evidence/8.0.0/orchestrator/run.json"]
+            vec!["docs/release-evidence/8.0.1/orchestrator/run.json"]
         );
     }
 }

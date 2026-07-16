@@ -1,0 +1,11 @@
+{
+  "commit": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+  "commit_input": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+  "mode": "dry-run",
+  "operation": "release-tree-identity",
+  "release_checksum_sha256": "68ad55ea6e8f6c38d6ede4caf3623aba26e8eb416dcbfb5ecf44748e86517961",
+  "repository": "/home/ubuntu/jain-split/jain-catboost",
+  "schema_version": "jain.release-tree-identity/v1",
+  "status": "pass",
+  "timestamp_unix": 1784176107
+}

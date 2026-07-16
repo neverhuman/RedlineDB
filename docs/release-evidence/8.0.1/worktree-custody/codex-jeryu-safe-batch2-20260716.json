@@ -1,0 +1,147 @@
+{
+  "schema": "jain.worktree-custody/v1",
+  "status": "pass",
+  "claim_token": "codex-zero-worktree-jeryu-safe-batch2-20260716T0415Z",
+  "owner": "Codex",
+  "completed_at_utc": "2026-07-16T04:18:37Z",
+  "release_scope": {
+    "kind": "version-neutral workspace custody",
+    "current_release_target": "8.0.1",
+    "note": "This cleanup changes no release source, manifest, tag, lock, evidence binding, or runtime."
+  },
+  "policy": {
+    "created_worktree": false,
+    "used_force": false,
+    "ran_worktree_prune": false,
+    "deleted_branch_or_ref": false,
+    "edited_source": false,
+    "touched_ci_forge_release_or_host_state": false,
+    "removal_command": "git -C <canonical-common-repository> worktree remove <path>"
+  },
+  "selection": {
+    "requested_present_inventory": 24,
+    "jeryu_auxiliary_registrations_examined": 13,
+    "selected": 2,
+    "excluded": 11,
+    "exclusion_reasons": [
+      "HEAD was not equal to or an ancestor of live forge main",
+      "checkout was dirty",
+      "named branch was absent from the loopback forge",
+      "checkout contained symlinks",
+      "path was a /tmp CI or evidence sandbox",
+      "path was outside the requested /home/ubuntu/jeryu-split scope"
+    ],
+    "specific_conservative_exclusion": {
+      "path": "/home/ubuntu/jeryu-split/.worktrees/jeryu-core-lfs-download-auth-20260715",
+      "reason": "The clean, symlink-free HEAD equals forge main, but its named branch is absent from the forge, so the exact branch-preservation predicate did not pass."
+    }
+  },
+  "inventory": {
+    "roots": [
+      "/home/ubuntu/jain-split",
+      "/home/ubuntu/jeryu-split",
+      "/home/ubuntu/jankurai",
+      "/tmp"
+    ],
+    "before": {
+      "common_git_dirs_with_auxiliary_entries": 12,
+      "auxiliary_admin_entries": 30,
+      "present": 24,
+      "missing": 6,
+      "jeryu_deploy_auxiliary": 5,
+      "jeryu_release_ops_auxiliary": 3
+    },
+    "after": {
+      "common_git_dirs_with_auxiliary_entries": 13,
+      "auxiliary_admin_entries": 28,
+      "present": 22,
+      "missing": 6,
+      "jeryu_deploy_auxiliary": 4,
+      "jeryu_release_ops_auxiliary": 2
+    },
+    "claimed_exact_delta": {
+      "auxiliary_admin_entries": -2,
+      "present": -2,
+      "missing": 0,
+      "jeryu_auxiliary": -2
+    },
+    "concurrent_external_observation": {
+      "note": "The number of common Git directories with an administrative worktrees directory changed 12 to 13 while total entries changed exactly 30 to 28. Readback showed Redline Core at four entries and a new Redline Web administrative directory with one entry. Both are outside this claim and were untouched; their net entry count was zero, so the exact two-entry Jeryu delta remains attributable to this claim."
+    },
+    "global_zero_worktree_complete": false
+  },
+  "preconditions": {
+    "all_selected_paths_present_and_registered": true,
+    "all_porcelain_statuses_empty": true,
+    "all_binary_diffs_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "internal_symlinks": 0,
+    "inbound_or_broken_symlink_target_matches": 0,
+    "symlink_scan": {
+      "/home/ubuntu/jain-split": 693,
+      "/home/ubuntu/jeryu-split": 127,
+      "/home/ubuntu/jankurai": 17,
+      "/tmp": 2913
+    },
+    "open_fd_records": 0,
+    "process_refs": 0,
+    "proc_symlinks_examined": 7986,
+    "argv_refs": 0,
+    "git_lock_files": 0,
+    "newer_owner_claim_matches": 0,
+    "all_heads_equal_live_forge_main": true
+  },
+  "retired": [
+    {
+      "path": "/home/ubuntu/jeryu-split/jeryu-deploy-check-run-exact-head-20260715",
+      "canonical_repository": "/home/ubuntu/jeryu-split/jeryu-deploy",
+      "origin": "http://127.0.0.1:8787/git/jeryu/jeryu-deploy.git",
+      "branch": "codex/check-run-exact-head-20260715",
+      "head": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "tree": "c6554a4806e7685e55d5036ec4f20213215cfb2d",
+      "forge_branch_head": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "forge_main": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "removed_non_force": true,
+      "path_absent_after": true,
+      "remote_ref_preserved_after": true
+    },
+    {
+      "path": "/home/ubuntu/jeryu-split/.worktrees/jeryu-release-ops",
+      "canonical_repository": "/home/ubuntu/jeryu-split/jeryu-release-ops",
+      "origin": "http://127.0.0.1:8787/git/jeryu/jeryu-release-ops.git",
+      "branch": null,
+      "detached": true,
+      "head": "7048a72be412466647ab1bde69ca9f9db8990374",
+      "tree": "11e40b6cb4ecdee234cf2e442c510d4824f30279",
+      "preserved_by_ref": "refs/heads/main",
+      "forge_main": "7048a72be412466647ab1bde69ca9f9db8990374",
+      "removed_non_force": true,
+      "path_absent_after": true,
+      "remote_ref_preserved_after": true
+    }
+  ],
+  "postconditions": {
+    "both_paths_absent": true,
+    "both_administrative_entries_absent": true,
+    "inbound_or_broken_symlink_target_matches": 0,
+    "symlink_scan": {
+      "/home/ubuntu/jain-split": 693,
+      "/home/ubuntu/jeryu-split": 127,
+      "/home/ubuntu/jankurai": 17,
+      "/tmp": 2940
+    },
+    "jeryu_release_ops_canonical": {
+      "branch": "main",
+      "head": "7048a72be412466647ab1bde69ca9f9db8990374",
+      "forge_main": "7048a72be412466647ab1bde69ca9f9db8990374",
+      "porcelain_entries": 0
+    },
+    "jeryu_deploy_canonical_observation": {
+      "branch": "main",
+      "head": "81a40601fecd2205005d4ac4707545772d51f104",
+      "forge_main": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "porcelain_entries": 26,
+      "note": "This concurrently active canonical checkout was left untouched."
+    }
+  },
+  "acceptance": "The exact two claimed Jeryu worktrees were clean, symlink-free, process-free, lock-free, and preserved by live forge main; each was removed without force. Twenty-eight auxiliary administrative entries remain across the inventoried roots and require separate custody."
+}

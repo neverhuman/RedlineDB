@@ -1,0 +1,28 @@
+Cloning into '/tmp/split-host-ci.cRZztJ/jain-web'...
+HEAD is now at d34ab11 docs: bind the protected Web release gate
+lock_blob=63cbfaacfff7d4a7d8982a25738b80f446fe9397
+name=jain-web
+ref=d34ab1149858d5fdd81d02d66a07d5a9c9a64903
+commit=d34ab1149858d5fdd81d02d66a07d5a9c9a64903
+tree=b5ee5ffd9d18eb95bb3db375f36d32a631b38f1b
+release_checksum_sha256=3652a08d9671233c41ec4365b8a1004b12f2d5b14786be5b613b3f6b0ec66851
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Python boundary ok: no files or runtime invocations
+error: failed to load manifest for workspace member `/tmp/split-host-ci.cRZztJ/jain-web/crates/feat-web`
+referenced by workspace at `/tmp/split-host-ci.cRZztJ/jain-web/Cargo.toml`
+
+Caused by:
+  failed to load manifest for dependency `jain-smartcluster`
+
+Caused by:
+  failed to read `/tmp/split-host-ci.cRZztJ/jain-smartcluster/crates/jain-smartcluster/Cargo.toml`
+
+Caused by:
+  No such file or directory (os error 2)

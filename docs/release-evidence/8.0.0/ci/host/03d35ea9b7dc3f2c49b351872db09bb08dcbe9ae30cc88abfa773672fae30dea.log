@@ -1,0 +1,1478 @@
+Cloning into '/tmp/split-host-ci.roOO0T/jain-web'...
+HEAD is now at 525c8ec ci: exclude the 258s ws_stream backlog test from the fast lane
+lock_blob=794cd886ff955ba286d5b31a47dbc511a54e80d9
+name=jain-web
+ref=525c8ecbbe98dc6b264f259537fdf5d38a00160a
+commit=525c8ecbbe98dc6b264f259537fdf5d38a00160a
+tree=26d50d3447a486a07a6e9abbb1e7eba467158617
+release_checksum_sha256=6e62e296b395378acbcaa06b93097b603afcda7635a2f094f4924477df67cf34
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Python boundary ok: no files or runtime invocations
+check ok: /tmp/split-host-ci.roOO0T/jain-web
+[ci] Redline Jain-family consumer contract and evidence controls
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/redline-core.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/redline-core
+ * [new branch]      claude/redline-split-onboard -> origin/claude/redline-split-onboard
+ * [new branch]      codex/redline-core-proof-routing-complete -> origin/codex/redline-core-proof-routing-complete
+ * [new branch]      codex/redline-core-rust-bench-tools -> origin/codex/redline-core-rust-bench-tools
+ * [new branch]      codex/redline-core-testing-v101-evidence -> origin/codex/redline-core-testing-v101-evidence
+ * [new branch]      codex/v8-redline-core-ci   -> origin/codex/v8-redline-core-ci
+ * [new branch]      main                       -> origin/main
+ * [new ref]         HEAD                       -> origin/HEAD
+ * [new tag]         phase11-fused              -> phase11-fused
+ * [new tag]         redline-core-v4.1.0-jain.0 -> redline-core-v4.1.0-jain.0
+ * [new tag]         redline-core-v4.1.0-jain.1 -> redline-core-v4.1.0-jain.1
+ * [new tag]         redline-core-v4.1.0-jain.2 -> redline-core-v4.1.0-jain.2
+ * [new tag]         redline-core-v4.1.0-jain.3 -> redline-core-v4.1.0-jain.3
+ * [new tag]         redline-core-v4.1.0-jain.4 -> redline-core-v4.1.0-jain.4
+ * [new tag]         v1.0.1                     -> v1.0.1
+ * [new tag]         v1.0.17                    -> v1.0.17
+ * [new tag]         v2.0.5                     -> v2.0.5
+ * [new tag]         v4.0.3                     -> v4.0.3
+ * [new tag]         v4.0.4                     -> v4.0.4
+ * [new tag]         v4.0.5                     -> v4.0.5
+ * [new tag]         v4.0.6                     -> v4.0.6
+ * [new tag]         v4.0.7                     -> v4.0.7
+ * [new tag]         v4.0.8                     -> v4.0.8
+ * [new tag]         v4.0.9                     -> v4.0.9
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded ahash v0.8.12
+  Downloaded arc-swap v1.9.2
+  Downloaded cpufeatures v0.2.17
+  Downloaded quote v1.0.46
+  Downloaded num_cpus v1.17.0
+  Downloaded sha2 v0.10.9
+  Downloaded thiserror v2.0.18
+  Downloaded zmij v1.0.22
+  Downloaded either v1.16.0
+  Downloaded getrandom v0.4.3
+  Downloaded aho-corasick v1.1.4
+  Downloaded ar_archive_writer v0.5.2
+  Downloaded crossbeam-epoch v0.9.20
+  Downloaded bitflags v2.13.0
+  Downloaded recursive v0.1.1
+  Downloaded generic-array v0.14.7
+  Downloaded errno v0.3.14
+  Downloaded block-buffer v0.10.4
+  Downloaded recursive-proc-macro-impl v0.1.1
+  Downloaded crypto-common v0.1.7
+  Downloaded cfg-if v1.0.4
+  Downloaded fastrand v2.4.1
+  Downloaded scopeguard v1.2.0
+  Downloaded crossbeam-deque v0.8.7
+  Downloaded stacker v0.1.24
+  Downloaded version_check v0.9.5
+  Downloaded find-msvc-tools v0.1.9
+  Downloaded lock_api v0.4.14
+  Downloaded shlex v2.0.1
+  Downloaded digest v0.10.7
+  Downloaded thiserror-impl v2.0.18
+  Downloaded parking_lot v0.12.5
+  Downloaded tempfile v3.27.0
+  Downloaded parking_lot_core v0.9.12
+  Downloaded unicode-ident v1.0.24
+  Downloaded smallvec v1.15.2
+  Downloaded getrandom v0.3.4
+  Downloaded log v0.4.33
+  Downloaded rayon-core v1.13.0
+  Downloaded crossbeam-queue v0.3.13
+  Downloaded cc v1.2.67
+  Downloaded serde_derive v1.0.228
+  Downloaded proc-macro2 v1.0.106
+  Downloaded crc32fast v1.5.0
+  Downloaded bumpalo v3.20.3
+  Downloaded typenum v1.20.1
+  Downloaded once_cell v1.21.4
+  Downloaded psm v0.1.31
+  Downloaded crossbeam-utils v0.8.22
+  Downloaded libm v0.2.16
+  Downloaded rayon v1.12.0
+  Downloaded regex v1.13.0
+  Downloaded rustversion v1.0.23
+  Downloaded zerocopy v0.8.54
+  Downloaded syn v2.0.118
+  Downloaded object v0.37.3
+  Downloaded regex-syntax v0.8.11
+  Downloaded rustix v1.1.4
+  Downloaded sqlparser v0.61.0
+  Downloaded regex-automata v0.4.15
+  Downloaded libc v0.2.186
+  Downloaded linux-raw-sys v0.12.1
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling libc v0.2.186
+   Compiling syn v2.0.118
+    Checking cfg-if v1.0.4
+   Compiling version_check v0.9.5
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.9
+   Compiling object v0.37.3
+   Compiling cc v1.2.67
+   Compiling memchr v2.8.3
+   Compiling crossbeam-utils v0.8.22
+    Checking serde_core v1.0.228
+   Compiling serde v1.0.228
+   Compiling ar_archive_writer v0.5.2
+   Compiling serde_derive v1.0.228
+   Compiling psm v0.1.31
+   Compiling generic-array v0.14.7
+    Checking hashbrown v0.17.1
+   Compiling crossbeam-epoch v0.9.20
+    Checking equivalent v1.0.2
+    Checking indexmap v2.14.0
+   Compiling stacker v0.1.24
+   Compiling zmij v1.0.22
+   Compiling zerocopy v0.8.54
+   Compiling rustversion v1.0.23
+   Compiling parking_lot_core v0.9.12
+   Compiling getrandom v0.3.4
+    Checking typenum v1.20.1
+   Compiling crossbeam-deque v0.8.7
+   Compiling ahash v0.8.12
+   Compiling getrandom v0.4.3
+   Compiling serde_json v1.0.150
+   Compiling rustix v1.1.4
+    Checking once_cell v1.21.4
+   Compiling crc32fast v1.5.0
+    Checking smallvec v1.15.2
+    Checking scopeguard v1.2.0
+   Compiling rayon-core v1.13.0
+   Compiling thiserror v2.0.18
+    Checking lock_api v0.4.14
+    Checking aho-corasick v1.1.4
+   Compiling recursive-proc-macro-impl v0.1.1
+   Compiling thiserror-impl v2.0.18
+    Checking itoa v1.0.18
+    Checking regex-syntax v0.8.11
+   Compiling libm v0.2.16
+    Checking linux-raw-sys v0.12.1
+    Checking bitflags v2.13.0
+    Checking regex-automata v0.4.15
+    Checking recursive v0.1.1
+    Checking arc-swap v1.9.2
+    Checking parking_lot v0.12.5
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking crossbeam-queue v0.3.13
+    Checking log v0.4.33
+    Checking either v1.16.0
+    Checking fastrand v2.4.1
+    Checking redlinedb-domain v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking bumpalo v3.20.3
+    Checking redlinedb-kernel v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking tempfile v3.27.0
+    Checking rayon v1.12.0
+    Checking sqlparser v0.61.0
+    Checking digest v0.10.7
+    Checking regex v1.13.0
+    Checking serde_spanned v0.6.9
+    Checking toml_datetime v0.6.11
+    Checking cpufeatures v0.2.17
+    Checking toml_write v0.1.2
+    Checking winnow v0.7.15
+    Checking toml_edit v0.22.27
+    Checking sha2 v0.10.9
+    Checking redlinedb-sql v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking num_cpus v1.17.0
+    Checking redlinedb v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking toml v0.8.23
+    Checking jain-redline-consumer-contract v8.0.0 (/tmp/split-host-ci.roOO0T/jain-web/ops/ci/redline-consumer)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 47.02s
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling crossbeam-utils v0.8.22
+   Compiling serde v1.0.228
+   Compiling memchr v2.8.3
+   Compiling typenum v1.20.1
+   Compiling generic-array v0.14.7
+   Compiling psm v0.1.31
+   Compiling crossbeam-epoch v0.9.20
+   Compiling scopeguard v1.2.0
+   Compiling once_cell v1.21.4
+   Compiling smallvec v1.15.2
+   Compiling parking_lot_core v0.9.12
+   Compiling lock_api v0.4.14
+   Compiling crossbeam-deque v0.8.7
+   Compiling stacker v0.1.24
+   Compiling zerocopy v0.8.54
+   Compiling zmij v1.0.22
+   Compiling getrandom v0.3.4
+   Compiling aho-corasick v1.1.4
+   Compiling regex-syntax v0.8.11
+   Compiling linux-raw-sys v0.12.1
+   Compiling bitflags v2.13.0
+   Compiling rustix v1.1.4
+   Compiling serde_json v1.0.150
+   Compiling regex-automata v0.4.15
+   Compiling recursive v0.1.1
+   Compiling thiserror v2.0.18
+   Compiling arc-swap v1.9.2
+   Compiling ahash v0.8.12
+   Compiling rayon-core v1.13.0
+   Compiling parking_lot v0.12.5
+   Compiling getrandom v0.4.3
+   Compiling crc32fast v1.5.0
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling crossbeam-queue v0.3.13
+   Compiling fastrand v2.4.1
+   Compiling bumpalo v3.20.3
+   Compiling redlinedb-domain v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling log v0.4.33
+   Compiling either v1.16.0
+   Compiling rayon v1.12.0
+   Compiling sqlparser v0.61.0
+   Compiling redlinedb-kernel v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling tempfile v3.27.0
+   Compiling digest v0.10.7
+   Compiling libm v0.2.16
+   Compiling regex v1.13.0
+   Compiling toml_datetime v0.6.11
+   Compiling serde_spanned v0.6.9
+   Compiling cpufeatures v0.2.17
+   Compiling toml_edit v0.22.27
+   Compiling sha2 v0.10.9
+   Compiling redlinedb-sql v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling num_cpus v1.17.0
+   Compiling redlinedb v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling toml v0.8.23
+   Compiling jain-redline-consumer-contract v8.0.0 (/tmp/split-host-ci.roOO0T/jain-web/ops/ci/redline-consumer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 51.42s
+     Running unittests src/lib.rs (/tmp/split-host-ci.roOO0T/cargo-target/debug/deps/jain_redline_consumer_contract-ed9e11d4effb448e)
+
+running 4 tests
+test tests::lowercase_hash_validation_is_exact ... ok
+test tests::release_identity_rejects_floating_or_mismatched_tag ... ok
+test tests::release_identity_uses_declared_revision ... ok
+test tests::release_identity_rejects_half_bound_release ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/validate_jain_release_manifest.rs (/tmp/split-host-ci.roOO0T/cargo-target/debug/deps/validate_jain_release_manifest-264a63eec4bf4020)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/durable_contract.rs (/tmp/split-host-ci.roOO0T/cargo-target/debug/deps/durable_contract-bf4be5bd1ce6a573)
+
+running 1 test
+test jain_model_and_release_state_survives_transaction_checkpoint_and_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.40s
+
+   Doc-tests jain_redline_consumer_contract
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[ci] web Rust required lane: ci-smoke
+    Updating crates.io index
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-battle-gpu
+ * [new branch]      agent/math-split-alignment -> origin/agent/math-split-alignment
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-battle-gpu -> origin/codex/release-7.0.5-battle-gpu
+ * [new branch]      codex/release-7.0.6-battle-gpu-align -> origin/codex/release-7.0.6-battle-gpu-align
+ * [new branch]      codex/v8-split2-corrective-20260713 -> origin/codex/v8-split2-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-battle-gpu-v7.0.1-split.0 -> jain-battle-gpu-v7.0.1-split.0
+ * [new tag]         jain-battle-gpu-v7.0.1-split.1 -> jain-battle-gpu-v7.0.1-split.1
+ * [new tag]         jain-battle-gpu-v7.0.1-split.2 -> jain-battle-gpu-v7.0.1-split.2
+ * [new tag]         jain-battle-gpu-v8.0.0-split.0 -> jain-battle-gpu-v8.0.0-split.0
+ * [new tag]         jain-battle-gpu-v8.0.0-split.1 -> jain-battle-gpu-v8.0.0-split.1
+ * [new tag]         jain-battle-gpu-v8.0.0-split.2 -> jain-battle-gpu-v8.0.0-split.2
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-core.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-core
+ * [new branch]      agent/full-run-manifest  -> origin/agent/full-run-manifest
+ * [new branch]      claude/lime-prime-core-20260713 -> origin/claude/lime-prime-core-20260713
+ * [new branch]      claude/lime-prime-core-v2-20260716 -> origin/claude/lime-prime-core-v2-20260716
+ * [new branch]      claude/web-transport-v2-20260715 -> origin/claude/web-transport-v2-20260715
+ * [new branch]      codex/chimera-starforge-required -> origin/codex/chimera-starforge-required
+ * [new branch]      codex/core-gpu-contract-20260714 -> origin/codex/core-gpu-contract-20260714
+ * [new branch]      codex/core-hyperion-system-bakeoff-20260714 -> origin/codex/core-hyperion-system-bakeoff-20260714
+ * [new branch]      codex/final-v8-release-20260713 -> origin/codex/final-v8-release-20260713
+ * [new branch]      codex/jope-gpu-backend-20260714 -> origin/codex/jope-gpu-backend-20260714
+ * [new branch]      codex/jope-lime-rust-20260713 -> origin/codex/jope-lime-rust-20260713
+ * [new branch]      codex/jope-prime-deadline-20260714 -> origin/codex/jope-prime-deadline-20260714
+ * [new branch]      codex/release-7.0.5-core-no-jope -> origin/codex/release-7.0.5-core-no-jope
+ * [new branch]      codex/release-7.0.6-core-cudarc-features -> origin/codex/release-7.0.6-core-cudarc-features
+ * [new branch]      codex/train-test-eval-core-20260714 -> origin/codex/train-test-eval-core-20260714
+ * [new branch]      codex/train-test-eval-core-pre-main-rebase-20260714 -> origin/codex/train-test-eval-core-pre-main-rebase-20260714
+ * [new branch]      codex/train-test-eval-core-pre-prime-20260714 -> origin/codex/train-test-eval-core-pre-prime-20260714
+ * [new branch]      codex/v8-core-jope-lime-split1-20260713 -> origin/codex/v8-core-jope-lime-split1-20260713
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      codex/wide-features-20260714 -> origin/codex/wide-features-20260714
+ * [new branch]      codex/wq14-native-jope-core-20260714 -> origin/codex/wq14-native-jope-core-20260714
+ * [new branch]      codexb/product-worker-contract-20260715 -> origin/codexb/product-worker-contract-20260715
+ * [new branch]      forkb-w2a                -> origin/forkb-w2a
+ * [new branch]      forkb-wave1              -> origin/forkb-wave1
+ * [new branch]      main                     -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD                     -> origin/HEAD
+ * [new tag]         jain-core-v7.0.1-split.0 -> jain-core-v7.0.1-split.0
+ * [new tag]         jain-core-v7.0.1-split.1 -> jain-core-v7.0.1-split.1
+ * [new tag]         jain-core-v7.0.1-split.2 -> jain-core-v7.0.1-split.2
+ * [new tag]         jain-core-v7.0.1-split.3 -> jain-core-v7.0.1-split.3
+ * [new tag]         jain-core-v7.0.1-split.4 -> jain-core-v7.0.1-split.4
+ * [new tag]         jain-core-v7.0.1-split.5 -> jain-core-v7.0.1-split.5
+ * [new tag]         jain-core-v7.0.1-split.6 -> jain-core-v7.0.1-split.6
+ * [new tag]         jain-core-v7.0.1-split.7 -> jain-core-v7.0.1-split.7
+ * [new tag]         jain-core-v8.0.0-split.0 -> jain-core-v8.0.0-split.0
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-math.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-math
+ * [new branch]      codex/deferred-math-sandbox-followup -> origin/codex/deferred-math-sandbox-followup
+ * [new branch]      codex/evolve-report-ledger -> origin/codex/evolve-report-ledger
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/release-7.0.6-math-evolve-report -> origin/codex/release-7.0.6-math-evolve-report
+ * [new branch]      codex/release-7.0.6-math-sandbox-main -> origin/codex/release-7.0.6-math-sandbox-main
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                     -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD                     -> origin/HEAD
+ * [new tag]         jain-math-v7.0.1-split.0 -> jain-math-v7.0.1-split.0
+ * [new tag]         jain-math-v7.0.1-split.1 -> jain-math-v7.0.1-split.1
+ * [new tag]         jain-math-v7.0.1-split.2 -> jain-math-v7.0.1-split.2
+ * [new tag]         jain-math-v7.0.1-split.3 -> jain-math-v7.0.1-split.3
+ * [new tag]         jain-math-v8.0.0-split.0 -> jain-math-v8.0.0-split.0
+ * [new tag]         jain-math-v8.0.0-split.1 -> jain-math-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-report.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-report
+ * [new branch]      agent/full-run-manifest-deps -> origin/agent/full-run-manifest-deps
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-report-no-jope -> origin/codex/release-7.0.5-report-no-jope
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      forkb-w2a                  -> origin/forkb-w2a
+ * [new branch]      main                       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD                       -> origin/HEAD
+ * [new tag]         jain-report-v7.0.1-split.0 -> jain-report-v7.0.1-split.0
+ * [new tag]         jain-report-v7.0.1-split.1 -> jain-report-v7.0.1-split.1
+ * [new tag]         jain-report-v7.0.1-split.2 -> jain-report-v7.0.1-split.2
+ * [new tag]         jain-report-v7.0.1-split.3 -> jain-report-v7.0.1-split.3
+ * [new tag]         jain-report-v7.0.1-split.4 -> jain-report-v7.0.1-split.4
+ * [new tag]         jain-report-v8.0.0-split.0 -> jain-report-v8.0.0-split.0
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-smartcluster.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-smartcluster
+ * [new branch]      claude/jankurai-shape-20260715 -> origin/claude/jankurai-shape-20260715
+ * [new branch]      codex/atomicsoul-integrated-20260715 -> origin/codex/atomicsoul-integrated-20260715
+ * [new branch]      codex/atomicsoul-minor3-20260715 -> origin/codex/atomicsoul-minor3-20260715
+ * [new branch]      codex/atomicsoul-preemption-20260715 -> origin/codex/atomicsoul-preemption-20260715
+ * [new branch]      codex/atomicsoul-release-integration-20260715 -> origin/codex/atomicsoul-release-integration-20260715
+ * [new branch]      codex/atomicsoul-reserve-20260715 -> origin/codex/atomicsoul-reserve-20260715
+ * [new branch]      codex/atomicsoul-smartcluster-20260715 -> origin/codex/atomicsoul-smartcluster-20260715
+ * [new branch]      codex/five-slot-fabric-20260715 -> origin/codex/five-slot-fabric-20260715
+ * [new branch]      codex/gpu-persistence-baseline-20260714 -> origin/codex/gpu-persistence-baseline-20260714
+ * [new branch]      codex/jope-lime-smartcluster-20260713 -> origin/codex/jope-lime-smartcluster-20260713
+ * [new branch]      codex/max-five-release-integration-20260715 -> origin/codex/max-five-release-integration-20260715
+ * [new branch]      codex/release-hermetic-20260714 -> origin/codex/release-hermetic-20260714
+ * [new branch]      codex/smartcluster-v2-recovery-20260715 -> origin/codex/smartcluster-v2-recovery-20260715
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      codex/wide-features-smartcluster-20260714 -> origin/codex/wide-features-smartcluster-20260714
+ * [new branch]      main       -> origin/main
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-smartcluster-v7.0.1-split.0 -> jain-smartcluster-v7.0.1-split.0
+ * [new tag]         jain-smartcluster-v7.0.1-split.1 -> jain-smartcluster-v7.0.1-split.1
+ * [new tag]         jain-smartcluster-v8.0.0-split.0 -> jain-smartcluster-v8.0.0-split.0
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-catboost.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-catboost
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-mainline-release -> origin/codex/v8.0.0-mainline-release
+ * [new branch]      main       -> origin/main
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-catboost-v7.0.1-split.0 -> jain-catboost-v7.0.1-split.0
+ * [new tag]         jain-catboost-v7.0.1-split.1 -> jain-catboost-v7.0.1-split.1
+ * [new tag]         jain-catboost-v8.0.0-split.0 -> jain-catboost-v8.0.0-split.0
+ * [new tag]         jain-catboost-v8.0.0-split.1 -> jain-catboost-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-domain.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-domain
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD                       -> origin/HEAD
+ * [new tag]         jain-domain-v7.0.1-split.0 -> jain-domain-v7.0.1-split.0
+ * [new tag]         jain-domain-v7.0.1-split.1 -> jain-domain-v7.0.1-split.1
+ * [new tag]         jain-domain-v8.0.0-split.0 -> jain-domain-v8.0.0-split.0
+ * [new tag]         jain-domain-v8.0.0-split.1 -> jain-domain-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-jable.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-jable
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                      -> origin/main
+ * [new ref]         HEAD                      -> origin/HEAD
+ * [new tag]         jain-jable-v7.0.1-split.0 -> jain-jable-v7.0.1-split.0
+ * [new tag]         jain-jable-v8.0.0-split.0 -> jain-jable-v8.0.0-split.0
+ * [new tag]         jain-jable-v8.0.0-split.1 -> jain-jable-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-lightgbm.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-lightgbm
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/native-vendor-schema-split2-20260713 -> origin/codex/native-vendor-schema-split2-20260713
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-lightgbm-v7.0.1-split.0 -> jain-lightgbm-v7.0.1-split.0
+ * [new tag]         jain-lightgbm-v7.0.1-split.1 -> jain-lightgbm-v7.0.1-split.1
+ * [new tag]         jain-lightgbm-v8.0.0-split.0 -> jain-lightgbm-v8.0.0-split.0
+ * [new tag]         jain-lightgbm-v8.0.0-split.1 -> jain-lightgbm-v8.0.0-split.1
+ * [new tag]         jain-lightgbm-v8.0.0-split.2 -> jain-lightgbm-v8.0.0-split.2
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-starforge.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-starforge
+ * [new branch]      codex/deferred-starforge-foundation -> origin/codex/deferred-starforge-foundation
+ * [new branch]      codex/fleet-clean-20260708 -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/release-7.0.6-starforge-foundation-main -> origin/codex/release-7.0.6-starforge-foundation-main
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main       -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD       -> origin/HEAD
+ * [new tag]         jain-starforge-v7.0.1-split.0 -> jain-starforge-v7.0.1-split.0
+ * [new tag]         jain-starforge-v7.0.1-split.1 -> jain-starforge-v7.0.1-split.1
+ * [new tag]         jain-starforge-v7.0.1-split.2 -> jain-starforge-v7.0.1-split.2
+ * [new tag]         jain-starforge-v8.0.0-split.0 -> jain-starforge-v8.0.0-split.0
+ * [new tag]         jain-starforge-v8.0.0-split.1 -> jain-starforge-v8.0.0-split.1
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-xgboost.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-xgboost
+ * [new branch]      codex/fleet-clean-20260708  -> origin/codex/fleet-clean-20260708
+ * [new branch]      codex/native-vendor-schema-split2-20260713 -> origin/codex/native-vendor-schema-split2-20260713
+ * [new branch]      codex/release-7.0.5-local-jeryu-metadata -> origin/codex/release-7.0.5-local-jeryu-metadata
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      main                        -> origin/main
+ * [new branch]      robustness/zero-issues-2026-07-08 -> origin/robustness/zero-issues-2026-07-08
+ * [new ref]         HEAD                        -> origin/HEAD
+ * [new tag]         jain-xgboost-v7.0.1-split.0 -> jain-xgboost-v7.0.1-split.0
+ * [new tag]         jain-xgboost-v7.0.1-split.1 -> jain-xgboost-v7.0.1-split.1
+ * [new tag]         jain-xgboost-v8.0.0-split.0 -> jain-xgboost-v8.0.0-split.0
+ * [new tag]         jain-xgboost-v8.0.0-split.1 -> jain-xgboost-v8.0.0-split.1
+ * [new tag]         jain-xgboost-v8.0.0-split.2 -> jain-xgboost-v8.0.0-split.2
+ Downloading crates ...
+  Downloaded anstream v1.0.0
+  Downloaded anyhow v1.0.103
+  Downloaded bytemuck v1.25.1
+  Downloaded gix-revwalk v0.33.0
+  Downloaded anstyle-query v1.1.5
+  Downloaded gix-shallow v0.12.1
+  Downloaded cobs v0.3.0
+  Downloaded cfg_aliases v0.2.1
+  Downloaded gix-sec v0.14.1
+  Downloaded adler2 v2.0.1
+  Downloaded gix-bitmap v0.3.2
+  Downloaded futures-io v0.3.32
+  Downloaded embedded-io v0.4.0
+  Downloaded gix-ignore v0.21.1
+  Downloaded gix-revision v0.47.0
+  Downloaded gix-lock v23.0.1
+  Downloaded futures-core v0.3.32
+  Downloaded percent-encoding v2.3.2
+  Downloaded futures-sink v0.3.32
+  Downloaded http-range-header v0.4.2
+  Downloaded gix-attributes v0.33.2
+  Downloaded nano-gemm-codegen v0.2.1
+  Downloaded interpol v0.2.1
+  Downloaded gix-submodule v0.32.0
+  Downloaded gemm-f32 v0.19.0
+  Downloaded serde_urlencoded v0.7.1
+  Downloaded gix-imara-diff v0.2.3
+  Downloaded rand_chacha v0.3.1
+  Downloaded simd-adler32 v0.3.9
+  Downloaded num-complex v0.4.6
+  Downloaded gix-protocol v0.63.0
+  Downloaded unicode-bom v2.0.3
+  Downloaded heapless v0.8.0
+  Downloaded gix-fs v0.21.2
+  Downloaded dyn-stack v0.13.2
+  Downloaded bytes v1.12.1
+  Downloaded base64 v0.22.1
+  Downloaded try-lock v0.2.5
+  Downloaded csv-core v0.1.13
+  Downloaded tokio-tungstenite v0.24.0
+  Downloaded nano-gemm-c32 v0.2.1
+  Downloaded ulid v1.2.1
+  Downloaded tracing-core v0.1.36
+  Downloaded want v0.3.1
+  Downloaded unicase v2.9.0
+  Downloaded gix-pack v0.72.0
+  Downloaded http-body-util v0.1.3
+  Downloaded tungstenite v0.24.0
+  Downloaded gix-worktree-state v0.32.0
+  Downloaded walkdir v2.5.0
+  Downloaded futures-util v0.3.32
+  Downloaded zopfli v0.8.3
+  Downloaded unicode-normalization v0.1.25
+  Downloaded zip v8.6.0
+  Downloaded socket2 v0.6.4
+  Downloaded sha1 v0.10.7
+  Downloaded tokio-macros v2.7.0
+  Downloaded signal-hook-registry v1.4.8
+  Downloaded sync_wrapper v1.0.2
+  Downloaded bstr v1.12.3
+  Downloaded shell-words v1.1.1
+  Downloaded nano-gemm-c64 v0.2.1
+  Downloaded utf-8 v0.7.6
+  Downloaded memmap2 v0.9.11
+  Downloaded serde_path_to_error v0.1.20
+  Downloaded zlib-rs v0.6.6
+  Downloaded same-file v1.0.6
+  Downloaded spin v0.9.8
+  Downloaded tracing v0.1.44
+  Downloaded tinyvec v1.12.0
+  Downloaded prodash v31.0.0
+  Downloaded rand v0.9.5
+  Downloaded hyper-util v0.1.20
+  Downloaded rand v0.8.7
+  Downloaded mio v1.2.1
+  Downloaded tokio-util v0.7.18
+  Downloaded pulp v0.22.3
+  Downloaded hashbrown v0.16.1
+  Downloaded jiff-static v0.2.32
+  Downloaded iana-time-zone v0.1.65
+  Downloaded ryu v1.0.23
+  Downloaded syn v1.0.109
+  Downloaded nix v0.29.0
+  Downloaded private-gemm-x86 v0.1.20
+  Downloaded num-traits v0.2.19
+  Downloaded gix-url v0.36.1
+  Downloaded postcard v1.1.3
+  Downloaded csv v1.4.0
+  Downloaded pin-project-lite v0.2.17
+  Downloaded gix-utils v0.3.3
+  Downloaded gix v0.85.0
+  Downloaded mime_guess v2.0.5
+  Downloaded hash32 v0.2.1
+  Downloaded tokio v1.52.3
+  Downloaded sha1-checked v0.10.0
+  Downloaded strsim v0.11.1
+  Downloaded gix-traverse v0.59.0
+  Downloaded slab v0.4.12
+  Downloaded paste v1.0.15
+  Downloaded multer v3.1.0
+  Downloaded miniz_oxide v0.8.9
+  Downloaded maybe-async v0.2.11
+  Downloaded reborrow v0.5.5
+  Downloaded kstring v2.0.2
+  Downloaded chrono v0.4.45
+  Downloaded zerocopy-derive v0.8.54
+  Downloaded utf8parse v0.2.2
+  Downloaded nano-gemm-f32 v0.2.1
+  Downloaded gix-validate v0.11.2
+  Downloaded tower-layer v0.3.3
+  Downloaded tower-http v0.6.11
+  Downloaded seq-macro v0.3.6
+  Downloaded rustc_version v0.4.1
+  Downloaded rand_core v0.9.5
+  Downloaded rand_core v0.6.4
+  Downloaded encoding_rs v0.8.35
+  Downloaded rand_chacha v0.9.0
+  Downloaded pulp-wasm-simd-flag v0.1.1
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded nonempty v0.12.0
+  Downloaded nano-gemm-f64 v0.2.1
+  Downloaded nano-gemm-core v0.2.1
+  Downloaded is_terminal_polyfill v1.70.2
+  Downloaded io-close v0.3.7
+  Downloaded httpdate v1.0.3
+  Downloaded httparse v1.10.1
+  Downloaded http-body v1.0.1
+  Downloaded heck v0.5.0
+  Downloaded heapless v0.7.17
+  Downloaded hash32 v0.3.1
+  Downloaded h2 v0.4.14
+  Downloaded gix-worktree v0.54.0
+  Downloaded gix-transport v0.57.2
+  Downloaded gix-trace v0.1.20
+  Downloaded uuid v1.23.5
+  Downloaded thiserror-impl v1.0.69
+  Downloaded thiserror v1.0.69
+  Downloaded static_assertions v1.1.0
+  Downloaded stable_deref_trait v1.2.1
+  Downloaded semver v1.0.28
+  Downloaded raw-cpuid v11.6.0
+  Downloaded jiff v0.2.32
+  Downloaded clap_builder v4.6.0
+  Downloaded axum v0.7.9
+  Downloaded typed-path v0.12.3
+  Downloaded tower v0.5.3
+  Downloaded gix-odb v0.82.0
+  Downloaded gix-index v0.53.0
+  Downloaded defmt v1.1.1
+  Downloaded hyper v1.10.1
+  Downloaded http v1.4.2
+  Downloaded hashbrown v0.14.5
+  Downloaded faer v0.24.4
+  Downloaded gix-worktree-stream v0.34.0
+  Downloaded gix-glob v0.26.1
+  Downloaded flate2 v1.1.9
+  Downloaded gix-tempfile v23.0.2
+  Downloaded gix-diff v0.65.0
+  Downloaded gix-config v0.58.0
+  Downloaded equator-macro v0.2.1
+  Downloaded clap v4.6.1
+  Downloaded allocator-api2 v0.2.21
+  Downloaded tower-service v0.3.3
+  Downloaded tinyvec_macros v0.1.1
+  Downloaded matchit v0.7.3
+  Downloaded half v2.7.1
+  Downloaded gix-refspec v0.43.0
+  Downloaded gix-path v0.12.1
+  Downloaded foldhash v0.2.0
+  Downloaded dyn-stack-macros v0.1.3
+  Downloaded clru v0.6.3
+  Downloaded gix-object v0.62.0
+  Downloaded getrandom v0.2.17
+  Downloaded gix-hashtable v0.15.2
+  Downloaded equator-macro v0.6.0
+  Downloaded clap_lex v1.1.0
+  Downloaded qd v0.8.0
+  Downloaded nano-gemm v0.2.2
+  Downloaded gix-command v0.9.1
+  Downloaded futures-channel v0.3.32
+  Downloaded dashmap v6.2.1
+  Downloaded gix-quote v0.7.2
+  Downloaded gix-pathspec v0.18.1
+  Downloaded gix-features v0.48.1
+  Downloaded gix-discover v0.53.0
+  Downloaded gix-date v0.15.5
+  Downloaded gix-commitgraph v0.37.1
+  Downloaded equator v0.6.0
+  Downloaded defmt-macros v1.1.1
+  Downloaded clap_derive v4.6.1
+  Downloaded gix-hash v0.25.1
+  Downloaded gix-filter v0.32.0
+  Downloaded gix-config-value v0.18.1
+  Downloaded byteorder v1.5.0
+  Downloaded mime v0.3.17
+  Downloaded gix-ref v0.65.0
+  Downloaded gix-packetline v0.21.5
+  Downloaded gix-error v0.2.4
+  Downloaded gemm-f16 v0.19.0
+  Downloaded gemm-c64 v0.19.0
+  Downloaded gemm v0.19.0
+  Downloaded filetime v0.2.29
+  Downloaded embedded-io v0.6.1
+  Downloaded data-encoding v2.11.0
+  Downloaded generativity v1.2.1
+  Downloaded futures-macro v0.3.32
+  Downloaded defmt-parser v1.0.0
+  Downloaded gix-actor v0.41.1
+  Downloaded futures-task v0.3.32
+  Downloaded fnv v1.0.7
+  Downloaded faster-hex v0.10.0
+  Downloaded anstyle-parse v1.0.0
+  Downloaded gemm-common v0.19.0
+  Downloaded bytemuck_derive v1.11.0
+  Downloaded bitflags v1.3.2
+  Downloaded autocfg v1.5.1
+  Downloaded async-trait v0.1.89
+  Downloaded form_urlencoded v1.2.2
+  Downloaded colorchoice v1.0.5
+  Downloaded axum-core v0.4.5
+  Downloaded anstyle v1.0.14
+  Downloaded gemm-c32 v0.19.0
+  Downloaded equator v0.2.2
+  Downloaded gix-chunk v0.7.2
+  Downloaded faer-traits v0.24.0
+  Downloaded defer v0.2.1
+  Downloaded atomic-waker v1.1.2
+  Downloaded gemm-f64 v0.19.0
+   Compiling syn v2.0.118
+   Compiling libc v0.2.186
+    Checking once_cell v1.21.4
+    Checking regex-automata v0.4.15
+    Checking bstr v1.12.3
+   Compiling thiserror-impl v2.0.18
+    Checking thiserror v2.0.18
+    Checking smallvec v1.15.2
+    Checking parking_lot_core v0.9.12
+    Checking gix-trace v0.1.20
+    Checking tinyvec_macros v0.1.1
+    Checking tinyvec v1.12.0
+    Checking parking_lot v0.12.5
+    Checking gix-validate v0.11.2
+    Checking zlib-rs v0.6.6
+    Checking gix-path v0.12.1
+    Checking unicode-normalization v0.1.25
+    Checking foldhash v0.2.0
+    Checking byteorder v1.5.0
+    Checking allocator-api2 v0.2.21
+    Checking gix-utils v0.3.3
+    Checking same-file v1.0.6
+    Checking walkdir v2.5.0
+    Checking hashbrown v0.17.1
+    Checking prodash v31.0.0
+    Checking gix-features v0.48.1
+    Checking stable_deref_trait v1.2.1
+    Checking gix-error v0.2.4
+   Compiling heapless v0.8.0
+    Checking sha1 v0.10.7
+    Checking hash32 v0.3.1
+    Checking faster-hex v0.10.0
+    Checking sha1-checked v0.10.0
+   Compiling serde_core v1.0.228
+    Checking gix-hash v0.25.1
+   Compiling autocfg v1.5.1
+   Compiling num-traits v0.2.19
+    Checking jiff v0.2.32
+    Checking gix-date v0.15.5
+    Checking gix-actor v0.41.1
+    Checking getrandom v0.4.3
+    Checking gix-hashtable v0.15.2
+    Checking bytemuck v1.25.1
+   Compiling serde v1.0.228
+    Checking gix-object v0.62.0
+    Checking memmap2 v0.9.11
+   Compiling serde_derive v1.0.228
+   Compiling nano-gemm-codegen v0.2.1
+    Checking tempfile v3.27.0
+    Checking num-complex v0.4.6
+    Checking bytes v1.12.1
+   Compiling paste v1.0.15
+    Checking gix-fs v0.21.2
+    Checking raw-cpuid v11.6.0
+   Compiling pulp v0.22.3
+    Checking hashbrown v0.14.5
+    Checking pin-project-lite v0.2.17
+    Checking dashmap v6.2.1
+    Checking gix-chunk v0.7.2
+    Checking reborrow v0.5.5
+    Checking pulp-wasm-simd-flag v0.1.1
+    Checking futures-core v0.3.32
+    Checking nonempty v0.12.0
+    Checking gix-tempfile v23.0.2
+    Checking ppv-lite86 v0.2.21
+    Checking gix-quote v0.7.2
+   Compiling dyn-stack-macros v0.1.3
+   Compiling getrandom v0.3.4
+    Checking dyn-stack v0.13.2
+    Checking gix-lock v23.0.1
+    Checking gix-glob v0.26.1
+    Checking gix-commitgraph v0.37.1
+    Checking http v1.4.2
+    Checking indexmap v2.14.0
+    Checking errno v0.3.14
+    Checking unicode-bom v2.0.3
+   Compiling seq-macro v0.3.6
+   Compiling syn v1.0.109
+   Compiling serde_json v1.0.150
+    Checking gemm-common v0.19.0
+    Checking signal-hook-registry v1.4.8
+    Checking gix-revwalk v0.33.0
+    Checking mio v1.2.1
+    Checking socket2 v0.6.4
+   Compiling tokio-macros v2.7.0
+    Checking percent-encoding v2.3.2
+    Checking static_assertions v1.1.0
+    Checking nano-gemm-core v0.2.1
+    Checking kstring v2.0.2
+    Checking tokio v1.52.3
+    Checking getrandom v0.2.17
+   Compiling httparse v1.10.1
+    Checking futures-sink v0.3.32
+    Checking rand_core v0.6.4
+   Compiling interpol v0.2.1
+    Checking gix-attributes v0.33.2
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling nano-gemm-f64 v0.2.1
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling futures-macro v0.3.32
+    Checking futures-task v0.3.32
+   Compiling defer v0.2.1
+    Checking shell-words v1.1.1
+    Checking slab v0.4.12
+    Checking futures-util v0.3.32
+    Checking gix-command v0.9.1
+   Compiling private-gemm-x86 v0.1.20
+    Checking rand_chacha v0.3.1
+    Checking http-body v1.0.1
+    Checking gix-packetline v0.21.5
+    Checking gix-sec v0.14.1
+    Checking num_cpus v1.17.0
+   Compiling equator-macro v0.2.1
+    Checking encoding_rs v0.8.35
+    Checking simd-adler32 v0.3.9
+   Compiling semver v1.0.28
+   Compiling anyhow v1.0.103
+   Compiling rustc_version v0.4.1
+    Checking equator v0.2.2
+    Checking rand v0.8.7
+    Checking gix-traverse v0.59.0
+    Checking gemm-c64 v0.19.0
+    Checking gemm-c32 v0.19.0
+    Checking gemm-f64 v0.19.0
+    Checking gemm-f32 v0.19.0
+    Checking rand_core v0.9.5
+    Checking gix-ref v0.65.0
+    Checking qd v0.8.0
+    Checking gix-bitmap v0.3.2
+    Checking spin v0.9.8
+    Checking tracing-core v0.1.36
+    Checking filetime v0.2.29
+    Checking adler2 v2.0.1
+    Checking generativity v1.2.1
+   Compiling equator-macro v0.6.0
+    Checking mime v0.3.17
+    Checking tower-service v0.3.3
+    Checking ryu v1.0.23
+   Compiling thiserror v1.0.69
+    Checking fnv v1.0.7
+    Checking gix-index v0.53.0
+    Checking equator v0.6.0
+    Checking faer-traits v0.24.0
+    Checking miniz_oxide v0.8.9
+    Checking tracing v0.1.44
+    Checking rand_chacha v0.9.0
+    Checking gemm v0.19.0
+    Checking nano-gemm v0.2.2
+    Checking stacker v0.1.24
+   Compiling heapless v0.7.17
+    Checking gix-url v0.36.1
+    Checking gix-ignore v0.21.1
+    Checking hashbrown v0.16.1
+    Checking gix-config-value v0.18.1
+   Compiling thiserror-impl v1.0.69
+   Compiling recursive-proc-macro-impl v0.1.1
+    Checking tower-layer v0.3.3
+    Checking httpdate v1.0.3
+    Checking utf8parse v0.2.2
+   Compiling unicase v2.9.0
+   Compiling mime_guess v2.0.5
+    Checking anstyle-parse v1.0.0
+    Checking recursive v0.1.1
+    Checking clru v0.6.3
+    Checking gix-worktree v0.54.0
+    Checking faer v0.24.4
+    Checking rand v0.9.5
+    Checking ahash v0.8.12
+    Checking flate2 v1.1.9
+    Checking zopfli v0.8.3
+    Checking gix-filter v0.32.0
+    Checking http-body-util v0.1.3
+    Checking gix-revision v0.47.0
+    Checking futures-channel v0.3.32
+    Checking hash32 v0.2.1
+   Compiling multer v3.1.0
+    Checking csv-core v0.1.13
+   Compiling async-trait v0.1.89
+    Checking anstyle-query v1.1.5
+    Checking sync_wrapper v1.0.2
+    Checking typed-path v0.12.3
+   Compiling cfg_aliases v0.2.1
+    Checking utf-8 v0.7.6
+    Checking is_terminal_polyfill v1.70.2
+    Checking colorchoice v1.0.5
+    Checking anstyle v1.0.14
+    Checking data-encoding v2.11.0
+    Checking atomic-waker v1.1.2
+    Checking hyper v1.10.1
+    Checking tungstenite v0.24.0
+    Checking anstream v1.0.0
+    Checking redlinedb-kernel v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling nix v0.29.0
+    Checking zip v8.6.0
+    Checking csv v1.4.0
+    Checking gix-refspec v0.43.0
+    Checking ulid v1.2.1
+    Checking jable v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-jable.git?tag=jain-jable-v8.0.0-split.0#15c7cc75)
+    Checking gix-pack v0.72.0
+    Checking sqlparser v0.61.0
+    Checking gix-pathspec v0.18.1
+    Checking gix-config v0.58.0
+    Checking feat-math v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.0-split.0#a8d683ae)
+    Checking gix-transport v0.57.2
+    Checking form_urlencoded v1.2.2
+    Checking gix-shallow v0.12.1
+    Checking domain v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-domain.git?tag=jain-domain-v8.0.0-split.0#2faf3fd7)
+    Checking gix-imara-diff v0.2.3
+    Checking cobs v0.3.0
+    Checking regex v1.13.0
+    Checking io-close v0.3.7
+   Compiling maybe-async v0.2.11
+    Checking clap_lex v1.1.0
+    Checking strsim v0.11.1
+   Compiling heck v0.5.0
+   Compiling clap_derive v4.6.1
+    Checking clap_builder v4.6.0
+    Checking gix-protocol v0.63.0
+    Checking gix-worktree-state v0.32.0
+    Checking redlinedb-sql v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking postcard v1.1.3
+    Checking gix-diff v0.65.0
+    Checking feat-core v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-core.git?tag=jain-core-v8.0.0-split.0#68a68a23)
+    Checking serde_urlencoded v0.7.1
+    Checking gix-submodule v0.32.0
+    Checking gix-odb v0.82.0
+    Checking jain-smartcluster-core v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-smartcluster.git?tag=jain-smartcluster-v8.0.0-split.0#ec9f7e95)
+    Checking tokio-tungstenite v0.24.0
+    Checking hyper-util v0.1.20
+    Checking tower v0.5.3
+    Checking axum-core v0.4.5
+    Checking gix-discover v0.53.0
+    Checking tokio-util v0.7.18
+    Checking serde_path_to_error v0.1.20
+    Checking base64 v0.22.1
+    Checking http-range-header v0.4.2
+    Checking iana-time-zone v0.1.65
+    Checking matchit v0.7.3
+    Checking axum v0.7.9
+    Checking chrono v0.4.45
+    Checking tower-http v0.6.11
+    Checking gix v0.85.0
+    Checking jain-smartcluster v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-smartcluster.git?tag=jain-smartcluster-v8.0.0-split.0#ec9f7e95)
+    Checking feat-report v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-report.git?tag=jain-report-v8.0.0-split.0#5cef1d00)
+    Checking redlinedb v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+    Checking clap v4.6.1
+    Checking uuid v1.23.5
+    Checking feat-web v8.0.0 (/tmp/split-host-ci.roOO0T/jain-web/crates/feat-web)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 50s
+ Downloading crates ...
+  Downloaded bit-vec v0.8.0
+  Downloaded icu_properties_data v2.2.0
+  Downloaded unarray v0.1.4
+  Downloaded rand_xorshift v0.4.0
+  Downloaded displaydoc v0.2.6
+  Downloaded deadpool-runtime v0.1.4
+  Downloaded yoke v0.8.3
+  Downloaded writeable v0.6.3
+  Downloaded icu_properties v2.2.0
+  Downloaded zerofrom-derive v0.1.7
+  Downloaded deadpool v0.12.3
+  Downloaded potential_utf v0.1.5
+  Downloaded icu_locale_core v2.2.0
+  Downloaded zerovec-derive v0.11.3
+  Downloaded tinystr v0.8.3
+  Downloaded zerofrom v0.1.8
+  Downloaded yoke-derive v0.8.2
+  Downloaded icu_provider v2.2.0
+  Downloaded quick-error v1.2.3
+  Downloaded lazy_static v1.5.0
+  Downloaded zerovec v0.11.6
+  Downloaded icu_collections v2.2.0
+  Downloaded zerotrie v0.2.4
+  Downloaded url v2.5.8
+  Downloaded icu_normalizer v2.2.0
+  Downloaded idna v1.1.0
+  Downloaded icu_normalizer_data v2.2.0
+  Downloaded futures-executor v0.3.32
+  Downloaded wiremock v0.6.5
+  Downloaded proptest v1.11.0
+  Downloaded wait-timeout v0.2.1
+  Downloaded synstructure v0.13.2
+  Downloaded rusty-fork v0.3.1
+  Downloaded litemap v0.8.2
+  Downloaded futures v0.3.32
+  Downloaded assert-json-diff v2.0.2
+  Downloaded idna_adapter v1.2.2
+  Downloaded utf8_iter v1.0.4
+  Downloaded bit-set v0.8.0
+   Compiling syn v2.0.118
+   Compiling libc v0.2.186
+   Compiling once_cell v1.21.4
+   Compiling regex-syntax v0.8.11
+   Compiling regex-automata v0.4.15
+   Compiling smallvec v1.15.2
+   Compiling bstr v1.12.3
+   Compiling thiserror-impl v2.0.18
+   Compiling thiserror v2.0.18
+   Compiling stable_deref_trait v1.2.1
+   Compiling foldhash v0.2.0
+   Compiling allocator-api2 v0.2.21
+   Compiling parking_lot_core v0.9.12
+   Compiling hashbrown v0.17.1
+   Compiling tinyvec_macros v0.1.1
+   Compiling gix-trace v0.1.20
+   Compiling tinyvec v1.12.0
+   Compiling parking_lot v0.12.5
+   Compiling gix-validate v0.11.2
+   Compiling zlib-rs v0.6.6
+   Compiling gix-path v0.12.1
+   Compiling unicode-normalization v0.1.25
+   Compiling byteorder v1.5.0
+   Compiling gix-utils v0.3.3
+   Compiling same-file v1.0.6
+   Compiling walkdir v2.5.0
+   Compiling prodash v31.0.0
+   Compiling gix-features v0.48.1
+   Compiling gix-error v0.2.4
+   Compiling sha1 v0.10.7
+   Compiling hash32 v0.3.1
+   Compiling heapless v0.8.0
+   Compiling faster-hex v0.10.0
+   Compiling serde_core v1.0.228
+   Compiling sha1-checked v0.10.0
+   Compiling gix-hash v0.25.1
+   Compiling getrandom v0.4.3
+   Compiling jiff v0.2.32
+   Compiling gix-date v0.15.5
+   Compiling num-traits v0.2.19
+   Compiling serde_derive v1.0.228
+   Compiling pin-project-lite v0.2.17
+   Compiling serde v1.0.228
+   Compiling gix-actor v0.41.1
+   Compiling tempfile v3.27.0
+   Compiling gix-hashtable v0.15.2
+   Compiling bytes v1.12.1
+   Compiling bytemuck v1.25.1
+   Compiling gix-object v0.62.0
+   Compiling memmap2 v0.9.11
+   Compiling futures-core v0.3.32
+   Compiling num-complex v0.4.6
+   Compiling indexmap v2.14.0
+   Compiling synstructure v0.13.2
+   Compiling futures-sink v0.3.32
+   Compiling gix-fs v0.21.2
+   Compiling raw-cpuid v11.6.0
+   Compiling hashbrown v0.14.5
+   Compiling dashmap v6.2.1
+   Compiling zerofrom-derive v0.1.7
+   Compiling ppv-lite86 v0.2.21
+   Compiling gix-chunk v0.7.2
+   Compiling errno v0.3.14
+   Compiling slab v0.4.12
+   Compiling nonempty v0.12.0
+   Compiling pulp-wasm-simd-flag v0.1.1
+   Compiling reborrow v0.5.5
+   Compiling pulp v0.22.3
+   Compiling signal-hook-registry v1.4.8
+   Compiling zerofrom v0.1.8
+   Compiling gix-tempfile v23.0.2
+   Compiling getrandom v0.3.4
+   Compiling futures-channel v0.3.32
+   Compiling yoke-derive v0.8.2
+   Compiling http v1.4.2
+   Compiling gix-quote v0.7.2
+   Compiling mio v1.2.1
+   Compiling socket2 v0.6.4
+   Compiling tokio-macros v2.7.0
+   Compiling fnv v1.0.7
+   Compiling dyn-stack v0.13.2
+   Compiling tokio v1.52.3
+   Compiling yoke v0.8.3
+   Compiling gix-lock v23.0.1
+   Compiling gix-glob v0.26.1
+   Compiling percent-encoding v2.3.2
+   Compiling serde_json v1.0.150
+   Compiling gix-commitgraph v0.37.1
+   Compiling futures-macro v0.3.32
+   Compiling zerovec-derive v0.11.3
+   Compiling futures-task v0.3.32
+   Compiling unicode-bom v2.0.3
+   Compiling futures-io v0.3.32
+   Compiling futures-util v0.3.32
+   Compiling gemm-common v0.19.0
+   Compiling zerovec v0.11.6
+   Compiling gix-revwalk v0.33.0
+   Compiling tracing-core v0.1.36
+   Compiling displaydoc v0.2.6
+   Compiling static_assertions v1.1.0
+   Compiling nano-gemm-core v0.2.1
+   Compiling kstring v2.0.2
+   Compiling tracing v0.1.44
+   Compiling getrandom v0.2.17
+   Compiling num_cpus v1.17.0
+   Compiling rand_core v0.6.4
+   Compiling gix-attributes v0.33.2
+   Compiling httparse v1.10.1
+   Compiling http-body v1.0.1
+   Compiling rand_core v0.9.5
+   Compiling shell-words v1.1.1
+   Compiling gix-command v0.9.1
+   Compiling rand_chacha v0.3.1
+   Compiling tinystr v0.8.3
+   Compiling tokio-util v0.7.18
+   Compiling gix-packetline v0.21.5
+   Compiling gix-sec v0.14.1
+   Compiling encoding_rs v0.8.35
+   Compiling equator-macro v0.2.1
+   Compiling tower-service v0.3.3
+   Compiling writeable v0.6.3
+   Compiling litemap v0.8.2
+   Compiling simd-adler32 v0.3.9
+   Compiling icu_locale_core v2.2.0
+   Compiling equator v0.2.2
+   Compiling rand v0.8.7
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling nano-gemm-f64 v0.2.1
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling rand_chacha v0.9.0
+   Compiling zerotrie v0.2.4
+   Compiling gix-traverse v0.59.0
+   Compiling potential_utf v0.1.5
+   Compiling gemm-c32 v0.19.0
+   Compiling gemm-f64 v0.19.0
+   Compiling gemm-c64 v0.19.0
+   Compiling gemm-f32 v0.19.0
+   Compiling gix-ref v0.65.0
+   Compiling qd v0.8.0
+   Compiling gix-bitmap v0.3.2
+   Compiling spin v0.9.8
+   Compiling filetime v0.2.29
+   Compiling icu_properties_data v2.2.0
+   Compiling httpdate v1.0.3
+   Compiling utf8_iter v1.0.4
+   Compiling ryu v1.0.23
+   Compiling icu_normalizer_data v2.2.0
+   Compiling mime v0.3.17
+   Compiling try-lock v0.2.5
+   Compiling adler2 v2.0.1
+   Compiling atomic-waker v1.1.2
+   Compiling generativity v1.2.1
+   Compiling faer-traits v0.24.0
+   Compiling h2 v0.4.14
+   Compiling equator v0.6.0
+   Compiling miniz_oxide v0.8.9
+   Compiling want v0.3.1
+   Compiling icu_collections v2.2.0
+   Compiling gix-index v0.53.0
+   Compiling gemm v0.19.0
+   Compiling icu_provider v2.2.0
+   Compiling rand v0.9.5
+   Compiling private-gemm-x86 v0.1.20
+   Compiling nano-gemm v0.2.2
+   Compiling stacker v0.1.24
+   Compiling anyhow v1.0.103
+   Compiling http-body-util v0.1.3
+   Compiling gix-ignore v0.21.1
+   Compiling gix-url v0.36.1
+   Compiling form_urlencoded v1.2.2
+   Compiling gix-config-value v0.18.1
+   Compiling hashbrown v0.16.1
+   Compiling recursive-proc-macro-impl v0.1.1
+   Compiling thiserror-impl v1.0.69
+   Compiling tower-layer v0.3.3
+   Compiling utf8parse v0.2.2
+   Compiling unicase v2.9.0
+   Compiling mime_guess v2.0.5
+   Compiling anstyle-parse v1.0.0
+   Compiling thiserror v1.0.69
+   Compiling recursive v0.1.1
+   Compiling clru v0.6.3
+   Compiling gix-worktree v0.54.0
+   Compiling faer v0.24.4
+   Compiling ahash v0.8.12
+   Compiling hyper v1.10.1
+   Compiling flate2 v1.1.9
+   Compiling zopfli v0.8.3
+   Compiling gix-filter v0.32.0
+   Compiling gix-revision v0.47.0
+   Compiling hash32 v0.2.1
+   Compiling regex v1.13.0
+   Compiling csv-core v0.1.13
+   Compiling async-trait v0.1.89
+   Compiling colorchoice v1.0.5
+   Compiling anstyle v1.0.14
+   Compiling sync_wrapper v1.0.2
+   Compiling typed-path v0.12.3
+   Compiling utf-8 v0.7.6
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling data-encoding v2.11.0
+   Compiling anstyle-query v1.1.5
+   Compiling anstream v1.0.0
+   Compiling tungstenite v0.24.0
+   Compiling zip v8.6.0
+   Compiling redlinedb-kernel v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling csv v1.4.0
+   Compiling heapless v0.7.17
+   Compiling gix-refspec v0.43.0
+   Compiling hyper-util v0.1.20
+   Compiling icu_normalizer v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling jable v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-jable.git?tag=jain-jable-v8.0.0-split.0#15c7cc75)
+   Compiling gix-pack v0.72.0
+   Compiling sqlparser v0.61.0
+   Compiling gix-config v0.58.0
+   Compiling gix-pathspec v0.18.1
+   Compiling feat-math v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.0-split.0#a8d683ae)
+   Compiling gix-transport v0.57.2
+   Compiling ulid v1.2.1
+   Compiling gix-shallow v0.12.1
+   Compiling domain v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-domain.git?tag=jain-domain-v8.0.0-split.0#2faf3fd7)
+   Compiling gix-imara-diff v0.2.3
+   Compiling cobs v0.3.0
+   Compiling io-close v0.3.7
+   Compiling maybe-async v0.2.11
+   Compiling base64 v0.22.1
+   Compiling strsim v0.11.1
+   Compiling clap_lex v1.1.0
+   Compiling clap_builder v4.6.0
+   Compiling clap_derive v4.6.1
+   Compiling gix-protocol v0.63.0
+   Compiling gix-worktree-state v0.32.0
+   Compiling postcard v1.1.3
+   Compiling gix-diff v0.65.0
+   Compiling feat-core v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-core.git?tag=jain-core-v8.0.0-split.0#68a68a23)
+   Compiling jain-smartcluster-core v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-smartcluster.git?tag=jain-smartcluster-v8.0.0-split.0#ec9f7e95)
+   Compiling gix-submodule v0.32.0
+   Compiling redlinedb-sql v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling gix-odb v0.82.0
+   Compiling idna_adapter v1.2.2
+   Compiling multer v3.1.0
+   Compiling tokio-tungstenite v0.24.0
+   Compiling tower v0.5.3
+   Compiling axum-core v0.4.5
+   Compiling serde_urlencoded v0.7.1
+   Compiling gix-discover v0.53.0
+   Compiling serde_path_to_error v0.1.20
+   Compiling iana-time-zone v0.1.65
+   Compiling http-range-header v0.4.2
+   Compiling matchit v0.7.3
+   Compiling axum v0.7.9
+   Compiling tower-http v0.6.11
+   Compiling chrono v0.4.45
+   Compiling gix v0.85.0
+   Compiling nix v0.29.0
+   Compiling idna v1.1.0
+   Compiling redlinedb v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.3#7137a1ee)
+   Compiling jain-smartcluster v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-smartcluster.git?tag=jain-smartcluster-v8.0.0-split.0#ec9f7e95)
+   Compiling feat-report v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-report.git?tag=jain-report-v8.0.0-split.0#5cef1d00)
+   Compiling clap v4.6.1
+   Compiling futures-executor v0.3.32
+   Compiling uuid v1.23.5
+   Compiling wait-timeout v0.2.1
+   Compiling quick-error v1.2.3
+   Compiling deadpool-runtime v0.1.4
+   Compiling lazy_static v1.5.0
+   Compiling bit-vec v0.8.0
+   Compiling bit-set v0.8.0
+   Compiling deadpool v0.12.3
+   Compiling rusty-fork v0.3.1
+   Compiling futures v0.3.32
+   Compiling url v2.5.8
+   Compiling rand_xorshift v0.4.0
+   Compiling assert-json-diff v2.0.2
+   Compiling unarray v0.1.4
+   Compiling proptest v1.11.0
+   Compiling wiremock v0.6.5
+   Compiling feat-web v8.0.0 (/tmp/split-host-ci.roOO0T/jain-web/crates/feat-web)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4m 03s
+     Running unittests src/lib.rs (/tmp/split-host-ci.roOO0T/cargo-target/debug/deps/feat_web-4142a01855eb5bdd)
+
+running 88 tests
+test auth::tests::disabled_authenticates_everyone_as_local ... ok
+test auth::tests::empty_token_set_degrades_to_disabled ... ok
+test auth::tests::token_owner_hash_is_stable_short_and_not_the_token ... ok
+test installer_auth::tests::extract_prefers_bearer_then_query ... ok
+test auth::tests::token_gate_requires_a_valid_token ... ok
+test auth::tests::distinct_tokens_are_distinct_owners ... ok
+test auth::tests::a_non_owner_or_wrong_user_token_is_forbidden ... ok
+test installer_auth::tests::golden_token_encodes_byte_for_byte ... ok
+test auth::tests::resolve_generates_persists_and_reuses_a_token_file ... ok
+test installer_auth::tests::golden_token_signature_is_actually_checked ... ok
+test installer_auth::tests::hmac_matches_known_rfc4231_vector ... ok
+test installer_auth::tests::golden_token_passes_signature_and_scope_failing_only_on_expiry ... ok
+test installer_auth::tests::rejects_expired_token ... ok
+test installer_auth::tests::mint_and_verify_round_trip ... ok
+test demo::tests::full_v1_contract_is_self_consistent ... ok
+test installer_auth::tests::rejects_tampered_token ... ok
+test jope::tests::lime_requires_a_staged_input ... ok
+test installer_auth::tests::rejects_wrong_secret ... ok
+test protocol::tests::target_request_defaults_to_approved ... ok
+test routes::tests::request_timeout_parses_env_and_falls_back_to_default ... ok
+test routes::tests::upload_validation_allows_only_csv_and_tsv ... ok
+test runner::tests::a_plan_of_native_members_is_not_disclosed_as_invented ... ok
+test runner::tests::any_member_carrying_a_math_genome_is_disclosed_as_invented ... ok
+test runner::tests::effort_knobs_scale_monotonically ... ok
+test runner::tests::resolved_training_knobs_persists_chimera_override ... ok
+test runner::tests::reasoning_message_keeps_concise_notes_and_suppresses_noisy_chatter ... ok
+test session_repo::tests::rejects_unsafe_paths ... ok
+test store::store_research::tests::full_v1_research_outcomes_are_deterministic ... ok
+test target::tests::final_id_column_requires_manual_target ... ok
+test target::tests::ambiguous_profile_stays_low_confidence ... ok
+test target::tests::manual_override_approves_requested_target ... ok
+test target::tests::last_label_column_is_high_confidence ... ok
+test runner::tests::supervisor_advance_flags_are_fresh_and_one_shot ... ok
+test routes::tests::artifact_scope_rejects_paths_outside_data_dir ... ok
+test session_repo::tests::stores_large_file_as_lfs_pointer_and_hydrates_checkout ... ok
+test session_repo::tests::creates_commit_and_checkpoint_ref ... ok
+test jope::tests::cancellation_is_terminal_against_late_progress ... ok
+test lifecycle::tests::health_snapshot_is_ok_on_a_live_store ... ok
+test store::tests::llm_credentials_are_owner_scoped_redacted_and_create_route_slots ... ok
+test routes::tests::jope_routes_stage_owner_scoped_jobs_and_replay_events ... ok
+test jope::tests::terminal_projection_hashes_published_artifacts ... ok
+test routes::tests::session_manifest_missing_uses_stable_error_code ... ok
+test store::tests::event_sequence_binds_session_id_as_data ... ok
+test store::tests::research_runs_record_setup_required_and_cancel_events ... ok
+test routes::tests::system_route_returns_host_snapshot ... ok
+test store::tests::jope_event_queries_bind_hostile_job_ids_without_cross_row_access ... ok
+test runner::tests::finish_training_success_sets_state_and_emits_terminal_event ... ok
+test lifecycle::tests::reconcile_sweeps_orphan_staging_dirs ... ok
+test routes::tests::report_pdf_route_can_download_pdf_as_attachment ... ok
+test routes::tests::create_session_route_returns_medium_default ... ok
+test store::tests::target_rejection_keeps_session_awaiting_target ... ok
+test routes::tests::session_manifest_routes_return_json_and_download ... ok
+test routes::tests::model_directory_download_returns_zip ... ok
+test routes::tests::report_pdf_route_rejects_non_report_artifacts ... ok
+test store::tests::concurrent_same_session_events_have_unique_contiguous_sequences ... ok
+test routes::tests::report_pdf_route_returns_inline_pdf ... ok
+test runner::tests::mock_training_stops_promptly_when_cancelled ... ok
+test store::tests::owner_scoping_isolates_sessions_across_owners ... ok
+test routes::tests::algorithm_export_includes_readme_manifest_and_invented_code ... ok
+test store::tests::storage_report_counts_rows_files_artifacts_and_events ... ok
+test store::tests::lists_renames_and_deletes_sessions ... ok
+test store::tests::auto_names_sessions_from_dataset_stem_with_dedup ... ok
+test routes::tests::report_pdf_route_returns_not_found_when_pdf_is_missing ... ok
+test routes::tests::llm_and_research_routes_cover_the_typed_browser_contract ... ok
+test store::tests::event_store_replays_in_sequence_order ... ok
+test routes::tests::algorithm_export_rejects_restricted_artifacts_without_invention ... ok
+test routes::tests::delete_all_sessions_route_clears_the_list ... ok
+test store::tests::pooled_connections_support_concurrent_request_work ... ok
+test store::tests::prune_storage_dry_run_reports_but_keeps_old_sessions_and_orphans ... ok
+test store::tests::trim_session_events_leaves_active_and_missing_sessions_alone ... ok
+test store::tests::prune_storage_can_enforce_a_session_tree_size_cap ... ok
+test store::tests::prune_storage_removes_old_sessions_rows_files_artifacts_events_and_orphans ... ok
+test lifecycle::tests::reconcile_fails_stranded_sessions_and_emits_terminal_event ... ok
+test lifecycle::tests::reconcile_leaves_stable_states_alone ... ok
+test store::tests::checkpoint_advances_redline_durable_state ... ok
+test store::tests::trim_session_events_keeps_last_rows_and_terminal_kinds ... ok
+test lifecycle::tests::gc_sweep_never_trims_an_active_session ... ok
+test lifecycle::tests::shutdown_cleanup_fails_inflight_sessions_and_checkpoints_redline ... ok
+test lifecycle::tests::gc_sweep_prunes_old_sessions_and_checkpoints ... ok
+test jope::tests::ownership_and_replay_survive_store_reopen ... ok
+test store::tests::seed_defaults_and_survives_reopen ... ok
+test store::tests::redline_backup_reopens_and_vacuum_remains_available ... ok
+test store::tests::delete_session_removes_owned_rows_directory_and_stays_deleted_after_reopen ... ok
+test store::tests::delete_all_sessions_removes_owned_rows_tree_and_stays_empty_after_reopen ... ok
+test store::tests::served_invented_defaults_off_and_survives_reopen ... ok
+test routes::tests::install_script_route_is_key_gated ... ok
+test runner::tests::mock_runner_emits_artifact_and_completion_events ... ok
+test store::tests::events_after_chunk_pages_through_a_large_backlog ... ok
+
+test result: ok. 88 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 44.96s
+
+     Running unittests src/main.rs (/tmp/split-host-ci.roOO0T/cargo-target/debug/deps/jain_web-a73e804eac409ee0)
+
+running 5 tests
+test tests::ci_smoke_allows_non_default_ports_without_override ... ok
+test tests::ci_smoke_allows_the_normal_local_port_with_explicit_override ... ok
+test tests::ci_smoke_refuses_the_normal_local_port_without_override ... ok
+test tests::probe_errors_on_unsupported_or_unreachable_targets ... ok
+test tests::probe_reports_the_http_status_of_a_live_server ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/api_http.rs (/tmp/split-host-ci.roOO0T/cargo-target/debug/deps/api_http-b97af24562d0f4df)
+
+running 44 tests
+test a_valid_key_mints_a_cookie_that_authenticates_subsequent_requests ... ok
+test unknown_session_upload_is_rejected_without_creating_session_dir ... ok
+test get_unknown_session_is_an_error ... ok
+test health_route_reports_ok_with_version_and_uptime ... ok
+test system_route_returns_cpu_memory_and_gpu_list ... ok
+test unauthenticated_requests_are_rejected_when_the_token_gate_is_on ... ok
+test path_traversal_session_ids_get_404_and_touch_no_files ... ok
+test rerun_requires_an_approved_target ... ok
+test explicit_train_or_holdout_upload_during_training_conflicts ... ok
+test session_requests_accept_optional_training_overrides ... ok
+test advance_session_is_safe_noop_when_not_training ... ok
+test a_caller_cannot_see_or_delete_another_owners_session ... ok
+test bad_extension_upload_restores_state_and_leaves_no_file_rows ... ok
+test training_config_change_is_rejected_while_training ... ok
+test session_view_surfaces_the_reproducibility_seed ... ok
+test storage_routes_report_usage_and_prune_dry_run_by_default ... ok
+test timed_rest_routes_still_respond_under_the_timeout_layer ... ok
+test oversize_upload_returns_413_and_cleans_partial_file_and_row ... ok
+test cancel_sets_cancelled_state ... ok
+test collaborator_routes_require_full_access_and_preserve_read_only_access ... ok
+test lists_and_deletes_sessions_over_http ... ok
+test delete_all_sessions_over_http_returns_empty_list_before_recreate ... ok
+test demo_matrix_rejects_injected_ids_and_unsupported_uploads_at_the_boundary ... ok
+test create_session_defaults_and_persists_each_effort ... ok
+test predict_without_a_model_is_an_error ... ok
+test upload_autoselects_final_column_and_blocks_training_by_default ... ok
+test events_replay_respects_the_after_cursor ... ok
+test suspicious_final_column_pauses_for_manual_target ... ok
+test change_effort_updates_the_session_before_training ... ok
+test low_confidence_final_binary_target_is_ready_when_smoke_training_is_blocked ... ok
+test files_route_lists_uploaded_temp_paths_only ... ok
+test upload_profiles_csv_and_rejects_other_extensions ... ok
+test smoke_training_disabled_rejects_manual_start_and_rerun ... ok
+test start_requires_an_approved_target ... ok
+test auto_upload_without_names_uses_smaller_companion_for_scoring ... ok
+test target_approve_and_reject_transition_state ... ok
+test checkpoint_revert_restores_session_files_and_artifacts ... ok
+test upload_above_axum_default_body_limit_is_accepted ... ok
+test scoring_upload_during_training_preserves_state_and_is_predicted ... FAILED
+test auto_train_and_test_upload_scores_test_rows ... FAILED
+test full_lifecycle_trains_predicts_and_downloads ... FAILED
+test rerun_reuses_the_same_data_and_completes_again ... FAILED
+test queued_run_reports_its_position_when_the_pool_is_full ... FAILED
+test two_concurrent_runs_on_distinct_sessions_both_run_without_queueing ... FAILED
+
+failures:
+
+---- scoring_upload_during_training_preserves_state_and_is_predicted stdout ----
+
+thread 'scoring_upload_during_training_preserves_state_and_is_predicted' (4080126) panicked at crates/feat-web/tests/api_http.rs:734:5:
+assertion `left == right` failed
+  left: String("training")
+ right: "prediction_ready"
+
+---- auto_train_and_test_upload_scores_test_rows stdout ----
+
+thread 'auto_train_and_test_upload_scores_test_rows' (4080100) panicked at crates/feat-web/tests/api_http.rs:616:5:
+assertion `left == right` failed
+  left: String("training")
+ right: "prediction_ready"
+
+---- full_lifecycle_trains_predicts_and_downloads stdout ----
+
+thread 'full_lifecycle_trains_predicts_and_downloads' (4080115) panicked at crates/feat-web/tests/api_http.rs:1092:5:
+assertion `left == right` failed: training should complete
+  left: "training"
+ right: "complete"
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+---- rerun_reuses_the_same_data_and_completes_again stdout ----
+
+thread 'rerun_reuses_the_same_data_and_completes_again' (4080125) panicked at crates/feat-web/tests/api_http.rs:1212:5:
+first run completes
+
+---- queued_run_reports_its_position_when_the_pool_is_full stdout ----
+
+thread 'queued_run_reports_its_position_when_the_pool_is_full' (4080123) panicked at crates/feat-web/tests/api_http.rs:1762:5:
+assertion `left == right` failed
+  left: String("training")
+ right: "complete"
+
+---- two_concurrent_runs_on_distinct_sessions_both_run_without_queueing stdout ----
+
+thread 'two_concurrent_runs_on_distinct_sessions_both_run_without_queueing' (4080137) panicked at crates/feat-web/tests/api_http.rs:1786:5:
+assertion `left == right` failed
+  left: String("training")
+ right: "complete"
+
+
+failures:
+    auto_train_and_test_upload_scores_test_rows
+    full_lifecycle_trains_predicts_and_downloads
+    queued_run_reports_its_position_when_the_pool_is_full
+    rerun_reuses_the_same_data_and_completes_again
+    scoring_upload_during_training_preserves_state_and_is_predicted
+    two_concurrent_runs_on_distinct_sessions_both_run_without_queueing
+
+test result: FAILED. 38 passed; 6 failed; 0 ignored; 0 measured; 0 filtered out; finished in 26.70s
+
+error: test failed, to rerun pass `-p feat-web --test api_http`
