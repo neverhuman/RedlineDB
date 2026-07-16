@@ -10,7 +10,7 @@ jeryu-ready:
   cargo run --locked --quiet -- jeryu-doctor --manifest repos.manifest.toml
 
 jeryu-ready-apply:
-  cargo run --locked --quiet -- jeryu-doctor --manifest repos.manifest.toml --fix-remotes --register-family
+  cargo run --locked --quiet -- jeryu-doctor --manifest repos.manifest.toml --fix-remotes --register-family --install-hooks
 
 jeryu-repos:
   cargo run --locked --quiet -- jeryu-local repo-list

@@ -1,0 +1,10 @@
+#!/usr/bin/env sh
+# Refuse to push from a repo that has extra git worktrees (policy: 1 primary checkout only).
+count=$(git worktree list --porcelain | grep -c '^worktree ')
+if [ "$count" -gt 1 ]; then
+  echo "PUSH REFUSED: $((count - 1)) extra git worktree(s) present." >&2
+  echo "Worktrees are banned (they fragment agents). Remove them: git worktree remove <path>" >&2
+  git worktree list >&2
+  exit 1
+fi
+exit 0

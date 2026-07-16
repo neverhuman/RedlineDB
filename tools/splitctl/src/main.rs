@@ -111,17 +111,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             let mut skip_remotes = false;
             let mut fix_remotes = false;
             let mut register_family = false;
+            let mut install_hooks = false;
             while let Some(arg) = args.next() {
                 match arg.as_str() {
                     "--manifest" => manifest = Some(PathBuf::from(args.next().ok_or("--manifest needs a path")?)),
                     "--skip-remotes" => skip_remotes = true,
                     "--fix-remotes" => fix_remotes = true,
                     "--register-family" => register_family = true,
+                    "--install-hooks" => install_hooks = true,
                     value => return Err(format!("unknown argument: {value}").into()),
                 }
             }
             if fix_remotes {
                 fix_local_remotes(manifest.clone())?;
+            }
+            if install_hooks {
+                install_worktree_ban_hooks(manifest.clone())?;
             }
             if register_family {
                 let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -2381,6 +2386,24 @@ fn verify_managed_worktree(repo: &ManagedRepo) -> JsonValue {
         failures.push("HEAD, origin/main, and remote main are not equal".to_owned());
     }
 
+    // BAN linked git worktrees: exactly one entry (the primary checkout) is allowed.
+    // Extra worktrees fragment agents, waste tokens, and corrupt release evidence.
+    let linked_worktrees = strict_git_output(&repo.path, &["worktree", "list", "--porcelain"])
+        .map(|value| {
+            value
+                .lines()
+                .filter(|line| line.starts_with("worktree "))
+                .count()
+                .saturating_sub(1)
+        })
+        .map_err(|error| failures.push(error.to_string()))
+        .unwrap_or(0);
+    if linked_worktrees > 0 {
+        failures.push(format!(
+            "{linked_worktrees} linked git worktree(s) present; exactly 1 (the primary checkout) is allowed"
+        ));
+    }
+
     let (local_tag, remote_tag) = if let Some(tag) = &repo.tag {
         let tag_ref = format!("refs/tags/{tag}");
         let local = local_ref_commit(&repo.path, &tag_ref)
@@ -2598,6 +2621,27 @@ fn fix_local_remotes(manifest: Option<PathBuf>) -> Result<(), Box<dyn std::error
     for repo in managed_repositories(&data, &path)? {
         if repo.path.join(".git").exists() {
             canonicalize_remote(&repo.path, &repo.remote)?;
+        }
+    }
+    Ok(())
+}
+
+fn install_worktree_ban_hooks(manifest: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let hooks_dir = root.join("hooks");
+    if !hooks_dir.join("pre-push").is_file() {
+        return Err(format!(
+            "shared hooks directory is missing pre-push: {}",
+            hooks_dir.display()
+        )
+        .into());
+    }
+    let path = manifest.unwrap_or_else(|| root.join("repos.manifest.toml"));
+    let data: toml::Value = fs::read_to_string(&path)?.parse()?;
+    let hooks_path = hooks_dir.display().to_string();
+    for repo in managed_repositories(&data, &path)? {
+        if repo.path.join(".git").exists() {
+            run_git_at(&repo.path, &["config", "core.hooksPath", &hooks_path])?;
         }
     }
     Ok(())
@@ -5779,6 +5823,51 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
 
         commit_next(&repo);
         assert_eq!(verify_managed_worktree(&managed)["status"], "fail");
+    }
+
+    #[test]
+    fn worktree_verification_fails_when_linked_worktree_present() {
+        let root = TestDir::new("worktree-linked-ban");
+        let (repo, _reviewed) = init_source(root.path());
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &repo,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        )
+        .unwrap();
+        run_git_strict(&repo, &["push", "-u", "origin", "main"]).unwrap();
+        let managed = ManagedRepo {
+            name: "example".to_owned(),
+            path: repo.clone(),
+            remote: remote.display().to_string(),
+            required_check: "example/required".to_owned(),
+            branch: "main".to_owned(),
+            tag: None,
+            kind: "family".to_owned(),
+            family: "jain-split".to_owned(),
+            family_registered: true,
+        };
+        assert_eq!(verify_managed_worktree(&managed)["status"], "pass");
+
+        let linked = root.path().join("linked-worktree");
+        run_git_strict(
+            &repo,
+            &["worktree", "add", "--detach", linked.to_str().unwrap()],
+        )
+        .unwrap();
+        let report = verify_managed_worktree(&managed);
+        assert_eq!(report["status"], "fail");
+        assert!(report["failures"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|failure| failure
+                .as_str()
+                .unwrap()
+                .contains("linked git worktree(s) present")));
+
+        run_git_strict(&repo, &["worktree", "remove", linked.to_str().unwrap()]).unwrap();
+        assert_eq!(verify_managed_worktree(&managed)["status"], "pass");
     }
 
     #[test]
