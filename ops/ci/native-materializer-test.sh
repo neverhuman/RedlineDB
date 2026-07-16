@@ -282,17 +282,16 @@ git -C "$control" restore ops/ci/native-materializer.sh
 evidence_root="$durable_root/persistent-evidence"
 head_sha="0123456789abcdef0123456789abcdef01234567"
 control_commit="$(git -C "$control" rev-parse HEAD)"
-outside_root="/tmp/jain-native-evidence-reject.$$"
-rm -rf -- "$outside_root"
-if JAIN_CI_ATTEMPT_ID=tmp-rejected jain_persist_native_evidence \
-  "$vendor_root" "$run_root/materialization.log" "$outside_root" "$run_root" \
+outside_durable_root="$run_root/rejected-evidence"
+if JAIN_CI_ATTEMPT_ID=ephemeral-rejected jain_persist_native_evidence \
+  "$vendor_root" "$run_root/materialization.log" "$outside_durable_root" "$run_root" \
   veox jain-core "$head_sha" jain-core/required "$control_commit" \
   "$control" \
   2>/dev/null; then
-  printf 'native evidence accepted a /tmp persistence root\n' >&2
+  printf 'native evidence accepted an in-root ephemeral persistence root\n' >&2
   exit 1
 fi
-[[ ! -e "$outside_root" ]]
+[[ ! -e "$outside_durable_root" ]]
 ln -s "$run_root" "$durable_root/ephemeral-link"
 if JAIN_CI_ATTEMPT_ID=symlink-rejected jain_persist_native_evidence \
   "$vendor_root" "$run_root/materialization.log" \

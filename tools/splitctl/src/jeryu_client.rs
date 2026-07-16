@@ -367,10 +367,14 @@ impl JeryuClient {
     }
 
     pub fn execute(&self, request: &JeryuRequest) -> Result<JsonValue> {
+        self.execute_with_timeout(request, IO_TIMEOUT)
+    }
+
+    fn execute_with_timeout(&self, request: &JeryuRequest, timeout: Duration) -> Result<JsonValue> {
         validate_request_path(&request.path)?;
-        let mut stream = TcpStream::connect_timeout(&self.address, IO_TIMEOUT)?;
-        stream.set_read_timeout(Some(IO_TIMEOUT))?;
-        stream.set_write_timeout(Some(IO_TIMEOUT))?;
+        let deadline = Instant::now() + timeout;
+        let mut stream =
+            TcpStream::connect_timeout(&self.address, remaining_until(deadline, "connect")?)?;
 
         let mut wire = SecretBytes(Vec::with_capacity(
             256 + self.token.0.len() + request.body.as_ref().map_or(0, String::len),
@@ -397,11 +401,15 @@ impl JeryuClient {
         if let Some(body) = &request.body {
             wire.0.extend_from_slice(body.as_bytes());
         }
-        stream.write_all(&wire.0)?;
+        write_all_with_deadline(&wire.0, deadline, |remaining, bytes| {
+            stream.set_write_timeout(Some(remaining))?;
+            stream.write(bytes)
+        })?;
+        remaining_until(deadline, "request shutdown")?;
         stream.shutdown(Shutdown::Write)?;
         drop(wire);
 
-        let response = read_response(&mut stream, Instant::now() + IO_TIMEOUT)?;
+        let response = read_response(&mut stream, deadline)?;
         if !(200..300).contains(&response.status) {
             let message = redact_and_sanitize(&response.body, self.token.as_slice());
             return Err(JeryuError::new(format!(
@@ -502,6 +510,38 @@ impl JeryuClient {
             address,
         }
     }
+}
+
+fn remaining_until(deadline: Instant, stage: &str) -> Result<Duration> {
+    deadline
+        .checked_duration_since(Instant::now())
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or_else(|| JeryuError::new(format!("local Jeryu {stage} deadline exceeded")))
+}
+
+fn write_all_with_deadline<F>(mut bytes: &[u8], deadline: Instant, mut write: F) -> Result<()>
+where
+    F: FnMut(Duration, &[u8]) -> io::Result<usize>,
+{
+    while !bytes.is_empty() {
+        let remaining = remaining_until(deadline, "request write")?;
+        match write(remaining, bytes) {
+            Ok(0) => return Err(JeryuError::new("local Jeryu request write returned zero")),
+            Ok(written) => bytes = &bytes[written..],
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+                ) =>
+            {
+                return Err(JeryuError::new(
+                    "local Jeryu request write deadline exceeded",
+                ))
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(())
 }
 
 impl PublishFailure {
@@ -1095,16 +1135,30 @@ fn parse_response_head(bytes: &[u8]) -> Result<ResponseHead> {
     if status == 204 && (chunked || content_length.is_some_and(|length| length != 0)) {
         return Err(JeryuError::new("HTTP 204 response declares a body"));
     }
-    let explicit_close = connection.as_deref().is_some_and(|value| {
-        value
-            .split(',')
-            .map(str::trim)
-            .any(|token| token.eq_ignore_ascii_case("close"))
-    });
+    let connection_tokens = connection
+        .as_deref()
+        .map(|value| value.split(',').map(str::trim).collect::<Vec<_>>())
+        .unwrap_or_default();
+    if connection_tokens.iter().any(|token| token.is_empty()) {
+        return Err(JeryuError::new(
+            "local Jeryu response has a malformed connection header",
+        ));
+    }
+    let explicit_close = connection_tokens
+        .iter()
+        .any(|token| token.eq_ignore_ascii_case("close"));
+    let explicit_keep_alive = connection_tokens
+        .iter()
+        .any(|token| token.eq_ignore_ascii_case("keep-alive"));
+    if explicit_close && explicit_keep_alive {
+        return Err(JeryuError::new(
+            "local Jeryu response has conflicting connection persistence",
+        ));
+    }
     let close_delimited = content_length.is_none()
         && !chunked
         && status != 204
-        && (version == "HTTP/1.0" || explicit_close);
+        && ((version == "HTTP/1.0" && !explicit_keep_alive) || explicit_close);
     Ok(ResponseHead {
         status,
         content_length,
@@ -1632,6 +1686,38 @@ mod tests {
             json!({})
         );
         assert!(execute_response(vec![b"HTTP/1.1 200 OK\r\n\r\n{}".to_vec()]).is_err());
+        assert!(execute_response(vec![
+            b"HTTP/1.0 200 OK\r\nConnection: keep-alive\r\n\r\n{}".to_vec()
+        ])
+        .is_err());
+        assert_eq!(
+            execute_response(vec![
+                b"HTTP/1.0 200 OK\r\nConnection: keep-alive\r\nContent-Length: 2\r\n\r\n{}"
+                    .to_vec()
+            ])
+            .unwrap(),
+            json!({})
+        );
+        assert!(execute_response(vec![
+            b"HTTP/1.0 200 OK\r\nConnection: close, keep-alive\r\n\r\n{}".to_vec()
+        ])
+        .is_err());
+    }
+
+    #[test]
+    fn request_write_uses_one_absolute_deadline() {
+        let started = Instant::now();
+        let deadline = started + Duration::from_millis(20);
+        let mut writes = 0;
+        let error = write_all_with_deadline(&[0_u8; 128], deadline, |_remaining, _bytes| {
+            writes += 1;
+            thread::sleep(Duration::from_millis(6));
+            Ok(1)
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("deadline exceeded"));
+        assert!(writes < 128);
+        assert!(started.elapsed() < Duration::from_millis(100));
     }
 
     #[test]

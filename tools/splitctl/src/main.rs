@@ -2965,6 +2965,7 @@ fn secure_git_command(repo: Option<&Path>) -> Command {
         .env("HOME", "/nonexistent")
         .env("GIT_CONFIG_NOSYSTEM", "1")
         .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_ATTR_NOSYSTEM", "1")
         .env("GIT_TERMINAL_PROMPT", "0")
         .env("GIT_ASKPASS", "/bin/false")
         .env("SSH_ASKPASS", "/bin/false")
@@ -2973,6 +2974,20 @@ fn secure_git_command(repo: Option<&Path>) -> Command {
         .args([
             "-c",
             "core.hooksPath=/dev/null",
+            "-c",
+            "core.fsmonitor=false",
+            "-c",
+            "core.attributesFile=/dev/null",
+            "-c",
+            "core.excludesFile=/dev/null",
+            "-c",
+            "diff.external=",
+            "-c",
+            "filter.lfs.process=",
+            "-c",
+            "filter.lfs.clean=",
+            "-c",
+            "filter.lfs.smudge=",
             "-c",
             "credential.helper=",
             "-c",
@@ -3109,6 +3124,7 @@ fn validate_physical_git_checkout(path: &Path) -> Result<PathBuf, Box<dyn std::e
             .into());
         }
     }
+    reject_local_git_injection(&canonical)?;
     let git_dir = secure_git_output(
         Some(&canonical),
         &["rev-parse", "--path-format=absolute", "--absolute-git-dir"],
@@ -3125,31 +3141,89 @@ fn validate_physical_git_checkout(path: &Path) -> Result<PathBuf, Box<dyn std::e
 }
 
 fn reject_local_git_injection(repo: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let names = secure_git_output(
-        Some(repo),
-        &[
-            "config",
-            "--local",
-            "--name-only",
-            "--list",
-            "--no-includes",
-        ],
-    )?;
-    for name in names.lines().map(str::to_ascii_lowercase) {
-        let hostile = name.starts_with("url.")
-            || name.starts_with("http.")
-            || name.starts_with("https.")
-            || name.starts_with("credential.")
-            || name.starts_with("include.")
-            || name.starts_with("includeif.")
-            || name.starts_with("protocol.")
-            || name == "core.askpass"
-            || name == "core.sshcommand"
-            || (name.starts_with("remote.")
-                && (name.ends_with(".proxy") || name.ends_with(".pushurl")));
-        if hostile {
+    let path = repo.join(".git/config");
+    let metadata = fs::symlink_metadata(&path)?;
+    if !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.nlink() != 1
+        || metadata.len() > 1024 * 1024
+    {
+        return Err("local Git configuration is not a bounded independent regular file".into());
+    }
+    let text = std::str::from_utf8(&fs::read(&path)?)
+        .map_err(|_| "local Git configuration is not UTF-8")?
+        .to_owned();
+    let mut section = None;
+    for raw in text.lines() {
+        let line = raw.trim();
+        if line.is_empty() || line.starts_with(['#', ';']) {
+            continue;
+        }
+        if line.ends_with('\\') {
+            return Err("local Git configuration continuations are forbidden".into());
+        }
+        if line.starts_with('[') {
+            if !line.ends_with(']') {
+                return Err("local Git configuration section is malformed".into());
+            }
+            let header = line[1..line.len() - 1].trim().to_ascii_lowercase();
+            let name = header.split_ascii_whitespace().next().unwrap_or_default();
+            if !matches!(name, "core" | "remote" | "branch" | "user") {
+                return Err(format!(
+                    "local Git configuration section is forbidden for branch publication: {name}"
+                )
+                .into());
+            }
+            section = Some(name.to_owned());
+            continue;
+        }
+        let current = section
+            .as_deref()
+            .ok_or("local Git configuration key is outside a section")?;
+        let (key, value) = line
+            .split_once('=')
+            .ok_or("local Git configuration key is malformed")?;
+        let key = key.trim().to_ascii_lowercase();
+        let value = value.trim();
+        let allowed = match current {
+            "core" => match key.as_str() {
+                "repositoryformatversion" => value == "0",
+                "filemode" | "logallrefupdates" => matches!(value, "true" | "false"),
+                "bare" => value == "false",
+                _ => false,
+            },
+            "remote" => match key.as_str() {
+                "url" => {
+                    value.starts_with("http://127.0.0.1:8787/git/")
+                        && value.ends_with(".git")
+                        && !value
+                            .bytes()
+                            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+                }
+                "fetch" => {
+                    value.starts_with("+refs/heads/")
+                        && value.contains(":refs/remotes/")
+                        && !value.bytes().any(|byte| byte.is_ascii_control())
+                }
+                _ => false,
+            },
+            "branch" => match key.as_str() {
+                "remote" => value == "origin",
+                "merge" => {
+                    value.starts_with("refs/heads/")
+                        && !value.bytes().any(|byte| byte.is_ascii_control())
+                }
+                _ => false,
+            },
+            "user" => {
+                matches!(key.as_str(), "name" | "email")
+                    && !value.bytes().any(|byte| byte.is_ascii_control())
+            }
+            _ => false,
+        };
+        if !allowed {
             return Err(format!(
-                "local Git configuration is forbidden for branch publication: {name}"
+                "local Git configuration key is forbidden for branch publication: {current}.{key}"
             )
             .into());
         }
@@ -3196,7 +3270,6 @@ fn jeryu_branch_push(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
     if !is_full_sha(&expected_head) || expected_head.chars().any(|ch| ch.is_ascii_uppercase()) {
         return Err("--expected-head must be a lowercase full 40-character commit SHA".into());
     }
-    reject_local_git_injection(&path)?;
     if secure_git_output(Some(&path), &["rev-parse", "--verify", "HEAD^{commit}"])? != expected_head
         || secure_git_output(Some(&path), &["branch", "--show-current"])? != branch
         || !secure_git_output(
@@ -3630,6 +3703,8 @@ fn immutable_main_policy(required_check: &str) -> JsonValue {
         "enforce_admins": true,
         "allow_force_pushes": false,
         "allow_deletions": false,
+        "require_signed_commits": false,
+        "require_jankurai_proof": false,
     })
 }
 
@@ -3665,40 +3740,77 @@ fn validate_protection_policy(
     policy: &JsonValue,
     required_check: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let checks = policy.get("required_status_checks");
-    let contexts = checks
-        .and_then(JsonValue::as_array)
-        .or_else(|| checks.and_then(|value| value.get("contexts"))?.as_array());
-    let required_exact = contexts
-        .is_some_and(|values| values.len() == 1 && values[0].as_str() == Some(required_check));
-    let approvals = policy
-        .get("required_approving_review_count")
-        .and_then(JsonValue::as_u64)
-        .or_else(|| {
-            policy
-                .get("required_pull_request_reviews")?
-                .get("required_approving_review_count")?
-                .as_u64()
-        })
-        .unwrap_or(0);
-    let boolean = |name: &str| {
-        policy.get(name).and_then(|value| {
-            value
-                .as_bool()
-                .or_else(|| value.get("enabled").and_then(JsonValue::as_bool))
+    let object = policy
+        .as_object()
+        .ok_or("branch protection readback is not an object")?;
+    let expected_keys = [
+        "allow_deletions",
+        "allow_force_pushes",
+        "enforce_admins",
+        "required_jankurai_proof",
+        "required_linear_history",
+        "required_pull_request_reviews",
+        "required_signatures",
+        "required_status_checks",
+        "updated_at",
+        "url",
+    ];
+    let exact_keys = |value: &JsonValue, keys: &[&str]| {
+        value.as_object().is_some_and(|object| {
+            object.len() == keys.len() && keys.iter().all(|key| object.contains_key(*key))
         })
     };
-    if required_exact
-        && approvals == 1
-        && boolean("required_linear_history") == Some(true)
-        && boolean("enforce_admins") == Some(true)
-        && boolean("allow_force_pushes") == Some(false)
-        && boolean("allow_deletions") == Some(false)
-    {
-        Ok(())
-    } else {
-        Err("branch protection readback does not satisfy the immutable-main policy".into())
+    let enabled = |name: &str, expected: bool| {
+        policy.get(name).is_some_and(|value| {
+            exact_keys(value, &["enabled"])
+                && value.get("enabled").and_then(JsonValue::as_bool) == Some(expected)
+        })
+    };
+    let checks = policy.get("required_status_checks");
+    let reviews = policy.get("required_pull_request_reviews");
+    let url_valid = policy
+        .get("url")
+        .and_then(JsonValue::as_str)
+        .is_some_and(|url| {
+            url.starts_with("/repos/")
+                && url.ends_with("/branches/main/protection")
+                && !url.bytes().any(|byte| byte.is_ascii_control())
+        });
+    let updated_at_valid = policy
+        .get("updated_at")
+        .and_then(JsonValue::as_str)
+        .is_some_and(|value| !value.is_empty() && value.len() <= 128);
+    let valid = object.len() == expected_keys.len()
+        && expected_keys.iter().all(|key| object.contains_key(*key))
+        && checks.is_some_and(|value| {
+            exact_keys(value, &["contexts", "strict"])
+                && value.get("strict").and_then(JsonValue::as_bool) == Some(true)
+                && value
+                    .get("contexts")
+                    .and_then(JsonValue::as_array)
+                    .is_some_and(|contexts| {
+                        contexts.len() == 1 && contexts[0].as_str() == Some(required_check)
+                    })
+        })
+        && reviews.is_some_and(|value| {
+            exact_keys(value, &["required_approving_review_count"])
+                && value
+                    .get("required_approving_review_count")
+                    .and_then(JsonValue::as_u64)
+                    == Some(1)
+        })
+        && enabled("required_linear_history", true)
+        && enabled("enforce_admins", true)
+        && enabled("allow_force_pushes", false)
+        && enabled("allow_deletions", false)
+        && enabled("required_signatures", false)
+        && enabled("required_jankurai_proof", false)
+        && url_valid
+        && updated_at_valid;
+    if valid {
+        return Ok(());
     }
+    Err("branch protection readback is not the exact immutable-main policy".into())
 }
 
 fn reconcile(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -5618,6 +5730,26 @@ mod tests {
         serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
     }
 
+    fn immutable_main_readback(required_check: &str) -> JsonValue {
+        json!({
+            "url": "/repos/jeryu/example/branches/main/protection",
+            "required_status_checks": {
+                "strict": true,
+                "contexts": [required_check],
+            },
+            "required_pull_request_reviews": {
+                "required_approving_review_count": 1,
+            },
+            "enforce_admins": {"enabled": true},
+            "required_linear_history": {"enabled": true},
+            "allow_force_pushes": {"enabled": false},
+            "allow_deletions": {"enabled": false},
+            "required_signatures": {"enabled": false},
+            "required_jankurai_proof": {"enabled": false},
+            "updated_at": "2026-07-16T18:00:00Z",
+        })
+    }
+
     struct JankuraiFixture {
         _root: TestDir,
         repo: PathBuf,
@@ -6465,7 +6597,12 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         )
         .unwrap();
         let policy: JsonValue = serde_json::from_str(protection.body().unwrap()).unwrap();
-        validate_protection_policy(&policy, "example/required").unwrap();
+        assert_eq!(policy, immutable_main_policy("example/required"));
+        validate_protection_policy(
+            &immutable_main_readback("example/required"),
+            "example/required",
+        )
+        .unwrap();
         assert!(validate_protection_policy(&json!({}), "example/required").is_err());
         assert!(plan_jeryu_lifecycle_request(
             "pr-merge",
@@ -6536,6 +6673,37 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         );
         assert_eq!(resolve_commit(&repo, "HEAD").unwrap(), head);
 
+        let marker = root.path().join("fsmonitor-invoked");
+        let monitor = root.path().join("hostile-fsmonitor.sh");
+        fs::write(
+            &monitor,
+            format!("#!/bin/sh\nprintf invoked >'{}'\n", marker.display()),
+        )
+        .unwrap();
+        fs::set_permissions(&monitor, fs::Permissions::from_mode(0o755)).unwrap();
+        run_git_strict(
+            &repo,
+            &["config", "core.fsmonitor", monitor.to_str().unwrap()],
+        )
+        .unwrap();
+        assert!(jeryu_branch_push(vec![
+            "branch-push".to_owned(),
+            "--repo".to_owned(),
+            "jeryu/example".to_owned(),
+            "--repo-path".to_owned(),
+            repo.display().to_string(),
+            "--branch".to_owned(),
+            "main".to_owned(),
+            "--expected-head".to_owned(),
+            head.clone(),
+        ])
+        .is_err());
+        assert!(
+            !marker.exists(),
+            "dry-run branch publication executed hostile core.fsmonitor"
+        );
+        run_git_strict(&repo, &["config", "--unset", "core.fsmonitor"]).unwrap();
+
         run_git_strict(
             &repo,
             &[
@@ -6583,17 +6751,29 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
 
     #[test]
     fn non_owner_is_forbidden_from_disabling_branch_protection() {
-        let mut policy = immutable_main_policy("example/required");
-        policy["enforce_admins"] = json!(false);
+        let mut policy = immutable_main_readback("example/required");
+        policy["enforce_admins"]["enabled"] = json!(false);
         assert!(validate_protection_policy(&policy, "example/required").is_err());
 
-        policy["enforce_admins"] = json!(true);
+        policy["enforce_admins"]["enabled"] = json!(true);
         validate_protection_policy(&policy, "example/required").unwrap();
 
-        policy["required_status_checks"] = json!(["example/required", "unexpected/required"]);
+        policy["required_status_checks"]["contexts"] =
+            json!(["example/required", "unexpected/required"]);
         assert!(validate_protection_policy(&policy, "example/required").is_err());
-        policy["required_status_checks"] = json!(["example/required"]);
-        policy["required_approving_review_count"] = json!(2);
+        policy["required_status_checks"]["contexts"] = json!(["example/required"]);
+        policy["required_pull_request_reviews"]["required_approving_review_count"] = json!(2);
+        assert!(validate_protection_policy(&policy, "example/required").is_err());
+
+        policy = immutable_main_readback("example/required");
+        policy["required_pull_request_reviews"]["bypass_pull_request_allowances"] =
+            json!({"users": ["admin"]});
+        assert!(validate_protection_policy(&policy, "example/required").is_err());
+        policy = immutable_main_readback("example/required");
+        policy["restrictions"] = json!({"users": []});
+        assert!(validate_protection_policy(&policy, "example/required").is_err());
+        policy = immutable_main_readback("example/required");
+        policy["required_signatures"]["enabled"] = json!(true);
         assert!(validate_protection_policy(&policy, "example/required").is_err());
     }
 
