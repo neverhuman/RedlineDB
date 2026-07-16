@@ -5,8 +5,76 @@ ops_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 workspace_root="${REDLINE_SPLIT_ROOT:-$(cd "$ops_root/.." && pwd)}"
 command="${1:-doctor}"
 
+ci_bind_required_path() {
+  local variable="${1:?path variable is required}"
+  local identity_variable="${2:?identity variable is required}"
+  local label="${3:?path label is required}"
+  local expected="${4:?expected path is required}"
+  local expected_state="${5:?expected path state is required}"
+  local actual="${!variable:-$expected}"
+  local current="/"
+  local remainder="${actual#/}"
+  local component identity identity_target
+
+  if [[ "$actual" != "$expected" ]]; then
+    printf 'redlinectl: ci-required %s must be exactly %s, got %s\n' \
+      "$label" "$expected" "$actual" >&2
+    exit 2
+  fi
+  while [[ -n "$remainder" ]]; do
+    component="${remainder%%/*}"
+    current="${current%/}/$component"
+    if [[ "$expected_state" == "absent" && "$remainder" != */* ]]; then
+      if [[ -L "$current" ]]; then
+        printf 'redlinectl: ci-required %s contains a symlink component: %s\n' \
+          "$label" "$current" >&2
+        exit 2
+      fi
+      if [[ -e "$current" && ! -f "$current" ]]; then
+        printf 'redlinectl: ci-required %s is not a regular file: %s\n' \
+          "$label" "$current" >&2
+        exit 2
+      fi
+      break
+    fi
+    if [[ -L "$current" ]]; then
+      printf 'redlinectl: ci-required %s contains a symlink component: %s\n' \
+        "$label" "$current" >&2
+      exit 2
+    fi
+    if [[ ! -e "$current" ]]; then
+      printf 'redlinectl: ci-required %s has a missing component: %s\n' \
+        "$label" "$current" >&2
+      exit 2
+    fi
+    if [[ "$remainder" == */* ]]; then
+      remainder="${remainder#*/}"
+    else
+      remainder=""
+    fi
+  done
+  identity_target="$actual"
+  if [[ "$expected_state" == "file" && ! -f "$actual" ]]; then
+    printf 'redlinectl: ci-required %s is not a regular file: %s\n' \
+      "$label" "$actual" >&2
+    exit 2
+  fi
+  if [[ "$expected_state" == "absent" ]]; then
+    identity_target="${actual%/*}"
+  fi
+  identity="$(command -p stat -Lc '%d:%i' -- "$identity_target")" || {
+    printf 'redlinectl: ci-required cannot bind %s identity: %s\n' \
+      "$label" "$actual" >&2
+    exit 2
+  }
+  printf -v "$variable" '%s' "$expected"
+  printf -v "$identity_variable" '%s' "$identity"
+  export "${variable?}" "${identity_variable?}"
+}
+
 if [[ "$command" == "ci-required" ]]; then
-  physical_workspace_root="$(cd "$ops_root/.." && pwd -P)"
+  physical_ops_root="$(cd "$ops_root" && pwd -P)"
+  physical_workspace_root="$(cd "$physical_ops_root/.." && pwd -P)"
   requested_workspace_root="$physical_workspace_root"
   if [[ -n "${REDLINE_SPLIT_ROOT:-}" ]]; then
     requested_workspace_root="$(cd "$REDLINE_SPLIT_ROOT" 2>/dev/null && pwd -P)" || {
@@ -21,6 +89,15 @@ if [[ "$command" == "ci-required" ]]; then
     exit 2
   fi
   workspace_root="$physical_workspace_root"
+  ci_bind_required_path \
+    REDLINE_SPLIT_MANIFEST REDLINE_CI_MANIFEST_IDENTITY manifest \
+    "$physical_ops_root/repos.manifest.toml" file
+  ci_bind_required_path \
+    REDLINE_SPLIT_LOCK REDLINE_CI_LOCK_IDENTITY authoritative-lock \
+    "$physical_ops_root/redline.lock.toml" file
+  ci_bind_required_path \
+    REDLINE_SPLIT_MIRROR_LOCK REDLINE_CI_MIRROR_IDENTITY compatibility-mirror \
+    "$physical_workspace_root/redline.lock.toml" absent
 fi
 
 export REDLINE_SPLIT_MANIFEST="${REDLINE_SPLIT_MANIFEST:-$ops_root/repos.manifest.toml}"
@@ -33,6 +110,13 @@ case "$command" in
     flock -x 9
     ;;
 esac
+
+if [[ "$command" == "ci-required" &&
+      ( -e "$REDLINE_SPLIT_MIRROR_LOCK" || -L "$REDLINE_SPLIT_MIRROR_LOCK" ) ]]; then
+  printf 'redlinectl: ci-required compatibility-mirror must be absent before Cargo: %s\n' \
+    "$REDLINE_SPLIT_MIRROR_LOCK" >&2
+  exit 2
+fi
 
 if [[ $# -eq 0 ]]; then
   set -- doctor

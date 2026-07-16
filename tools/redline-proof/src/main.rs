@@ -5011,6 +5011,10 @@ fn parse_consumer_assignments(values: Vec<String>) -> Result<BTreeMap<String, Pa
 }
 
 fn validate_ci_required_paths(paths: &Paths) -> Result<()> {
+    let root_parent = paths
+        .root
+        .parent()
+        .ok_or_else(|| error("CI control-plane root has no physical parent"))?;
     for (label, actual, expected) in [
         (
             "CI manifest",
@@ -5025,21 +5029,100 @@ fn validate_ci_required_paths(paths: &Paths) -> Result<()> {
         (
             "CI compatibility mirror",
             paths.mirror.as_path(),
-            paths.root.join("../redline.lock.toml"),
+            root_parent.join("redline.lock.toml"),
         ),
     ] {
-        if absolute_path(actual)? != absolute_path(&expected)? {
+        if actual.as_os_str() != expected.as_os_str() {
             return Err(error(format!(
                 "{label} override is forbidden in the protected required lane: expected {}",
-                absolute_path(&expected)?.display()
+                expected.display()
             )));
         }
     }
     Ok(())
 }
 
-fn ci_required(paths: &Paths) -> Result<()> {
+#[cfg(unix)]
+fn validate_ci_required_path_identity(
+    path: &Path,
+    label: &str,
+    raw_identity: &str,
+    expected_present: bool,
+) -> Result<()> {
+    use std::os::unix::fs::MetadataExt;
+
+    let (device, inode) = raw_identity
+        .split_once(':')
+        .ok_or_else(|| error(format!("{label} bound identity must be DEVICE:INODE")))?;
+    let device = device
+        .parse::<u64>()
+        .map_err(|_| error(format!("{label} bound device is invalid")))?;
+    let inode = inode
+        .parse::<u64>()
+        .map_err(|_| error(format!("{label} bound inode is invalid")))?;
+    let identity_path = if expected_present {
+        require_physical_file(path, label)?;
+        path
+    } else {
+        require_path_absent(path, label)?;
+        reject_symlink_components(path, label)?;
+        path.parent()
+            .ok_or_else(|| error(format!("{label} has no physical parent")))?
+    };
+    let metadata = fs::metadata(identity_path)?;
+    if (metadata.dev(), metadata.ino()) != (device, inode) {
+        return Err(error(format!(
+            "{label} physical identity changed after wrapper validation: {}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+#[cfg(not(unix))]
+fn validate_ci_required_path_identity(
+    path: &Path,
+    label: &str,
+    _raw_identity: &str,
+    _expected_present: bool,
+) -> Result<()> {
+    Err(error(format!(
+        "{label} identity binding requires Unix device and inode metadata: {}",
+        path.display()
+    )))
+}
+
+fn validate_ci_required_path_bindings(paths: &Paths) -> Result<()> {
     validate_ci_required_paths(paths)?;
+    for (label, path, variable, expected_present) in [
+        (
+            "CI manifest",
+            paths.manifest.as_path(),
+            "REDLINE_CI_MANIFEST_IDENTITY",
+            true,
+        ),
+        (
+            "CI authoritative lock",
+            paths.lock.as_path(),
+            "REDLINE_CI_LOCK_IDENTITY",
+            true,
+        ),
+        (
+            "CI compatibility mirror",
+            paths.mirror.as_path(),
+            "REDLINE_CI_MIRROR_IDENTITY",
+            false,
+        ),
+    ] {
+        let identity = env::var(variable)
+            .map_err(|_| error(format!("{label} is missing wrapper physical identity")))?;
+        validate_ci_required_path_identity(path, label, &identity, expected_present)?;
+    }
+    Ok(())
+}
+
+fn ci_required(paths: &Paths) -> Result<()> {
+    validate_ci_required_path_bindings(paths)?;
     validate_physical_checkout(&paths.root)?;
     let predecessor = paths.root.join(CI_PREDECESSOR_LOCK);
     with_ci_compatibility_mirror(&paths.lock, &paths.mirror, &predecessor, || {
@@ -5554,7 +5637,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn ci_required_entry_serializes_mirror_ownership_through_failed_gate_cleanup() {
-        use std::os::unix::fs::PermissionsExt;
+        use std::os::unix::fs::{symlink, PermissionsExt};
 
         let fixture = TestDir::new_in_root("ci-required-flock");
         let workspace = fixture.path().join("workspace");
@@ -5601,6 +5684,9 @@ exec "$REDLINE_FLOCK_TEST_REAL_FLOCK" "$@"
             &fake_cargo,
             r#"#!/usr/bin/env bash
 set -euo pipefail
+if [[ -n "${REDLINE_FLOCK_TEST_CARGO_ENTERED:-}" ]]; then
+  : >"$REDLINE_FLOCK_TEST_CARGO_ENTERED"
+fi
 case "$REDLINE_FLOCK_TEST_ID" in
   first)
     "$REDLINE_FLOCK_TEST_REAL_FLOCK" -n 9
@@ -5639,7 +5725,8 @@ esac
         .unwrap();
         fs::set_permissions(&fake_cargo, fs::Permissions::from_mode(0o755)).unwrap();
 
-        let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(&workspace);
+        fs::write(control.join("repos.manifest.toml"), b"fixture manifest\n").unwrap();
         let sidecar = checksum_path(&mirror);
         let marker = mirror.with_file_name(".redline.lock.toml.ci-compatibility-mirror");
         let first_attempt = fixture.path().join("first-flock-attempted");
@@ -5684,6 +5771,58 @@ esac
             }
             path.exists()
         };
+
+        let outside = fixture.path().join("outside/deep");
+        fs::create_dir_all(&outside).unwrap();
+        symlink(&outside, control.join("path-alias")).unwrap();
+        symlink(&outside, workspace.join("path-alias")).unwrap();
+        for (case_index, (variable, parent, file_name)) in [
+            (
+                "REDLINE_SPLIT_MANIFEST",
+                control.as_path(),
+                "repos.manifest.toml",
+            ),
+            ("REDLINE_SPLIT_LOCK", control.as_path(), "redline.lock.toml"),
+            (
+                "REDLINE_SPLIT_MIRROR_LOCK",
+                workspace.as_path(),
+                "redline.lock.toml",
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            for (variant_index, candidate) in [
+                parent.join(format!("missing/../{file_name}")),
+                parent.join(format!("path-alias/../{file_name}")),
+                PathBuf::from(format!("{}//{file_name}", parent.display())),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let attempt = fixture
+                    .path()
+                    .join(format!("invalid-{case_index}-{variant_index}-flock"));
+                let cargo_entered = fixture
+                    .path()
+                    .join(format!("invalid-{case_index}-{variant_index}-cargo"));
+                let output = Command::new(&redlinectl)
+                    .arg("ci-required")
+                    .env("PATH", &test_path)
+                    .env("REDLINE_SPLIT_ROOT", &workspace)
+                    .env(variable, &candidate)
+                    .env("REDLINE_FLOCK_TEST_ID", "invalid")
+                    .env("REDLINE_FLOCK_TEST_ATTEMPT", &attempt)
+                    .env("REDLINE_FLOCK_TEST_REAL_FLOCK", &real_flock)
+                    .env("REDLINE_FLOCK_TEST_CARGO_ENTERED", &cargo_entered)
+                    .output()
+                    .unwrap();
+                assert_eq!(output.status.code(), Some(2));
+                assert!(String::from_utf8_lossy(&output.stderr).contains("must be exactly"));
+                assert!(!attempt.exists());
+                assert!(!cargo_entered.exists());
+            }
+        }
 
         let first = spawn_entry("first", &first_attempt, &workspace);
         let first_attempted = wait_for(&first_attempt);
@@ -5781,7 +5920,7 @@ esac
         let valid = Paths {
             manifest: root.join("repos.manifest.toml"),
             lock: root.join("redline.lock.toml"),
-            mirror: root.join("../redline.lock.toml"),
+            mirror: fixture.path().join("redline.lock.toml"),
             root: root.clone(),
         };
         validate_ci_required_paths(&valid).unwrap();
@@ -5792,6 +5931,55 @@ esac
             .unwrap_err()
             .to_string();
         assert!(failure.contains("CI compatibility mirror override is forbidden"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ci_required_identity_binding_rejects_replacement_for_every_input() {
+        use std::os::unix::fs::MetadataExt;
+
+        let fixture = TestDir::new_in_root("ci-required-replacement");
+        let root = fixture.path().join("redline-split-ops");
+        fs::create_dir_all(&root).unwrap();
+        let paths = Paths {
+            manifest: root.join("repos.manifest.toml"),
+            lock: root.join("redline.lock.toml"),
+            mirror: fixture.path().join("redline.lock.toml"),
+            root,
+        };
+        validate_ci_required_paths(&paths).unwrap();
+
+        for (label, path, expected_present) in [
+            ("CI manifest", paths.manifest.as_path(), true),
+            ("CI authoritative lock", paths.lock.as_path(), true),
+            ("CI compatibility mirror", paths.mirror.as_path(), false),
+        ] {
+            let identity_path = if expected_present {
+                fs::write(path, b"reviewed identity\n").unwrap();
+                path
+            } else {
+                path.parent().unwrap()
+            };
+            let metadata = fs::metadata(identity_path).unwrap();
+            let binding = format!("{}:{}", metadata.dev(), metadata.ino());
+            validate_ci_required_path_identity(path, label, &binding, expected_present).unwrap();
+            if expected_present {
+                let replacement = path.with_extension("replacement");
+                fs::write(&replacement, b"replacement identity\n").unwrap();
+                fs::rename(replacement, path).unwrap();
+            } else {
+                fs::write(path, b"unexpected mirror owner\n").unwrap();
+            }
+            let failure =
+                validate_ci_required_path_identity(path, label, &binding, expected_present)
+                    .unwrap_err()
+                    .to_string();
+            assert!(
+                failure.contains("physical identity changed after wrapper validation")
+                    || failure.contains("must be absent"),
+                "{label}: {failure}"
+            );
+        }
     }
 
     fn testing_repo() -> Repo {
