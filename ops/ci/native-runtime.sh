@@ -228,11 +228,10 @@ jain_native_source_root() {
   fi
 }
 
-# Create clean detached shared clones at the authority revisions. Shared object
-# reads keep the large native sources fast without registering worktrees or
-# writing into the canonical source repositories, which are read-only inside
-# host CI. Dirty checkout bytes are never read. Git object, tree, and SHA-256
-# tree-manifest identities are verified before checkout.
+# Create clean detached physical clones at the authority revisions without
+# registering linked checkouts or retaining object alternates to the canonical
+# source repositories. Dirty checkout bytes are never read. Git object, tree,
+# and SHA-256 tree-manifest identities are verified before checkout.
 jain_stage_native_source_worktrees() {
   local authority="${1:?native source authority is required}"
   local source_input="${2:?native source root is required}"
@@ -290,12 +289,26 @@ jain_stage_native_source_worktrees() {
       jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
       return 1
     }
-    git clone --quiet --shared --no-checkout "$source_root/$learner" \
+    git clone --quiet --no-local --no-checkout "$source_root/$learner" \
       "$staged_root/$learner" || {
       jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
       return 1
     }
     git -C "$staged_root/$learner" checkout --quiet --detach "$revision" || {
+      jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+      return 1
+    }
+    git -C "$staged_root/$learner" remote remove origin || return 1
+    [[ -d "$staged_root/$learner/.git" \
+      && ! -e "$staged_root/$learner/.git/commondir" \
+      && ! -e "$staged_root/$learner/.git/worktrees" \
+      && ! -e "$staged_root/$learner/.git/objects/info/alternates" \
+      && "$(git -C "$staged_root/$learner" rev-parse --path-format=absolute --absolute-git-dir)" \
+        == "$staged_root/$learner/.git" \
+      && "$(git -C "$staged_root/$learner" rev-parse --path-format=absolute --git-common-dir)" \
+        == "$staged_root/$learner/.git" \
+      && -z "$(find "$staged_root/$learner" -xdev -type l -print -quit)" \
+      && -z "$(find "$staged_root/$learner" -xdev ! -type d ! -type f -print -quit)" ]] || {
       jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
       return 1
     }
@@ -343,13 +356,27 @@ jain_stage_native_source_worktrees() {
         return 1
       }
       mkdir -p "$(dirname "$staged_root/$learner/$sub_path")"
-      git clone --quiet --shared --no-checkout \
+      git clone --quiet --no-local --no-checkout \
         "$source_root/$learner/$sub_path" "$staged_root/$learner/$sub_path" || {
         jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
         return 1
       }
       git -C "$staged_root/$learner/$sub_path" checkout --quiet --detach \
         "$sub_revision" || {
+        jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+        return 1
+      }
+      git -C "$staged_root/$learner/$sub_path" remote remove origin || return 1
+      [[ -d "$staged_root/$learner/$sub_path/.git" \
+        && ! -e "$staged_root/$learner/$sub_path/.git/commondir" \
+        && ! -e "$staged_root/$learner/$sub_path/.git/worktrees" \
+        && ! -e "$staged_root/$learner/$sub_path/.git/objects/info/alternates" \
+        && "$(git -C "$staged_root/$learner/$sub_path" rev-parse --path-format=absolute --absolute-git-dir)" \
+          == "$staged_root/$learner/$sub_path/.git" \
+        && "$(git -C "$staged_root/$learner/$sub_path" rev-parse --path-format=absolute --git-common-dir)" \
+          == "$staged_root/$learner/$sub_path/.git" \
+        && -z "$(find "$staged_root/$learner/$sub_path" -xdev -type l -print -quit)" \
+        && -z "$(find "$staged_root/$learner/$sub_path" -xdev ! -type d ! -type f -print -quit)" ]] || {
         jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
         return 1
       }
@@ -362,6 +389,10 @@ jain_cleanup_native_source_worktrees() {
   local source_input="${2:?native source root is required}"
   local staged_root="${3:?staged native source root is required}"
   : "$authority" "$source_input"
+  [[ "$staged_root" == /* && "$staged_root" != / \
+    && -z "$(find "$staged_root" -xdev -type l -print -quit 2>/dev/null)" \
+    && -z "$(find "$staged_root" -xdev ! -type d ! -type f -print -quit 2>/dev/null)" ]] \
+    || return 1
   rm -rf -- "$staged_root"
 }
 

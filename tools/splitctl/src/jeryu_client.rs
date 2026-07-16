@@ -11,15 +11,17 @@ use std::{
     },
     path::{Component, Path},
     sync::atomic::{compiler_fence, Ordering},
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 const JERYU_ADDR: SocketAddr = SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 8787));
 const JERYU_HOST: &str = "127.0.0.1:8787";
 const MAX_TOKEN_BYTES: u64 = 4096;
 const MAX_HEADER_BYTES: usize = 32 * 1024;
-const MAX_BODY_BYTES: usize = 8 * 1024 * 1024;
+const MAX_BODY_BYTES: usize = 4 * 1024 * 1024;
 const MAX_WIRE_BYTES: usize = MAX_HEADER_BYTES + MAX_BODY_BYTES + 1024 * 1024;
+const MAX_HEADER_COUNT: usize = 128;
+const MAX_LINE_BYTES: usize = 4 * 1024;
 const IO_TIMEOUT: Duration = Duration::from_secs(15);
 
 #[derive(Debug)]
@@ -52,12 +54,6 @@ struct SecretBytes(Vec<u8>);
 impl SecretBytes {
     fn as_slice(&self) -> &[u8] {
         &self.0
-    }
-}
-
-impl fmt::Debug for SecretBytes {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.write_str("SecretBytes([REDACTED])")
     }
 }
 
@@ -141,6 +137,7 @@ impl JeryuRequest {
         repo: &str,
         title: &str,
         head: &str,
+        expected_head: &str,
         base: &str,
         body: &str,
         draft: bool,
@@ -148,6 +145,7 @@ impl JeryuRequest {
     ) -> Result<Self> {
         validate_repo_slug(repo)?;
         validate_ref_name(head, "PR head")?;
+        validate_sha(expected_head)?;
         validate_ref_name(base, "PR base")?;
         validate_actor(actor)?;
         Self::new(
@@ -157,6 +155,7 @@ impl JeryuRequest {
                 json!({
                     "title": title,
                     "head": head,
+                    "head_sha": expected_head,
                     "base": base,
                     "body": body,
                     "draft": draft,
@@ -197,6 +196,12 @@ impl JeryuRequest {
         )
     }
 
+    pub fn pr_details(repo: &str, number: u64) -> Result<Self> {
+        validate_repo_slug(repo)?;
+        validate_number(number)?;
+        Self::new(Method::Get, format!("/repos/{repo}/pulls/{number}"), None)
+    }
+
     pub fn pr_approval(
         repo: &str,
         number: u64,
@@ -225,13 +230,14 @@ impl JeryuRequest {
         )
     }
 
-    pub fn pr_merge(repo: &str, number: u64) -> Result<Self> {
+    pub fn pr_merge(repo: &str, number: u64, expected_head: &str) -> Result<Self> {
         validate_repo_slug(repo)?;
         validate_number(number)?;
+        validate_sha(expected_head)?;
         Self::new(
             Method::Put,
             format!("/repos/{repo}/pulls/{number}/merge"),
-            Some("{}".to_owned()),
+            Some(json!({"sha": expected_head, "merge_method": "merge"}).to_string()),
         )
     }
 
@@ -267,6 +273,16 @@ impl JeryuRequest {
             Some(body.to_string()),
         )
     }
+
+    pub fn commit_status_readback(repo: &str, sha: &str) -> Result<Self> {
+        validate_repo_slug(repo)?;
+        validate_sha(sha)?;
+        Self::new(
+            Method::Get,
+            format!("/repos/{repo}/commits/{sha}/status"),
+            None,
+        )
+    }
 }
 
 pub struct JeryuClient {
@@ -298,6 +314,25 @@ impl HostCiPublication {
         validate_publication_text(&self.required_check, "required check")?;
         validate_publication_text(&self.proof_attempt_id, "proof attempt ID")?;
         validate_publication_text(&self.proof_summary, "proof summary")?;
+        let receipt = format!("receipt_sha256={}", self.proof_receipt_sha256);
+        let attempt = format!("attempt_id={}", self.proof_attempt_id);
+        if self
+            .proof_summary
+            .split_ascii_whitespace()
+            .filter(|value| *value == receipt)
+            .count()
+            != 1
+            || self
+                .proof_summary
+                .split_ascii_whitespace()
+                .filter(|value| *value == attempt)
+                .count()
+                != 1
+        {
+            return Err(JeryuError::new(
+                "host-CI proof summary must contain the exact receipt and attempt markers once",
+            ));
+        }
         validate_publication_text(&self.status_description, "status description")
     }
 }
@@ -321,16 +356,6 @@ impl fmt::Display for PublishFailure {
 }
 
 impl std::error::Error for PublishFailure {}
-
-impl fmt::Debug for JeryuClient {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("JeryuClient")
-            .field("token", &self.token)
-            .field("address", &self.address)
-            .finish()
-    }
-}
 
 impl JeryuClient {
     pub fn from_token_file(path: &Path) -> Result<Self> {
@@ -376,7 +401,7 @@ impl JeryuClient {
         stream.shutdown(Shutdown::Write)?;
         drop(wire);
 
-        let response = read_response(&mut stream)?;
+        let response = read_response(&mut stream, Instant::now() + IO_TIMEOUT)?;
         if !(200..300).contains(&response.status) {
             let message = redact_and_sanitize(&response.body, self.token.as_slice());
             return Err(JeryuError::new(format!(
@@ -418,7 +443,7 @@ impl JeryuClient {
             }),
         )
         .map_err(PublishFailure::before)?;
-        self.execute(&proof).map_err(PublishFailure::before)?;
+        self.execute(&proof).map_err(PublishFailure::after)?;
 
         let readback = JeryuRequest::checks(&publication.repo, &publication.head_sha)
             .map_err(PublishFailure::after)?;
@@ -437,6 +462,13 @@ impl JeryuClient {
         .map_err(PublishFailure::after)?;
         self.execute(&required).map_err(PublishFailure::after)?;
 
+        let required_readback = JeryuRequest::checks(&publication.repo, &publication.head_sha)
+            .map_err(PublishFailure::after)?;
+        let response = self
+            .execute(&required_readback)
+            .map_err(PublishFailure::after)?;
+        validate_required_readback(&response, publication).map_err(PublishFailure::after)?;
+
         let status = JeryuRequest::commit_status(
             &publication.repo,
             &publication.head_sha,
@@ -452,6 +484,14 @@ impl JeryuClient {
         )
         .map_err(PublishFailure::after)?;
         self.execute(&status).map_err(PublishFailure::after)?;
+
+        let status_readback =
+            JeryuRequest::commit_status_readback(&publication.repo, &publication.head_sha)
+                .map_err(PublishFailure::after)?;
+        let response = self
+            .execute(&status_readback)
+            .map_err(PublishFailure::after)?;
+        validate_status_readback(&response, publication).map_err(PublishFailure::after)?;
         Ok(())
     }
 
@@ -497,8 +537,6 @@ fn validate_proof_readback(response: &JsonValue, publication: &HostCiPublication
         .get("check_runs")
         .and_then(JsonValue::as_array)
         .ok_or_else(|| JeryuError::new("Jeryu proof readback has no check_runs array"))?;
-    let receipt = format!("receipt_sha256={}", publication.proof_receipt_sha256);
-    let attempt = format!("attempt_id={}", publication.proof_attempt_id);
     let matches = runs
         .iter()
         .filter(|run| {
@@ -512,7 +550,7 @@ fn validate_proof_readback(response: &JsonValue, publication: &HostCiPublication
                     .get("output")
                     .and_then(|output| output.get("summary"))
                     .and_then(JsonValue::as_str)
-                    .is_some_and(|summary| summary.contains(&receipt) && summary.contains(&attempt))
+                    == Some(publication.proof_summary.as_str())
         })
         .count();
     if matches == 1 {
@@ -520,6 +558,65 @@ fn validate_proof_readback(response: &JsonValue, publication: &HostCiPublication
     } else {
         Err(JeryuError::new(
             "Jeryu proof readback does not exactly match the published proof",
+        ))
+    }
+}
+
+fn validate_required_readback(response: &JsonValue, publication: &HostCiPublication) -> Result<()> {
+    let runs = response
+        .get("check_runs")
+        .and_then(JsonValue::as_array)
+        .ok_or_else(|| JeryuError::new("Jeryu required-check readback has no check_runs array"))?;
+    let matches = runs
+        .iter()
+        .filter(|run| {
+            run.get("name").and_then(JsonValue::as_str) == Some(publication.required_check.as_str())
+                && run.get("head_sha").and_then(JsonValue::as_str)
+                    == Some(publication.head_sha.as_str())
+                && run.get("status").and_then(JsonValue::as_str) == Some("completed")
+                && run.get("conclusion").and_then(JsonValue::as_str)
+                    == Some(publication.conclusion.as_str())
+        })
+        .count();
+    if matches == 1 {
+        Ok(())
+    } else {
+        Err(JeryuError::new(
+            "Jeryu required-check readback does not exactly match the publication",
+        ))
+    }
+}
+
+fn validate_status_readback(response: &JsonValue, publication: &HostCiPublication) -> Result<()> {
+    if response.get("sha").and_then(JsonValue::as_str) != Some(publication.head_sha.as_str()) {
+        return Err(JeryuError::new(
+            "Jeryu commit-status readback names the wrong commit",
+        ));
+    }
+    let expected_state = if publication.conclusion == "success" {
+        "success"
+    } else {
+        "failure"
+    };
+    let statuses = response
+        .get("statuses")
+        .and_then(JsonValue::as_array)
+        .ok_or_else(|| JeryuError::new("Jeryu commit-status readback has no statuses array"))?;
+    let matches = statuses
+        .iter()
+        .filter(|status| {
+            status.get("context").and_then(JsonValue::as_str)
+                == Some(publication.required_check.as_str())
+                && status.get("state").and_then(JsonValue::as_str) == Some(expected_state)
+                && status.get("description").and_then(JsonValue::as_str)
+                    == Some(publication.status_description.as_str())
+        })
+        .count();
+    if matches == 1 {
+        Ok(())
+    } else {
+        Err(JeryuError::new(
+            "Jeryu commit-status readback does not exactly match the publication",
         ))
     }
 }
@@ -780,7 +877,7 @@ struct HttpResponse {
     body: Vec<u8>,
 }
 
-fn read_response(stream: &mut TcpStream) -> Result<HttpResponse> {
+fn read_response(stream: &mut TcpStream, deadline: Instant) -> Result<HttpResponse> {
     let mut wire = Vec::new();
     let header_end = loop {
         if let Some(index) = find_bytes(&wire, b"\r\n\r\n") {
@@ -791,7 +888,7 @@ fn read_response(stream: &mut TcpStream) -> Result<HttpResponse> {
                 "local Jeryu response headers are oversized",
             ));
         }
-        if !read_more(stream, &mut wire)? {
+        if !read_more(stream, &mut wire, deadline)? {
             return Err(JeryuError::new(
                 "local Jeryu response headers are truncated",
             ));
@@ -804,12 +901,17 @@ fn read_response(stream: &mut TcpStream) -> Result<HttpResponse> {
     }
     let head = parse_response_head(&wire[..header_end])?;
     let mut body_wire = wire.split_off(header_end);
-    let body = if let Some(length) = head.content_length {
+    let body = if head.status == 204 {
+        if !body_wire.is_empty() {
+            return Err(JeryuError::new("HTTP 204 response carried a body"));
+        }
+        Vec::new()
+    } else if let Some(length) = head.content_length {
         if length > MAX_BODY_BYTES {
             return Err(JeryuError::new("local Jeryu response body is oversized"));
         }
         while body_wire.len() < length {
-            if !read_more(stream, &mut body_wire)? {
+            if !read_more(stream, &mut body_wire, deadline)? {
                 return Err(JeryuError::new("local Jeryu response body is truncated"));
             }
         }
@@ -818,45 +920,48 @@ fn read_response(stream: &mut TcpStream) -> Result<HttpResponse> {
         }
         body_wire
     } else if head.chunked {
-        loop {
-            if let Some((decoded, consumed)) = decode_chunked(&body_wire)? {
-                if consumed != body_wire.len() {
-                    return Err(JeryuError::new(
-                        "local Jeryu chunked body has trailing bytes",
-                    ));
-                }
-                break decoded;
-            }
-            if body_wire.len() > MAX_WIRE_BYTES {
-                return Err(JeryuError::new("local Jeryu chunked body is oversized"));
-            }
-            if !read_more(stream, &mut body_wire)? {
-                return Err(JeryuError::new("local Jeryu chunked body is truncated"));
-            }
+        read_chunked_body(stream, body_wire, deadline)?
+    } else if head.close_delimited {
+        if body_wire.len() > MAX_BODY_BYTES {
+            return Err(JeryuError::new("local Jeryu response body is oversized"));
         }
-    } else {
-        while read_more(stream, &mut body_wire)? {
+        while read_more(stream, &mut body_wire, deadline)? {
             if body_wire.len() > MAX_BODY_BYTES {
                 return Err(JeryuError::new("local Jeryu response body is oversized"));
             }
         }
         body_wire
+    } else {
+        return Err(JeryuError::new(
+            "HTTP/1.1 response has no explicit body framing",
+        ));
     };
-    if head.status == 204 && !body.is_empty() {
-        return Err(JeryuError::new("HTTP 204 response carried a body"));
-    }
     Ok(HttpResponse {
         status: head.status,
         body,
     })
 }
 
-fn read_more(stream: &mut TcpStream, bytes: &mut Vec<u8>) -> Result<bool> {
+fn read_more(stream: &mut TcpStream, bytes: &mut Vec<u8>, deadline: Instant) -> Result<bool> {
     if bytes.len() >= MAX_WIRE_BYTES {
         return Err(JeryuError::new("local Jeryu response is oversized"));
     }
+    let remaining = deadline
+        .checked_duration_since(Instant::now())
+        .filter(|remaining| !remaining.is_zero())
+        .ok_or_else(|| JeryuError::new("local Jeryu response deadline exceeded"))?;
+    stream.set_read_timeout(Some(remaining.min(IO_TIMEOUT)))?;
     let mut buffer = [0_u8; 8192];
-    let count = stream.read(&mut buffer)?;
+    let count = stream.read(&mut buffer).map_err(|error| {
+        if matches!(
+            error.kind(),
+            io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+        ) {
+            JeryuError::new("local Jeryu response deadline exceeded")
+        } else {
+            error.into()
+        }
+    })?;
     if count == 0 {
         return Ok(false);
     }
@@ -871,6 +976,7 @@ struct ResponseHead {
     status: u16,
     content_length: Option<usize>,
     chunked: bool,
+    close_delimited: bool,
 }
 
 fn parse_response_head(bytes: &[u8]) -> Result<ResponseHead> {
@@ -885,6 +991,11 @@ fn parse_response_head(bytes: &[u8]) -> Result<ResponseHead> {
     let status_line = lines
         .next()
         .ok_or_else(|| JeryuError::new("local Jeryu response has no status line"))?;
+    if status_line.len() > MAX_LINE_BYTES {
+        return Err(JeryuError::new(
+            "local Jeryu response status line is oversized",
+        ));
+    }
     let mut status_parts = status_line.splitn(3, ' ');
     let version = status_parts.next().unwrap_or_default();
     let status_text = status_parts.next().unwrap_or_default();
@@ -907,7 +1018,16 @@ fn parse_response_head(bytes: &[u8]) -> Result<ResponseHead> {
 
     let mut content_length = None;
     let mut transfer_encoding = None;
-    for line in lines {
+    let mut connection = None;
+    for (index, line) in lines.enumerate() {
+        if index >= MAX_HEADER_COUNT {
+            return Err(JeryuError::new("local Jeryu response has too many headers"));
+        }
+        if line.len() > MAX_LINE_BYTES {
+            return Err(JeryuError::new(
+                "local Jeryu response header line is oversized",
+            ));
+        }
         let (name, value) = line
             .split_once(':')
             .ok_or_else(|| JeryuError::new("local Jeryu response header is malformed"))?;
@@ -943,6 +1063,13 @@ fn parse_response_head(bytes: &[u8]) -> Result<ResponseHead> {
                 ));
             }
             transfer_encoding = Some(value.to_ascii_lowercase());
+        } else if name.eq_ignore_ascii_case("connection") {
+            if connection.is_some() {
+                return Err(JeryuError::new(
+                    "local Jeryu response has duplicate connection headers",
+                ));
+            }
+            connection = Some(value.to_ascii_lowercase());
         } else if name.eq_ignore_ascii_case("content-encoding")
             && !value.eq_ignore_ascii_case("identity")
         {
@@ -968,10 +1095,21 @@ fn parse_response_head(bytes: &[u8]) -> Result<ResponseHead> {
     if status == 204 && (chunked || content_length.is_some_and(|length| length != 0)) {
         return Err(JeryuError::new("HTTP 204 response declares a body"));
     }
+    let explicit_close = connection.as_deref().is_some_and(|value| {
+        value
+            .split(',')
+            .map(str::trim)
+            .any(|token| token.eq_ignore_ascii_case("close"))
+    });
+    let close_delimited = content_length.is_none()
+        && !chunked
+        && status != 204
+        && (version == "HTTP/1.0" || explicit_close);
     Ok(ResponseHead {
         status,
         content_length,
         chunked,
+        close_delimited,
     })
 }
 
@@ -983,14 +1121,15 @@ fn valid_crlf(bytes: &[u8]) -> bool {
     })
 }
 
-fn decode_chunked(bytes: &[u8]) -> Result<Option<(Vec<u8>, usize)>> {
+fn read_chunked_body(
+    stream: &mut TcpStream,
+    mut bytes: Vec<u8>,
+    deadline: Instant,
+) -> Result<Vec<u8>> {
     let mut cursor = 0;
     let mut decoded = Vec::new();
     loop {
-        let Some(line_end) = find_bytes(&bytes[cursor..], b"\r\n") else {
-            return Ok(None);
-        };
-        let line_end = cursor + line_end;
+        let line_end = read_line_end(stream, &mut bytes, cursor, deadline, "chunk size")?;
         let line = &bytes[cursor..line_end];
         if line.is_empty() || line.len() > 16 || !line.iter().all(u8::is_ascii_hexdigit) {
             return Err(JeryuError::new("local Jeryu chunk size is malformed"));
@@ -1001,18 +1140,26 @@ fn decode_chunked(bytes: &[u8]) -> Result<Option<(Vec<u8>, usize)>> {
             .map_err(|_| JeryuError::new("local Jeryu chunk size is malformed"))?;
         cursor = line_end + 2;
         if size == 0 {
-            loop {
-                let Some(trailer_end) = find_bytes(&bytes[cursor..], b"\r\n") else {
-                    return Ok(None);
-                };
-                let trailer_end = cursor + trailer_end;
+            for trailer_count in 0..=MAX_HEADER_COUNT {
+                let trailer_end = read_line_end(stream, &mut bytes, cursor, deadline, "trailer")?;
                 if trailer_end == cursor {
-                    return Ok(Some((decoded, trailer_end + 2)));
+                    if trailer_end + 2 != bytes.len() {
+                        return Err(JeryuError::new(
+                            "local Jeryu chunked body has trailing bytes",
+                        ));
+                    }
+                    return Ok(decoded);
+                }
+                if trailer_count == MAX_HEADER_COUNT {
+                    return Err(JeryuError::new(
+                        "local Jeryu response has too many trailers",
+                    ));
                 }
                 let trailer = &bytes[cursor..trailer_end];
                 validate_trailer(trailer)?;
                 cursor = trailer_end + 2;
             }
+            unreachable!();
         }
         if size > MAX_BODY_BYTES.saturating_sub(decoded.len()) {
             return Err(JeryuError::new("local Jeryu chunked body is oversized"));
@@ -1020,8 +1167,10 @@ fn decode_chunked(bytes: &[u8]) -> Result<Option<(Vec<u8>, usize)>> {
         let Some(data_end) = cursor.checked_add(size) else {
             return Err(JeryuError::new("local Jeryu chunk size is oversized"));
         };
-        if bytes.len() < data_end + 2 {
-            return Ok(None);
+        while bytes.len() < data_end + 2 {
+            if !read_more(stream, &mut bytes, deadline)? {
+                return Err(JeryuError::new("local Jeryu chunked body is truncated"));
+            }
         }
         if &bytes[data_end..data_end + 2] != b"\r\n" {
             return Err(JeryuError::new("local Jeryu chunk terminator is malformed"));
@@ -1031,7 +1180,40 @@ fn decode_chunked(bytes: &[u8]) -> Result<Option<(Vec<u8>, usize)>> {
     }
 }
 
+fn read_line_end(
+    stream: &mut TcpStream,
+    bytes: &mut Vec<u8>,
+    start: usize,
+    deadline: Instant,
+    label: &str,
+) -> Result<usize> {
+    loop {
+        if let Some(relative) = find_bytes(&bytes[start..], b"\r\n") {
+            let end = start + relative;
+            if end - start > MAX_LINE_BYTES {
+                return Err(JeryuError::new(format!(
+                    "local Jeryu {label} line is oversized"
+                )));
+            }
+            return Ok(end);
+        }
+        if bytes.len().saturating_sub(start) > MAX_LINE_BYTES {
+            return Err(JeryuError::new(format!(
+                "local Jeryu {label} line is oversized"
+            )));
+        }
+        if !read_more(stream, bytes, deadline)? {
+            return Err(JeryuError::new(format!(
+                "local Jeryu {label} line is truncated"
+            )));
+        }
+    }
+}
+
 fn validate_trailer(line: &[u8]) -> Result<()> {
+    if line.len() > MAX_LINE_BYTES {
+        return Err(JeryuError::new("local Jeryu trailer line is oversized"));
+    }
     let text = std::str::from_utf8(line)
         .map_err(|_| JeryuError::new("local Jeryu trailer is malformed"))?;
     let (name, value) = text
@@ -1145,7 +1327,7 @@ mod tests {
             token_value()
         );
         let client = JeryuClient::from_token_file(&path).unwrap();
-        assert!(!format!("{client:?}").contains("fixture-token"));
+        drop(client);
         for entry in fs::read_dir("/proc/self/fd").unwrap() {
             let Ok(entry) = entry else { continue };
             let Ok(target) = fs::read_link(entry.path()) else {
@@ -1271,7 +1453,10 @@ mod tests {
                 }
             }
             for part in response_parts {
-                stream.write_all(&part).unwrap();
+                if let Err(error) = stream.write_all(&part) {
+                    assert_eq!(error.kind(), io::ErrorKind::BrokenPipe);
+                    break;
+                }
                 thread::yield_now();
             }
             request
@@ -1352,9 +1537,32 @@ mod tests {
         });
         let responses = vec![
             json_response("201 Created", json!({})),
-            json_response("200 OK", json!({"check_runs": [proof_run]})),
+            json_response("200 OK", json!({"check_runs": [proof_run.clone()]})),
             json_response("201 Created", json!({})),
+            json_response(
+                "200 OK",
+                json!({"check_runs": [
+                    proof_run,
+                    {
+                        "name": publication.required_check,
+                        "head_sha": publication.head_sha,
+                        "status": "completed",
+                        "conclusion": publication.conclusion,
+                    }
+                ]}),
+            ),
             json_response("201 Created", json!({})),
+            json_response(
+                "200 OK",
+                json!({
+                    "sha": publication.head_sha,
+                    "statuses": [{
+                        "context": publication.required_check,
+                        "state": "success",
+                        "description": publication.status_description,
+                    }]
+                }),
+            ),
         ];
         let (address, server) = serve_sequence(responses);
         let client = JeryuClient::for_test(token_value(), address);
@@ -1365,7 +1573,9 @@ mod tests {
                 "POST /repos/jeryu/example/check-runs HTTP/1.1",
                 "GET /repos/jeryu/example/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs HTTP/1.1",
                 "POST /repos/jeryu/example/check-runs HTTP/1.1",
+                "GET /repos/jeryu/example/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/check-runs HTTP/1.1",
                 "POST /repos/jeryu/example/statuses/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa HTTP/1.1",
+                "GET /repos/jeryu/example/commits/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/status HTTP/1.1",
             ]
         );
     }
@@ -1379,7 +1589,7 @@ mod tests {
         )]);
         let client = JeryuClient::for_test(token_value(), address);
         let failure = client.publish_host_ci(&publication).unwrap_err();
-        assert!(!failure.publication_started());
+        assert!(failure.publication_started());
         assert_eq!(server.join().unwrap().len(), 1);
 
         let (address, server) = serve_sequence(vec![
@@ -1414,6 +1624,14 @@ mod tests {
             execute_response(vec![b"HTTP/1.0 200 OK\r\n\r\n{}".to_vec()]).unwrap(),
             json!({})
         );
+        assert_eq!(
+            execute_response(vec![
+                b"HTTP/1.1 200 OK\r\nConnection: close\r\n\r\n{}".to_vec()
+            ])
+            .unwrap(),
+            json!({})
+        );
+        assert!(execute_response(vec![b"HTTP/1.1 200 OK\r\n\r\n{}".to_vec()]).is_err());
     }
 
     #[test]
@@ -1463,6 +1681,19 @@ mod tests {
         let mut oversized = b"HTTP/1.1 200 OK\r\n\r\n".to_vec();
         oversized.resize(MAX_BODY_BYTES + MAX_HEADER_BYTES + 1, b'x');
         assert!(execute_response(vec![oversized]).is_err());
+
+        let mut too_many_headers = b"HTTP/1.1 200 OK\r\n".to_vec();
+        for index in 0..=MAX_HEADER_COUNT {
+            too_many_headers.extend_from_slice(format!("X-{index}: value\r\n").as_bytes());
+        }
+        too_many_headers.extend_from_slice(b"Content-Length: 2\r\n\r\n{}");
+        assert!(execute_response(vec![too_many_headers]).is_err());
+
+        let oversized_line = format!(
+            "HTTP/1.1 200 OK\r\nX-Long: {}\r\nContent-Length: 2\r\n\r\n{{}}",
+            "x".repeat(MAX_LINE_BYTES + 1)
+        );
+        assert!(execute_response(vec![oversized_line.into_bytes()]).is_err());
     }
 
     #[test]
@@ -1501,11 +1732,6 @@ mod tests {
 
     #[test]
     fn client_debug_and_proc_metadata_do_not_disclose_secret() {
-        let client = JeryuClient::for_test(
-            token_value(),
-            SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::LOCALHOST, 1)),
-        );
-        assert!(!format!("{client:?}").contains("fixture-token"));
         assert_proc_non_disclosure(token_value());
     }
 

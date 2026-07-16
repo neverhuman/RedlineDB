@@ -56,7 +56,8 @@ Required-check publication is a protected-host operation, not a capability of
 an ordinary source checkout. The v4 boundary runs the product gate and governed
 Jankurai audit in separate network-isolated units, validates exact-SHA evidence
 under root-owned storage, and publishes and reads back `jankurai/proof` before
-publishing `<repo>/required` and its commit status.
+publishing and reading back `<repo>/required`, then publishing and reading back
+its commit status.
 
 Install or update that boundary only from a clean protected-merged
 `jain-split-ops` commit using the reviewed procedure in

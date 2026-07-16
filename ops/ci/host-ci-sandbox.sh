@@ -155,7 +155,7 @@ done
 caller_request="$(realpath -e -- "$request")" || fail 'sandbox request missing'
 bootstrap_root="$(dirname "$caller_request")"
 case "$bootstrap_root" in
-  /tmp/split-host-ci-bootstrap.??????) ;;
+  "$family_root"/target/host-ci-sandboxes/split-host-ci-bootstrap.??????) ;;
   *) fail 'request is outside a host-CI bootstrap directory' ;;
 esac
 [[ "$caller_request" == "$bootstrap_root/sandbox-request.json" \

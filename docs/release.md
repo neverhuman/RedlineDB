@@ -40,7 +40,8 @@ and the governed Jankurai binary named by its protected installation receipt.
 It seals the auditor report and validated
 `jain.jankurai-exact-sha-evidence/v1` receipt under root-owned storage.
 `jankurai/proof` must be published and read back before
-`<repo>/required` or its commit status. Repository, SHA, policy, auditor,
+`<repo>/required`; the exact required check must be read back before the commit
+status, and that status must also be read back. Repository, SHA, policy, auditor,
 score, ratchet, conformance, clean-tree, run, attempt, seal, or readback
 mismatches fail closed.
 

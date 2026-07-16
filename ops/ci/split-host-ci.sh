@@ -3,7 +3,7 @@
 #
 # Modeled on veox-split/jain-ctl/host-ci.sh (jain stays the control plane;
 # the host is the runner) with one split-family addition: the sha is checked
-# out into a temp dir ALONGSIDE SYMLINKS to the sibling split repos, so the
+# out into a standalone physical clone alongside physical sibling clones, so the
 # workspaces' local `[patch]` path dependencies (../jain-core/...) resolve
 # exactly as they do in the canonical checkout layout.
 #
@@ -37,6 +37,7 @@ fi
 # created by host-ci-sandbox. Caller-owned state and checkout paths are invalid.
 
 REEXEC_STATE="${JAIN_HOST_CI_REEXEC_STATE:-}"
+SPLIT_ROOT="${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}"
 [[ "$REEXEC_STATE" == /opt/jain-ci/authority/reexec-state.json \
   && -f "$REEXEC_STATE" && ! -L "$REEXEC_STATE" \
   && "$(stat -c '%a:%h' -- "$REEXEC_STATE")" == '444:1' \
@@ -47,7 +48,7 @@ jq -e '
   select(.schema_version == "jain.host-ci-reexec/v4")
   | select(.source_root == "/opt/jain-ci/authority/control-plane")
   | select(.exact_root == "/opt/jain-ci/authority/control-plane")
-  | select(.result_path | type == "string" and startswith("/tmp/split-host-ci-bootstrap."))
+  | select(.result_path | type == "string" and startswith("/"))
   | select(.splitctl_path == "/opt/jain-ci/authority/splitctl")
   | select(.commit | test("^[0-9a-f]{40}$"))' "$REEXEC_STATE" >/dev/null \
   || exit 2
@@ -66,6 +67,8 @@ SPLITCTL_BIN="$(realpath -e -- "$(jq -er '.splitctl_path' "$REEXEC_STATE")")" \
   && "$(stat -c '%a:%h' -- "$SPLITCTL_BIN")" == '555:1' \
   && "$CHILD_RESULT_PATH" \
     == "${JAIN_HOST_CI_WRITABLE_ROOT:?}/worker-evidence.json" \
+  && "$JAIN_HOST_CI_WRITABLE_ROOT" \
+    == "$SPLIT_ROOT"/target/host-ci-sandboxes/split-host-ci-bootstrap.??????/writable \
   && ! -e "$CHILD_RESULT_PATH" \
   && "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
     -C "$OPS_ROOT" rev-parse --verify 'HEAD^{commit}')" \
@@ -98,7 +101,6 @@ source "$OPS_ROOT/ops/ci/pinned-advisory.sh"
 # now lives in its own repo (jain-split-ops/), a sibling of the family members, so
 # a location-derived root would be wrong. Callers (rollout-pr-flow.sh) pass it;
 # default to the conventional root and assert it is really a family root.
-SPLIT_ROOT="${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}"
 [ -d "$SPLIT_ROOT/jain-core" ] || { printf '[split-host-ci] JAIN_SPLIT_ROOT=%s is not a split family root (no jain-core/)\n' "$SPLIT_ROOT" >&2; exit 2; }
 
 say() { printf '[split-host-ci] %s\n' "$*" >&2; }
@@ -232,7 +234,10 @@ git -C "$REPO_PATH" cat-file -e "$SHA^{commit}" 2>/dev/null || {
   exit 2
 }
 
-tmp="$(mktemp -d /tmp/split-host-ci.XXXXXX)"
+checkout_root="${JAIN_HOST_CI_WRITABLE_ROOT:?}/physical-checkouts"
+mkdir -p "$checkout_root" || exit 2
+checkout_root="$(realpath -e -- "$checkout_root")" || exit 2
+tmp="$(mktemp -d "$checkout_root/split-host-ci.XXXXXX")" || exit 2
 wt="$tmp/$REPO"
 native_vendor="$tmp/native-vendor"
 native_source_input="${JAIN_NATIVE_SOURCE_ROOT:-$SPLIT_ROOT/vendor}"
@@ -241,17 +246,46 @@ native_bundle="$tmp/native-materializer"
 native_authority=""
 native_materializer=""
 cleanup() {
-  git -C "$REPO_PATH" worktree remove -f "$wt" >/dev/null 2>&1 || true
   if [ -n "$native_authority" ] && [ -f "$native_authority" ]; then
     jain_cleanup_native_source_worktrees \
       "$native_authority" "$native_source_input" "$native_source_root"
   fi
-  rm -rf "$tmp" >/dev/null 2>&1 || true
+  if [[ "$(realpath -e -- "$tmp" 2>/dev/null || true)" == "$tmp" \
+    && "$tmp" == "$checkout_root"/split-host-ci.?????? \
+    && -z "$(find "$tmp" -xdev -type l -print -quit 2>/dev/null)" \
+    && -z "$(find "$tmp" -xdev ! -type d ! -type f -print -quit 2>/dev/null)" ]]; then
+    rm -rf -- "$tmp" >/dev/null 2>&1 || true
+  else
+    say "refusing unsafe physical-checkout cleanup: $tmp"
+  fi
 }
 trap cleanup EXIT
 
-git -C "$REPO_PATH" worktree add -f --detach "$wt" "$SHA" >/dev/null 2>&1 \
-  || { post_check failure; echo "worktree checkout failed" >&2; exit 1; }
+validate_physical_checkout() {
+  local checkout="${1:?checkout is required}" expected="${2:?commit is required}"
+  local checkout_real git_dir common_dir
+  checkout_real="$(realpath -e -- "$checkout")" || return 1
+  [[ "$checkout_real" == "$checkout" && -d "$checkout/.git" && ! -L "$checkout/.git" \
+    && ! -e "$checkout/.git/commondir" && ! -e "$checkout/.git/worktrees" \
+    && ! -e "$checkout/.git/objects/info/alternates" \
+    && -z "$(find "$checkout" -xdev -type l -print -quit)" \
+    && -z "$(find "$checkout" -xdev ! -type d ! -type f -print -quit)" ]] || return 1
+  git_dir="$(git -C "$checkout" rev-parse --absolute-git-dir)" || return 1
+  common_dir="$(git -C "$checkout" rev-parse --path-format=absolute --git-common-dir)" \
+    || return 1
+  [[ "$git_dir" == "$checkout/.git" && "$common_dir" == "$checkout/.git" \
+    && "$(git -C "$checkout" rev-parse --verify 'HEAD^{commit}')" == "$expected" \
+    && -z "$(git -C "$checkout" status --porcelain=v1 --untracked-files=all)" ]] \
+    || return 1
+}
+
+git clone --quiet --no-local --no-checkout "$REPO_PATH" "$wt" \
+  || { post_check failure; echo "physical checkout clone failed" >&2; exit 1; }
+git -C "$wt" checkout --quiet --detach "$SHA" \
+  || { post_check failure; echo "physical checkout failed" >&2; exit 1; }
+git -C "$wt" remote remove origin || exit 1
+validate_physical_checkout "$wt" "$SHA" \
+  || { post_check failure; echo "physical checkout is not isolated" >&2; exit 1; }
 
 # Release Cargo policy may enable native learners even when the repository's
 # merge lane does not. Extract the materializer from the exact reviewed
@@ -287,8 +321,9 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
   say "native materialization receipt: $JAIN_NATIVE_EVIDENCE_DIR/receipt.json ($JAIN_NATIVE_EVIDENCE_SHA256)"
   mkdir -p "$wt/target" || native_setup_failure \
     "release CI native target setup failed" 1
-  ln -s "$native_vendor" "$wt/target/native-vendor" || native_setup_failure \
-    "release CI native vendor link setup failed" 1
+  mv -- "$native_vendor" "$wt/target/native-vendor" || native_setup_failure \
+    "release CI native vendor placement failed" 1
+  native_vendor="$wt/target/native-vendor"
   jain_prepare_native_runtime "$native_vendor" || {
     native_setup_failure "release CI native runtime path setup failed" 1
   }
@@ -307,7 +342,18 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
     jain-research jain-report jain-tui jain-cli jain-web jain-python \
     jain-model-zoo jain-ops jain-smartcluster jain-deploy; do
     [ "$sib" = "$REPO" ] && continue
-    [ -d "$SPLIT_ROOT/$sib" ] && ln -s "$SPLIT_ROOT/$sib" "$tmp/$sib"
+    if [ -d "$SPLIT_ROOT/$sib/.git" ]; then
+      sib_sha="$(git -C "$SPLIT_ROOT/$sib" rev-parse --verify 'HEAD^{commit}')" \
+        || native_setup_failure "cannot resolve sibling $sib" 1
+      git clone --quiet --no-local --no-checkout "$SPLIT_ROOT/$sib" "$tmp/$sib" \
+        || native_setup_failure "cannot clone sibling $sib" 1
+      git -C "$tmp/$sib" checkout --quiet --detach "$sib_sha" \
+        || native_setup_failure "cannot checkout sibling $sib" 1
+      git -C "$tmp/$sib" remote remove origin \
+        || native_setup_failure "cannot isolate sibling $sib" 1
+      validate_physical_checkout "$tmp/$sib" "$sib_sha" \
+        || native_setup_failure "sibling $sib is not a physical isolated checkout" 1
+    fi
   done
 fi
 
@@ -315,7 +361,11 @@ fi
 # parity) opt into the real safetensors via JAIN_NEEDS_ARTIFACTS; feat-core's
 # starforge_integration resolves repo-relative artifacts/ from the worktree root.
 if [ "${JAIN_NEEDS_ARTIFACTS:-0}" = "1" ] && [ -d "$SPLIT_ROOT/jain-starforge/artifacts" ]; then
-  ln -s "$SPLIT_ROOT/jain-starforge/artifacts" "$wt/artifacts"
+  cp -aL -- "$SPLIT_ROOT/jain-starforge/artifacts" "$wt/artifacts" \
+    || native_setup_failure "artifact staging failed" 1
+  [[ -z "$(find "$wt/artifacts" -xdev -type l -print -quit)" \
+    && -z "$(find "$wt/artifacts" -xdev ! -type d ! -type f -print -quit)" ]] \
+    || native_setup_failure "artifact staging contains symlink or special nodes" 1
 fi
 
 # Release CI deliberately uses clean Cargo/target caches. Merge CI may retain

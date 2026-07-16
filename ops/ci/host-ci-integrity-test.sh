@@ -2,7 +2,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-tmp="$(mktemp -d /tmp/jain-host-ci-integrity-test.XXXXXX)"
+mkdir -p "$repo_root/target/test-tmp"
+tmp="$(mktemp -d "$repo_root/target/test-tmp/jain-host-ci-integrity-test.XXXXXX")"
 trap 'rm -rf "$tmp"' EXIT
 fixture="$tmp/control"
 mkdir -p "$fixture/ops/ci" "$fixture/tools/splitctl/src"

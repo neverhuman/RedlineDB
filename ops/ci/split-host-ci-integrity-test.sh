@@ -2,10 +2,10 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-tmp="$(mktemp -d /tmp/jain-split-host-integrity-test.XXXXXX)"
-native_evidence_root="$(mktemp -d "$HOME/.cache/jain-native-evidence-test.XXXXXX")"
-proof_evidence_root="$(mktemp -d "$HOME/.cache/jain-proof-evidence-test.XXXXXX")"
-advisory_owner=""
+mkdir -p "$repo_root/target/test-tmp"
+tmp="$(mktemp -d "$repo_root/target/test-tmp/jain-split-host-integrity-test.XXXXXX")"
+native_evidence_root="$(mktemp -d "$repo_root/target/test-tmp/jain-native-evidence-test.XXXXXX")"
+proof_evidence_root="$(mktemp -d "$repo_root/target/test-tmp/jain-proof-evidence-test.XXXXXX")"
 forged_root=""
 fd_attack_root=""
 runner_pid=""
@@ -36,12 +36,8 @@ cleanup() {
     kill "$attack_pid" 2>/dev/null || true
     wait "$attack_pid" 2>/dev/null || true
   fi
-  case "$forged_root" in
-    /tmp/split-host-ci-bootstrap.??????) rm -rf -- "$forged_root" ;;
-  esac
-  case "$fd_attack_root" in
-    /tmp/split-host-ci-bootstrap.??????) rm -rf -- "$fd_attack_root" ;;
-  esac
+  [[ -z "$forged_root" || "$forged_root" != "$tmp"/* ]] || rm -rf -- "$forged_root"
+  [[ -z "$fd_attack_root" || "$fd_attack_root" != "$tmp"/* ]] || rm -rf -- "$fd_attack_root"
   sudo -n rm -rf -- "$publisher_root" 2>/dev/null || true
   sudo -n rm -rf -- "$request_root" 2>/dev/null || true
   sudo -n rm -rf -- "$worker_cache" 2>/dev/null || true
@@ -56,7 +52,6 @@ control="$tmp/control"
 control_remote="$tmp/jain-split-ops.git"
 split_root="$tmp/split"
 sandbox_family_root="$tmp/sandbox-family"
-advisory_owner="$tmp/private-advisory-owner"
 pinned_advisory_commit="$(sed -n \
   's/^JAIN_PINNED_RUSTSEC_COMMIT="\([0-9a-f]\{40\}\)"$/\1/p' \
   "$repo_root/ops/ci/pinned-advisory.sh")"
@@ -65,13 +60,12 @@ mkdir -p "$sandbox_family_root/target" "$sandbox_family_root/jain-core" \
   "$sandbox_family_root/redline-split-ops"
 install -m 0644 "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml" \
   "$sandbox_family_root/redline-split-ops/repos.manifest.toml"
-git init --quiet "$advisory_owner"
-git -C "$advisory_owner" fetch --quiet "$HOME/.cargo/advisory-db" \
+git clone --quiet --no-local --no-checkout "$HOME/.cargo/advisory-db" \
+  "$sandbox_family_root/target/advisory-db"
+git -C "$sandbox_family_root/target/advisory-db" checkout --quiet --detach \
   "$pinned_advisory_commit"
-git -C "$advisory_owner" checkout --quiet --detach FETCH_HEAD
-git -C "$advisory_owner" worktree add --quiet --detach \
-  "$sandbox_family_root/target/advisory-db" "$pinned_advisory_commit"
-[[ -f "$sandbox_family_root/target/advisory-db/.git" ]]
+git -C "$sandbox_family_root/target/advisory-db" remote remove origin
+[[ -d "$sandbox_family_root/target/advisory-db/.git" ]]
 product="$split_root/jain-report"
 product_remote="$product_forge_root/jeryu/jain-report.git"
 forge_log="$tmp/forge.log"
@@ -187,7 +181,7 @@ sed -i "s#__FORGE_BASE__#$forge_base#g" "$fake_jankurai"
 chmod 0755 "$fake_jankurai"
 fake_jankurai_digest="$(sha256sum "$fake_jankurai" | cut -d' ' -f1)"
 
-git clone --quiet --shared "$repo_root" "$control"
+git clone --quiet --no-local "$repo_root" "$control"
 git -C "$control" config user.name 'Host CI Integration Fixture'
 git -C "$control" config user.email host-ci-integration@example.invalid
 for boundary_file in \
@@ -518,10 +512,12 @@ grep -Fq 'caller-provided forge credentials are forbidden' "$credential_reject_l
 
 # A structurally valid self-pointed reviewed child can return only a local
 # result. It has no publisher code path and no credential.
-forged_root="$(mktemp -d /tmp/split-host-ci-bootstrap.XXXXXX)"
+mkdir -p "$split_root/target/host-ci-sandboxes"
+forged_root="$(mktemp -d "$split_root/target/host-ci-sandboxes/split-host-ci-bootstrap.XXXXXX")"
 chmod 0700 "$forged_root"
-git -C "$control" worktree add --quiet --detach \
-  "$forged_root/control-plane" "$control_commit"
+git clone --quiet --no-local --no-checkout "$control" "$forged_root/control-plane"
+git -C "$forged_root/control-plane" checkout --quiet --detach "$control_commit"
+git -C "$forged_root/control-plane" remote remove origin
 git -C "$control" show "$control_commit:ops/ci/split-host-ci.sh" \
   >"$forged_root/.split-host-ci-reviewed"
 chmod 0500 "$forged_root/.split-host-ci-reviewed"
@@ -563,8 +559,6 @@ forge_lines_after="$(wc -l <"$forge_log" 2>/dev/null || echo 0)"
   printf 'direct reviewed child deleted caller-controlled paths\n' >&2
   exit 1
 }
-git -C "$control" worktree remove --force \
-  "$forged_root/control-plane" >/dev/null
 rm -rf -- "$forged_root"
 forged_root=""
 
@@ -636,15 +630,24 @@ proof_get_line="$(grep -nF \
   <<<"$success_tail" | head -1 | cut -d: -f1)"
 required_post_line="$(grep -nF 'body={"name":"jain-report/required"' \
   <<<"$success_tail" | head -1 | cut -d: -f1)"
+required_get_line="$(grep -nF \
+  "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+  <<<"$success_tail" | sed -n '2p' | cut -d: -f1)"
 status_post_line="$(grep -nF \
   "POST /repos/jeryu/jain-report/statuses/$product_sha HTTP/1.1" \
   <<<"$success_tail" | head -1 | cut -d: -f1)"
+status_get_line="$(grep -nF \
+  "GET /repos/jeryu/jain-report/commits/$product_sha/status HTTP/1.1" \
+  <<<"$success_tail" | head -1 | cut -d: -f1)"
 [[ "$proof_post_line" =~ ^[0-9]+$ && "$proof_get_line" =~ ^[0-9]+$ \
-  && "$required_post_line" =~ ^[0-9]+$ && "$status_post_line" =~ ^[0-9]+$ ]] \
+  && "$required_post_line" =~ ^[0-9]+$ && "$required_get_line" =~ ^[0-9]+$ \
+  && "$status_post_line" =~ ^[0-9]+$ && "$status_get_line" =~ ^[0-9]+$ ]] \
   && (( proof_post_line < proof_get_line \
     && proof_get_line < required_post_line \
-    && required_post_line < status_post_line )) || {
-  printf 'publisher did not enforce proof POST/readback/required/status order\n' >&2
+    && required_post_line < required_get_line \
+    && required_get_line < status_post_line \
+    && status_post_line < status_get_line )) || {
+  printf 'publisher did not enforce exact POST/readback publication order\n' >&2
   exit 1
 }
 grep -Fq '"state":"success"' "$forge_log" || {
@@ -914,6 +917,16 @@ exercise_partial_publication() {
     exit 1
   fi
   if (( stage >= 4 )); then
+    [[ "$(grep -Fc \
+      "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+      <<<"$tail")" -ge 2 ]]
+  elif [[ "$(grep -Fc \
+    "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+    <<<"$tail")" -ge 2 ]]; then
+    printf '%s reached required-check readback too early\n' "$behavior" >&2
+    exit 1
+  fi
+  if (( stage >= 5 )); then
     grep -Fq \
       "POST /repos/jeryu/jain-report/statuses/$product_sha HTTP/1.1" \
       <<<"$tail"
@@ -921,6 +934,16 @@ exercise_partial_publication() {
       "POST /repos/jeryu/jain-report/statuses/$product_sha HTTP/1.1" \
       <<<"$tail"; then
     printf '%s reached commit-status publication too early\n' "$behavior" >&2
+    exit 1
+  fi
+  if (( stage >= 6 )); then
+    grep -Fq \
+      "GET /repos/jeryu/jain-report/commits/$product_sha/status HTTP/1.1" \
+      <<<"$tail"
+  elif grep -Fq \
+    "GET /repos/jeryu/jain-report/commits/$product_sha/status HTTP/1.1" \
+    <<<"$tail"; then
+    printf '%s reached commit-status readback too early\n' "$behavior" >&2
     exit 1
   fi
   request="$(latest_root_request)"
@@ -938,13 +961,15 @@ exercise_partial_publication() {
   printf 'ok\n' >"$forge_behavior"
 }
 
-# Proof POST is the publication gate. Once any POST succeeds, every later
-# readback/required/status failure consumes the request and cannot be replayed.
-exercise_partial_publication proof-post-fail failed 1
+# Proof POST is the publication gate. Once its request is attempted, that and
+# every later readback/required/status failure consumes the request permanently.
+exercise_partial_publication proof-post-fail consumed 1
 exercise_partial_publication readback-missing consumed 2
 exercise_partial_publication readback-mismatch consumed 2
 exercise_partial_publication required-post-fail consumed 3
-exercise_partial_publication status-post-fail consumed 4
+exercise_partial_publication required-readback-missing consumed 4
+exercise_partial_publication status-post-fail consumed 5
+exercise_partial_publication status-readback-missing consumed 6
 
 # A nonzero reviewed worker exit is independently sealed and can publish only
 # failure; it cannot reuse the prior success result.
@@ -1087,7 +1112,8 @@ grep -Eq 'score report git.head|rev-parse|proof evidence promotion failed' \
 # descriptor must not change the already snapshotted authority input. The
 # replacement is valid and asks the worker to fail, so a successful run proves
 # the sandbox never reread caller-controlled bytes after the ownership change.
-fd_attack_root="$(mktemp -d /tmp/split-host-ci-bootstrap.XXXXXX)"
+mkdir -p "$sandbox_family_root/target/host-ci-sandboxes"
+fd_attack_root="$(mktemp -d "$sandbox_family_root/target/host-ci-sandboxes/split-host-ci-bootstrap.XXXXXX")"
 chmod 0700 "$fd_attack_root"
 mkdir -m 0700 "$fd_attack_root/child-home" \
   "$fd_attack_root/writable" "$fd_attack_root/cargo-target"

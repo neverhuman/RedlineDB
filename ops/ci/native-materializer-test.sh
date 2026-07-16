@@ -7,8 +7,9 @@ source "$repo_root/ops/ci/native-runtime.sh"
 # shellcheck source=ops/ci/host-ci-evidence.sh
 source "$repo_root/ops/ci/host-ci-evidence.sh"
 
-tmp="$(mktemp -d /tmp/jain-native-materializer-test.XXXXXX)"
-durable_root="${JAIN_TEST_DURABLE_ROOT:-$HOME/.cache/jain-native-materializer-test.$$}"
+mkdir -p "$repo_root/target/test-tmp"
+tmp="$(mktemp -d "$repo_root/target/test-tmp/jain-native-materializer-test.XXXXXX")"
+durable_root="${JAIN_TEST_DURABLE_ROOT:-$repo_root/target/test-tmp/jain-native-materializer-durable.$$}"
 promotion_staging=""
 promotion_small_store=""
 promotion_staging_mounted=0
@@ -178,12 +179,23 @@ grep -Fq 'source revision mismatch' "$tmp/mismatch.log" || {
 git -C "$source_root/xgboost" checkout --quiet --detach "$xgb_expected"
 
 staged_source="$tmp/staged-source"
-source_worktrees_before="$({
-  for learner in catboost xgboost lightgbm; do
-    printf '%s\n' "[$learner]"
-    git -C "$source_root/$learner" worktree list --porcelain
-  done
-})"
+assert_independent_primary() {
+  local checkout="$1" git_dir common_dir
+  git_dir="$(git -C "$checkout" rev-parse --path-format=absolute --absolute-git-dir)"
+  common_dir="$(git -C "$checkout" rev-parse --path-format=absolute --git-common-dir)"
+  [[ -d "$checkout/.git" && ! -L "$checkout/.git" \
+    && "$git_dir" == "$checkout/.git" && "$common_dir" == "$checkout/.git" \
+    && ! -e "$checkout/.git/worktrees" && ! -L "$checkout/.git/worktrees" \
+    && ! -e "$checkout/.git/commondir" && ! -L "$checkout/.git/commondir" \
+    && ! -e "$checkout/.git/objects/info/alternates" \
+    && ! -L "$checkout/.git/objects/info/alternates" ]]
+}
+for learner in catboost xgboost lightgbm; do
+  assert_independent_primary "$source_root/$learner" || {
+    printf 'canonical native source is not an independent primary: %s\n' "$learner" >&2
+    exit 1
+  }
+done
 chmod -R a-w "$source_root"
 jain_stage_native_source_worktrees "$authority" "$source_root" "$staged_source"
 for learner in catboost xgboost lightgbm; do
@@ -194,16 +206,12 @@ for learner in catboost xgboost lightgbm; do
       exit 1
     }
 done
-source_worktrees_after="$({
-  for learner in catboost xgboost lightgbm; do
-    printf '%s\n' "[$learner]"
-    git -C "$source_root/$learner" worktree list --porcelain
-  done
-})"
-[[ "$source_worktrees_after" == "$source_worktrees_before" ]] || {
-  printf 'native staging mutated canonical source worktree metadata\n' >&2
-  exit 1
-}
+for learner in catboost xgboost lightgbm; do
+  assert_independent_primary "$source_root/$learner" || {
+    printf 'native staging mutated canonical Git ownership: %s\n' "$learner" >&2
+    exit 1
+  }
+done
 chmod -R u+w "$source_root"
 jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_source"
 [[ ! -e "$staged_source" ]] || {
@@ -274,14 +282,17 @@ git -C "$control" restore ops/ci/native-materializer.sh
 evidence_root="$durable_root/persistent-evidence"
 head_sha="0123456789abcdef0123456789abcdef01234567"
 control_commit="$(git -C "$control" rev-parse HEAD)"
+outside_root="/tmp/jain-native-evidence-reject.$$"
+rm -rf -- "$outside_root"
 if JAIN_CI_ATTEMPT_ID=tmp-rejected jain_persist_native_evidence \
-  "$vendor_root" "$run_root/materialization.log" "$tmp/evidence" "$run_root" \
+  "$vendor_root" "$run_root/materialization.log" "$outside_root" "$run_root" \
   veox jain-core "$head_sha" jain-core/required "$control_commit" \
   "$control" \
   2>/dev/null; then
   printf 'native evidence accepted a /tmp persistence root\n' >&2
   exit 1
 fi
+[[ ! -e "$outside_root" ]]
 ln -s "$run_root" "$durable_root/ephemeral-link"
 if JAIN_CI_ATTEMPT_ID=symlink-rejected jain_persist_native_evidence \
   "$vendor_root" "$run_root/materialization.log" \

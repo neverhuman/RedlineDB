@@ -15,11 +15,18 @@ SHA="${3:?sha}"
 REPO_PATH="${4:?repo_path}"
 CHECK="${5:-$REPO/required}"
 OPS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+split_root="$(realpath -e -- "${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}")" || exit 2
 control_commit="$("$OPS_ROOT/ops/ci/host-ci-integrity.sh" "$OPS_ROOT")" \
   || { printf '[split-host-ci] exact control-plane integrity check failed\n' >&2; exit 2; }
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
 
-bootstrap_root="$(mktemp -d /tmp/split-host-ci-bootstrap.XXXXXX)" || exit 2
+bootstrap_parent="$split_root/target/host-ci-sandboxes"
+mkdir -p -m 0700 -- "$bootstrap_parent" || exit 2
+bootstrap_parent="$(realpath -e -- "$bootstrap_parent")" || exit 2
+[[ "$bootstrap_parent" == "$split_root/target/host-ci-sandboxes" \
+  && ! -L "$bootstrap_parent" \
+  && "$(stat -c '%u:%a' -- "$bootstrap_parent")" == "$(id -u):700" ]] || exit 2
+bootstrap_root="$(mktemp -d "$bootstrap_parent/split-host-ci-bootstrap.XXXXXX")" || exit 2
 sandbox_request="$bootstrap_root/sandbox-request.json"
 staged_product="$bootstrap_root/product-source"
 child_log="$bootstrap_root/child.log"
@@ -27,7 +34,7 @@ cleanup() {
   local root_real
   root_real="$(realpath -e -- "$bootstrap_root" 2>/dev/null || true)"
   case "$root_real" in
-    /tmp/split-host-ci-bootstrap.??????)
+    "$bootstrap_parent"/split-host-ci-bootstrap.??????)
       [[ "$root_real" == "$bootstrap_root" && ! -L "$root_real" \
         && "$(stat -c '%u:%a' -- "$root_real" 2>/dev/null)" \
           == "$(id -u):700" ]] && rm -rf -- "$root_real"
@@ -60,14 +67,14 @@ for child_var in "${safe_child_vars[@]}"; do
   fi
 done
 child_environment="$(jq -c \
-  --arg split_root "${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}" \
+  --arg split_root "$split_root" \
   --arg target "$bootstrap_root/cargo-target" \
   --arg writable "$bootstrap_root/writable" \
   '. + {JAIN_SPLIT_ROOT:$split_root,CARGO_TARGET_DIR:$target,
     JAIN_HOST_CI_WRITABLE_ROOT:$writable,JAIN_RELEASE_CI:"1"}' \
   <<<"$child_environment")" || exit 2
 jq -n --arg commit "$control_commit" \
-  --arg split_root "${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}" \
+  --arg split_root "$split_root" \
   --arg owner "$OWNER" --arg repo "$REPO" --arg sha "$SHA" \
   --arg product "$staged_product" --arg check "$CHECK" \
   --argjson environment "$child_environment" \

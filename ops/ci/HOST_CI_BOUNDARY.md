@@ -55,9 +55,10 @@ mismatch gains no publication authority.
 
 Publication is strictly ordered: POST `jankurai/proof`, GET the commit's check
 runs and verify the exact receipt digest, attempt, and full SHA, POST
-`<repo>/required`, then POST its commit status. A proof POST failure prevents
-required publication. After any successful POST, a readback or later POST
-failure consumes the request; it can never be replayed.
+`<repo>/required`, GET and verify that exact required result, POST its commit
+status, then GET and verify that exact context, description, state, and SHA. A
+proof POST failure prevents required publication. After the first proof POST is
+attempted, every failure consumes the request; it can never be replayed.
 
 ## One-time administrator installation
 

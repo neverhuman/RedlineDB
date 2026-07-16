@@ -2315,6 +2315,68 @@ fn verify_worktrees_command(args: Vec<String>) -> Result<(), Box<dyn std::error:
     finish_receipted_operation(&receipt, &mut report, result)
 }
 
+#[cfg(test)]
+#[derive(Debug, PartialEq, Eq)]
+struct PrimaryRegistration {
+    path: PathBuf,
+    head: String,
+    branch: String,
+}
+
+#[cfg(test)]
+fn parse_single_primary_registration(
+    porcelain: &[u8],
+) -> Result<PrimaryRegistration, Box<dyn std::error::Error>> {
+    if porcelain.is_empty() || !porcelain.ends_with(b"\0\0") {
+        return Err("registration porcelain is empty or not NUL terminated".into());
+    }
+    let mut records = Vec::new();
+    let mut fields = Vec::new();
+    for field in porcelain[..porcelain.len() - 1].split(|byte| *byte == 0) {
+        if field.is_empty() {
+            if fields.is_empty() {
+                return Err("registration porcelain contains an empty record".into());
+            }
+            records.push(std::mem::take(&mut fields));
+        } else {
+            fields.push(std::str::from_utf8(field)?.to_owned());
+        }
+    }
+    if !fields.is_empty() || records.len() != 1 {
+        return Err("registration porcelain must describe exactly one primary checkout".into());
+    }
+    let mut path = None;
+    let mut head = None;
+    let mut branch = None;
+    for (index, field) in records.pop().unwrap().into_iter().enumerate() {
+        let (name, value) = field
+            .split_once(' ')
+            .ok_or("registration porcelain field is malformed")?;
+        if value.is_empty() {
+            return Err("registration porcelain field has an empty value".into());
+        }
+        match name {
+            "worktree" if index == 0 && path.is_none() => path = Some(PathBuf::from(value)),
+            "HEAD" if head.is_none() && is_full_sha(value) => head = Some(value.to_owned()),
+            "branch" if branch.is_none() && value.starts_with("refs/heads/") => {
+                branch = Some(value.to_owned())
+            }
+            _ => {
+                return Err("registration porcelain contains duplicate or unsupported state".into())
+            }
+        }
+    }
+    let path = path.ok_or("registration porcelain has no primary checkout path")?;
+    if !path.is_absolute() {
+        return Err("registered primary checkout path is not absolute".into());
+    }
+    Ok(PrimaryRegistration {
+        path,
+        head: head.ok_or("registration porcelain has no exact HEAD")?,
+        branch: branch.ok_or("registration porcelain has no named branch")?,
+    })
+}
+
 fn verify_managed_worktree(repo: &ManagedRepo) -> JsonValue {
     let mut failures = Vec::new();
     let branch = strict_git_output(&repo.path, &["branch", "--show-current"])
@@ -2377,22 +2439,52 @@ fn verify_managed_worktree(repo: &ManagedRepo) -> JsonValue {
         failures.push("HEAD, origin/main, and remote main are not equal".to_owned());
     }
 
-    // BAN linked git worktrees: exactly one entry (the primary checkout) is allowed.
-    // Extra worktrees fragment agents, waste tokens, and corrupt release evidence.
-    let linked_worktrees = strict_git_output(&repo.path, &["worktree", "list", "--porcelain"])
-        .map(|value| {
-            value
-                .lines()
-                .filter(|line| line.starts_with("worktree "))
-                .count()
-                .saturating_sub(1)
-        })
-        .map_err(|error| failures.push(error.to_string()))
-        .unwrap_or(0);
-    if linked_worktrees > 0 {
-        failures.push(format!(
-            "{linked_worktrees} linked git worktree(s) present; exactly 1 (the primary checkout) is allowed"
-        ));
+    let dot_git = repo.path.join(".git");
+    match fs::symlink_metadata(&dot_git) {
+        Ok(metadata) if metadata.file_type().is_dir() && !metadata.file_type().is_symlink() => {}
+        Ok(_) => {
+            failures.push("primary checkout does not own a physical .git directory".to_owned())
+        }
+        Err(error) => failures.push(format!("cannot inspect primary .git directory: {error}")),
+    }
+    for forbidden in [
+        dot_git.join("worktrees"),
+        dot_git.join("commondir"),
+        dot_git.join("objects/info/alternates"),
+    ] {
+        if fs::symlink_metadata(&forbidden).is_ok() {
+            failures.push(format!(
+                "forbidden auxiliary or shared Git metadata exists: {}",
+                forbidden.display()
+            ));
+        }
+    }
+    let canonical_repo = fs::canonicalize(&repo.path)
+        .map_err(|error| failures.push(format!("cannot canonicalize checkout: {error}")))
+        .ok();
+    if canonical_repo.as_deref() != Some(repo.path.as_path()) {
+        failures.push("checkout path has a symlink, alias, or non-canonical component".to_owned());
+    }
+    let git_dir = strict_git_output(
+        &repo.path,
+        &["rev-parse", "--path-format=absolute", "--absolute-git-dir"],
+    )
+    .map_err(|error| failures.push(error.to_string()))
+    .ok();
+    let common_dir = strict_git_output(
+        &repo.path,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )
+    .map_err(|error| failures.push(error.to_string()))
+    .ok();
+    let expected_git_dir = dot_git.to_string_lossy();
+    if git_dir.as_deref() != Some(expected_git_dir.as_ref())
+        || common_dir.as_deref() != Some(expected_git_dir.as_ref())
+    {
+        failures.push(
+            "checkout Git directory is auxiliary, shared, alternate, or outside the primary"
+                .to_owned(),
+        );
     }
 
     let (local_tag, remote_tag) = if let Some(tag) = &repo.tag {
@@ -2433,6 +2525,8 @@ fn verify_managed_worktree(repo: &ManagedRepo) -> JsonValue {
         "local_tag": local_tag,
         "remote_tag": remote_tag,
         "dirty": dirty,
+        "git_dir": git_dir,
+        "git_common_dir": common_dir,
         "status": if failures.is_empty() {"pass"} else {"fail"},
         "failures": failures,
     })
@@ -2484,6 +2578,27 @@ fn finish_receipted_operation(
     }
     write_json_receipt(receipt, report)?;
     println!("wrote {}", receipt.display());
+    result
+}
+
+fn finish_optional_evidence(
+    evidence_out: Option<&Path>,
+    report: &mut JsonValue,
+    result: Result<(), Box<dyn std::error::Error>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match &result {
+        Ok(()) => report["status"] = json!("pass"),
+        Err(error) => {
+            report["status"] = json!("fail");
+            report["error"] = json!(error.to_string());
+        }
+    }
+    if let Some(path) = evidence_out {
+        write_json_receipt(path, report)?;
+        println!("wrote {}", path.display());
+    } else {
+        println!("{}", serde_json::to_string_pretty(report)?);
+    }
     result
 }
 
@@ -2679,6 +2794,9 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     ) {
         return jeryu_lifecycle(args);
     }
+    if command == "branch-push" {
+        return jeryu_branch_push(args);
+    }
     let json_output = args.iter().any(|arg| arg == "--json");
     let apply = args.iter().any(|arg| arg == "--apply");
     let value = |flag: &str| -> Result<String, Box<dyn std::error::Error>> {
@@ -2703,6 +2821,7 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                 &repo,
                 &value("--title")?,
                 &value("--head")?,
+                &value("--expected-head")?,
                 &value("--base").unwrap_or_else(|_| "main".to_owned()),
                 &value("--body").unwrap_or_default(),
                 args.iter().any(|arg| arg == "--draft"),
@@ -2716,20 +2835,40 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         _ => return Err(format!("unsupported jeryu-local command: {command}").into()),
     };
     if command == "pr-open" && !apply {
-        println!(
-            "{}",
-            serde_json::to_string_pretty(&json!({
-                "action": "would-apply",
-                "request": jeryu_request_json(&request),
-            }))?
-        );
-        return Ok(());
+        let mut report = receipt_header("jain.jeryu-pr-open/v1", "jeryu-local pr-open", false);
+        report["action"] = json!("would-apply");
+        report["request"] = jeryu_request_json(&request);
+        let evidence_out = value("--evidence-out").ok().map(PathBuf::from);
+        return finish_optional_evidence(evidence_out.as_deref(), &mut report, Ok(()));
     }
     let token_file = PathBuf::from(
         value("--token-file")
             .map_err(|_| "Jeryu API operations require an explicit --token-file path")?,
     );
-    let response = JeryuClient::from_token_file(&token_file)?.execute(&request)?;
+    let client = JeryuClient::from_token_file(&token_file)?;
+    let response = client.execute(&request)?;
+    if command == "pr-open" {
+        let number = response
+            .get("number")
+            .and_then(JsonValue::as_u64)
+            .ok_or("Jeryu PR-open response has no PR number")?;
+        let readback = client.execute(&JeryuRequest::pr_details(&value("--repo")?, number)?)?;
+        validate_pr_open_readback(
+            &readback,
+            number,
+            &value("--head")?,
+            &value("--expected-head")?,
+            &value("--base").unwrap_or_else(|_| "main".to_owned()),
+        )?;
+        let mut report = receipt_header("jain.jeryu-pr-open/v1", "jeryu-local pr-open", true);
+        report["action"] = json!("opened-and-verified");
+        report["request"] = jeryu_request_json(&request);
+        report["response"] = response;
+        report["readback"] = readback;
+        report["external_state_changed"] = json!(true);
+        let evidence_out = value("--evidence-out").ok().map(PathBuf::from);
+        return finish_optional_evidence(evidence_out.as_deref(), &mut report, Ok(()));
+    }
     if json_output {
         println!("{}", serde_json::to_string_pretty(&response)?);
     } else {
@@ -2738,16 +2877,392 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn validate_pr_open_readback(
+    response: &JsonValue,
+    number: u64,
+    head: &str,
+    expected_head: &str,
+    base: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let valid = response.get("number").and_then(JsonValue::as_u64) == Some(number)
+        && response.get("state").and_then(JsonValue::as_str) == Some("open")
+        && response
+            .get("head")
+            .and_then(|value| value.get("ref"))
+            .and_then(JsonValue::as_str)
+            == Some(head)
+        && response
+            .get("head")
+            .and_then(|value| value.get("sha"))
+            .and_then(JsonValue::as_str)
+            == Some(expected_head)
+        && response
+            .get("base")
+            .and_then(|value| value.get("ref"))
+            .and_then(JsonValue::as_str)
+            == Some(base);
+    if valid {
+        Ok(())
+    } else {
+        Err("Jeryu PR readback does not exactly match the requested head, base, and state".into())
+    }
+}
+
 fn reject_legacy_jeryu_environment() -> Result<(), Box<dyn std::error::Error>> {
-    for name in ["JERYU_BASE", "JERYU_MERGE_TOKEN", "JERYU_MERGE_TOKEN_FILE"] {
-        if env::var_os(name).is_some() {
+    for (name, _) in env::vars_os() {
+        if forbidden_jeryu_environment_name(&name.to_string_lossy()) {
             return Err(format!(
-                "{name} is forbidden; use the fixed loopback origin and explicit --token-file"
+                "{} is forbidden for local Jeryu operations; use the fixed loopback origin and explicit token-file transport",
+                name.to_string_lossy()
             )
             .into());
         }
     }
     Ok(())
+}
+
+fn forbidden_jeryu_environment_name(name: &str) -> bool {
+    let upper = name.to_ascii_uppercase();
+    matches!(
+        upper.as_str(),
+        "JERYU_BASE"
+            | "JERYU_MERGE_TOKEN"
+            | "JERYU_MERGE_TOKEN_FILE"
+            | "HTTP_PROXY"
+            | "HTTPS_PROXY"
+            | "ALL_PROXY"
+            | "NO_PROXY"
+            | "SSH_ASKPASS"
+            | "SSH_ASKPASS_REQUIRE"
+            | "GIT_CONFIG"
+            | "GIT_CONFIG_COUNT"
+            | "GIT_DIR"
+            | "GIT_WORK_TREE"
+            | "GIT_COMMON_DIR"
+            | "GIT_OBJECT_DIRECTORY"
+            | "GIT_ALTERNATE_OBJECT_DIRECTORIES"
+            | "GIT_ASKPASS"
+            | "GIT_PROXY_COMMAND"
+            | "GIT_SSH"
+            | "GIT_SSH_COMMAND"
+            | "GIT_EXEC_PATH"
+            | "GIT_TEMPLATE_DIR"
+    ) || upper.starts_with("GIT_CONFIG_KEY_")
+        || upper.starts_with("GIT_CONFIG_VALUE_")
+}
+
+fn fixed_jeryu_git_remote(repo: &str) -> Result<String, Box<dyn std::error::Error>> {
+    validate_jeryu_repo_slug(repo)?;
+    Ok(format!("{LOCAL_JERYU_ORIGIN}/git/{repo}.git"))
+}
+
+fn secure_git_command(repo: Option<&Path>) -> Command {
+    let mut command = Command::new("/usr/bin/git");
+    command
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("LC_ALL", "C")
+        .env("HOME", "/nonexistent")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_ASKPASS", "/bin/false")
+        .env("SSH_ASKPASS", "/bin/false")
+        .env("GIT_OPTIONAL_LOCKS", "0")
+        .env("GIT_PROTOCOL_FROM_USER", "0")
+        .args([
+            "-c",
+            "core.hooksPath=/dev/null",
+            "-c",
+            "credential.helper=",
+            "-c",
+            "core.askPass=/bin/false",
+            "-c",
+            "http.proxy=",
+            "-c",
+            "https.proxy=",
+            "-c",
+            "protocol.allow=never",
+            "-c",
+            "protocol.http.allow=always",
+        ]);
+    if let Some(repo) = repo {
+        command.arg("-C").arg(repo);
+    }
+    command
+}
+
+fn secure_git_output(
+    repo: Option<&Path>,
+    args: &[&str],
+) -> Result<String, Box<dyn std::error::Error>> {
+    let output = secure_git_command(repo).args(args).output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "credentialless git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+    let stdout = std::str::from_utf8(&output.stdout)
+        .map_err(|_| "credentialless git output was not UTF-8")?;
+    Ok(stdout.trim().to_owned())
+}
+
+fn secure_git_status(
+    repo: Option<&Path>,
+    args: &[&str],
+) -> Result<bool, Box<dyn std::error::Error>> {
+    Ok(secure_git_command(repo).args(args).status()?.success())
+}
+
+fn secure_ls_remote(
+    repo: &str,
+    reference: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    if !reference.starts_with("refs/heads/")
+        || reference.bytes().any(|byte| byte.is_ascii_control())
+    {
+        return Err("remote readback requires an exact heads ref".into());
+    }
+    let remote = fixed_jeryu_git_remote(repo)?;
+    let output = secure_git_output(None, &["ls-remote", "--refs", &remote, reference])?;
+    if output.is_empty() {
+        return Ok(None);
+    }
+    let mut lines = output.lines();
+    let line = lines.next().ok_or("missing ls-remote result")?;
+    if lines.next().is_some() {
+        return Err("fixed-origin readback returned duplicate refs".into());
+    }
+    let mut fields = line.split('\t');
+    let sha = fields.next().unwrap_or_default();
+    let found_ref = fields.next().unwrap_or_default();
+    if fields.next().is_some()
+        || found_ref != reference
+        || !is_full_sha(sha)
+        || sha.chars().any(|ch| ch.is_ascii_uppercase())
+    {
+        return Err("fixed-origin readback was malformed".into());
+    }
+    Ok(Some(sha.to_owned()))
+}
+
+fn is_full_sha(value: &str) -> bool {
+    value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn validate_release_branch(value: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if value.is_empty()
+        || value.starts_with('-')
+        || value.ends_with(['.', '/'])
+        || value.contains("..")
+        || value.contains("@{")
+        || value.contains("//")
+        || value.contains('\\')
+        || value.split('/').any(|part| {
+            part.is_empty()
+                || matches!(part, "." | "..")
+                || part.ends_with(".lock")
+                || part.bytes().any(|byte| {
+                    byte.is_ascii_control()
+                        || byte.is_ascii_whitespace()
+                        || matches!(byte, b'~' | b'^' | b':' | b'?' | b'*' | b'[')
+                })
+        })
+    {
+        return Err("--branch must be a safe full branch name".into());
+    }
+    Ok(())
+}
+
+fn validate_physical_git_checkout(path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    if !path.is_absolute() {
+        return Err("--repo-path must be absolute".into());
+    }
+    let canonical = fs::canonicalize(path)?;
+    if canonical != path {
+        return Err("--repo-path must already be canonical".into());
+    }
+    let split_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or("splitctl root has no parent")?;
+    if !canonical.starts_with(split_root) {
+        return Err("--repo-path must remain beneath the split root".into());
+    }
+    let dot_git = canonical.join(".git");
+    let metadata = fs::symlink_metadata(&dot_git)?;
+    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+        return Err("checkout must own a physical .git directory".into());
+    }
+    for forbidden in [
+        dot_git.join("commondir"),
+        dot_git.join("worktrees"),
+        dot_git.join("objects/info/alternates"),
+    ] {
+        if fs::symlink_metadata(&forbidden).is_ok() {
+            return Err(format!(
+                "checkout contains forbidden Git metadata: {}",
+                forbidden.display()
+            )
+            .into());
+        }
+    }
+    let git_dir = secure_git_output(
+        Some(&canonical),
+        &["rev-parse", "--path-format=absolute", "--absolute-git-dir"],
+    )?;
+    let common_dir = secure_git_output(
+        Some(&canonical),
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )?;
+    let expected = dot_git.to_string_lossy();
+    if git_dir != expected || common_dir != expected {
+        return Err("checkout does not own an independent Git directory".into());
+    }
+    Ok(canonical)
+}
+
+fn reject_local_git_injection(repo: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    let names = secure_git_output(
+        Some(repo),
+        &[
+            "config",
+            "--local",
+            "--name-only",
+            "--list",
+            "--no-includes",
+        ],
+    )?;
+    for name in names.lines().map(str::to_ascii_lowercase) {
+        let hostile = name.starts_with("url.")
+            || name.starts_with("http.")
+            || name.starts_with("https.")
+            || name.starts_with("credential.")
+            || name.starts_with("include.")
+            || name.starts_with("includeif.")
+            || name.starts_with("protocol.")
+            || name == "core.askpass"
+            || name == "core.sshcommand"
+            || (name.starts_with("remote.")
+                && (name.ends_with(".proxy") || name.ends_with(".pushurl")));
+        if hostile {
+            return Err(format!(
+                "local Git configuration is forbidden for branch publication: {name}"
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
+fn jeryu_branch_push(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repo = None;
+    let mut repo_path = None;
+    let mut branch = None;
+    let mut expected_head = None;
+    let mut evidence_out = None;
+    let mut apply = false;
+    let mut iter = args.into_iter().skip(1);
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repo" => repo = Some(iter.next().ok_or("--repo needs owner/name")?),
+            "--repo-path" => {
+                repo_path = Some(PathBuf::from(
+                    iter.next().ok_or("--repo-path needs a path")?,
+                ))
+            }
+            "--branch" => branch = Some(iter.next().ok_or("--branch needs a value")?),
+            "--expected-head" => {
+                expected_head = Some(iter.next().ok_or("--expected-head needs a SHA")?)
+            }
+            "--evidence-out" => {
+                evidence_out = Some(PathBuf::from(
+                    iter.next().ok_or("--evidence-out needs a path")?,
+                ))
+            }
+            "--apply" => apply = true,
+            value => return Err(format!("unknown branch-push argument: {value}").into()),
+        }
+    }
+    let repo = repo.ok_or("branch-push requires --repo")?;
+    let path =
+        validate_physical_git_checkout(&repo_path.ok_or("branch-push requires --repo-path")?)?;
+    let branch = branch.ok_or("branch-push requires --branch")?;
+    let expected_head = expected_head.ok_or("branch-push requires --expected-head")?;
+    validate_jeryu_repo_slug(&repo)?;
+    validate_release_branch(&branch)?;
+    if !is_full_sha(&expected_head) || expected_head.chars().any(|ch| ch.is_ascii_uppercase()) {
+        return Err("--expected-head must be a lowercase full 40-character commit SHA".into());
+    }
+    reject_local_git_injection(&path)?;
+    if secure_git_output(Some(&path), &["rev-parse", "--verify", "HEAD^{commit}"])? != expected_head
+        || secure_git_output(Some(&path), &["branch", "--show-current"])? != branch
+        || !secure_git_output(
+            Some(&path),
+            &["status", "--porcelain=v1", "--untracked-files=all"],
+        )?
+        .is_empty()
+    {
+        return Err("branch publication requires the clean named branch at the exact head".into());
+    }
+
+    let remote = fixed_jeryu_git_remote(&repo)?;
+    let reference = format!("refs/heads/{branch}");
+    let mut report = receipt_header(
+        "jain.jeryu-branch-publication/v1",
+        "jeryu-local branch-push",
+        apply,
+    );
+    report["repository"] = json!(repo);
+    report["repository_path"] = json!(path);
+    report["branch"] = json!(branch);
+    report["expected_head"] = json!(expected_head);
+    report["remote"] = json!(remote);
+    report["external_state_changed"] = json!(false);
+    let result = (|| {
+        if !apply {
+            report["action"] = json!("would-push-and-read-back");
+            return Ok(());
+        }
+        let before = secure_ls_remote(&repo, &reference)?;
+        report["before"] = json!(before);
+        if let Some(before) = before.as_deref() {
+            if before != expected_head
+                && (!secure_git_status(
+                    Some(&path),
+                    &["cat-file", "-e", &format!("{before}^{{commit}}")],
+                )? || !secure_git_status(
+                    Some(&path),
+                    &["merge-base", "--is-ancestor", before, &expected_head],
+                )?)
+            {
+                return Err("branch publication is not a non-force fast-forward".into());
+            }
+        }
+        if before.as_deref() != Some(expected_head.as_str()) {
+            let refspec = format!("{expected_head}:{reference}");
+            let output = secure_git_output(
+                Some(&path),
+                &["push", "--porcelain", "--no-verify", &remote, &refspec],
+            )?;
+            report["push_result"] = json!(output);
+            report["external_state_changed"] = json!(true);
+        }
+        let after = secure_ls_remote(&repo, &reference)?;
+        report["after"] = json!(after);
+        if after.as_deref() != Some(expected_head.as_str()) {
+            return Err("branch publication readback does not equal the exact head".into());
+        }
+        report["action"] = json!(if before.as_deref() == Some(expected_head.as_str()) {
+            "verified-existing"
+        } else {
+            "pushed-and-verified"
+        });
+        Ok(())
+    })();
+    finish_optional_evidence(evidence_out.as_deref(), &mut report, result)
 }
 
 fn compact_json_output(value: &JsonValue) -> String {
@@ -2812,8 +3327,6 @@ fn jeryu_publish_host_ci(args: Vec<String>) -> Result<(), HostCiPublishCommandEr
     let required = |value: Option<String>, name: &str| {
         value.ok_or_else(|| HostCiPublishCommandError::before(format!("{name} is required")))
     };
-    let token_file =
-        token_file.ok_or_else(|| HostCiPublishCommandError::before("--token-file is required"))?;
     let publication = HostCiPublication {
         repo: required(repo, "--repo")?,
         head_sha: required(head_sha, "--head-sha")?,
@@ -2841,6 +3354,8 @@ fn jeryu_publish_host_ci(args: Vec<String>) -> Result<(), HostCiPublishCommandEr
         );
         return Ok(());
     }
+    let token_file =
+        token_file.ok_or_else(|| HostCiPublishCommandError::before("--token-file is required"))?;
     let client = JeryuClient::from_token_file(&token_file)
         .map_err(|error| HostCiPublishCommandError::before(error.to_string()))?;
     client
@@ -2862,7 +3377,7 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
     let mut body = None;
     let mut branch = "main".to_owned();
     let mut required_check = None;
-    let mut receipt = None;
+    let mut evidence_out = None;
     let mut token_file = None;
     let mut apply = false;
     let mut iter = args.into_iter().skip(1);
@@ -2878,8 +3393,10 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
             "--required-check" => {
                 required_check = Some(iter.next().ok_or("--required-check needs a value")?)
             }
-            "--receipt" => {
-                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            "--evidence-out" => {
+                evidence_out = Some(PathBuf::from(
+                    iter.next().ok_or("--evidence-out needs a path")?,
+                ))
             }
             "--token-file" => {
                 token_file = Some(PathBuf::from(
@@ -2895,14 +3412,6 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
     if branch != "main" {
         return Err("release branch protection may only target main".into());
     }
-    let receipt = match receipt {
-        Some(path) => path,
-        None => release_evidence_path(&format!(
-            "jeryu-{}-{}.json",
-            receipt_component(&command),
-            receipt_component(&repo)
-        )),
-    };
     let request = if command == "pr-approve" {
         plan_jeryu_approval_request(
             &repo,
@@ -2915,6 +3424,7 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
             &command,
             &repo,
             number.as_deref(),
+            expected_head.as_deref(),
             &branch,
             required_check.as_deref(),
         )?
@@ -2942,6 +3452,25 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
             .as_deref()
             .ok_or("Jeryu API operations require an explicit --token-file path")?;
         let client = JeryuClient::from_token_file(token_file)?;
+        if command == "pr-merge" {
+            let number = number
+                .as_deref()
+                .ok_or("missing PR number")?
+                .parse::<u64>()?;
+            let premerge = client.execute(&JeryuRequest::pr_details(&repo, number)?)?;
+            validate_pr_open_readback(
+                &premerge,
+                number,
+                premerge
+                    .get("head")
+                    .and_then(|value| value.get("ref"))
+                    .and_then(JsonValue::as_str)
+                    .ok_or("pre-merge PR readback has no head branch")?,
+                expected_head.as_deref().ok_or("missing expected head")?,
+                "main",
+            )?;
+            report["premerge_readback"] = premerge;
+        }
         let response = client.execute(&request)?;
         report["response"] = response.clone();
         match command.as_str() {
@@ -2964,12 +3493,22 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
                 )?;
                 report["readback"] = approval;
             }
-            "pr-merge"
+            "pr-merge" => {
+                let expected_head = expected_head.as_deref().ok_or("missing expected head")?;
                 if response.get("merged").and_then(JsonValue::as_bool) != Some(true)
-                    && response.get("merged_at").is_none()
-                    && response.get("sha").is_none() =>
-            {
-                return Err("Jeryu PR merge response does not prove a merged commit".into())
+                    || response.get("sha").and_then(JsonValue::as_str) != Some(expected_head)
+                {
+                    return Err(
+                        "Jeryu PR merge response does not prove the expected merged commit".into(),
+                    );
+                }
+                let main = secure_ls_remote(&repo, "refs/heads/main")?;
+                if main.as_deref() != Some(expected_head) {
+                    return Err(
+                        "protected main does not resolve to the expected merged commit".into(),
+                    );
+                }
+                report["main_readback"] = json!(main);
             }
             "protection-apply" => {
                 let readback = JeryuRequest::protection(&repo, &branch, None)?;
@@ -2993,7 +3532,7 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
         });
         Ok(())
     })();
-    finish_receipted_operation(&receipt, &mut report, result)
+    finish_optional_evidence(evidence_out.as_deref(), &mut report, result)
 }
 
 fn plan_jeryu_approval_request(
@@ -3040,6 +3579,7 @@ fn plan_jeryu_lifecycle_request(
     command: &str,
     repo: &str,
     number: Option<&str>,
+    expected_head: Option<&str>,
     branch: &str,
     required_check: Option<&str>,
 ) -> Result<JeryuRequest, Box<dyn std::error::Error>> {
@@ -3052,7 +3592,11 @@ fn plan_jeryu_lifecycle_request(
             match command {
                 "pr-ready" => JeryuRequest::pr_update(repo, number, json!({"draft": false})),
                 "pr-close" => JeryuRequest::pr_update(repo, number, json!({"state": "closed"})),
-                "pr-merge" => JeryuRequest::pr_merge(repo, number),
+                "pr-merge" => JeryuRequest::pr_merge(
+                    repo,
+                    number,
+                    expected_head.ok_or("PR merge requires --expected-head")?,
+                ),
                 _ => unreachable!(),
             }
             .map_err(Into::into)
@@ -3125,11 +3669,8 @@ fn validate_protection_policy(
     let contexts = checks
         .and_then(JsonValue::as_array)
         .or_else(|| checks.and_then(|value| value.get("contexts"))?.as_array());
-    let required_present = contexts.is_some_and(|values| {
-        values
-            .iter()
-            .any(|value| value.as_str() == Some(required_check))
-    });
+    let required_exact = contexts
+        .is_some_and(|values| values.len() == 1 && values[0].as_str() == Some(required_check));
     let approvals = policy
         .get("required_approving_review_count")
         .and_then(JsonValue::as_u64)
@@ -3147,8 +3688,8 @@ fn validate_protection_policy(
                 .or_else(|| value.get("enabled").and_then(JsonValue::as_bool))
         })
     };
-    if required_present
-        && approvals >= 1
+    if required_exact
+        && approvals == 1
         && boolean("required_linear_history") == Some(true)
         && boolean("enforce_admins") == Some(true)
         && boolean("allow_force_pushes") == Some(false)
@@ -5013,7 +5554,9 @@ mod tests {
 
     impl TestDir {
         fn new(label: &str) -> Self {
-            let path = env::temp_dir().join(format!(
+            let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-tmp");
+            fs::create_dir_all(&parent).unwrap();
+            let path = parent.join(format!(
                 "jain-split-ops-{label}-{}-{}",
                 std::process::id(),
                 NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
@@ -5799,7 +6342,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     }
 
     #[test]
-    fn worktree_verification_fails_when_linked_worktree_present() {
+    fn worktree_verification_fails_when_auxiliary_registration_metadata_exists() {
         let root = TestDir::new("worktree-linked-ban");
         let (repo, _reviewed) = init_source(root.path());
         let remote = init_bare(root.path());
@@ -5822,12 +6365,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         };
         assert_eq!(verify_managed_worktree(&managed)["status"], "pass");
 
-        let linked = root.path().join("linked-worktree");
-        run_git_strict(
-            &repo,
-            &["worktree", "add", "--detach", linked.to_str().unwrap()],
-        )
-        .unwrap();
+        fs::create_dir(repo.join(".git/worktrees")).unwrap();
         let report = verify_managed_worktree(&managed);
         assert_eq!(report["status"], "fail");
         assert!(report["failures"]
@@ -5837,39 +6375,90 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             .any(|failure| failure
                 .as_str()
                 .unwrap()
-                .contains("linked git worktree(s) present")));
+                .contains("forbidden auxiliary or shared Git metadata")));
 
-        run_git_strict(&repo, &["worktree", "remove", linked.to_str().unwrap()]).unwrap();
+        fs::remove_dir(repo.join(".git/worktrees")).unwrap();
         assert_eq!(verify_managed_worktree(&managed)["status"], "pass");
     }
 
     #[test]
+    fn synthetic_registration_porcelain_requires_one_exact_primary() {
+        let sha = "a".repeat(40);
+        let valid = format!(
+            "worktree /home/ubuntu/jain-split/example\0HEAD {sha}\0branch refs/heads/main\0\0"
+        );
+        let parsed = parse_single_primary_registration(valid.as_bytes()).unwrap();
+        assert_eq!(parsed.path, Path::new("/home/ubuntu/jain-split/example"));
+        assert_eq!(parsed.head, sha);
+        assert_eq!(parsed.branch, "refs/heads/main");
+
+        for invalid in [
+            Vec::new(),
+            b"worktree /one\0HEAD a\0branch refs/heads/main\0\0".to_vec(),
+            format!("worktree /one\0HEAD {sha}\0detached\0\0").into_bytes(),
+            format!(
+                "worktree /one\0HEAD {sha}\0branch refs/heads/main\0\0worktree /two\0HEAD {sha}\0branch refs/heads/main\0\0"
+            )
+            .into_bytes(),
+            format!(
+                "worktree /one\0worktree /two\0HEAD {sha}\0branch refs/heads/main\0\0"
+            )
+            .into_bytes(),
+        ] {
+            assert!(parse_single_primary_registration(&invalid).is_err());
+        }
+    }
+
+    #[test]
     fn jeryu_lifecycle_plans_exact_requests_and_policy() {
-        let ready =
-            plan_jeryu_lifecycle_request("pr-ready", "jeryu/example", Some("7"), "main", None)
-                .unwrap();
+        let ready = plan_jeryu_lifecycle_request(
+            "pr-ready",
+            "jeryu/example",
+            Some("7"),
+            None,
+            "main",
+            None,
+        )
+        .unwrap();
         assert_eq!(ready.method(), "PATCH");
         assert_eq!(ready.path(), "/repos/jeryu/example/pulls/7");
         assert_eq!(
             serde_json::from_str::<JsonValue>(ready.body().unwrap()).unwrap(),
             json!({"draft": false})
         );
-        let close =
-            plan_jeryu_lifecycle_request("pr-close", "jeryu/example", Some("7"), "main", None)
-                .unwrap();
+        let close = plan_jeryu_lifecycle_request(
+            "pr-close",
+            "jeryu/example",
+            Some("7"),
+            None,
+            "main",
+            None,
+        )
+        .unwrap();
         assert_eq!(
             serde_json::from_str::<JsonValue>(close.body().unwrap()).unwrap(),
             json!({"state": "closed"})
         );
-        let merge =
-            plan_jeryu_lifecycle_request("pr-merge", "jeryu/example", Some("7"), "main", None)
-                .unwrap();
+        let expected_head = "a".repeat(40);
+        let merge = plan_jeryu_lifecycle_request(
+            "pr-merge",
+            "jeryu/example",
+            Some("7"),
+            Some(&expected_head),
+            "main",
+            None,
+        )
+        .unwrap();
         assert_eq!(merge.method(), "PUT");
         assert_eq!(merge.path(), "/repos/jeryu/example/pulls/7/merge");
-        assert_eq!(merge.body(), Some("{}"));
+        assert_eq!(
+            serde_json::from_str::<JsonValue>(merge.body().unwrap()).unwrap(),
+            json!({"sha": expected_head, "merge_method": "merge"})
+        );
         let protection = plan_jeryu_lifecycle_request(
             "protection-apply",
             "jeryu/example",
+            None,
             None,
             "main",
             Some("example/required"),
@@ -5878,6 +6467,85 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let policy: JsonValue = serde_json::from_str(protection.body().unwrap()).unwrap();
         validate_protection_policy(&policy, "example/required").unwrap();
         assert!(validate_protection_policy(&json!({}), "example/required").is_err());
+        assert!(plan_jeryu_lifecycle_request(
+            "pr-merge",
+            "jeryu/example",
+            Some("7"),
+            None,
+            "main",
+            None,
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn jeryu_pr_open_readback_is_exact() {
+        let sha = "a".repeat(40);
+        let readback = json!({
+            "number": 9,
+            "state": "open",
+            "head": {"ref": "codex/release", "sha": sha},
+            "base": {"ref": "main"},
+        });
+        validate_pr_open_readback(&readback, 9, "codex/release", &sha, "main").unwrap();
+        let mut wrong = readback.clone();
+        wrong["head"]["sha"] = json!("b".repeat(40));
+        assert!(validate_pr_open_readback(&wrong, 9, "codex/release", &sha, "main").is_err());
+    }
+
+    #[test]
+    fn hostile_git_askpass_proxy_and_config_environment_names_are_rejected() {
+        for name in [
+            "GIT_CONFIG_COUNT",
+            "GIT_ASKPASS",
+            "SSH_ASKPASS",
+            "SSH_ASKPASS_REQUIRE",
+            "HTTP_PROXY",
+            "https_proxy",
+            "ALL_PROXY",
+            "NO_PROXY",
+            "JERYU_BASE",
+            "JERYU_MERGE_TOKEN_FILE",
+        ] {
+            assert!(forbidden_jeryu_environment_name(name), "accepted {name}");
+        }
+        assert!(!forbidden_jeryu_environment_name("PATH"));
+        assert!(!forbidden_jeryu_environment_name("LC_ALL"));
+    }
+
+    #[test]
+    fn branch_push_dry_run_is_local_read_only_and_rejects_config_injection() {
+        let root = TestDir::new("branch-push-dry-run");
+        let (repo, head) = init_source(root.path());
+        let before = strict_git_output(&repo, &["status", "--porcelain=v1"]).unwrap();
+        jeryu_branch_push(vec![
+            "branch-push".to_owned(),
+            "--repo".to_owned(),
+            "jeryu/example".to_owned(),
+            "--repo-path".to_owned(),
+            repo.display().to_string(),
+            "--branch".to_owned(),
+            "main".to_owned(),
+            "--expected-head".to_owned(),
+            head.clone(),
+        ])
+        .unwrap();
+        assert_eq!(
+            strict_git_output(&repo, &["status", "--porcelain=v1"]).unwrap(),
+            before
+        );
+        assert_eq!(resolve_commit(&repo, "HEAD").unwrap(), head);
+
+        run_git_strict(
+            &repo,
+            &[
+                "config",
+                "url.http://attacker.invalid/.insteadOf",
+                LOCAL_JERYU_ORIGIN,
+            ],
+        )
+        .unwrap();
+        assert!(reject_local_git_injection(&repo).is_err());
     }
 
     #[test]
@@ -5921,11 +6589,28 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
 
         policy["enforce_admins"] = json!(true);
         validate_protection_policy(&policy, "example/required").unwrap();
+
+        policy["required_status_checks"] = json!(["example/required", "unexpected/required"]);
+        assert!(validate_protection_policy(&policy, "example/required").is_err());
+        policy["required_status_checks"] = json!(["example/required"]);
+        policy["required_approving_review_count"] = json!(2);
+        assert!(validate_protection_policy(&policy, "example/required").is_err());
     }
 
     #[test]
-    fn jeryu_lifecycle_dry_run_needs_no_token_and_writes_receipt() {
+    fn jeryu_lifecycle_dry_run_needs_no_token_and_writes_only_explicit_evidence() {
         let root = TestDir::new("jeryu-dry-run");
+        let before = fs::read_dir(root.path()).unwrap().count();
+        jeryu_lifecycle(vec![
+            "pr-ready".to_owned(),
+            "--repo".to_owned(),
+            "jeryu/example".to_owned(),
+            "--number".to_owned(),
+            "3".to_owned(),
+        ])
+        .unwrap();
+        assert_eq!(fs::read_dir(root.path()).unwrap().count(), before);
+
         let receipt = root.path().join("ready.json");
         jeryu_lifecycle(vec![
             "pr-ready".to_owned(),
@@ -5933,7 +6618,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             "jeryu/example".to_owned(),
             "--number".to_owned(),
             "3".to_owned(),
-            "--receipt".to_owned(),
+            "--evidence-out".to_owned(),
             receipt.display().to_string(),
         ])
         .unwrap();

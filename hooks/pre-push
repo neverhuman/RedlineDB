@@ -1,10 +1,16 @@
 #!/usr/bin/env sh
-# Refuse to push from a repo that has extra git worktrees (policy: 1 primary checkout only).
-count=$(git worktree list --porcelain | grep -c '^worktree ')
-if [ "$count" -gt 1 ]; then
-  echo "PUSH REFUSED: $((count - 1)) extra git worktree(s) present." >&2
-  echo "Worktrees are banned (they fragment agents). Remove them: git worktree remove <path>" >&2
-  git worktree list >&2
+# Refuse any checkout that does not own one independent physical Git directory.
+root=$(git rev-parse --show-toplevel) || exit 1
+git_dir=$(git rev-parse --path-format=absolute --absolute-git-dir) || exit 1
+common_dir=$(git rev-parse --path-format=absolute --git-common-dir) || exit 1
+expected="$root/.git"
+if [ ! -d "$expected" ] || [ -L "$expected" ] ||
+  [ "$git_dir" != "$expected" ] || [ "$common_dir" != "$expected" ] ||
+  [ -e "$expected/worktrees" ] || [ -L "$expected/worktrees" ] ||
+  [ -e "$expected/commondir" ] || [ -L "$expected/commondir" ] ||
+  [ -e "$expected/objects/info/alternates" ] || [ -L "$expected/objects/info/alternates" ]; then
+  echo "PUSH REFUSED: checkout has auxiliary, shared, alternate, or non-physical Git metadata." >&2
+  echo "Preserve valuable bytes and retire the checkout through the reviewed custody flow." >&2
   exit 1
 fi
 exit 0

@@ -12,7 +12,9 @@ struct Scratch(PathBuf);
 
 impl Scratch {
     fn new() -> Self {
-        let path = std::env::temp_dir().join(format!(
+        let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-tmp");
+        fs::create_dir_all(&parent).expect("create scratch parent");
+        let path = parent.join(format!(
             "splitctl-integration-{}-{}",
             std::process::id(),
             NEXT_CASE.fetch_add(1, Ordering::Relaxed)
@@ -34,6 +36,9 @@ impl Drop for Scratch {
 
 fn splitctl(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_splitctl"))
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("LC_ALL", "C")
         .args(args)
         .output()
         .expect("run splitctl")
@@ -57,7 +62,7 @@ fn property_rejects_unsafe_repository_slugs() {
 }
 
 #[test]
-fn dry_run_pr_lifecycle_writes_a_plan_without_credentials() {
+fn dry_run_pr_lifecycle_writes_only_explicit_evidence_without_credentials() {
     let scratch = Scratch::new();
     let receipt = scratch.path().join("ready.json");
     let output = splitctl(&[
@@ -67,7 +72,7 @@ fn dry_run_pr_lifecycle_writes_a_plan_without_credentials() {
         "jeryu/example",
         "--number",
         "7",
-        "--receipt",
+        "--evidence-out",
         receipt.to_str().expect("UTF-8 receipt path"),
     ]);
     assert!(
@@ -80,6 +85,40 @@ fn dry_run_pr_lifecycle_writes_a_plan_without_credentials() {
     assert_eq!(report["mode"], "dry-run");
     assert_eq!(report["action"], "would-apply");
     assert_eq!(report["request"]["body"]["draft"], false);
+}
+
+#[test]
+fn dry_run_host_ci_publication_needs_no_token() {
+    let head = "a".repeat(40);
+    let digest = "b".repeat(64);
+    let summary = format!("receipt_sha256={digest} attempt_id=attempt-1 exact");
+    let output = splitctl(&[
+        "jeryu-publish-host-ci",
+        "--repo",
+        "jeryu/example",
+        "--head-sha",
+        &head,
+        "--required-check",
+        "example/required",
+        "--conclusion",
+        "success",
+        "--proof-summary",
+        &summary,
+        "--proof-receipt-sha256",
+        &digest,
+        "--proof-attempt-id",
+        "attempt-1",
+        "--status-description",
+        "example/required root-seal=0123456789abcdef",
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value = serde_json::from_slice(&output.stdout).expect("parse dry-run output");
+    assert_eq!(report["action"], "would-publish");
+    assert_eq!(report["head_sha"], head);
 }
 
 #[test]
@@ -104,7 +143,7 @@ fn non_owner_is_forbidden_from_planning_an_admin_bypass() {
         "jeryu/example",
         "--required-check",
         "example/required",
-        "--receipt",
+        "--evidence-out",
         receipt.to_str().expect("UTF-8 receipt path"),
     ]);
     assert!(

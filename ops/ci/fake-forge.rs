@@ -127,14 +127,21 @@ fn handle(
             .create(true)
             .append(true)
             .open(state_path)?;
-        writeln!(state, "{body}")?;
+        writeln!(state, "check\t{body}")?;
+    }
+    if status_post {
+        let mut state = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(state_path)?;
+        writeln!(state, "status\t{body}")?;
     }
     if method == "GET" && path.contains("/commits/") && path.ends_with("/check-runs") {
         let mut runs = Vec::new();
         if behavior != "readback-missing" {
             for line in fs::read_to_string(state_path)?.lines() {
-                if !line.trim().is_empty() {
-                    runs.push(line.to_owned());
+                if let Some(run) = line.strip_prefix("check\t") {
+                    runs.push(run.to_owned());
                 }
             }
         }
@@ -152,10 +159,42 @@ fn handle(
                     .collect();
             }
         }
+        if behavior == "required-readback-missing"
+            && runs.iter().any(|run| run.contains("/required\""))
+        {
+            runs.clear();
+        }
         let response = format!(
             "{{\"total_count\":{},\"check_runs\":[{}]}}",
             runs.len(),
             runs.join(",")
+        );
+        return respond(&mut stream, 200, &response, "application/json");
+    }
+    if method == "GET" && path.contains("/commits/") && path.ends_with("/status") {
+        let sha = path
+            .split("/commits/")
+            .nth(1)
+            .and_then(|tail| tail.split('/').next())
+            .ok_or("status readback has no commit")?;
+        let mut statuses = Vec::new();
+        if behavior != "status-readback-missing" {
+            for line in fs::read_to_string(state_path)?.lines() {
+                if let Some(status) = line.strip_prefix("status\t") {
+                    statuses.push(status.to_owned());
+                }
+            }
+        }
+        if behavior == "readback-mismatch" {
+            statuses = statuses
+                .into_iter()
+                .map(|status| status.replace("/required\"", "/wrong\""))
+                .collect();
+        }
+        let response = format!(
+            "{{\"sha\":\"{sha}\",\"total_count\":{},\"statuses\":[{}]}}",
+            statuses.len(),
+            statuses.join(",")
         );
         return respond(&mut stream, 200, &response, "application/json");
     }
