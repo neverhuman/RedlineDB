@@ -32,6 +32,14 @@ const SUCCESSOR_PREDECESSOR_TAG: &str = "redline-core-v4.1.0-jain.3";
 const SUCCESSOR_PREDECESSOR_COMMIT: &str = "7137a1ee2d04be4eb6931d99ff78b8a52c827900";
 const SUCCESSOR_PREPARED_LOCK_SHA256: &str =
     "a6223759a257baec12d5bcaaa235de70823101e0b3be1898ce58ecec07c620b7";
+const SANDBOX_MARKER: &str = ".redline-standalone-sandbox";
+const GIT_CONTEXT_ENV: [&str; 5] = [
+    "GIT_DIR",
+    "GIT_WORK_TREE",
+    "GIT_COMMON_DIR",
+    "GIT_OBJECT_DIRECTORY",
+    "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+];
 
 #[derive(Debug)]
 struct RepairError {
@@ -274,6 +282,137 @@ fn absolute_path(path: &Path) -> Result<PathBuf> {
         }
     }
     Ok(normalized)
+}
+
+fn reject_symlink_components(path: &Path, context: &str) -> Result<()> {
+    let absolute = absolute_path(path)?;
+    let mut current = PathBuf::new();
+    for component in absolute.components() {
+        current.push(component.as_os_str());
+        match fs::symlink_metadata(&current) {
+            Ok(metadata) if metadata.file_type().is_symlink() => {
+                return Err(error(format!(
+                    "{context} contains a symlinked path component: {}",
+                    current.display()
+                )))
+            }
+            Ok(_) => {}
+            Err(value) if value.kind() == io::ErrorKind::NotFound => {}
+            Err(value) => return Err(value.into()),
+        }
+    }
+    Ok(())
+}
+
+fn require_path_absent(path: &Path, context: &str) -> Result<()> {
+    match fs::symlink_metadata(path) {
+        Err(value) if value.kind() == io::ErrorKind::NotFound => Ok(()),
+        Ok(_) => Err(error(format!(
+            "{context} must be absent: {}",
+            path.display()
+        ))),
+        Err(value) => Err(value.into()),
+    }
+}
+
+struct StandaloneSandbox {
+    root: PathBuf,
+    token: String,
+    cleaned: bool,
+}
+
+impl StandaloneSandbox {
+    fn new(prefix: &str) -> Result<Self> {
+        let parent = absolute_path(&env::temp_dir())?;
+        reject_symlink_components(&parent, "standalone sandbox parent")?;
+        let token = unique_suffix();
+        let root = parent.join(format!("{prefix}-{token}"));
+        fs::create_dir(&root)?;
+        let marker = root.join(SANDBOX_MARKER);
+        let marker_result = (|| -> Result<()> {
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&marker)?;
+            file.write_all(token.as_bytes())?;
+            file.sync_all()?;
+            Ok(())
+        })();
+        if let Err(value) = marker_result {
+            let _ = fs::remove_dir(&root);
+            return Err(value);
+        }
+        Ok(Self {
+            root,
+            token,
+            cleaned: false,
+        })
+    }
+
+    fn path(&self) -> &Path {
+        &self.root
+    }
+
+    fn cleanup(&mut self) -> Result<()> {
+        if self.cleaned {
+            return Ok(());
+        }
+        reject_symlink_components(&self.root, "standalone sandbox cleanup root")?;
+        let metadata = fs::symlink_metadata(&self.root)?;
+        if !metadata.is_dir() || metadata.file_type().is_symlink() {
+            return Err(error(format!(
+                "standalone sandbox cleanup root is not a physical directory: {}",
+                self.root.display()
+            )));
+        }
+        let marker = self.root.join(SANDBOX_MARKER);
+        let marker_metadata = fs::symlink_metadata(&marker)?;
+        if !marker_metadata.is_file() || marker_metadata.file_type().is_symlink() {
+            return Err(error(format!(
+                "standalone sandbox cleanup marker is not a physical file: {}",
+                marker.display()
+            )));
+        }
+        if fs::read_to_string(&marker)? != self.token {
+            return Err(error(format!(
+                "standalone sandbox cleanup marker does not match: {}",
+                marker.display()
+            )));
+        }
+        fs::remove_dir_all(&self.root)?;
+        require_path_absent(&self.root, "standalone sandbox cleanup root")?;
+        self.cleaned = true;
+        Ok(())
+    }
+}
+
+impl Drop for StandaloneSandbox {
+    fn drop(&mut self) {
+        if !self.cleaned {
+            if let Err(value) = self.cleanup() {
+                eprintln!("redline-proof: standalone sandbox cleanup refused: {value}");
+            }
+        }
+    }
+}
+
+fn with_standalone_sandbox<T>(
+    prefix: &str,
+    operation: impl FnOnce(&Path) -> Result<T>,
+) -> Result<T> {
+    let mut sandbox = StandaloneSandbox::new(prefix)?;
+    let result = operation(sandbox.path());
+    let cleanup = sandbox.cleanup();
+    match (result, cleanup) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Err(value), Ok(())) => Err(value),
+        (Ok(_), Err(cleanup)) => Err(error(format!(
+            "standalone sandbox cleanup failed: {cleanup}"
+        ))),
+        (Err(value), Err(cleanup)) => Err(error(format!(
+            "{value}; standalone sandbox cleanup failed: {cleanup}"
+        ))),
+    }
 }
 
 fn recorded_path(path: &Path, base: &Path) -> Result<String> {
@@ -640,17 +779,21 @@ fn command_output(command: &mut Command) -> Result<Output> {
     Ok(output)
 }
 
+fn isolated_git() -> Command {
+    let mut command = Command::new("git");
+    for name in GIT_CONTEXT_ENV {
+        command.env_remove(name);
+    }
+    command
+}
+
 fn git(root: &Path, args: &[&str]) -> Result<String> {
-    let output = command_output(Command::new("git").arg("-C").arg(root).args(args))?;
+    let output = command_output(isolated_git().arg("-C").arg(root).args(args))?;
     Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 
 fn git_optional(root: &Path, args: &[&str]) -> Result<Option<String>> {
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(root)
-        .args(args)
-        .output()?;
+    let output = isolated_git().arg("-C").arg(root).args(args).output()?;
     if output.status.success() {
         Ok(Some(String::from_utf8(output.stdout)?.trim().to_owned()))
     } else {
@@ -659,12 +802,128 @@ fn git_optional(root: &Path, args: &[&str]) -> Result<Option<String>> {
 }
 
 fn git_tree_checksum(root: &Path, commit: &str) -> Result<String> {
-    let output = command_output(Command::new("git").arg("-C").arg(root).args([
+    let output = command_output(isolated_git().arg("-C").arg(root).args([
         "archive",
         "--format=tar",
         commit,
     ]))?;
     Ok(sha256_bytes(&output.stdout))
+}
+
+fn validate_physical_checkout(root: &Path) -> Result<()> {
+    reject_symlink_components(root, "repository checkout")?;
+    let root_metadata = fs::symlink_metadata(root)?;
+    if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() {
+        return Err(error(format!(
+            "repository checkout is not a physical directory: {}",
+            root.display()
+        )));
+    }
+    let git_dir = root.join(".git");
+    let git_metadata = fs::symlink_metadata(&git_dir)?;
+    if !git_metadata.is_dir() || git_metadata.file_type().is_symlink() {
+        return Err(error(format!(
+            "repository .git is not a physical directory: {}",
+            git_dir.display()
+        )));
+    }
+    let expected_git_dir = absolute_path(&git_dir)?;
+    let actual_git_dir = absolute_path(Path::new(&git(
+        root,
+        &["rev-parse", "--path-format=absolute", "--absolute-git-dir"],
+    )?))?;
+    let common_dir = absolute_path(Path::new(&git(
+        root,
+        &["rev-parse", "--path-format=absolute", "--git-common-dir"],
+    )?))?;
+    if actual_git_dir != expected_git_dir || common_dir != expected_git_dir {
+        return Err(error(format!(
+            "repository checkout uses a non-physical or shared Git directory: {}",
+            root.display()
+        )));
+    }
+    let alternates = git_dir.join("objects/info/alternates");
+    require_path_absent(&alternates, "repository object alternates")?;
+    let linked_checkouts = git_dir.join("worktrees");
+    require_path_absent(&linked_checkouts, "repository linked-checkout registry")?;
+    if git(root, &["rev-parse", "--is-shallow-repository"])? != "false" {
+        return Err(error(format!(
+            "repository checkout is shallow: {}",
+            root.display()
+        )));
+    }
+    Ok(())
+}
+
+fn clone_exact_standalone(source: &Path, destination: &Path, commit: &str) -> Result<()> {
+    if !is_sha1(commit) {
+        return Err(error("standalone checkout commit must be an exact SHA-1"));
+    }
+    validate_physical_checkout(source)?;
+    let parent = destination
+        .parent()
+        .ok_or_else(|| error("standalone checkout destination has no parent"))?;
+    reject_symlink_components(parent, "standalone checkout parent")?;
+    match fs::symlink_metadata(destination) {
+        Err(value) if value.kind() == io::ErrorKind::NotFound => {}
+        Ok(_) => {
+            return Err(error(format!(
+                "standalone checkout destination already exists: {}",
+                destination.display()
+            )))
+        }
+        Err(value) => return Err(value.into()),
+    }
+    let origin = git(source, &["remote", "get-url", "origin"])?;
+    command_output(
+        isolated_git()
+            .args([
+                "clone",
+                "--no-local",
+                "--no-checkout",
+                "--origin",
+                "origin",
+                "--",
+            ])
+            .arg(source)
+            .arg(destination),
+    )?;
+    command_output(
+        isolated_git()
+            .arg("-C")
+            .arg(destination)
+            .args(["remote", "set-url", "origin"])
+            .arg(&origin),
+    )?;
+    command_output(
+        isolated_git()
+            .arg("-C")
+            .arg(destination)
+            .args(["checkout", "--detach", commit]),
+    )?;
+    validate_physical_checkout(destination)?;
+    if git(destination, &["rev-parse", "HEAD"])? != commit
+        || !git(destination, &["branch", "--show-current"])?.is_empty()
+        || !git(
+            destination,
+            &["status", "--porcelain", "--untracked-files=all"],
+        )?
+        .is_empty()
+        || git(destination, &["remote"])? != "origin"
+        || git(destination, &["remote", "get-url", "origin"])? != origin
+    {
+        return Err(error(format!(
+            "standalone checkout did not preserve exact detached identity: {}",
+            destination.display()
+        )));
+    }
+    command_output(
+        isolated_git()
+            .arg("-C")
+            .arg(destination)
+            .args(["fsck", "--full", "--strict"]),
+    )?;
+    Ok(())
 }
 
 fn cargo_package_version(path: &Path) -> Result<String> {
@@ -705,7 +964,7 @@ fn validate_product_version(root: &Path, repo: &Repo) -> Result<()> {
 }
 
 fn forge_ref(root: &Path, reference: &str) -> Result<Option<String>> {
-    let output = Command::new("git")
+    let output = isolated_git()
         .arg("-C")
         .arg(root)
         .args(["ls-remote", "origin", reference])
@@ -737,7 +996,7 @@ fn forge_ref(root: &Path, reference: &str) -> Result<Option<String>> {
 }
 
 fn local_tag_exists(root: &Path, tag: &str) -> Result<bool> {
-    Ok(Command::new("git")
+    Ok(isolated_git()
         .arg("-C")
         .arg(root)
         .args([
@@ -839,6 +1098,7 @@ fn current_reviewed_state(
     allow_absent_tag: bool,
 ) -> Result<JsonValue> {
     let root = manifest.repo_root(repo);
+    validate_physical_checkout(&root)?;
     if git_optional(&root, &["rev-parse", "--is-inside-work-tree"])?.as_deref() != Some("true") {
         return Err(error(format!(
             "{}: checkout is missing at {}",
@@ -859,7 +1119,7 @@ fn current_reviewed_state(
         )));
     }
     if !git(&root, &["status", "--porcelain", "--untracked-files=all"])?.is_empty() {
-        return Err(error(format!("{}: worktree is dirty", repo.name)));
+        return Err(error(format!("{}: checkout is dirty", repo.name)));
     }
     let remotes = git(&root, &["remote"])?;
     if remotes != "origin" {
@@ -946,7 +1206,7 @@ fn current_reviewed_state(
     }))
 }
 
-fn ci_commands(repo: &Repo, worktree: &Path) -> Result<Vec<Vec<String>>> {
+fn ci_commands(repo: &Repo, checkout: &Path) -> Result<Vec<Vec<String>>> {
     let commands: Vec<Vec<&str>> = match repo.name.as_str() {
         "redline" => vec![
             vec!["bash", "scripts/ci-local.sh", "required"],
@@ -963,11 +1223,11 @@ fn ci_commands(repo: &Repo, worktree: &Path) -> Result<Vec<Vec<String>>> {
         "redline-web" => vec![vec!["bash", "scripts/ci-local.sh", "pr-ci"]],
         _ => Vec::new(),
     };
-    if !worktree.join("scripts/ci-doctor.sh").is_file()
+    if !checkout.join("scripts/ci-doctor.sh").is_file()
         || commands.is_empty()
         || commands
             .iter()
-            .any(|command| !worktree.join(command[1]).is_file())
+            .any(|command| !checkout.join(command[1]).is_file())
     {
         return Err(error(format!(
             "{}: complete independent CI entrypoints are absent",
@@ -1136,14 +1396,14 @@ fn manifest_string<'a>(value: &'a JsonValue, field: &str) -> Result<&'a str> {
 fn verify_testing_package(
     repo: &Repo,
     commit: &str,
-    worktree: &Path,
+    checkout: &Path,
 ) -> Result<(PathBuf, PathBuf, PathBuf, String)> {
     let package = format!("redline-testing-{}-linux-x86_64", repo.product_version);
-    let artifact = worktree.join("dist").join(format!("{package}.tar.gz"));
-    let checksum = worktree
+    let artifact = checkout.join("dist").join(format!("{package}.tar.gz"));
+    let checksum = checkout
         .join("dist")
         .join(format!("{package}.tar.gz.sha256"));
-    let manifest = worktree.join("dist/release-manifest.json");
+    let manifest = checkout.join("dist/release-manifest.json");
     for path in [&artifact, &checksum, &manifest] {
         if !path.is_file() {
             return Err(error(format!(
@@ -1178,7 +1438,7 @@ fn verify_testing_package(
             "redline-testing release manifest binary_sha256 is invalid",
         ));
     }
-    let binary = worktree
+    let binary = checkout
         .join("dist")
         .join(&package)
         .join("bin/redline-testing");
@@ -1222,21 +1482,12 @@ fn stage_testing_artifact(
         .and_then(JsonValue::as_str)
         .ok_or_else(|| error("reviewed redline-testing state lacks commit"))?;
     let source = manifest.repo_root(repo);
-    let worktree = temporary.join("redline-testing-artifact-source");
+    let checkout = temporary.join("redline-testing-artifact-source");
     let staging = temporary.join("redline-testing-artifact");
     let log_path = log_dir.join("redline-testing-artifact.log");
     let command = ["bash", "scripts/ci-local.sh", "release"];
-    let mut worktree_added = false;
-    let attempt = (|| -> Result<TestingArtifact> {
-        command_output(
-            Command::new("git")
-                .arg("-C")
-                .arg(&source)
-                .args(["worktree", "add", "--detach"])
-                .arg(&worktree)
-                .arg(commit),
-        )?;
-        worktree_added = true;
+    (|| -> Result<TestingArtifact> {
+        clone_exact_standalone(&source, &checkout, commit)?;
         let mut log = File::create(&log_path)?;
         writeln!(log, "$ {}", command.join(" "))?;
         log.flush()?;
@@ -1246,7 +1497,7 @@ fn stage_testing_artifact(
         configure_family_child(&mut process);
         let result = process
             .args(&command[1..])
-            .current_dir(&worktree)
+            .current_dir(&checkout)
             .env("REDLINE_TESTING_RELEASE_TAG", &repo.current_tag)
             .stdout(Stdio::from(stdout))
             .stderr(Stdio::from(stderr))
@@ -1258,7 +1509,7 @@ fn stage_testing_artifact(
             )));
         }
         let (artifact, checksum, release_manifest, binary_sha256) =
-            verify_testing_package(repo, commit, &worktree)?;
+            verify_testing_package(repo, commit, &checkout)?;
         fs::create_dir_all(&staging)?;
         let artifact_path = staging.join(
             artifact
@@ -1299,29 +1550,7 @@ fn stage_testing_artifact(
             build_log_sha256: sha256_file(&log_path)?,
             build_log: log_path,
         })
-    })();
-    let cleanup = if worktree_added {
-        command_output(
-            Command::new("git")
-                .arg("-C")
-                .arg(&source)
-                .args(["worktree", "remove", "--force"])
-                .arg(&worktree),
-        )
-        .map(|_| ())
-    } else {
-        Ok(())
-    };
-    match (attempt, cleanup) {
-        (Ok(artifact), Ok(())) => Ok(artifact),
-        (Err(value), Ok(())) => Err(value),
-        (Ok(_), Err(cleanup)) => Err(error(format!(
-            "redline-testing artifact worktree cleanup failed: {cleanup}"
-        ))),
-        (Err(value), Err(cleanup)) => Err(error(format!(
-            "{value}; redline-testing artifact worktree cleanup failed: {cleanup}"
-        ))),
-    }
+    })()
 }
 
 fn merge_json(base: &JsonValue, additions: &[(&str, JsonValue)]) -> Result<JsonValue> {
@@ -1404,147 +1633,118 @@ fn family_ci(manifest_path: &Path, receipt: &Path) -> Result<()> {
             )?);
         }
     } else {
-        let temporary = env::temp_dir().join(format!("redline-family-ci-{}", unique_suffix()));
-        fs::create_dir_all(&temporary)?;
-        let artifact = match stage_testing_artifact(&manifest, &states, &temporary, &log_dir) {
-            Ok(value) => Some(value),
-            Err(value) => {
+        with_standalone_sandbox("redline-family-ci", |temporary| {
+            let artifact = match stage_testing_artifact(&manifest, &states, temporary, &log_dir) {
+                Ok(value) => Some(value),
+                Err(value) => {
+                    for repo in &manifest.repos {
+                        let state = states
+                            .get(&repo.name)
+                            .ok_or_else(|| error("missing reviewed state"))?;
+                        let failure = if repo.name == "redline-testing" {
+                            format!("redline-testing artifact preparation failed: {value}")
+                        } else {
+                            "blocked because reviewed redline-testing artifact preparation failed"
+                                .to_owned()
+                        };
+                        rows.push(merge_json(
+                            state,
+                            &[
+                                ("dependency_artifacts", json!([])),
+                                ("commands", json!([])),
+                                ("log", JsonValue::Null),
+                                ("log_sha256", JsonValue::Null),
+                                (
+                                    "status",
+                                    json!(if repo.name == "redline-testing" {
+                                        "fail"
+                                    } else {
+                                        "blocked"
+                                    }),
+                                ),
+                                ("failure", json!(failure)),
+                            ],
+                        )?);
+                    }
+                    None
+                }
+            };
+            if let Some(artifact) = artifact {
                 for repo in &manifest.repos {
                     let state = states
                         .get(&repo.name)
                         .ok_or_else(|| error("missing reviewed state"))?;
-                    let failure = if repo.name == "redline-testing" {
-                        format!("redline-testing artifact preparation failed: {value}")
-                    } else {
-                        "blocked because reviewed redline-testing artifact preparation failed"
-                            .to_owned()
-                    };
+                    let source = manifest.repo_root(repo);
+                    let checkout = temporary.join(&repo.name);
+                    let log_path = log_dir.join(format!("{}.log", repo.name));
+                    let mut commands = Vec::new();
+                    let mut status = "fail";
+                    let mut failure: Option<String> = None;
+                    let attempt = (|| -> Result<()> {
+                        let commit = state
+                            .get("commit")
+                            .and_then(JsonValue::as_str)
+                            .ok_or_else(|| error("missing state commit"))?;
+                        clone_exact_standalone(&source, &checkout, commit)?;
+                        commands = ci_commands(repo, &checkout)?;
+                        let mut log = File::create(&log_path)?;
+                        for command in &commands {
+                            writeln!(log, "$ {}", command.join(" "))?;
+                            log.flush()?;
+                            let stdout = log.try_clone()?;
+                            let stderr = log.try_clone()?;
+                            let mut process = Command::new(&command[0]);
+                            configure_family_child(&mut process);
+                            if repo.name == "redline-core" {
+                                configure_redline_core_artifact(&mut process, &artifact)?;
+                            }
+                            let result = process
+                                .args(&command[1..])
+                                .current_dir(&checkout)
+                                .stdout(Stdio::from(stdout))
+                                .stderr(Stdio::from(stderr))
+                                .status()?;
+                            if !result.success() {
+                                return Err(error(format!(
+                                    "CI command exited {:?}: {}",
+                                    result.code(),
+                                    command.join(" ")
+                                )));
+                            }
+                        }
+                        status = "pass";
+                        Ok(())
+                    })();
+                    if let Err(value) = attempt {
+                        failure = Some(value.to_string());
+                        if !log_path.exists() {
+                            fs::write(&log_path, format!("family-ci failure: {value}\n"))?;
+                        }
+                    }
+                    let log_record =
+                        recorded_path(&log_path, receipt.parent().unwrap_or(Path::new(".")))?;
+                    let dependency_artifacts =
+                        if repo.name == "redline-core" {
+                            json!([artifact
+                                .receipt_json(receipt.parent().unwrap_or(Path::new(".")))?])
+                        } else {
+                            json!([])
+                        };
                     rows.push(merge_json(
                         state,
                         &[
-                            ("dependency_artifacts", json!([])),
-                            ("commands", json!([])),
-                            ("log", JsonValue::Null),
-                            ("log_sha256", JsonValue::Null),
-                            (
-                                "status",
-                                json!(if repo.name == "redline-testing" {
-                                    "fail"
-                                } else {
-                                    "blocked"
-                                }),
-                            ),
+                            ("dependency_artifacts", dependency_artifacts),
+                            ("commands", json!(commands)),
+                            ("log", json!(log_record)),
+                            ("log_sha256", json!(sha256_file(&log_path)?)),
+                            ("status", json!(status)),
                             ("failure", json!(failure)),
                         ],
                     )?);
                 }
-                None
             }
-        };
-        if let Some(artifact) = artifact {
-            for repo in &manifest.repos {
-                let state = states
-                    .get(&repo.name)
-                    .ok_or_else(|| error("missing reviewed state"))?;
-                let source = manifest.repo_root(repo);
-                let worktree = temporary.join(&repo.name);
-                let log_path = log_dir.join(format!("{}.log", repo.name));
-                let mut commands = Vec::new();
-                let mut status = "fail";
-                let mut failure: Option<String> = None;
-                let mut worktree_added = false;
-                let attempt = (|| -> Result<()> {
-                    let commit = state
-                        .get("commit")
-                        .and_then(JsonValue::as_str)
-                        .ok_or_else(|| error("missing state commit"))?;
-                    command_output(
-                        Command::new("git")
-                            .arg("-C")
-                            .arg(&source)
-                            .args(["worktree", "add", "--detach"])
-                            .arg(&worktree)
-                            .arg(commit),
-                    )?;
-                    worktree_added = true;
-                    commands = ci_commands(repo, &worktree)?;
-                    let mut log = File::create(&log_path)?;
-                    for command in &commands {
-                        writeln!(log, "$ {}", command.join(" "))?;
-                        log.flush()?;
-                        let stdout = log.try_clone()?;
-                        let stderr = log.try_clone()?;
-                        let mut process = Command::new(&command[0]);
-                        configure_family_child(&mut process);
-                        if repo.name == "redline-core" {
-                            configure_redline_core_artifact(&mut process, &artifact)?;
-                        }
-                        let result = process
-                            .args(&command[1..])
-                            .current_dir(&worktree)
-                            .stdout(Stdio::from(stdout))
-                            .stderr(Stdio::from(stderr))
-                            .status()?;
-                        if !result.success() {
-                            return Err(error(format!(
-                                "CI command exited {:?}: {}",
-                                result.code(),
-                                command.join(" ")
-                            )));
-                        }
-                    }
-                    status = "pass";
-                    Ok(())
-                })();
-                if let Err(value) = attempt {
-                    failure = Some(value.to_string());
-                    if !log_path.exists() {
-                        fs::write(&log_path, format!("family-ci failure: {value}\n"))?;
-                    }
-                }
-                if worktree_added {
-                    let cleanup = Command::new("git")
-                        .arg("-C")
-                        .arg(&source)
-                        .args(["worktree", "remove", "--force"])
-                        .arg(&worktree)
-                        .output()?;
-                    if !cleanup.status.success() {
-                        status = "fail";
-                        let detail = String::from_utf8_lossy(if cleanup.stderr.is_empty() {
-                            &cleanup.stdout
-                        } else {
-                            &cleanup.stderr
-                        });
-                        let message =
-                            format!("detached worktree cleanup failed: {}", detail.trim());
-                        failure = Some(match failure {
-                            Some(old) => format!("{old}; {message}"),
-                            None => message,
-                        });
-                    }
-                }
-                let log_record =
-                    recorded_path(&log_path, receipt.parent().unwrap_or(Path::new(".")))?;
-                let dependency_artifacts = if repo.name == "redline-core" {
-                    json!([artifact.receipt_json(receipt.parent().unwrap_or(Path::new(".")))?])
-                } else {
-                    json!([])
-                };
-                rows.push(merge_json(
-                    state,
-                    &[
-                        ("dependency_artifacts", dependency_artifacts),
-                        ("commands", json!(commands)),
-                        ("log", json!(log_record)),
-                        ("log_sha256", json!(sha256_file(&log_path)?)),
-                        ("status", json!(status)),
-                        ("failure", json!(failure)),
-                    ],
-                )?);
-            }
-        }
-        let _ = fs::remove_dir_all(&temporary);
+            Ok(())
+        })?;
     }
     let passed = !rows.is_empty()
         && rows
@@ -3543,7 +3743,7 @@ fn remote_verify(lock: &Path) -> Result<()> {
                 "{name}: canonical local Jeryu remote or tag is missing"
             )));
         }
-        let output = Command::new("git")
+        let output = isolated_git()
             .args([
                 "ls-remote",
                 remote,
@@ -3852,13 +4052,7 @@ fn validate(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
     let manifest = load_manifest(manifest_path)?;
     for repo in &manifest.repos {
         let checkout = manifest.repo_root(repo);
-        if !checkout.join(".git").exists() {
-            return Err(error(format!(
-                "{}: missing independent Git checkout: {}",
-                repo.name,
-                checkout.display()
-            )));
-        }
+        validate_physical_checkout(&checkout)?;
     }
     let hub = manifest
         .repos
@@ -3945,6 +4139,7 @@ fn clone_or_update(manifest_path: &Path, dry_run: bool) -> Result<()> {
             continue;
         }
         if checkout.join(".git").is_dir() {
+            validate_physical_checkout(&checkout)?;
             if !git(
                 &checkout,
                 &["status", "--porcelain", "--untracked-files=all"],
@@ -3967,14 +4162,14 @@ fn clone_or_update(manifest_path: &Path, dry_run: bool) -> Result<()> {
                     repo.name
                 )));
             }
-            command_output(Command::new("git").arg("-C").arg(&checkout).args([
+            command_output(isolated_git().arg("-C").arg(&checkout).args([
                 "fetch",
                 "--prune",
                 "--tags",
                 "origin",
                 &repo.default_branch,
             ]))?;
-            command_output(Command::new("git").arg("-C").arg(&checkout).args([
+            command_output(isolated_git().arg("-C").arg(&checkout).args([
                 "merge",
                 "--ff-only",
                 &format!("origin/{}", repo.default_branch),
@@ -3985,11 +4180,14 @@ fn clone_or_update(manifest_path: &Path, dry_run: bool) -> Result<()> {
                 repo.name
             )));
         } else {
-            fs::create_dir_all(checkout.parent().unwrap_or(Path::new(".")))?;
+            let parent = checkout.parent().unwrap_or(Path::new("."));
+            reject_symlink_components(parent, "clone destination parent")?;
+            fs::create_dir_all(parent)?;
             command_output(
-                Command::new("git")
+                isolated_git()
                     .args([
                         "clone",
+                        "--no-local",
                         "--origin",
                         "origin",
                         "--branch",
@@ -3999,6 +4197,7 @@ fn clone_or_update(manifest_path: &Path, dry_run: bool) -> Result<()> {
                     ])
                     .arg(&checkout),
             )?;
+            validate_physical_checkout(&checkout)?;
         }
         let head = git(&checkout, &["rev-parse", "HEAD"])?;
         if forge_ref(&checkout, &format!("refs/heads/{}", repo.default_branch))?.as_deref()
@@ -4032,7 +4231,7 @@ fn default_paths() -> Paths {
             .unwrap_or_else(|| root.join("redline.lock.toml")),
         mirror: env::var_os("REDLINE_SPLIT_MIRROR_LOCK")
             .map(PathBuf::from)
-            .unwrap_or_else(|| root.join("../redline-split/redline.lock.toml")),
+            .unwrap_or_else(|| root.join("../redline.lock.toml")),
         root,
     }
 }
@@ -4254,10 +4453,94 @@ mod tests {
         }
     }
 
+    fn initialize_test_repo(root: &Path) -> String {
+        fs::create_dir_all(root).unwrap();
+        command_output(
+            isolated_git()
+                .args(["init", "--initial-branch", "main", "--"])
+                .arg(root),
+        )
+        .unwrap();
+        git(root, &["config", "user.name", "Redline Test"]).unwrap();
+        git(
+            root,
+            &["config", "user.email", "redline-test@example.invalid"],
+        )
+        .unwrap();
+        git(
+            root,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "http://127.0.0.1:8787/git/jeryu/test.git",
+            ],
+        )
+        .unwrap();
+        fs::write(root.join("README.md"), b"standalone clone fixture\n").unwrap();
+        git(root, &["add", "README.md"]).unwrap();
+        git(root, &["commit", "-m", "fixture"]).unwrap();
+        git(root, &["rev-parse", "HEAD"]).unwrap()
+    }
+
+    #[test]
+    fn standalone_checkout_is_exact_and_independent() {
+        let fixture = TestDir::new("standalone-checkout");
+        let source = fixture.path().join("source");
+        let commit = initialize_test_repo(&source);
+        with_standalone_sandbox("redline-clone-test", |sandbox| {
+            let checkout = sandbox.join("checkout");
+            clone_exact_standalone(&source, &checkout, &commit)?;
+            assert!(checkout.join(".git").is_dir());
+            assert!(!checkout.join(".git/objects/info/alternates").exists());
+            assert_eq!(git(&checkout, &["rev-parse", "HEAD"]).unwrap(), commit);
+            assert!(git(&checkout, &["branch", "--show-current"])
+                .unwrap()
+                .is_empty());
+            Ok(())
+        })
+        .unwrap();
+        assert!(!source.join(".git/worktrees").exists());
+    }
+
+    #[test]
+    fn standalone_sandbox_cleans_after_operation_error() {
+        let mut root = PathBuf::new();
+        let result = with_standalone_sandbox("redline-error-test", |sandbox| -> Result<()> {
+            root = sandbox.to_path_buf();
+            fs::write(sandbox.join("partial-output"), b"partial")?;
+            Err(error("expected operation failure"))
+        });
+        assert!(result.is_err());
+        assert!(!root.exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn standalone_sandbox_refuses_symlink_root_cleanup() {
+        use std::os::unix::fs::symlink;
+
+        let victim = TestDir::new("sandbox-victim");
+        fs::write(victim.path().join("must-survive"), b"preserved").unwrap();
+        let mut sandbox = StandaloneSandbox::new("redline-symlink-test").unwrap();
+        let root = sandbox.path().to_path_buf();
+        fs::remove_file(root.join(SANDBOX_MARKER)).unwrap();
+        fs::remove_dir(&root).unwrap();
+        symlink(victim.path(), &root).unwrap();
+        let failure = sandbox.cleanup().unwrap_err().to_string();
+        assert!(failure.contains("symlinked path component"));
+        assert_eq!(
+            fs::read(victim.path().join("must-survive")).unwrap(),
+            b"preserved"
+        );
+        fs::remove_file(&root).unwrap();
+        sandbox.cleaned = true;
+    }
+
     fn testing_repo() -> Repo {
         Repo {
             name: "redline-testing".to_owned(),
-            path: PathBuf::from("../redline-split/redline-testing"),
+            path: PathBuf::from("../redline-testing"),
             github_slug: "neverhuman/redline-testing".to_owned(),
             remote: format!("{LOCAL_JERYU_BASE}jeryu/redline-testing.git"),
             product_version: "1.0.1".to_owned(),
@@ -4951,7 +5234,7 @@ mod tests {
             rows.push(TagRow {
                 repo: Repo {
                     name: (*name).to_owned(),
-                    path: PathBuf::from(format!("../redline-split/{name}")),
+                    path: PathBuf::from(format!("../{name}")),
                     github_slug: format!("neverhuman/{name}"),
                     remote: format!("{LOCAL_JERYU_BASE}jeryu/{name}.git"),
                     product_version: match *name {
@@ -5052,9 +5335,8 @@ mod tests {
     fn control_validation_does_not_require_family_checkouts() {
         let fixture = TestDir::new("standalone-control");
         let control = fixture.path().join("redline-split-ops");
-        let mirror_dir = fixture.path().join("redline-split");
+        let family_root = fixture.path();
         fs::create_dir_all(control.join("schemas")).unwrap();
-        fs::create_dir_all(&mirror_dir).unwrap();
         let source = Path::new(env!("CARGO_MANIFEST_DIR"));
         for name in [
             "repos.manifest.toml",
@@ -5076,7 +5358,7 @@ mod tests {
             )
             .unwrap();
         }
-        assert!(!mirror_dir.join("redline.lock.toml").exists());
+        assert!(!family_root.join("redline.lock.toml").exists());
         assert_eq!(
             validate_control(
                 &control.join("repos.manifest.toml"),
@@ -5088,11 +5370,11 @@ mod tests {
         assert!(verify_lock(
             &control.join("repos.manifest.toml"),
             &control.join("redline.lock.toml"),
-            Some(&mirror_dir.join("redline.lock.toml")),
+            Some(&family_root.join("redline.lock.toml")),
         )
         .unwrap_err()
         .to_string()
         .contains("compatibility lock mirror is required"));
-        assert!(!mirror_dir.join("redline").exists());
+        assert!(!family_root.join("redline").exists());
     }
 }

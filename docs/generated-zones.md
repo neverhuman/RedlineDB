@@ -13,6 +13,6 @@ inputs. The two tracked Jankurai score files under `.jankurai/` are regenerated
 only from a clean reviewed source commit. Their source commands and acceptance
 rules are in `docs/testing.md` and `docs/audit-rubric.md`.
 
-The compatibility mirror at `../redline-split/redline.lock.toml` is outside
+The compatibility mirror at `../redline.lock.toml` is outside
 this repository because the family container is not a Git repository. Only a
 successful transactional proof command may update it.

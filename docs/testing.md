@@ -10,11 +10,9 @@ entrypoint runs `ops/ci/quality-gates.sh`, so the single protected required
 status is published only after required, security, pinned score, and release
 readiness all pass on the exact detached commit. It accepts the narrower
 `security`, `score`, and `release-readiness` lanes for targeted repair reruns.
-Because the compatibility lock and four child checkouts intentionally live
-outside this repository, a detached runner must set `REDLINE_SPLIT_CONTAINER`
-to the reviewed family container. The entrypoint links that container only into
-the temporary runner parent and fails before any success publication when
-neither the variable nor the normal sibling path is available.
+The protected control-plane lane never creates a family-container symlink and
+does not need the child checkouts: `control-validate` reads only the canonical
+manifest, schemas, and authoritative lock from its exact standalone runner.
 The required entrypoint removes a parent runner's temporary global Git-config
 override before release readiness. This prevents mirror-cache rewrites from
 disguising canonical local-Jeryu remote identity while retaining the operator's
@@ -63,7 +61,12 @@ These checks prove synchronization only; the receipt must continue to report
 `just family-ci` is intentionally stronger: every child must be clean `main`,
 equal its local-Jeryu forge head, and either have no proposed tag yet or have an
 immutable tag already bound to that exact commit. It executes the complete
-child lanes in detached worktrees and writes checksummed JSON plus raw logs.
+child lanes in automatically removed standalone `git clone --no-local`
+checkouts detached at the exact reviewed SHA and writes checksummed JSON plus
+raw logs. Each clone must have a physical `.git` directory equal to its common
+Git directory, full history, no alternates, no linked-checkout registry, a clean
+detached HEAD, and the canonical Jeryu origin. Sandbox cleanup requires its
+private marker and refuses symlinked root components.
 Child commands use each repository's pinned toolchain, never the control
 plane's `RUSTUP_TOOLCHAIN` override. Before Core CI, the runner builds the exact
 reviewed Redline Testing release package locally, verifies its commit, manifest,
@@ -73,7 +76,7 @@ Common repair signatures:
 
 - `existing immutable tag ... points to ...`: do not move it; correct the
   release plan or choose a separately reviewed new identity.
-- `worktree is dirty` or `branch is ...`: preserve the work, then refresh a
+- `checkout is dirty` or `branch is ...`: preserve the work, then refresh a
   clean `main`; never reset or delete it.
 - `tampered evidence`: regenerate the producer receipt and checksum together.
 - `proof is not derived as eligible`: obtain fresh family and consumer
