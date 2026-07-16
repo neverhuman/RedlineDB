@@ -265,6 +265,7 @@ name = "redline-split-ops"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "libc",
  "pathdiff",
  "serde_json",
  "sha2",

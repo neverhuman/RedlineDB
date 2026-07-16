@@ -3,9 +3,15 @@ use serde_json::{json, Map as JsonMap, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    env, fs,
+    env,
+    ffi::{CString, OsStr},
+    fs,
     fs::{File, OpenOptions},
-    io::{self, Write},
+    io::{self, Read, Seek, SeekFrom, Write},
+    os::{
+        fd::{AsRawFd, FromRawFd},
+        unix::{ffi::OsStrExt, fs::OpenOptionsExt},
+    },
     path::{Component, Path, PathBuf},
     process::{Command, Output, Stdio},
     time::{SystemTime, UNIX_EPOCH},
@@ -400,189 +406,698 @@ fn identity_from_metadata(metadata: &fs::Metadata) -> PhysicalFileIdentity {
     }
 }
 
-fn physical_file_identity(
-    path: &Path,
-    context: &str,
-    expected_mode: u32,
-) -> Result<PhysicalFileIdentity> {
-    require_physical_file(path, context)?;
-    #[cfg(unix)]
-    {
-        let metadata = fs::metadata(path)?;
-        let identity = identity_from_metadata(&metadata);
-        if identity.mode != expected_mode {
-            return Err(error(format!(
-                "{context} has mode {:04o}, expected {expected_mode:04o}: {}",
-                identity.mode,
-                path.display()
-            )));
-        }
-        if identity.links != 1 {
-            return Err(error(format!(
-                "{context} has link count {}, expected 1: {}",
-                identity.links,
-                path.display()
-            )));
-        }
-        Ok(identity)
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = expected_mode;
-        Err(error(format!(
-            "{context} identity requires Unix device and inode metadata: {}",
-            path.display()
-        )))
-    }
-}
-
-fn require_same_physical_file(
-    path: &Path,
-    context: &str,
-    expected_mode: u32,
-    expected: &PhysicalFileIdentity,
-    held: &File,
-) -> Result<()> {
-    let actual = physical_file_identity(path, context, expected_mode)?;
-    if &actual != expected {
-        return Err(error(format!(
-            "{context} physical identity changed before cleanup: {}",
-            path.display()
-        )));
-    }
-    #[cfg(unix)]
-    if identity_from_metadata(&held.metadata()?) != *expected {
-        return Err(error(format!(
-            "{context} held creation identity changed before cleanup: {}",
-            path.display()
-        )));
-    }
-    Ok(())
-}
-
-fn cleanup_failed_created_file(path: &Path, held: &File, context: &str) -> Result<()> {
-    #[cfg(unix)]
-    {
-        let held_metadata = held.metadata()?;
-        if !held_metadata.is_file() {
-            return Err(error(format!(
-                "{context} failed-creation handle is not a regular file: {}",
-                path.display()
-            )));
-        }
-        let held_identity = identity_from_metadata(&held_metadata);
-        if held_identity.links != 1 {
-            return Err(error(format!(
-                "{context} failed-creation handle has link count {}, expected 1: {}",
-                held_identity.links,
-                path.display()
-            )));
-        }
-        let path_metadata = fs::symlink_metadata(path)?;
-        if path_metadata.file_type().is_symlink() || !path_metadata.is_file() {
-            return Err(error(format!(
-                "{context} failed-creation path is not the created regular file: {}",
-                path.display()
-            )));
-        }
-        let path_identity = identity_from_metadata(&path_metadata);
-        if path_identity.device != held_identity.device
-            || path_identity.inode != held_identity.inode
-            || path_identity.links != 1
-        {
-            return Err(error(format!(
-                "{context} failed-creation path identity changed before cleanup: {}",
-                path.display()
-            )));
-        }
-        fs::remove_file(path)?;
-        File::open(
-            path.parent()
-                .ok_or_else(|| error(format!("{context} has no parent")))?,
-        )?
-        .sync_all()?;
-        Ok(())
-    }
-    #[cfg(not(unix))]
-    {
-        let _ = held;
-        Err(error(format!(
-            "{context} failed-creation cleanup requires Unix device and inode metadata: {}",
-            path.display()
-        )))
-    }
-}
-
-fn create_new_synced_file(
-    path: &Path,
-    data: &[u8],
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PhysicalDirectoryIdentity {
+    device: u64,
+    inode: u64,
     mode: u32,
-    context: &str,
-) -> Result<(File, PhysicalFileIdentity)> {
-    let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-    let written = (|| -> Result<PhysicalFileIdentity> {
-        file.write_all(data)?;
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            file.set_permissions(fs::Permissions::from_mode(mode))?;
-        }
-        file.sync_all()?;
-        #[cfg(unix)]
-        {
-            let metadata = file.metadata()?;
-            if !metadata.is_file() {
-                return Err(error(format!(
-                    "{context} creation handle is not a regular file: {}",
-                    path.display()
-                )));
-            }
-            let identity = identity_from_metadata(&metadata);
-            if identity.mode != mode {
-                return Err(error(format!(
-                    "{context} creation handle has mode {:04o}, expected {mode:04o}: {}",
-                    identity.mode,
-                    path.display()
-                )));
-            }
-            if identity.links != 1 {
-                return Err(error(format!(
-                    "{context} creation handle has link count {}, expected 1: {}",
-                    identity.links,
-                    path.display()
-                )));
-            }
-            let path_identity = physical_file_identity(path, context, mode)?;
-            if path_identity != identity {
-                return Err(error(format!(
-                    "{context} path changed during creation: {}",
-                    path.display()
-                )));
-            }
-            Ok(identity)
-        }
-        #[cfg(not(unix))]
-        {
-            physical_file_identity(path, context, mode)
-        }
-    })();
-    match written {
-        Ok(identity) => Ok((file, identity)),
-        Err(value) => {
-            let cleanup = cleanup_failed_created_file(path, &file, context);
-            drop(file);
-            match cleanup {
-                Ok(()) => Err(value),
-                Err(cleanup) => Err(error(format!(
-                    "{value}; {context} failed-creation cleanup refused: {cleanup}"
-                ))),
-            }
-        }
+}
+
+fn directory_identity_from_metadata(metadata: &fs::Metadata) -> PhysicalDirectoryIdentity {
+    use std::os::unix::fs::MetadataExt;
+
+    PhysicalDirectoryIdentity {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+        mode: metadata.mode() & 0o7777,
+    }
+}
+
+fn descriptor_name(name: &OsStr, context: &str) -> Result<CString> {
+    let path = Path::new(name);
+    if path.components().count() != 1
+        || !matches!(path.components().next(), Some(Component::Normal(_)))
+    {
+        return Err(error(format!(
+            "{context} must be one physical path component"
+        )));
+    }
+    CString::new(name.as_bytes())
+        .map_err(|_| error(format!("{context} contains an embedded NUL byte")))
+}
+
+fn raw_file_identity(value: &libc::stat) -> PhysicalFileIdentity {
+    PhysicalFileIdentity {
+        device: value.st_dev,
+        inode: value.st_ino,
+        mode: value.st_mode & 0o7777,
+        links: value.st_nlink,
+    }
+}
+
+fn raw_directory_identity(value: &libc::stat) -> PhysicalDirectoryIdentity {
+    PhysicalDirectoryIdentity {
+        device: value.st_dev,
+        inode: value.st_ino,
+        mode: value.st_mode & 0o7777,
     }
 }
 
 #[derive(Debug)]
+struct HeldDirectory {
+    path: PathBuf,
+    file: File,
+    identity: PhysicalDirectoryIdentity,
+}
+
+impl HeldDirectory {
+    fn open(path: &Path, context: &str) -> Result<Self> {
+        let path = absolute_path(path)?;
+        reject_symlink_components(&path, context)?;
+        let before = fs::symlink_metadata(&path)?;
+        if !before.is_dir() || before.file_type().is_symlink() {
+            return Err(error(format!(
+                "{context} is not a physical directory: {}",
+                path.display()
+            )));
+        }
+        let file = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(&path)?;
+        let identity = directory_identity_from_metadata(&file.metadata()?);
+        if identity != directory_identity_from_metadata(&before) {
+            return Err(error(format!(
+                "{context} changed while its descriptor was opened: {}",
+                path.display()
+            )));
+        }
+        let held = Self {
+            path,
+            file,
+            identity,
+        };
+        held.validate(context)?;
+        Ok(held)
+    }
+
+    fn duplicate(&self) -> Result<Self> {
+        Ok(Self {
+            path: self.path.clone(),
+            file: self.file.try_clone()?,
+            identity: self.identity.clone(),
+        })
+    }
+
+    fn validate(&self, context: &str) -> Result<()> {
+        reject_symlink_components(&self.path, context)?;
+        let path_metadata = fs::symlink_metadata(&self.path)?;
+        if !path_metadata.is_dir() || path_metadata.file_type().is_symlink() {
+            return Err(error(format!(
+                "{context} path is not the held physical directory: {}",
+                self.path.display()
+            )));
+        }
+        let path_identity = directory_identity_from_metadata(&path_metadata);
+        let held_identity = directory_identity_from_metadata(&self.file.metadata()?);
+        if path_identity != self.identity || held_identity != self.identity {
+            return Err(error(format!(
+                "{context} path and held descriptor identity diverged: {}",
+                self.path.display()
+            )));
+        }
+        Ok(())
+    }
+
+    fn stat_entry(&self, name: &OsStr, context: &str) -> Result<Option<libc::stat>> {
+        let name = descriptor_name(name, context)?;
+        let mut value = std::mem::MaybeUninit::<libc::stat>::uninit();
+        let result = unsafe {
+            libc::fstatat(
+                self.file.as_raw_fd(),
+                name.as_ptr(),
+                value.as_mut_ptr(),
+                libc::AT_SYMLINK_NOFOLLOW,
+            )
+        };
+        if result == 0 {
+            return Ok(Some(unsafe { value.assume_init() }));
+        }
+        let failure = io::Error::last_os_error();
+        if failure.kind() == io::ErrorKind::NotFound {
+            Ok(None)
+        } else {
+            Err(failure.into())
+        }
+    }
+
+    fn regular_entry_identity(&self, name: &OsStr, context: &str) -> Result<PhysicalFileIdentity> {
+        let value = self
+            .stat_entry(name, context)?
+            .ok_or_else(|| error(format!("{context} is absent")))?;
+        if value.st_mode & libc::S_IFMT != libc::S_IFREG {
+            return Err(error(format!(
+                "{context} is not a descriptor-relative regular file"
+            )));
+        }
+        Ok(raw_file_identity(&value))
+    }
+
+    fn directory_entry_identity(
+        &self,
+        name: &OsStr,
+        context: &str,
+    ) -> Result<PhysicalDirectoryIdentity> {
+        let value = self
+            .stat_entry(name, context)?
+            .ok_or_else(|| error(format!("{context} is absent")))?;
+        if value.st_mode & libc::S_IFMT != libc::S_IFDIR {
+            return Err(error(format!(
+                "{context} is not a descriptor-relative physical directory"
+            )));
+        }
+        Ok(raw_directory_identity(&value))
+    }
+
+    fn require_absent(&self, name: &OsStr, context: &str) -> Result<()> {
+        self.validate(context)?;
+        if self.stat_entry(name, context)?.is_some() {
+            return Err(error(format!("{context} must be absent")));
+        }
+        Ok(())
+    }
+
+    fn open_regular_file(&self, name: &OsStr, context: &str) -> Result<HeldInputFile> {
+        self.validate(context)?;
+        let name_value = descriptor_name(name, context)?;
+        let descriptor = unsafe {
+            libc::openat(
+                self.file.as_raw_fd(),
+                name_value.as_ptr(),
+                libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+            )
+        };
+        if descriptor < 0 {
+            return Err(io::Error::last_os_error().into());
+        }
+        let file = unsafe { File::from_raw_fd(descriptor) };
+        let metadata = file.metadata()?;
+        if !metadata.is_file() {
+            return Err(error(format!("{context} descriptor is not a regular file")));
+        }
+        let identity = identity_from_metadata(&metadata);
+        if identity.links != 1 {
+            return Err(error(format!(
+                "{context} has link count {}, expected 1",
+                identity.links
+            )));
+        }
+        if self.regular_entry_identity(name, context)? != identity {
+            return Err(error(format!(
+                "{context} path changed while its descriptor was opened"
+            )));
+        }
+        let digest = sha256_bytes(&read_held_file(&file)?);
+        Ok(HeldInputFile {
+            name: name.to_os_string(),
+            file,
+            identity,
+            digest,
+            context: context.to_owned(),
+        })
+    }
+
+    fn create_file(
+        &self,
+        name: &OsStr,
+        data: &[u8],
+        mode: u32,
+        context: &str,
+    ) -> Result<(File, PhysicalFileIdentity)> {
+        self.validate(context)?;
+        self.require_absent(name, context)?;
+        let name_value = descriptor_name(name, context)?;
+        let descriptor = unsafe {
+            libc::openat(
+                self.file.as_raw_fd(),
+                name_value.as_ptr(),
+                libc::O_RDWR
+                    | libc::O_CREAT
+                    | libc::O_EXCL
+                    | libc::O_NOFOLLOW
+                    | libc::O_NONBLOCK
+                    | libc::O_CLOEXEC,
+                mode as libc::mode_t,
+            )
+        };
+        if descriptor < 0 {
+            return Err(io::Error::last_os_error().into());
+        }
+        let mut file = unsafe { File::from_raw_fd(descriptor) };
+        let written = (|| -> Result<PhysicalFileIdentity> {
+            use std::os::unix::fs::PermissionsExt;
+
+            file.set_permissions(fs::Permissions::from_mode(mode))?;
+            file.write_all(data)?;
+            file.sync_all()?;
+            let identity = identity_from_metadata(&file.metadata()?);
+            if identity.mode != mode || identity.links != 1 {
+                return Err(error(format!(
+                    "{context} creation identity has mode {:04o} and {} links",
+                    identity.mode, identity.links
+                )));
+            }
+            if self.regular_entry_identity(name, context)? != identity {
+                return Err(error(format!(
+                    "{context} path changed during descriptor-relative creation"
+                )));
+            }
+            Ok(identity)
+        })();
+        match written {
+            Ok(identity) => Ok((file, identity)),
+            Err(value) => {
+                let identity = identity_from_metadata(&file.metadata()?);
+                let cleanup = self.unlink_owned_file(name, &file, &identity, context);
+                match cleanup {
+                    Ok(()) => Err(value),
+                    Err(cleanup) => Err(error(format!(
+                        "{value}; {context} failed-creation cleanup refused: {cleanup}"
+                    ))),
+                }
+            }
+        }
+    }
+
+    fn validate_owned_file(
+        &self,
+        name: &OsStr,
+        held: &File,
+        expected: &PhysicalFileIdentity,
+        context: &str,
+    ) -> Result<()> {
+        self.validate(context)?;
+        if self.regular_entry_identity(name, context)? != *expected
+            || identity_from_metadata(&held.metadata()?) != *expected
+        {
+            return Err(error(format!(
+                "{context} path and held descriptor identity diverged"
+            )));
+        }
+        Ok(())
+    }
+
+    fn unlink_owned_file(
+        &self,
+        name: &OsStr,
+        held: &File,
+        expected: &PhysicalFileIdentity,
+        context: &str,
+    ) -> Result<()> {
+        self.unlink_owned_file_with(name, held, expected, context, || Ok(()))
+    }
+
+    fn unlink_owned_file_with(
+        &self,
+        name: &OsStr,
+        held: &File,
+        expected: &PhysicalFileIdentity,
+        context: &str,
+        before_unlink: impl FnOnce() -> Result<()>,
+    ) -> Result<()> {
+        self.validate_owned_file(name, held, expected, context)?;
+        before_unlink()?;
+        let name_value = descriptor_name(name, context)?;
+        self.validate(context)?;
+        let quarantine_name =
+            std::ffi::OsString::from(format!(".redline-owned-delete-{}", unique_suffix()));
+        self.require_absent(&quarantine_name, context)?;
+        let quarantine_value = descriptor_name(&quarantine_name, context)?;
+        if unsafe {
+            libc::renameat2(
+                self.file.as_raw_fd(),
+                name_value.as_ptr(),
+                self.file.as_raw_fd(),
+                quarantine_value.as_ptr(),
+                libc::RENAME_NOREPLACE,
+            )
+        } != 0
+        {
+            return Err(io::Error::last_os_error().into());
+        }
+        let moved = self.regular_entry_identity(&quarantine_name, context)?;
+        let held_now = identity_from_metadata(&held.metadata()?);
+        if moved != *expected || held_now != *expected {
+            let rollback = unsafe {
+                libc::renameat2(
+                    self.file.as_raw_fd(),
+                    quarantine_value.as_ptr(),
+                    self.file.as_raw_fd(),
+                    name_value.as_ptr(),
+                    libc::RENAME_NOREPLACE,
+                )
+            };
+            if rollback != 0 {
+                return Err(error(format!(
+                    "{context} quarantine captured a foreign inode and restoration failed: {}",
+                    io::Error::last_os_error()
+                )));
+            }
+            self.file.sync_all()?;
+            return Err(error(format!(
+                "{context} identity changed before descriptor-relative removal"
+            )));
+        }
+        if unsafe { libc::unlinkat(self.file.as_raw_fd(), quarantine_value.as_ptr(), 0) } != 0 {
+            let failure = io::Error::last_os_error();
+            let rollback = unsafe {
+                libc::renameat2(
+                    self.file.as_raw_fd(),
+                    quarantine_value.as_ptr(),
+                    self.file.as_raw_fd(),
+                    name_value.as_ptr(),
+                    libc::RENAME_NOREPLACE,
+                )
+            };
+            if rollback != 0 {
+                return Err(error(format!(
+                    "{context} unlink failed ({failure}) and quarantine restoration failed: {}",
+                    io::Error::last_os_error()
+                )));
+            }
+            self.file.sync_all()?;
+            return Err(failure.into());
+        }
+        let after = identity_from_metadata(&held.metadata()?);
+        if after.device != expected.device
+            || after.inode != expected.inode
+            || after.mode != expected.mode
+            || after.links != 0
+        {
+            return Err(error(format!(
+                "{context} unlink did not remove the held owned inode"
+            )));
+        }
+        if self.stat_entry(name, context)?.is_some() {
+            return Err(error(format!(
+                "{context} descriptor-relative path remains after unlink"
+            )));
+        }
+        if self.stat_entry(&quarantine_name, context)?.is_some() {
+            return Err(error(format!(
+                "{context} quarantine remains after descriptor-relative unlink"
+            )));
+        }
+        self.file.sync_all()?;
+        Ok(())
+    }
+
+    fn create_directory(&self, name: &OsStr, mode: u32, context: &str) -> Result<Self> {
+        self.validate(context)?;
+        self.require_absent(name, context)?;
+        let name_value = descriptor_name(name, context)?;
+        if unsafe {
+            libc::mkdirat(
+                self.file.as_raw_fd(),
+                name_value.as_ptr(),
+                mode as libc::mode_t,
+            )
+        } != 0
+        {
+            return Err(io::Error::last_os_error().into());
+        }
+        let descriptor = unsafe {
+            libc::openat(
+                self.file.as_raw_fd(),
+                name_value.as_ptr(),
+                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            )
+        };
+        if descriptor < 0 {
+            let _ = unsafe {
+                libc::unlinkat(
+                    self.file.as_raw_fd(),
+                    name_value.as_ptr(),
+                    libc::AT_REMOVEDIR,
+                )
+            };
+            return Err(io::Error::last_os_error().into());
+        }
+        let file = unsafe { File::from_raw_fd(descriptor) };
+        file.set_permissions({
+            use std::os::unix::fs::PermissionsExt;
+            fs::Permissions::from_mode(mode)
+        })?;
+        file.sync_all()?;
+        let identity = directory_identity_from_metadata(&file.metadata()?);
+        if identity.mode != mode {
+            return Err(error(format!(
+                "{context} creation identity has mode {:04o}, expected {mode:04o}",
+                identity.mode
+            )));
+        }
+        if self.directory_entry_identity(name, context)? != identity {
+            return Err(error(format!(
+                "{context} path changed during descriptor-relative directory creation"
+            )));
+        }
+        let directory = Self {
+            path: self.path.join(name),
+            file,
+            identity,
+        };
+        directory.validate(context)?;
+        Ok(directory)
+    }
+
+    fn quarantine_owned_directory(
+        &self,
+        name: &OsStr,
+        held: &HeldDirectory,
+        context: &str,
+    ) -> Result<std::ffi::OsString> {
+        self.validate(context)?;
+        if self.directory_entry_identity(name, context)? != held.identity
+            || directory_identity_from_metadata(&held.file.metadata()?) != held.identity
+        {
+            return Err(error(format!(
+                "{context} path and held directory identity diverged"
+            )));
+        }
+        let quarantine =
+            std::ffi::OsString::from(format!(".redline-owned-directory-{}", unique_suffix()));
+        self.require_absent(&quarantine, context)?;
+        let source_value = descriptor_name(name, context)?;
+        let quarantine_value = descriptor_name(&quarantine, context)?;
+        if unsafe {
+            libc::renameat2(
+                self.file.as_raw_fd(),
+                source_value.as_ptr(),
+                self.file.as_raw_fd(),
+                quarantine_value.as_ptr(),
+                libc::RENAME_NOREPLACE,
+            )
+        } != 0
+        {
+            return Err(io::Error::last_os_error().into());
+        }
+        if self.directory_entry_identity(&quarantine, context)? != held.identity
+            || directory_identity_from_metadata(&held.file.metadata()?) != held.identity
+        {
+            let rollback = unsafe {
+                libc::renameat2(
+                    self.file.as_raw_fd(),
+                    quarantine_value.as_ptr(),
+                    self.file.as_raw_fd(),
+                    source_value.as_ptr(),
+                    libc::RENAME_NOREPLACE,
+                )
+            };
+            if rollback != 0 {
+                return Err(error(format!(
+                    "{context} quarantine captured a foreign directory and restoration failed: {}",
+                    io::Error::last_os_error()
+                )));
+            }
+            self.file.sync_all()?;
+            return Err(error(format!(
+                "{context} identity changed before descriptor-relative quarantine"
+            )));
+        }
+        self.file.sync_all()?;
+        Ok(quarantine)
+    }
+
+    fn unlink_owned_empty_directory(
+        &self,
+        name: &OsStr,
+        held: &HeldDirectory,
+        context: &str,
+    ) -> Result<()> {
+        use std::os::unix::fs::MetadataExt;
+
+        self.validate(context)?;
+        if self.directory_entry_identity(name, context)? != held.identity
+            || directory_identity_from_metadata(&held.file.metadata()?) != held.identity
+        {
+            return Err(error(format!(
+                "{context} path and held directory identity diverged"
+            )));
+        }
+        let name_value = descriptor_name(name, context)?;
+        if unsafe {
+            libc::unlinkat(
+                self.file.as_raw_fd(),
+                name_value.as_ptr(),
+                libc::AT_REMOVEDIR,
+            )
+        } != 0
+        {
+            return Err(io::Error::last_os_error().into());
+        }
+        let after = held.file.metadata()?;
+        if directory_identity_from_metadata(&after) != held.identity || after.nlink() != 0 {
+            return Err(error(format!(
+                "{context} unlink did not remove the held owned directory inode"
+            )));
+        }
+        self.require_absent(name, context)?;
+        self.file.sync_all()?;
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct GlobalFamilyLock {
+    parent: HeldDirectory,
+    file: File,
+    identity: PhysicalFileIdentity,
+}
+
+impl GlobalFamilyLock {
+    fn acquire(family_root: &Path) -> Result<Self> {
+        Self::acquire_with_flags(family_root, false)
+    }
+
+    #[cfg(test)]
+    fn try_acquire(family_root: &Path) -> Result<Self> {
+        Self::acquire_with_flags(family_root, true)
+    }
+
+    fn acquire_with_flags(family_root: &Path, nonblocking: bool) -> Result<Self> {
+        use std::os::unix::fs::MetadataExt;
+
+        let parent = HeldDirectory::open(family_root, "Redline family lock root")?;
+        let name = OsStr::new(".redline-family.lock");
+        let name_value = descriptor_name(name, "Redline family lock")?;
+        let mut created = true;
+        let mut descriptor = unsafe {
+            libc::openat(
+                parent.file.as_raw_fd(),
+                name_value.as_ptr(),
+                libc::O_RDWR
+                    | libc::O_CREAT
+                    | libc::O_EXCL
+                    | libc::O_NOFOLLOW
+                    | libc::O_NONBLOCK
+                    | libc::O_CLOEXEC,
+                0o600,
+            )
+        };
+        if descriptor < 0 && io::Error::last_os_error().kind() == io::ErrorKind::AlreadyExists {
+            created = false;
+            descriptor = unsafe {
+                libc::openat(
+                    parent.file.as_raw_fd(),
+                    name_value.as_ptr(),
+                    libc::O_RDWR | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+                )
+            };
+        }
+        if descriptor < 0 {
+            return Err(io::Error::last_os_error().into());
+        }
+        let file = unsafe { File::from_raw_fd(descriptor) };
+        if created {
+            file.set_permissions({
+                use std::os::unix::fs::PermissionsExt;
+                fs::Permissions::from_mode(0o600)
+            })?;
+            file.sync_all()?;
+            parent.file.sync_all()?;
+        }
+        let metadata = file.metadata()?;
+        if !metadata.is_file() || metadata.uid() != unsafe { libc::geteuid() } {
+            return Err(error(
+                "Redline family lock must be a regular file owned by the current user",
+            ));
+        }
+        let identity = identity_from_metadata(&metadata);
+        if identity.mode != 0o600 || identity.links != 1 {
+            return Err(error(format!(
+                "Redline family lock must have exact mode 0600 and one link, found {:04o} and {} links",
+                identity.mode, identity.links
+            )));
+        }
+        if parent.regular_entry_identity(name, "Redline family lock")? != identity {
+            return Err(error(
+                "Redline family lock path changed while its descriptor was opened",
+            ));
+        }
+        let operation = libc::LOCK_EX | if nonblocking { libc::LOCK_NB } else { 0 };
+        loop {
+            if unsafe { libc::flock(file.as_raw_fd(), operation) } == 0 {
+                break;
+            }
+            let failure = io::Error::last_os_error();
+            if failure.kind() != io::ErrorKind::Interrupted {
+                return Err(failure.into());
+            }
+        }
+        let guard = Self {
+            parent,
+            file,
+            identity,
+        };
+        guard.validate()?;
+        Ok(guard)
+    }
+
+    fn validate(&self) -> Result<()> {
+        self.parent.validate_owned_file(
+            OsStr::new(".redline-family.lock"),
+            &self.file,
+            &self.identity,
+            "Redline family lock",
+        )?;
+        use std::os::unix::fs::MetadataExt;
+        if self.file.metadata()?.uid() != unsafe { libc::geteuid() } {
+            return Err(error("Redline family lock ownership changed while held"));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+struct HeldInputFile {
+    name: std::ffi::OsString,
+    file: File,
+    identity: PhysicalFileIdentity,
+    digest: String,
+    context: String,
+}
+
+impl HeldInputFile {
+    fn validate(&self, parent: &HeldDirectory) -> Result<()> {
+        parent.validate_owned_file(&self.name, &self.file, &self.identity, &self.context)?;
+        if sha256_bytes(&read_held_file(&self.file)?) != self.digest {
+            return Err(error(format!("{} bytes changed while held", self.context)));
+        }
+        Ok(())
+    }
+}
+
+fn read_held_file(file: &File) -> Result<Vec<u8>> {
+    let mut copy = file.try_clone()?;
+    copy.seek(SeekFrom::Start(0))?;
+    let mut bytes = Vec::new();
+    copy.read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
+#[derive(Debug)]
 struct CiCompatibilityMirror {
+    parent: HeldDirectory,
     authoritative: PathBuf,
     predecessor: PathBuf,
     mirror: PathBuf,
@@ -605,10 +1120,31 @@ struct CiCompatibilityMirror {
 }
 
 impl CiCompatibilityMirror {
+    #[cfg(test)]
     fn new(authoritative: &Path, mirror: &Path, predecessor: &Path) -> Result<Self> {
+        let mirror = absolute_path(mirror)?;
+        let parent_path = mirror
+            .parent()
+            .ok_or_else(|| error("CI compatibility mirror has no parent"))?;
+        let parent = HeldDirectory::open(parent_path, "CI compatibility mirror parent")?;
+        Self::new_in_parent(authoritative, &mirror, predecessor, parent)
+    }
+
+    fn new_in_parent(
+        authoritative: &Path,
+        mirror: &Path,
+        predecessor: &Path,
+        parent: HeldDirectory,
+    ) -> Result<Self> {
         let authoritative = absolute_path(authoritative)?;
         let predecessor = absolute_path(predecessor)?;
         let mirror = absolute_path(mirror)?;
+        if mirror.parent() != Some(parent.path.as_path()) {
+            return Err(error(
+                "CI compatibility mirror parent does not match its held directory",
+            ));
+        }
+        parent.validate("CI compatibility mirror parent")?;
         let mirror_sidecar = checksum_path(&mirror);
         let marker = mirror.with_file_name(format!(
             ".{}{}",
@@ -648,12 +1184,18 @@ impl CiCompatibilityMirror {
                 "tracked predecessor lock has wrong digest: expected {SUCCESSOR_PREDECESSOR_LOCK_SHA256}, found {predecessor_digest}"
             )));
         }
-        require_path_absent(&mirror, "CI compatibility mirror")?;
-        require_path_absent(&mirror_sidecar, "CI compatibility mirror sidecar")?;
-        require_path_absent(&marker, "CI compatibility mirror marker")?;
-        reject_symlink_components(&mirror, "CI compatibility mirror")?;
-        reject_symlink_components(&mirror_sidecar, "CI compatibility mirror sidecar")?;
-        reject_symlink_components(&marker, "CI compatibility mirror marker")?;
+        parent.require_absent(
+            mirror.file_name().unwrap_or_default(),
+            "CI compatibility mirror",
+        )?;
+        parent.require_absent(
+            mirror_sidecar.file_name().unwrap_or_default(),
+            "CI compatibility mirror sidecar",
+        )?;
+        parent.require_absent(
+            marker.file_name().unwrap_or_default(),
+            "CI compatibility mirror marker",
+        )?;
 
         let mirror_bytes = fs::read(&predecessor)?;
         let sidecar_bytes = format!(
@@ -667,6 +1209,7 @@ impl CiCompatibilityMirror {
         let marker_bytes =
             format!("redline.ci-compatibility-mirror/v1\n{}\n", unique_suffix()).into_bytes();
         let mut guard = Self {
+            parent,
             authoritative,
             predecessor,
             mirror,
@@ -688,8 +1231,8 @@ impl CiCompatibilityMirror {
             cleaned: false,
         };
         let created = (|| -> Result<()> {
-            let (marker_file, marker_identity) = create_new_synced_file(
-                &guard.marker,
+            let (marker_file, marker_identity) = guard.parent.create_file(
+                guard.marker.file_name().unwrap_or_default(),
                 &guard.marker_bytes,
                 0o600,
                 "CI compatibility mirror marker",
@@ -697,8 +1240,8 @@ impl CiCompatibilityMirror {
             guard.marker_file = Some(marker_file);
             guard.marker_identity = Some(marker_identity);
             guard.marker_created = true;
-            let (mirror_file, mirror_identity) = create_new_synced_file(
-                &guard.mirror,
+            let (mirror_file, mirror_identity) = guard.parent.create_file(
+                guard.mirror.file_name().unwrap_or_default(),
                 &guard.mirror_bytes,
                 0o644,
                 "CI compatibility mirror",
@@ -706,8 +1249,8 @@ impl CiCompatibilityMirror {
             guard.mirror_file = Some(mirror_file);
             guard.mirror_identity = Some(mirror_identity);
             guard.mirror_created = true;
-            let (sidecar_file, sidecar_identity) = create_new_synced_file(
-                &guard.mirror_sidecar,
+            let (sidecar_file, sidecar_identity) = guard.parent.create_file(
+                guard.mirror_sidecar.file_name().unwrap_or_default(),
                 &guard.sidecar_bytes,
                 0o644,
                 "CI compatibility mirror sidecar",
@@ -715,13 +1258,7 @@ impl CiCompatibilityMirror {
             guard.sidecar_file = Some(sidecar_file);
             guard.sidecar_identity = Some(sidecar_identity);
             guard.sidecar_created = true;
-            File::open(
-                guard
-                    .mirror
-                    .parent()
-                    .ok_or_else(|| error("CI compatibility mirror has no parent"))?,
-            )?
-            .sync_all()?;
+            guard.parent.file.sync_all()?;
             guard.complete = true;
             guard.validate_complete()
         })();
@@ -738,40 +1275,37 @@ impl CiCompatibilityMirror {
     }
 
     fn validate_complete(&self) -> Result<()> {
-        require_same_physical_file(
-            &self.marker,
-            "CI compatibility mirror marker",
-            0o600,
-            self.marker_identity
-                .as_ref()
-                .ok_or_else(|| error("CI compatibility mirror marker identity is missing"))?,
+        self.parent.validate_owned_file(
+            self.marker.file_name().unwrap_or_default(),
             self.marker_file
                 .as_ref()
                 .ok_or_else(|| error("CI compatibility mirror marker handle is missing"))?,
-        )?;
-        require_same_physical_file(
-            &self.mirror,
-            "CI compatibility mirror",
-            0o644,
-            self.mirror_identity
+            self.marker_identity
                 .as_ref()
-                .ok_or_else(|| error("CI compatibility mirror identity is missing"))?,
+                .ok_or_else(|| error("CI compatibility mirror marker identity is missing"))?,
+            "CI compatibility mirror marker",
+        )?;
+        self.parent.validate_owned_file(
+            self.mirror.file_name().unwrap_or_default(),
             self.mirror_file
                 .as_ref()
                 .ok_or_else(|| error("CI compatibility mirror handle is missing"))?,
-        )?;
-        require_same_physical_file(
-            &self.mirror_sidecar,
-            "CI compatibility mirror sidecar",
-            0o644,
-            self.sidecar_identity
+            self.mirror_identity
                 .as_ref()
-                .ok_or_else(|| error("CI compatibility mirror sidecar identity is missing"))?,
+                .ok_or_else(|| error("CI compatibility mirror identity is missing"))?,
+            "CI compatibility mirror",
+        )?;
+        self.parent.validate_owned_file(
+            self.mirror_sidecar.file_name().unwrap_or_default(),
             self.sidecar_file
                 .as_ref()
                 .ok_or_else(|| error("CI compatibility mirror sidecar handle is missing"))?,
+            self.sidecar_identity
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror sidecar identity is missing"))?,
+            "CI compatibility mirror sidecar",
         )?;
-        if fs::read(&self.marker)? != self.marker_bytes {
+        if read_held_file(self.marker_file.as_ref().unwrap())? != self.marker_bytes {
             return Err(error(format!(
                 "CI compatibility mirror cleanup marker does not match: {}",
                 self.marker.display()
@@ -794,15 +1328,16 @@ impl CiCompatibilityMirror {
             ("CI compatibility mirror", &self.mirror),
             ("CI compatibility mirror sidecar", &self.mirror_sidecar),
         ])?;
-        if fs::read(&self.mirror)? != self.mirror_bytes
-            || sha256_file(&self.mirror)? != SUCCESSOR_PREDECESSOR_LOCK_SHA256
+        if read_held_file(self.mirror_file.as_ref().unwrap())? != self.mirror_bytes
+            || sha256_bytes(&read_held_file(self.mirror_file.as_ref().unwrap())?)
+                != SUCCESSOR_PREDECESSOR_LOCK_SHA256
         {
             return Err(error(format!(
                 "CI compatibility mirror has wrong digest or bytes: {}",
                 self.mirror.display()
             )));
         }
-        if fs::read(&self.mirror_sidecar)? != self.sidecar_bytes
+        if read_held_file(self.sidecar_file.as_ref().unwrap())? != self.sidecar_bytes
             || verify_checksum(&self.mirror)? != SUCCESSOR_PREDECESSOR_LOCK_SHA256
         {
             return Err(error(format!(
@@ -836,33 +1371,33 @@ impl CiCompatibilityMirror {
                     "CI compatibility mirror cleanup ownership state is inconsistent",
                 ));
             }
-            File::open(
-                self.mirror
-                    .parent()
-                    .ok_or_else(|| error("CI compatibility mirror has no parent"))?,
-            )?
-            .sync_all()?;
-            require_path_absent(&self.mirror, "cleaned CI compatibility mirror")?;
-            require_path_absent(
-                &self.mirror_sidecar,
+            self.parent.file.sync_all()?;
+            self.parent.require_absent(
+                self.mirror.file_name().unwrap_or_default(),
+                "cleaned CI compatibility mirror",
+            )?;
+            self.parent.require_absent(
+                self.mirror_sidecar.file_name().unwrap_or_default(),
                 "cleaned CI compatibility mirror sidecar",
             )?;
-            require_path_absent(&self.marker, "cleaned CI compatibility mirror marker")?;
+            self.parent.require_absent(
+                self.marker.file_name().unwrap_or_default(),
+                "cleaned CI compatibility mirror marker",
+            )?;
             self.cleaned = true;
             return Ok(());
         }
-        require_same_physical_file(
-            &self.marker,
-            "CI compatibility mirror marker",
-            0o600,
-            self.marker_identity
-                .as_ref()
-                .ok_or_else(|| error("CI compatibility mirror marker identity is missing"))?,
+        self.parent.validate_owned_file(
+            self.marker.file_name().unwrap_or_default(),
             self.marker_file
                 .as_ref()
                 .ok_or_else(|| error("CI compatibility mirror marker handle is missing"))?,
+            self.marker_identity
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror marker identity is missing"))?,
+            "CI compatibility mirror marker",
         )?;
-        if fs::read(&self.marker)? != self.marker_bytes {
+        if read_held_file(self.marker_file.as_ref().unwrap())? != self.marker_bytes {
             return Err(error(format!(
                 "CI compatibility mirror cleanup marker does not match: {}",
                 self.marker.display()
@@ -873,105 +1408,93 @@ impl CiCompatibilityMirror {
             self.complete = false;
         } else {
             if self.mirror_created {
-                require_same_physical_file(
-                    &self.mirror,
-                    "partial CI compatibility mirror",
-                    0o644,
-                    self.mirror_identity.as_ref().ok_or_else(|| {
-                        error("partial CI compatibility mirror identity is missing")
-                    })?,
+                self.parent.validate_owned_file(
+                    self.mirror.file_name().unwrap_or_default(),
                     self.mirror_file.as_ref().ok_or_else(|| {
                         error("partial CI compatibility mirror handle is missing")
                     })?,
+                    self.mirror_identity.as_ref().ok_or_else(|| {
+                        error("partial CI compatibility mirror identity is missing")
+                    })?,
+                    "partial CI compatibility mirror",
                 )?;
-                if fs::read(&self.mirror)? != self.mirror_bytes {
+                if read_held_file(self.mirror_file.as_ref().unwrap())? != self.mirror_bytes {
                     return Err(error("partial CI compatibility mirror bytes changed"));
                 }
             }
             if self.sidecar_created {
-                require_same_physical_file(
-                    &self.mirror_sidecar,
-                    "partial CI compatibility mirror sidecar",
-                    0o644,
-                    self.sidecar_identity.as_ref().ok_or_else(|| {
-                        error("partial CI compatibility mirror sidecar identity is missing")
-                    })?,
+                self.parent.validate_owned_file(
+                    self.mirror_sidecar.file_name().unwrap_or_default(),
                     self.sidecar_file.as_ref().ok_or_else(|| {
                         error("partial CI compatibility mirror sidecar handle is missing")
                     })?,
+                    self.sidecar_identity.as_ref().ok_or_else(|| {
+                        error("partial CI compatibility mirror sidecar identity is missing")
+                    })?,
+                    "partial CI compatibility mirror sidecar",
                 )?;
-                if fs::read(&self.mirror_sidecar)? != self.sidecar_bytes {
+                if read_held_file(self.sidecar_file.as_ref().unwrap())? != self.sidecar_bytes {
                     return Err(error("partial CI compatibility mirror sidecar changed"));
                 }
             }
         }
         if self.sidecar_created {
-            require_same_physical_file(
-                &self.mirror_sidecar,
-                "CI compatibility mirror sidecar",
-                0o644,
-                self.sidecar_identity
-                    .as_ref()
-                    .ok_or_else(|| error("CI compatibility mirror sidecar identity is missing"))?,
+            self.parent.unlink_owned_file(
+                self.mirror_sidecar.file_name().unwrap_or_default(),
                 self.sidecar_file
                     .as_ref()
                     .ok_or_else(|| error("CI compatibility mirror sidecar handle is missing"))?,
+                self.sidecar_identity
+                    .as_ref()
+                    .ok_or_else(|| error("CI compatibility mirror sidecar identity is missing"))?,
+                "CI compatibility mirror sidecar",
             )?;
-            fs::remove_file(&self.mirror_sidecar)?;
             self.sidecar_created = false;
             self.sidecar_identity = None;
             self.sidecar_file = None;
         }
         if self.mirror_created {
-            require_same_physical_file(
-                &self.mirror,
-                "CI compatibility mirror",
-                0o644,
-                self.mirror_identity
-                    .as_ref()
-                    .ok_or_else(|| error("CI compatibility mirror identity is missing"))?,
+            self.parent.unlink_owned_file(
+                self.mirror.file_name().unwrap_or_default(),
                 self.mirror_file
                     .as_ref()
                     .ok_or_else(|| error("CI compatibility mirror handle is missing"))?,
+                self.mirror_identity
+                    .as_ref()
+                    .ok_or_else(|| error("CI compatibility mirror identity is missing"))?,
+                "CI compatibility mirror",
             )?;
-            fs::remove_file(&self.mirror)?;
             self.mirror_created = false;
             self.mirror_identity = None;
             self.mirror_file = None;
         }
-        File::open(
-            self.mirror
-                .parent()
-                .ok_or_else(|| error("CI compatibility mirror has no parent"))?,
-        )?
-        .sync_all()?;
-        require_same_physical_file(
-            &self.marker,
-            "CI compatibility mirror marker",
-            0o600,
-            self.marker_identity
-                .as_ref()
-                .ok_or_else(|| error("CI compatibility mirror marker identity is missing"))?,
+        self.parent.file.sync_all()?;
+        self.parent.unlink_owned_file(
+            self.marker.file_name().unwrap_or_default(),
             self.marker_file
                 .as_ref()
                 .ok_or_else(|| error("CI compatibility mirror marker handle is missing"))?,
+            self.marker_identity
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror marker identity is missing"))?,
+            "CI compatibility mirror marker",
         )?;
-        fs::remove_file(&self.marker)?;
         self.marker_created = false;
         self.marker_identity = None;
         self.marker_file = None;
-        File::open(
-            self.mirror
-                .parent()
-                .ok_or_else(|| error("CI compatibility mirror has no parent"))?,
-        )?
-        .sync_all()?;
-        require_path_absent(&self.mirror, "cleaned CI compatibility mirror")?;
-        require_path_absent(
-            &self.mirror_sidecar,
+        self.parent.file.sync_all()?;
+        self.parent.require_absent(
+            self.mirror.file_name().unwrap_or_default(),
+            "cleaned CI compatibility mirror",
+        )?;
+        self.parent.require_absent(
+            self.mirror_sidecar.file_name().unwrap_or_default(),
             "cleaned CI compatibility mirror sidecar",
         )?;
-        require_path_absent(&self.marker, "cleaned CI compatibility mirror marker")?;
+        self.parent.require_absent(
+            self.marker.file_name().unwrap_or_default(),
+            "cleaned CI compatibility mirror marker",
+        )?;
         self.cleaned = true;
         Ok(())
     }
@@ -987,13 +1510,32 @@ impl Drop for CiCompatibilityMirror {
     }
 }
 
+#[cfg(test)]
 fn with_ci_compatibility_mirror<T>(
     authoritative: &Path,
     mirror: &Path,
     predecessor: &Path,
     operation: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
-    let mut guard = CiCompatibilityMirror::new(authoritative, mirror, predecessor)?;
+    let mirror = absolute_path(mirror)?;
+    let parent = HeldDirectory::open(
+        mirror
+            .parent()
+            .ok_or_else(|| error("CI compatibility mirror has no parent"))?,
+        "CI compatibility mirror parent",
+    )?;
+    with_ci_compatibility_mirror_in_parent(authoritative, &mirror, predecessor, parent, operation)
+}
+
+fn with_ci_compatibility_mirror_in_parent<T>(
+    authoritative: &Path,
+    mirror: &Path,
+    predecessor: &Path,
+    parent: HeldDirectory,
+    operation: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+    let mut guard =
+        CiCompatibilityMirror::new_in_parent(authoritative, mirror, predecessor, parent)?;
     let result = operation();
     let cleanup = guard.cleanup();
     match (result, cleanup) {
@@ -1008,72 +1550,150 @@ fn with_ci_compatibility_mirror<T>(
     }
 }
 
+fn remove_physical_tree_contents(path: &Path) -> Result<()> {
+    for entry in fs::read_dir(path)? {
+        let entry = entry?;
+        let child = entry.path();
+        let metadata = fs::symlink_metadata(&child)?;
+        if metadata.is_dir() {
+            fs::remove_dir_all(&child)?;
+        } else {
+            fs::remove_file(&child)?;
+        }
+    }
+    Ok(())
+}
+
 struct StandaloneSandbox {
-    root: PathBuf,
-    token: String,
+    parent: HeldDirectory,
+    original_name: std::ffi::OsString,
+    current_name: std::ffi::OsString,
+    root: HeldDirectory,
+    marker_file: File,
+    marker_identity: PhysicalFileIdentity,
+    marker_bytes: Vec<u8>,
     cleaned: bool,
 }
 
 impl StandaloneSandbox {
     fn new(prefix: &str) -> Result<Self> {
-        let parent = absolute_path(&env::temp_dir())?;
-        reject_symlink_components(&parent, "standalone sandbox parent")?;
-        let token = unique_suffix();
-        let root = parent.join(format!("{prefix}-{token}"));
-        fs::create_dir(&root)?;
-        let marker = root.join(SANDBOX_MARKER);
-        let marker_result = (|| -> Result<()> {
-            let mut file = OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&marker)?;
-            file.write_all(token.as_bytes())?;
-            file.sync_all()?;
-            Ok(())
-        })();
-        if let Err(value) = marker_result {
-            let _ = fs::remove_dir(&root);
-            return Err(value);
-        }
+        let parent_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/standalone-sandboxes");
+        fs::create_dir_all(&parent_path)?;
+        let parent = HeldDirectory::open(&parent_path, "standalone sandbox parent")?;
+        let root_name = std::ffi::OsString::from(format!("{prefix}-{}", unique_suffix()));
+        descriptor_name(&root_name, "standalone sandbox root")?;
+        let root = parent.create_directory(&root_name, 0o700, "standalone sandbox root")?;
+        let marker_bytes =
+            format!("redline.standalone-sandbox/v1\n{}\n", unique_suffix()).into_bytes();
+        let marker = root.create_file(
+            OsStr::new(SANDBOX_MARKER),
+            &marker_bytes,
+            0o600,
+            "standalone sandbox marker",
+        );
+        let (marker_file, marker_identity) = match marker {
+            Ok(value) => value,
+            Err(value) => {
+                let cleanup = (|| -> Result<()> {
+                    let quarantine = parent.quarantine_owned_directory(
+                        &root_name,
+                        &root,
+                        "partial standalone sandbox root",
+                    )?;
+                    parent.unlink_owned_empty_directory(
+                        &quarantine,
+                        &root,
+                        "partial standalone sandbox root",
+                    )
+                })();
+                return match cleanup {
+                    Ok(()) => Err(value),
+                    Err(cleanup) => Err(error(format!(
+                        "{value}; partial standalone sandbox cleanup failed: {cleanup}"
+                    ))),
+                };
+            }
+        };
         Ok(Self {
+            parent,
+            original_name: root_name.clone(),
+            current_name: root_name,
             root,
-            token,
+            marker_file,
+            marker_identity,
+            marker_bytes,
             cleaned: false,
         })
     }
 
     fn path(&self) -> &Path {
-        &self.root
+        &self.root.path
     }
 
     fn cleanup(&mut self) -> Result<()> {
         if self.cleaned {
             return Ok(());
         }
-        reject_symlink_components(&self.root, "standalone sandbox cleanup root")?;
-        let metadata = fs::symlink_metadata(&self.root)?;
-        if !metadata.is_dir() || metadata.file_type().is_symlink() {
-            return Err(error(format!(
-                "standalone sandbox cleanup root is not a physical directory: {}",
-                self.root.display()
-            )));
-        }
-        let marker = self.root.join(SANDBOX_MARKER);
-        let marker_metadata = fs::symlink_metadata(&marker)?;
-        if !marker_metadata.is_file() || marker_metadata.file_type().is_symlink() {
-            return Err(error(format!(
-                "standalone sandbox cleanup marker is not a physical file: {}",
-                marker.display()
-            )));
-        }
-        if fs::read_to_string(&marker)? != self.token {
+        self.parent.validate("standalone sandbox parent")?;
+        self.root.validate("standalone sandbox cleanup root")?;
+        self.root.validate_owned_file(
+            OsStr::new(SANDBOX_MARKER),
+            &self.marker_file,
+            &self.marker_identity,
+            "standalone sandbox cleanup marker",
+        )?;
+        if read_held_file(&self.marker_file)? != self.marker_bytes {
             return Err(error(format!(
                 "standalone sandbox cleanup marker does not match: {}",
-                marker.display()
+                self.root.path.join(SANDBOX_MARKER).display()
             )));
         }
-        fs::remove_dir_all(&self.root)?;
-        require_path_absent(&self.root, "standalone sandbox cleanup root")?;
+        let quarantine = self.parent.quarantine_owned_directory(
+            &self.current_name,
+            &self.root,
+            "standalone sandbox cleanup root",
+        )?;
+        self.current_name = quarantine;
+        self.root.path = self.parent.path.join(&self.current_name);
+        self.root
+            .validate("quarantined standalone sandbox cleanup root")?;
+        self.root.validate_owned_file(
+            OsStr::new(SANDBOX_MARKER),
+            &self.marker_file,
+            &self.marker_identity,
+            "quarantined standalone sandbox cleanup marker",
+        )?;
+        self.root.unlink_owned_file(
+            OsStr::new(SANDBOX_MARKER),
+            &self.marker_file,
+            &self.marker_identity,
+            "quarantined standalone sandbox cleanup marker",
+        )?;
+        remove_physical_tree_contents(&self.root.path)?;
+        let marker_after = identity_from_metadata(&self.marker_file.metadata()?);
+        if marker_after.device != self.marker_identity.device
+            || marker_after.inode != self.marker_identity.inode
+            || marker_after.mode != self.marker_identity.mode
+            || marker_after.links != 0
+        {
+            return Err(error(
+                "standalone sandbox cleanup did not unlink the held marker inode",
+            ));
+        }
+        self.parent.unlink_owned_empty_directory(
+            &self.current_name,
+            &self.root,
+            "quarantined standalone sandbox cleanup root",
+        )?;
+        self.parent.require_absent(
+            &self.original_name,
+            "original standalone sandbox cleanup root",
+        )?;
+        self.parent.require_absent(
+            &self.current_name,
+            "quarantined standalone sandbox cleanup root",
+        )?;
+        self.parent.file.sync_all()?;
         self.cleaned = true;
         Ok(())
     }
@@ -4854,7 +5474,7 @@ fn ensure_command(name: &str) -> Result<()> {
 }
 
 fn doctor(manifest: &Path, lock: &Path, mirror: &Path) -> Result<()> {
-    for command in ["git", "cargo", "flock"] {
+    for command in ["git", "cargo"] {
         ensure_command(command)?;
     }
     validate(manifest, lock, mirror)?;
@@ -5042,112 +5662,98 @@ fn validate_ci_required_paths(paths: &Paths) -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
-fn validate_ci_required_path_identity(
-    path: &Path,
-    label: &str,
-    raw_identity: &str,
-    expected_present: bool,
-) -> Result<()> {
-    use std::os::unix::fs::MetadataExt;
-
-    let (device, inode) = raw_identity
-        .split_once(':')
-        .ok_or_else(|| error(format!("{label} bound identity must be DEVICE:INODE")))?;
-    let device = device
-        .parse::<u64>()
-        .map_err(|_| error(format!("{label} bound device is invalid")))?;
-    let inode = inode
-        .parse::<u64>()
-        .map_err(|_| error(format!("{label} bound inode is invalid")))?;
-    let identity_path = if expected_present {
-        require_physical_file(path, label)?;
-        path
-    } else {
-        require_path_absent(path, label)?;
-        reject_symlink_components(path, label)?;
-        path.parent()
-            .ok_or_else(|| error(format!("{label} has no physical parent")))?
-    };
-    let metadata = fs::metadata(identity_path)?;
-    if (metadata.dev(), metadata.ino()) != (device, inode) {
-        return Err(error(format!(
-            "{label} physical identity changed after wrapper validation: {}",
-            path.display()
-        )));
-    }
-    Ok(())
+struct CiRequiredBindings {
+    control: HeldDirectory,
+    manifest: HeldInputFile,
+    lock: HeldInputFile,
+    mirror_parent: HeldDirectory,
+    mirror_name: std::ffi::OsString,
 }
 
-#[cfg(not(unix))]
-fn validate_ci_required_path_identity(
-    path: &Path,
-    label: &str,
-    _raw_identity: &str,
-    _expected_present: bool,
-) -> Result<()> {
-    Err(error(format!(
-        "{label} identity binding requires Unix device and inode metadata: {}",
-        path.display()
-    )))
-}
-
-fn validate_ci_required_path_bindings(paths: &Paths) -> Result<()> {
-    validate_ci_required_paths(paths)?;
-    for (label, path, variable, expected_present) in [
-        (
-            "CI manifest",
-            paths.manifest.as_path(),
-            "REDLINE_CI_MANIFEST_IDENTITY",
-            true,
-        ),
-        (
-            "CI authoritative lock",
-            paths.lock.as_path(),
-            "REDLINE_CI_LOCK_IDENTITY",
-            true,
-        ),
-        (
-            "CI compatibility mirror",
-            paths.mirror.as_path(),
-            "REDLINE_CI_MIRROR_IDENTITY",
-            false,
-        ),
-    ] {
-        let identity = env::var(variable)
-            .map_err(|_| error(format!("{label} is missing wrapper physical identity")))?;
-        validate_ci_required_path_identity(path, label, &identity, expected_present)?;
+impl CiRequiredBindings {
+    fn new(paths: &Paths) -> Result<Self> {
+        validate_ci_required_paths(paths)?;
+        let control = HeldDirectory::open(&paths.root, "CI control-plane root")?;
+        let manifest =
+            control.open_regular_file(OsStr::new("repos.manifest.toml"), "CI manifest")?;
+        let lock =
+            control.open_regular_file(OsStr::new("redline.lock.toml"), "CI authoritative lock")?;
+        let mirror_parent_path = paths
+            .mirror
+            .parent()
+            .ok_or_else(|| error("CI compatibility mirror has no parent"))?;
+        let mirror_parent =
+            HeldDirectory::open(mirror_parent_path, "CI compatibility mirror parent")?;
+        let mirror_name = paths
+            .mirror
+            .file_name()
+            .ok_or_else(|| error("CI compatibility mirror has no file name"))?
+            .to_os_string();
+        let bindings = Self {
+            control,
+            manifest,
+            lock,
+            mirror_parent,
+            mirror_name,
+        };
+        bindings.validate_absent()?;
+        Ok(bindings)
     }
-    Ok(())
+
+    fn validate_inputs(&self) -> Result<()> {
+        self.control.validate("CI control-plane root")?;
+        self.manifest.validate(&self.control)?;
+        self.lock.validate(&self.control)?;
+        self.mirror_parent
+            .validate("CI compatibility mirror parent")?;
+        Ok(())
+    }
+
+    fn validate_absent(&self) -> Result<()> {
+        self.validate_inputs()?;
+        self.mirror_parent
+            .require_absent(&self.mirror_name, "CI compatibility mirror")
+    }
 }
 
 fn ci_required(paths: &Paths) -> Result<()> {
-    validate_ci_required_path_bindings(paths)?;
+    let bindings = CiRequiredBindings::new(paths)?;
     validate_physical_checkout(&paths.root)?;
+    bindings.validate_absent()?;
     let predecessor = paths.root.join(CI_PREDECESSOR_LOCK);
-    with_ci_compatibility_mirror(&paths.lock, &paths.mirror, &predecessor, || {
-        let status = Command::new("bash")
-            .arg(paths.root.join("ops/ci/quality-gates.sh"))
-            .current_dir(&paths.root)
-            .status()?;
-        if !status.success() {
-            return Err(error(format!(
-                "required quality gates failed with status {status}"
-            )));
-        }
-        Ok(())
-    })
+    let result = with_ci_compatibility_mirror_in_parent(
+        &paths.lock,
+        &paths.mirror,
+        &predecessor,
+        bindings.mirror_parent.duplicate()?,
+        || {
+            bindings.validate_inputs()?;
+            let status = Command::new("bash")
+                .arg(paths.root.join("ops/ci/quality-gates.sh"))
+                .current_dir(&paths.root)
+                .status()?;
+            bindings.validate_inputs()?;
+            if !status.success() {
+                return Err(error(format!(
+                    "required quality gates failed with status {status}"
+                )));
+            }
+            Ok(())
+        },
+    );
+    let final_validation = bindings.validate_absent();
+    match (result, final_validation) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(value), Ok(())) => Err(value),
+        (Ok(()), Err(value)) => Err(value),
+        (Err(value), Err(validation)) => Err(error(format!(
+            "{value}; CI required binding final validation failed: {validation}"
+        ))),
+    }
 }
 
-fn real_main() -> Result<()> {
-    let paths = default_paths();
-    let mut args: Vec<String> = env::args().skip(1).collect();
-    let command = if args.is_empty() {
-        "doctor".to_owned()
-    } else {
-        args.remove(0)
-    };
-    match command.as_str() {
+fn dispatch(paths: &Paths, command: &str, mut args: Vec<String>) -> Result<()> {
+    match command {
         "validate" => { if !args.is_empty() { return Err(error("validate accepts no arguments")); } validate(&paths.manifest, &paths.lock, &paths.mirror) }
         "control-validate" => {
             if !args.is_empty() { return Err(error("control-validate accepts no arguments")); }
@@ -5157,7 +5763,7 @@ fn real_main() -> Result<()> {
         }
         "ci-required" => {
             if !args.is_empty() { return Err(error("ci-required accepts no arguments")); }
-            ci_required(&paths)
+            ci_required(paths)
         }
         "doctor" => { if !args.is_empty() { return Err(error("doctor accepts no arguments")); } doctor(&paths.manifest, &paths.lock, &paths.mirror) }
         "lock-verify" => {
@@ -5280,7 +5886,7 @@ fn real_main() -> Result<()> {
             if args.len() != 1 {
                 return Err(error("release-receipt requires one output path"));
             }
-            release_receipt(Path::new(&args[0]), &paths)
+            release_receipt(Path::new(&args[0]), paths)
         }
         "clone" => {
             let dry_run = if args == ["--dry-run"] { true } else if args.is_empty() { false } else { return Err(error("clone accepts only --dry-run")); };
@@ -5289,6 +5895,39 @@ fn real_main() -> Result<()> {
         "update" => { if !args.is_empty() { return Err(error("update accepts no arguments")); } clone_or_update(&paths.manifest, false) }
         "--version" | "version" => { println!("redline-proof 0.1.0"); Ok(()) }
         _ => Err(error("usage: redlinectl {clone [--dry-run]|update|ci-required|control-validate|control-review-lock-verify|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
+    }
+}
+
+fn real_main() -> Result<()> {
+    let paths = default_paths();
+    let mut args: Vec<String> = env::args().skip(1).collect();
+    let command = if args.is_empty() {
+        "doctor".to_owned()
+    } else {
+        args.remove(0)
+    };
+    let family_lock = if matches!(
+        command.as_str(),
+        "clone" | "update" | "family-ci" | "ci" | "ci-required" | "proof-refresh"
+    ) {
+        Some(GlobalFamilyLock::acquire(paths.root.parent().ok_or_else(
+            || error("Redline control-plane root has no family root"),
+        )?)?)
+    } else {
+        None
+    };
+    let result = dispatch(&paths, &command, args);
+    let final_validation = match &family_lock {
+        Some(guard) => guard.validate(),
+        None => Ok(()),
+    };
+    match (result, final_validation) {
+        (Ok(()), Ok(())) => Ok(()),
+        (Err(value), Ok(())) => Err(value),
+        (Ok(()), Err(value)) => Err(value),
+        (Err(value), Err(validation)) => Err(error(format!(
+            "{value}; Redline family lock final validation failed: {validation}"
+        ))),
     }
 }
 
@@ -5378,6 +6017,9 @@ mod tests {
         let source = fixture.path().join("source");
         let commit = initialize_test_repo(&source);
         with_standalone_sandbox("redline-clone-test", |sandbox| {
+            assert!(sandbox.starts_with(
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("target/standalone-sandboxes")
+            ));
             let checkout = sandbox.join("checkout");
             clone_exact_standalone(&source, &checkout, &commit)?;
             assert!(checkout.join(".git").is_dir());
@@ -5423,6 +6065,36 @@ mod tests {
             b"preserved"
         );
         fs::remove_file(&root).unwrap();
+        sandbox.cleaned = true;
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn standalone_sandbox_unlinks_symlink_content_without_following_and_rejects_marker_replacement()
+    {
+        use std::os::unix::fs::{symlink, PermissionsExt};
+
+        let victim = TestDir::new("sandbox-content-victim");
+        fs::write(victim.path().join("must-survive"), b"preserved").unwrap();
+        let mut sandbox = StandaloneSandbox::new("redline-content-symlink-test").unwrap();
+        let link = sandbox.path().join("unsafe-link");
+        symlink(victim.path(), &link).unwrap();
+        sandbox.cleanup().unwrap();
+        assert_eq!(
+            fs::read(victim.path().join("must-survive")).unwrap(),
+            b"preserved"
+        );
+
+        let mut sandbox = StandaloneSandbox::new("redline-marker-replacement-test").unwrap();
+        let root = sandbox.path().to_path_buf();
+        let marker = root.join(SANDBOX_MARKER);
+        fs::remove_file(&marker).unwrap();
+        fs::write(&marker, &sandbox.marker_bytes).unwrap();
+        fs::set_permissions(&marker, fs::Permissions::from_mode(0o600)).unwrap();
+        let failure = sandbox.cleanup().unwrap_err().to_string();
+        assert!(failure.contains("path and held descriptor identity diverged"));
+        assert_eq!(fs::read(&marker).unwrap(), sandbox.marker_bytes);
+        fs::remove_dir_all(&root).unwrap();
         sandbox.cleaned = true;
     }
 
@@ -5546,7 +6218,7 @@ mod tests {
         let external_link = fixture.path().join("external-link");
         fs::hard_link(&mirror, &external_link).unwrap();
         let failure = guard.cleanup().unwrap_err().to_string();
-        assert!(failure.contains("link count 2, expected 1"));
+        assert!(failure.contains("path and held descriptor identity diverged"));
         assert!(mirror.exists());
         assert!(external_link.exists());
         assert_eq!(
@@ -5570,7 +6242,7 @@ mod tests {
         fs::write(&mirror, &guard.mirror_bytes).unwrap();
         fs::set_permissions(&mirror, fs::Permissions::from_mode(0o644)).unwrap();
         let failure = guard.cleanup().unwrap_err().to_string();
-        assert!(failure.contains("physical identity changed before cleanup"));
+        assert!(failure.contains("path and held descriptor identity diverged"));
         assert!(mirror.exists());
         guard.cleaned = true;
 
@@ -5581,7 +6253,7 @@ mod tests {
         fs::write(&guard.marker, &guard.marker_bytes).unwrap();
         fs::set_permissions(&guard.marker, fs::Permissions::from_mode(0o600)).unwrap();
         let failure = guard.cleanup().unwrap_err().to_string();
-        assert!(failure.contains("physical identity changed before cleanup"));
+        assert!(failure.contains("path and held descriptor identity diverged"));
         assert!(guard.marker.exists());
         guard.cleaned = true;
     }
@@ -5636,281 +6308,115 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn ci_required_entry_serializes_mirror_ownership_through_failed_gate_cleanup() {
+    fn rust_family_lock_serializes_and_rejects_path_replacement() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let fixture = TestDir::new_in_root("rust-family-lock");
+        let first = GlobalFamilyLock::acquire(fixture.path()).unwrap();
+        let lock_path = fixture.path().join(".redline-family.lock");
+        let metadata = fs::metadata(&lock_path).unwrap();
+        assert_eq!(metadata.permissions().mode() & 0o7777, 0o600);
+        assert!(GlobalFamilyLock::try_acquire(fixture.path()).is_err());
+
+        let displaced = fixture.path().join("held-lock");
+        fs::rename(&lock_path, &displaced).unwrap();
+        fs::write(&lock_path, b"replacement\n").unwrap();
+        fs::set_permissions(&lock_path, fs::Permissions::from_mode(0o600)).unwrap();
+        let failure = first.validate().unwrap_err().to_string();
+        assert!(failure.contains("path and held descriptor identity diverged"));
+        assert_eq!(fs::read(&lock_path).unwrap(), b"replacement\n");
+        drop(first);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn rust_family_lock_rejects_symlink_hardlink_fifo_and_wrong_mode() {
         use std::os::unix::fs::{symlink, PermissionsExt};
 
-        let fixture = TestDir::new_in_root("ci-required-flock");
-        let workspace = fixture.path().join("workspace");
-        let control = workspace.join("redline-split-ops");
-        let different_workspace = fixture.path().join("different-workspace");
-        let fake_bin = fixture.path().join("bin");
-        fs::create_dir_all(&control).unwrap();
-        fs::create_dir_all(&different_workspace).unwrap();
-        fs::create_dir_all(&fake_bin).unwrap();
+        let symlink_fixture = TestDir::new_in_root("lock-symlink");
+        let victim = symlink_fixture.path().join("victim");
+        fs::write(&victim, b"preserved\n").unwrap();
+        symlink(&victim, symlink_fixture.path().join(".redline-family.lock")).unwrap();
+        assert!(GlobalFamilyLock::acquire(symlink_fixture.path()).is_err());
+        assert_eq!(fs::read(&victim).unwrap(), b"preserved\n");
 
-        let redlinectl = control.join("redlinectl");
-        fs::copy(
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("redlinectl"),
-            &redlinectl,
+        let hardlink_fixture = TestDir::new_in_root("lock-hardlink");
+        let lock = hardlink_fixture.path().join(".redline-family.lock");
+        fs::write(&lock, b"").unwrap();
+        fs::set_permissions(&lock, fs::Permissions::from_mode(0o600)).unwrap();
+        fs::hard_link(&lock, hardlink_fixture.path().join("alias")).unwrap();
+        assert!(GlobalFamilyLock::acquire(hardlink_fixture.path()).is_err());
+
+        let fifo_fixture = TestDir::new_in_root("lock-fifo");
+        let fifo = CString::new(
+            fifo_fixture
+                .path()
+                .join(".redline-family.lock")
+                .as_os_str()
+                .as_bytes(),
         )
         .unwrap();
-        fs::set_permissions(&redlinectl, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+        assert!(GlobalFamilyLock::acquire(fifo_fixture.path()).is_err());
 
-        let real_flock_output = Command::new("sh")
-            .args(["-c", "command -v flock"])
-            .output()
+        let mode_fixture = TestDir::new_in_root("lock-mode");
+        let lock = mode_fixture.path().join(".redline-family.lock");
+        fs::write(&lock, b"").unwrap();
+        fs::set_permissions(&lock, fs::Permissions::from_mode(0o644)).unwrap();
+        let failure = GlobalFamilyLock::acquire(mode_fixture.path())
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("exact mode 0600"));
+        assert_eq!(
+            fs::metadata(&lock).unwrap().permissions().mode() & 0o7777,
+            0o644
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn descriptor_inputs_reject_fifo_and_device_nodes() {
+        let fixture = TestDir::new_in_root("descriptor-special-files");
+        let parent = HeldDirectory::open(fixture.path(), "special-file fixture").unwrap();
+        let fifo_name = OsStr::new("input-fifo");
+        let fifo = CString::new(fixture.path().join(fifo_name).as_os_str().as_bytes()).unwrap();
+        assert_eq!(unsafe { libc::mkfifo(fifo.as_ptr(), 0o600) }, 0);
+        assert!(parent.open_regular_file(fifo_name, "FIFO input").is_err());
+
+        let devices = HeldDirectory::open(Path::new("/dev"), "device directory").unwrap();
+        let failure = devices
+            .open_regular_file(OsStr::new("null"), "device input")
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("not a regular file"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn owned_unlink_refuses_same_name_replacement_without_deleting_it() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let fixture = TestDir::new_in_root("owned-unlink-race");
+        let parent = HeldDirectory::open(fixture.path(), "owned unlink parent").unwrap();
+        let name = OsStr::new("owned");
+        let path = fixture.path().join(name);
+        let displaced = fixture.path().join("displaced-owned");
+        let (held, identity) = parent
+            .create_file(name, b"reviewed bytes\n", 0o600, "owned unlink input")
             .unwrap();
-        assert!(real_flock_output.status.success());
-        let real_flock = String::from_utf8(real_flock_output.stdout)
-            .unwrap()
-            .trim()
-            .to_owned();
-        assert!(Path::new(&real_flock).is_absolute());
-
-        let fake_flock = fake_bin.join("flock");
-        fs::write(
-            &fake_flock,
-            r#"#!/usr/bin/env bash
-set -euo pipefail
-: >"$REDLINE_FLOCK_TEST_ATTEMPT"
-exec "$REDLINE_FLOCK_TEST_REAL_FLOCK" "$@"
-"#,
-        )
-        .unwrap();
-        fs::set_permissions(&fake_flock, fs::Permissions::from_mode(0o755)).unwrap();
-
-        let fake_cargo = fake_bin.join("cargo");
-        fs::write(
-            &fake_cargo,
-            r#"#!/usr/bin/env bash
-set -euo pipefail
-if [[ -n "${REDLINE_FLOCK_TEST_CARGO_ENTERED:-}" ]]; then
-  : >"$REDLINE_FLOCK_TEST_CARGO_ENTERED"
-fi
-case "$REDLINE_FLOCK_TEST_ID" in
-  first)
-    "$REDLINE_FLOCK_TEST_REAL_FLOCK" -n 9
-    : >"$REDLINE_FLOCK_TEST_FIRST_ENTERED"
-    for _ in $(seq 1 500); do
-      [[ ! -e "$REDLINE_FLOCK_TEST_RELEASE" ]] || exit 23
-      sleep 0.01
-    done
-    exit 70
-    ;;
-  second)
-    if [[ -e "$REDLINE_FLOCK_TEST_MIRROR" ||
-          -e "$REDLINE_FLOCK_TEST_SIDECAR" ||
-          -e "$REDLINE_FLOCK_TEST_MARKER" ]]; then
-      : >"$REDLINE_FLOCK_TEST_OVERLAP"
-      exit 31
-    fi
-    [[ -e "$REDLINE_FLOCK_TEST_CLEANED" ]] || exit 32
-    : >"$REDLINE_FLOCK_TEST_SECOND_ENTERED"
-    ;;
-  different)
-    : >"$REDLINE_FLOCK_TEST_DIFFERENT_ENTERED"
-    if [[ -e "$REDLINE_FLOCK_TEST_MIRROR" ||
-          -e "$REDLINE_FLOCK_TEST_SIDECAR" ||
-          -e "$REDLINE_FLOCK_TEST_MARKER" ]]; then
-      : >"$REDLINE_FLOCK_TEST_OVERLAP"
-    fi
-    exit 34
-    ;;
-  *)
-    exit 33
-    ;;
-esac
-"#,
-        )
-        .unwrap();
-        fs::set_permissions(&fake_cargo, fs::Permissions::from_mode(0o755)).unwrap();
-
-        let (authoritative, predecessor, mirror) = ci_mirror_fixture(&workspace);
-        fs::write(control.join("repos.manifest.toml"), b"fixture manifest\n").unwrap();
-        let sidecar = checksum_path(&mirror);
-        let marker = mirror.with_file_name(".redline.lock.toml.ci-compatibility-mirror");
-        let first_attempt = fixture.path().join("first-flock-attempted");
-        let second_attempt = fixture.path().join("second-flock-attempted");
-        let first_entered = fixture.path().join("first-entered");
-        let second_entered = fixture.path().join("second-entered");
-        let different_attempt = fixture.path().join("different-flock-attempted");
-        let different_entered = fixture.path().join("different-entered");
-        let overlap = fixture.path().join("overlap");
-        let cleaned = fixture.path().join("cleanup-complete");
-        let release = fixture.path().join("release-first");
-        let mut test_path = std::ffi::OsString::from(fake_bin.as_os_str());
-        test_path.push(":");
-        test_path.push(env::var_os("PATH").unwrap_or_default());
-
-        let spawn_entry = |id: &str, attempt: &Path, requested_root: &Path| {
-            Command::new(&redlinectl)
-                .arg("ci-required")
-                .env("PATH", &test_path)
-                .env("REDLINE_SPLIT_ROOT", requested_root)
-                .env("REDLINE_FLOCK_TEST_ID", id)
-                .env("REDLINE_FLOCK_TEST_ATTEMPT", attempt)
-                .env("REDLINE_FLOCK_TEST_REAL_FLOCK", &real_flock)
-                .env("REDLINE_FLOCK_TEST_FIRST_ENTERED", &first_entered)
-                .env("REDLINE_FLOCK_TEST_SECOND_ENTERED", &second_entered)
-                .env("REDLINE_FLOCK_TEST_DIFFERENT_ENTERED", &different_entered)
-                .env("REDLINE_FLOCK_TEST_RELEASE", &release)
-                .env("REDLINE_FLOCK_TEST_CLEANED", &cleaned)
-                .env("REDLINE_FLOCK_TEST_MIRROR", &mirror)
-                .env("REDLINE_FLOCK_TEST_SIDECAR", &sidecar)
-                .env("REDLINE_FLOCK_TEST_MARKER", &marker)
-                .env("REDLINE_FLOCK_TEST_OVERLAP", &overlap)
-                .stdout(Stdio::piped())
-                .stderr(Stdio::piped())
-                .spawn()
-                .unwrap()
-        };
-        let wait_for = |path: &Path| {
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
-            while !path.exists() && std::time::Instant::now() < deadline {
-                std::thread::sleep(std::time::Duration::from_millis(10));
-            }
-            path.exists()
-        };
-
-        let outside = fixture.path().join("outside/deep");
-        fs::create_dir_all(&outside).unwrap();
-        symlink(&outside, control.join("path-alias")).unwrap();
-        symlink(&outside, workspace.join("path-alias")).unwrap();
-        for (case_index, (variable, parent, file_name)) in [
-            (
-                "REDLINE_SPLIT_MANIFEST",
-                control.as_path(),
-                "repos.manifest.toml",
-            ),
-            ("REDLINE_SPLIT_LOCK", control.as_path(), "redline.lock.toml"),
-            (
-                "REDLINE_SPLIT_MIRROR_LOCK",
-                workspace.as_path(),
-                "redline.lock.toml",
-            ),
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            for (variant_index, candidate) in [
-                parent.join(format!("missing/../{file_name}")),
-                parent.join(format!("path-alias/../{file_name}")),
-                PathBuf::from(format!("{}//{file_name}", parent.display())),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                let attempt = fixture
-                    .path()
-                    .join(format!("invalid-{case_index}-{variant_index}-flock"));
-                let cargo_entered = fixture
-                    .path()
-                    .join(format!("invalid-{case_index}-{variant_index}-cargo"));
-                let output = Command::new(&redlinectl)
-                    .arg("ci-required")
-                    .env("PATH", &test_path)
-                    .env("REDLINE_SPLIT_ROOT", &workspace)
-                    .env(variable, &candidate)
-                    .env("REDLINE_FLOCK_TEST_ID", "invalid")
-                    .env("REDLINE_FLOCK_TEST_ATTEMPT", &attempt)
-                    .env("REDLINE_FLOCK_TEST_REAL_FLOCK", &real_flock)
-                    .env("REDLINE_FLOCK_TEST_CARGO_ENTERED", &cargo_entered)
-                    .output()
-                    .unwrap();
-                assert_eq!(output.status.code(), Some(2));
-                assert!(String::from_utf8_lossy(&output.stderr).contains("must be exactly"));
-                assert!(!attempt.exists());
-                assert!(!cargo_entered.exists());
-            }
-        }
-
-        let first = spawn_entry("first", &first_attempt, &workspace);
-        let first_attempted = wait_for(&first_attempt);
-        let first_has_lock = wait_for(&first_entered);
-        if !first_attempted || !first_has_lock {
-            fs::write(&release, b"release\n").unwrap();
-            let output = first.wait_with_output().unwrap();
-            panic!(
-                "first ci-required entry did not acquire the global flock: status={} stderr={}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
-        let family_lock = workspace.join(".redline-family.lock");
-        let inherited_lock_contended = !Command::new(&real_flock)
-            .args(["-x", "-n"])
-            .arg(&family_lock)
-            .args(["-c", "true"])
-            .status()
-            .unwrap()
-            .success();
-
-        let mut second = None;
-        let mut second_attempted = false;
-        let mut different_output = None;
-        let gate_result = with_ci_compatibility_mirror(
-            &authoritative,
-            &mirror,
-            &predecessor,
-            || -> Result<()> {
-                if !mirror.is_file() || !sidecar.is_file() || !marker.is_file() {
-                    return Err(error("first ci-required mirror ownership is incomplete"));
-                }
-                second = Some(spawn_entry("second", &second_attempt, &workspace));
-                second_attempted = wait_for(&second_attempt);
-                if !second_attempted {
-                    return Err(error("second ci-required entry did not reach global flock"));
-                }
-                if second_entered.exists() || overlap.exists() {
-                    return Err(error(
-                        "second ci-required entry overlapped active mirror ownership",
-                    ));
-                }
-                different_output = Some(
-                    spawn_entry("different", &different_attempt, &different_workspace)
-                        .wait_with_output()
-                        .unwrap(),
-                );
-                if different_attempt.exists() || different_entered.exists() || overlap.exists() {
-                    return Err(error(
-                        "different-root ci-required entry reached flock or Cargo",
-                    ));
-                }
-                Err(error("expected required gate failure"))
-            },
-        );
-        let cleanup_complete = !mirror.exists() && !sidecar.exists() && !marker.exists();
-        if cleanup_complete {
-            fs::write(&cleaned, b"cleaned\n").unwrap();
-        }
-        fs::write(&release, b"release\n").unwrap();
-        let first_output = first.wait_with_output().unwrap();
-        let second_output = second.map(|child| child.wait_with_output().unwrap());
-
-        let failure = gate_result.unwrap_err().to_string();
-        assert!(
-            failure.contains("expected required gate failure"),
-            "{failure}"
-        );
-        assert!(second_attempted);
-        assert!(inherited_lock_contended);
-        assert!(cleanup_complete);
-        assert_eq!(first_output.status.code(), Some(23));
-        let different_output = different_output.expect("different-root entry was not started");
-        assert_eq!(different_output.status.code(), Some(2));
-        assert!(String::from_utf8_lossy(&different_output.stderr)
-            .contains("REDLINE_SPLIT_ROOT must resolve to"));
-        let second_output = second_output.expect("second ci-required entry was not started");
-        assert!(
-            second_output.status.success(),
-            "second ci-required entry failed: status={} stderr={}",
-            second_output.status,
-            String::from_utf8_lossy(&second_output.stderr)
-        );
-        assert!(second_entered.exists());
-        assert!(!different_attempt.exists());
-        assert!(!different_entered.exists());
-        assert!(!overlap.exists());
+        let failure = parent
+            .unlink_owned_file_with(name, &held, &identity, "owned unlink input", || {
+                fs::rename(&path, &displaced)?;
+                fs::write(&path, b"replacement bytes\n")?;
+                fs::set_permissions(&path, fs::Permissions::from_mode(0o600))?;
+                Ok(())
+            })
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("identity changed before descriptor-relative removal"));
+        assert_eq!(fs::read(&path).unwrap(), b"replacement bytes\n");
+        assert_eq!(fs::read(&displaced).unwrap(), b"reviewed bytes\n");
+        assert_eq!(identity_from_metadata(&held.metadata().unwrap()).links, 1);
     }
 
     #[test]
@@ -5935,9 +6441,7 @@ esac
 
     #[cfg(unix)]
     #[test]
-    fn ci_required_identity_binding_rejects_replacement_for_every_input() {
-        use std::os::unix::fs::MetadataExt;
-
+    fn ci_required_descriptor_bindings_reject_every_replacement_class() {
         let fixture = TestDir::new_in_root("ci-required-replacement");
         let root = fixture.path().join("redline-split-ops");
         fs::create_dir_all(&root).unwrap();
@@ -5947,39 +6451,71 @@ esac
             mirror: fixture.path().join("redline.lock.toml"),
             root,
         };
-        validate_ci_required_paths(&paths).unwrap();
+        fs::write(&paths.manifest, b"reviewed manifest\n").unwrap();
+        fs::write(&paths.lock, b"reviewed lock\n").unwrap();
+        let bindings = CiRequiredBindings::new(&paths).unwrap();
+        bindings.validate_absent().unwrap();
 
-        for (label, path, expected_present) in [
-            ("CI manifest", paths.manifest.as_path(), true),
-            ("CI authoritative lock", paths.lock.as_path(), true),
-            ("CI compatibility mirror", paths.mirror.as_path(), false),
-        ] {
-            let identity_path = if expected_present {
-                fs::write(path, b"reviewed identity\n").unwrap();
-                path
-            } else {
-                path.parent().unwrap()
-            };
-            let metadata = fs::metadata(identity_path).unwrap();
-            let binding = format!("{}:{}", metadata.dev(), metadata.ino());
-            validate_ci_required_path_identity(path, label, &binding, expected_present).unwrap();
-            if expected_present {
-                let replacement = path.with_extension("replacement");
-                fs::write(&replacement, b"replacement identity\n").unwrap();
-                fs::rename(replacement, path).unwrap();
-            } else {
-                fs::write(path, b"unexpected mirror owner\n").unwrap();
-            }
-            let failure =
-                validate_ci_required_path_identity(path, label, &binding, expected_present)
-                    .unwrap_err()
-                    .to_string();
-            assert!(
-                failure.contains("physical identity changed after wrapper validation")
-                    || failure.contains("must be absent"),
-                "{label}: {failure}"
-            );
-        }
+        let replacement = paths.manifest.with_extension("replacement");
+        fs::write(&replacement, b"reviewed manifest\n").unwrap();
+        fs::rename(&replacement, &paths.manifest).unwrap();
+        let failure = bindings.validate_inputs().unwrap_err().to_string();
+        assert!(failure.contains("path and held descriptor identity diverged"));
+
+        let lock_fixture = TestDir::new_in_root("ci-required-lock-replacement");
+        let root = lock_fixture.path().join("redline-split-ops");
+        fs::create_dir_all(&root).unwrap();
+        let paths = Paths {
+            manifest: root.join("repos.manifest.toml"),
+            lock: root.join("redline.lock.toml"),
+            mirror: lock_fixture.path().join("redline.lock.toml"),
+            root,
+        };
+        fs::write(&paths.manifest, b"reviewed manifest\n").unwrap();
+        fs::write(&paths.lock, b"reviewed lock\n").unwrap();
+        let bindings = CiRequiredBindings::new(&paths).unwrap();
+        let replacement = paths.lock.with_extension("replacement");
+        fs::write(&replacement, b"reviewed lock\n").unwrap();
+        fs::rename(&replacement, &paths.lock).unwrap();
+        let failure = bindings.validate_inputs().unwrap_err().to_string();
+        assert!(failure.contains("path and held descriptor identity diverged"));
+
+        let mirror_fixture = TestDir::new_in_root("ci-required-mirror-owner");
+        let root = mirror_fixture.path().join("redline-split-ops");
+        fs::create_dir_all(&root).unwrap();
+        let paths = Paths {
+            manifest: root.join("repos.manifest.toml"),
+            lock: root.join("redline.lock.toml"),
+            mirror: mirror_fixture.path().join("redline.lock.toml"),
+            root,
+        };
+        fs::write(&paths.manifest, b"reviewed manifest\n").unwrap();
+        fs::write(&paths.lock, b"reviewed lock\n").unwrap();
+        let bindings = CiRequiredBindings::new(&paths).unwrap();
+        fs::write(&paths.mirror, b"unexpected mirror owner\n").unwrap();
+        let failure = bindings.validate_absent().unwrap_err().to_string();
+        assert!(failure.contains("must be absent"));
+
+        let parent_fixture = TestDir::new_in_root("ci-required-parent-replacement");
+        let family = parent_fixture.path().join("family");
+        let root = family.join("redline-split-ops");
+        fs::create_dir_all(&root).unwrap();
+        let paths = Paths {
+            manifest: root.join("repos.manifest.toml"),
+            lock: root.join("redline.lock.toml"),
+            mirror: family.join("redline.lock.toml"),
+            root,
+        };
+        fs::write(&paths.manifest, b"reviewed manifest\n").unwrap();
+        fs::write(&paths.lock, b"reviewed lock\n").unwrap();
+        let bindings = CiRequiredBindings::new(&paths).unwrap();
+        let displaced = parent_fixture.path().join("displaced-family");
+        fs::rename(&family, &displaced).unwrap();
+        fs::create_dir_all(&paths.root).unwrap();
+        fs::write(&paths.manifest, b"reviewed manifest\n").unwrap();
+        fs::write(&paths.lock, b"reviewed lock\n").unwrap();
+        let failure = bindings.validate_inputs().unwrap_err().to_string();
+        assert!(failure.contains("path and held descriptor identity diverged"));
     }
 
     fn testing_repo() -> Repo {

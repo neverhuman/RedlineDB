@@ -9,9 +9,11 @@ The physical family root (`jain-redline/`) is deliberately not a Git repository
 and is not a Cargo workspace. `redline-split-ops` and every child are standalone
 physical repositories beneath it. Manifest paths are relative to the control
 plane; `REDLINE_SPLIT_ROOT` relocates the family lock/serialization root and no
-child path is derived from a fixed home directory. `redline-central` remains a
-separately reviewed, unaccepted onboarding repository until an exact identity
-can be added to both manifest and lock through the proof lifecycle.
+child path is derived from a fixed home directory. Serialized operations hold
+that root and `.redline-family.lock` through descriptor-safe Rust guards; the
+shell launcher never owns or passes the lock descriptor. `redline-central`
+remains a separately reviewed, unaccepted onboarding repository until an exact
+identity can be added to both manifest and lock through the proof lifecycle.
 
 A Core successor crosses that boundary in two protected states. Preparation
 writes only the authoritative ineligible lock; reconciliation copies those

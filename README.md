@@ -76,7 +76,10 @@ temporary standalone `git clone --no-local` checked out at the exact reviewed
 SHA, and writes a JSON receipt, per-repository logs, and a `<receipt>.sha256`
 sidecar. Clone roots and Git directories must be physical, independent, full
 history repositories with no object alternates or linked-checkout metadata.
-Cleanup is marker-bound and refuses a symlinked root. A present tag that points
+The clone sandbox is rooted beneath this repository's `target/` directory.
+Cleanup is descriptor- and marker-bound and does not follow symlink targets;
+the held marker and root inodes must both be proven unlinked. A present tag
+that points
 anywhere other than the reviewed head is an immutable-tag conflict; a tag may
 be absent during this CI step, but `proof-refresh` requires it locally and on
 Jeryu.

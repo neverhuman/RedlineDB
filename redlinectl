@@ -2,19 +2,17 @@
 set -euo pipefail
 
 ops_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-workspace_root="${REDLINE_SPLIT_ROOT:-$(cd "$ops_root/.." && pwd)}"
 command="${1:-doctor}"
 
 ci_bind_required_path() {
   local variable="${1:?path variable is required}"
-  local identity_variable="${2:?identity variable is required}"
-  local label="${3:?path label is required}"
-  local expected="${4:?expected path is required}"
-  local expected_state="${5:?expected path state is required}"
+  local label="${2:?path label is required}"
+  local expected="${3:?expected path is required}"
+  local expected_state="${4:?expected path state is required}"
   local actual="${!variable:-$expected}"
   local current="/"
   local remainder="${actual#/}"
-  local component identity identity_target
+  local component
 
   if [[ "$actual" != "$expected" ]]; then
     printf 'redlinectl: ci-required %s must be exactly %s, got %s\n' \
@@ -53,23 +51,13 @@ ci_bind_required_path() {
       remainder=""
     fi
   done
-  identity_target="$actual"
   if [[ "$expected_state" == "file" && ! -f "$actual" ]]; then
     printf 'redlinectl: ci-required %s is not a regular file: %s\n' \
       "$label" "$actual" >&2
     exit 2
   fi
-  if [[ "$expected_state" == "absent" ]]; then
-    identity_target="${actual%/*}"
-  fi
-  identity="$(command -p stat -Lc '%d:%i' -- "$identity_target")" || {
-    printf 'redlinectl: ci-required cannot bind %s identity: %s\n' \
-      "$label" "$actual" >&2
-    exit 2
-  }
   printf -v "$variable" '%s' "$expected"
-  printf -v "$identity_variable" '%s' "$identity"
-  export "${variable?}" "${identity_variable?}"
+  export "${variable?}"
 }
 
 if [[ "$command" == "ci-required" ]]; then
@@ -88,28 +76,20 @@ if [[ "$command" == "ci-required" ]]; then
       "$physical_workspace_root" "$requested_workspace_root" >&2
     exit 2
   fi
-  workspace_root="$physical_workspace_root"
   ci_bind_required_path \
-    REDLINE_SPLIT_MANIFEST REDLINE_CI_MANIFEST_IDENTITY manifest \
+    REDLINE_SPLIT_MANIFEST manifest \
     "$physical_ops_root/repos.manifest.toml" file
   ci_bind_required_path \
-    REDLINE_SPLIT_LOCK REDLINE_CI_LOCK_IDENTITY authoritative-lock \
+    REDLINE_SPLIT_LOCK authoritative-lock \
     "$physical_ops_root/redline.lock.toml" file
   ci_bind_required_path \
-    REDLINE_SPLIT_MIRROR_LOCK REDLINE_CI_MIRROR_IDENTITY compatibility-mirror \
+    REDLINE_SPLIT_MIRROR_LOCK compatibility-mirror \
     "$physical_workspace_root/redline.lock.toml" absent
 fi
 
 export REDLINE_SPLIT_MANIFEST="${REDLINE_SPLIT_MANIFEST:-$ops_root/repos.manifest.toml}"
 export REDLINE_SPLIT_LOCK="${REDLINE_SPLIT_LOCK:-$ops_root/redline.lock.toml}"
 export REDLINE_SPLIT_MIRROR_LOCK="${REDLINE_SPLIT_MIRROR_LOCK:-$ops_root/../redline.lock.toml}"
-
-case "$command" in
-  clone|update|family-ci|ci|ci-required|proof-refresh)
-    exec 9>"$workspace_root/.redline-family.lock"
-    flock -x 9
-    ;;
-esac
 
 if [[ "$command" == "ci-required" &&
       ( -e "$REDLINE_SPLIT_MIRROR_LOCK" || -L "$REDLINE_SPLIT_MIRROR_LOCK" ) ]]; then

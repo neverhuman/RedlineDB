@@ -16,13 +16,21 @@ manifest, schemas, and authoritative lock from its exact standalone runner.
 Before the existing gates run, the Rust `ci-required` wrapper verifies the
 tracked predecessor and prepared authoritative digests, then constructs the
 physical predecessor compatibility mirror required by the review verifier.
+The serialized commands acquire `.redline-family.lock` in Rust through a held
+family-root descriptor. The lock is a current-owner regular file with exact
+mode `0600`, one link, no symlink traversal, and stable path/descriptor
+identity; the descriptor and exclusive lock remain live through final command
+validation. `ci-required` likewise holds and repeatedly validates descriptors
+for the control root, manifest, authoritative lock, and mirror parent across
+the gate invocation.
 The mirror and sidecar are distinct from the authoritative lock and owned by a
 private sibling marker. Pre-existing, partial, aliased, symlinked, or
 wrong-digest state is rejected. Cleanup removes only the marker-bound files
 after revalidating their still-open creation handle, creation-time device/inode
 identity, exact mode, single-link ownership, and bytes, on both gate success and
-failure. Successful unlinks advance resumable cleanup state before the next
-filesystem operation.
+failure. Each removal first quarantines the directory entry relative to the
+held parent, verifies that it is the owned inode, unlinks it, and proves the
+held inode reached link count zero before cleanup state advances.
 The required lane uses `control-review-lock-verify`, which validates the exact
 manifest, derived lock transition, and tracked predecessor binding
 without consulting sibling checkouts. The operational `review-lock-verify`
@@ -83,8 +91,11 @@ child lanes in automatically removed standalone `git clone --no-local`
 checkouts detached at the exact reviewed SHA and writes checksummed JSON plus
 raw logs. Each clone must have a physical `.git` directory equal to its common
 Git directory, full history, no alternates, no linked-checkout registry, a clean
-detached HEAD, and the canonical Jeryu origin. Sandbox cleanup requires its
-private marker and refuses symlinked root components.
+detached HEAD, and the canonical Jeryu origin. Sandbox roots live only beneath
+`redline-split-ops/target/standalone-sandboxes`. Cleanup requires its private
+marker, never follows symlink targets, holds the root and marker identities,
+quarantines the root relative to its held parent, and proves both held inodes
+were unlinked.
 Child commands use each repository's pinned toolchain, never the control
 plane's `RUSTUP_TOOLCHAIN` override. Before Core CI, the runner builds the exact
 reviewed Redline Testing release package locally, verifies its commit, manifest,
