@@ -13,8 +13,10 @@ ARTIFACT_DIR="${ROOT_DIR}/target/jankurai"
 # this on the runners that have the full toolchain installed.
 STRICT_TOOLS="${REDLINE_STRICT_TOOLS:-0}"
 
-# Pinned auditor: never the stale ~/.local/bin shadow.
-JANKURAI_BIN="${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}"
+# Governed auditor: caller environment and PATH never select release evidence.
+readonly JAIN_GOVERNED_JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
+readonly JAIN_GOVERNED_JANKURAI_VERSION="jankurai 1.6.11"
+readonly JAIN_GOVERNED_JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
 
 # Tool version pins (documented for ci-doctor / supply-chain parity).
 NODE_PIN="${REDLINE_NODE_PIN:-22}"
@@ -68,16 +70,45 @@ cargo_workspace_ready() {
   (cd "$ROOT_DIR" && cargo metadata --no-deps --format-version 1 >/dev/null 2>&1)
 }
 
+jain_sha256() {
+  sha256sum -- "${1:?file is required}" | awk '{print $1}'
+}
+
+jain_verify_exact_executable() {
+  local label="${1:?label is required}" path="${2:?path is required}"
+  local expected_digest="${3:?digest is required}" resolved
+  [[ -f "$path" && -x "$path" && ! -L "$path" ]] || {
+    printf '%s must be an executable regular non-symlink: %s\n' "$label" "$path" >&2
+    return 1
+  }
+  resolved="$(realpath -e -- "$path")" || return 1
+  [[ "$resolved" == "$path" ]] || {
+    printf '%s resolved outside its exact path: %s\n' "$label" "$resolved" >&2
+    return 1
+  }
+  [[ "$(jain_sha256 "$path")" == "$expected_digest" ]] || {
+    printf '%s digest mismatch: %s\n' "$label" "$path" >&2
+    return 1
+  }
+}
+
+jain_verify_governed_jankurai() {
+  local path="${1:?path is required}" expected_version="${2:?version is required}"
+  local expected_digest="${3:?digest is required}" actual
+  jain_verify_exact_executable governed-Jankurai "$path" "$expected_digest" || return 1
+  actual="$("$path" --version 2>/dev/null)" || return 1
+  [[ "$actual" == "$expected_version" ]] || {
+    printf 'governed Jankurai version mismatch: %s\n' "${actual:-missing}" >&2
+    return 1
+  }
+}
+
 jankurai_bin() {
-  if [[ -x "$JANKURAI_BIN" ]]; then
-    printf '%s' "$JANKURAI_BIN"
-    return 0
-  fi
-  if command -v jankurai >/dev/null 2>&1; then
-    command -v jankurai
-    return 0
-  fi
-  return 1
+  jain_verify_governed_jankurai \
+    "$JAIN_GOVERNED_JANKURAI_BIN" \
+    "$JAIN_GOVERNED_JANKURAI_VERSION" \
+    "$JAIN_GOVERNED_JANKURAI_SHA256" || return 1
+  printf '%s' "$JAIN_GOVERNED_JANKURAI_BIN"
 }
 
 ensure_artifacts() {
