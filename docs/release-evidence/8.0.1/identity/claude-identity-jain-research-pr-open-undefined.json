@@ -1,0 +1,101 @@
+{
+  "schema_version": "jain.claude-identity-pr-open/v1",
+  "claim_token": "claude-identity-4repos-undefined",
+  "claim_token_as_posted": "claude-identity-4repos-20260716T0455Z",
+  "claim_token_era": "undefined",
+  "repo": "jeryu/jain-research",
+  "canonical_checkout": "/home/ubuntu/jain-split/jain-research",
+  "branch": "release/v8.0.1/research-identity",
+  "head_sha_old": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5",
+  "head_sha_new": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5",
+  "rebase_performed": false,
+  "base_main_sha": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+  "merge_base_equals_origin_main": true,
+  "branch_commits_ahead": 2,
+  "branch_commits": [
+    {"sha": "074d09b4382f5aeb265d1fd273669563c85836ff", "subject": "release(jain-research): add split package identity", "note": "adds agent/standard-version.toml (5 lines) — resolves Codex audit finding that forge main lacks the identity file; matches jain-llm 9eb84f0 pattern"},
+    {"sha": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5", "subject": "release: align research with Jain 8.0.1", "note": "10-file identity flip (VERSION, agent/*.toml, Cargo.toml/lock, READMEs, CHANGELOG, ops/ci scripts)"}
+  ],
+  "corrective_tag": {
+    "existing_invalid_tag": "jain-research-v8.0.1-split.0 -> c61504a7e25ce62c71100865ef52f49a12c59e1b (self-identifies 8.0.0; never moved)",
+    "target": "jain-research-v8.0.1-split.1",
+    "target_unused_on_forge": true
+  },
+  "surface_audit": {
+    "VERSION": "jain-research-v8.0.1-split.1",
+    "agent/standard-version.toml": "jain-research-v8.0.1-split.1",
+    "agent/boundaries.toml [stack].version": "8.0.1",
+    "workspace Cargo.toml [workspace.package].version": "8.0.1",
+    "crate Cargo.toml": "version.workspace = true",
+    "package.metadata.jain-release": "absent — pattern-consistent: absent in merged exemplar jain-llm PR #7 branch as well; not a surface in this family",
+    "Cargo.lock own-package": "8.0.1",
+    "ops/ci/artifact_support.sh": "8.0.1",
+    "ops/ci/package-identity.sh": "8.0.1",
+    "active_8_0_0_grep_hits": 0,
+    "grep_exclusions": [".git", "target", "CHANGELOG history entries"],
+    "fixes_made": [],
+    "reconcile_commit": "not needed — all surfaces already consistent"
+  },
+  "gates": {
+    "cargo_fmt_check": {"exit": 0, "pre_existing_failures": 0},
+    "cargo_test_locked_j8": {"exit": 0, "result": "11 passed (5 suites)"},
+    "jankurai": {
+      "version": "1.6.11",
+      "invocation": "ops/ci/score.sh (jankurai audit . --full --mode advisory --policy agent/audit-policy.toml)",
+      "score": 88,
+      "baseline": 86,
+      "hard_findings": 0,
+      "caps": 0,
+      "soft_findings": 4,
+      "gate": "pass (score ok: 88, hard=0)"
+    }
+  },
+  "push": {
+    "result": "branch on forge at exact head; push reported up-to-date because another lane had already pushed the identical ref (~04:59-05:00Z)",
+    "ls_remote_readback": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5 refs/heads/release/v8.0.1/research-identity"
+  },
+  "pr": {
+    "number": 5,
+    "url": "/jeryu/jain-research/pull/5",
+    "actor": "claude",
+    "title": "chore(release): align jain-research identity to 8.0.1",
+    "head": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5",
+    "base": "main",
+    "state": "open",
+    "draft": false,
+    "created_at": "2026-07-16T05:05:42.904186914Z",
+    "note_curl_timeout": "pr-open POST timed out client-side after 15s but the forge processed it; CLI receipt docs/release-evidence/8.0.1/jeryu-pr-open-jeryu-jain-research-release-v8.0.1-research-identity.json records the timeout error even though PR #5 was created; verified via pr-list readback",
+    "duplicate_pr_observed": {
+      "number": 4,
+      "actor": "codex",
+      "title": "release: align jain-research with Jain 8.0.1",
+      "created_at": "2026-07-16T05:00:08.140790290Z",
+      "same_head": true,
+      "same_base": true,
+      "disposition": "left untouched — not this lane's artifact; reviewers/owner to close one duplicate"
+    }
+  },
+  "checks_readback": {
+    "sha": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5",
+    "total_count": 1,
+    "runs": [{"name": "jankurai/proof", "conclusion": "failure", "output": null, "completed_at": "2026-07-16T04:59:56.427178494Z", "note": "stale null-output check posted by the earlier actor's lane; same known pattern as jain-llm PR #7"}],
+    "required_check_absent": true,
+    "heavy_ci_run": false
+  },
+  "checkout_restored": {
+    "branch": "main",
+    "porcelain_empty": true,
+    "local_main_sha": "074d09b4382f5aeb265d1fd273669563c85836ff",
+    "origin_main_sha": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+    "main_equals_origin_main": false,
+    "note": "local main is 1 commit ahead of origin/main — PRE-EXISTING state (commit 074d09b authored 2026-07-14T03:22:24Z by Jain Split Bot, before this lane); it is an ancestor of the pushed PR head so no content is unpublished; main push is 403 and resetting another lane's pre-existing ref state is out of scope. ff-only merge from origin/main reported already-up-to-date."
+  },
+  "never_done": ["approve", "merge", "tag", "protection", "authority", "heavy host-CI", "worktree", "clone"],
+  "utc": {
+    "custody_check": "2026-07-16T05:02Z",
+    "pr_created": "2026-07-16T05:05:42Z",
+    "checks_readback": "2026-07-16T05:06:35Z",
+    "receipt_written": "2026-07-16T05:08Z"
+  },
+  "signed": "Claude worker claude-identity-4repos (jain-research lane)"
+}

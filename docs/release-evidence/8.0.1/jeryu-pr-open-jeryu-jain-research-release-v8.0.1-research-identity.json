@@ -1,0 +1,21 @@
+{
+  "error": "local Jeryu request failed: curl: (28) Operation timed out after 15002 milliseconds with 0 bytes received",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/jain-research",
+  "request": {
+    "body": {
+      "actor": "claude",
+      "base": "main",
+      "body": "Corrects active jain-research source, package, candidate, agent, and evidence identity to 8.0.1 (jain-research-v8.0.1-split.1) without changing dependencies or moving the occupied split.0 tag. Local fmt, test (11 passed), and jankurai score (88, hard=0, caps=0) gates pass at head 14f4d338d31efdb80b08a94b8543e08b1cb1d6e5.",
+      "draft": false,
+      "head": "release/v8.0.1/research-identity",
+      "title": "chore(release): align jain-research identity to 8.0.1"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-research/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "fail",
+  "timestamp_unix": 1784178334
+}

@@ -1,0 +1,43 @@
+{
+  "claim_token": "claude-e2e-binary-undefined",
+  "task": "e2e-binary-web",
+  "host": "xbabe2",
+  "image": "image.neverhuman.org/veox/jain@sha256:ffbbaf48bda7253785b2d32436eb0cbf1d0ff927a41593b907f7307e07075871",
+  "image_digest": "sha256:ffbbaf48bda7253785b2d32436eb0cbf1d0ff927a41593b907f7307e07075871",
+  "container_name": "e2e-cls-20260716",
+  "container_id": "e405d78f4c06c969bd192f32a381abac1faf14cc0fe9e5a261db6518b60780f1",
+  "container_env": {
+    "JAIN_WEB_CLUSTER": "0",
+    "JAIN_WEB_MAX_DATA_BYTES": "2147483648",
+    "JAIN_THREADS": "32"
+  },
+  "session_id": "16fffd43-4094-425f-bf7e-fa4115bec29f",
+  "effort": "low",
+  "overrides": {"hyperion_enabled": false},
+  "seed": 20260616,
+  "fixture": {
+    "dir": "/home/ubuntu/jain-split/jain-deploy/deployment/testdata/binary-0004ff1bec07b7a0",
+    "dataset_hash": "0004ff1bec07b7a0",
+    "train_rows": 1000,
+    "test_rows": 1000,
+    "feature_columns": 72
+  },
+  "terminal_status": "complete",
+  "winning_model": "ges",
+  "predictions_artifact_id": "f284d20b-d973-4957-a45b-8094772ce18a",
+  "predictions_sha256": "3f165c17fe2d8b484f04dff87ae5261999388d9e2678be19240a364a930c3be0",
+  "prediction_rows": 1000,
+  "metric": {
+    "name": "auc",
+    "value": 0.686567,
+    "floor": 0.62,
+    "method": "rank-statistic AUC computed in awk (average ranks for ties); P=397 positives, N=603 negatives"
+  },
+  "pass": true,
+  "timestamps_utc": {
+    "session_created": "2026-07-16T05:01:22Z",
+    "training_complete": "2026-07-16T05:02:15Z",
+    "predictions_downloaded": "2026-07-16T05:03:46Z",
+    "receipt_written": "2026-07-16T05:03:46Z"
+  }
+}

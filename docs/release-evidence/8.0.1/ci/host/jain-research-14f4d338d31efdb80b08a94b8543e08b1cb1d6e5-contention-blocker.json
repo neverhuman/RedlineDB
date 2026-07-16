@@ -1,0 +1,26 @@
+{
+  "schema_version": "jain.host-ci-contention-blocker/v1",
+  "repository": "jeryu/jain-research",
+  "head_sha": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5",
+  "check": "jain-research/required",
+  "attempted_at": "2026-07-16T05:04:00Z",
+  "status": "blocked_before_checkout",
+  "runner_exit": 130,
+  "reason": "shared heavy host-CI lane was already occupied by active Web/Core owner runners",
+  "observed_active_runners": [
+    "jain-web f235a471ff716c3d8bd5577f3f241d2ce07a09ed",
+    "jain-core 09823c4012d228c8d73df625329340afc1bc27f4",
+    "jain-web d505b6ccf208a36b24ab6f2ad66dab56329ea45d"
+  ],
+  "post_check": false,
+  "post_status": false,
+  "existing_readback": {
+    "name": "jankurai/proof",
+    "conclusion": "failure",
+    "required_check_absent": true
+  },
+  "source_mutation": false,
+  "worktree_created": false,
+  "tag_mutation": false,
+  "deployment_mutation": false
+}

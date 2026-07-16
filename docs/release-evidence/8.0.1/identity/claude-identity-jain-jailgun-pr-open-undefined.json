@@ -1,0 +1,96 @@
+{
+  "schema_version": "jain.claude.identity-pr-open/v1",
+  "claim_token": "claude-identity-4repos-20260716T0455Z",
+  "lane_label": "claude-identity-4repos-undefined",
+  "repo": "jeryu/jain-jailgun",
+  "branch": "release/v8.0.1/jailgun-identity",
+  "old_head_sha": "6c51a10dda78cac94f2355c0bf032665887ba218",
+  "new_head_sha": "6c51a10dda78cac94f2355c0bf032665887ba218",
+  "rebase": "not-needed; merge-base(branch, origin/main) == origin/main (linear single-commit child)",
+  "base_main_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+  "corrective_tag_target": "jain-jailgun-v8.0.1-split.1",
+  "invalid_tag_note": "jain-jailgun-v8.0.1-split.0 exists at 9045da04 (commit self-identifies as 8.0.0); left untouched, never moved",
+  "surface_audit": {
+    "surfaces_checked": [
+      "VERSION",
+      "agent/standard-version.toml",
+      "agent/boundaries.toml [stack].version",
+      "Cargo.toml [package].version + [package.metadata.jain-release].candidate_tag",
+      "Cargo.lock own-package version",
+      "ops/ci/artifact_support.sh",
+      "ops/ci/package-identity.sh",
+      "tests/release_contract.rs",
+      "README.md / AGENTS.md / db/README.md / docs/release.md / contracts"
+    ],
+    "result": "all surfaces agree on 8.0.1 / jain-jailgun-v8.0.1-split.1",
+    "active_8_0_0_hits": 0,
+    "grep_exclusions": ".git, CHANGELOG history, untracked target/ build artifacts (binary-only matches)",
+    "fixes_made": [],
+    "reconcile_commit": "not-needed; pre-existing commit 6c51a10 already consistent"
+  },
+  "gates": {
+    "cargo_fmt_check": "pass (exit 0, no pre-existing failures)",
+    "cargo_test_locked_j8": "pass (7 tests passed across 3 suites, exit 0)",
+    "jankurai": {
+      "version": "1.6.11",
+      "invocation": "just score -> ops/ci/score.sh -> jankurai audit . --full --mode advisory --policy agent/audit-policy.toml",
+      "score": 88,
+      "baseline": 85,
+      "allowed_drop": 0,
+      "floor": 85,
+      "hard_findings": 0,
+      "caps_applied": 0,
+      "soft_findings": 4,
+      "gate_exit": 0,
+      "note": "score 88 >= baseline 85; metadata-only branch did not regress"
+    }
+  },
+  "push": {
+    "result": "up-to-date; origin/release/v8.0.1/jailgun-identity already at 6c51a10dda78cac94f2355c0bf032665887ba218 (materialized by prior attempt in this claimed lane)",
+    "verified_by": "git ls-remote origin"
+  },
+  "pr": {
+    "number": 7,
+    "url": "/jeryu/jain-jailgun/pull/7",
+    "state": "open",
+    "draft": false,
+    "head_sha": "6c51a10dda78cac94f2355c0bf032665887ba218",
+    "base_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+    "title": "chore(release): align Jailgun identity to 8.0.1",
+    "adoption_note": "PR already existed; adopted as canonical because prior evidence docs/release-evidence/8.0.1/jeryu-pr-open-jeryu-jain-jailgun-v801-identity.json binds #7 as opened-and-verified (status pass). No new pr-open was issued.",
+    "duplicate_pr": {
+      "number": 6,
+      "created_at": "2026-07-16T05:01:38Z",
+      "same_head_base": true,
+      "disposition": "left open; flagged to Codex reviewer for close during independent review (pr-close not authorized for this lane)"
+    }
+  },
+  "checks_readback": {
+    "sha": "6c51a10dda78cac94f2355c0bf032665887ba218",
+    "total_count": 1,
+    "runs": [
+      {
+        "name": "jankurai/proof",
+        "status": "completed",
+        "conclusion": "success",
+        "completed_at": "2026-07-16T05:01:17Z"
+      }
+    ],
+    "note": "jain-jailgun/required absent as expected; heavy host-CI intentionally not run (lane occupied)"
+  },
+  "checkout_restored": {
+    "branch": "main",
+    "main_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+    "origin_main_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+    "ff_only_merge": "already up to date",
+    "porcelain_empty": true
+  },
+  "conflict_check": "UPGRADE_CHAT tail + full E2E_testing_chat read; only post-04:50 jailgun mention is Codex 04:59 read-only quality audit of this same claim (non-mutating); no conflicting claim",
+  "excluded_actions": "no approve, merge, tag, protection, authority, manifest, redline, worktree, host-service, or heavy host-CI mutation",
+  "utc": {
+    "custody_check": "2026-07-16T05:03Z",
+    "gates_complete": "2026-07-16T05:05Z",
+    "checkout_restored": "2026-07-16T05:06Z",
+    "receipt_written": "2026-07-16T05:07Z"
+  }
+}

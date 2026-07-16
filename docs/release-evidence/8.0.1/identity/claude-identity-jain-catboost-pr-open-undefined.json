@@ -1,0 +1,42 @@
+{
+  "claim_token": "claude-identity-4repos-undefined (lane posted 2026-07-16T04:55Z as claude-identity-4repos-20260716T0455Z)",
+  "repo": "jeryu/jain-catboost",
+  "status": "blocked",
+  "reason": "Step-1 conflict check hit: UPGRADE_CHAT.md contains a Codex continuation claim ('codex-catboost-v801-identity-20260716', posted after the 04:59Z entry, i.e. after the 04:50Z cutoff) scoped to pushing branch release/v8.0.1/catboost-identity@8ba6b34 and opening the PR on canonical /home/ubuntu/jain-split/jain-catboost. Codex has already executed it: forge branch release/v8.0.1/catboost-identity = 8ba6b347071dfbd04e2fdc7b6cd3440587404e56 and PR #8 (non-draft, open, user codex, created 2026-07-16T05:00:12Z) exist. Per lane-ownership rules this worker stood down without mutating anything.",
+  "observed": {
+    "forge_main": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+    "forge_branch_release_v801_catboost_identity": "8ba6b347071dfbd04e2fdc7b6cd3440587404e56",
+    "pr": {
+      "number": 8,
+      "state": "open",
+      "draft": false,
+      "user": "codex",
+      "created_at": "2026-07-16T05:00:12.660759464Z",
+      "head": "8ba6b347071dfbd04e2fdc7b6cd3440587404e56",
+      "base_main": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "title": "chore(release): align CatBoost identity to 8.0.1"
+    },
+    "audit_defect_recheck_at_head_8ba6b34": {
+      "VERSION": "jain-catboost-v8.0.1-split.1",
+      "agent/standard-version.toml version": "jain-catboost-v8.0.1-split.1",
+      "note": "the reported VERSION=split.2 vs standard-version=split.1 mismatch is NOT present at the pushed head; both surfaces read jain-catboost-v8.0.1-split.1 (read-only git show; full surface audit left to the independent reviewer)"
+    },
+    "canonical_checkout": {
+      "path": "/home/ubuntu/jain-split/jain-catboost",
+      "branch": "release/v8.0.1/catboost-identity",
+      "head": "8ba6b347071dfbd04e2fdc7b6cd3440587404e56",
+      "porcelain_empty": true,
+      "left_untouched": "yes - checkout belongs to the Codex continuation lane; not restored to main by this worker"
+    }
+  },
+  "mutations_by_this_worker": [
+    "this receipt + .sha256 sidecar",
+    "one stand-down entry appended to /home/ubuntu/jain-split/E2E_testing_chat.md"
+  ],
+  "never_done": "no push, PR, approve, merge, tag, protection, authority, checkout, worktree, CI, or host mutation",
+  "utc": {
+    "conflict_detected": "2026-07-16T05:01:12Z",
+    "receipt_written": "2026-07-16T05:03:00Z"
+  },
+  "signed": "Claude worker claude-identity-4repos-undefined"
+}

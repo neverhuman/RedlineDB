@@ -1,0 +1,93 @@
+{
+  "schema_version": "jain.split.identity-pr-open/v1",
+  "claim_token": "claude-identity-4repos-20260716T0455Z",
+  "task_label": "claude-identity-4repos-undefined",
+  "repo": "jeryu/jain-zyal",
+  "canonical_checkout": "/home/ubuntu/jain-split/jain-zyal",
+  "branch": "release/v8.0.1/zyal-identity",
+  "head_sha_before": "f385b20ab613fbc691f985c4d7489133512878b0",
+  "head_sha_after": "f385b20ab613fbc691f985c4d7489133512878b0",
+  "rebase_performed": false,
+  "base_main_sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
+  "merge_base_equals_origin_main": true,
+  "commits_ahead_of_main": 1,
+  "identity_commit": "f385b20ab613fbc691f985c4d7489133512878b0 release: align zyal with Jain v8.0.1",
+  "invalid_tag_never_moved": "jain-zyal-v8.0.1-split.0 -> 5737cb78bd4378ba9c4f85cf13868a7c34b2f288 (commit self-identifies as 8.0.0)",
+  "corrective_tag_target": "jain-zyal-v8.0.1-split.1",
+  "surface_audit": {
+    "surfaces_checked": [
+      "VERSION",
+      "agent/standard-version.toml",
+      "agent/boundaries.toml",
+      "Cargo.toml [package] version + [package.metadata.jain-release] candidate_tag",
+      "Cargo.lock own-package jain-zyal version",
+      "ops/ci/artifact_support.sh",
+      "ops/ci/package-identity.sh",
+      "tests/release_contract.rs",
+      "contracts/zyal-runbook.schema.json",
+      "contracts/generated/zyal-runbook.schema.md",
+      "README.md, AGENTS.md, db/README.md, docs/release.md, contracts/README.md"
+    ],
+    "all_read": "8.0.1 / jain-zyal-v8.0.1-split.1",
+    "residual_8_0_0_active_hits": 0,
+    "residual_8_0_0_exempt_hits": [
+      "CHANGELOG.md:5 (new-entry prose: 'preserving the immutable 8.0.0 history')",
+      "CHANGELOG.md:8 (pre-existing history heading '## jain-zyal-v8.0.0-split.1', present on origin/main)"
+    ]
+  },
+  "fixes_made": [],
+  "reconcile_commit": null,
+  "observations": [
+    "Identity commit also refreshed 3 third-party Cargo.lock pins alongside the own-package flip (2.13.0->2.13.1, syn 2.0.118->2.0.119, 1.0.21->1.0.23); cargo test --locked passes with the committed lock.",
+    "Branch was already present on the forge before this session's push (push returned up-to-date); two earlier open PRs for the same head exist: #6 (05:01:36Z) and #7 (05:02:52Z), created by another session. Left untouched; owner/Codex to pick canonical PR and close duplicates.",
+    "This session's pr-open POST timed out client-side (curl 28 after 15s) but landed server-side as PR #8; verified via jeryu-local pr-list before any retry, so no duplicate was created by this lane."
+  ],
+  "gates": {
+    "cargo_fmt_check": {"exit_code": 0, "pre_existing_failures": "none"},
+    "cargo_test_locked_j8": {"exit_code": 0, "result": "9 passed (3 suites)"},
+    "jankurai": {
+      "version": "1.6.11",
+      "invocation": "bash ops/ci/score.sh (jankurai audit . --full --mode advisory --policy agent/audit-policy.toml)",
+      "score": 88,
+      "baseline": 85,
+      "hard_findings": 0,
+      "caps_applied": 0,
+      "soft_findings": 4,
+      "gate_exit_code": 0
+    }
+  },
+  "pr": {
+    "number": 8,
+    "url": "/jeryu/jain-zyal/pull/8",
+    "title": "release: align zyal with Jain v8.0.1",
+    "head": "f385b20ab613fbc691f985c4d7489133512878b0",
+    "base": "main",
+    "base_sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
+    "draft": false,
+    "state": "open",
+    "created_at": "2026-07-16T05:05:06.379813361Z",
+    "duplicate_open_prs_same_head_other_session": [6, 7]
+  },
+  "checks_readback": {
+    "sha": "f385b20ab613fbc691f985c4d7489133512878b0",
+    "total_count": 1,
+    "runs": [
+      {"name": "jankurai/proof", "status": "completed", "conclusion": "success", "completed_at": "2026-07-16T05:01:09.993587872Z"}
+    ],
+    "required_check_absent_as_expected": true,
+    "heavy_ci_not_run": true
+  },
+  "checkout_restored": {
+    "branch": "main",
+    "main_sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
+    "equals_origin_main": true,
+    "porcelain_bytes": 0
+  },
+  "never_done": ["approve", "merge", "tag", "protection", "authority", "heavy-host-CI", "worktree", "clone"],
+  "utc": {
+    "custody_check": "2026-07-16T05:03Z (approx, session step order)",
+    "pr_open_request": "2026-07-16T05:04:49Z (receipt timestamp_unix 1784178289)",
+    "pr_created": "2026-07-16T05:05:06Z",
+    "receipt_written": "2026-07-16T05:06:43Z"
+  }
+}

@@ -1,5 +1,5 @@
 {
-  "error": "branch protection readback does not satisfy the immutable-main policy",
+  "action": "verified",
   "mode": "read-only",
   "operation": "jeryu-local protection-readback",
   "repository": "jeryu/jain-agent",
@@ -40,6 +40,6 @@
     "url": "/repos/jeryu/jain-agent/branches/main/protection"
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
-  "status": "fail",
-  "timestamp_unix": 1784178015
+  "status": "pass",
+  "timestamp_unix": 1784178386
 }

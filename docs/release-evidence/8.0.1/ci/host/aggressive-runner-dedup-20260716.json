@@ -1,0 +1,60 @@
+{
+  "schema": "jain.ci-runner-dedup/v1",
+  "audited_at_utc": "2026-07-16T05:07:00Z",
+  "actor": "/root",
+  "owner_authorization": "Terminate redundant or stale work when helpful, while preserving safety and proof requirements.",
+  "decision": "PASS_WITH_ONE_SANDBOX_CUSTODY_FOLLOWUP",
+  "terminated": [
+    {
+      "process_group": 482927,
+      "repository": "jain-web",
+      "head": "f235a471ff716c3d8bd5577f3f241d2ce07a09ed",
+      "reason": "superseded by the current Web T0 keeper head",
+      "signal": "SIGTERM",
+      "process_readback": "absent",
+      "sandbox_readback": "/tmp/split-host-ci.9cFgEg remains and requires standalone-sandbox custody cleanup"
+    },
+    {
+      "process_group": 3609457,
+      "repository": "jain-core",
+      "head": "09823c4012d228c8d73df625329340afc1bc27f4",
+      "reason": "independent review withheld: transport PR contains unrelated divergent engine work and must be re-cut",
+      "signal": "SIGTERM",
+      "process_readback": "absent",
+      "sandbox_readback": "/tmp/split-host-ci.3eht1K absent"
+    }
+  ],
+  "completed_before_signal": [
+    {
+      "process_group": 3539681,
+      "watcher_process_group": 3539682,
+      "repository": "jain-web",
+      "head": "d505b6ccf208a36b24ab6f2ad66dab56329ea45d",
+      "reason": "superseded by the current Web control keeper head",
+      "signal_result": "ESRCH; process groups had exited between pre-readback and signal",
+      "process_readback": "absent"
+    }
+  ],
+  "preserved": [
+    {
+      "process_group": 108648,
+      "repository": "jain-core",
+      "head": "e446c4076e29651ec787d2828ca4ad4f0ac8d071",
+      "reason": "current Core PR head"
+    },
+    {
+      "process_group": 219050,
+      "repository": "jain-web",
+      "head": "b9f316048d4df5dd2c71bb3ec9f588bf0d2c196c",
+      "reason": "new current Web head started after stale-runner retirement"
+    }
+  ],
+  "safety": {
+    "sigkill_used": false,
+    "service_or_container_stopped": false,
+    "source_or_checkout_mutated": false,
+    "forge_or_check_mutated": false,
+    "worktree_created_or_removed": false,
+    "tag_or_authority_mutated": false
+  }
+}

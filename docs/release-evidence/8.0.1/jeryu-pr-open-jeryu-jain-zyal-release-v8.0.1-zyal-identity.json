@@ -1,0 +1,21 @@
+{
+  "error": "local Jeryu request failed: curl: (28) Operation timed out after 15001 milliseconds with 0 bytes received",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "repository": "jeryu/jain-zyal",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "release/v8.0.1/zyal-identity",
+      "title": "release: align zyal with Jain v8.0.1"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-zyal/pulls"
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "fail",
+  "timestamp_unix": 1784178289
+}

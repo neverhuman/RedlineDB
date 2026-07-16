@@ -1,0 +1,300 @@
+{
+  "schema_version": "jain.authority-state-audit/v1",
+  "generated_at_utc": "2026-07-16T05:01:41Z",
+  "status": "blocked",
+  "mode": "strictly-read-only",
+  "claim": "codex-mcp-v801-authority-readonly-audit-20260716T0454Z",
+  "owner_requirement": {
+    "release": "8.0.1",
+    "scope": "all active release surfaces",
+    "source": "UPGRADE_CHAT.md owner ruling at 2026-07-16 05:40 UTC and owner decision at 04:07 UTC",
+    "historical_policy": "Existing immutable 8.0.0 tags and historical receipts remain preserved, but no active 8.0.0 tag, manifest, source identity, dependency pin, image, or deployment surface may be accepted as the 8.0.1 release."
+  },
+  "control_plane_remote_identity": {
+    "manifest_declared_canonical_slug": "jeryu/jain-split-ops",
+    "manifest_declared_canonical_remote": "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
+    "canonical_main": "88a673c6c0e829721eebf8265036c1b18f2ef139",
+    "canonical_protection_readback": {
+      "required_approvals": 1,
+      "required_contexts": [
+        "jain-split-ops/required"
+      ],
+      "strict": true,
+      "linear_history": true,
+      "enforce_admins": true,
+      "force_push": false,
+      "deletion": false
+    },
+    "checkout_origin": "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
+    "legacy_mirror_slug": "veox/jain-split-ops",
+    "legacy_mirror_remote": "http://127.0.0.1:8787/git/veox/jain-split-ops.git",
+    "legacy_mirror_main": "beb0c1957a77a9c33eeb44d03b27c07def2daa47",
+    "legacy_mirror_relationship": "The legacy veox main is the merge base; the held branch is 42 commits ahead and 0 behind it, while canonical protected jeryu main has 12 additional divergent commits.",
+    "decision": "Use jeryu/jain-split-ops for protected authority lifecycle. Report veox only as a stale legacy mirror; never treat beb0c195 as current canonical main."
+  },
+  "canonical_control_plane": {
+    "path": "/home/ubuntu/jain-split/jain-split-ops",
+    "branch": "claude/v8-release-fixes-20260714",
+    "head": "7eeff1ceb6876c0fe83b6fadb3d013580ecc7f4c",
+    "tree": "2838ff0402bc4516a60e90c7ffca30102f428406",
+    "forge_protected_main": "88a673c6c0e829721eebf8265036c1b18f2ef139",
+    "merge_base_with_forge_main": "beb0c1957a77a9c33eeb44d03b27c07def2daa47",
+    "ahead_of_forge_main": 42,
+    "behind_forge_main": 12,
+    "tracked_changed_before_this_receipt": 26,
+    "staged_paths": 0,
+    "unstaged_paths": 26,
+    "untracked_files_before_this_receipt": 119,
+    "unstaged_binary_diff_sha256": "395a78fc17bbad28113e948bde5d571052f80bbc8a48e146c7c9f77a869c70f8",
+    "staged_binary_diff_sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+    "porcelain_sha256_before_this_receipt": "c0cbc56dce56670e2eda57d8b1e6e7edfa1fd578eb0c771726c654cdd0a2ba0c",
+    "accepted_authority": false,
+    "reason": "The checkout is a heavily dirty divergent feature branch held by another owner; none of its authority bytes are on protected main."
+  },
+  "protected_main_identity": {
+    "commit": "88a673c6c0e829721eebf8265036c1b18f2ef139",
+    "release_version": "8.0.0",
+    "VERSION": "jain-split-ops-v8.0.0-split.0",
+    "splitctl_RELEASE_VERSION": "8.0.0",
+    "active_8_0_0_occurrence_counts": {
+      "VERSION": 1,
+      "agent/standard-version.toml": 2,
+      "ops/split/cutover.sh": 3,
+      "ops/split/register-family.sh": 1,
+      "repos.manifest.toml": 29,
+      "tools/splitctl/src/main.rs": 18,
+      "total": 54
+    },
+    "accepted_as_8_0_1": false
+  },
+  "dirty_authority_manifest": {
+    "path": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+    "sha256": "dbec989b1b5d2b04a26ad920f6e5946c8233c53db98eea9938860a5d962fc977",
+    "release_version": "8.0.1",
+    "family_source_version": "8.0.0",
+    "family_source_tag_series": "v8.0.0-split.N",
+    "dependency_tag_suffix": "v8.0.1-split.0",
+    "status": "candidate",
+    "formal_ga": false,
+    "sagemaker": "N/A",
+    "validation": "pass for the dirty working-tree schema and current derived bytes",
+    "validation_command_observation": "splitctl validate-manifest --check-paths --check-derived reported 25 family repositories, 1 infrastructure repository, SHA dbec989b...",
+    "accepted_as_owner_all_8_0_1": false,
+    "reason": "The active source lineage is deliberately mixed at 8.0.0, contradicting the explicit match-all-surfaces 8.0.1 ruling, and the manifest is not protected-main authority."
+  },
+  "fail_closed_metadata": {
+    "release_status": "candidate",
+    "formal_ga": false,
+    "production_applied": false,
+    "atomicsoul_push": false,
+    "sagemaker": "N/A",
+    "rollback_target": "7.0.6",
+    "status": "preserved",
+    "source": "dirty authority plus the 8.0.1 dry-plan receipt"
+  },
+  "derived_state": {
+    "portal_manifest": {
+      "path": "/home/ubuntu/jain-split/jain/repos.manifest.toml",
+      "sha256": "bfa30fde78e37ed709ab0dd35458bc083dc9456697f755babb072cdb355383c7",
+      "canonical_manifest_sha256": "dbec989b1b5d2b04a26ad920f6e5946c8233c53db98eea9938860a5d962fc977",
+      "matches_dirty_authority": true,
+      "protected_acceptance": false
+    },
+    "deploy_manifest": {
+      "path": "/home/ubuntu/jain-split/jain-deploy/repos.manifest.toml",
+      "sha256": "bfa30fde78e37ed709ab0dd35458bc083dc9456697f755babb072cdb355383c7",
+      "canonical_manifest_sha256": "dbec989b1b5d2b04a26ad920f6e5946c8233c53db98eea9938860a5d962fc977",
+      "matches_dirty_authority": true,
+      "protected_acceptance": false
+    },
+    "portal_family_lock": {
+      "path": "/home/ubuntu/jain-split/jain/family.lock",
+      "sha256": "6d6b64fbaab22f36754c7b01e424dc8f9a31e7b07dfec5f6bfe8abd750e19fdf",
+      "source_manifest_sha256": "dbec989b1b5d2b04a26ad920f6e5946c8233c53db98eea9938860a5d962fc977",
+      "pending_values": 52,
+      "pending_pairs": 26,
+      "release_eligible": false
+    },
+    "deploy_family_lock": {
+      "path": "/home/ubuntu/jain-split/jain-deploy/jain-split.lock.toml",
+      "sha256": "704f111d35ecb760e85b066e84d04f497735b68be2f4b551da15a017b9eba111",
+      "source_manifest_sha256": "c7355cf33d01aae437ca7bf7650e6bb1d3cee212c9cca7bb2b82df77411e48a7",
+      "current_authority_sha256": "dbec989b1b5d2b04a26ad920f6e5946c8233c53db98eea9938860a5d962fc977",
+      "source_hash_matches_current": false,
+      "pending_commits": 27,
+      "redline_engine_tag": "redline-core-v4.1.0-jain.1",
+      "release_eligible": false
+    },
+    "root_mirror": {
+      "path": "/home/ubuntu/jain-split/repos.manifest.toml",
+      "sha256": "08a5e2c499fdf80cd75080b6825c5420c929bebce4e1c077e9a583fa943cc750",
+      "authority": false,
+      "family_source_version": "8.0.0",
+      "classification": "non-authoritative mirror; never use it to tag or bind"
+    }
+  },
+  "active_non_historical_8_0_0_surfaces": {
+    "source_lineage_occurrences": {
+      "total": 15,
+      "surfaces": [
+        "jain-split-ops/repos.manifest.toml:3-4",
+        "jain/repos.manifest.toml:5-6",
+        "jain-deploy/repos.manifest.toml:5-6",
+        "jain-split-ops/docs/release-evidence/8.0.1/authority/version-map.json:8-9",
+        "jain-split-ops/tools/splitctl/src/main.rs:14-15",
+        "jain-split-ops/tools/splitctl/src/release_candidate.rs:14-15",
+        "jain-split-ops/tools/splitctl/src/release_candidate.rs:547",
+        "jain-split-ops/tools/splitctl/src/release_candidate.rs:2283-2284"
+      ],
+      "effect": "Current dirty validators require the mixed 8.0.0 source identity instead of enforcing the owner's all-8.0.1 decision."
+    },
+    "dependency_pin_occurrences": {
+      "cargo_lock_total": 57,
+      "cargo_lock_files": {
+        "jain-core/Cargo.lock": 9,
+        "jain-battle-gpu/Cargo.lock": 1,
+        "jain-agent/Cargo.lock": 1,
+        "jain-cli/Cargo.lock": 12,
+        "jain-jnoccio/Cargo.lock": 1,
+        "jain-report/Cargo.lock": 4,
+        "jain-deploy/Cargo.lock": 12,
+        "jain-tui/Cargo.lock": 4,
+        "jain-web/Cargo.lock": 13
+      },
+      "ci_lock_assertion_total": 9,
+      "ci_lock_assertion_files": {
+        "jain-core/ops/ci/dependency-lock.sh": 8,
+        "jain-battle-gpu/ops/ci/dependency-lock.sh": 1
+      },
+      "total": 66,
+      "effect": "Active dependency manifests point at 8.0.1 tags, but consumed lockfiles and fail-closed lock assertions still bind 8.0.0 tags/commits. These are resolver inputs, not historical documentation."
+    },
+    "active_stale_docs_and_policy": [
+      "jain-split-ops/.jankurai/repo-score.json and repo-score.md still identify jain-split-ops-v8.0.0-split.0",
+      "jain-split-ops/docs/WORK_QUEUE.md still dispatches a v8.0.0 final push",
+      "jain-split-ops/docs/release-runbook.md is still the active 8.0.0 release-candidate runbook",
+      "jain-split-ops/docs/testing.md still describes the 8.0.0 candidate"
+    ],
+    "explicitly_not_counted_as_active": [
+      "immutable historical tags and receipts under docs/release-evidence/8.0.0",
+      "archived chats and evidence patches",
+      "changelog history",
+      "generic test-only example-v8.0.0 tag fixtures",
+      "the separate Redline product version 4.1.0"
+    ]
+  },
+  "pending_authority_identities": {
+    "pair_count": 27,
+    "pending_value_count": 54,
+    "all_pairs_complete": true,
+    "identities": [
+      "jain-split-ops@jain-split-ops-v8.0.1-split.0",
+      "jain-smartcluster@jain-smartcluster-v8.0.1-split.0",
+      "jain@jain-v8.0.1-split.0",
+      "jain-docs@jain-docs-v8.0.1-split.0",
+      "jain-domain@jain-domain-v8.0.1-split.0",
+      "jain-math@jain-math-v8.0.1-split.0",
+      "jain-contracts@jain-contracts-v8.0.1-split.1",
+      "jain-catboost@jain-catboost-v8.0.1-split.2",
+      "jain-xgboost@jain-xgboost-v8.0.1-split.0",
+      "jain-lightgbm@jain-lightgbm-v8.0.1-split.0",
+      "jain-jable@jain-jable-v8.0.1-split.0",
+      "jain-battle-gpu@jain-battle-gpu-v8.0.1-split.1",
+      "jain-starforge@jain-starforge-v8.0.1-split.2",
+      "jain-core@jain-core-v8.0.1-split.0",
+      "jain-llm@jain-llm-v8.0.1-split.0",
+      "jain-agent@jain-agent-v8.0.1-split.0",
+      "jain-jnoccio@jain-jnoccio-v8.0.1-split.0",
+      "jain-zyal@jain-zyal-v8.0.1-split.0",
+      "jain-jailgun@jain-jailgun-v8.0.1-split.0",
+      "jain-research@jain-research-v8.0.1-split.0",
+      "jain-report@jain-report-v8.0.1-split.0",
+      "jain-tui@jain-tui-v8.0.1-split.0",
+      "jain-cli@jain-cli-v8.0.1-split.0",
+      "jain-web@jain-web-v8.0.1-split.0",
+      "jain-model-zoo@jain-model-zoo-v8.0.1-split.0",
+      "jain-ops@jain-ops-v8.0.1-split.0",
+      "jain-deploy@jain-deploy-v8.0.1-split.0"
+    ],
+    "effect": "No current authority row is tag-bind complete; family locks are intentionally fail-closed and release-ineligible."
+  },
+  "model_zoo": {
+    "forge_main": "0e7dd974f01fa76905d392e92fcee23089ba5bd3",
+    "tree": "744e4b3da7e08e1f04d00a39742bd70f1944916d",
+    "identity": "jain-model-zoo-v8.0.1-split.1",
+    "release_checksum_sha256": "f60eba58380464a9dada6fdfcf02600e0665b16ce7f7313b7b9c0c9fa5215f5c",
+    "jankurai/proof": "success",
+    "jain-model-zoo/required": "success",
+    "existing_split_0_commit": "fd00a3df96d9769e0282582aba0c3579e568db6c",
+    "split_1_exists": false,
+    "dirty_authority_tag": "jain-model-zoo-v8.0.1-split.0",
+    "dirty_authority_commit": "PENDING",
+    "dirty_authority_checksum": "PENDING",
+    "tag_gate": "blocked because governed immutable-tag requires the canonical manifest to declare split.1 plus the exact commit/checksum first",
+    "accepted": false
+  },
+  "plan_and_preflight": {
+    "dry_plan": {
+      "path": "jain-split-ops/docs/release-evidence/8.0.1/orchestrator/release-candidate-plan.json",
+      "sha256": "b791877af4e88a45c04a4acfd1396fb95af8231a27ce264c092b45c676340160",
+      "status": "planned",
+      "mode": "plan",
+      "manifest_sha256": "dbec989b1b5d2b04a26ad920f6e5946c8233c53db98eea9938860a5d962fc977",
+      "repository_count": 27,
+      "failed_steps": 0,
+      "blocked_steps": 0,
+      "attempted_steps": 0,
+      "acceptance_meaning": "Syntax/dependency graph planning passed only. No release step, check, tag, bind, or deployment was attempted; planned is not green release acceptance."
+    },
+    "preflight": {
+      "path": "jain-split-ops/docs/release-evidence/8.0.1/orchestrator/release-preflight-20260716.json",
+      "sha256": "55c8a9a6bf9458ce99d89ce3e622ae763d02d43e4e32256bc21a34ee337a6783",
+      "status": "fail",
+      "repositories_failed": 26,
+      "repositories_passed": 0,
+      "managed_family_failures": 65,
+      "infrastructure_failures": 3,
+      "external_dependency_failures": 1,
+      "external_failure": "Redline proof lock is not cutover_eligible",
+      "managed_release_worktrees_in_receipt": 32,
+      "staleness_note": "This point-in-time receipt predates later worktree cleanup and cannot prove current zero-worktree state, but it remains the newest preflight and is red."
+    },
+    "release_candidate_apply_receipt_present": false,
+    "release_snapshot_receipt_present": false,
+    "release_acceptance": false
+  },
+  "other_active_pin_defects": [
+    "jain-web/crates/feat-web/Cargo.toml points SmartCluster at the jeryu owner, while canonical infrastructure ownership is jain-split/jain-smartcluster.",
+    "jain-deploy/jain-split.lock.toml is bound to stale authority SHA c7355cf3 and Redline jain.1 rather than the current post-jain.4 proof target.",
+    "The single default dependency_tag_suffix v8.0.1-split.0 cannot substitute for repository-specific corrective revisions already declared as split.1 or split.2."
+  ],
+  "minimal_protected_sequence": {
+    "model_zoo_tag_minimum": [
+      "Obtain a stopped-head handoff from the current authority owner. Preserve the useful dirty branch, but do not merge its 42-ahead/12-behind history or dirty worktree wholesale.",
+      "PR OPS-SEMANTICS: from exact protected jain-split-ops main, make splitctl consume one configured 8.0.1 release/source identity and evidence root instead of hardcoding the mixed 8.0.0 source lineage. Update its focused tests only; keep candidate/formal_ga=false/SageMaker N/A/AtomicSoul push disabled/rollback 7.0.6. Run exact-head required checks, independent approval, protected fast-forward merge.",
+      "PR OPS-AUTHORITY-MZ: from the new protected main, update canonical authority to all-8.0.1 active lineage and prebind Model Zoo only to jain-model-zoo-v8.0.1-split.1, commit 0e7dd974..., checksum f60eba58.... Keep every unrelated incomplete repository as a paired PENDING row; do not invent binds. Validate exact proposed derived bytes and obtain exact-head CI plus independent approval.",
+      "PR PORTAL-DERIVED and PR DEPLOY-DERIVED: generate, never hand-edit, each derived manifest from the exact OPS-AUTHORITY-MZ bytes/hash. Update portal family.lock and deploy jain-split.lock only from the same authority; the deploy lock must consume the current verified Redline lock, not jain.1. Review and protected-merge these small generated PRs in a frozen linked train with the authority PR so no release action observes mixed hashes.",
+      "After protected readback proves authority and both derived manifests agree, invoke governed immutable-tag for Model Zoo split.1, read back the local-Jeryu tag at exact 0e7dd974 and its 8.0.1 VERSION/content, and record the receipt. Never move split.0 and never raw-tag."
+    ],
+    "full_8_0_1_authority_acceptance_after_model_zoo": [
+      "Complete fresh post-jain.4 Redline family CI plus both Jain and Jeryu consumer evidence, run proof-refresh with no waiver, require cutover_eligible=true and byte-identical locks, then pin that exact Redline identity through protection.",
+      "For each dependency wave, protected-merge exact 8.0.1 repository identity/pin/lock PRs, regenerate the nine stale Cargo.lock files and nine CI pin assertions, cut only the next unused immutable 8.0.1 tag, read it back, and replace that repository's paired PENDING authority fields through a bounded protected authority PR.",
+      "Regenerate and protected-merge portal/deploy derived manifests and locks from every accepted authority SHA. Reject the stale root mirror as input.",
+      "Reach zero PENDING values, clean forge-equal protected main in every canonical checkout, and zero accepted auxiliary worktrees/scratch dependencies.",
+      "Run fresh release-preflight, release-candidate, and release-snapshot on final protected/tagged SHAs. Acceptance requires all repositories pass, Redline cutover eligible, all checks/evidence current, and no merely-planned receipt substituted for executed proof."
+    ]
+  },
+  "actions_not_performed": [
+    "authority or source edit",
+    "index mutation",
+    "checkout switch, stash, reset, or cleanup",
+    "commit",
+    "push",
+    "PR creation or mutation",
+    "CI execution",
+    "proof-refresh",
+    "tag",
+    "deployment",
+    "worktree action"
+  ]
+}
