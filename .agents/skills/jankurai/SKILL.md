@@ -12,4 +12,4 @@ When a user provides a paper, release, implementation, or handoff plan in the co
 For explicit MASTER_PLAN/phase work only, read `.jankurai/MASTER_PLAN.md`, then `tips/phases/00-phase-index.md`, then the active `tips/phases/*.md` phase file. Log explicit phase work in `tips/phases/logs/`.
 For explicit MASTER_PLAN/phase planning only, follow `.jankurai/MASTER_PLAN.md#detailed-planner-protocol`.
 Run the proof lane in `.jankurai/test-map.json` for changed paths.
-If jankurai is installed, run `jankurai update --client-start --quiet` before work; do not apply updates unless the user asks.
+Use only `bash ops/ci/run-jankurai.sh ...`; governed Jankurai 1.6.11 is verified fail-closed and client self-update is forbidden.

@@ -70,6 +70,12 @@ jobs:
         run: |
           curl -sSL https://github.com/anchore/syft/releases/download/v1.10.0/syft_1.10.0_linux_amd64.tar.gz \
             | tar -xz -C /usr/local/bin syft
+      - name: Verify governed Jankurai identity
+        run: |
+          set -euo pipefail
+          source ops/ci/lib.sh
+          mkdir -p .jankurai
+          ci_require_jankurai_logged .jankurai/jankurai-identity.log
       - name: Prepare accepted baseline
         run: |
           set -euo pipefail
@@ -92,25 +98,19 @@ jobs:
             exit 1
           fi
           cp .jankurai/accepted-baseline.json target/jankurai/accepted-baseline.json
-      - name: Install jankurai
-        run: |
-          set -euo pipefail
-          source ops/ci/lib.sh
-          mkdir -p .jankurai
-          ci_install_jankurai_logged .jankurai/jankurai-install.log
       - name: Check audit policy mirror
         run: bash scripts/check_audit_policy_mirror.sh
       - name: Tool-adoption command index
         run: |
           printf '%s\n' \
-            'jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml' \
-            'jankurai proofbind verify . --changed-from origin/main' \
-            'jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json' \
+            'bash ops/ci/run-jankurai.sh audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml' \
+            'bash ops/ci/run-jankurai.sh proofbind verify . --changed-from origin/main' \
+            'bash ops/ci/run-jankurai.sh proofmark rust . --obligations target/jankurai/proofbind/obligations.json' \
             'cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md' \
-            'jankurai security run . --out target/jankurai/security/evidence.json' \
+            'bash ops/ci/run-jankurai.sh security run . --out target/jankurai/security/evidence.json' \
             'cargo test -p jankurai --test language_bad_behavior' \
-            'jankurai rust witness build .'
-      - run: jankurai --version
+            'bash ops/ci/run-jankurai.sh rust witness build .'
+      - run: bash ops/ci/run-jankurai.sh --version
       - name: Proofbind verify
         run: |
           set -euo pipefail
@@ -118,15 +118,15 @@ jobs:
           while IFS= read -r -d '' path; do
             changed+=(--changed "$path")
           done < <(git diff --name-only -z --diff-filter=ACMRT origin/main...HEAD --)
-          jankurai proofbind verify . "${changed[@]}"
+          bash ops/ci/run-jankurai.sh proofbind verify . "${changed[@]}"
       - name: Proofmark rust
-        run: jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
+        run: bash ops/ci/run-jankurai.sh proofmark rust . --obligations target/jankurai/proofbind/obligations.json
       - name: Rust witness build
-        run: jankurai rust witness build .
+        run: bash ops/ci/run-jankurai.sh rust witness build .
       - name: Security lane
-        run: jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
+        run: bash ops/ci/run-jankurai.sh security run . --strict --profile ci --out target/jankurai/security/evidence.json
       - name: Copy-code audit
-        run: jankurai copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
+        run: bash ops/ci/run-jankurai.sh copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
       - name: Language bad-behavior tests
         run: |
           set -euo pipefail
@@ -161,8 +161,8 @@ jobs:
         env:
           BASE_REF: origin/main
         run: bash ops/ci/jankurai-staged-gate.sh
-      - name: jankurai audit
-        run: jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --sarif target/jankurai/jankurai.sarif --github-step-summary target/jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl --policy agent/audit-policy.toml
+      - name: Governed Jankurai audit
+        run: bash ops/ci/run-jankurai.sh audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --sarif target/jankurai/jankurai.sarif --github-step-summary target/jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl --policy agent/audit-policy.toml
       - name: Filter generated-zone SARIF findings
         if: hashFiles('target/jankurai/jankurai.sarif') != ''
         run: bash ops/ci/filter-generated-sarif.sh target/jankurai/jankurai.sarif
@@ -210,7 +210,7 @@ jobs:
             .jankurai/migration-report.json
             .jankurai/language-bad-behavior.log
             target/jankurai/language-bad-behavior.log
-            .jankurai/jankurai-install.log
+            .jankurai/jankurai-identity.log
 
   security:
     # Hard gate end-to-end. Mirrors the local `just security` recipe so

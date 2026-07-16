@@ -24,8 +24,8 @@ tool="${1:?tool id required: audit-ci|proof-routing|security|contract-drift|auth
 LOG_DIR="target/jankurai"
 mkdir -p "$LOG_DIR/${tool}" "$LOG_DIR/security" .jankurai
 
-# Install the pinned jankurai release binary. Failure is a real lane failure.
-ci_install_jankurai_logged "$LOG_DIR/${tool}/install.log"
+# Verify the governed Jankurai identity. Failure is a real lane failure.
+ci_require_jankurai_logged "$LOG_DIR/${tool}/identity.log"
 
 # Prepare accepted baseline (used by `--mode ratchet`).
 if [[ -f .jankurai/baselines/main.repo-score.json ]]; then
@@ -35,8 +35,8 @@ fi
 # Execute the per-tool canonical ci_command. We hold the EXACT string
 # verbatim because the tool-adoption auditor matches each tool's
 # `ci_command` field against the workflow / script source.
-audit_cmd="jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml"
-sec_cmd="jankurai security run . --out target/jankurai/security/evidence.json"
+audit_cmd="run_governed_jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml"
+sec_cmd="run_governed_jankurai security run . --out target/jankurai/security/evidence.json"
 
 audit_ratchet_acceptable() {
     jq -e '

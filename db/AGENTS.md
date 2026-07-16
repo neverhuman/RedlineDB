@@ -7,4 +7,4 @@ When a user provides a paper, release, implementation, or handoff plan in the co
 Owns `db/`.
 Forbidden: application logic, transport routing, and UI concerns.
 Proof lane: `migration / constraint tests`.
-If jankurai is installed, run `jankurai update --client-start --quiet` before work; do not apply updates unless the user asks.
+Use only `bash ops/ci/run-jankurai.sh ...`; governed Jankurai 1.6.11 is verified fail-closed and client self-update is forbidden.

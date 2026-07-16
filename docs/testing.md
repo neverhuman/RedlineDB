@@ -7,6 +7,18 @@ records the budgets/kill-switches that bound the long-running ones,
 and points at the structured error surface that produces machine-
 readable repair receipts.
 
+## Governed Jankurai 1.6.11
+
+Every active Jankurai command routes through `bash ops/ci/run-jankurai.sh`.
+The verifier accepts only `/home/ubuntu/.jeryu/bin/jankurai` with version
+`jankurai 1.6.11`, binary SHA-256
+`fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e`,
+and a content-addressed production receipt binding local-forge tag
+`v1.6.11-deadlang-precision-split.1` to commit
+`dface7397fe24d46b0b1885ddd5782c34edbff49`. There is no PATH, environment,
+or per-repository install fallback. Predecessor reports are historical only;
+the active baseline remains absent until governed 1.6.11 regenerates it.
+
 ## Proof-lane index
 
 | Lane                                 | Proves                                                                                                |
@@ -60,7 +72,7 @@ readable repair receipts.
 | `release-binary-smoke`               | Builds and verifies the pinned RedlineDB `v2.0.6` Linux release package, then runs a CLI smoke query. |
 | `release`                            | `cargo build --workspace --release --locked`.                                                         |
 | `jankurai-tools`                     | Local mirror for every `.github/workflows/jankurai-tools.yml` matrix job. Run with `scripts/ci-local.sh jankurai-tools`. |
-| `pr-gate`                            | Local mirror for PR branch freshness plus `jankurai staged-gate` against `origin/main`. Run with `scripts/ci-local.sh pr-gate`. |
+| `pr-gate`                            | Local mirror for PR branch freshness plus `bash ops/ci/jankurai-staged-gate.sh` against `origin/main`. Run with `scripts/ci-local.sh pr-gate`. |
 
 Lane definitions: `.jankurai/proof-lanes.toml`. To rerun a lane:
 

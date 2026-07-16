@@ -60,7 +60,7 @@ fn release_security_surfaces_have_no_active_soft_gate() {
     let workflow = read(".github/workflows/jankurai.yml");
     assert!(workflow.contains("cargo install cargo-deny --locked --version 0.19.8"));
     assert!(workflow.contains(
-        "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json"
+        "bash ops/ci/run-jankurai.sh audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json"
     ));
     assert!(!workflow.contains("cargo-deny --locked --version 0.18.0"));
 

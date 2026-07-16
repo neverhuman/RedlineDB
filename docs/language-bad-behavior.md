@@ -1,6 +1,6 @@
 # Language Bad Behavior — Detector Terms
 
-The jankurai audit greps product code for a small set of terms that
+The governed Jankurai audit greps product code for a small set of terms that
 historically signal future-hostile drift: code that is half-deleted,
 unowned, or pretending to be something it is not. This doc enumerates
 the terms, explains what each one means, and records the local
@@ -59,7 +59,7 @@ repair plan.
 ## Rerunning the detector
 
 ```
-jankurai audit . --policy agent/audit-policy.toml --mode advisory \
+bash ops/ci/run-jankurai.sh audit . --policy agent/audit-policy.toml --mode advisory \
   --json .jankurai/repo-score.json --md .jankurai/repo-score.md
 ```
 

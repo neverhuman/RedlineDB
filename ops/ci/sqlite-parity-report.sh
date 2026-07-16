@@ -44,11 +44,8 @@ report_paths=(
 )
 
 ensure_jankurai() {
-  if command -v jankurai >/dev/null 2>&1; then
-    return 0
-  fi
   mkdir -p .jankurai/sqlite-parity-report
-  ci_install_jankurai_logged .jankurai/sqlite-parity-report/install.log
+  ci_require_jankurai_logged .jankurai/sqlite-parity-report/identity.log
 }
 
 ensure_sqlite_parity_reference() {

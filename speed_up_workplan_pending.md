@@ -214,8 +214,8 @@ Verification:
 - `cargo test -p redlinedb-sql --test differential_lab diff_subquery_matrix --quiet --locked`
 - `cargo test -p redlinedb-sql --test smoke_select --quiet --locked`
 - `cargo check -p redlinedb-sql --quiet --locked`
-- `jankurai audit-file . --path crates/sql/src/planner/helpers.rs --mode save-gate`
-- `jankurai audit-file . --path crates/sql/tests/differential_lab.rs --mode save-gate`
+- `bash ops/ci/run-jankurai.sh audit-file . --path crates/sql/src/planner/helpers.rs --mode save-gate`
+- `bash ops/ci/run-jankurai.sh audit-file . --path crates/sql/tests/differential_lab.rs --mode save-gate`
 - `cargo build -p redlinedb-cli --release --locked`
 - Direct batch replay of the official correlated-subquery shape on `target/release/redlinedb`: outputs `1|one|101`, `2|two|200`, `3|three|NULL`.
 - Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `8` remaining failures out of `2445`; `10456` passed with matching stdout hash.
@@ -270,7 +270,7 @@ Verification:
 - `cargo test -p redlinedb-sql --test parity_attach --quiet --locked`
 - `cargo check -p redlinedb-sql --quiet --locked`
 - `cargo build -p redlinedb-cli --release --locked`
-- `jankurai audit-file` save-gates on `crates/sql/src/statement.rs`, `crates/sql/src/parser/templates.rs`, `crates/sql/src/exec/mod.rs`, `crates/sql/src/planner.rs`, and `crates/sql/tests/parity_attach.rs`
+- `bash ops/ci/run-jankurai.sh audit-file` save-gates on `crates/sql/src/statement.rs`, `crates/sql/src/parser/templates.rs`, `crates/sql/src/exec/mod.rs`, `crates/sql/src/planner.rs`, and `crates/sql/tests/parity_attach.rs`
 - Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `5` remaining failures out of `2445`; `10379` passed with matching stdout and stderr hashes.
 - Raw result: `target/redline-testing/attach-insert-select-v2/sqlite_parity.raw.jsonl`, sha256 `b890eddb15f50bfb1f1ff1b19140ca512fba2b04fbfe9f9370b93442d759e0cb`
 
@@ -294,7 +294,7 @@ Verification:
 - `cargo check -p redlinedb-sql --quiet --locked`
 - `cargo build -p redlinedb-cli --release --locked`
 - `just fast`
-- `jankurai audit-file` save-gates on all touched source/test files
+- `bash ops/ci/run-jankurai.sh audit-file` save-gates on all touched source/test files
 - Latest full `redline-testing run --suite sqlite_parity` on `target/release/redlinedb`: `4` remaining failures out of `2445`; `10339` passed.
 - Raw result: `target/redline-testing/upsert-ordered-arms-v6/sqlite_parity.raw.jsonl`, sha256 `4d2de4e4d46bbedca8bba9a02927b2b96ce14beefd5dafa729851c13766522be`.
 
@@ -317,7 +317,7 @@ Current NATURAL/USING join merged-column slice:
   - `cargo test -p redlinedb-sql --test smoke_select --quiet --locked`
   - `cargo test -p redlinedb-sql --test differential_lab diff_outer_and_cross_join_matrix --quiet --locked`
   - `cargo check -p redlinedb-sql --quiet --locked`
-  - `jankurai audit-file` on touched files (no new findings)
+  - `bash ops/ci/run-jankurai.sh audit-file` on touched files (no new findings)
   - `cargo build -p redlinedb-cli --release --locked`
   - `just fast`
 - next logical slice: dedicated collate-aware conflict-index key parity for `10340`.

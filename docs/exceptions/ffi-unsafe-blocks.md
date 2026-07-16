@@ -97,7 +97,7 @@ Two paths exist to remove this exception:
    style spans multiple lines and is occasionally interrupted by the
    `# Safety` block of the enclosing `extern "C"` function.
 
-2. **Per-detector waiver**: extend the jankurai audit-policy schema to
+2. **Per-detector waiver**: extend the Jankurai audit-policy schema to
    support `[detectors.HLT-029]` with `nearby_safety_comment.required =
    "any"` semantics, then drop the path-level exclusion in favour of a
    per-file `jankurai:allow rust.unsafe.undocumented-block` marker that

@@ -7,4 +7,4 @@ When a user provides a paper, release, implementation, or handoff plan in the co
 Owns `crates/workers/`.
 Forbidden: request handling, UI behavior, and direct user flow ownership.
 Proof lane: `workflow / replay tests`.
-If jankurai is installed, run `jankurai update --client-start --quiet` before work; do not apply updates unless the user asks.
+Use only `bash ops/ci/run-jankurai.sh ...`; governed Jankurai 1.6.11 is verified fail-closed and client self-update is forbidden.

@@ -10,7 +10,7 @@
 #   scripts/ci-local.sh pr-ci              # exact local mirror of .github/workflows/ci.yml
 #   scripts/ci-local.sh fast               # quick iteration lane
 #   scripts/ci-local.sh security           # cargo audit + cargo deny + gitleaks
-#   scripts/ci-local.sh audit              # full jankurai audit lane
+#   scripts/ci-local.sh audit              # full governed Jankurai audit lane
 #   scripts/ci-local.sh dependency-review  # local dependency-review mirror
 #   scripts/ci-local.sh sqlite-parity-report # local SQLite parity report update
 #   scripts/ci-local.sh pr-gate            # PR freshness + staged jankurai gate
@@ -30,7 +30,7 @@ usage: scripts/ci-local.sh {required|pr-ci|fast|security|audit|dependency-review
   pr-ci              run the exact local mirror of .github/workflows/ci.yml
   fast                run scripts/just/fast.sh          (quick iteration lane)
   security            run ops/ci/security.sh            (cargo audit + deny + gitleaks)
-  audit               run ops/ci/jankurai-audit.sh      (full jankurai audit lane)
+  audit               run ops/ci/jankurai-audit.sh      (full governed Jankurai audit lane)
   dependency-review   run ops/ci/dependency-review.sh   (cargo deny advisories/bans/licenses/sources)
   sqlite-parity-report run ops/ci/sqlite-parity-report.sh update
   jankurai-tools      run every jankurai-tools matrix lane plus input-boundary cross-check
