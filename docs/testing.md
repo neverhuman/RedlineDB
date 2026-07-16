@@ -19,8 +19,10 @@ physical predecessor compatibility mirror required by the review verifier.
 The mirror and sidecar are distinct from the authoritative lock and owned by a
 private sibling marker. Pre-existing, partial, aliased, symlinked, or
 wrong-digest state is rejected. Cleanup removes only the marker-bound files
-after revalidating their physical identity and bytes, on both gate success and
-failure.
+after revalidating their still-open creation handle, creation-time device/inode
+identity, exact mode, single-link ownership, and bytes, on both gate success and
+failure. Successful unlinks advance resumable cleanup state before the next
+filesystem operation.
 The required lane uses `control-review-lock-verify`, which validates the exact
 manifest, derived lock transition, and tracked predecessor binding
 without consulting sibling checkouts. The operational `review-lock-verify`

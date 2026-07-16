@@ -376,24 +376,209 @@ fn require_distinct_file_ids(paths: &[(&str, &Path)]) -> Result<()> {
     require_distinct_paths(paths)
 }
 
-fn create_new_synced_file(path: &Path, data: &[u8], mode: u32) -> Result<()> {
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct PhysicalFileIdentity {
+    #[cfg(unix)]
+    device: u64,
+    #[cfg(unix)]
+    inode: u64,
+    #[cfg(unix)]
+    mode: u32,
+    #[cfg(unix)]
+    links: u64,
+}
+
+#[cfg(unix)]
+fn identity_from_metadata(metadata: &fs::Metadata) -> PhysicalFileIdentity {
+    use std::os::unix::fs::MetadataExt;
+
+    PhysicalFileIdentity {
+        device: metadata.dev(),
+        inode: metadata.ino(),
+        mode: metadata.mode() & 0o7777,
+        links: metadata.nlink(),
+    }
+}
+
+fn physical_file_identity(
+    path: &Path,
+    context: &str,
+    expected_mode: u32,
+) -> Result<PhysicalFileIdentity> {
+    require_physical_file(path, context)?;
+    #[cfg(unix)]
+    {
+        let metadata = fs::metadata(path)?;
+        let identity = identity_from_metadata(&metadata);
+        if identity.mode != expected_mode {
+            return Err(error(format!(
+                "{context} has mode {:04o}, expected {expected_mode:04o}: {}",
+                identity.mode,
+                path.display()
+            )));
+        }
+        if identity.links != 1 {
+            return Err(error(format!(
+                "{context} has link count {}, expected 1: {}",
+                identity.links,
+                path.display()
+            )));
+        }
+        Ok(identity)
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = expected_mode;
+        Err(error(format!(
+            "{context} identity requires Unix device and inode metadata: {}",
+            path.display()
+        )))
+    }
+}
+
+fn require_same_physical_file(
+    path: &Path,
+    context: &str,
+    expected_mode: u32,
+    expected: &PhysicalFileIdentity,
+    held: &File,
+) -> Result<()> {
+    let actual = physical_file_identity(path, context, expected_mode)?;
+    if &actual != expected {
+        return Err(error(format!(
+            "{context} physical identity changed before cleanup: {}",
+            path.display()
+        )));
+    }
+    #[cfg(unix)]
+    if identity_from_metadata(&held.metadata()?) != *expected {
+        return Err(error(format!(
+            "{context} held creation identity changed before cleanup: {}",
+            path.display()
+        )));
+    }
+    Ok(())
+}
+
+fn cleanup_failed_created_file(path: &Path, held: &File, context: &str) -> Result<()> {
+    #[cfg(unix)]
+    {
+        let held_metadata = held.metadata()?;
+        if !held_metadata.is_file() {
+            return Err(error(format!(
+                "{context} failed-creation handle is not a regular file: {}",
+                path.display()
+            )));
+        }
+        let held_identity = identity_from_metadata(&held_metadata);
+        if held_identity.links != 1 {
+            return Err(error(format!(
+                "{context} failed-creation handle has link count {}, expected 1: {}",
+                held_identity.links,
+                path.display()
+            )));
+        }
+        let path_metadata = fs::symlink_metadata(path)?;
+        if path_metadata.file_type().is_symlink() || !path_metadata.is_file() {
+            return Err(error(format!(
+                "{context} failed-creation path is not the created regular file: {}",
+                path.display()
+            )));
+        }
+        let path_identity = identity_from_metadata(&path_metadata);
+        if path_identity.device != held_identity.device
+            || path_identity.inode != held_identity.inode
+            || path_identity.links != 1
+        {
+            return Err(error(format!(
+                "{context} failed-creation path identity changed before cleanup: {}",
+                path.display()
+            )));
+        }
+        fs::remove_file(path)?;
+        File::open(
+            path.parent()
+                .ok_or_else(|| error(format!("{context} has no parent")))?,
+        )?
+        .sync_all()?;
+        Ok(())
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = held;
+        Err(error(format!(
+            "{context} failed-creation cleanup requires Unix device and inode metadata: {}",
+            path.display()
+        )))
+    }
+}
+
+fn create_new_synced_file(
+    path: &Path,
+    data: &[u8],
+    mode: u32,
+    context: &str,
+) -> Result<(File, PhysicalFileIdentity)> {
     let mut file = OpenOptions::new().write(true).create_new(true).open(path)?;
-    let written = (|| -> Result<()> {
+    let written = (|| -> Result<PhysicalFileIdentity> {
         file.write_all(data)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            fs::set_permissions(path, fs::Permissions::from_mode(mode))?;
+            file.set_permissions(fs::Permissions::from_mode(mode))?;
         }
         file.sync_all()?;
-        Ok(())
+        #[cfg(unix)]
+        {
+            let metadata = file.metadata()?;
+            if !metadata.is_file() {
+                return Err(error(format!(
+                    "{context} creation handle is not a regular file: {}",
+                    path.display()
+                )));
+            }
+            let identity = identity_from_metadata(&metadata);
+            if identity.mode != mode {
+                return Err(error(format!(
+                    "{context} creation handle has mode {:04o}, expected {mode:04o}: {}",
+                    identity.mode,
+                    path.display()
+                )));
+            }
+            if identity.links != 1 {
+                return Err(error(format!(
+                    "{context} creation handle has link count {}, expected 1: {}",
+                    identity.links,
+                    path.display()
+                )));
+            }
+            let path_identity = physical_file_identity(path, context, mode)?;
+            if path_identity != identity {
+                return Err(error(format!(
+                    "{context} path changed during creation: {}",
+                    path.display()
+                )));
+            }
+            Ok(identity)
+        }
+        #[cfg(not(unix))]
+        {
+            physical_file_identity(path, context, mode)
+        }
     })();
-    if let Err(value) = written {
-        drop(file);
-        let _ = fs::remove_file(path);
-        return Err(value);
+    match written {
+        Ok(identity) => Ok((file, identity)),
+        Err(value) => {
+            let cleanup = cleanup_failed_created_file(path, &file, context);
+            drop(file);
+            match cleanup {
+                Ok(()) => Err(value),
+                Err(cleanup) => Err(error(format!(
+                    "{value}; {context} failed-creation cleanup refused: {cleanup}"
+                ))),
+            }
+        }
     }
-    Ok(())
 }
 
 #[derive(Debug)]
@@ -409,6 +594,12 @@ struct CiCompatibilityMirror {
     marker_created: bool,
     mirror_created: bool,
     sidecar_created: bool,
+    marker_identity: Option<PhysicalFileIdentity>,
+    mirror_identity: Option<PhysicalFileIdentity>,
+    sidecar_identity: Option<PhysicalFileIdentity>,
+    marker_file: Option<File>,
+    mirror_file: Option<File>,
+    sidecar_file: Option<File>,
     complete: bool,
     cleaned: bool,
 }
@@ -487,15 +678,42 @@ impl CiCompatibilityMirror {
             marker_created: false,
             mirror_created: false,
             sidecar_created: false,
+            marker_identity: None,
+            mirror_identity: None,
+            sidecar_identity: None,
+            marker_file: None,
+            mirror_file: None,
+            sidecar_file: None,
             complete: false,
             cleaned: false,
         };
         let created = (|| -> Result<()> {
-            create_new_synced_file(&guard.marker, &guard.marker_bytes, 0o600)?;
+            let (marker_file, marker_identity) = create_new_synced_file(
+                &guard.marker,
+                &guard.marker_bytes,
+                0o600,
+                "CI compatibility mirror marker",
+            )?;
+            guard.marker_file = Some(marker_file);
+            guard.marker_identity = Some(marker_identity);
             guard.marker_created = true;
-            create_new_synced_file(&guard.mirror, &guard.mirror_bytes, 0o644)?;
+            let (mirror_file, mirror_identity) = create_new_synced_file(
+                &guard.mirror,
+                &guard.mirror_bytes,
+                0o644,
+                "CI compatibility mirror",
+            )?;
+            guard.mirror_file = Some(mirror_file);
+            guard.mirror_identity = Some(mirror_identity);
             guard.mirror_created = true;
-            create_new_synced_file(&guard.mirror_sidecar, &guard.sidecar_bytes, 0o644)?;
+            let (sidecar_file, sidecar_identity) = create_new_synced_file(
+                &guard.mirror_sidecar,
+                &guard.sidecar_bytes,
+                0o644,
+                "CI compatibility mirror sidecar",
+            )?;
+            guard.sidecar_file = Some(sidecar_file);
+            guard.sidecar_identity = Some(sidecar_identity);
             guard.sidecar_created = true;
             File::open(
                 guard
@@ -520,16 +738,39 @@ impl CiCompatibilityMirror {
     }
 
     fn validate_complete(&self) -> Result<()> {
-        for (label, path) in [
-            ("CI compatibility mirror marker", self.marker.as_path()),
-            ("CI compatibility mirror", self.mirror.as_path()),
-            (
-                "CI compatibility mirror sidecar",
-                self.mirror_sidecar.as_path(),
-            ),
-        ] {
-            require_physical_file(path, label)?;
-        }
+        require_same_physical_file(
+            &self.marker,
+            "CI compatibility mirror marker",
+            0o600,
+            self.marker_identity
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror marker identity is missing"))?,
+            self.marker_file
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror marker handle is missing"))?,
+        )?;
+        require_same_physical_file(
+            &self.mirror,
+            "CI compatibility mirror",
+            0o644,
+            self.mirror_identity
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror identity is missing"))?,
+            self.mirror_file
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror handle is missing"))?,
+        )?;
+        require_same_physical_file(
+            &self.mirror_sidecar,
+            "CI compatibility mirror sidecar",
+            0o644,
+            self.sidecar_identity
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror sidecar identity is missing"))?,
+            self.sidecar_file
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror sidecar handle is missing"))?,
+        )?;
         if fs::read(&self.marker)? != self.marker_bytes {
             return Err(error(format!(
                 "CI compatibility mirror cleanup marker does not match: {}",
@@ -582,10 +823,45 @@ impl CiCompatibilityMirror {
             return Ok(());
         }
         if !self.marker_created {
+            if self.mirror_created
+                || self.sidecar_created
+                || self.marker_identity.is_some()
+                || self.mirror_identity.is_some()
+                || self.sidecar_identity.is_some()
+                || self.marker_file.is_some()
+                || self.mirror_file.is_some()
+                || self.sidecar_file.is_some()
+            {
+                return Err(error(
+                    "CI compatibility mirror cleanup ownership state is inconsistent",
+                ));
+            }
+            File::open(
+                self.mirror
+                    .parent()
+                    .ok_or_else(|| error("CI compatibility mirror has no parent"))?,
+            )?
+            .sync_all()?;
+            require_path_absent(&self.mirror, "cleaned CI compatibility mirror")?;
+            require_path_absent(
+                &self.mirror_sidecar,
+                "cleaned CI compatibility mirror sidecar",
+            )?;
+            require_path_absent(&self.marker, "cleaned CI compatibility mirror marker")?;
             self.cleaned = true;
             return Ok(());
         }
-        require_physical_file(&self.marker, "CI compatibility mirror marker")?;
+        require_same_physical_file(
+            &self.marker,
+            "CI compatibility mirror marker",
+            0o600,
+            self.marker_identity
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror marker identity is missing"))?,
+            self.marker_file
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror marker handle is missing"))?,
+        )?;
         if fs::read(&self.marker)? != self.marker_bytes {
             return Err(error(format!(
                 "CI compatibility mirror cleanup marker does not match: {}",
@@ -594,17 +870,35 @@ impl CiCompatibilityMirror {
         }
         if self.complete {
             self.validate_complete()?;
+            self.complete = false;
         } else {
             if self.mirror_created {
-                require_physical_file(&self.mirror, "partial CI compatibility mirror")?;
+                require_same_physical_file(
+                    &self.mirror,
+                    "partial CI compatibility mirror",
+                    0o644,
+                    self.mirror_identity.as_ref().ok_or_else(|| {
+                        error("partial CI compatibility mirror identity is missing")
+                    })?,
+                    self.mirror_file.as_ref().ok_or_else(|| {
+                        error("partial CI compatibility mirror handle is missing")
+                    })?,
+                )?;
                 if fs::read(&self.mirror)? != self.mirror_bytes {
                     return Err(error("partial CI compatibility mirror bytes changed"));
                 }
             }
             if self.sidecar_created {
-                require_physical_file(
+                require_same_physical_file(
                     &self.mirror_sidecar,
                     "partial CI compatibility mirror sidecar",
+                    0o644,
+                    self.sidecar_identity.as_ref().ok_or_else(|| {
+                        error("partial CI compatibility mirror sidecar identity is missing")
+                    })?,
+                    self.sidecar_file.as_ref().ok_or_else(|| {
+                        error("partial CI compatibility mirror sidecar handle is missing")
+                    })?,
                 )?;
                 if fs::read(&self.mirror_sidecar)? != self.sidecar_bytes {
                     return Err(error("partial CI compatibility mirror sidecar changed"));
@@ -612,12 +906,60 @@ impl CiCompatibilityMirror {
             }
         }
         if self.sidecar_created {
+            require_same_physical_file(
+                &self.mirror_sidecar,
+                "CI compatibility mirror sidecar",
+                0o644,
+                self.sidecar_identity
+                    .as_ref()
+                    .ok_or_else(|| error("CI compatibility mirror sidecar identity is missing"))?,
+                self.sidecar_file
+                    .as_ref()
+                    .ok_or_else(|| error("CI compatibility mirror sidecar handle is missing"))?,
+            )?;
             fs::remove_file(&self.mirror_sidecar)?;
+            self.sidecar_created = false;
+            self.sidecar_identity = None;
+            self.sidecar_file = None;
         }
         if self.mirror_created {
+            require_same_physical_file(
+                &self.mirror,
+                "CI compatibility mirror",
+                0o644,
+                self.mirror_identity
+                    .as_ref()
+                    .ok_or_else(|| error("CI compatibility mirror identity is missing"))?,
+                self.mirror_file
+                    .as_ref()
+                    .ok_or_else(|| error("CI compatibility mirror handle is missing"))?,
+            )?;
             fs::remove_file(&self.mirror)?;
+            self.mirror_created = false;
+            self.mirror_identity = None;
+            self.mirror_file = None;
         }
+        File::open(
+            self.mirror
+                .parent()
+                .ok_or_else(|| error("CI compatibility mirror has no parent"))?,
+        )?
+        .sync_all()?;
+        require_same_physical_file(
+            &self.marker,
+            "CI compatibility mirror marker",
+            0o600,
+            self.marker_identity
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror marker identity is missing"))?,
+            self.marker_file
+                .as_ref()
+                .ok_or_else(|| error("CI compatibility mirror marker handle is missing"))?,
+        )?;
         fs::remove_file(&self.marker)?;
+        self.marker_created = false;
+        self.marker_identity = None;
+        self.marker_file = None;
         File::open(
             self.mirror
                 .parent()
@@ -5031,6 +5373,16 @@ mod tests {
             assert!(metadata.is_file());
             assert!(!metadata.file_type().is_symlink());
         }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+
+            for (path, expected_mode) in [(&mirror, 0o644), (&sidecar, 0o644), (&marker, 0o600)] {
+                let metadata = fs::metadata(path).unwrap();
+                assert_eq!(metadata.mode() & 0o7777, expected_mode);
+                assert_eq!(metadata.nlink(), 1);
+            }
+        }
         assert_eq!(
             sha256_file(&mirror).unwrap(),
             SUCCESSOR_PREDECESSOR_LOCK_SHA256
@@ -5040,6 +5392,15 @@ mod tests {
             fs::read(&authoritative).unwrap()
         );
         guard.cleanup().unwrap();
+        assert!(!guard.marker_created);
+        assert!(!guard.mirror_created);
+        assert!(!guard.sidecar_created);
+        assert!(guard.marker_identity.is_none());
+        assert!(guard.mirror_identity.is_none());
+        assert!(guard.sidecar_identity.is_none());
+        assert!(guard.marker_file.is_none());
+        assert!(guard.mirror_file.is_none());
+        assert!(guard.sidecar_file.is_none());
         assert!(!mirror.exists());
         assert!(!sidecar.exists());
         assert!(!marker.exists());
@@ -5091,18 +5452,47 @@ mod tests {
         let fixture = TestDir::new("ci-mirror-alias");
         let (authoritative, predecessor, mirror) = ci_mirror_fixture(fixture.path());
         let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
-        fs::remove_file(&mirror).unwrap();
-        fs::hard_link(&authoritative, &mirror).unwrap();
+        let external_link = fixture.path().join("external-link");
+        fs::hard_link(&mirror, &external_link).unwrap();
         let failure = guard.cleanup().unwrap_err().to_string();
-        assert!(failure.contains("aliases authoritative lock"));
+        assert!(failure.contains("link count 2, expected 1"));
+        assert!(mirror.exists());
+        assert!(external_link.exists());
         assert_eq!(
             sha256_file(&authoritative).unwrap(),
             SUCCESSOR_PREPARED_LOCK_SHA256
         );
 
+        fs::remove_file(&external_link).unwrap();
+        guard.cleanup().unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn ci_compatibility_mirror_refuses_same_byte_replacements() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let mirror_fixture = TestDir::new("ci-mirror-replaced");
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(mirror_fixture.path());
+        let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
         fs::remove_file(&mirror).unwrap();
         fs::write(&mirror, &guard.mirror_bytes).unwrap();
-        guard.cleanup().unwrap();
+        fs::set_permissions(&mirror, fs::Permissions::from_mode(0o644)).unwrap();
+        let failure = guard.cleanup().unwrap_err().to_string();
+        assert!(failure.contains("physical identity changed before cleanup"));
+        assert!(mirror.exists());
+        guard.cleaned = true;
+
+        let marker_fixture = TestDir::new("ci-marker-replaced");
+        let (authoritative, predecessor, mirror) = ci_mirror_fixture(marker_fixture.path());
+        let mut guard = CiCompatibilityMirror::new(&authoritative, &mirror, &predecessor).unwrap();
+        fs::remove_file(&guard.marker).unwrap();
+        fs::write(&guard.marker, &guard.marker_bytes).unwrap();
+        fs::set_permissions(&guard.marker, fs::Permissions::from_mode(0o600)).unwrap();
+        let failure = guard.cleanup().unwrap_err().to_string();
+        assert!(failure.contains("physical identity changed before cleanup"));
+        assert!(guard.marker.exists());
+        guard.cleaned = true;
     }
 
     #[test]
