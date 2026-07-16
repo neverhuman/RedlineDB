@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- Release proof lanes now require the fixed Jankurai 1.6.11 executable at
+  `/home/ubuntu/.jeryu/bin/jankurai`, verify its SHA-256 before use, reject
+  PATH/symlink/version/digest substitution, and bind clean exact-HEAD reports
+  under `target/jankurai/`. CI no longer installs or fetches Jankurai source,
+  and generated score reports are no longer committed as source state.
+
 ## [4.1.0] - 2026-05-29
 
 W7 startup optimization — eliminate cgroup walk from the volatile (in-memory)
