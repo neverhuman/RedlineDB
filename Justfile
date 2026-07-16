@@ -21,8 +21,8 @@ jeryu-prs repo token_file:
 jeryu-branch-push repo repo_path branch expected_head:
   cargo run --locked --quiet -- jeryu-local branch-push --repo "{{repo}}" --repo-path "{{repo_path}}" --branch "{{branch}}" --expected-head "{{expected_head}}"
 
-jeryu-branch-push-apply repo repo_path branch expected_head:
-  cargo run --locked --quiet -- jeryu-local branch-push --repo "{{repo}}" --repo-path "{{repo_path}}" --branch "{{branch}}" --expected-head "{{expected_head}}" --apply
+jeryu-branch-push-apply repo repo_path branch expected_head token_file:
+  cargo run --locked --quiet -- jeryu-local branch-push --repo "{{repo}}" --repo-path "{{repo_path}}" --branch "{{branch}}" --expected-head "{{expected_head}}" --token-file "{{token_file}}" --apply
 
 jeryu-pr-open repo title head expected_head base="main":
   cargo run --locked --quiet -- jeryu-local pr-open --repo "{{repo}}" --title "{{title}}" --head "{{head}}" --expected-head "{{expected_head}}" --base "{{base}}"

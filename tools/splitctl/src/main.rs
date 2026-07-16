@@ -1,11 +1,13 @@
 // Repository-local release and Jeryu control-plane CLI.
 mod jeryu_client;
 
-use jeryu_client::{HostCiPublication, JeryuClient, JeryuRequest};
+use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, JeryuRequest};
 use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
-    env, fs,
+    env,
+    ffi::OsStr,
+    fs,
     io::{self, Read, Write},
     os::unix::fs::{MetadataExt, OpenOptionsExt},
     path::{Path, PathBuf},
@@ -17,6 +19,9 @@ const RELEASE_VERSION: &str = "8.0.0";
 const LOCAL_JERYU_ORIGIN: &str = "http://127.0.0.1:8787";
 const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
 const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
+const JERYU_ASKPASS_MODE: &str = "JAIN_SPLITCTL_JERYU_ASKPASS";
+const JERYU_ASKPASS_TOKEN_FILE: &str = "JAIN_SPLITCTL_JERYU_TOKEN_FILE";
+const JERYU_GIT_USERNAME: &str = "x-access-token";
 
 #[derive(Debug, Clone)]
 struct Repo {
@@ -49,6 +54,9 @@ struct ReleaseFeatureMatrix {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    if env::var_os(JERYU_ASKPASS_MODE).is_some() {
+        return jeryu_git_askpass(env::args_os().skip(1).collect());
+    }
     let mut args = env::args().skip(1);
     match args.next().as_deref() {
         Some("refresh-ci-contract") => {
@@ -2951,6 +2959,41 @@ fn forbidden_jeryu_environment_name(name: &str) -> bool {
         || upper.starts_with("GIT_CONFIG_VALUE_")
 }
 
+fn jeryu_git_askpass(args: Vec<std::ffi::OsString>) -> Result<(), Box<dyn std::error::Error>> {
+    if env::var(JERYU_ASKPASS_MODE).as_deref() != Ok("v1")
+        || env::var_os("GIT_ASKPASS") != Some(env::current_exe()?.into_os_string())
+        || env::var_os("GIT_TERMINAL_PROMPT").as_deref() != Some(OsStr::new("0"))
+        || args.len() != 1
+    {
+        return Err("invalid controlled Jeryu askpass invocation".into());
+    }
+    let prompt = args[0]
+        .to_str()
+        .ok_or("Jeryu askpass prompt is not UTF-8")?;
+    let token_file = env::var_os(JERYU_ASKPASS_TOKEN_FILE);
+    write_jeryu_askpass_response(prompt, token_file.as_deref(), &mut io::stdout().lock())
+}
+
+fn write_jeryu_askpass_response(
+    prompt: &str,
+    token_file: Option<&OsStr>,
+    output: &mut impl Write,
+) -> Result<(), Box<dyn std::error::Error>> {
+    match prompt {
+        "Username for 'http://127.0.0.1:8787': " => {
+            writeln!(output, "{JERYU_GIT_USERNAME}")?;
+            output.flush()?;
+            Ok(())
+        }
+        "Password for 'http://x-access-token@127.0.0.1:8787': " => {
+            let token_file = token_file.ok_or("controlled Jeryu askpass has no token file")?;
+            write_token_for_askpass(Path::new(token_file), unsafe { libc::geteuid() }, output)?;
+            Ok(())
+        }
+        _ => Err("Jeryu askpass rejected an unexpected prompt".into()),
+    }
+}
+
 fn fixed_jeryu_git_remote(repo: &str) -> Result<String, Box<dyn std::error::Error>> {
     validate_jeryu_repo_slug(repo)?;
     Ok(format!("{LOCAL_JERYU_ORIGIN}/git/{repo}.git"))
@@ -3007,6 +3050,43 @@ fn secure_git_command(repo: Option<&Path>) -> Command {
     command
 }
 
+fn secure_git_authenticated_command(
+    repo: Option<&Path>,
+    token_file: &Path,
+) -> Result<Command, Box<dyn std::error::Error>> {
+    if !token_file.is_absolute() {
+        return Err("Jeryu token path must be absolute".into());
+    }
+    let executable = env::current_exe()?;
+    let metadata = fs::symlink_metadata(&executable)?;
+    let running = fs::metadata("/proc/self/exe")?;
+    if !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.uid() != unsafe { libc::geteuid() }
+        || metadata.dev() != running.dev()
+        || metadata.ino() != running.ino()
+        || metadata.mode() & 0o111 == 0
+    {
+        return Err("splitctl executable is not a trusted current-owner regular file".into());
+    }
+    let mut command = secure_git_command(repo);
+    command
+        .env("GIT_ASKPASS", &executable)
+        .env(JERYU_ASKPASS_MODE, "v1")
+        .env(JERYU_ASKPASS_TOKEN_FILE, token_file)
+        .args([
+            "-c",
+            "credential.username=x-access-token",
+            "-c",
+            "credential.useHttpPath=false",
+            "-c",
+            "http.followRedirects=false",
+            "-c",
+            "http.maxRequests=1",
+        ]);
+    Ok(command)
+}
+
 fn secure_git_output(
     repo: Option<&Path>,
     args: &[&str],
@@ -3025,6 +3105,36 @@ fn secure_git_output(
     Ok(stdout.trim().to_owned())
 }
 
+fn secure_git_authenticated_output(
+    repo: Option<&Path>,
+    token_file: &Path,
+    args: &[&str],
+) -> Result<String, Box<dyn std::error::Error>> {
+    let output = secure_git_authenticated_command(repo, token_file)?
+        .args(args)
+        .output()?;
+    if !output.status.success() {
+        return Err(format!("authenticated fixed-origin Git {} failed", args[0]).into());
+    }
+    let stdout = std::str::from_utf8(&output.stdout)
+        .map_err(|_| "authenticated fixed-origin Git output was not UTF-8")?;
+    Ok(stdout.trim().to_owned())
+}
+
+fn secure_git_authenticated_status(
+    repo: Option<&Path>,
+    token_file: &Path,
+    args: &[&str],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let output = secure_git_authenticated_command(repo, token_file)?
+        .args(args)
+        .output()?;
+    if !output.status.success() {
+        return Err(format!("authenticated fixed-origin Git {} failed", args[0]).into());
+    }
+    Ok(())
+}
+
 fn secure_git_status(
     repo: Option<&Path>,
     args: &[&str],
@@ -3035,6 +3145,7 @@ fn secure_git_status(
 fn secure_ls_remote(
     repo: &str,
     reference: &str,
+    token_file: &Path,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
     if !reference.starts_with("refs/heads/")
         || reference.bytes().any(|byte| byte.is_ascii_control())
@@ -3042,7 +3153,11 @@ fn secure_ls_remote(
         return Err("remote readback requires an exact heads ref".into());
     }
     let remote = fixed_jeryu_git_remote(repo)?;
-    let output = secure_git_output(None, &["ls-remote", "--refs", &remote, reference])?;
+    let output = secure_git_authenticated_output(
+        None,
+        token_file,
+        &["ls-remote", "--refs", &remote, reference],
+    )?;
     if output.is_empty() {
         return Ok(None);
     }
@@ -3236,6 +3351,7 @@ fn jeryu_branch_push(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
     let mut repo_path = None;
     let mut branch = None;
     let mut expected_head = None;
+    let mut token_file = None;
     let mut evidence_out = None;
     let mut apply = false;
     let mut iter = args.into_iter().skip(1);
@@ -3250,6 +3366,11 @@ fn jeryu_branch_push(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
             "--branch" => branch = Some(iter.next().ok_or("--branch needs a value")?),
             "--expected-head" => {
                 expected_head = Some(iter.next().ok_or("--expected-head needs a SHA")?)
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
             }
             "--evidence-out" => {
                 evidence_out = Some(PathBuf::from(
@@ -3280,6 +3401,11 @@ fn jeryu_branch_push(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
     {
         return Err("branch publication requires the clean named branch at the exact head".into());
     }
+    let token_file = if apply {
+        Some(token_file.ok_or("branch-push --apply requires --token-file")?)
+    } else {
+        None
+    };
 
     let remote = fixed_jeryu_git_remote(&repo)?;
     let reference = format!("refs/heads/{branch}");
@@ -3299,7 +3425,10 @@ fn jeryu_branch_push(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
             report["action"] = json!("would-push-and-read-back");
             return Ok(());
         }
-        let before = secure_ls_remote(&repo, &reference)?;
+        let token_file = token_file
+            .as_deref()
+            .ok_or("branch-push --apply requires --token-file")?;
+        let before = secure_ls_remote(&repo, &reference, token_file)?;
         report["before"] = json!(before);
         if let Some(before) = before.as_deref() {
             if before != expected_head
@@ -3316,14 +3445,15 @@ fn jeryu_branch_push(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
         }
         if before.as_deref() != Some(expected_head.as_str()) {
             let refspec = format!("{expected_head}:{reference}");
-            let output = secure_git_output(
+            secure_git_authenticated_status(
                 Some(&path),
+                token_file,
                 &["push", "--porcelain", "--no-verify", &remote, &refspec],
             )?;
-            report["push_result"] = json!(output);
+            report["push_result"] = json!("authenticated-non-force-push-completed");
             report["external_state_changed"] = json!(true);
         }
-        let after = secure_ls_remote(&repo, &reference)?;
+        let after = secure_ls_remote(&repo, &reference, token_file)?;
         report["after"] = json!(after);
         if after.as_deref() != Some(expected_head.as_str()) {
             return Err("branch publication readback does not equal the exact head".into());
@@ -3575,7 +3705,7 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
                         "Jeryu PR merge response does not prove the expected merged commit".into(),
                     );
                 }
-                let main = secure_ls_remote(&repo, "refs/heads/main")?;
+                let main = secure_ls_remote(&repo, "refs/heads/main", token_file)?;
                 if main.as_deref() != Some(expected_head) {
                     return Err(
                         "protected main does not resolve to the expected merged commit".into(),
@@ -6656,6 +6786,72 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         }
         assert!(!forbidden_jeryu_environment_name("PATH"));
         assert!(!forbidden_jeryu_environment_name("LC_ALL"));
+    }
+
+    #[test]
+    fn controlled_jeryu_askpass_is_prompt_exact_and_token_file_bound() {
+        let root = TestDir::new("jeryu-askpass");
+        let token_file = root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+
+        let mut username = Vec::new();
+        write_jeryu_askpass_response(
+            "Username for 'http://127.0.0.1:8787': ",
+            None,
+            &mut username,
+        )
+        .unwrap();
+        assert_eq!(username, b"x-access-token\n");
+
+        let mut password = Vec::new();
+        write_jeryu_askpass_response(
+            "Password for 'http://x-access-token@127.0.0.1:8787': ",
+            Some(token_file.as_os_str()),
+            &mut password,
+        )
+        .unwrap();
+        assert_eq!(password, b"fixture-token-0123456789\n");
+        assert!(write_jeryu_askpass_response(
+            "Password for 'http://attacker.invalid': ",
+            Some(token_file.as_os_str()),
+            &mut Vec::new(),
+        )
+        .is_err());
+
+        let command = secure_git_authenticated_command(None, &token_file).unwrap();
+        let secret = OsStr::new("fixture-token-0123456789");
+        assert!(command.get_args().all(|arg| arg != secret));
+        assert!(command
+            .get_envs()
+            .all(|(name, value)| name != secret && value != Some(secret)));
+        assert_eq!(
+            command
+                .get_envs()
+                .find(|(name, _)| *name == OsStr::new(JERYU_ASKPASS_TOKEN_FILE))
+                .and_then(|(_, value)| value),
+            Some(token_file.as_os_str())
+        );
+    }
+
+    #[test]
+    fn branch_push_apply_requires_an_explicit_token_before_remote_access() {
+        let root = TestDir::new("branch-push-token-required");
+        let (repo, head) = init_source(root.path());
+        let error = jeryu_branch_push(vec![
+            "branch-push".to_owned(),
+            "--repo".to_owned(),
+            "jeryu/example".to_owned(),
+            "--repo-path".to_owned(),
+            repo.display().to_string(),
+            "--branch".to_owned(),
+            "main".to_owned(),
+            "--expected-head".to_owned(),
+            head,
+            "--apply".to_owned(),
+        ])
+        .unwrap_err();
+        assert!(error.to_string().contains("requires --token-file"));
     }
 
     #[test]

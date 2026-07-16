@@ -784,6 +784,18 @@ fn read_token(path: &Path, expected_uid: u32) -> Result<SecretBytes> {
     read_token_with_hook(path, expected_uid, || {})
 }
 
+pub(crate) fn write_token_for_askpass(
+    path: &Path,
+    expected_uid: u32,
+    output: &mut impl Write,
+) -> Result<()> {
+    let token = read_token(path, expected_uid)?;
+    output.write_all(token.as_slice())?;
+    output.write_all(b"\n")?;
+    output.flush()?;
+    Ok(())
+}
+
 fn read_token_with_hook<F>(path: &Path, expected_uid: u32, hook: F) -> Result<SecretBytes>
 where
     F: FnOnce(),
