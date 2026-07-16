@@ -3589,11 +3589,15 @@ fn jeryu_lifecycle(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
                 report["readback"] = policy.clone();
                 validate_protection_policy(
                     &policy,
+                    &repo,
+                    &branch,
                     required_check.as_deref().ok_or("missing required check")?,
                 )?;
             }
             "protection-readback" => validate_protection_policy(
                 &response,
+                &repo,
+                &branch,
                 required_check.as_deref().ok_or("missing required check")?,
             )?,
             _ => {}
@@ -3738,6 +3742,8 @@ fn jeryu_request_json(request: &JeryuRequest) -> JsonValue {
 
 fn validate_protection_policy(
     policy: &JsonValue,
+    repo: &str,
+    branch: &str,
     required_check: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let object = policy
@@ -3768,14 +3774,8 @@ fn validate_protection_policy(
     };
     let checks = policy.get("required_status_checks");
     let reviews = policy.get("required_pull_request_reviews");
-    let url_valid = policy
-        .get("url")
-        .and_then(JsonValue::as_str)
-        .is_some_and(|url| {
-            url.starts_with("/repos/")
-                && url.ends_with("/branches/main/protection")
-                && !url.bytes().any(|byte| byte.is_ascii_control())
-        });
+    let expected_url = format!("/repos/{repo}/branches/{branch}/protection");
+    let url_valid = policy.get("url").and_then(JsonValue::as_str) == Some(expected_url.as_str());
     let updated_at_valid = policy
         .get("updated_at")
         .and_then(JsonValue::as_str)
@@ -6600,10 +6600,18 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         assert_eq!(policy, immutable_main_policy("example/required"));
         validate_protection_policy(
             &immutable_main_readback("example/required"),
+            "jeryu/example",
+            "main",
             "example/required",
         )
         .unwrap();
-        assert!(validate_protection_policy(&json!({}), "example/required").is_err());
+        assert!(validate_protection_policy(
+            &json!({}),
+            "jeryu/example",
+            "main",
+            "example/required"
+        )
+        .is_err());
         assert!(plan_jeryu_lifecycle_request(
             "pr-merge",
             "jeryu/example",
@@ -6753,28 +6761,64 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     fn non_owner_is_forbidden_from_disabling_branch_protection() {
         let mut policy = immutable_main_readback("example/required");
         policy["enforce_admins"]["enabled"] = json!(false);
-        assert!(validate_protection_policy(&policy, "example/required").is_err());
+        assert!(
+            validate_protection_policy(&policy, "jeryu/example", "main", "example/required")
+                .is_err()
+        );
 
         policy["enforce_admins"]["enabled"] = json!(true);
-        validate_protection_policy(&policy, "example/required").unwrap();
+        validate_protection_policy(&policy, "jeryu/example", "main", "example/required").unwrap();
+
+        for invalid_url in [
+            "/repos/jeryu/other/branches/main/protection",
+            "/repos/jeryu/example/branches/release/protection",
+            "/repos/jeryu%2Fexample/branches/main/protection",
+            "/repos/jeryu/example/branches/main/%70rotection",
+            "//repos/jeryu/example/branches/main/protection",
+        ] {
+            let mut wrong_subject = immutable_main_readback("example/required");
+            wrong_subject["url"] = json!(invalid_url);
+            assert!(validate_protection_policy(
+                &wrong_subject,
+                "jeryu/example",
+                "main",
+                "example/required"
+            )
+            .is_err());
+        }
 
         policy["required_status_checks"]["contexts"] =
             json!(["example/required", "unexpected/required"]);
-        assert!(validate_protection_policy(&policy, "example/required").is_err());
+        assert!(
+            validate_protection_policy(&policy, "jeryu/example", "main", "example/required")
+                .is_err()
+        );
         policy["required_status_checks"]["contexts"] = json!(["example/required"]);
         policy["required_pull_request_reviews"]["required_approving_review_count"] = json!(2);
-        assert!(validate_protection_policy(&policy, "example/required").is_err());
+        assert!(
+            validate_protection_policy(&policy, "jeryu/example", "main", "example/required")
+                .is_err()
+        );
 
         policy = immutable_main_readback("example/required");
         policy["required_pull_request_reviews"]["bypass_pull_request_allowances"] =
             json!({"users": ["admin"]});
-        assert!(validate_protection_policy(&policy, "example/required").is_err());
+        assert!(
+            validate_protection_policy(&policy, "jeryu/example", "main", "example/required")
+                .is_err()
+        );
         policy = immutable_main_readback("example/required");
         policy["restrictions"] = json!({"users": []});
-        assert!(validate_protection_policy(&policy, "example/required").is_err());
+        assert!(
+            validate_protection_policy(&policy, "jeryu/example", "main", "example/required")
+                .is_err()
+        );
         policy = immutable_main_readback("example/required");
         policy["required_signatures"]["enabled"] = json!(true);
-        assert!(validate_protection_policy(&policy, "example/required").is_err());
+        assert!(
+            validate_protection_policy(&policy, "jeryu/example", "main", "example/required")
+                .is_err()
+        );
     }
 
     #[test]
