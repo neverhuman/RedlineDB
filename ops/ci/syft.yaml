@@ -1,0 +1,11 @@
+check-for-app-update: false
+enrich: []
+cache:
+  ttl: 0s
+golang:
+  search-remote-licenses: false
+  use-packages-lib: false
+java:
+  use-network: false
+javascript:
+  search-remote-licenses: false
