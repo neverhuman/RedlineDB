@@ -57,9 +57,46 @@ pinned_advisory_commit="$(sed -n \
   "$repo_root/ops/ci/pinned-advisory.sh")"
 [[ "$pinned_advisory_commit" =~ ^[0-9a-f]{40}$ ]]
 mkdir -p "$sandbox_family_root/target" "$sandbox_family_root/jain-core" \
+  "$sandbox_family_root/redline-split"
+redline_fixture_sources="$tmp/redline-fixture-sources"
+mkdir -p "$redline_fixture_sources"
+git init --quiet --initial-branch=main "$redline_fixture_sources/control"
+git -C "$redline_fixture_sources/control" config user.name 'Redline Fixture'
+git -C "$redline_fixture_sources/control" config user.email \
+  redline-fixture@example.invalid
+cat >"$redline_fixture_sources/control/repos.manifest.toml" <<EOF
+family = "redline-split"
+lock = "redline.lock.toml"
+[control_plane]
+name = "redline-split-ops"
+path = "."
+remote = "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
+required_check = "redline-split-ops/required"
+[[repo]]
+name = "redline-core"
+path = "../redline-split/redline-core"
+remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
+required_check = "redline-core/required"
+default_branch = "main"
+current_tag = "redline-core-v4.1.0-jain.1"
+EOF
+printf '[proof]\ncutover_eligible = true\n' \
+  >"$redline_fixture_sources/control/redline.lock.toml"
+git -C "$redline_fixture_sources/control" add repos.manifest.toml redline.lock.toml
+git -C "$redline_fixture_sources/control" commit --quiet -m 'synthetic legacy control'
+git clone --quiet --no-local "$redline_fixture_sources/control" \
   "$sandbox_family_root/redline-split-ops"
-install -m 0644 "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml" \
-  "$sandbox_family_root/redline-split-ops/repos.manifest.toml"
+git -C "$sandbox_family_root/redline-split-ops" remote remove origin
+git init --quiet --initial-branch=main "$redline_fixture_sources/core"
+git -C "$redline_fixture_sources/core" config user.name 'Redline Fixture'
+git -C "$redline_fixture_sources/core" config user.email \
+  redline-fixture@example.invalid
+printf 'synthetic core\n' >"$redline_fixture_sources/core/payload.txt"
+git -C "$redline_fixture_sources/core" add payload.txt
+git -C "$redline_fixture_sources/core" commit --quiet -m 'synthetic legacy core'
+git clone --quiet --no-local "$redline_fixture_sources/core" \
+  "$sandbox_family_root/redline-split/redline-core"
+git -C "$sandbox_family_root/redline-split/redline-core" remote remove origin
 git clone --quiet --no-local --no-checkout "$HOME/.cargo/advisory-db" \
   "$sandbox_family_root/target/advisory-db"
 git -C "$sandbox_family_root/target/advisory-db" checkout --quiet --detach \
@@ -203,17 +240,12 @@ install -D -m 0644 "$repo_root/tools/splitctl/src/main.rs" \
   "$control/tools/splitctl/src/main.rs"
 install -D -m 0644 "$repo_root/tools/splitctl/src/jeryu_client.rs" \
   "$control/tools/splitctl/src/jeryu_client.rs"
-# Keep the fixture self-contained while preserving splitctl's production rule
-# that the reviewed nested-family path is exact rather than caller-selected.
-sed -i \
-  "s#/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml#$sandbox_family_root/redline-split-ops/repos.manifest.toml#g" \
-  "$control/tools/splitctl/src/main.rs"
 git init --quiet --bare "$control_remote"
 sed -i \
   "s#remote = \"http://127.0.0.1:8787/git/jeryu/jain-split-ops.git\"#remote = \"$control_remote\"#" \
   "$control/repos.manifest.toml"
 sed -i \
-  "s#manifest_path = \"/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml\"#manifest_path = \"$sandbox_family_root/redline-split-ops/repos.manifest.toml\"#" \
+  "s#/home/ubuntu/jain-split#$sandbox_family_root#g" \
   "$control/repos.manifest.toml"
 git -C "$control" add repos.manifest.toml ops/ci tools/splitctl/src
 git -C "$control" commit --quiet -m 'fixture reviewed host-CI boundary'
