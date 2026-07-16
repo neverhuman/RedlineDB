@@ -25,7 +25,13 @@ grep -Fq 'bash ops/ci/jankurai.sh' .github/workflows/jankurai.yml
 [[ "$(grep -Fc 'uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' \
   .github/workflows/jankurai.yml)" -eq 4 ]]
 [[ "$(grep -Fc 'persist-credentials: false' .github/workflows/jankurai.yml)" -eq 4 ]]
-grep -Fq 'cargo audit --no-fetch --json' ops/ci/security.sh
+grep -Fq 'bash ops/ci/pinned-rustsec-test.sh' ops/ci/security.sh
+grep -Fq 'cargo audit --db target/jankurai/security/rustsec-db --no-fetch --json' \
+  ops/ci/security.sh
+grep -Fq 'JAIN_RUSTSEC_COMMIT="9f3e138091487e69144f536d36976e427a7a3307"' \
+  ops/ci/pinned-rustsec.sh
+grep -Fq 'JAIN_RUSTSEC_ARCHIVE_SHA256="08098d56e4349bd8fc08e8be06ba057e481ef547c859194fc538f0acbd0be63c"' \
+  ops/ci/pinned-rustsec.sh
 grep -Fq 'zizmor --offline --format json' ops/ci/security.sh
 if grep -Fq -- '--no-exit-codes' ops/ci/security.sh; then
   printf 'security lane must not suppress Zizmor findings\n' >&2

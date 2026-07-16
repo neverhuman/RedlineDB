@@ -18,7 +18,9 @@ cargo audit --version >/dev/null 2>&1 || {
 mkdir -p target/jankurai/security
 gitleaks detect --source . --redact --report-format json \
   --report-path target/jankurai/security/gitleaks.json
-cargo audit --no-fetch --json > target/jankurai/security/cargo-audit.json
+bash ops/ci/pinned-rustsec-test.sh
+cargo audit --db target/jankurai/security/rustsec-db --no-fetch --json \
+  > target/jankurai/security/cargo-audit.json
 syft . -o spdx-json=target/jankurai/security/sbom.spdx.json
 zizmor --offline --format json .github/workflows \
   > target/jankurai/security/zizmor.json
