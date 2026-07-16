@@ -10,22 +10,11 @@ ensure_artifacts
 log_file="${ARTIFACT_DIR}/language-bad-behavior.log"
 : > "$log_file"
 
-if JBIN="$(jankurai_bin)"; then
-  for sub in ci-bad-behavior git-bad-behavior release-bad-behavior; do
-    log "language-bad-behavior: jankurai ${sub}"
-    if "$JBIN" "$sub" . --out "$log_file" >>"$log_file" 2>&1; then
-      printf '%s: ok\n' "$sub" >> "$log_file"
-    else
-      printf '%s: scan emitted findings (see above)\n' "$sub" >> "$log_file"
-    fi
-  done
-else
-  missing_tool jankurai "language bad-behavior scans"
-  {
-    printf 'ci-bad-behavior: .github/workflows pin every action to a 40-hex SHA; security scans are blocking\n'
-    printf 'git-bad-behavior: ops/git-hooks/pre-push gates pushes; no force-push or destructive automation\n'
-    printf 'release-bad-behavior: docs/release.md + ops/ci/release-readiness.sh back every release step\n'
-  } >> "$log_file"
-fi
+JBIN="$(jankurai_bin)" || fail "governed Jankurai identity verification failed"
+for sub in ci-bad-behavior git-bad-behavior release-bad-behavior; do
+  log "language-bad-behavior: jankurai ${sub}"
+  "$JBIN" "$sub" . --out "$log_file" >>"$log_file" 2>&1
+  printf '%s: ok\n' "$sub" >>"$log_file"
+done
 
 log "language-bad-behavior: complete"

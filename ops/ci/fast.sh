@@ -9,6 +9,9 @@ while IFS= read -r script; do
   bash -n "$script"
 done < <(find scripts ops/ci ops/git-hooks -type f -name '*.sh' 2>/dev/null | sort)
 
+log "fast: governed Jankurai hostile identity tests"
+bash ops/ci/governed-jankurai-test.sh
+
 log "fast: checking CI language boundary"
 cargo fmt --manifest-path tools/release-control/Cargo.toml -- --check
 cargo clippy --locked --manifest-path tools/release-control/Cargo.toml --all-targets -- -D warnings

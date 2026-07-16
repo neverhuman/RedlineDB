@@ -84,45 +84,43 @@ release-readiness:
 
 # audit-ci: advisory repo score.
 score:
-    mkdir -p target/jankurai
-    "${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}" audit . --mode advisory \
-      --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md
+    bash ops/ci/score.sh
 
 # Run the full jankurai tool suite.
 jankurai:
     bash ops/ci/jankurai.sh
 
 proof-routing:
-    "${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}" proof . --changed-from "${JANKURAI_BASE_REF:-origin/main}" --out target/jankurai/proof-routing.json --md target/jankurai/proof-routing.md
+    bash ops/ci/governed-jankurai.sh proof . --changed-from "${JANKURAI_BASE_REF:-origin/main}" --out target/jankurai/proof-routing.json --md target/jankurai/proof-routing.md
 
 proofbind:
-    "${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}" proofbind verify . --changed-from "${JANKURAI_BASE_REF:-origin/main}" --out target/jankurai/proofbind/surface-witness.json --obligations-out target/jankurai/proofbind/obligations.json
+    bash ops/ci/governed-jankurai.sh proofbind verify . --changed-from "${JANKURAI_BASE_REF:-origin/main}" --out target/jankurai/proofbind/surface-witness.json --obligations-out target/jankurai/proofbind/obligations.json
 
 proofmark-rust:
-    "${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}" proofmark rust . --obligations target/jankurai/proofbind/obligations.json --out target/jankurai/proofmark/proofmark-receipt.json
+    bash ops/ci/governed-jankurai.sh proofmark rust . --obligations target/jankurai/proofbind/obligations.json --out target/jankurai/proofmark/proofmark-receipt.json
 
 copy-code:
-    "${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}" copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
+    bash ops/ci/governed-jankurai.sh copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
 
 security-evidence:
-    "${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}" security run . --script ops/ci/security.sh --out target/jankurai/security/evidence.json
+    bash ops/ci/governed-jankurai.sh security run . --script ops/ci/security.sh --out target/jankurai/security/evidence.json
 
 language-bad-behavior:
     bash ops/ci/language-bad-behavior.sh
 
 rust-witness:
-    "${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}" rust witness build . --out target/jankurai/rust/witness-graph.json
+    bash ops/ci/governed-jankurai.sh rust witness build . --out target/jankurai/rust/witness-graph.json
 
 # authz-matrix / input-boundary / agent-tool-supply are audit detectors; the
 # audit produces their evidence in the repo score JSON.
 authz-matrix:
-    "${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}" audit . --mode advisory --json target/jankurai/authz-matrix.json --md target/jankurai/authz-matrix.md
+    bash ops/ci/governed-jankurai.sh audit . --mode advisory --full --no-score-history --policy .jankurai/audit-policy.toml --json target/jankurai/authz-matrix.json --md target/jankurai/authz-matrix.md
 
 input-boundary:
-    "${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}" audit . --mode advisory --json target/jankurai/input-boundary.json --md target/jankurai/input-boundary.md
+    bash ops/ci/governed-jankurai.sh audit . --mode advisory --full --no-score-history --policy .jankurai/audit-policy.toml --json target/jankurai/input-boundary.json --md target/jankurai/input-boundary.md
 
 agent-tool-supply:
-    "${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}" audit . --mode advisory --json target/jankurai/agent-tool-supply.json --md target/jankurai/agent-tool-supply.md
+    bash ops/ci/governed-jankurai.sh audit . --mode advisory --full --no-score-history --policy .jankurai/audit-policy.toml --json target/jankurai/agent-tool-supply.json --md target/jankurai/agent-tool-supply.md
 
 evidence-catalog:
     bash ops/ci/evidence-catalog.sh

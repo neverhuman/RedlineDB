@@ -32,6 +32,11 @@ bound parameters, never interpolated.
 
 ## Supply chain
 
-`ops/ci/security.sh` (blocking in CI) runs gitleaks, cargo-audit, cargo-deny
-(`deny.toml`), `npm audit --audit-level=high`, zizmor, and emits an SPDX SBOM.
-Every GitHub Action is pinned to a 40-hex commit SHA.
+`ops/ci/security.sh` is blocking and network-free. It verifies exact local tool
+bytes, audits against the clean pinned RustSec database without fetching, runs
+`cargo-deny` with fetching disabled and warnings denied, uses the offline npm
+advisory cache, requires zero offline Zizmor findings, and runs pinned Syft with
+its update check disabled. Evidence stays under `target/jankurai/security/` and
+is bound to the exact commit and tree. Every GitHub Action is pinned to a
+40-hex commit SHA; workflows never install release security tools from the
+public network.

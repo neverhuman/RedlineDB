@@ -19,7 +19,7 @@ and check your toolchain with `bash scripts/ci-doctor.sh`.
 | backend | `ops/ci/backend.sh` | `cargo fmt`/`clippy -D warnings`/`test`, release build |
 | security | `ops/ci/security.sh` | gitleaks, cargo-audit, cargo-deny, npm audit, zizmor, SBOM |
 | web e2e | `ops/ci/e2e.sh` | Playwright smoke against the **built binary** + axe a11y |
-| jankurai | `ops/ci/jankurai.sh` | the jankurai tool suite → `target/jankurai/**` evidence |
+| jankurai | `ops/ci/jankurai.sh` | exact governed Jankurai 1.6.11, clean-head score/proof → ignored `target/jankurai/**` evidence |
 | cost-budget | `ops/ci/cost-budget.sh` | zero-spend budget + stop conditions receipt |
 | release-readiness | `ops/ci/release-readiness.sh` | release evidence surface receipt |
 
