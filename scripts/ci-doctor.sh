@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT"
+
+source ops/ci/lib.sh
+for command in cargo jq rg sha256sum realpath; do
+  require_cmd "$command"
+done
+
+JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
+JANKURAI_VERSION="1.6.11"
+JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+[[ -f "$JANKURAI_BIN" && ! -L "$JANKURAI_BIN" && -x "$JANKURAI_BIN" ]]
+[[ "$(realpath -e -- "$JANKURAI_BIN")" == "$JANKURAI_BIN" ]]
+[[ "$($JANKURAI_BIN --version)" == "jankurai $JANKURAI_VERSION" ]]
+[[ "$(sha256sum -- "$JANKURAI_BIN" | awk '{print $1}')" == "$JANKURAI_SHA256" ]]
+
+for script in ops/ci/*.sh scripts/ci-local.sh scripts/ci-doctor.sh; do
+  bash -n "$script"
+done
+[[ -x ops/ci/jankurai.sh && -x ops/ci/required.sh && -x scripts/ci-local.sh ]]
+grep -Fq 'bash ops/ci/jankurai.sh' .github/workflows/jankurai.yml
+printf 'ci doctor ok: governed Jankurai and local lane dispatch\n'

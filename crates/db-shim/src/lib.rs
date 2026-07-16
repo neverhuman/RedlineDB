@@ -137,7 +137,10 @@ impl Db {
         let sql = self.expand(sql);
         match &mut self.inner {
             Inner::Sqlite(c) => {
-                c.execute(&sql, rusqlite::params_from_iter(params.iter().map(to_rusqlite)))?;
+                c.execute(
+                    &sql,
+                    rusqlite::params_from_iter(params.iter().map(to_rusqlite)),
+                )?;
                 Ok(())
             }
             Inner::Redline(c) => Ok(c.execute_params(&sql, params)?),

@@ -27,7 +27,11 @@ fn run(backend: &str, dsn: &str, ns: &str) -> db_shim::Result<()> {
     // Parameterized + non-parameterized DML.
     db.execute_params(
         "INSERT INTO {ns}items(id,name,score) VALUES (?,?,?)",
-        &[Value::Integer(1), Value::Text("ada".into()), Value::Real(9.5)],
+        &[
+            Value::Integer(1),
+            Value::Text("ada".into()),
+            Value::Real(9.5),
+        ],
     )?;
     db.execute("INSERT INTO {ns}items(id,name,score) VALUES (2,'lin',8.0)")?;
 
@@ -35,7 +39,11 @@ fn run(backend: &str, dsn: &str, ns: &str) -> db_shim::Result<()> {
     db.transaction(|tx| {
         tx.execute_params(
             "INSERT INTO {ns}items(id,name,score) VALUES (?,?,?)",
-            &[Value::Integer(3), Value::Text("grace".into()), Value::Real(10.0)],
+            &[
+                Value::Integer(3),
+                Value::Text("grace".into()),
+                Value::Real(10.0),
+            ],
         )?;
         Ok(())
     })?;
@@ -43,7 +51,11 @@ fn run(backend: &str, dsn: &str, ns: &str) -> db_shim::Result<()> {
     // Pragma round-trip (parity feature both backends support).
     db.execute_batch("PRAGMA user_version = 7")?;
     let uv = db.query_row("PRAGMA user_version", &[])?;
-    assert_eq!(uv.first(), Some(&Value::Integer(7)), "user_version round-trip");
+    assert_eq!(
+        uv.first(),
+        Some(&Value::Integer(7)),
+        "user_version round-trip"
+    );
 
     // Count + parameterized query.
     let count = db.query_row("SELECT COUNT(*) FROM {ns}items", &[])?;

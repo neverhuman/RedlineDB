@@ -9,6 +9,9 @@ description = "Switchable SQLite|RedlineDB abstraction (rusqlite-shaped, .env-dr
 redlinedb-client = { path = "../redlinedb-client" }
 rusqlite = { version = "0.32", features = ["bundled"] }
 
+[dev-dependencies]
+proptest = "1"
+
 [[bin]]
 name = "db-shim-parity"
 path = "src/bin/parity.rs"

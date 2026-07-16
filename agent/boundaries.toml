@@ -1,0 +1,25 @@
+schema_version = "1.0.0"
+workspace = "redline-central"
+
+[db]
+root_paths = ["crates/db-shim"]
+migration_paths = ["db/migrations"]
+constraint_paths = ["db/constraints"]
+
+[[boundaries]]
+path = "crates/redlinedb-client"
+kind = "protocol"
+owns = ["framing", "wire values", "client session lifecycle"]
+forbids = ["database storage", "process launch"]
+
+[[boundaries]]
+path = "crates/db-shim"
+kind = "adapter"
+owns = ["backend selection", "namespace expansion", "transaction parity"]
+forbids = ["wire framing", "service lifecycle"]
+
+[[boundaries]]
+path = "docker"
+kind = "packaging"
+owns = ["central service image contract", "port and volume declaration"]
+forbids = ["Rust protocol implementation"]

@@ -5,7 +5,7 @@ services:
     build:
       context: ../..                              # redline-split/ (to access redline-core)
       dockerfile: redline-central/docker/Dockerfile
-    image: redline-central-db:latest
+    image: redline-central-db:4.1.0
     container_name: redline-central-db
     ports:
       - "6033:6033"

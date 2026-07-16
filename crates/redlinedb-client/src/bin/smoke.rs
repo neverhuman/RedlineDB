@@ -4,7 +4,9 @@
 use redlinedb_client::{Client, Value};
 
 fn main() {
-    let addr = std::env::args().nth(1).unwrap_or_else(|| "127.0.0.1:6033".to_owned());
+    let addr = std::env::args()
+        .nth(1)
+        .unwrap_or_else(|| "127.0.0.1:6033".to_owned());
     match run(&addr) {
         Ok(()) => println!("SMOKE PASS ({addr})"),
         Err(e) => {
@@ -26,7 +28,11 @@ fn run(addr: &str) -> redlinedb_client::Result<()> {
     // Parameterized insert.
     c.execute_params(
         "INSERT INTO smoke_items(id, name, score) VALUES (?, ?, ?)",
-        &[Value::Integer(1), Value::Text("ada".into()), Value::Real(9.5)],
+        &[
+            Value::Integer(1),
+            Value::Text("ada".into()),
+            Value::Real(9.5),
+        ],
     )?;
     // Non-parameterized insert.
     c.execute("INSERT INTO smoke_items(id, name, score) VALUES (2, 'lin', 8.0)")?;
@@ -36,11 +42,19 @@ fn run(addr: &str) -> redlinedb_client::Result<()> {
     c.transaction(|tx| {
         tx.execute_params(
             "INSERT INTO smoke_items(id, name, score) VALUES (?, ?, ?)",
-            &[Value::Integer(3), Value::Text("grace".into()), Value::Real(10.0)],
+            &[
+                Value::Integer(3),
+                Value::Text("grace".into()),
+                Value::Real(10.0),
+            ],
         )?;
         tx.execute_params(
             "INSERT INTO smoke_items(id, name, score) VALUES (?, ?, ?)",
-            &[Value::Integer(4), Value::Text("hopper".into()), Value::Real(9.9)],
+            &[
+                Value::Integer(4),
+                Value::Text("hopper".into()),
+                Value::Real(9.9),
+            ],
         )?;
         Ok(())
     })?;
@@ -53,7 +67,10 @@ fn run(addr: &str) -> redlinedb_client::Result<()> {
     assert_eq!(n, 4, "expected 4 rows");
 
     // Parameterized query.
-    let r = c.query("SELECT id, name, score FROM smoke_items WHERE score >= ? ORDER BY id", &[Value::Real(9.0)])?;
+    let r = c.query(
+        "SELECT id, name, score FROM smoke_items WHERE score >= ? ORDER BY id",
+        &[Value::Real(9.0)],
+    )?;
     println!("query columns = {:?}", r.columns);
     for row in &r.rows {
         println!(

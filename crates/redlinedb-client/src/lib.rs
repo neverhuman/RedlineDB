@@ -163,7 +163,9 @@ impl Client {
         };
         match client.request(&Request::Hello)? {
             Response::Hello { .. } => Ok(client),
-            other => Err(Error::Protocol(format!("unexpected hello response: {other:?}"))),
+            other => Err(Error::Protocol(format!(
+                "unexpected hello response: {other:?}"
+            ))),
         }
     }
 
@@ -196,7 +198,9 @@ impl Client {
 
     /// Execute a non-parameterized statement (DDL/DML). Returns rows affected.
     pub fn execute(&mut self, sql: &str) -> Result<u64> {
-        match self.request(&Request::Exec { sql: sql.to_owned() })? {
+        match self.request(&Request::Exec {
+            sql: sql.to_owned(),
+        })? {
             Response::Summary { rows_affected, .. } => Ok(rows_affected),
             other => Err(Error::Protocol(format!("exec: unexpected {other:?}"))),
         }
@@ -251,7 +255,9 @@ impl Client {
             stmt_id: id,
             sql: sql.to_owned(),
         })? {
-            Response::Prepared { stmt_id, columns, .. } => Ok((stmt_id, columns)),
+            Response::Prepared {
+                stmt_id, columns, ..
+            } => Ok((stmt_id, columns)),
             other => Err(Error::Protocol(format!("prepare: unexpected {other:?}"))),
         }
     }

@@ -1,0 +1,24 @@
+{
+  "workspace": "redline-central",
+  "owners": {
+    ".env.example": "ops",
+    ".github/": "ops",
+    ".gitignore": "control-plane",
+    "AGENTS.md": "control-plane",
+    "Cargo.toml": "workspace",
+    "Cargo.lock": "workspace",
+    "VERSION": "workspace",
+    "CHANGELOG.md": "docs",
+    "README.md": "docs",
+    "Justfile": "ops",
+    "agent/": "control-plane",
+    "crates/redlinedb-client/": "protocol",
+    "crates/db-shim/": "adapter",
+    "db/": "adapter",
+    "docker/": "ops",
+    "docs/": "docs",
+    "ops/": "ops",
+    "rust-toolchain.toml": "ops",
+    "scripts/": "ops"
+  }
+}

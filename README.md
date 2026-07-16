@@ -1,5 +1,9 @@
 # redline-central
 
+[![Jankurai](https://img.shields.io/badge/Jankurai-governed-blue)](agent/repo-score.md)
+
+Agent entrypoint: [`AGENTS.md`](AGENTS.md).
+
 The **centralized RedlineDB for the whole system**: one shared `redlinedb-server` (in Docker) that
 every project connects to, with a switchable SQLite/RedlineDB abstraction and per-project table-name
 prefixes. Lives beside `redline-core` under `redline-split/`; the server binary stays in redline-core,
@@ -10,6 +14,14 @@ this subrepo dockerizes it and provides the remote client + the switchable shim.
 - `crates/db-shim` — switchable `sqlite|redline` abstraction (+ `{ns}` prefixing, `.env`) — proven.
 - `docker/` — `Dockerfile` + `docker-compose.yml` for the central server.
 - `.env.example` — `DB_BACKEND` / `DB_DSN` / `DB_NAMESPACE` template a consumer copies.
+
+## Quick start
+
+```sh
+cargo test --locked --workspace --all-targets
+DB_BACKEND=sqlite DB_DSN=:memory: DB_NAMESPACE=demo \
+  cargo run --locked -p db-shim --bin db-shim-parity
+```
 
 ## Run the central DB
 Docker (recommended):
@@ -27,4 +39,12 @@ redlinedb-server --database ./central.redline --listen 127.0.0.1:6033   # from r
   exclusive-`flock` limit (multiple processes cannot open one embedded dir; the server fixes that).
   Verify: start the server, then
   `cargo run -p redlinedb-client --bin redlinedb-client-smoke -- 127.0.0.1:6033`.
-- ⏳ `db-shim` (switchable sqlite|redline + `{ns}` prefix), central migration tooling — next.
+- ✅ `db-shim` SQLite behavior, namespace expansion, commit, and rollback are
+  covered by host-local Rust tests. Live Redline parity remains an explicit
+  service-backed smoke lane, not a hidden dependency of the required lane.
+
+## Validate
+
+Run the complete protected-review contract with
+`bash scripts/ci-local.sh required`. Release identity and immutable-tag rules
+are documented in [`docs/release.md`](docs/release.md).

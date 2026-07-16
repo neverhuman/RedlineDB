@@ -1,0 +1,81 @@
+{
+  "workspace": "redline-central",
+  "tests": {
+    ".env.example": {
+      "command": "bash ops/ci/contract-drift.sh",
+      "purpose": "verify documented central connection variables"
+    },
+    ".github/": {
+      "command": "bash -n ops/ci/*.sh scripts/ci-local.sh",
+      "purpose": "verify compatibility workflows delegate to local proof scripts"
+    },
+    ".gitignore": {
+      "command": "bash ops/ci/contract-drift.sh",
+      "purpose": "verify generated proof output remains outside source authority"
+    },
+    "AGENTS.md": {
+      "command": "bash ops/ci/jankurai.sh",
+      "purpose": "verify repository guidance and governed audit routing"
+    },
+    "Cargo.toml": {
+      "command": "bash ops/ci/contract-drift.sh",
+      "purpose": "verify native Redline package identity"
+    },
+    "Cargo.lock": {
+      "command": "cargo check --locked --workspace --all-targets",
+      "purpose": "verify the locked dependency graph"
+    },
+    "CHANGELOG.md": {
+      "command": "bash ops/ci/contract-drift.sh",
+      "purpose": "verify native release identity notes"
+    },
+    "Justfile": {
+      "command": "just fast",
+      "purpose": "verify local proof entrypoints"
+    },
+    "README.md": {
+      "command": "bash ops/ci/fast.sh",
+      "purpose": "verify documented quick-start behavior"
+    },
+    "VERSION": {
+      "command": "bash ops/ci/contract-drift.sh",
+      "purpose": "verify native Redline version source"
+    },
+    "agent/": {
+      "command": "bash ops/ci/jankurai.sh",
+      "purpose": "verify machine-readable proof routing"
+    },
+    "crates/redlinedb-client/": {
+      "command": "cargo test --locked -p redlinedb-client --all-targets",
+      "purpose": "verify framed protocol and value contracts"
+    },
+    "crates/db-shim/": {
+      "command": "cargo test --locked -p db-shim --all-targets",
+      "purpose": "verify SQLite parity, namespace, and transaction behavior"
+    },
+    "db/": {
+      "command": "cargo test --locked -p db-shim --test sqlite_contract",
+      "purpose": "verify namespacing, constraints, and rollback behavior"
+    },
+    "docker/": {
+      "command": "bash ops/ci/contract-drift.sh",
+      "purpose": "verify central-service packaging contract"
+    },
+    "docs/": {
+      "command": "bash ops/ci/contract-drift.sh",
+      "purpose": "verify immutable native release identity documentation"
+    },
+    "ops/": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify blocking proof lanes"
+    },
+    "rust-toolchain.toml": {
+      "command": "cargo check --locked --workspace --all-targets",
+      "purpose": "verify the pinned Rust toolchain"
+    },
+    "scripts/": {
+      "command": "bash -n scripts/ci-local.sh",
+      "purpose": "verify local lane dispatch"
+    }
+  }
+}
