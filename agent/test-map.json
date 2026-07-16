@@ -13,13 +13,41 @@
       "command": "bash ops/ci/score.sh",
       "purpose": "verify governed Jankurai policy and version metadata"
     },
+    ".jeryu/": {
+      "command": "bash ops/ci/release-readiness.sh",
+      "purpose": "verify local-forge release policy remains fail closed"
+    },
+    ".npmrc": {
+      "command": "bash ops/ci/web.sh",
+      "purpose": "verify the frontend dependency and registry policy"
+    },
     "AGENTS.md": {
       "command": "bash ops/ci/score.sh",
       "purpose": "verify agent guidance remains visible to the auditor"
     },
+    "CHANGELOG.md": {
+      "command": "bash ops/ci/release-readiness.sh",
+      "purpose": "verify release and rollback guidance"
+    },
+    "CONTRACT.md": {
+      "command": "bash ops/ci/contract-drift.sh",
+      "purpose": "verify the OpenAPI, Rust, and TypeScript contract stays synchronized"
+    },
+    "Cargo.lock": {
+      "command": "bash ops/ci/backend.sh",
+      "purpose": "verify the locked backend dependency graph"
+    },
+    "Cargo.toml": {
+      "command": "bash ops/ci/backend.sh",
+      "purpose": "verify the Rust workspace and backend package"
+    },
     "Justfile": {
       "command": "bash ops/ci/fast.sh",
       "purpose": "verify the canonical command surface"
+    },
+    "LICENSE": {
+      "command": "bash ops/ci/security.sh",
+      "purpose": "verify dependency and source-license policy"
     },
     "README.md": {
       "command": "bash ops/ci/score.sh",
@@ -28,6 +56,18 @@
     "agent/": {
       "command": "bash ops/ci/jankurai.sh",
       "purpose": "verify machine-readable proof, boundary, and ownership policy"
+    },
+    "apps/api/": {
+      "command": "bash ops/ci/backend.sh",
+      "purpose": "verify the Rust API, connector, property tests, and release build"
+    },
+    "apps/web/": {
+      "command": "bash ops/ci/web.sh && bash ops/ci/e2e.sh",
+      "purpose": "verify the TypeScript UI, browser flow, and accessibility checks"
+    },
+    "contracts/": {
+      "command": "bash ops/ci/contract-drift.sh",
+      "purpose": "verify generated contract identity"
     },
     "db/": {
       "command": "cargo test -p redline-web-server --test property --locked",
@@ -41,9 +81,17 @@
       "command": "bash ops/ci/release-readiness.sh",
       "purpose": "verify release and repair guidance"
     },
+    "gitleaks.toml": {
+      "command": "bash ops/ci/security.sh",
+      "purpose": "verify the governed secret-scanning policy"
+    },
     "ops/": {
       "command": "REDLINE_STRICT_TOOLS=1 bash ops/ci/pr-ci.sh",
       "purpose": "verify the full governed CI and evidence surface"
+    },
+    "rust-toolchain.toml": {
+      "command": "bash scripts/ci-doctor.sh",
+      "purpose": "verify the Rust toolchain identity used by CI"
     },
     "schemas/": {
       "command": "bash ops/ci/jankurai.sh",
@@ -52,6 +100,10 @@
     "scripts/": {
       "command": "bash scripts/ci-doctor.sh",
       "purpose": "verify local tool identity and CI parity"
+    },
+    "tools/": {
+      "command": "bash ops/ci/fast.sh",
+      "purpose": "verify release-control helpers and the Rust-only language boundary"
     }
   }
 }
