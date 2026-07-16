@@ -1,39 +1,40 @@
 #!/usr/bin/env bash
-# Rendered UX QA lane: run the jankurai UX audit against the built SPA and emit
-# layered evidence (Playwright smoke, axe accessibility, design tokens). The
-# browser-driven Playwright run lives in ops/ci/e2e.sh; this lane records the
-# rendered-UX evidence receipt the audit consumes.
+# Bind the real Playwright/Axe browser run to the exact clean commit. The
+# standalone Jankurai distribution does not ship its repository-local
+# packages/ux-qa runtime, so release evidence must not invoke that missing path.
 set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd "$ROOT_DIR"
 ensure_artifacts
 
-if JBIN="$(jankurai_bin)"; then
-  log "ux-qa: jankurai ux audit"
-  "$JBIN" ux audit --config agent/ux-qa.toml --out "${ARTIFACT_DIR}/ux-qa.json" \
-    || warn "ux-qa: jankurai ux audit emitted a non-zero status (supplementary lane)"
-else
-  missing_tool jankurai "rendered UX audit"
-fi
+has git || fail "git is required for exact-head UX evidence"
+has jq || fail "jq is required for exact-head UX evidence"
+[[ -z "$(git status --porcelain)" ]] || fail "UX evidence requires a clean checkout"
+playwright_json="${ARTIFACT_DIR}/ux-qa/playwright.json"
+[[ -s "$playwright_json" ]] || fail "Playwright UX evidence is missing"
+jq -e '
+  .stats.expected == 4
+  and .stats.skipped == 0
+  and .stats.unexpected == 0
+  and .stats.flaky == 0
+  and ([.suites[].specs[] | select(.ok != true)] | length) == 0
+' "$playwright_json" >/dev/null
 
-log "ux-qa: recording rendered-UX evidence receipt"
-if [[ ! -s "${ARTIFACT_DIR}/ux-qa.json" ]]; then
-  if ! has jq; then
-    missing_tool jq "rendered UX receipt"
-    exit 0
-  fi
-  jq '{
-    ok: true,
-    repo: "redline-web",
-    owned_surface: "Vite/React SQL console + observability dashboard",
-    e2e: .playwright_visual,
-    accessibility: .accessibility,
-    api_mocks: .api_mocks,
-    design_tokens: .design_tokens,
-    config: "agent/ux-qa.toml",
-    playwright_config: "apps/web/playwright.config.ts",
-    e2e_spec: "apps/web/e2e/smoke.spec.ts"
-  }' agent/ux-qa-evidence.json >"${ARTIFACT_DIR}/ux-qa.json"
-fi
+report_sha256="$(jain_sha256 "$playwright_json")"
+smoke_sha256="$(jain_sha256 apps/web/e2e/smoke.spec.ts)"
+config_sha256="$(jain_sha256 apps/web/playwright.config.ts)"
+jq -n \
+  --arg commit "$(git rev-parse HEAD)" \
+  --arg tree "$(git rev-parse 'HEAD^{tree}')" \
+  --arg report_sha256 "$report_sha256" \
+  --arg smoke_sha256 "$smoke_sha256" \
+  --arg config_sha256 "$config_sha256" \
+  --slurpfile report "$playwright_json" \
+  '{schema_version:"redline.web.ux-qa/v1",status:"pass",
+    commit:$commit,tree:$tree,playwright_report_sha256:$report_sha256,
+    smoke_spec_sha256:$smoke_sha256,playwright_config_sha256:$config_sha256,
+    stats:$report[0].stats,
+    tests:[$report[0].suites[].specs[]|{title,ok}]}' \
+  >"${ARTIFACT_DIR}/ux-qa.json"
 
 log "ux-qa: complete"
