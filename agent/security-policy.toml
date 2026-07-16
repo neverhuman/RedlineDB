@@ -1,0 +1,14 @@
+schema_version = "1.0.0"
+enabled_tools = ["gitleaks", "cargo audit", "cargo deny", "syft", "actionlint"]
+required_tools = ["gitleaks"]
+advisory_tools = ["cargo deny", "syft", "actionlint"]
+
+[severity_thresholds]
+fail_lane_on = "high"
+
+[thin_hub]
+rust_dependency_graph = "tools/evidence-processor/Cargo.lock"
+product_dependency_graph = "not_applicable"
+require_secret_scan = true
+require_sbom = true
+require_workflow_lint = true

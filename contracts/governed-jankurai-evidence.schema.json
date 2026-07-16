@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://redlinedb.invalid/schemas/governed-jankurai-evidence-v1.json",
+  "title": "Redline governed Jankurai evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "head_sha",
+    "tree_sha",
+    "source_clean",
+    "report",
+    "report_sha256",
+    "auditor_version",
+    "governed_binary",
+    "governed_binary_sha256",
+    "report_decision",
+    "native_passed",
+    "ratchet_accepted",
+    "policy_changed"
+  ],
+  "properties": {
+    "schema_version": {"const": "redline.governed-jankurai-evidence/v1"},
+    "status": {"const": "pass"},
+    "head_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "tree_sha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "source_clean": {"const": true},
+    "report": {"const": "target/jankurai/repo-score.json"},
+    "report_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "auditor_version": {"const": "1.6.11"},
+    "governed_binary": {"const": "/home/ubuntu/.jeryu/bin/jankurai"},
+    "governed_binary_sha256": {"const": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"},
+    "report_decision": {"type": "string", "enum": ["advisory", "pass", "fail"]},
+    "native_passed": {"type": "boolean"},
+    "ratchet_accepted": {"const": true},
+    "policy_changed": {"type": "boolean"}
+  }
+}

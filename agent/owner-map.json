@@ -1,0 +1,21 @@
+{
+  "workspace": "redline-hub",
+  "owners": {
+    ".github/": "ops",
+    ".gitignore": "workspace",
+    ".jankurai/": "agent",
+    "AGENTS.md": "agent",
+    "CHANGELOG.md": "workspace",
+    "README.md": "workspace",
+    "VERSION": "workspace",
+    "agent/": "agent",
+    "assets/": "workspace",
+    "contracts/": "contracts",
+    "db/": "workspace",
+    "docs/": "standard",
+    "justfile": "workspace",
+    "ops/": "ops",
+    "scripts/": "ops",
+    "tools/": "tools"
+  }
+}

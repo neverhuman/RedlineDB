@@ -40,7 +40,12 @@ agent/*
 !agent/JANKURAI_STANDARD.md
 !agent/audit-policy.toml
 !agent/boundaries.toml
+!agent/generated-zones.toml
+!agent/owner-map.json
+!agent/proof-lanes.toml
+!agent/security-policy.toml
 !agent/standard-version.toml
+!agent/test-map.json
 !agent/tool-adoption.toml
 :memory:/
 FUCKIT.md

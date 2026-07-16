@@ -1,0 +1,69 @@
+{
+  "workspace": "redline-hub",
+  "tests": {
+    ".github/": {
+      "command": "actionlint .github/workflows/*.yml",
+      "purpose": "validate workflow syntax and pinned action structure"
+    },
+    ".gitignore": {
+      "command": "just check",
+      "purpose": "validate source and generated-evidence boundaries"
+    },
+    ".jankurai/": {
+      "command": "just score",
+      "purpose": "validate Jankurai control metadata and score policy"
+    },
+    "AGENTS.md": {
+      "command": "just check",
+      "purpose": "validate hub ownership and proof routing"
+    },
+    "CHANGELOG.md": {
+      "command": "just score",
+      "purpose": "keep release changes visible to the governed audit"
+    },
+    "README.md": {
+      "command": "just check",
+      "purpose": "validate the public hub entrypoint"
+    },
+    "VERSION": {
+      "command": "just check",
+      "purpose": "validate the hub compatibility-track source"
+    },
+    "agent/": {
+      "command": "just score",
+      "purpose": "validate agent control manifests"
+    },
+    "assets/": {
+      "command": "just score",
+      "purpose": "audit committed hub evidence assets"
+    },
+    "contracts/": {
+      "command": "just score",
+      "purpose": "validate governed evidence contracts and generation routes"
+    },
+    "db/": {
+      "command": "just check",
+      "purpose": "enforce the hub no-database-truth boundary"
+    },
+    "docs/": {
+      "command": "just score",
+      "purpose": "validate release and audit guidance"
+    },
+    "justfile": {
+      "command": "just test",
+      "purpose": "run the canonical hub test lane"
+    },
+    "ops/": {
+      "command": "just check",
+      "purpose": "run required CI control-plane proof"
+    },
+    "scripts/": {
+      "command": "just check",
+      "purpose": "validate hub guard and audit dispatch scripts"
+    },
+    "tools/": {
+      "command": "just security",
+      "purpose": "validate security wrappers and the Rust evidence processor"
+    }
+  }
+}

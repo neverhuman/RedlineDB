@@ -19,6 +19,9 @@
 #
 # Usage:
 #   bash tools/security-lane.sh
+# Parallel local runs may set CI_CARGO_AUDIT_DB to a reviewed, non-symlink
+# advisory snapshot and CI_CARGO_AUDIT_NO_FETCH=1; ops/ci/security.sh validates
+# that boundary without touching another lane's shared Cargo advisory cache.
 
 set -euo pipefail
 

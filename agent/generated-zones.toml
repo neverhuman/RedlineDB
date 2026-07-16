@@ -1,0 +1,13 @@
+[[zone]]
+path = "target/jankurai/governed-evidence.json"
+source = "contracts/governed-jankurai-evidence.schema.json"
+command = "just score"
+read_only = false
+write_policy = "auditor_output"
+
+[[zone]]
+path = "target/jankurai/**"
+source = "governed Jankurai 1.6.11 proof lanes"
+command = "bash ops/ci/jankurai-audit.sh"
+read_only = false
+write_policy = "auditor_output"

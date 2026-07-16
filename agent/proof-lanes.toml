@@ -1,0 +1,24 @@
+[[lane]]
+name = "required"
+command = "just check"
+purpose = "thin-hub boundary, no-Python policy, hostile Jankurai probes, evidence-processor tests, and tool doctor"
+
+[[lane]]
+name = "test"
+command = "just test"
+purpose = "locked Rust evidence-processor tests plus hostile Jankurai substitution tests"
+
+[[lane]]
+name = "audit"
+command = "bash ops/ci/jankurai-audit.sh"
+purpose = "governed 1.6.11 full audit, strict security evidence, ratchet, and exact-head receipt"
+
+[[lane]]
+name = "staged"
+command = "bash ops/ci/jankurai-staged-gate.sh"
+purpose = "save-gate every changed non-generated file against origin/main"
+
+[[lane]]
+name = "security"
+command = "just security"
+purpose = "dependency, secret, SBOM, and workflow security evidence"
