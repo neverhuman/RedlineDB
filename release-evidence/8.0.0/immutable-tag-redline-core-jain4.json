@@ -1,0 +1,22 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+    "remote": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+  "commit_input": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "remote": "http://127.0.0.1:8787/git/jeryu/redline-core.git",
+  "remote_main": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+  "repository": "/home/ubuntu/jain-split/redline-split/redline-core",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "redline-core-v4.1.0-jain.4",
+  "timestamp_unix": 1784058649
+}

@@ -1,0 +1,20 @@
+{
+  "schema_version": "redline.consumer-evidence/v1",
+  "consumer": "jeryu-split",
+  "family": "redline-split",
+  "generated_at": "2026-07-16T04:21:14Z",
+  "status": "pass",
+  "source_commit": "7048a72be412466647ab1bde69ca9f9db8990374",
+  "required_check": "jeryu-split/redline-consumer",
+  "engine_tag": "redline-core-v4.1.0-jain.4",
+  "engine_commit": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+  "proof_lock_id": "redline-proof/v2/4.1.0/3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+  "family_ci_receipt_sha256": "e2e15315fa01bb0ea669e1a7751e8f502ce94289e304319cd55669234d2dd59a",
+  "manifest_sha256": "55544e8d3e4d50a17e0bfe80fc00d819529d354caf8137564ede68021b96f0c6",
+  "policy_sha256": "e29ddbb7ec7bed306210ac0ba290b3886d210b93e45de6b8e0f873e01945315c",
+  "consumer_manifest_sha256": "91a19fae23189d5c7f3d0fe72b466df6bd4c828cac7ad1cf31e763340877a384",
+  "consumer_policy_sha256": "ce4d49f39ee369bd1ac6f85625061867a38712820845e2342184b241873ed8f7",
+  "test_log": "redline-consumer-jeryu-jain4.test.log",
+  "test_log_sha256": "2da8eb2127be33a01fb2101f8e757aa71373a6d006604629ea5fab2138c01507",
+  "tool_version": "jeryu-redline-consumer/v1"
+}
