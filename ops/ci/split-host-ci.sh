@@ -243,6 +243,12 @@ git config --file "$gitconfig" --add url."file://$MIRROR_ROOT/".insteadOf http:/
 git config --file "$gitconfig" --add url."file://$MIRROR_ROOT/".insteadOf http://127.0.0.1:8787/git/redline/
 git config --file "$gitconfig" --add url."file://$MIRROR_ROOT/".insteadOf https://github.com/neverhuman/
 git config --file "$gitconfig" net.git-fetch-with-cli true
+# The bare mirrors under MIRROR_ROOT are operator-owned CI caches; the runner uid
+# need not match their owner. This ephemeral gitconfig is used only for this run's
+# exact-SHA clones against those read-only mirror paths, so trust them here so the
+# clone does not trip Git's dubious-ownership guard. (Git's safe.directory does not
+# honor a "$MIRROR_ROOT/*" suffix on this version; the run-scoped "*" is exact.)
+git config --file "$gitconfig" --add safe.directory "*"
 export HOME="$tmp/home" CARGO_HOME="$tmp/cargo-home" CARGO_TARGET_DIR="$tmp/cargo-target"
 export GIT_CONFIG_GLOBAL="$gitconfig" GIT_CONFIG_NOSYSTEM=1
 export PATH="$CARGO_HOME/bin:$PATH"
