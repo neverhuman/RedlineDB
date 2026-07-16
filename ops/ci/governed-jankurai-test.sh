@@ -2,7 +2,12 @@
 set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
-tmp="$(mktemp -d /tmp/redline-web-governed-jankurai.XXXXXX)"
+tmp_parent="${ROOT_DIR}/target/ci-tmp"
+mkdir -p -- "$tmp_parent"
+[[ -d "$tmp_parent" && ! -L "$tmp_parent" \
+  && "$(realpath -e -- "$tmp_parent")" == "$tmp_parent" ]] \
+  || fail "CI scratch root must be a physical directory inside the repository"
+tmp="$(mktemp -d "${tmp_parent}/redline-web-governed-jankurai.XXXXXX")"
 cleanup() {
   local rc=$?
   rm -rf -- "$tmp"
