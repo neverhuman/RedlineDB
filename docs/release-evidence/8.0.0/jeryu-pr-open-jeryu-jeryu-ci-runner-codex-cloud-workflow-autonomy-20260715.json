@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jeryu-ci-runner"
+      },
+      "sha": "47b80c6f980caa8299b24886593402171fef4879"
+    },
+    "body": "",
+    "created_at": "2026-07-16T00:59:15.548525799Z",
+    "draft": false,
+    "head": {
+      "label": "codex/cloud-workflow-autonomy-20260715",
+      "ref": "codex/cloud-workflow-autonomy-20260715",
+      "repo": {
+        "full_name": "jeryu/jeryu-ci-runner"
+      },
+      "sha": "3ca70b8901c7d54371d8c947b11a3a53811c507e"
+    },
+    "html_url": "/jeryu/jeryu-ci-runner/pull/5",
+    "id": "4d4963d1-7e54-4429-8ce0-281dbd54ae43",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 5,
+    "source_repository": "jeryu/jeryu-ci-runner",
+    "state": "open",
+    "title": "Complete durable Jeryu workflow autonomy",
+    "updated_at": "2026-07-16T00:59:15.548525799Z",
+    "url": "/repos/jeryu/jeryu-ci-runner/pulls/5",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jeryu-ci-runner",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codex/cloud-workflow-autonomy-20260715",
+      "title": "Complete durable Jeryu workflow autonomy"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jeryu-ci-runner/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jeryu-ci-runner"
+      },
+      "sha": "47b80c6f980caa8299b24886593402171fef4879"
+    },
+    "body": "",
+    "created_at": "2026-07-16T00:59:15.548525799Z",
+    "draft": false,
+    "head": {
+      "label": "codex/cloud-workflow-autonomy-20260715",
+      "ref": "codex/cloud-workflow-autonomy-20260715",
+      "repo": {
+        "full_name": "jeryu/jeryu-ci-runner"
+      },
+      "sha": "3ca70b8901c7d54371d8c947b11a3a53811c507e"
+    },
+    "html_url": "/jeryu/jeryu-ci-runner/pull/5",
+    "id": "4d4963d1-7e54-4429-8ce0-281dbd54ae43",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 5,
+    "source_repository": "jeryu/jeryu-ci-runner",
+    "state": "open",
+    "title": "Complete durable Jeryu workflow autonomy",
+    "updated_at": "2026-07-16T00:59:15.548525799Z",
+    "url": "/repos/jeryu/jeryu-ci-runner/pulls/5",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784163555
+}

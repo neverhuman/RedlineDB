@@ -1,0 +1,166 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Exact preserved candidate promotion. Full canonical local CI is green at 9045da04eed8566b77f2dd8783f9f5deb06b9d3e. Check publication and merge remain blocked pending protected publisher authority.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-16T01:11:16.679719069+00:00",
+      "head_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+      "status": "pass"
+    },
+    "passport_hash": "passport:9045da04eed8566b77f2dd8783f9f5deb06b9d3e:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "13d4f928445c5d8685af917dad01a3cf6eb89e64",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "73e2234e-34f8-4ac0-9d79-17db34a98c5c#5",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/wave4-jain-jailgun-split1-20260715",
+      "head_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 5,
+      "passport_hash": "passport:9045da04eed8566b77f2dd8783f9f5deb06b9d3e:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "73e2234e-34f8-4ac0-9d79-17db34a98c5c",
+        "name": "jain-jailgun",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(jain-jailgun): bind 8.0.0 split.1 identity",
+      "updated_at": "2026-07-15T20:32:01.353078138+00:00"
+    }
+  },
+  "repository": "jeryu/jain-jailgun",
+  "request": {
+    "body": {
+      "body_markdown": null,
+      "evidence": null,
+      "expected_head_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-jailgun/pulls/5/reviews"
+  },
+  "response": {
+    "description": "Exact preserved candidate promotion. Full canonical local CI is green at 9045da04eed8566b77f2dd8783f9f5deb06b9d3e. Check publication and merge remain blocked pending protected publisher authority.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-16T01:11:16.664126696+00:00",
+      "head_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+      "status": "pass"
+    },
+    "passport_hash": "passport:9045da04eed8566b77f2dd8783f9f5deb06b9d3e:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "13d4f928445c5d8685af917dad01a3cf6eb89e64",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "73e2234e-34f8-4ac0-9d79-17db34a98c5c#5",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/wave4-jain-jailgun-split1-20260715",
+      "head_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 5,
+      "passport_hash": "passport:9045da04eed8566b77f2dd8783f9f5deb06b9d3e:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "73e2234e-34f8-4ac0-9d79-17db34a98c5c",
+        "name": "jain-jailgun",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(jain-jailgun): bind 8.0.0 split.1 identity",
+      "updated_at": "2026-07-15T20:32:01.353078138+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784164273
+}
