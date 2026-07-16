@@ -10,11 +10,11 @@
     "VERSION": "workspace",
     "agent/": "agent",
     "assets/": "workspace",
-    "contracts/": "contracts",
     "db/": "workspace",
     "docs/": "standard",
     "justfile": "workspace",
     "ops/": "ops",
+    "schemas/": "contracts",
     "scripts/": "ops",
     "tools/": "tools"
   }

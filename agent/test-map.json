@@ -37,10 +37,6 @@
       "command": "just score",
       "purpose": "audit committed hub evidence assets"
     },
-    "contracts/": {
-      "command": "just score",
-      "purpose": "validate governed evidence contracts and generation routes"
-    },
     "db/": {
       "command": "just check",
       "purpose": "enforce the hub no-database-truth boundary"
@@ -56,6 +52,10 @@
     "ops/": {
       "command": "just check",
       "purpose": "run required CI control-plane proof"
+    },
+    "schemas/": {
+      "command": "just score",
+      "purpose": "validate governed evidence schemas"
     },
     "scripts/": {
       "command": "just check",
