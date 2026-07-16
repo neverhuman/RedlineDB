@@ -1,0 +1,269 @@
+{
+  "schema_version": "jain.identity-independent-review/v1",
+  "status": "REVIEW_BLOCK",
+  "reviewed_at": "2026-07-16T07:31:05Z",
+  "claim_token": "codex-mcp-contracts-pr11-c3cf9594-independent-review-20260716T0722Z",
+  "repository": "jeryu/jain-contracts",
+  "reviewer_independence": {
+    "authored_reviewed_commits": false,
+    "mutated_source_or_refs": false,
+    "posted_checks": false,
+    "approved_or_merged": false
+  },
+  "pull_request": {
+    "number": 11,
+    "id": "a4336208-4d39-498f-890a-d4b2d0b17c82",
+    "state": "open",
+    "draft": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "base_ref": "main",
+    "base_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+    "head_ref": "release/v8.0.1/contracts-corrective-identity-20260716",
+    "head_sha": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+    "live_forge_base_and_head_exact": true
+  },
+  "ancestry": {
+    "merge_base": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+    "direct_linear_commits_over_base": 2,
+    "commits": [
+      {
+        "sha": "f7086dcecf19ececa97df33f16326f5d3d51aabf",
+        "parent": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+        "tree": "8b8fc1a5f6ba62fdac797ef8a0a6c76427e49219",
+        "subject": "chore(release): prepare contracts v8.0.1 correction"
+      },
+      {
+        "sha": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+        "parent": "f7086dcecf19ececa97df33f16326f5d3d51aabf",
+        "tree": "6a3d049b7fbd38965b6bf1b67cdff8c37221f257",
+        "subject": "docs(contracts): make release proof agent-readable"
+      }
+    ],
+    "merge_commits": 0
+  },
+  "exact_diff": {
+    "file_count": 7,
+    "insertions": 32,
+    "deletions": 5,
+    "full_index_binary_diff_sha256": "6ee3ddc8e310d8c2d8ea1003d1406ddf3a0240ff8b6d869b7d168e2ba67ec247",
+    "files": [
+      "CHANGELOG.md",
+      "README.md",
+      "VERSION",
+      "agent/standard-version.toml",
+      "contracts/AGENTS.md",
+      "docs/release.md",
+      "docs/testing.md"
+    ],
+    "mode_changes": 0,
+    "binary_changes": 0,
+    "symlink_changes": 0,
+    "schema_changes": 0,
+    "fixture_changes": 0,
+    "runtime_changes": 0,
+    "dependency_changes": 0,
+    "policy_floor_or_baseline_changes": 0,
+    "diff_check": "pass"
+  },
+  "unchanged_surface_proof": {
+    "demo_fixture_tree_base": "705575d2c0abf06399509fc13182083c9c7678b1",
+    "demo_fixture_tree_head": "705575d2c0abf06399509fc13182083c9c7678b1",
+    "demo_fixture_tree_identical": true,
+    "changed_contract_path_entries": [
+      "contracts/AGENTS.md"
+    ],
+    "changed_public_manifests_schemas_fixtures_or_payloads": [],
+    "dependency_manifests_changed": []
+  },
+  "release_identity": {
+    "version_file": "jain-contracts-v8.0.1-split.1",
+    "standard_version": "jain-contracts-v8.0.1-split.1",
+    "candidate_tag": "jain-contracts-v8.0.1-split.1",
+    "candidate_tag_is_next_unused": true,
+    "existing_immutable_tag": {
+      "tag": "jain-contracts-v8.0.1-split.0",
+      "commit": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+      "payload_version": "jain-contracts-v8.0.0-split.2",
+      "preserved": true
+    },
+    "status": "candidate",
+    "formal_ga": false,
+    "production_applied": false,
+    "atomicsoul_push": 0,
+    "sagemaker": "N/A",
+    "rollback_target": "7.0.6",
+    "changed_release_metadata_review": "pass",
+    "active_repository_lineage_review": "block"
+  },
+  "standalone_exact_head_review": {
+    "checkout_type": "automatically removed standalone --no-local clone with physical .git directory",
+    "worktree_used": false,
+    "detached_head": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+    "origin_main": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+    "physical_git_directory": true,
+    "alternates": "absent",
+    "git_fsck_strict": "pass",
+    "clean_before_and_after": true,
+    "automatically_removed": true,
+    "initial_direct_http_clone_attempt": "forge returned HTTP 500; no checkout was retained",
+    "successful_clone_source": "canonical exact stopped checkout copied with --no-local, then exact forge refs fetched after setting canonical loopback origin"
+  },
+  "governed_jankurai": {
+    "tool": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "jankurai 1.6.11",
+    "binary_type": "regular file",
+    "binary_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "command": "jankurai diff-audit . --base-ref origin/main",
+    "status": "pass",
+    "score": 87,
+    "raw_score": 87,
+    "minimum_score": 85,
+    "hard_findings": 0,
+    "caps": [],
+    "soft_findings": 5,
+    "independent_diff_score_sha256": "e05e3b4e8aba00cff64d982242e5a8fbbb55e8654e00734cc946dc2a88b028a8",
+    "independent_proof_plan_sha256": "967f19504b44a474127b3459173aa64b0045d90a1a21377d9e7a6a9f0de1b612",
+    "independent_changed_list_sha256": "be2766800ed10873fc7e1c828df236b3c284b4b02794d4b491b9f1d128fbcbf6",
+    "author_changed_list_sha256_matches": true,
+    "independent_invocation_used_governed_bytes": true,
+    "repository_local_governed_tool_enforcement": {
+      "status": "block",
+      "require_jankurai_behavior": "accepts any ambient PATH binary reporting jankurai 1.6.11",
+      "score_lane_behavior": "checks only ambient command presence",
+      "ambient_binary": "/home/ubuntu/.local/bin/jankurai",
+      "ambient_binary_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+      "governed_binary_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+      "digest_mismatch": true
+    }
+  },
+  "bounded_gates": {
+    "just_fast": "pass",
+    "just_required_non_release_mode": "pass",
+    "release_mode_contract_drift": {
+      "status": "expected_block",
+      "contracts_head": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+      "web_protected_main": "13ea4968dde1286111dacf8cd0216fa71e931242",
+      "deploy_protected_main": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "exit_code": 1,
+      "error": "release contract drift requires full-v1 mirror at ../jain-deploy/contracts/demo",
+      "standalone_physical_clones_removed": true
+    }
+  },
+  "forge_check_readback": {
+    "head_sha": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+    "jankurai_proof": {
+      "id": "75b4f2e8-6a07-4cb3-9e09-1cb9bb3f31af",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    "jeryu_autonomy": {
+      "id": "8710603b-37fa-4b26-8f65-75ff7c4265ad",
+      "status": "completed",
+      "conclusion": "neutral"
+    },
+    "required_check_name": "jain-contracts/required",
+    "required_check_present": false,
+    "required_check_success": false
+  },
+  "deploy_consumer_prerequisite": {
+    "protected_main_sha": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+    "protected_main_has_contracts_demo": false,
+    "candidate_pull_request": 23,
+    "candidate_head": "627b36d3d325b9f9d6e13e948c6149626be8a7ba",
+    "candidate_has_full_v1_mirror": true,
+    "candidate_json_semantically_matches_contracts": true,
+    "candidate_csv_payloads_byte_match_contracts": true,
+    "candidate_jankurai_proof": "failure",
+    "candidate_jain_deploy_required": "failure",
+    "candidate_merged": false,
+    "release_prerequisite_satisfied": false
+  },
+  "documentation_review": {
+    "readme_proof_command_reproduces": true,
+    "testing_document_replaces_prohibited_worktree_guidance": true,
+    "testing_document_requires_exact_report_and_check_readback": true,
+    "blocking_internal_consistency_finding": {
+      "file": "contracts/AGENTS.md",
+      "finding": "The new rule says an identity-only revision requires an empty diff under contracts/ against protected base, but this exact identity revision changes contracts/AGENTS.md. The instruction does not exclude policy documentation, so the reviewed head does not satisfy its own literal acceptance predicate.",
+      "minimal_remediation": "Move the guidance outside contracts/ or narrow the predicate explicitly to public manifests, schemas, fixtures, and payloads while preserving the prohibition on semantic contract edits."
+    },
+    "blocking_active_lineage_findings": [
+      {
+        "file": "AGENTS.md",
+        "finding": "Active dependency guidance still mandates *-v8.0.0-split.0 tags instead of the 8.0.1 authority identity."
+      },
+      {
+        "file": "db/README.md",
+        "finding": "Active no-storage guidance still calls Jain 8.0.0 the candidate."
+      }
+    ]
+  },
+  "canonical_integrity": {
+    "checkout": "/home/ubuntu/jain-split/jain-contracts",
+    "review_snapshot_head": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+    "review_snapshot_tree": "6a3d049b7fbd38965b6bf1b67cdff8c37221f257",
+    "review_snapshot_branch_matches_forge": true,
+    "review_snapshot_clean": true,
+    "registered_worktrees": 1,
+    "git_lock_files": 0,
+    "temporary_review_clones_remaining": 0,
+    "post_review_handoff": {
+      "live_forge_pr_head": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+      "canonical_local_successor_head": "54357986f4244cf408cc405b7a034bdf4eac0bf4",
+      "canonical_local_successor_pushed": true,
+      "live_forge_pr_advanced_at": "2026-07-16T07:32:55Z",
+      "successor_jankurai_proof": "success",
+      "successor_required_check_present": false,
+      "owner_claim": "codex-contracts-pr11-governed-tool-lineage-repair-20260716T0728Z",
+      "reviewer_mutated_checkout": false
+    }
+  },
+  "supersession": {
+    "reviewed_head_is_no_longer_live_pr_head": true,
+    "reviewed_head": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+    "successor_head": "54357986f4244cf408cc405b7a034bdf4eac0bf4",
+    "successor_requires_fresh_independent_review": true
+  },
+  "decision": {
+    "content_semantics": "pass",
+    "changed_release_metadata": "pass",
+    "active_repository_lineage": "block",
+    "governed_proof": "pass",
+    "repository_local_tool_governance": "block",
+    "review": "block",
+    "merge_authorized_by_this_receipt": false,
+    "blocking_reasons": [
+      "jain-contracts/required is absent at the exact reviewed head.",
+      "Protected Deploy main lacks the required full-v1 consumer mirror, so fresh release-mode contract drift fails closed.",
+      "The successor remediation changes contracts/AGENTS.md while that same new rule literally requires an empty contracts/ diff for identity-only revisions.",
+      "Repository-local Jankurai enforcement accepts ambient version-matching bytes with the wrong SHA-256, and the score lane checks only command presence.",
+      "Active AGENTS.md guidance still mandates v8.0.0-split.0 dependency tags.",
+      "Active db/README.md guidance still names Jain 8.0.0 as the candidate."
+    ],
+    "required_before_re_review": [
+      "Pin and validate the regular non-symlink governed Jankurai path, version, and SHA-256 and route every repository invocation through it, including an adversarial-PATH regression check.",
+      "Correct the two active 8.0.0 lineage surfaces to candidate 8.0.1 without rewriting immutable history.",
+      "Resolve the contracts/AGENTS.md self-inconsistency without weakening the prohibition on schema, fixture, manifest, or payload drift.",
+      "Protected-land the exact Deploy full-v1 mirror through green exact-head proof, required CI, independent approval, and protected merge.",
+      "Rerun Contracts release-mode contract drift with physical protected Core, Web, and Deploy main checkouts.",
+      "Run exact-head host CI and read back jain-contracts/required=success.",
+      "Obtain a new independent review for the resulting exact successor head."
+    ]
+  },
+  "mutations_excluded": [
+    "source",
+    "index",
+    "refs",
+    "checks",
+    "approval",
+    "merge",
+    "tag",
+    "authority",
+    "protection",
+    "deployment",
+    "host_ci",
+    "force_operations",
+    "git_worktrees"
+  ]
+}

@@ -1,0 +1,243 @@
+manifest ok: 25 repos
+check ok: /home/ubuntu/.cache/claude-orch-ci/deploy-lane/jain-deploy
+[ci] Rust required lane: fmt + targeted clippy/test
+    Checking jain-deploy-ops v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/deploy-lane/jain-deploy/ops/split)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.80s
+   Compiling jain-deploy-ops v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/deploy-lane/jain-deploy/ops/split)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.88s
+     Running unittests src/lib.rs (target/debug/deps/jain_deploy_engine-71b819a237772796)
+
+running 47 tests
+test caddy::tests::route_payload_uses_canary_prefix_and_strip ... ok
+test caddy::tests::remote_script_targets_proxy_caddy_and_admin_api ... ok
+test caddy::tests::dry_run_upsert_is_offline ... ok
+test caddy::tests::upsert_replaces_existing_slug_route_at_front ... ok
+test canary_auth::tests::mint_and_verify_slot_b ... ok
+test canary_auth::tests::rejects_bad_prefix ... ok
+test canary_auth::tests::mint_and_verify_round_trip ... ok
+test canary_auth::tests::rejects_invalid_slot_mint ... ok
+test canary_auth::tests::rejects_expired_token ... ok
+test canary_auth::tests::rejects_tampered_token ... ok
+test canary_gate::tests::crash_probe_scripts_kill_then_start_the_container ... ok
+test canary_auth::tests::rejects_wrong_secret ... ok
+test canary_gate::tests::dry_run_writes_nothing_and_returns_none ... ok
+test canary_gate::tests::gate_filename_matches_the_promote_canary_gate ... ok
+test canary_gate::tests::gate_report_fails_if_any_runtime_check_fails ... ok
+test canary_gate::tests::gate_report_fails_on_offline_check_failure_too ... ok
+test canary_gate::tests::gate_report_passes_with_passing_runtime_checks ... ok
+test canary_gate::tests::liveness_script_curls_from_inside_the_proxy ... ok
+test canary_gate::tests::upstream_url_targets_the_slot_cockpit ... ok
+test doctor::tests::build_local_passes_with_version ... ok
+test doctor::tests::missing_version_fails ... ok
+test doctor::tests::mode_parses_the_four_gates ... ok
+test doctor::tests::promote_rejects_veox_c_slot ... ok
+test installer_download::tests::rejects_empty_secret_or_version ... ok
+test installer_download::tests::mint_and_verify_round_trip ... ok
+test doctor::tests::gate_write_then_require_round_trips ... ok
+test installer_download::tests::canary_runtime_tokens_are_not_download_tokens ... ok
+test doctor::tests::require_gate_rejects_failed_gate ... ok
+test installer_download::tests::rejects_expired_token ... ok
+test installer_download::tests::rejects_tampered_token ... ok
+test installer_download::tests::rejects_wrong_secret ... ok
+test plan::tests::dry_run_never_executes ... ok
+test plan::tests::escapes_single_quotes ... ok
+test plan::tests::renders_escaped_command ... ok
+test registry::tests::gc_plan_targets_atomicsoul_registry_container ... ok
+test registry::tests::promote_plan_pushes_release_and_latest ... ok
+test registry::tests::promote_requires_digest_pin ... ok
+test registry::tests::publish_rc_plan_tags_and_pushes_rc ... ok
+test registry::tests::rc_reference_is_versioned_rc_tag ... ok
+test registry::tests::registry_const_points_at_public_host ... ok
+test registry::tests::registry_prune_plan_contains_each_cleanup_command ... ok
+test registry::tests::relay_target_uses_local_registry_when_relays_configured ... ok
+test registry::tests::registry_state_plan_reports_storage_pressure_inputs ... ok
+test registry::tests::rewrites_public_registry_prefix ... ok
+test slug::tests::rc_slug_matches_hand_computed_vector ... ok
+test slug::tests::rc_slug_is_deterministic_and_salted ... ok
+test slug::tests::slug_is_base62_alphabet_only ... ok
+
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/deployctl.rs (target/debug/deps/deployctl-abbccaa2123b0b09)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/deployctl_dry_run.rs (target/debug/deps/deployctl_dry_run-edee51f253b56c67)
+
+running 2 tests
+test build_local_may_write_only_its_local_gate ... ok
+test network_dry_runs_execute_nothing_leak_no_tokens_and_leave_gates_untouched ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/engine_contract.rs (target/debug/deps/engine_contract-ea6b24cd80621aae)
+
+running 8 tests
+test rc_slug_embeds_into_canary_release_path ... ok
+test registry_plans_render_without_execution ... ok
+test token_claims_flow_into_synthetic_tenant_name ... ok
+test shell_escape_is_always_a_closed_quoted_word ... ok
+test any_single_char_mutation_invalidates_token ... ok
+test plans_render_one_line_per_step ... ok
+test slugs_are_deterministic_base62_and_salted ... ok
+test tokens_round_trip_claims ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/installer_download_contract.rs (target/debug/deps/installer_download_contract-50ec048700a62027)
+
+running 6 tests
+test download_prefix_and_scope_match_featweb_constants ... ok
+test canary_runtime_token_still_fails_featweb_download_verify ... ok
+test engine_minted_download_token_verifies_under_featweb_logic ... ok
+test featweb_logic_rejects_engine_token_under_wrong_secret ... ok
+test golden_token_encodes_byte_for_byte ... ok
+test golden_token_verifies_under_featweb_logic_with_exact_claims ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/jain_deploy_ops-edd58344afc48653)
+
+running 5 tests
+test tests::legacy_manifest_and_lock_flags_remain_supported ... ok
+test tests::staged_contract_fails_closed_without_the_supervisor ... ok
+test tests::stage_contract_copies_web_and_supervisor_inputs_and_rewrites_git_deps ... ok
+test tests::invention_export_fixture_is_rust_compatible ... ok
+touch /tmp/jain-deploy-stage-test-3195321-1784210523658019348/score-ran
+touch /tmp/jain-deploy-stage-test-3195321-1784210523658019348/check-ran
+test tests::fleet_ci_preserves_score_and_full_lane_selection ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.71s
+
+     Running unittests src/lib.rs (target/debug/deps/jain_supervisor-8605891f0ed7c1e0)
+
+running 5 tests
+test tests::only_serve_activates_dual_service_mode ... ok
+test tests::ports_are_separate_and_sagemaker_is_fixed_to_8080 ... ok
+test tests::secret_debug_output_is_always_redacted ... ok
+test tests::startup_errors_do_not_render_inherited_secrets ... ok
+test tests::a_service_failure_terminates_and_reaps_its_peer ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+
+     Running unittests src/main.rs (target/debug/deps/jain_supervisor-94c7605eabf5bdb1)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/supervisor_process.rs (target/debug/deps/supervisor_process-7eeac0c6aff23a28)
+
+running 1 test
+test sigterm_reaches_all_services_and_output_redacts_the_token ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.07s
+
+     Running unittests src/lib.rs (target/debug/deps/sagemaker_ci-dd697ef2563982ee)
+
+running 19 tests
+test aws_spec::tests::cpu_endpoint_config_omits_gpu_inference_ami_version ... ok
+test aws_spec::tests::gpu_endpoint_config_pins_inference_ami_version ... ok
+test aws_spec::tests::image_uri_must_be_digest_pinned ... ok
+test aws_spec::tests::training_specs_switch_starforge_policy_by_instance_family ... ok
+test runtime_contract::tests::gpu_runtime_rejects_bundled_host_driver_libraries ... ok
+test runtime_contract::tests::manifest_label_hashes_must_match_runtime_files ... ok
+test runtime_contract::tests::runtime_directory_modes_require_tmp_sticky_and_writable_sagemaker_dirs ... ok
+test runtime_contract::tests::runtime_inventory_accepts_compressed_chimera_weights ... ok
+test runtime_contract::tests::runtime_inventory_rejects_missing_tabicl_or_chimera_weights ... ok
+test runtime_contract::tests::image_config_requires_labels_strict_user_and_separate_service_ports ... ok
+test runtime_contract::tests::inert_base_metadata_is_allowed_but_real_executables_are_blocked ... ok
+test runtime_contract::tests::tar_verbose_parser_normalizes_paths_and_symlinks ... ok
+test runtime_contract::tests::version_consistency_requires_binary_label_and_manifest_to_agree ... ok
+test tests::safe_name_and_command_text_are_stable ... ok
+test runtime_contract::tests::runtime_inventory_requires_files_and_rejects_forbidden_entries ... ok
+test tests::collect_files_returns_sorted_files_only ... ok
+test tests::write_json_and_copy_dir_all_preserve_expected_files ... ok
+test tests::run_logged_records_log_and_check_failures ... ok
+test tests::run_capture_records_streams_and_check_failures ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/bin/sagemaker_aws_smoke.rs (target/debug/deps/sagemaker_aws_smoke-2c3cedf0af3e5eae)
+
+running 1 test
+test tests::log_collection_error_records_reason_and_stream ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/sagemaker_contract_test.rs (target/debug/deps/sagemaker_contract_test-7d316be2479c7c20)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests jain_deploy_engine
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests jain_supervisor
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sagemaker_ci
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[ci] deploy required lane: sagemaker-ci + stage plan
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.18s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.18s
+     Running unittests src/lib.rs (target/debug/deps/sagemaker_ci-d07d5708c5d992d8)
+
+running 19 tests
+test aws_spec::tests::cpu_endpoint_config_omits_gpu_inference_ami_version ... ok
+test aws_spec::tests::image_uri_must_be_digest_pinned ... ok
+test aws_spec::tests::gpu_endpoint_config_pins_inference_ami_version ... ok
+test aws_spec::tests::training_specs_switch_starforge_policy_by_instance_family ... ok
+test runtime_contract::tests::gpu_runtime_rejects_bundled_host_driver_libraries ... ok
+test runtime_contract::tests::manifest_label_hashes_must_match_runtime_files ... ok
+test runtime_contract::tests::image_config_requires_labels_strict_user_and_separate_service_ports ... ok
+test runtime_contract::tests::runtime_directory_modes_require_tmp_sticky_and_writable_sagemaker_dirs ... ok
+test runtime_contract::tests::runtime_inventory_rejects_missing_tabicl_or_chimera_weights ... ok
+test runtime_contract::tests::tar_verbose_parser_normalizes_paths_and_symlinks ... ok
+test runtime_contract::tests::runtime_inventory_accepts_compressed_chimera_weights ... ok
+test runtime_contract::tests::inert_base_metadata_is_allowed_but_real_executables_are_blocked ... ok
+test runtime_contract::tests::version_consistency_requires_binary_label_and_manifest_to_agree ... ok
+test tests::safe_name_and_command_text_are_stable ... ok
+test runtime_contract::tests::runtime_inventory_requires_files_and_rejects_forbidden_entries ... ok
+test tests::collect_files_returns_sorted_files_only ... ok
+test tests::write_json_and_copy_dir_all_preserve_expected_files ... ok
+test tests::run_logged_records_log_and_check_failures ... ok
+test tests::run_capture_records_streams_and_check_failures ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/sagemaker_aws_smoke.rs (target/debug/deps/sagemaker_aws_smoke-b86d1e869282633e)
+
+running 1 test
+test tests::log_collection_error_records_reason_and_stream ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/sagemaker_contract_test.rs (target/debug/deps/sagemaker_contract_test-76621ccdf47228d4)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sagemaker_ci
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+lock ok: 26 repos
+required ok: jain-deploy
+CI_EXIT=0

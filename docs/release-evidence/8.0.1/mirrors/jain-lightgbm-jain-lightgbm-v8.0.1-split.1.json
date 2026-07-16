@@ -1,0 +1,22 @@
+{
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-lightgbm.git",
+      "mirror_existed": true,
+      "name": "jain-lightgbm",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-lightgbm",
+      "source_head": "625139b5af66bcca45e23454e684134e057f1197"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-lightgbm"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1784212514
+}

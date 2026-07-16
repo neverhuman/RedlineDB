@@ -1,0 +1,235 @@
+{
+  "schema_version": "jain.independent-review/v1",
+  "status": "PASS_SOURCE_REPRODUCIBILITY_BLOCK_AUTHOR_DIFF_EVIDENCE_AND_REQUIRED",
+  "completed_at": "2026-07-16T08:53:16Z",
+  "claim": "codex-jain-docs-pr13-pdf-successor-independent-review-20260716T0851Z",
+  "reviewer": "codex-independent",
+  "reviewer_authored_candidate_source": false,
+  "repository": "jeryu/jain-docs",
+  "pull_request": 13,
+  "branch": "codex/v8.0.1/docs-proof-successor-20260716",
+  "base_sha": "8b5ab9ab6b224821622eccfd5a8cb9cde5350e51",
+  "prior_reviewed_head_sha": "0b278ec716fcccd74abd0a2b3b051d8729c140e2",
+  "head_sha": "abaee0720716d59f29058b8b523f67ec2ec0f315",
+  "tree_sha": "e8e9c98898e58b906b46d59d79256440581c363f",
+  "commit_count_from_main": 4,
+  "merge_base_equals_protected_main": true,
+  "commit_derived_epoch": {
+    "unix": 1784191086,
+    "iso8601": "2026-07-16T08:38:06+00:00",
+    "positive": true,
+    "passed_explicitly_to_typst": true
+  },
+  "candidate_diff": {
+    "files_changed": 16,
+    "insertions": 270,
+    "deletions": 45,
+    "mode_changes": 1,
+    "mode_change_detail": "create mode 100755 ops/ci/docs-pdf-reproducible.sh",
+    "renames": 0,
+    "submodules": 0,
+    "raw_git_full_index_binary_diff_sha256": "d13da5d33116056d2d28c55c0d81da6f020c70cd85a37e7c17215b91a460dcc3",
+    "rtk_rendered_full_index_binary_diff_sha256": "3b3fcbe6f73a5812ddacfdf6956954980d89e18c8367856453118bb999d165c2",
+    "source_archive_sha256": "ce50f0c73f45ffdaeb99185ed6798a8ffa50db6616d255da52f65e314f498123",
+    "manual_content_semantics_changed": false,
+    "product_behavior_changed": false,
+    "dependency_or_lock_changed": false,
+    "release_identity_changed": false
+  },
+  "successor_commit_diff": {
+    "files_changed": 9,
+    "insertions": 187,
+    "deletions": 31,
+    "raw_git_full_index_binary_diff_sha256": "f08e4fa9413774c45df9aff54476e63d74a646a7f319068a9fd364cdb98bf736",
+    "rtk_rendered_full_index_binary_diff_sha256": "5f6eb13b109f447cbe54fa06f652a7247ea70d8d64f2210443b0bd7093e04b85"
+  },
+  "author_evidence": {
+    "path": "jain-split-ops/docs/release-evidence/8.0.1/identity/jain-docs-pr13-reproducible-pdf-successor-20260716.json",
+    "sha256": "cc0be66757b18543b185e19c9e3b44e3e206b7cd7039405b0b43d6b93a33299c",
+    "source_and_reproducibility_claims_confirmed": true,
+    "diff_hash_description_confirmed": false,
+    "diff_hash_defect": "Both fields named full_index_binary_diff_sha256 reproduce only after RTK transforms Git output; actual raw git diff --binary --full-index bytes hash to d13da5d3...0dcc3 and f08e4fa9...f736. The author receipt must not be treated as raw-patch authority.",
+    "incidental_sbom_hash_claim_reproduced": false,
+    "author_sbom_sha256": "137022f41a15cf42e8bdb74cf5cd8547cae4e2e27810abb9325848a24932d13f",
+    "reviewer_sbom_sha256": "d4abb7ad1044cc4d3adace4f8e0cbced9ec804ef7af8e3b9ad62fac4cd0c64d5",
+    "sbom_observation": "The security lane passed and its evidence receipt reproduced, but the generated SPDX bytes are not deterministic and are not accepted as immutable exact-head evidence by this review."
+  },
+  "font_and_toolchain_review": {
+    "font_manifest_path": "ops/ci/docs-fonts.sha256",
+    "font_manifest_sha256": "ccfb22007e11197ce881f451e1687dd43a616aa24ee42d2b5336ea33fb41c0cb",
+    "font_directory": "/home/ubuntu/jain-split/jain-docs/target/ci/tools/fonts",
+    "font_directory_is_regular_non_symlink": true,
+    "exact_files": 9,
+    "font_faces": 7,
+    "license_files": 2,
+    "other_entries": 0,
+    "symlinks": 0,
+    "manifest_check_strict": "pass",
+    "files": {
+      "Inter-Bold.ttf": "288316099b1e0a47a4716d159098005eef7c0066921f34e3200393dbdb01947f",
+      "Inter-ExtraBold.ttf": "e6756ad5690b77606aa62249a7b420d9902d45cae4b0048a24911fd4324b0a22",
+      "Inter-Italic.ttf": "bbc051dd204b5019a1aa0bc0ae2aa8a05ab13e7a3f979fa357631dc7feb6833a",
+      "Inter-Medium.ttf": "97ad806f526e41546d46365bb3a393145f75b7b1568913db74549ad8b8dba872",
+      "Inter-Regular.ttf": "40d692fce188e4471e2b3cba937be967878f631ad3ebbbdcd587687c7ebe0c82",
+      "JetBrainsMono-Medium.ttf": "31c92d01a8a08528b718a43addf0ad3df0af2ca4b7b3290a452f70f358e14d3d",
+      "JetBrainsMono-Regular.ttf": "a0bf60ef0f83c5ed4d7a75d45838548b1f6873372dfac88f71804491898d138f",
+      "OFL-Inter.txt": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+      "OFL-JetBrainsMono.txt": "30f0c136e3c88e422d0791acd97238870f9054a9729bc34cf2ff0d4ed8cac4ad"
+    },
+    "typst_path": "/home/ubuntu/.cargo/bin/typst",
+    "typst_version": "typst 0.15.0 (unknown commit)",
+    "typst_sha256": "a852e595ba046074d1cb63fd9fed14e00f36031dee4d2ad330783c92e7982d45",
+    "system_fonts_ignored": true,
+    "embedded_fonts_readback": [
+      "Inter-ExtraBold",
+      "Inter-Medium",
+      "Inter-Italic",
+      "JetBrainsMono-Medium",
+      "Inter-Regular",
+      "JetBrainsMono-Regular",
+      "Inter-Bold"
+    ]
+  },
+  "fail_closed_probes": {
+    "missing_font": "expected_failure",
+    "extra_file": "expected_failure",
+    "symlinked_font_input": "expected_failure",
+    "tampered_font": "expected_failure",
+    "non_positive_epoch": "expected_failure"
+  },
+  "independent_pdf_reproduction": {
+    "physical_clone_mode": "git clone --no-local; exact-head detached",
+    "clone_count": 2,
+    "git_worktree_used": false,
+    "clone_a_stable_equals_versioned": true,
+    "clone_b_stable_equals_versioned": true,
+    "cross_clone_pdf_byte_identical": true,
+    "cross_clone_build_inputs_byte_identical": true,
+    "pdf_sha256": "3ea834be724b2a21ca2bf1326e087e6f7618315be696aa03ef896edb4ef559ec",
+    "manual_build_inputs_sha256": "664fcb30fe95f5ca97d26b24d45986030dd65a09527ed5c67ae02a4e862c24c0",
+    "reproducibility_receipt_sha256": "8cedefa93d86021e44da349ac68a60eb9ea22935e6f9c3c970326bde970fbff8",
+    "manual_pdf_manifest_sha256": "2cb28840b8ffb4d79c986fabc90db5e0e86a56f8626ebb8f545b5aeb47479a22",
+    "clones_clean_symlink_free_process_free_before_removal": true,
+    "clones_removed": true,
+    "nested_reproducibility_clones_removed_automatically": true
+  },
+  "local_gates": {
+    "fast": "pass",
+    "required": "pass",
+    "artifact_support": {
+      "status": "pass",
+      "receipt_sha256": "da8f64ff850d21d59ecfbafb1cfa3300a22ca70356ce6e12454276f98e0798be",
+      "archive_sha256": "ce50f0c73f45ffdaeb99185ed6798a8ffa50db6616d255da52f65e314f498123",
+      "inventory_sha256": "0315d7aece437c71d30fcaa06cb11d2f77e89574e44bb058c1048467073b7e08"
+    },
+    "contract_drift": {
+      "status": "pass",
+      "receipt_sha256": "721b93ecdf1f8cb4f73fec64b5fa24eba7d9a9659e798ccd6a6d579dd006a8fb"
+    },
+    "security": {
+      "status": "pass",
+      "findings": 0,
+      "receipt_sha256": "c26b2c13f8e970a5ef4ddb7bc3a55c27c4d03a86290a0acabda7178f9ea572ed"
+    },
+    "repo_score": {
+      "status": "pass",
+      "score": 89,
+      "raw_score": 89,
+      "minimum": 85,
+      "hard_findings": 0,
+      "caps": [],
+      "soft_findings": 5,
+      "receipt_sha256": "025bcc89e73bac7237018556f2085dccf2cdb8f9f933ae6560572a58bf95c6c0"
+    },
+    "changed_fast": {
+      "status": "pass",
+      "score": 86,
+      "raw_score": 86,
+      "minimum": 85,
+      "hard_findings": 0,
+      "caps": [],
+      "soft_findings": 6,
+      "changed_files": 16,
+      "diff_score_sha256": "76f14ee253ea0449022c5cd2ae2b64540e6902d8a772e98b40d49b698349406c",
+      "proof_plan_sha256": "76dd697afaf017fcacbbec6a7dbc6fe3127dc7eb61b13113686dd13fcd4fc89a"
+    },
+    "tool_adoption": "pass",
+    "coverage": {
+      "status": "pass",
+      "sources_present": 1,
+      "sources_total": 1,
+      "hard_findings": 0,
+      "soft_findings": 0,
+      "receipt_sha256": "032ddbb4f72ffd896f2fe0e6fea00199290b5d090657bdcf6ce8baa5de6e3fe0"
+    }
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "regular": true,
+    "executable": true,
+    "symlink": false,
+    "version": "jankurai 1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+  },
+  "forge_readback": {
+    "pull_request_open": true,
+    "pull_request_base_exact": true,
+    "pull_request_head_exact": true,
+    "pull_request_body_sha256": "cdc6bb455e4c15c1318836aa8652d07d2e6a6cbaf5b0af3adab600c73135feb1",
+    "jankurai_proof": {
+      "status": "completed",
+      "conclusion": "success",
+      "check_id": "8504c268-6f01-4a27-a472-987894b0099e"
+    },
+    "autonomy": {
+      "status": "completed",
+      "conclusion": "action_required",
+      "check_id": "891c3ec9-621d-4584-9bfe-1a2855062c83"
+    },
+    "jain_docs_required_present": false,
+    "existing_immutable_tag": "jain-docs-v8.0.1-split.0",
+    "existing_immutable_tag_sha": "b0245456d73d99a6698db053bf49300d6bbbac12",
+    "next_unused_tag": "jain-docs-v8.0.1-split.1"
+  },
+  "canonical_checkout": {
+    "path": "/home/ubuntu/jain-split/jain-docs",
+    "head_sha": "abaee0720716d59f29058b8b523f67ec2ec0f315",
+    "tree_sha": "e8e9c98898e58b906b46d59d79256440581c363f",
+    "clean": true,
+    "branch_forge_equal": true,
+    "local_main_forge_equal": true,
+    "registered_worktrees": 1,
+    "source_symlinks": 0,
+    "source_or_index_holders": 0
+  },
+  "decision": {
+    "source_review": "ACCEPT",
+    "reproducible_pdf_remediation": "ACCEPT",
+    "author_receipt_as_raw_diff_authority": "REJECT_UNTIL_CORRECTED_OR_SUPERSEDED",
+    "protected_lifecycle": "BLOCKED_REQUIRED_ABSENT",
+    "safe_next_step": "Use this independent receipt as the raw-diff correction authority or append a corrected author receipt, then provision the exact reviewed font directory in the serialized host sandbox, publish genuine exact-head jain-docs/required, and proceed through independent protected approval/merge/tag/authority binding."
+  },
+  "release_metadata": {
+    "product_version": "8.0.1",
+    "status": "candidate",
+    "formal_ga": false,
+    "production_applied": false,
+    "rollback_target": "7.0.6"
+  },
+  "excluded_actions_confirmed": [
+    "source_edit",
+    "index_or_ref_mutation",
+    "push",
+    "pull_request_metadata_mutation",
+    "host_ci",
+    "required_check_publication",
+    "approval",
+    "merge",
+    "tag",
+    "authority_binding",
+    "protection_mutation",
+    "deployment",
+    "force",
+    "git_worktree"
+  ]
+}

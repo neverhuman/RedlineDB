@@ -1,0 +1,197 @@
+start: 2026-07-16T14:31:24Z
+./ops/ci/required.sh
+check ok: /home/ubuntu/.cache/claude-orch-ci/leaf/jain-catboost
+[ci] native learner required lane: metadata + vendor-backed release smoke
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling glob v0.3.3
+   Compiling quote v1.0.46
+   Compiling libc v0.2.186
+   Compiling prettyplease v0.2.37
+   Compiling memchr v2.8.2
+   Compiling minimal-lexical v0.2.1
+   Compiling regex-syntax v0.8.11
+   Compiling cfg-if v1.0.4
+   Compiling clang-sys v1.8.1
+   Compiling either v1.16.0
+   Compiling bindgen v0.70.1
+   Compiling nom v7.1.3
+   Compiling libloading v0.8.9
+   Compiling itertools v0.13.0
+   Compiling bitflags v2.13.0
+   Compiling rustc-hash v1.1.0
+   Compiling regex-automata v0.4.14
+   Compiling shlex v1.3.0
+   Compiling log v0.4.33
+   Compiling catboost v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/leaf/jain-catboost/crates/catboost)
+   Compiling cexpr v0.6.0
+   Compiling regex v1.12.4
+   Compiling syn v2.0.118
+   Compiling catboost-sys v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/leaf/jain-catboost/crates/catboost-sys)
+    Finished `release` profile [optimized + debuginfo] target(s) in 10.97s
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling getrandom v0.3.4
+   Compiling zerocopy v0.8.53
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+   Compiling autocfg v1.5.1
+   Compiling linux-raw-sys v0.12.1
+   Compiling bitflags v2.13.0
+   Compiling once_cell v1.21.4
+   Compiling fastrand v2.4.1
+   Compiling fnv v1.0.7
+   Compiling num-traits v0.2.19
+   Compiling quick-error v1.2.3
+   Compiling bit-vec v0.8.0
+   Compiling unarray v0.1.4
+   Compiling regex-syntax v0.8.11
+   Compiling catboost v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/leaf/jain-catboost/crates/catboost)
+   Compiling ppv-lite86 v0.2.21
+   Compiling bit-set v0.8.0
+   Compiling wait-timeout v0.2.1
+   Compiling rand_core v0.9.5
+   Compiling rand v0.9.4
+   Compiling rand_chacha v0.9.0
+   Compiling rand_xorshift v0.4.0
+   Compiling tempfile v3.27.0
+   Compiling rusty-fork v0.3.1
+   Compiling proptest v1.11.0
+   Compiling catboost-sys v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/leaf/jain-catboost/crates/catboost-sys)
+    Finished `release` profile [optimized + debuginfo] target(s) in 23.33s
+     Running unittests src/lib.rs (target/release/deps/catboost-4f3576bd7408a893)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/smoke.rs (target/release/deps/smoke-e08880d819f3dfb2)
+
+running 2 tests
+test multilabel_train_predict ... ok
+test single_target_train_predict_importance ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.13s
+
+     Running unittests src/lib.rs (target/release/deps/catboost_sys-d9b23c2a9b66a061)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests cbtool/main.rs (target/release/deps/catboost_cbtool-11f8cb3f86e47f37)
+
+running 15 tests
+test tests::build_info_gen_filters_arcadia_paths_and_escapes_defines ... ok
+cbtool: expected a script path as first argument
+cbtool: unhandled script 'unknown.py'
+run_tool: missing --
+export_script_gen: unknown format unknown
+link_lib: unsupported arch_type BAD_AR
+create_recursive_library: no --linking-cmdline
+test tests::export_script_gen_writes_gnu_version_script ... ok
+test tests::gen_join_srcs_emits_expected_pragmas_and_includes ... ok
+test tests::split_ext_reassembles_and_keeps_dots_out_of_directories ... ok
+test tests::process_link_input_classifies_global_nonglobal_and_response_file_inputs ... ok
+Patched by re_replace: /tmp/catboost-cbtool-dispatch-3792229-1/input.txt
+test tests::missing_inputs_and_bad_arguments_return_errors ... ok
+test tests::response_file_expansion_skips_command_file_markers ... ok
+Patched by re_replace: /tmp/catboost-cbtool-replace-3792229-8/types.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-10/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-10/decl.h
+test tests::re_replace_removes_final_from_supported_struct_and_class_declarations ... ok
+test tests::rodata2cpp_writes_byte_array_and_size_symbol ... ok
+test tests::link_lib_invokes_archiver_for_plain_object_inputs ... ok
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-16/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-16/decl.h
+test tests::vcs_generators_write_reduced_metadata ... ok
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-19/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-19/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-21/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-21/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-24/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-24/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-27/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-27/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-30/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-30/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-33/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-33/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-36/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-36/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-39/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-39/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-42/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-42/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-45/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-45/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-47/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-47/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-50/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-50/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-54/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-54/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-57/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-57/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-60/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-60/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-63/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-63/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-66/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-66/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-68/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-68/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-71/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-71/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-75/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-75/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-78/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-78/decl.h
+test tests::dispatch_smoke_tests_every_supported_script_basename ... ok
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-81/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-81/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-84/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-84/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-87/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-87/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-90/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-90/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-93/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-93/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-96/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-96/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-98/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-98/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-102/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-102/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-105/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-3792229-105/decl.h
+test tests::re_replace_strips_final_exactly_once_and_is_idempotent ... ok
+test tests::export_script_gen_gnu_output_is_deterministic_and_covers_all_c_symbols ... ok
+test tests::rodata2cpp_embeds_every_input_byte_in_order ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/export_contract.rs (target/release/deps/export_contract-da98bf38bfaec4f0)
+
+running 3 tests
+test export_contract::tests::cached_library_must_export_the_exact_abi_namespace ... ok
+test export_contract::tests::reconciliation_is_idempotent ... ok
+test export_contract::tests::replaces_stale_cb_exports_and_preserves_upstream_symbols ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests catboost
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests catboost_sys
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+required ok: jain-catboost
+=== EXIT 0 (2026-07-16T14:31:59Z) ===

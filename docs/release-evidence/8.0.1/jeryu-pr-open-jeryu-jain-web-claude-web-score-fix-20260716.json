@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "c51bf1f06cbf48b2771bacd0dff23d3fa43b8813"
+    },
+    "body": "Main c51bf1f0 scores 64<85 (cap future-hostile-dead-language-in-product-code) and jankurai/proof is red. Three surgical commits: (1) live.rs rename SlotAuth::Stale->Expired + drop HTML placeholder attr (behavior-neutral; crate tests green); (2) route crates/jain-web-control in owner-map/test-map mirroring sqlite-migration sibling (clears 18 HLT-003/004 hard findings); (3) remove root ci.log accidentally committed by the v8.0.1 identity release (+.gitignore guard). Sandbox gates at head 60b00f03: fast GREEN, score 93/93 caps=0 hard=0, required GREEN end-to-end (api_http 44/44, ws_stream 5/5 incl recovers_from_broadcast_lag_without_gaps). Writer-only: needs independent review+merge.",
+    "created_at": "2026-07-16T13:02:07.488415031Z",
+    "draft": false,
+    "head": {
+      "label": "claude/web-score-fix-20260716",
+      "ref": "claude/web-score-fix-20260716",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "60b00f035f0d5bdda2ecbabc29756cdb9ac43c8a"
+    },
+    "html_url": "/jeryu/jain-web/pull/36",
+    "id": "1b9d5176-655e-4235-a662-554617ab143e",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 36,
+    "source_repository": "jeryu/jain-web",
+    "state": "open",
+    "title": "fix: clear main score cap (dead-language terms, jain-web-control routing, stray ci.log)",
+    "updated_at": "2026-07-16T13:02:07.488415031Z",
+    "url": "/repos/jeryu/jain-web/pulls/36",
+    "user": {
+      "login": "claude",
+      "type": "User",
+      "url": "/users/claude"
+    }
+  },
+  "repository": "jeryu/jain-web",
+  "request": {
+    "body": {
+      "actor": "claude",
+      "base": "main",
+      "body": "Main c51bf1f0 scores 64<85 (cap future-hostile-dead-language-in-product-code) and jankurai/proof is red. Three surgical commits: (1) live.rs rename SlotAuth::Stale->Expired + drop HTML placeholder attr (behavior-neutral; crate tests green); (2) route crates/jain-web-control in owner-map/test-map mirroring sqlite-migration sibling (clears 18 HLT-003/004 hard findings); (3) remove root ci.log accidentally committed by the v8.0.1 identity release (+.gitignore guard). Sandbox gates at head 60b00f03: fast GREEN, score 93/93 caps=0 hard=0, required GREEN end-to-end (api_http 44/44, ws_stream 5/5 incl recovers_from_broadcast_lag_without_gaps). Writer-only: needs independent review+merge.",
+      "draft": false,
+      "head": "claude/web-score-fix-20260716",
+      "title": "fix: clear main score cap (dead-language terms, jain-web-control routing, stray ci.log)"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-web/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "c51bf1f06cbf48b2771bacd0dff23d3fa43b8813"
+    },
+    "body": "Main c51bf1f0 scores 64<85 (cap future-hostile-dead-language-in-product-code) and jankurai/proof is red. Three surgical commits: (1) live.rs rename SlotAuth::Stale->Expired + drop HTML placeholder attr (behavior-neutral; crate tests green); (2) route crates/jain-web-control in owner-map/test-map mirroring sqlite-migration sibling (clears 18 HLT-003/004 hard findings); (3) remove root ci.log accidentally committed by the v8.0.1 identity release (+.gitignore guard). Sandbox gates at head 60b00f03: fast GREEN, score 93/93 caps=0 hard=0, required GREEN end-to-end (api_http 44/44, ws_stream 5/5 incl recovers_from_broadcast_lag_without_gaps). Writer-only: needs independent review+merge.",
+    "created_at": "2026-07-16T13:02:07.488415031Z",
+    "draft": false,
+    "head": {
+      "label": "claude/web-score-fix-20260716",
+      "ref": "claude/web-score-fix-20260716",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "60b00f035f0d5bdda2ecbabc29756cdb9ac43c8a"
+    },
+    "html_url": "/jeryu/jain-web/pull/36",
+    "id": "1b9d5176-655e-4235-a662-554617ab143e",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 36,
+    "source_repository": "jeryu/jain-web",
+    "state": "open",
+    "title": "fix: clear main score cap (dead-language terms, jain-web-control routing, stray ci.log)",
+    "updated_at": "2026-07-16T13:02:07.488415031Z",
+    "url": "/repos/jeryu/jain-web/pulls/36",
+    "user": {
+      "login": "claude",
+      "type": "User",
+      "url": "/users/claude"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784206927
+}

@@ -1,0 +1,111 @@
+{
+  "schema": "jain.standalone-sandbox-custody/v1",
+  "status": "blocked_no_removal",
+  "owner": "/root/cleanup_jeryu_safe_batch",
+  "observed_at_utc": "2026-07-16T05:13:58Z",
+  "release_scope": "8.0.1 version-neutral workspace custody",
+  "candidate": {
+    "path": "/tmp/split-host-ci.9cFgEg",
+    "present_before": true,
+    "present_after": true,
+    "owner_uid": 1000,
+    "owner_gid": 1000,
+    "mode": "0700",
+    "filesystem": "ext4 root filesystem",
+    "nested_mounts": 0,
+    "approximate_size": "19G"
+  },
+  "policy": {
+    "claim_token": "codex-mcp-orphan-split-host-ci-9cFgEg-20260716T051039Z",
+    "created_worktree": false,
+    "git_worktree_remove_invoked": false,
+    "git_worktree_prune_invoked": false,
+    "force_used": false,
+    "ref_deleted": false,
+    "filesystem_removal_invoked": false,
+    "other_tmp_path_touched": false,
+    "source_index_ref_pr_ci_check_tag_authority_protection_host_service_image_or_route_mutation": false
+  },
+  "standalone_git": {
+    "checkout": "/tmp/split-host-ci.9cFgEg/jain-web",
+    "dot_git_kind": "directory",
+    "absolute_git_dir": "/tmp/split-host-ci.9cFgEg/jain-web/.git",
+    "common_git_dir": ".git",
+    "detached": true,
+    "registered_worktree_admin_matches": 0,
+    "registration_scan_roots": [
+      "/home/ubuntu/jain-split",
+      "/home/ubuntu/jeryu-split",
+      "/home/ubuntu/jankurai"
+    ],
+    "registered_worktree_predicate": "pass_standalone_not_registered"
+  },
+  "source_identity": {
+    "repository": "jeryu/jain-web",
+    "head": "f235a471ff716c3d8bd5577f3f241d2ce07a09ed",
+    "tree": "931251b99857373e9645269400c6b8a2afd85aa4",
+    "parent": "525c8ecbbe98dc6b264f259537fdf5d38a00160a",
+    "subject": "test(web): deadline-based lifecycle polling in api_http",
+    "porcelain_count": 0,
+    "porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "diff_binary_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "untracked_count": 0,
+    "closed_pr_metadata": {"number": 27, "state": "closed", "merged": false, "head": "f235a471ff716c3d8bd5577f3f241d2ce07a09ed"},
+    "named_source_branch": "refs/heads/claude/web-t0-tests-20260715",
+    "named_source_branch_current_head": "e793e37fe652ad3fa350515b04daa183047dd2f6",
+    "live_forge_git_refs_at_exact_candidate_head": 0,
+    "exact_source_head_ref_predicate": "fail_no_live_git_ref"
+  },
+  "content_classification": {
+    "cargo_target": "16G reproducible Rust build output",
+    "cargo_home": "716M reproducible Cargo registry/git cache",
+    "sandbox_home": "1.7G generated CI tool/package home",
+    "clean_source_checkout": "558M exact detached Jain Web checkout",
+    "ci_log": "120K generated runner log",
+    "identity_log": "4K generated runner log",
+    "native_vendor_log": "4K generated runner log",
+    "cargo_git_checkout_directories": 12,
+    "unique_tracked_or_untracked_source_changes": false,
+    "dependency_cache_status_and_secret_scan": "not_evaluated_after_mandatory_symlink_and_ref_gates_failed"
+  },
+  "symlinks": {
+    "internal_count": 662,
+    "broken_internal_count": 0,
+    "manifest_format": "sorted relative-path TAB raw-target newline",
+    "manifest_sha256": "c00804080bff59de1c3f0b8ff798bfe87908c0d19230b1d8d0b50751993e7d3d",
+    "classification": "generated pnpm project and node_modules links inside the sandbox",
+    "examples": [
+      "home/.local/share/pnpm/store/v11/projects/a116db3ed0795e37e260fa84029f0924 -> ../../../../../../../jain-web/apps/web",
+      "jain-web/apps/web/node_modules/react -> .pnpm/react@18.3.1/node_modules/react",
+      "jain-web/apps/web/node_modules/@playwright/test -> ../.pnpm/@playwright+test@1.61.1/node_modules/@playwright/test"
+    ],
+    "external_inbound_scan": "not_evaluated_after_internal_zero-symlink_predicate_failed",
+    "zero_symlink_predicate": "fail"
+  },
+  "activity": {
+    "external_process_command_refs": 0,
+    "proc_cwd_root_fd_links": 0,
+    "active_fd_predicate": "pass_at_final_readback",
+    "lock_scan": "not_evaluated_after_earlier_mandatory_predicate_failure"
+  },
+  "gate_result": {
+    "not_registered_worktree": "pass",
+    "exact_source_head_on_live_forge_ref": "fail",
+    "clean_primary_checkout": "pass",
+    "zero_internal_symlinks": "fail",
+    "zero_inbound_symlinks": "not_evaluated",
+    "zero_external_process_or_fd_refs": "pass",
+    "no_unique_dependency_cache_or_secret_material": "not_evaluated",
+    "reproducible_output_classification": "partial_pass",
+    "removal_authorized": false
+  },
+  "terminal_result": {
+    "removed": false,
+    "path_still_present": true,
+    "blockers": [
+      "The exact path contains 662 symlinks; the mandatory zero-symlink predicate failed.",
+      "The detached source commit is named in closed PR #27 metadata but no live forge Git ref targets it; the named source branch now targets e793e37fe652ad3fa350515b04daa183047dd2f6."
+    ],
+    "next_action": "Do not remove this sandbox under the current authorization. First obtain an owner decision that explicitly resolves the generated-link policy and preserve f235a471ff716c3d8bd5577f3f241d2ce07a09ed with an independently verified live Git ref or cryptographic bundle; then repeat the full inbound-link, cache, secret, lock, process, and byte-custody audit."
+  }
+}

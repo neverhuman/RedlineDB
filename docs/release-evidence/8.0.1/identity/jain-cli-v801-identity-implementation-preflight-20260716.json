@@ -1,0 +1,71 @@
+{
+  "schema": "jain.identity-implementation-preflight/v1",
+  "operation": "canonical-checkout preflight before surgical 8.0.1 identity implementation",
+  "repository": "jeryu/jain-cli",
+  "canonical_path": "/home/ubuntu/jain-split/jain-cli",
+  "release": "8.0.1",
+  "status": "blocked",
+  "decision": "STOP_NO_MUTATION",
+  "claim_token": "codex-mcp-cli-v801-identity-implementation-20260716T0559Z",
+  "snapshot_at": "2026-07-16T05:59:00Z",
+  "required_preconditions": {
+    "canonical_primary_clean": false,
+    "checked_out_on_protected_main": false,
+    "head_equals_live_forge_main": false,
+    "single_registered_checkout": true,
+    "conflicting_live_ledger_claim": false,
+    "path_referencing_process_found": false,
+    "open_file_entry_found": false
+  },
+  "observed": {
+    "branch": "codex/jope-lime-rust-20260713",
+    "head": "ca3672e272adc59a0667e81353522321eb4712e8",
+    "live_forge_main": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3",
+    "live_forge_branch": "c5f1e748c0a21d6e4dcbd0f826b88f5dafe97a0c",
+    "commits_ahead_of_main": 4,
+    "commits_not_on_live_same_name_branch": 3,
+    "registered_checkouts": 1,
+    "dirty_source_files": 8,
+    "dirty_insertions": 250,
+    "dirty_deletions": 12,
+    "dirty_binary_diff_sha256": "857cc3536e0611272b14260abe2596184404893742b283c172e85eb877d01ed5",
+    "dirty_paths": [
+      "crates/feat-cli/src/args/pipeline.rs",
+      "crates/feat-cli/src/artifact.rs",
+      "crates/feat-cli/src/commands.rs",
+      "crates/feat-cli/src/config.rs",
+      "crates/feat-cli/src/config/presets.rs",
+      "crates/feat-cli/src/sagemaker/mod.rs",
+      "crates/feat-cli/src/sagemaker/tests.rs",
+      "crates/feat-cli/src/server.rs"
+    ],
+    "local_only_commits": [
+      "93673b80d3f5a84235df7c92ce56906e1d245449",
+      "68f18c57fdb3dbcb455626facc15869b3045b9e2",
+      "ca3672e272adc59a0667e81353522321eb4712e8"
+    ],
+    "lsof_namespace_warnings": true
+  },
+  "blockers": [
+    "canonical checkout is not on protected main",
+    "canonical HEAD is not live forge main",
+    "three committed WIP heads are not on the live same-name forge branch",
+    "eight Rust source files contain additional dirty WIP",
+    "stopped-head custody handoff is absent"
+  ],
+  "acceptance": {
+    "source_edits": 0,
+    "branch_switches": 0,
+    "stashes": 0,
+    "resets": 0,
+    "commits": 0,
+    "pushes": 0,
+    "prs_opened": 0,
+    "ci_runs": 0,
+    "approvals": 0,
+    "merges": 0,
+    "tags": 0,
+    "worktrees_created": 0
+  },
+  "next_action": "Obtain a stopped-head handoff that preserves the three unpushed commits and dirty model-smoke/source work, then return the canonical checkout to clean forge-equal protected main before reclaiming identity implementation."
+}

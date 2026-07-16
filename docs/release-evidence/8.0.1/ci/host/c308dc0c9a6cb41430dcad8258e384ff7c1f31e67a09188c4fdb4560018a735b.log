@@ -1,0 +1,15 @@
+Cloning into '/tmp/split-host-ci.c7ojRc/jain-lightgbm'...
+HEAD is now at 84a1c77 docs: prohibit git worktrees
+lock_blob=c7c3792a5455ce83e334f2e173778ea17aaac387
+name=jain-lightgbm
+ref=84a1c776903b64d32c10d375e21bb876b921405b
+commit=84a1c776903b64d32c10d375e21bb876b921405b
+tree=46a3a656616caa6dcca24381c80d9e839b33b52f
+release_checksum_sha256=b7984afe057f169ac09065481e4e6a4b8da32b7938a83133abb1444a632285bf
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: /tmp/split-host-ci.c7ojRc/jain-lightgbm
+[ci] native learner required lane: metadata + vendor-backed release smoke
+[ci] JAIN_VENDOR_ROOT not set; native release smoke deferred to deploy integration
+required ok: jain-lightgbm

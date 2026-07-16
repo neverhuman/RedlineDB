@@ -1,0 +1,94 @@
+forge-ei.com, www.forge-ei.com, git.forge-ei.com, xdev.forge-ei.com {
+    redir https://www.neverhuman.org/ permanent
+}
+
+neverhuman.org {
+    redir https://www.neverhuman.org{uri} permanent
+}
+
+image.forge-ei.com {
+    redir https://image.neverhuman.org{uri} permanent
+}
+
+image.neverhuman.org {
+    @blocked not remote_ip 192.168.68.0/24 172.16.0.0/12 127.0.0.1
+    respond @blocked "Access Denied" 403
+
+    @write_methods method POST PUT PATCH DELETE
+
+    handle @write_methods {
+        basic_auth {
+            0fad67fe5f8efbca $2a$14$enzKDYJDlohXCYr0dooeQO4.F9V9hFdb4KHarbSrUbpkxANqWMEjC
+        }
+        reverse_proxy registry:5000
+    }
+
+    handle {
+        reverse_proxy registry:5000
+    }
+}
+
+www.neverhuman.org {
+    # jain v8.0.1 public trial (/try) — routes to the xbabe3 web-control slot
+    # fleet (192.168.68.54:8080). Durable equivalent of the admin-API routes.
+    @jain_try path /try
+    reverse_proxy @jain_try 192.168.68.54:8080
+    @jain_api path /api/public/*
+    reverse_proxy @jain_api 192.168.68.54:8080
+    @jain_live path_regexp slot ^/live/g([0-9]{2})(/.*)?$
+    reverse_proxy @jain_live 192.168.68.54:8080
+    # jain Cloud landing page — static site served by the jain-landing nginx
+    # container (nht_net); files on host at /home/ubuntu/jain-landing.
+    reverse_proxy jain-landing:80
+    # nht retired 2026-07-07; to bring it back, remove the line above and restore:
+    # reverse_proxy nh-tele-a:18090 nh-tele-b:18090 {
+    #     lb_policy first
+    #     health_uri      /health
+    #     health_interval 10s
+    #     health_timeout  5s
+    # }
+}
+
+telemetry.neverhuman.org {
+    reverse_proxy nh-tele-a:18090 nh-tele-b:18090 {
+        lb_policy first
+        health_uri      /health
+        health_interval 10s
+        health_timeout  5s
+    }
+}
+
+
+doom.neverhuman.org {
+    reverse_proxy nh-tele-a:18090 nh-tele-b:18090 {
+        lb_policy first
+        health_uri      /health
+        health_interval 10s
+        health_timeout  5s
+    }
+}
+
+room.neverhuman.org {
+    reverse_proxy signalhouse-frontend-1:8080
+}
+
+# BEGIN downloads.neverhuman.org
+downloads.neverhuman.org {
+  root * /home/ubuntu/nht-storage/downloads
+  encode zstd gzip
+  @json path *.json
+  header @json Access-Control-Allow-Origin "*"
+  @latest path /desktop/veox-desktop-latest.* /desktop/veox-desktop-preview-latest.* /*/desktop/veox-desktop-latest.* /*/desktop/veox-desktop-preview-latest.* /desktop/ /*/desktop/
+  header @latest Cache-Control "public, max-age=60"
+  @versioned path /desktop/releases/* /*/desktop/releases/*
+  header @versioned Cache-Control "public, max-age=31536000, immutable"
+  file_server
+}
+# END downloads.neverhuman.org
+
+# BEGIN git.neverhuman.org
+git.neverhuman.org {
+  encode zstd gzip
+  reverse_proxy 172.19.0.1:8787
+}
+# END git.neverhuman.org

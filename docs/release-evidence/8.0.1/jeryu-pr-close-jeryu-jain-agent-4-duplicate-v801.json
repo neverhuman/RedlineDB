@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-close",
+  "repository": "jeryu/jain-agent",
+  "request": {
+    "body": {
+      "state": "closed"
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-agent/pulls/4"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-agent"
+      },
+      "sha": "8818f70e04d68ae70657f6a3138d6407cbc490fb"
+    },
+    "body": "",
+    "created_at": "2026-07-16T04:09:35.184355388Z",
+    "draft": false,
+    "head": {
+      "label": "claude/repin-v8.0.1-20260716",
+      "ref": "claude/repin-v8.0.1-20260716",
+      "repo": {
+        "full_name": "jeryu/jain-agent"
+      },
+      "sha": "ffbccc31d9c194f74b6253cf91c85b264a582d1d"
+    },
+    "html_url": "/jeryu/jain-agent/pull/4",
+    "id": "81307a60-6dc3-47c7-979a-226251d72d2d",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "closed",
+    "merged": false,
+    "merged_at": null,
+    "number": 4,
+    "source_repository": "jeryu/jain-agent",
+    "state": "closed",
+    "title": "repin v8.0.1: bump jain-llm to jain-llm-v8.0.1-split.0",
+    "updated_at": "2026-07-16T05:14:36.794423714Z",
+    "url": "/repos/jeryu/jain-agent/pulls/4",
+    "user": {
+      "login": "claude",
+      "type": "User",
+      "url": "/users/claude"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784178876
+}

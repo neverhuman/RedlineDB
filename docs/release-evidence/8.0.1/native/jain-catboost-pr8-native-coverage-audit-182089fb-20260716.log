@@ -1,0 +1,94 @@
+lcov_sha256=e10c4603879aff6e167c5eac95e8eff27951ad0c396cbd02060e43818d9cef0a
+sources=17
+lines_hit=782
+lines_found=959
+line_percent=81.5433
+source_files:
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/args.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/build_info.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/export_script.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/flatc.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/io.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/join_srcs.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/link.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/main.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/process.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/recursive_lib.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/replace.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/rodata.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/run_tool.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost-sys/cbtool/vcs.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost/src/error.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost/src/model.rs
+SF:/tmp/codex-catboost-native-evidence-20260716/repo/crates/catboost/src/params.rs
+coverage-audit status=warn sources=1/2 hard=0 soft=0 json=target/jankurai/coverage/coverage-audit.json md=target/jankurai/coverage/coverage-audit.md
+{
+  "schema_version": 1,
+  "generated_by": "jankurai coverage audit",
+  "repo_root": ".",
+  "config_path": "agent/coverage-sources.toml",
+  "strict": false,
+  "changed_from": null,
+  "summary": {
+    "status": "warn",
+    "sources_total": 2,
+    "sources_present": 1,
+    "sources_missing": 1,
+    "hard_findings": 0,
+    "soft_findings": 0
+  },
+  "sources": [
+    {
+      "id": "rust-lcov",
+      "kind": "line_coverage",
+      "format": "lcov",
+      "mode": "advisory",
+      "status": "pass",
+      "artifact_paths": [
+        "target/llvm-cov/lcov.info",
+        "target/jankurai/coverage/rust-lcov.info"
+      ],
+      "matched_artifact": "target/llvm-cov/lcov.info",
+      "applies_to": [
+        "crates/**/*.rs"
+      ],
+      "owner": "tools",
+      "lane": "coverage-audit",
+      "metrics": {
+        "covered_branches": 0,
+        "covered_lines": 762,
+        "present": true,
+        "total_branches": 0,
+        "total_line_coverage": 0.8149732620320855,
+        "total_lines": 935
+      },
+      "parser_warnings": []
+    },
+    {
+      "id": "security-evidence",
+      "kind": "supply_chain",
+      "format": "generic-json-summary",
+      "mode": "auto",
+      "status": "missing",
+      "artifact_paths": [
+        "target/jankurai/security/evidence.json",
+        "target/security/evidence.json"
+      ],
+      "matched_artifact": null,
+      "applies_to": [
+        ".github/**",
+        "Cargo.toml",
+        "Cargo.lock",
+        "package.json",
+        "apps/web/package.json"
+      ],
+      "owner": "ops",
+      "lane": "security",
+      "metrics": {
+        "present": false
+      },
+      "parser_warnings": []
+    }
+  ],
+  "findings": []
+}

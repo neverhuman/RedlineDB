@@ -1,0 +1,169 @@
+{
+  "schema_version": "jain.split.independent-review/v1",
+  "status": "pass_pending_exact_head_required_and_approval",
+  "decision": "REVIEW_PASS_PENDING_EXACT_HEAD_REQUIRED_AND_APPROVAL",
+  "recorded_at_utc": "2026-07-16T07:38:42Z",
+  "claim_token": "codex-jable-pr4-independent-review-20260716T0731Z",
+  "independence": {
+    "reviewer_authored_base": false,
+    "reviewer_authored_pr_commits": false,
+    "source_or_ref_mutation_performed": false
+  },
+  "repository": "jeryu/jain-jable",
+  "pull_request": 4,
+  "branch": "claude/v801-identity-jain-jable-20260716",
+  "base_ref": "main",
+  "base_sha": "9a38221906d8918efa3b8d8ef582423f2a23dafc",
+  "first_commit_sha": "4fb7d2dc0178dd8030d3d116d8267943c3e56470",
+  "head_sha": "c606b6298bee69b521b1fc8f3144e23be357cb1f",
+  "tree_sha": "f68a091af87b4e041e338b2b623f056040bd978c",
+  "graph": {
+    "base_is_first_commit_parent": true,
+    "first_commit_is_head_parent": true,
+    "merge_base_equals_protected_main": true,
+    "commit_count_over_base": 2,
+    "linear": true
+  },
+  "diff": {
+    "full_index_binary_sha256": "6ea949c3b30ae9c20746df9fe3c4a3c085ce2a9e3ecef4197de76e0a79dc3c3e",
+    "files": 15,
+    "insertions": 110,
+    "deletions": 30,
+    "changed_paths": [
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "Cargo.lock",
+      "Cargo.toml",
+      "README.md",
+      "VERSION",
+      "agent/standard-version.toml",
+      "db/AGENTS.md",
+      "db/README.md",
+      "docs/README.md",
+      "docs/release.md",
+      "docs/testing.md",
+      "ops/ci/lib.sh",
+      "ops/ci/score.sh",
+      "ops/ci/tool-adoption.sh"
+    ],
+    "product_source_changes": 0,
+    "dependency_graph_changes": 0,
+    "cargo_lock_change": "workspace package version only: 8.0.0 to 8.0.1",
+    "binary_changes": 0,
+    "symlink_changes": 0,
+    "mode_changes": 0,
+    "diff_check": "pass"
+  },
+  "candidate": {
+    "version": "8.0.1",
+    "proposed_tag": "jain-jable-v8.0.1-split.1",
+    "next_unused_revision": true,
+    "existing_invalid_tag": "jain-jable-v8.0.1-split.0",
+    "existing_invalid_tag_commit": "e119908dd4f522fdbada7ddb461fb10c0dd7f563",
+    "existing_invalid_tag_payload_version": "8.0.0",
+    "historical_8_0_0_changelog_preserved": true,
+    "status": "candidate",
+    "formal_ga": false,
+    "production_applied": false,
+    "atomicsoul_push": 0,
+    "rollback_target": "7.0.6",
+    "accepted": false,
+    "tagged": false,
+    "authority_bound": false,
+    "deployed": false
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "path_is_regular_non_symlink": true,
+    "version": "1.6.11",
+    "binary_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "all_executable_repo_invocations_source_fixed_path_function": true,
+    "digest_and_version_guard": "pass",
+    "adversarial_path": {
+      "ambient_binary": "/home/ubuntu/.local/bin/jankurai",
+      "ambient_binary_version": "1.6.11",
+      "ambient_binary_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+      "shell_function_precedence_verified": true,
+      "fixed_governed_dispatch": "pass"
+    },
+    "changed_fast": {
+      "status": "pass",
+      "score": 85,
+      "raw_score": 85,
+      "hard_findings": 0,
+      "caps": [],
+      "run_report_sha256": "d92dbd18010270cb3f4896d3a0998168bf4be87021cc3329aa8f038ca9cdd5f6"
+    },
+    "forge_check": {
+      "name": "jankurai/proof",
+      "status": "completed",
+      "conclusion": "success",
+      "check_id": "72403322-e4d5-442c-815f-84993ef93c01",
+      "head_sha": "c606b6298bee69b521b1fc8f3144e23be357cb1f"
+    }
+  },
+  "independent_gates": {
+    "cargo_metadata_locked": "pass",
+    "cargo_fmt": "pass",
+    "cargo_clippy_all_targets": "pass",
+    "cargo_tests": {
+      "status": "pass",
+      "passed": 22,
+      "failed": 0
+    },
+    "doc_tests": "pass",
+    "bash_syntax": "pass",
+    "shellcheck_changed_proof_scripts": "pass",
+    "artifact_support": {
+      "status": "pass",
+      "receipt_sha256": "5b536fc0307fac6c8df73b3947a6d2bac057a0e6cdaf03bd13d889abc7005a5a"
+    },
+    "git_fsck_strict": "pass"
+  },
+  "forge_readback": {
+    "pr_state": "open",
+    "pr_base_ref": "main",
+    "pr_head_sha": "c606b6298bee69b521b1fc8f3144e23be357cb1f",
+    "protected_main_sha": "9a38221906d8918efa3b8d8ef582423f2a23dafc",
+    "mergeable_state": "blocked",
+    "required_check": "jain-jable/required",
+    "required_check_state": "absent",
+    "autonomy_check_state": "action_required",
+    "required_approvals": 1,
+    "required_linear_history": true,
+    "enforce_admins": true,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  },
+  "physical_review_clone": {
+    "clone_mode": "git clone --no-local",
+    "detached_exact_head": true,
+    "git_dir_is_directory": true,
+    "alternates_absent": true,
+    "linked_worktree_admin_absent": true,
+    "strict_fsck": "pass",
+    "removed_after_review": true
+  },
+  "canonical_integrity": {
+    "checkout_head": "c606b6298bee69b521b1fc8f3144e23be357cb1f",
+    "checkout_clean": true,
+    "forge_branch_equal": true,
+    "git_dir_is_directory": true,
+    "registered_paths_for_common_git_dir": 1,
+    "strict_fsck": "pass"
+  },
+  "evidence_note": "The author receipt's aggregate_binary_diff_sha256 did not reproduce under an exact physical clone. This independent receipt binds the same exact path/stat/mode review to a deterministic git diff --full-index --binary digest; the discrepancy does not change source contents, commit/tree identity, or gate results.",
+  "excluded_actions": {
+    "host_ci_run": false,
+    "required_check_published": false,
+    "approval": false,
+    "merge": false,
+    "tag": false,
+    "authority_bind": false,
+    "protection_mutation": false,
+    "deployment": false,
+    "force_operation": false,
+    "git_worktree_action": false
+  },
+  "next_step": "Run one serialized governed standalone-clone exact-head host CI job to publish jain-jable/required. If that required check is successful and the head remains unchanged, a separate owner may approve and protected-fast-forward merge before cutting and binding the immutable split.1 tag."
+}

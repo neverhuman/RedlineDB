@@ -1,0 +1,10 @@
+{
+  "schema_version": "jain.host-ci/v1",
+  "owner": "jeryu",
+  "repository": "jain-web",
+  "head_sha": "60b00f035f0d5bdda2ecbabc29756cdb9ac43c8a",
+  "check": "jain-web/required",
+  "conclusion": "success",
+  "log_sha256": "fcaeb627c25760f9926e0cc844a5f29f5f948656bd6253edeab6d825d37231e3",
+  "log_path": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/ci/host/fcaeb627c25760f9926e0cc844a5f29f5f948656bd6253edeab6d825d37231e3.log"
+}

@@ -1,0 +1,110 @@
+Cloning into '/tmp/split-host-ci.JS5f2K/jain-smartcluster'...
+HEAD is now at 66ec823 test(jope): land the E3 ten-guest activation-receipt harness
+lock_blob=3a8c5e1f50222f5d4ebfe28522c8ef17658daf73
+name=jain-smartcluster
+ref=66ec823371a388e2ae32ef5bb5028d74caea1ecd
+commit=66ec823371a388e2ae32ef5bb5028d74caea1ecd
+tree=3c235b60d79ce8c70c993d4d07b21bf7e0504308
+release_checksum_sha256=55ad3f588c160f35dc6b91d90257f1822978779a2bfd34842bccc67417c6ec05
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: jain-smartcluster
+immutable inventory receipt ok: entries=57 digest=4940d0890131293c0faaac5022fedca5ae31d3383a5ea94464096f2fbc2d68cd
+Diff in /tmp/split-host-ci.JS5f2K/jain-smartcluster/crates/jain-smartcluster-daemon/src/actor/requests/lifecycle.rs:288:
+             // release the job back to the queue so the scheduler relaunches
+             // it from its durable spec instead of wedging on a conflict.
+             let suspended = self
+[31m-                .transition(&job, JobState::Suspended, "paused attempt has no live process")
+(B[m[32m+                .transition(
+(B[m[32m+                    &job,
+(B[m[32m+                    JobState::Suspended,
+(B[m[32m+                    "paused attempt has no live process",
+(B[m[32m+                )
+(B[m                 .map_err(actor_server_error)?;
+             self.record_transition(&suspended).map_err(event_error)?;
+             let receipt = self
+Diff in /tmp/split-host-ci.JS5f2K/jain-smartcluster/crates/jain-smartcluster-daemon/src/actor/scheduling/gpu.rs:150:
+ 
+     const DEFAULT_THRESHOLD: u64 = 1024 * 1024 * 1024;
+ 
+[31m-    fn device(used_vram_bytes: u64, reserved_vram_bytes: u64, processes: usize) -> crate::gpu::GpuDevice {
+(B[m[32m+    fn device(
+(B[m[32m+        used_vram_bytes: u64,
+(B[m[32m+        reserved_vram_bytes: u64,
+(B[m[32m+        processes: usize,
+(B[m[32m+    ) -> crate::gpu::GpuDevice {
+(B[m         crate::gpu::GpuDevice {
+             id: "0".to_owned(),
+             physical_index: 0,
+Diff in /tmp/split-host-ci.JS5f2K/jain-smartcluster/crates/jain-smartcluster-daemon/src/actor/scheduling/gpu.rs:183:
+         // Measured idle readings: xbabe3 RTX 3090 and xbabe1 RTX 4090 count
+         // the driver reservation as used memory with zero compute processes.
+         for used in [476_839_936, 504_496_128] {
+[31m-            assert!(!unaccounted_vram_usage(&device(used, 0, 0), DEFAULT_THRESHOLD));
+(B[m[32m+            assert!(!unaccounted_vram_usage(
+(B[m[32m+                &device(used, 0, 0),
+(B[m[32m+                DEFAULT_THRESHOLD
+(B[m[32m+            ));
+(B[m         }
+         assert_eq!(
+             crate::config::SchedulerConfig::default().gpu_unaccounted_vram_threshold_bytes,
+Diff in /tmp/split-host-ci.JS5f2K/jain-smartcluster/crates/jain-smartcluster-daemon/src/actor/scheduling/gpu.rs:210:
+     #[test]
+     fn leaked_vram_without_processes_is_flagged() {
+         let leaked = 20 * 1024 * 1024 * 1024;
+[31m-        assert!(unaccounted_vram_usage(&device(leaked, 0, 0), DEFAULT_THRESHOLD));
+(B[m         assert!(unaccounted_vram_usage(
+[32m+            &device(leaked, 0, 0),
+(B[m[32m+            DEFAULT_THRESHOLD
+(B[m[32m+        ));
+(B[m[32m+        assert!(unaccounted_vram_usage(
+(B[m             &device(leaked, 476_839_936, 0),
+             DEFAULT_THRESHOLD,
+         ));
+Diff in /tmp/split-host-ci.JS5f2K/jain-smartcluster/crates/jain-smartcluster-daemon/src/actor/scheduling/gpu.rs:222:
+         // Ownership of live compute processes is judged by the external-PID
+         // and MPS gates, not by the unaccounted-usage clamp.
+         let used = 20 * 1024 * 1024 * 1024;
+[31m-        assert!(!unaccounted_vram_usage(&device(used, 0, 1), DEFAULT_THRESHOLD));
+(B[m[32m+        assert!(!unaccounted_vram_usage(
+(B[m[32m+            &device(used, 0, 1),
+(B[m[32m+            DEFAULT_THRESHOLD
+(B[m[32m+        ));
+(B[m     }
+ 
+     #[test]
+Diff in /tmp/split-host-ci.JS5f2K/jain-smartcluster/crates/jain-smartcluster-daemon/src/actor/scheduling/lifecycle.rs:127:
+         // first and record the real outcome; failing here used to strand the
+         // job in Paused with no active workload left to resume.
+         let job = if job.state == JobState::Paused {
+[31m-            let receipt = self.transition(&job, JobState::Running, "pause voided by process exit")?;
+(B[m[32m+            let receipt =
+(B[m[32m+                self.transition(&job, JobState::Running, "pause voided by process exit")?;
+(B[m             self.record_transition(&receipt)?;
+             receipt.job
+         } else {
+Diff in /tmp/split-host-ci.JS5f2K/jain-smartcluster/crates/jain-smartcluster-daemon/src/actor/tests.rs:247:
+     let admitted = actor
+         .transition(&job, JobState::Admitted, "scheduler admission committed")
+         .expect("admit race test job");
+[31m-    actor.record_transition(&admitted).expect("record admission");
+(B[m[32m+    actor
+(B[m[32m+        .record_transition(&admitted)
+(B[m[32m+        .expect("record admission");
+(B[m     let at = now_timestamp();
+     let launch = actor
+         .store
+Diff in /tmp/split-host-ci.JS5f2K/jain-smartcluster/crates/jain-smartcluster-daemon/src/actor/tests.rs:264:
+         .expect("record running state");
+     actor.record_transition(&running).expect("record running");
+     let paused = actor
+[31m-        .transition(&running.job, JobState::Paused, "pause committed before freezer")
+(B[m[32m+        .transition(
+(B[m[32m+            &running.job,
+(B[m[32m+            JobState::Paused,
+(B[m[32m+            "pause committed before freezer",
+(B[m[32m+        )
+(B[m         .expect("commit racing pause");
+     actor.record_transition(&paused).expect("record pause");
+     (paused.job, attempt)

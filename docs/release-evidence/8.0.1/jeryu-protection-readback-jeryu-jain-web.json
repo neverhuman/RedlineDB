@@ -1,0 +1,45 @@
+{
+  "action": "verified",
+  "mode": "read-only",
+  "operation": "jeryu-local protection-readback",
+  "repository": "jeryu/jain-web",
+  "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/repos/jeryu/jain-web/branches/main/protection"
+  },
+  "response": {
+    "allow_deletions": {
+      "enabled": false
+    },
+    "allow_force_pushes": {
+      "enabled": false
+    },
+    "enforce_admins": {
+      "enabled": true
+    },
+    "required_jankurai_proof": {
+      "enabled": false
+    },
+    "required_linear_history": {
+      "enabled": true
+    },
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 1
+    },
+    "required_signatures": {
+      "enabled": false
+    },
+    "required_status_checks": {
+      "contexts": [
+        "jain-web/required"
+      ],
+      "strict": true
+    },
+    "updated_at": "2026-07-13T11:34:17.637628765Z",
+    "url": "/repos/jeryu/jain-web/branches/main/protection"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784206859
+}

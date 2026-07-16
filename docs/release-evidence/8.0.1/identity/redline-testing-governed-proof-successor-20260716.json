@@ -1,0 +1,63 @@
+{
+  "schema": "jain.redline-testing-governed-proof-successor/v1",
+  "generated_at": "2026-07-16T10:41:20Z",
+  "decision": "SOURCE_GREEN_PR_OPEN_AUTOMATIC_PROOF_BLOCKED",
+  "repository": "jeryu/redline-testing",
+  "canonical_path": "/home/ubuntu/jain-split/jain-redline/redline-testing",
+  "base_commit": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+  "head_commit": "91009de27dcb1e33ec93ebc1061fd556a7df3044",
+  "tree": "014defca7c6e4b0f25916ff7ef9e46d036b18788",
+  "raw_full_index_diff_sha256": "29d894d408ee58af43b7acf9df9499a90fb70be2769e9a6a39dc608520c688b3",
+  "source_archive_sha256": "e5f8361e430db5be2a97dd49ed85971a5875dabbf1de72557021d1f72ad24168",
+  "jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "score": 87,
+    "raw_score": 87,
+    "minimum_score": 85,
+    "hard_findings": 0,
+    "dirty_worktree": false,
+    "tool_adoption": {
+      "applicable": 15,
+      "configured": 15,
+      "ci_evidence": 10,
+      "artifact_verified": 10
+    },
+    "score_receipt_sha256": "81186ba8764fe5648be762676e4d9c6966edcb3a6f9663e016f23b0460f410e7",
+    "security_receipt_sha256": "811cf9d3eb90b0c49ca4f8db46b6f9f993fd8edd499052429c76620817f668b8"
+  },
+  "security": {
+    "rustsec_database_commit": "9f3e138091487e69144f536d36976e427a7a3307",
+    "cargo_audit_no_fetch": true,
+    "cargo_network_offline": true,
+    "syft_update_check_disabled": true,
+    "sbom_sha256": "3c3d02d750a5e8833aff261087c4324bdad422224fc17702500fdffbf9db150c"
+  },
+  "local_required": {
+    "status": "pass",
+    "rust_tests": {
+      "passed": 49,
+      "ignored": 1
+    },
+    "ci_fail_closed_tests": 11,
+    "release_tar_sha256": "aa081e033baa8f59ffc959471054ff5094cb1a96ccac46f26d468f109b0b82c9"
+  },
+  "forge": {
+    "pull_request": 11,
+    "head_readback": "91009de27dcb1e33ec93ebc1061fd556a7df3044",
+    "pr_open_receipt_sha256": "9540cedb766dbb153f3978c44a467f89292b08278584eafb6ed3047292e3b64b",
+    "automatic_proof": {
+      "check_id": "c0f8c070-2814-408b-ae3e-491ac344ced9",
+      "status": "completed",
+      "conclusion": "failure",
+      "output": null
+    }
+  },
+  "remaining": [
+    "Obtain diagnostic output and a genuine successful exact-head jankurai/proof check.",
+    "Run one serialized host-native redline-testing/required lane on the exact PR head.",
+    "Obtain independent approval and protected fast-forward merge.",
+    "Cut/read back the next unused immutable 8.0.1 tag and bind it through authority review."
+  ]
+}

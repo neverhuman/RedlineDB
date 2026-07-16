@@ -1268,6 +1268,7 @@ fn run_repo_ci(
         .arg(&commit)
         .arg(&repo.path)
         .arg(&repo.required_check)
+        .arg("--apply")
         .env("JAIN_RELEASE_CI", "1")
         .env("JAIN_RELEASE_VERSION", RELEASE_VERSION)
         .env("ATOMICSOUL_PUSH", "0")

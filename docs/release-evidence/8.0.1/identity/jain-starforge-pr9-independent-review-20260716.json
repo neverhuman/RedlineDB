@@ -1,0 +1,278 @@
+{
+  "schema_version": "jain.independent-source-review/v2",
+  "status": "BLOCK_SOURCE_POLICY_AND_CONTRACT_DRIFT_REQUIRED_ABSENT",
+  "recorded_at_utc": "2026-07-16T09:32:30Z",
+  "claim_token": "codex-jain-starforge-pr9-independent-acceptance-20260716T0911Z",
+  "repository": "jeryu/jain-starforge",
+  "pull_request": 9,
+  "reviewer_authored_reviewed_source_or_author_receipt": false,
+  "source_or_forge_mutation_performed": false,
+  "author_receipt": {
+    "path": "jain-starforge-pr9-v801-identity-proof-successor-20260716.json",
+    "sha256": "dfaff2f6aa86e83d1ec1cd87e0aba1e24e91908a15770eeffb516ad3dc912a0c",
+    "json_parse": "pass",
+    "head_binding": "pass",
+    "identity_hashes_reproduced": true,
+    "runtime_gate_results_reproduced": true,
+    "source_acceptance": "BLOCK"
+  },
+  "reviewed_identity": {
+    "base_sha": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+    "head_sha": "c0f2a4904a3ac6f5e475b3f8ea7e4fccad871406",
+    "head_tree_sha": "4f32690dcdcd8ca929c88707d92e10617dd7ce32",
+    "merge_base": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+    "ahead": 1,
+    "behind": 0,
+    "linear": true,
+    "changed_files": 12,
+    "insertions": 150,
+    "deletions": 38,
+    "raw_full_index_diff": {
+      "sha256": "1fb4adbe5e8bacec501d8eebe32a0568e91b6a58c6506f70ed58d70063d7f736",
+      "bytes": 14015,
+      "lines": 331,
+      "reproduced": true
+    },
+    "source_archive": {
+      "method": "git archive --format=tar HEAD from the exact detached physical clone",
+      "sha256": "66bb6844feb9ef436b58c2cf5d5407d2fef53f5819cd9657b3fcf04945f45505",
+      "bytes": 982005760,
+      "reproduced": true
+    }
+  },
+  "standalone_clone": {
+    "method": "physical git clone --no-local --no-hardlinks with no Git-worktree registration",
+    "source": "/home/ubuntu/jain-split/jain-starforge",
+    "temporary_path": "/tmp/codex-jain-starforge-pr9-independent-acceptance-20260716/repo",
+    "detached_head": "c0f2a4904a3ac6f5e475b3f8ea7e4fccad871406",
+    "strict_fsck_before_and_after": "pass",
+    "lfs_pull": "pass",
+    "lfs_fsck": "pass",
+    "clean_porcelain_sha256_after_gates": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "symlink_count": 0,
+    "automatically_removed_after_evidence_capture": true
+  },
+  "unchanged_product_and_model_identity": {
+    "product_rust_changed_files": 0,
+    "product_tree_path": "crates/starforge",
+    "product_tree_sha_base_and_head": "5b3e10629ded9aed82380493d7c7c8f7bc0c56c1",
+    "artifacts_changed_files": 0,
+    "artifacts_tree_sha_base_and_head": "2a8f121d69ca411694c652d1a24cb2102d3a966a",
+    "model_bundle_index_blob_sha_base_and_head": "acc42b380994be611c0526efca02b5affb948c6c",
+    "contracts_tree_sha_base_and_head": "0213f7866ec67bbe951823dada457c4f3bd00556",
+    "schemas_tree_sha_base_and_head": "78eac5631ff8469734b85e367723eb1a32997c01",
+    "public_api": {
+      "tool": "cargo-public-api 0.52.0",
+      "removed": 0,
+      "changed": 0,
+      "added": 0,
+      "decision": "PASS"
+    },
+    "version_identity": {
+      "VERSION": "jain-starforge-v8.0.1-split.1",
+      "workspace_package_version": "8.0.1",
+      "cargo_lock_starforge_version": "8.0.1"
+    },
+    "dependencies": {
+      "crate_manifest_changed": false,
+      "workspace_cargo_toml_change": "version 8.0.0 to 8.0.1 only",
+      "cargo_toml_raw_full_index_diff_sha256": "fd4346069c790dcbb9b7eca4592b44cf4b36f7f4f08f24deb41180d306ca29e3",
+      "cargo_lock_change": "starforge root package version 8.0.0 to 8.0.1 only",
+      "cargo_lock_raw_full_index_diff_sha256": "9c8160271bffc4c6f4667296581e5bc7697e59b5db51f8e3f4c8e0b13e2494bd",
+      "registry_source_delta_lines": 0,
+      "registry_checksum_delta_lines": 0,
+      "resolved_starforge_dependencies": 14,
+      "decision": "PASS"
+    }
+  },
+  "lfs_identity": {
+    "tracked_artifact_count": 10,
+    "materialized_artifact_count": 10,
+    "materialized_bytes": 980791992,
+    "all_regular_non_symlink": true,
+    "all_larger_than_pointer_threshold": true,
+    "all_materialized_sha256_equal_lfs_oid": true,
+    "git_lfs_fsck": "pass",
+    "materialized_manifest_sha256": "2c3ead699b1e0eb71ab52dab47d892e8601fdea799eeb77aca3212400995579f",
+    "model_and_lfs_content_changed": false,
+    "decision": "PASS"
+  },
+  "governed_jankurai": {
+    "governed_path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "governed_version": "1.6.11",
+    "governed_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "regular_non_symlink": true,
+    "ambient_first_path": "/home/ubuntu/.local/bin/jankurai",
+    "ambient_first_version": "1.6.11",
+    "ambient_first_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "hostile_path_function_selected_governed_binary": true,
+    "runtime_selection_decision": "PASS",
+    "declarative_policy_decision": "BLOCK",
+    "declarative_policy_observed": "agent/audit-policy.toml requires 1.6.10 while governed runtime and docs require 1.6.11"
+  },
+  "independent_runtime_verification": {
+    "required": {
+      "status": "pass",
+      "elapsed_seconds": 335.18,
+      "maximum_rss_kb": 1027032,
+      "locked_metadata": "pass",
+      "fmt": "pass",
+      "clippy_all_targets": "pass",
+      "rust_tests": "pass",
+      "prime_lime_differential": "pass",
+      "target_encoder_parity": "pass",
+      "lfs_oid_and_materialized_content": "10/10 pass",
+      "starlight_regression_golden": "pass",
+      "chimera_regression_real_weight_cpu": "pass",
+      "chimera_classifier_real_weight_cpu": "pass"
+    },
+    "security": {
+      "status": "pass",
+      "evidence_sha256": "b0409916ebc125885cbd904cce4ea4e26f73d898b8eb9c647aa235334b647468",
+      "exact_author_hash_reproduced": true
+    },
+    "contract_drift": {
+      "lane_exit": "pass",
+      "receipt_sha256": "eef463f900a5c9b0f05e5517a9c80a13550a78fa984c0d0e3597f6af2bfc3b66",
+      "schemas": 2,
+      "declared_release_inputs": 7,
+      "public_api_diff": "none",
+      "source_acceptance": "BLOCK_UNDER_SCOPED_LFS_CONTRACT"
+    },
+    "artifact_support": {
+      "status": "pass",
+      "schema_version": "jain.split.artifact-support/v2",
+      "receipt_sha256": "f4bcca25440fd50c274c73834fc60a861ec636785e4f86c631c2621d9d20d2c2",
+      "exact_author_hash_reproduced": true,
+      "source_archive_sha256": "66bb6844feb9ef436b58c2cf5d5407d2fef53f5819cd9657b3fcf04945f45505",
+      "lfs_materialized_manifest_sha256": "2c3ead699b1e0eb71ab52dab47d892e8601fdea799eeb77aca3212400995579f",
+      "lfs_artifact_count": 10
+    },
+    "coverage": {
+      "status": "pass",
+      "sources_present": 2,
+      "sources_total": 2,
+      "hard_findings": 0,
+      "covered_lines": 3775,
+      "total_lines": 6810,
+      "line_fraction": 0.5543318649045521,
+      "receipt_sha256": "99e64623712226e7741f8da0276cf16fe82ce756f90b1300c203a799ecef7f40",
+      "exact_author_hash_reproduced": true
+    },
+    "full_score": {
+      "status": "pass",
+      "score": 88,
+      "raw_score": 88,
+      "hard_findings": 0,
+      "caps": 0,
+      "author_report_sha256_preserved": "38d3d7ceef8bf67e027e52e36c1ea82c50becadb187f0e5c81e023b00b499bd9",
+      "independent_report_sha256": "2fab6a7477fc5321a8ceaf008a167947f52ac2ab8cd81fcb094d8082d2b2a171",
+      "byte_identity_expected": false,
+      "byte_identity_note": "Jankurai reports bind run timestamps, elapsed time, fingerprints, and ignored generated inputs; the independently reproduced gate semantics are authoritative for this review."
+    },
+    "changed_fast_diff_audit": {
+      "status": "pass",
+      "score": 86,
+      "raw_score": 86,
+      "hard_findings": 0,
+      "caps": 0,
+      "changed_files": 12,
+      "independent_report_sha256": "2e197539c774033eb6bb198b9d80914aa390b661eb2df0b509817692ec54ab98",
+      "author_report_sha256_preserved_in_author_receipt": "cc1411c72b7cc8631991a403c74a72d282997c198c31bebc17c52f5da0d434fc",
+      "byte_identity_expected": false
+    }
+  },
+  "findings": [
+    {
+      "severity": "block",
+      "id": "STARFORGE-PR9-GOVERNED-JANKURAI-POLICY-DRIFT",
+      "path": "agent/audit-policy.toml:6",
+      "detail": "The declarative audit policy still requires Jankurai 1.6.10, but the changed governed runtime, documentation, and actual proof reports require/use 1.6.11. The executable selection is secure, yet the repository now has two conflicting required tool identities.",
+      "required_action": "Change required_tool_version to 1.6.11 on this review branch and rerun governed score plus changed-fast diff-audit."
+    },
+    {
+      "severity": "block",
+      "id": "STARFORGE-PR9-LFS-CONTRACT-UNDER-SCOPED",
+      "paths": [
+        "contracts/README.md",
+        "ops/ci/contract-drift.sh"
+      ],
+      "detail": "The release-input contract still declares and checks six LFS weights plus one golden fixture, while required.sh, docs/release.md, artifact support, and the authoritative materialized set require ten LFS weights. The passing contract receipt therefore omits the four artifacts/model-bundle LFS weights.",
+      "required_action": "Align the contract documentation and contract-drift release_inputs with all ten required LFS weights, retain the golden fixture, explicitly evaluate the authoritative model-bundle index, and rerun contract, required, artifact, score, and diff-audit evidence at the repaired exact head."
+    },
+    {
+      "severity": "block",
+      "id": "STARFORGE-PR9-REQUIRED-ABSENT",
+      "path": "forge check state",
+      "detail": "Exact-head jankurai/proof succeeds, but jain-starforge/required is absent."
+    }
+  ],
+  "forge_readback": {
+    "pull_request_number": 9,
+    "title": "release: align Starforge with Jain 8.0.1",
+    "state": "open",
+    "draft": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "base_ref": "main",
+    "base_sha": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+    "head_ref": "release/v8.0.1/starforge-identity",
+    "head_sha": "c0f2a4904a3ac6f5e475b3f8ea7e4fccad871406",
+    "pr_open_receipt_sha256": "8079732642592f2b2fb7664bbe26ef202498eead0b9adbf232e2245cf2be92dd",
+    "jankurai_proof": {
+      "status": "completed",
+      "conclusion": "success",
+      "check_id": "ef947bcb-5ed7-4f81-a970-3fb2e664881d"
+    },
+    "jain_starforge_required": "absent"
+  },
+  "immutable_identity": {
+    "occupied_tag": "jain-starforge-v8.0.1-split.0",
+    "occupied_tag_sha": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+    "next_unused_tag": "jain-starforge-v8.0.1-split.1",
+    "next_unused_tag_absent": true
+  },
+  "canonical_checkout": {
+    "path": "/home/ubuntu/jain-split/jain-starforge",
+    "branch": "release/v8.0.1/starforge-identity",
+    "head_sha": "c0f2a4904a3ac6f5e475b3f8ea7e4fccad871406",
+    "tree_sha": "4f32690dcdcd8ca929c88707d92e10617dd7ce32",
+    "clean_porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "branch_forge_equal": true,
+    "origin_main_tracking_ref_sha": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+    "registered_worktrees": 1,
+    "sole_registered_worktree": true,
+    "symlink_count": 0,
+    "source_process_holder_observed": false
+  },
+  "decision": {
+    "identity_reproduction": "PASS",
+    "product_model_lfs_public_api_dependency_identity": "PASS",
+    "runtime_gates": "PASS",
+    "source_review": "BLOCK",
+    "release": "BLOCK",
+    "reason": "The exact source and runtime proofs reproduce, but the governed Jankurai declarative policy conflicts with the required binary and the release-input contract omits four of ten required LFS weights; exact-head required is also absent."
+  },
+  "remaining_actions": [
+    "Repair both source findings on the existing branch without broadening product behavior.",
+    "Run fresh independent acceptance at the repaired exact head.",
+    "Publish genuine serialized jain-starforge/required success at that accepted exact head.",
+    "Obtain independent approval, protected fast-forward merge, immutable split.1 tag/readback, and protected authority binding."
+  ],
+  "excluded_actions_confirmed": [
+    "canonical_source_or_index_mutation",
+    "canonical_or_forge_ref_mutation",
+    "pull_request_mutation",
+    "check_post",
+    "host_ci",
+    "approval",
+    "merge",
+    "tag",
+    "authority_binding",
+    "deployment",
+    "force",
+    "cleanup_or_stash",
+    "secret_exposure",
+    "git_worktree"
+  ]
+}

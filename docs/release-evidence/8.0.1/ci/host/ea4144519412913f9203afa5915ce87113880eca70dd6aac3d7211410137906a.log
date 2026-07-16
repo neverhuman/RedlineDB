@@ -1,0 +1,15 @@
+Cloning into '/tmp/split-host-ci.TGZhBC/jain-xgboost'...
+HEAD is now at 8457e19 docs: prohibit git worktrees
+lock_blob=21aaf0a444e35b31e767e9733dd6a9580bacb5b8
+name=jain-xgboost
+ref=8457e1906850c0cf48cd9547c01f9161b6db5484
+commit=8457e1906850c0cf48cd9547c01f9161b6db5484
+tree=d34399ed120801725e2e86a62153b7b82354a834
+release_checksum_sha256=16dc66e5713f19e5e3e6545b0f6b6b0a83cee73898e7215d8c7389556dd9f9e1
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: /tmp/split-host-ci.TGZhBC/jain-xgboost
+[ci] native learner required lane: metadata + vendor-backed release smoke
+[ci] JAIN_VENDOR_ROOT not set; native release smoke deferred to deploy integration
+required ok: jain-xgboost

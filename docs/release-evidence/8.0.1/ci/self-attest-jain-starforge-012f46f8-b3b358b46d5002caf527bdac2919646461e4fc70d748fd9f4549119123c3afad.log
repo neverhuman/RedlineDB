@@ -1,0 +1,166 @@
+check ok: /home/ubuntu/.cache/claude-orch-ci/leaf/jain-starforge
+[ci] Rust required lane: fmt + targeted clippy/test
+warning: this function has too many arguments (9/7)
+   --> crates/starforge/src/cli.rs:542:1
+    |
+542 | / fn write_regression_feature_cache(
+543 | |     out_dir: &Path,
+544 | |     dataset: &str,
+545 | |     dump: &RegressionFeatureDump,
+...   |
+551 | |     test_idx: &[usize],
+552 | | ) -> Result<()> {
+    | |_______________^
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#too_many_arguments
+    = note: `#[warn(clippy::too_many_arguments)]` on by default
+
+warning: this `repeat().take()` can be written more concisely
+   --> crates/starforge/src/cli.rs:644:19
+    |
+644 |     header.extend(std::iter::repeat(b' ').take(pad));
+    |                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using `repeat_n()` instead: `std::iter::repeat_n(b' ', pad)`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_repeat_n
+    = note: `#[warn(clippy::manual_repeat_n)]` on by default
+
+warning: `starforge` (lib) generated 2 warnings (run `cargo clippy --fix --lib -p starforge -- ` to apply 1 suggestion)
+warning: `starforge` (lib test) generated 2 warnings (2 duplicates)
+warning: this manual char comparison can be written more succinctly
+   --> crates/starforge/src/bin/model_bundle_pack.rs:150:29
+    |
+150 |         .trim_start_matches(|value: char| value == ' ' || value == '(')
+    |                             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ help: consider using an array of `char`: `[' ', '(']`
+    |
+    = help: for further information visit https://rust-lang.github.io/rust-clippy/rust-1.96.0/index.html#manual_pattern_char_comparison
+    = note: `#[warn(clippy::manual_pattern_char_comparison)]` on by default
+
+warning: `starforge` (bin "model_bundle_pack") generated 1 warning (run `cargo clippy --fix --bin "model_bundle_pack" -p starforge -- ` to apply 1 suggestion)
+warning: `starforge` (bin "model_bundle_pack" test) generated 1 warning (1 duplicate)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.25s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.21s
+     Running unittests src/lib.rs (target/debug/deps/starforge-16cecddd7064887d)
+
+running 35 tests
+test bundle::tests::descriptor_relative_reads_enforce_the_byte_bound ... ok
+test cli::tests::caps_feature_prefix_for_regression_bench ... ok
+test cli::tests::parses_cpu_device_and_supported_dtypes ... ok
+test bundle::tests::notice_content_is_checked_against_the_manifest ... ok
+test bundle::tests::rejects_absolute_and_unsupported_paths ... ok
+test data::tests::row_selection_and_splits_are_deterministic_and_stratified ... ok
+test metrics::tests::binary_auc_handles_ordering_and_ties ... ok
+test metrics::tests::binary_auc_returns_nan_for_invalid_inputs ... ok
+test metrics::tests::regression_metrics_handle_basic_cases ... ok
+test data::tests::dataset_dirs_discovers_sorted_limited_dataset_dirs ... ok
+test cli::tests::rejects_invalid_device_dtype_and_cli_arguments ... ok
+test bundle::tests::rejects_manifest_final_and_intermediate_symlinks ... ok
+test data::tests::report_scores_reads_completed_finite_auc_reports ... ok
+test model::tests::roundtrips_real_starforge_weights_if_present ... ignored, slow: processes the real ~200MB weights with zstd -19
+test model::tests::median_of_views_is_row_stable_single_vs_batch ... ok
+test model::tests::rank_aggregate_uses_average_one_based_ranks ... ok
+test target_encoder::tests::numpy_sampling_matches_frozen_oracle ... ok
+test target_encoder::tests::numpy_seed_sequence_and_pcg64_match_frozen_stream ... ok
+test target_encoder::tests::safe_unit_matches_oracle_nan_to_num_contract ... ok
+test data::tests::load_dataset_reports_loading_shape_errors ... ok
+test model::tests::loads_plain_and_zstd_safetensors_identically ... ok
+test target_encoder::tests::short_targets_bind_effective_count_and_replacement_fraction ... ok
+test model::proptests::regression_query_chunk_is_bounded_and_lossless_when_fitting ... ok
+test bundle::tests::rejects_duplicate_paths_and_inconsistent_license_policy ... ok
+test model::proptests::median_of_views_is_identity_when_all_views_agree ... ok
+test model::proptests::split_then_merge_heads_round_trips_bit_exactly ... ok
+test model::proptests::softmax_last_rows_are_shift_invariant_probability_distributions ... ok
+test model::tests::loads_zstd_cli_compressed_safetensors ... ok
+test bundle::tests::verified_reads_reject_bytes_changed_after_initial_verification ... ok
+test model::proptests::average_ranks_conserve_sum_range_and_permutation_equivariance ... ok
+test target_encoder::tests::classical_signature_matches_frozen_binary_and_regression_oracle ... ok
+test model::proptests::median_of_views_scores_rows_identically_alone_and_in_batch ... ok
+test model::proptests::median_of_views_ignores_view_order_and_preserves_rows ... ok
+test bundle::tests::canonical_policy_identities_are_reproducible ... ok
+test bundle::tests::shipped_bundle_is_complete_and_digest_checked ... ok
+
+test result: ok. 34 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 29.09s
+
+     Running unittests src/bin/model_bundle_pack.rs (target/debug/deps/model_bundle_pack-7fcc2641d8eef0f2)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/starforge-a19b069bacbe9baa)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/foundation_parity.rs (target/debug/deps/foundation_parity-44579ae2ae79c269)
+
+running 2 tests
+test committed_gen18_full_context_is_exact_and_complete ... ok
+test foundation_2048_matches_starlight_reference ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 51.14s
+
+     Running tests/golden_parity.rs (target/debug/deps/golden_parity-481cda243950d5d7)
+
+running 6 tests
+test predict_chimera_classifier_matches_golden_fixture_when_artifacts_are_provided ... ok
+test predict_chimera_classifier_real_weights_smoke_when_requested ... ok
+test predict_chimera_regression_matches_golden_fixture_when_artifacts_are_provided ... ok
+test predict_chimera_regression_real_weights_smoke_when_requested ... ok
+test predict_regression_single_matches_golden_fixture_when_artifacts_are_provided ... ok
+test predict_single_matches_golden_fixture_when_artifacts_are_provided ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/novel_input_differential.rs (target/debug/deps/novel_input_differential-a546f60c62b9ec6b)
+
+running 1 test
+test runtime_generated_prime_lime_component_differential has been running for over 60 seconds
+test runtime_generated_prime_lime_component_differential ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 155.58s
+
+     Running tests/target_encoder_parity.rs (target/debug/deps/target_encoder_parity-b4fba63cd50e9f7b)
+
+running 1 test
+test real_binary_and_regression_fused_target_parity ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 39.36s
+
+   Doc-tests starforge
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[ci] starforge required lane: immutable LFS weight checks
+Git LFS fsck OK
+starforge LFS guard: 10 tracked weights, content SHA256 matches LFS OID
+[ci] starforge required lane: committed regression golden fixture
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.85s
+     Running tests/golden_parity.rs (target/debug/deps/golden_parity-481cda243950d5d7)
+
+running 1 test
+test predict_regression_single_matches_golden_fixture_when_artifacts_are_provided ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 5.51s
+
+[ci] starforge required lane: current Chimera real-weight smoke proofs
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running tests/golden_parity.rs (target/debug/deps/golden_parity-481cda243950d5d7)
+
+running 1 test
+test predict_chimera_regression_real_weights_smoke_when_requested ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 7.77s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.10s
+     Running tests/golden_parity.rs (target/debug/deps/golden_parity-481cda243950d5d7)
+
+running 1 test
+test predict_chimera_classifier_real_weights_smoke_when_requested ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 5 filtered out; finished in 8.58s
+
+required ok: jain-starforge
+CI_EXIT=0

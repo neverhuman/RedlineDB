@@ -1,0 +1,49 @@
+Claude-EDGE (Lane 6b) — AtomicSoul public edge retarget, 2026-07-16 ~14:04–14:11Z
+Executed from jope-prime host (curl) + ssh atomicsoul (docker exec proxy-caddy-1 curl).
+
+== STAGING re-verify (direct, Host: www.neverhuman.org) 14:04Z ==
+GET  http://xbabe3:8082/try                     -> 200, 2518 bytes (cockpit HTML)
+GET  http://xbabe3:8082/api/public/capacity     -> 200 {"max_active":10,"warm":0,"active":0,"available":true}
+POST http://xbabe3:8082/api/public/allocations  -> 201, slot g01 epoch 2, Set-Cookie jain_lease (Secure; HttpOnly; SameSite=Strict)
+DELETE /api/public/allocations                  -> 405 (release-by-DELETE not implemented in this build; leases idle-expire)
+Note: without the Host header the staging caddy serves a 200 empty catch-all.
+
+== PUBLIC BEFORE (curl --resolve www.neverhuman.org:443:192.168.68.78) ==
+/try -> 200 2518B; /api/public/capacity -> 200; / (landing) -> 200 10016B
+(edge was already wired by owner/another lane, dialing 192.168.68.54:8080 = standalone web-control)
+
+== CHANGE (Etag CAS via admin API, docker exec proxy-caddy-1) 14:07Z ==
+GET  /config/apps/http/servers/srv0/routes/6/handle/0/routes
+     Etag: "/config/apps/http/servers/srv0/routes/6/handle/0/routes 0e23fdea650ff41d"   (routes-inner-before-8080.json)
+PATCH same path, If-Match <etag>, body = patch-payload-inner-routes-8082.json           -> 200
+     delta: three dials 192.168.68.54:8080 -> 192.168.68.54:8082; @id tags added
+            (jain-web-api-public, jain-web-try, jain-web-live-slots); jain-landing:80 fallback unchanged
+readback Etag: "... b4fc26d0c29eae01"                                                   (routes-inner-after-8082.json)
+
+== DURABILITY (no sudo needed) 14:10Z ==
+proxy-caddy-1 cmd: caddy run --config /etc/caddy/Caddyfile --adapter caddyfile
+host file /home/ubuntu/NHT/Proxy/Caddyfile (owner ubuntu) had the durable routes dialing 8080.
+Backed up to Caddyfile.bak-20260716T140521Z, sed 8080->8082 (3 dials + comment), then
+docker exec proxy-caddy-1 caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile -> "Valid configuration".
+No reload issued (runtime already correct); restart now converges to 8082 too.
+signalhouse-frontend-1:8080 line untouched.
+
+== PUBLIC AFTER (curl --resolve ...:443:192.168.68.78) 14:08Z ==
+GET  /try                    -> 200, 2518 bytes
+GET  /api/public/capacity    -> 200
+POST /api/public/allocations -> HTTP/2 201, slot g02 epoch 2, Set-Cookie jain_lease + jain_visitor,
+                                headers show DOUBLE "via: 1.1 Caddy" (proxy-caddy-1 -> jain-l6-caddy) = Lane 6 stack
+GET  /live/g02/ (lease cookie) -> 200, 2583 bytes, references /live/g02/ws
+GET  /live/g02/ws (Upgrade: websocket) -> HTTP/1.1 101 Switching Protocols
+GET  /api/public/capacity    -> 200 {"max_active":10,"warm":0,"active":2,"available":true}
+                                (active:2 = g01 direct-staging + g02 public: same scqd state => same backend)
+
+== TRUE PUBLIC (real DNS, no --resolve) 14:09Z ==
+GET https://www.neverhuman.org/api/public/capacity -> 200, remote_ip 162.218.217.123
+    {"max_active":10,"warm":0,"active":2,"available":true}
+
+== NEIGHBOR ROUTES SPOT CHECK (unchanged, no 5xx) ==
+telemetry.neverhuman.org/health -> 200; room.neverhuman.org/ -> 200;
+downloads.neverhuman.org/ -> 404 (file_server root without index; host route untouched, pre-existing behavior)
+
+Test leases g01/g02 left to idle-expire (~15 min idle deadline); DELETE endpoint returns 405.

@@ -1,0 +1,63 @@
+== Lane 6 route verification through jain-l6-caddy (xbabe3:8082), canonical routes, Host=www.neverhuman.org ==
+
+--- GET /try ---
+HTTP/1.1 200 OK
+Content-Length: 2518
+Content-Type: text/html; charset=utf-8
+Date: Thu, 16 Jul 2026 13:14:55 GMT
+Via: 1.1 Caddy
+
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>jain — try it live</title>
+<style>
+  :root{color-scheme:dark}
+  bod
+
+--- GET /api/public/capacity ---
+HTTP/1.1 200 OK
+Content-Length: 54
+Content-Type: application/json
+Date: Thu, 16 Jul 2026 13:14:55 GMT
+Via: 1.1 Caddy
+
+{"max_active":10,"warm":0,"active":2,"available":true}
+
+--- POST /api/public/allocations ---
+{"slot":"g03","epoch":2,"idle_deadline_unix_ms":1784208595062,"absolute_deadline_unix_ms":1784211295062,"expires_at_unix_ms":1784208595062,"launch_path":"/live/g03/"}
+HTTP/1.1 201 Created
+Set-Cookie: jain_lease=<redacted-token>; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600
+Set-Cookie: jain_visitor=df5734615cc7bfb6d1cbc74485fd2175; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000
+
+--- GET /live/g03/ (lease cookie; Secure flag means HTTPS-only in browsers — header replay here) ---
+HTTP/1.1 200 OK
+Content-Length: 2583
+Content-Type: text/html; charset=utf-8
+Date: Thu, 16 Jul 2026 13:14:55 GMT
+Via: 1.1 Caddy
+
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>jain cockpit — g03</title>
+<style>
+  :root{color-scheme:dark}
+  bod
+
+--- WS upgrade /live/g03/ws ---
+HTTP/1.1 101 Switching Protocols
+Connection: upgrade
+Date: Thu, 16 Jul 2026 13:14:55 GMT
+Sec-WebSocket-Accept: HSmrc0sMlYUkAGmm5OPpG2HaGWk=
+Server: Caddy
+Upgrade: websocket
+
+�({"frame":"hello","slot":"g03","epoch":2}
+--- DELETE /api/public/allocations/current ---
+HTTP 204
+
+--- capacity after release ---
+{"max_active":10,"warm":0,"active":2,"available":true}

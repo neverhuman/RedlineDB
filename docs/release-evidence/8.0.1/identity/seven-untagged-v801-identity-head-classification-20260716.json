@@ -1,0 +1,352 @@
+{
+  "schema": "jain.identity-head-classification/v1",
+  "operation": "read-only classification of the seven previously untagged 8.0.1 release lanes",
+  "status": "pass",
+  "release_decision": "BLOCK",
+  "claim_token": "codex-mcp-seven-untagged-v801-identity-review-20260716T0543Z",
+  "snapshot_at": "2026-07-16T05:52:55Z",
+  "release": "8.0.1",
+  "repositories_in_scope": [
+    "jain-agent",
+    "jain-jnoccio",
+    "jain-report",
+    "jain-tui",
+    "jain-cli",
+    "jain-web",
+    "jain-deploy"
+  ],
+  "mutation_policy": "No source, branch/ref, forge, check, CI, approval, merge, tag, authority, runtime, host, or worktree mutation. Only the requested evidence/coordination writes and read-only protection receipts are permitted.",
+  "summary": {
+    "repositories_read": 7,
+    "open_candidate_prs": 5,
+    "missing_candidate_prs": 2,
+    "live_v8_0_1_tags": 0,
+    "exact_heads_ready_for_required_ci": 0,
+    "exact_heads_ready_for_merge": 0,
+    "why_zero_are_ready": [
+      "all five candidate heads have jankurai/proof=failure",
+      "Agent, Report, and TUI also have latest required=failure and remain self-identified as 8.0.0",
+      "Web has no required check and retains active 8.0.0 dependency and Redline-consumer release pins",
+      "Deploy has no required check and leaves PRODUCT_VERSION, release packages, dependency pins, and deployment defaults at 8.0.0",
+      "Jnoccio and CLI have no open 8.0.1 identity PR or matching forge branch"
+    ],
+    "nearest_exact_heads_not_yet_ready": [
+      {
+        "rank": 1,
+        "repository": "jain-agent",
+        "pr": 5,
+        "head": "ffbccc31d9c194f74b6253cf91c85b264a582d1d",
+        "reason": "Smallest deterministic change: one direct jain-llm tag repin and its exact lock source line. It is a dependency repin, not an 8.0.1 self-identity head; proof and required are red. Add the surgical self-identity surfaces and obtain green proof before spending another required-CI slot."
+      },
+      {
+        "rank": 2,
+        "repository": "jain-web",
+        "pr": 31,
+        "head": "92f1d3a055829f106319103bb5760b35a00591ae",
+        "reason": "Its four-file self-identity bump is surgical, but active Cargo dependency pins and the Redline consumer remain on 8.0.0, proof is red, required is absent, and the Web lane is dependency-last. Recompose after validated 8.0.1 dependency heads/tags and after the active Web lane quiesces."
+      }
+    ]
+  },
+  "protection": {
+    "all_pass": true,
+    "policy": {
+      "required_approvals": 1,
+      "required_linear_history": true,
+      "enforce_admins": true,
+      "allow_force_pushes": false,
+      "allow_deletions": false
+    },
+    "repositories": [
+      {"repository": "jeryu/jain-agent", "required_context": "jain-agent/required", "status": "pass"},
+      {"repository": "jeryu/jain-jnoccio", "required_context": "jain-jnoccio/required", "status": "pass"},
+      {"repository": "jeryu/jain-report", "required_context": "jain-report/required", "status": "pass"},
+      {"repository": "jeryu/jain-tui", "required_context": "jain-tui/required", "status": "pass"},
+      {"repository": "jeryu/jain-cli", "required_context": "jain-cli/required", "status": "pass"},
+      {"repository": "jeryu/jain-web", "required_context": "jain-web/required", "status": "pass"},
+      {"repository": "jeryu/jain-deploy", "required_context": "jain-deploy/required", "status": "pass"}
+    ]
+  },
+  "repositories": [
+    {
+      "repository": "jeryu/jain-agent",
+      "pr": 5,
+      "title": "repin v8.0.1: bump jain-llm to jain-llm-v8.0.1-split.0",
+      "head_ref": "claude/repin-v8.0.1-20260716",
+      "head": "ffbccc31d9c194f74b6253cf91c85b264a582d1d",
+      "base": "8818f70e04d68ae70657f6a3138d6407cbc490fb",
+      "live_main": "8818f70e04d68ae70657f6a3138d6407cbc490fb",
+      "base_is_current_main": true,
+      "merge_base_equals_base": true,
+      "commits_ahead": 1,
+      "merge_commits": 0,
+      "tree": "32447587c4b99f626287864d18a2363f52b7a1e7",
+      "diff": {
+        "files": 2,
+        "insertions": 2,
+        "deletions": 2,
+        "paths": ["Cargo.lock", "Cargo.toml"],
+        "binary_sha256": "3fced923ff0d389dc4a83b3c0267aba8c157530d9a545e6e505b515830e1bb2f",
+        "source_drift": false,
+        "mode_drift": false,
+        "symlinks_in_head": 0
+      },
+      "lock": {
+        "sha256": "e3ced6ed410c87e1daacffa6ab5a493e2a78c46c76af2fcf53b60f8ab6d48880",
+        "classification": "surgical direct dependency repin",
+        "detail": "Only the jain-llm git source changes from v8.0.0-split.0#a8571241 to v8.0.1-split.0#9eb84f0e; no registry-package churn."
+      },
+      "identity": {
+        "cargo_package": "8.0.0",
+        "version_file": "jain-agent-v8.0.0-split.0",
+        "complete_v8_0_1_self_identity": false
+      },
+      "light_validation": {"locked_offline_metadata_no_deps": "pass"},
+      "checks": {
+        "jankurai_proof": {"status": "completed", "conclusion": "failure", "id": "d793e186-0370-44e1-a922-ac152a013fae", "completed_at": "2026-07-16T04:07:16.692611241Z"},
+        "required": {"context": "jain-agent/required", "status": "completed", "conclusion": "failure", "id": "d930f972-303a-431f-b2f0-a157d10c66d9", "completed_at": "2026-07-16T04:29:03.787199094Z", "prior_failure_count": 1}
+      },
+      "verdict": "WITHHOLD_IDENTITY_INCOMPLETE_PROOF_AND_REQUIRED_RED",
+      "ready_for_required_ci": false
+    },
+    {
+      "repository": "jeryu/jain-jnoccio",
+      "pr": null,
+      "head": null,
+      "base": null,
+      "live_main": "4810be89abad8e4e52b9be9fa9b49a4891970891",
+      "live_main_identity": "8.0.0",
+      "matching_v8_0_1_identity_branch": false,
+      "live_v8_0_1_tags": [],
+      "checks": null,
+      "verdict": "BLOCK_NO_OPEN_IDENTITY_HEAD",
+      "ready_for_required_ci": false
+    },
+    {
+      "repository": "jeryu/jain-report",
+      "pr": 8,
+      "title": "repin v8.0.1: bump feat-core + feat-math to v8.0.1-split.0",
+      "head_ref": "claude/repin-v8.0.1-20260716",
+      "head": "c8a9743929d315aa2b409d3ed965622b9ce7e7db",
+      "base": "5cef1d0079908485857009ff18db79d8e4078068",
+      "live_main": "5cef1d0079908485857009ff18db79d8e4078068",
+      "base_is_current_main": true,
+      "merge_base_equals_base": true,
+      "commits_ahead": 1,
+      "merge_commits": 0,
+      "tree": "8545b05433f5579c6d290e2fc731d3a19fc1b83e",
+      "diff": {
+        "files": 2,
+        "insertions": 567,
+        "deletions": 10,
+        "paths": ["Cargo.lock", "crates/feat-report/Cargo.toml"],
+        "binary_sha256": "e6f5ca7e3e687b163ee33cd0fe61da1bed0d490b401329f20c7cd10583d404a0",
+        "source_drift": false,
+        "mode_drift": false,
+        "symlinks_in_head": 0
+      },
+      "lock": {
+        "sha256": "9042bcaf5d794a1b1726dd91a7500ef57b6076fcac99a73b5096bf9fe80d5e0f",
+        "classification": "large transitive dependency graph expansion",
+        "detail": "Two direct tag repins expand Cargo.lock by 52 package records and also retarget transitive domain, math, and jable git sources. Locked offline metadata parses, but this is not a surgical self-identity lock diff."
+      },
+      "identity": {
+        "workspace_package": "8.0.0",
+        "version_file": "jain-report-v8.0.0-split.0",
+        "standard_version": "jain-report-v8.0.0-split.0",
+        "complete_v8_0_1_self_identity": false
+      },
+      "light_validation": {"locked_offline_metadata_no_deps": "pass"},
+      "checks": {
+        "jankurai_proof": {"status": "completed", "conclusion": "failure", "id": "dd2fdc5e-8f16-43e1-88b3-418f32a6979a", "completed_at": "2026-07-16T04:15:01.021848171Z"},
+        "required": {"context": "jain-report/required", "status": "completed", "conclusion": "failure", "id": "7a8b19f0-e05c-4212-8196-b7bd7dc4d379", "completed_at": "2026-07-16T04:18:58.227931977Z"}
+      },
+      "verdict": "WITHHOLD_IDENTITY_INCOMPLETE_LOCK_EXPANSION_PROOF_AND_REQUIRED_RED",
+      "ready_for_required_ci": false
+    },
+    {
+      "repository": "jeryu/jain-tui",
+      "pr": 11,
+      "title": "repin v8.0.1: bump feat-core to jain-core-v8.0.1-split.0",
+      "head_ref": "claude/repin-v8.0.1-20260716",
+      "head": "fe9bfe3c48dbd0123f0c56e4dee69a0169b68bea",
+      "base": "b96010d56b07c54972dd9f2d29f691b2cb1cb375",
+      "live_main": "b96010d56b07c54972dd9f2d29f691b2cb1cb375",
+      "base_is_current_main": true,
+      "merge_base_equals_base": true,
+      "commits_ahead": 1,
+      "merge_commits": 0,
+      "tree": "6f3611b55872df9ace7494570eac096df7065473",
+      "diff": {
+        "files": 2,
+        "insertions": 495,
+        "deletions": 5,
+        "paths": ["Cargo.lock", "crates/feat-tui/Cargo.toml"],
+        "binary_sha256": "f6ae40cc457f36c058fe15e982789af642f2eb2898a0701bc66ba6e8fdc88ddb",
+        "source_drift": false,
+        "mode_drift": false,
+        "symlinks_in_head": 0
+      },
+      "lock": {
+        "sha256": "4f82f0c3453f894526d941edbee9e6b3ebe06764a7e5aa75a4c26311b20ce998",
+        "classification": "large transitive dependency graph expansion",
+        "detail": "One direct core tag repin expands Cargo.lock by 44 package records and retargets transitive domain, math, and jable git sources. Locked offline metadata parses, but this is not a surgical self-identity lock diff."
+      },
+      "identity": {
+        "workspace_package": "8.0.0",
+        "version_file": "jain-tui-v8.0.0-split.0",
+        "standard_version": "jain-tui-v8.0.0-split.0",
+        "complete_v8_0_1_self_identity": false
+      },
+      "light_validation": {"locked_offline_metadata_no_deps": "pass"},
+      "checks": {
+        "jankurai_proof": {"status": "completed", "conclusion": "failure", "id": "debba0b4-e05e-4119-9629-3d8cc504246d", "completed_at": "2026-07-16T04:06:55.931650299Z"},
+        "required": {"context": "jain-tui/required", "status": "completed", "conclusion": "failure", "id": "c5fc9753-7786-403d-a941-8e7bd21fdce4", "completed_at": "2026-07-16T04:33:14.193633132Z", "prior_failure_count": 1}
+      },
+      "verdict": "WITHHOLD_IDENTITY_INCOMPLETE_LOCK_EXPANSION_PROOF_AND_REQUIRED_RED",
+      "ready_for_required_ci": false
+    },
+    {
+      "repository": "jeryu/jain-cli",
+      "pr": null,
+      "head": null,
+      "base": null,
+      "live_main": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3",
+      "live_main_identity": "8.0.0",
+      "matching_v8_0_1_identity_branch": false,
+      "live_v8_0_1_tags": [],
+      "checks": null,
+      "verdict": "BLOCK_NO_OPEN_IDENTITY_HEAD",
+      "ready_for_required_ci": false
+    },
+    {
+      "repository": "jeryu/jain-web",
+      "pr": 31,
+      "title": "release: v8.0.1 split identity (jain-web)",
+      "head_ref": "claude/v801-identity-20260716",
+      "head": "92f1d3a055829f106319103bb5760b35a00591ae",
+      "base": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "live_main": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "base_is_current_main": true,
+      "merge_base_equals_base": true,
+      "commits_ahead": 1,
+      "merge_commits": 0,
+      "tree": "16693c4d4e2283e4c0d804519ca7091d8843d7c2",
+      "diff": {
+        "files": 4,
+        "insertions": 5,
+        "deletions": 5,
+        "paths": ["Cargo.lock", "Cargo.toml", "VERSION", "agent/standard-version.toml"],
+        "binary_sha256": "04ed367d5157161f197216b28c6b93a4a2828dd3af00d458c5b09b121e358d32",
+        "source_drift": false,
+        "mode_drift": false,
+        "symlinks_in_head": 0
+      },
+      "lock": {
+        "sha256": "c5d0408db57a7734b882726cd493aecfc34a05e87d8d11bf2d476db893a4df3d",
+        "classification": "surgical own-workspace version updates only",
+        "detail": "Only feat-web and jain-web-sqlite-migration lock versions change from 8.0.0 to 8.0.1."
+      },
+      "identity": {
+        "workspace_package": "8.0.1",
+        "version_file": "jain-web-v8.0.1-split.0",
+        "standard_version": "jain-web-v8.0.1-split.0",
+        "complete_v8_0_1_self_identity": true,
+        "remaining_active_v8_0_0_release_surfaces": [
+          "crates/feat-web/Cargo.toml: feat-core v8.0.0-split.0",
+          "crates/feat-web/Cargo.toml: feat-math v8.0.0-split.0",
+          "crates/feat-web/Cargo.toml: feat-report v8.0.0-split.0",
+          "crates/feat-web/Cargo.toml: battle-gpu v8.0.0-split.1",
+          "ops/ci/redline-consumer/src/lib.rs: RELEASE_VERSION 8.0.0 and v8.0.0 tag validation"
+        ],
+        "complete_dependency_last_v8_0_1_identity": false
+      },
+      "light_validation": {
+        "locked_offline_metadata_no_deps": "blocked_missing_expected_sibling_checkout",
+        "detail": "Standalone clone cannot resolve ../jain-smartcluster; this is not source drift, but no metadata-pass credit is claimed."
+      },
+      "checks": {
+        "jankurai_proof": {"status": "completed", "conclusion": "failure", "id": "26c870f8-e09f-4e11-bf15-33c4bafaec23", "completed_at": "2026-07-16T05:12:38.886376781Z"},
+        "required": {"context": "jain-web/required", "status": "missing", "conclusion": null}
+      },
+      "verdict": "WITHHOLD_DEPENDENCY_IDENTITY_INCOMPLETE_PROOF_RED_REQUIRED_MISSING",
+      "ready_for_required_ci": false
+    },
+    {
+      "repository": "jeryu/jain-deploy",
+      "pr": 27,
+      "title": "release: v8.0.1 split identity (jain-deploy)",
+      "head_ref": "claude/v801-identity-20260716",
+      "head": "ec08477512319f6c7cda64e0ef33349840e23105",
+      "base": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "live_main": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "base_is_current_main": true,
+      "merge_base_equals_base": true,
+      "commits_ahead": 1,
+      "merge_commits": 0,
+      "tree": "29172b18c23c4cb7e42b98e16530a574206e6a43",
+      "diff": {
+        "files": 5,
+        "insertions": 7,
+        "deletions": 7,
+        "paths": ["Cargo.lock", "Cargo.toml", "VERSION", "agent/standard-version.toml", "deployment/stage/Cargo.workspace.toml"],
+        "binary_sha256": "928403393cde7bde8b268b45ecfecd2b9d5e3d7d1b7e3574fdc3d4e60d435701",
+        "source_drift": false,
+        "mode_drift": false,
+        "symlinks_in_head": 0
+      },
+      "lock": {
+        "sha256": "1a30eedd0e0ae7bbc76cdfacaef3b5d6070492e16d197d916af4268a7b4f79f0",
+        "classification": "surgical but incomplete own-workspace version updates",
+        "detail": "Only jain-product, jain-supervisor, and sagemaker-ci lock versions change to 8.0.1; jain-deploy-engine and jain-deploy-ops remain 8.0.0."
+      },
+      "identity": {
+        "workspace_package": "8.0.1",
+        "stage_workspace_package": "8.0.1",
+        "version_file": "jain-deploy-v8.0.1-split.0",
+        "standard_version": "jain-deploy-v8.0.1-split.0",
+        "product_version": "8.0.0",
+        "jain_deploy_engine_package": "8.0.0",
+        "jain_deploy_ops_package": "8.0.0",
+        "remaining_active_v8_0_0_release_surfaces": [
+          "PRODUCT_VERSION",
+          "crates/jain-deploy-engine/Cargo.toml",
+          "ops/split/Cargo.toml",
+          "deployment/product/Cargo.toml feat-cli tag",
+          "deployment/ops Dockerfile SmartCluster tags",
+          "AtomicSoul release scripts and defaults"
+        ],
+        "complete_v8_0_1_identity": false
+      },
+      "light_validation": {
+        "locked_offline_metadata_no_deps": "pass",
+        "finding": "Metadata confirms three workspace-inherited packages at 8.0.1 while jain-deploy-engine and jain-deploy-ops remain 8.0.0."
+      },
+      "checks": {
+        "jankurai_proof": {"status": "completed", "conclusion": "failure", "id": "b3e6c856-17d7-4384-a26c-6b9b1ec70635", "completed_at": "2026-07-16T05:19:17.499905199Z"},
+        "required": {"context": "jain-deploy/required", "status": "missing", "conclusion": null}
+      },
+      "verdict": "WITHHOLD_IDENTITY_INCOMPLETE_PROOF_RED_REQUIRED_MISSING",
+      "ready_for_required_ci": false
+    }
+  ],
+  "acceptance": {
+    "standalone_clones_used": 5,
+    "git_worktrees_created": 0,
+    "temporary_paths_removed": true,
+    "temporary_path_absence_verified": true,
+    "host_ci_run": false,
+    "heavy_ci_run": false,
+    "approvals": 0,
+    "merges": 0,
+    "tags_created": 0,
+    "source_or_forge_mutations": 0
+  },
+  "next_actions": [
+    "Do not spend a required-CI slot on any of these exact heads as currently written.",
+    "Repair Agent first by composing its already-surgical dependency repin with complete 8.0.1 self identity on current main, then require green jankurai/proof before host CI.",
+    "Create current-main surgical 8.0.1 identity PRs for Jnoccio and CLI; neither lane currently exists.",
+    "Regenerate and independently explain Report/TUI transitive locks after complete self-identity changes; do not broadly accept the present 52/44-package expansions without proof.",
+    "Recompose Web dependency-last after upstream 8.0.1 tags and the active Web lane settle; update Redline-consumer release assertions consistently.",
+    "Repair Deploy PRODUCT_VERSION, release-package versions, dependency pins, image/default versions, and tests before exact-head proof and required CI."
+  ]
+}

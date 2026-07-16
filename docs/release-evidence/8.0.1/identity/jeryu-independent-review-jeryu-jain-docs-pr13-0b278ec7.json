@@ -1,0 +1,159 @@
+{
+  "schema_version": "jain.independent-pr-review/v1",
+  "status": "PASS_PENDING_REQUIRED",
+  "completed_at": "2026-07-16T08:28:45Z",
+  "claim": "codex-jain-docs-pr13-independent-review-20260716T0822Z",
+  "repository": "jeryu/jain-docs",
+  "pull_request": 13,
+  "reviewer_authored_pr_commits": false,
+  "base_sha": "8b5ab9ab6b224821622eccfd5a8cb9cde5350e51",
+  "head_sha": "0b278ec716fcccd74abd0a2b3b051d8729c140e2",
+  "tree_sha": "709e062c92638c5ac862126496a7aa9951a4999a",
+  "commit_count": 3,
+  "author_receipt": {
+    "path": "jain-split-ops/docs/release-evidence/8.0.1/identity/jain-docs-pr13-v801-proof-successor-20260716.json",
+    "sha256": "15f279e1f1dc46eaf7ac069749cba0c44fdd27e7fa0a2ba54571543f10b53cf8"
+  },
+  "pull_request_diff": {
+    "files": [
+      "README.md",
+      "db/AGENTS.md",
+      "docs/AGENTS.md",
+      "docs/release.md",
+      "docs/testing.md",
+      "ops/AGENTS.md",
+      "ops/ci/check.sh",
+      "ops/ci/lib.sh",
+      "ops/ci/score.sh",
+      "schemas/docs-artifact.schema.json"
+    ],
+    "files_changed": 10,
+    "insertions": 83,
+    "deletions": 14,
+    "full_index_binary_diff_sha256": "315d4e80a8ce91841321fc84fd04ff4d33f57d6848bc0fbf76b0b64005477c01",
+    "author_claim_reproduced": true,
+    "diff_check": "pass",
+    "mode_changes": 0,
+    "renames": 0,
+    "submodules": 0
+  },
+  "scope_review": {
+    "proof_and_trusted_guidance_only": true,
+    "product_or_manual_content_semantics_changed": false,
+    "dependency_or_lock_changed": false,
+    "manual_source_tree_base_and_head": "d2f81eece39deec93f280f4715f4d8b45e4a7eca",
+    "schema_validation_semantics_changed": false,
+    "schema_without_comment_sha256_base": "abfadcbe04a06cd25483f42a5ea33e20fe94d2c494d62f6e317974f48026a52f",
+    "schema_without_comment_sha256_head": "abfadcbe04a06cd25483f42a5ea33e20fe94d2c494d62f6e317974f48026a52f",
+    "release_identity_correction": "VERSION and PRODUCT_VERSION now consistently require jain-docs-v8.0.1-split.1 / 8.0.1",
+    "findings_blocking_this_scoped_diff": []
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "path_is_regular_executable_non_symlink": true,
+    "realpath_matches_literal_path": true,
+    "version": "jankurai 1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "ambient_path": "/home/ubuntu/.local/bin/jankurai",
+    "ambient_version": "jankurai 1.6.11",
+    "ambient_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "hostile_path_before_source_selected_ambient": true,
+    "hostile_path_after_source_selected_verified_function": true,
+    "repository_script_invocations_route_through_verified_function": true
+  },
+  "local_gates": {
+    "standalone_clone": "git clone --no-local; automatically removed after review",
+    "fast": "pass",
+    "check_and_hostile_path_regression": "pass",
+    "required_links_and_manual": "pass_with_documented_fallback_font_advisory",
+    "artifact_support": "pass",
+    "contract_drift": "pass",
+    "offline_security_and_sbom": "pass",
+    "tool_adoption": "pass",
+    "full_score": {
+      "status": "pass",
+      "score": 89,
+      "raw_score": 89,
+      "hard_findings": 0,
+      "caps": [],
+      "report_sha256": "b06846190ef6afcb1b78badb9b3e2b68c0d9bbffe34d234d9bba0294403a04ec",
+      "note": "The independent clean-clone score is above the 85 floor but did not reproduce the author's generated-state-sensitive score 91/report hash."
+    },
+    "changed_fast": {
+      "status": "pass",
+      "score": 86,
+      "raw_score": 86,
+      "hard_findings": 0,
+      "caps": [],
+      "report_sha256": "0d9f3fb043d5a685a65ea0a2ca0b748a14be63e147fa8b28cae96d06d08dc853"
+    }
+  },
+  "artifact_readback": {
+    "source_archive_sha256": "84cc5c964090bf20a3fa17a0b38e072257d39c4ff0ce3f82cc406169913e01b1",
+    "artifact_receipt_sha256": "9f97360c50c5919175e55e8e1251fde4226c35bf0e8ec7cfe68f78874c1addc0",
+    "contract_receipt_sha256": "d4a566fd4f8a35dc3b68181384c42890dc8d5126d551e7f9af15278737e50b11",
+    "security_receipt_sha256": "c26b2c13f8e970a5ef4ddb7bc3a55c27c4d03a86290a0acabda7178f9ea572ed",
+    "sbom_sha256": "4e6464db1a4bce662156d6957823ad5bea7a5c99b8baf400066ff2ca61caf073",
+    "final_run_versioned_and_stable_pdf_sha256": "0bcebbbb2b1cd85aeb9e03bdc2eaa7e1d79a5ff935fea087c6677d22581a6423",
+    "publication_performed": false
+  },
+  "release_artifact_reproducibility_observation": {
+    "introduced_by_this_pr": false,
+    "scope": "pre-existing ops/ci/docs-pdf.sh behavior",
+    "consecutive_clean_clone_pdf_sha256_values": [
+      "2d2af0730ccb07bd0d8db5895bb75686ab77a93fd1605f3fe21cfc319d0b591c",
+      "cd65d11d6b18718cad14a03e95ee120ee65139b983e482a68c198c702404e274",
+      "911b0523358ea3fbf6416cad8140a0799187c80765b5ce5572d054d06c81ce01",
+      "0bcebbbb2b1cd85aeb9e03bdc2eaa7e1d79a5ff935fea087c6677d22581a6423"
+    ],
+    "cause_evidence": "Typst 0.15.0 embeds the wall-clock CreationDate/ModDate and generated PDF IDs because docs-pdf.sh does not set SOURCE_DATE_EPOCH/--creation-timestamp; the lane also permits unpinned host fallback fonts.",
+    "classification": "does not regress or block merging this bounded proof hardening, but blocks claiming rebuild-identical PDF evidence for terminal production acceptance",
+    "required_followup": "Pin SOURCE_DATE_EPOCH or --creation-timestamp to immutable source metadata, require the checksum-pinned font set, ignore system fonts, and prove two fresh builds are byte-identical."
+  },
+  "forge_readback": {
+    "pull_request_state": "open",
+    "draft": false,
+    "base_sha": "8b5ab9ab6b224821622eccfd5a8cb9cde5350e51",
+    "head_sha": "0b278ec716fcccd74abd0a2b3b051d8729c140e2",
+    "mergeable_state": "blocked",
+    "jankurai_proof": "success",
+    "jankurai_proof_check_id": "902521d6-6e58-4198-81ce-41a3281c13de",
+    "jain_docs_required": "absent",
+    "existing_tag": "jain-docs-v8.0.1-split.0",
+    "existing_tag_sha": "b0245456d73d99a6698db053bf49300d6bbbac12",
+    "next_unused_tag": "jain-docs-v8.0.1-split.1",
+    "next_unused_tag_absent": true
+  },
+  "canonical_checkout_readback": {
+    "path": "/home/ubuntu/jain-split/jain-docs",
+    "clean": true,
+    "head_sha": "0b278ec716fcccd74abd0a2b3b051d8729c140e2",
+    "tree_sha": "709e062c92638c5ac862126496a7aa9951a4999a",
+    "branch_equals_forge": true,
+    "registered_worktrees": 1,
+    "symlinks": 0,
+    "open_file_holders_observed": 0
+  },
+  "remaining_blockers": [
+    "Publish genuine jain-docs/required success for exact head 0b278ec716fcccd74abd0a2b3b051d8729c140e2 through the serialized host producer.",
+    "Perform the separate independent exact-head approval action after required is green.",
+    "Fix and prove rebuild-identical PDF generation before using rebuilt manuals as terminal release evidence.",
+    "Protected fast-forward merge PR 13.",
+    "Cut and read back immutable jain-docs-v8.0.1-split.1 without moving occupied split.0.",
+    "Bind merged commit and checksum through the protected authority lifecycle."
+  ],
+  "excluded_actions_confirmed": [
+    "source_or_index_mutation",
+    "canonical_or_forge_ref_mutation",
+    "pull_request_mutation",
+    "check_post",
+    "host_ci",
+    "approval",
+    "merge",
+    "tag",
+    "authority_binding",
+    "deployment",
+    "force",
+    "git_worktree"
+  ]
+}

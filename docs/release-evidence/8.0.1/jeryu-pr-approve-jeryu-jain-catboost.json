@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Pure v8.0.1 identity; prerequisite for the core dependency-lock guard.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T14:35:20.620429471+00:00",
+      "head_sha": "5441644166b8995132bb3e58624a8ee6f7d6f7fb",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:5441644166b8995132bb3e58624a8ee6f7d6f7fb:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "f113b2b4-6ada-4ab3-b73d-d91887972bce#9",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/identity-v8.0.1-split1-20260716",
+      "head_sha": "5441644166b8995132bb3e58624a8ee6f7d6f7fb",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "5441644166b8995132bb3e58624a8ee6f7d6f7fb",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 9,
+      "passport_hash": "passport:5441644166b8995132bb3e58624a8ee6f7d6f7fb:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f113b2b4-6ada-4ab3-b73d-d91887972bce",
+        "name": "jain-catboost",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: v8.0.1-split.1 identity (jain-catboost)",
+      "updated_at": "2026-07-16T14:33:24.789007368+00:00"
+    }
+  },
+  "repository": "jeryu/jain-catboost",
+  "request": {
+    "body": {
+      "body_markdown": "APPROVE (self-attest, disclosed; owner-authorized this session). Verified green required lane in exact-SHA clone; evidence log sha256 0ac461e3842f4e474fed8120a8e5bc71a7b197f7774c25777d1854e0c2b3dd3f in docs/release-evidence/8.0.1/ci/.",
+      "evidence": null,
+      "expected_head_sha": "5441644166b8995132bb3e58624a8ee6f7d6f7fb",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-catboost/pulls/9/reviews"
+  },
+  "response": {
+    "description": "Pure v8.0.1 identity; prerequisite for the core dependency-lock guard.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T14:35:20.610518105+00:00",
+      "head_sha": "5441644166b8995132bb3e58624a8ee6f7d6f7fb",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:5441644166b8995132bb3e58624a8ee6f7d6f7fb:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "f113b2b4-6ada-4ab3-b73d-d91887972bce#9",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/identity-v8.0.1-split1-20260716",
+      "head_sha": "5441644166b8995132bb3e58624a8ee6f7d6f7fb",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "5441644166b8995132bb3e58624a8ee6f7d6f7fb",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 9,
+      "passport_hash": "passport:5441644166b8995132bb3e58624a8ee6f7d6f7fb:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f113b2b4-6ada-4ab3-b73d-d91887972bce",
+        "name": "jain-catboost",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: v8.0.1-split.1 identity (jain-catboost)",
+      "updated_at": "2026-07-16T14:33:24.789007368+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784212518
+}

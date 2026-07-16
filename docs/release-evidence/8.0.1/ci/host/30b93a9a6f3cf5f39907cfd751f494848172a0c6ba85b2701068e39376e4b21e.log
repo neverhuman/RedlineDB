@@ -1,0 +1,11 @@
+Cloning into '/tmp/split-host-ci.UkAt7i/jain-split-ops'...
+HEAD is now at ac1db7c ci(worktree-ban): enforce single-checkout policy mechanically
+lock_blob=f604eeb8630901717b05a285b3f857d24cd17aee
+name=jain-split-ops
+ref=ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa
+commit=ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa
+tree=dfbb660ba3fd008edcf9bfc83776bf8b96949d76
+release_checksum_sha256=4cb6fcb58b6d925f5b95c6eda48c2d41e78362edeca3432f621126c2cca89c42
+[required:jain-split-ops] shell: bash -n + shellcheck (error level) on all ops shell scripts
+native runtime build/link contract ok
+native evidence root cannot use /tmp: /tmp/split-host-ci.UkAt7i/home/.cache/jain-native-materializer-test.2321636/persistent-evidence

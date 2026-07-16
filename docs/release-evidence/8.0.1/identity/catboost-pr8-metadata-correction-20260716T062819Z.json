@@ -1,0 +1,70 @@
+{
+  "schema_version": "jain.jeryu-pr-metadata-correction/v1",
+  "status": "pass",
+  "recorded_at": "2026-07-16T06:28:49Z",
+  "claim": "codex-mcp-catboost8-pr-metadata-correction-20260716T0623Z",
+  "repository": "jeryu/jain-catboost",
+  "pull_request": 8,
+  "authorized_scope": "PR description only",
+  "precondition": {
+    "state": "open",
+    "merged": false,
+    "draft": false,
+    "head_sha": "d24e6a2d80d82cdbed65785a5dbd871cb00750dc",
+    "base_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+    "old_body_sha256": "1809a82a20527153307d8f97ded9696ac20d43b0a2e9da61560a5cc5bc548f79",
+    "stale_claim_present": "This is one commit directly over protected main"
+  },
+  "mutation": {
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-catboost/pulls/8",
+    "field_changed": "body",
+    "credential_transport": "authorization header supplied on stdin; credential not recorded",
+    "source_or_ref_mutation": false,
+    "approval_or_merge_mutation": false,
+    "check_or_protection_mutation": false,
+    "tag_or_authority_mutation": false,
+    "deployment_mutation": false,
+    "worktree_action": false
+  },
+  "readback": {
+    "state": "open",
+    "merged": false,
+    "draft": false,
+    "head_sha": "d24e6a2d80d82cdbed65785a5dbd871cb00750dc",
+    "base_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+    "head_ref": "refs/heads/release/v8.0.1/catboost-identity",
+    "main_ref": "refs/heads/main",
+    "mergeable_state": "blocked",
+    "updated_at": "2026-07-16T06:28:19.904271872Z",
+    "body": "Align active CatBoost release identity to corrective jain-catboost-v8.0.1-split.1. This is a three-commit linear surgical repair directly over protected main; the final combined diff is limited to release identity, workspace/package lock, documentation, and changelog surfaces, with no vendor or product-source changes. Existing split.0 history remains immutable. Independent exact-head review and jankurai/proof have passed at d24e6a2d80d82cdbed65785a5dbd871cb00750dc; jain-catboost/required is still absent. Required CI, independent approval, protected merge, immutable-tag creation, and authority-manifest readback must complete before this candidate is accepted.",
+    "body_sha256": "c56b12005ea898b0e78311c333e0b579b5066fe3e3d43c9dd508a651ee34ade9",
+    "canonical_pr_json_sha256": "b22e75450337897d36dff4c10e7c7936c9384fde3656ed907e905892dda1633c",
+    "body_claims": {
+      "commit_shape": "three-commit linear surgical repair directly over protected main",
+      "combined_diff_scope": "release identity, workspace/package lock, documentation, and changelog surfaces; no vendor or product-source changes",
+      "passed": [
+        "independent exact-head review",
+        "jankurai/proof"
+      ],
+      "remaining": [
+        "jain-catboost/required",
+        "independent approval",
+        "protected merge",
+        "immutable-tag creation",
+        "authority-manifest readback"
+      ]
+    }
+  },
+  "exact_head_checks": {
+    "total_count": 2,
+    "jankurai/proof": "success",
+    "jeryu/autonomy": "neutral",
+    "jain-catboost/required": "absent"
+  },
+  "failed_non_mutating_attempts": [
+    "RTK's summarized curl adapter rejected stdin-header authentication with HTTP 401; readback proved no change",
+    "RTK's summarized jq adapter truncated the JSON payload and the forge rejected it with HTTP 422; readback proved no change"
+  ],
+  "acceptance": "metadata corrected and exact unchanged head/body read back; PR remains correctly blocked pending required lifecycle gates"
+}

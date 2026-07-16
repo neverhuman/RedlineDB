@@ -1,0 +1,5 @@
+[0000]  WARN no explicit name and version provided for directory source, deriving artifact ID from the given path (which is not ideal)
+sbom_sha256=6ef4ef98f8ea73f9fc172e8b5c0e32f081470f5e850304541aa7958aa19b4e73
+sbom_packages=61
+grype_matches=0
+[]

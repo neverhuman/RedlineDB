@@ -1,0 +1,19 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-merge",
+  "repository": "jain-split/jain-smartcluster",
+  "request": {
+    "body": {},
+    "method": "PUT",
+    "path": "/repos/jain-split/jain-smartcluster/pulls/6/merge"
+  },
+  "response": {
+    "merged": true,
+    "message": "Pull Request successfully merged",
+    "sha": "918002585f8d054bd786dda0ba66d45bc54802db"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784214177
+}

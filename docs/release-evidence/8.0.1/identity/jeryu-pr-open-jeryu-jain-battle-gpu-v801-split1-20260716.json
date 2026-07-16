@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-battle-gpu"
+      },
+      "sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b"
+    },
+    "body": "Corrects authored release identity from historical Jain 8.0.0 split.2 to the next unused Jain 8.0.1 split.1 candidate without moving tags or changing product/GPU code. Preserves the governed jain-math-v8.0.0-split.1 dependency. Local release-gate passes required, security against RustSec 9f3e1380, Jankurai 90 with hard=0/caps=0, contract drift, and artifact support. Still requires exact-head host CI, independent approval, protected merge, immutable tag readback, and authority commit/checksum binding.",
+    "created_at": "2026-07-16T06:46:20.677903653Z",
+    "draft": false,
+    "head": {
+      "label": "release/v8.0.1/battle-gpu-identity",
+      "ref": "release/v8.0.1/battle-gpu-identity",
+      "repo": {
+        "full_name": "jeryu/jain-battle-gpu"
+      },
+      "sha": "6aa1e7e95c3deb3445518c4ef0f46b4b1b98c9c0"
+    },
+    "html_url": "/jeryu/jain-battle-gpu/pull/9",
+    "id": "6ae639c7-0909-4e9c-9fe3-50b0da60fa70",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 9,
+    "source_repository": "jeryu/jain-battle-gpu",
+    "state": "open",
+    "title": "release(battle-gpu): correct 8.0.1 identity",
+    "updated_at": "2026-07-16T06:46:20.677903653Z",
+    "url": "/repos/jeryu/jain-battle-gpu/pulls/9",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-battle-gpu",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Corrects authored release identity from historical Jain 8.0.0 split.2 to the next unused Jain 8.0.1 split.1 candidate without moving tags or changing product/GPU code. Preserves the governed jain-math-v8.0.0-split.1 dependency. Local release-gate passes required, security against RustSec 9f3e1380, Jankurai 90 with hard=0/caps=0, contract drift, and artifact support. Still requires exact-head host CI, independent approval, protected merge, immutable tag readback, and authority commit/checksum binding.",
+      "draft": false,
+      "head": "release/v8.0.1/battle-gpu-identity",
+      "title": "release(battle-gpu): correct 8.0.1 identity"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-battle-gpu/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-battle-gpu"
+      },
+      "sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b"
+    },
+    "body": "Corrects authored release identity from historical Jain 8.0.0 split.2 to the next unused Jain 8.0.1 split.1 candidate without moving tags or changing product/GPU code. Preserves the governed jain-math-v8.0.0-split.1 dependency. Local release-gate passes required, security against RustSec 9f3e1380, Jankurai 90 with hard=0/caps=0, contract drift, and artifact support. Still requires exact-head host CI, independent approval, protected merge, immutable tag readback, and authority commit/checksum binding.",
+    "created_at": "2026-07-16T06:46:20.677903653Z",
+    "draft": false,
+    "head": {
+      "label": "release/v8.0.1/battle-gpu-identity",
+      "ref": "release/v8.0.1/battle-gpu-identity",
+      "repo": {
+        "full_name": "jeryu/jain-battle-gpu"
+      },
+      "sha": "6aa1e7e95c3deb3445518c4ef0f46b4b1b98c9c0"
+    },
+    "html_url": "/jeryu/jain-battle-gpu/pull/9",
+    "id": "6ae639c7-0909-4e9c-9fe3-50b0da60fa70",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 9,
+    "source_repository": "jeryu/jain-battle-gpu",
+    "state": "open",
+    "title": "release(battle-gpu): correct 8.0.1 identity",
+    "updated_at": "2026-07-16T06:46:20.677903653Z",
+    "url": "/repos/jeryu/jain-battle-gpu/pulls/9",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784184380
+}

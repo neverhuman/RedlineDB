@@ -1,0 +1,5 @@
+./ops/ci/artifact_support.sh
+warning: manifest has no documentation, homepage or repository
+  |
+  = note: see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
+artifact support ok: jain-xgboost package=xgboost@8.0.1 native=pass-pruned

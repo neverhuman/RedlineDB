@@ -1,0 +1,105 @@
+{
+  "schema_version": "jain.stale-ci-supersession/v1",
+  "generated_at": "2026-07-16T06:44:51Z",
+  "claim_token": "codex-mcp-stale-ci-supersession-20260716T063642Z",
+  "scope": {
+    "old_core_head": "521608d171a7e136880f6a1a736221c0ff7275d8",
+    "new_core_head": "c2603cea6760e532cb78886323ea41049e9675c8",
+    "old_web_head": "3144411e9f2e6d54077c31a11b2060b23a7c3ec1",
+    "new_web_head": "0378a3ec278fe3f36e5160d8358776acfc0a3542"
+  },
+  "signals_sent": [],
+  "core": {
+    "reported_processes": {
+      "wrapper_pid": 2133453,
+      "runner_pid": 2133473,
+      "runner_process_group": 2133473,
+      "standalone_sandbox": "/tmp/split-host-ci.PYcjHJ"
+    },
+    "supersession_predicates": {
+      "old_head_is_current_open_pr_head": false,
+      "new_head_open_prs": [15, 20],
+      "old_head_is_ancestor_of_new_head": true,
+      "preserving_branch": "claude/lime-prime-core-v2-20260716",
+      "preserving_branch_head": "c2603cea6760e532cb78886323ea41049e9675c8",
+      "old_head_reachable_in_canonical_object_store": true,
+      "old_head_is_remote_main": false
+    },
+    "checks": {
+      "old_head_jankurai_proof": "failure",
+      "old_head_required": "failure",
+      "new_head_jankurai_proof": "failure",
+      "new_head_required": "failure"
+    },
+    "terminal_observation": {
+      "outcome": "finished_naturally_before_signal",
+      "required_completed_at": "2026-07-16T06:39:47.662615922Z",
+      "failure": "feat-core test binary could not load lib_lightgbm.so",
+      "wrapper_runner_and_children_absent": true,
+      "standalone_sandbox_removed_by_runner": true
+    },
+    "evidence": {
+      "host_log": "jain-split-ops/docs/release-evidence/8.0.1/ci/host/5f7eb9b052da37ee1dacd7049023e577d058722732a984fe7e1975a4403d969e.log",
+      "host_log_sha256": "5f7eb9b052da37ee1dacd7049023e577d058722732a984fe7e1975a4403d969e",
+      "host_receipt": "jain-split-ops/docs/release-evidence/8.0.1/ci/host/jain-core-521608d171a7e136880f6a1a736221c0ff7275d8-5f7eb9b052da37ee1dacd7049023e577d058722732a984fe7e1975a4403d969e.json",
+      "host_receipt_sha256": "7696d3dd3df1ebee6439be1f8c52de31af5f25e64f52c45478596d7c8133b0c4",
+      "cargo_receipt": "jain-split-ops/docs/release-evidence/8.0.1/ci/jain-core-521608d171a7e136880f6a1a736221c0ff7275d8-cargo.json",
+      "cargo_receipt_sha256": "d5ab4fd2cb3088f72a1fd534c697cf95b7a491561d8fd671ce1f79c1d350bb97",
+      "outer_log": "/tmp/claude-1000/-home-ubuntu-jain-split/7171c3ce-8a4a-43a0-b28a-a1dd5d30efde/scratchpad/w26/ci-run3.log",
+      "outer_log_sha256": "288e45e73bb20c9ca88b24116b9fc8330153c91bf722a03210176a316677ea35"
+    }
+  },
+  "web": {
+    "reported_wrapper_pid": 2548559,
+    "process_group": 2548559,
+    "session": 2548382,
+    "wrapper_absent": true,
+    "surviving_processes": [3711761, 3714002, 62629],
+    "surviving_process_tree": "splitctl -> cargo -> rustc",
+    "supersession_predicates": {
+      "old_head_is_current_open_pr_head": true,
+      "old_head_open_pr": 28,
+      "new_head_open_pr": 32,
+      "old_head_protected_from_signal": true
+    },
+    "checks": {
+      "old_head_jankurai_proof": "success",
+      "old_head_required": "failure",
+      "new_head_jankurai_proof": "failure",
+      "new_head_required": "failure"
+    },
+    "decision": "leave_running_current_open_pr_head",
+    "custody_blocker": "The wrapper exited but its process group still compiles the exact head of open PR 28. Signaling is prohibited until that PR head is formally superseded or closed. The runner cleanup guard also preserves both sandboxes because each contains symlinks.",
+    "sandboxes": [
+      {
+        "path": "/tmp/split-host-ci.OZdPoq",
+        "head": "3144411e9f2e6d54077c31a11b2060b23a7c3ec1",
+        "git_state": "clean detached HEAD",
+        "symlink_count": 662,
+        "open_descriptors": true,
+        "log_sha256_at_2026-07-16T06:43:18Z": "29e6de8b839fb7976d653508e2a7ed46e84297ce984f2ef54e43b311d360a891"
+      },
+      {
+        "path": "/tmp/split-host-ci.yDHE8j",
+        "head": "3144411e9f2e6d54077c31a11b2060b23a7c3ec1",
+        "git_state": "clean detached HEAD",
+        "symlink_count": 662,
+        "open_descriptors": false,
+        "log_sha256": "8e205b3710972e294b8ee259ebe9f99a06ac35f91b3fb5f9909cc45fed1b1b72"
+      }
+    ],
+    "preserved_failure_evidence": {
+      "host_log": "jain-split-ops/docs/release-evidence/8.0.1/ci/host/8e205b3710972e294b8ee259ebe9f99a06ac35f91b3fb5f9909cc45fed1b1b72.log",
+      "host_log_sha256": "8e205b3710972e294b8ee259ebe9f99a06ac35f91b3fb5f9909cc45fed1b1b72",
+      "host_receipt": "jain-split-ops/docs/release-evidence/8.0.1/ci/host/jain-web-3144411e9f2e6d54077c31a11b2060b23a7c3ec1-8e205b3710972e294b8ee259ebe9f99a06ac35f91b3fb5f9909cc45fed1b1b72.json",
+      "host_receipt_sha256": "f49928b999c6954831dee40c96353c186fb27b085d7cad7fc490e361d194f72e"
+    }
+  },
+  "safety": {
+    "worktrees_created_or_removed": 0,
+    "source_refs_mutated": 0,
+    "checks_posted_by_this_audit": 0,
+    "processes_signaled_by_this_audit": 0,
+    "secrets_recorded": 0
+  }
+}

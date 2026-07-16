@@ -1,0 +1,14 @@
+{
+  "error": "local Jeryu request failed: curl: (28) Operation timed out after 15001 milliseconds with 0 bytes received",
+  "mode": "apply",
+  "operation": "jeryu-local pr-merge",
+  "repository": "jeryu/jain-math",
+  "request": {
+    "body": {},
+    "method": "PUT",
+    "path": "/repos/jeryu/jain-math/pulls/14/merge"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "fail",
+  "timestamp_unix": 1784212293
+}

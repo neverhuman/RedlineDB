@@ -1,0 +1,221 @@
+{
+  "schema_version": "jain.identity-independent-review/v1",
+  "status": "REVIEW_PASS_PENDING_EXACT_HEAD_NATIVE_REQUIRED_AND_APPROVAL",
+  "reviewed_at": "2026-07-16T07:47:49Z",
+  "repository": "jeryu/jain-xgboost",
+  "pull_request": {
+    "number": 8,
+    "id": "5a09ecd3-2140-43dd-9a7c-f5b040fb38c4",
+    "state": "open",
+    "draft": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "base_ref": "main",
+    "api_base_sha_at_open": "34d3534702727b463c4b00c799d06fda0f76438c",
+    "protected_main_sha_at_review": "8457e1906850c0cf48cd9547c01f9161b6db5484",
+    "head_ref": "claude/v801-identity-jain-xgboost-20260716",
+    "head_sha": "41244cdf009f32101fd26f764685c304494d6d4a",
+    "tree_sha": "12b75831158f4bff8e302cffeacbdf2742b0d183",
+    "linear_commits_over_current_main": 3,
+    "behind_current_main": 0,
+    "current_main_is_direct_ancestor": true,
+    "live_branch_readback_matches": true
+  },
+  "exact_diff": {
+    "base": "8457e1906850c0cf48cd9547c01f9161b6db5484",
+    "head": "41244cdf009f32101fd26f764685c304494d6d4a",
+    "file_count": 14,
+    "insertions": 59,
+    "deletions": 23,
+    "plain_diff_sha256": "b479cb8746aa1c52ea5a436fd59a6308f72ee68362c737b6c6b84ed484db387c",
+    "full_index_binary_diff_sha256": "69a186855db09fea9f36dd587d845de8429ed0316f5bc1038a30eda7a08105de",
+    "files": [
+      "CHANGELOG.md",
+      "Cargo.lock",
+      "Cargo.toml",
+      "README.md",
+      "RELEASE.md",
+      "VERSION",
+      "agent/standard-version.toml",
+      "db/README.md",
+      "docs/architecture.md",
+      "docs/release.md",
+      "ops/ci/artifact_support.sh",
+      "ops/ci/lib.sh",
+      "ops/ci/release-readiness.sh",
+      "ops/ci/score.sh"
+    ],
+    "mode_changes": 0,
+    "binary_changes": 0,
+    "symlinks_in_exact_head": 0,
+    "product_source_changes": 0,
+    "contract_schema_or_fixture_changes": 0,
+    "dependency_source_or_resolution_changes": 0,
+    "cargo_changes": [
+      "workspace.package version 8.0.0 -> 8.0.1",
+      "Cargo.lock xgboost root package version 8.0.0 -> 8.0.1"
+    ]
+  },
+  "remediation_delta": {
+    "base": "2c023191344b665c8257b6c17274727c16414ab4",
+    "head": "41244cdf009f32101fd26f764685c304494d6d4a",
+    "files": 2,
+    "insertions": 28,
+    "deletions": 7,
+    "plain_diff_sha256": "d8e7521b9e5e00e615cfd0805bbbe86bf6dcbdcc9d5e1ad69ad9b6667e87cdbd",
+    "full_index_binary_diff_sha256": "72412ee8d2f8a69314a3d61cca6be4c22af0c307c15f5ee7f1873be804207798",
+    "files_changed": [
+      "ops/ci/lib.sh",
+      "ops/ci/score.sh"
+    ]
+  },
+  "successor_receipt_reproduction": {
+    "receipt": "docs/release-evidence/8.0.1/identity/xgboost-pr8-v801-governed-tool-successor-20260716.json",
+    "receipt_sha256": "69ec2baef553f6c474757fce89a4b6f4879ca0cbe2c8876aa5e14e1d37ac2b70",
+    "exact_diff_fields_reproduced": true,
+    "remediation_delta_fields_reproduced": true,
+    "protected_main_head_tree_and_forge_branch_reproduced": true,
+    "recorded_canonical_artifact_hashes_read_back": {
+      "full_jankurai_report_sha256": "eee1c56a6d1e5d2104de73a85db3acd3fcf5719ec25f3fbda1c1d1f11eae211a",
+      "release_readiness_sha256": "17dd147bc46369eeebba8ad694c2cb202baec8f1d5085d79b95e39ef9b539ec3",
+      "artifact_support_receipt_sha256": "0b10852e4008d50536659909a804901120644688b9144d815d7ffe35e5e60e32",
+      "cargo_metadata_sha256": "7b0931c643bb09afa457203d4acf898a4c90aa767e83a91f4daaeff4d3c74907",
+      "security_evidence_sha256": "b0409916ebc125885cbd904cce4ea4e26f73d898b8eb9c647aa235334b647468",
+      "coverage_audit_sha256": "7ad0792dbf006e698d06552c75c9f8f5ba208c5e6d563ba17f591dc02669f3cc"
+    },
+    "isolated_semantic_rerun": "pass; generated JSON digests are intentionally path/time dependent, while scores, decisions, identity, and exact source-bound hashes reproduced"
+  },
+  "supersession": {
+    "superseded_receipt": "docs/release-evidence/8.0.1/identity/xgboost-pr8-v801-remediation-20260716.json",
+    "superseded_receipt_sha256": "918d212313a0063570cfa6f31bc76dd94ec28ac5c615e098445c6a5db4232110",
+    "superseded_recorded_binary_diff_sha256": "56ca9f61ef20c21318f314fba32cb9c1e69f7d282a3c709e3d7fe120c4fefd1f",
+    "prior_independent_rejection_receipt": "docs/release-evidence/8.0.1/identity/jeryu-independent-review-jeryu-jain-xgboost-pr8.json",
+    "prior_independent_rejection_receipt_sha256": "ed20aaec2eac7c4755ca4ec547e642d1cb2e8d1b9566af155a7025ef8395a333",
+    "supersession_is_explicit_and_preserves_prior_evidence": true,
+    "prior_governed_tool_and_receipt_hash_blockers_resolved": true
+  },
+  "release_identity": {
+    "candidate": "jain-xgboost-v8.0.1-split.1",
+    "next_unused": true,
+    "authority_product_version": "8.0.1",
+    "authority_current_tag_is_known_invalid_identity": "jain-xgboost-v8.0.1-split.0",
+    "authority_release_commit": "PENDING",
+    "authority_release_checksum_sha256": "PENDING",
+    "live_v8_0_1_split_0_target": "34d3534702727b463c4b00c799d06fda0f76438c",
+    "split_0_target_version_file": "jain-xgboost-v8.0.0-split.2",
+    "split_0_target_cargo_version": "8.0.0",
+    "split_1_exists_on_forge": false,
+    "immutable_v8_0_0_history_preserved": true,
+    "active_identity_consistent": true,
+    "release_status": "candidate",
+    "formal_ga": false,
+    "production_applied": false,
+    "atomicsoul_push": false,
+    "rollback_target": "7.0.6"
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "jankurai 1.6.11",
+    "binary_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "path_is_regular_file": true,
+    "terminal_symlink_rejected_by_source": true,
+    "symlinked_path_component_rejected_by_source": true,
+    "digest_and_version_fail_closed_by_source": true,
+    "all_repository_invocations_route_through_fixed_shell_function": true,
+    "ambient_require_tool_jankurai_calls": 0,
+    "adversarial_path": {
+      "ambient_selected_path_before_sourcing": "/home/ubuntu/.local/bin/jankurai",
+      "ambient_selected_version": "jankurai 1.6.11",
+      "ambient_selected_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+      "post_source_dispatch_type": "shell function",
+      "post_source_dispatch_path": "/home/ubuntu/.jeryu/bin/jankurai",
+      "post_source_dispatch_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+      "complete_score_lane_status": "pass"
+    },
+    "changed_fast": {
+      "score": 86,
+      "raw_score": 86,
+      "caps": 0,
+      "hard_findings": 0,
+      "soft_findings": 5,
+      "changed_files": 14
+    },
+    "full": {
+      "score": 91,
+      "raw_score": 91,
+      "caps": 0,
+      "hard_findings": 0
+    },
+    "forge_check": {
+      "id": "3197f4b1-bbea-438e-9c6c-6e844be31c2f",
+      "name": "jankurai/proof",
+      "head_sha": "41244cdf009f32101fd26f764685c304494d6d4a",
+      "status": "completed",
+      "conclusion": "success"
+    }
+  },
+  "isolated_validation": {
+    "checkout": "automatically removed standalone git clone --no-local at exact head",
+    "physical_git_directory": true,
+    "alternates": 0,
+    "internal_registrations": 1,
+    "strict_fsck": "pass",
+    "clean_before_validation": true,
+    "git_diff_check": "pass",
+    "bash_syntax": "pass",
+    "shellcheck_changed_proof_scripts": "pass",
+    "fast": "pass_with_explicit_native_vendor_deferral",
+    "check": "pass",
+    "local_required": "pass_with_explicit_native_vendor_deferral; not accepted as host required evidence",
+    "contract_drift": "pass",
+    "artifact_support": "pass_native_not_provided",
+    "score": "pass_91_raw91_caps0_hard0",
+    "release_readiness": "pass"
+  },
+  "canonical_integrity": {
+    "checkout_head": "41244cdf009f32101fd26f764685c304494d6d4a",
+    "checkout_branch": "claude/v801-identity-jain-xgboost-20260716",
+    "checkout_clean": true,
+    "checkout_forge_equal": true,
+    "registered_worktrees": 1,
+    "only_canonical_primary_registered": true,
+    "worktree_created": false
+  },
+  "forge_protection": {
+    "enforce_admins": true,
+    "required_linear_history": true,
+    "required_approvals": 1,
+    "required_check": "jain-xgboost/required",
+    "strict_required_checks": true,
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "readback_receipt": "docs/release-evidence/8.0.1/jeryu-protection-readback-jeryu-jain-xgboost.json",
+    "readback_receipt_sha256": "12c2a9c40cd489fe0c8ae1923f93ab925d90e6b5b275bc11a026d1e6e95ebf3f"
+  },
+  "remaining_blockers": [
+    "serialized exact-head host CI with governed native vendor input",
+    "jain-xgboost/required=success read back at exact head 41244cdf009f32101fd26f764685c304494d6d4a",
+    "one independent approval after required success",
+    "protected fast-forward merge",
+    "immutable jain-xgboost-v8.0.1-split.1 tag and forge readback",
+    "protected authority commit/checksum binding"
+  ],
+  "decision": {
+    "review": "pass",
+    "merge_authorized_by_this_receipt": false,
+    "content_delta_surgical": true,
+    "next_step": "Run the serialized exact-head native-vendor host lane and require jain-xgboost/required=success before approval or merge."
+  },
+  "mutations_excluded": [
+    "XGBoost source or index",
+    "branch or tag refs",
+    "PR state",
+    "check publication",
+    "approval",
+    "merge",
+    "authority or protection mutation",
+    "deployment or release",
+    "force operations",
+    "Git worktree lifecycle"
+  ]
+}

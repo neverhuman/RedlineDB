@@ -1,0 +1,17 @@
+{
+  "schema_version": "jain.catboost-c-api-receipt/v1",
+  "status": "pass",
+  "header_sha256": "f3642f9c986db641f645c1a9e0808a0e71aa42bece57123f2c200d6e477b86f8",
+  "adapter_sha256": "f0f27cd0f99332322d9da278978e7e131401d9f4029c3a85bc013eb542a3dce1",
+  "required_symbols": [
+    "cb_abi_version",
+    "cb_last_error",
+    "cb_train",
+    "cb_output_dim",
+    "cb_predict",
+    "cb_feature_importance",
+    "cb_save",
+    "cb_load",
+    "cb_free"
+  ]
+}

@@ -1,0 +1,13 @@
+Cloning into '/tmp/split-host-ci.0lSMul/jain-core'...
+HEAD is now at 0318d78 build: pin deps to the cut v8.0.1-split.0 cascade tags
+lock_blob=084236cc8f226d8fd4910480d93ab1daaa5ffeb5
+name=jain-core
+ref=0318d78c993864712438eac84f47aeaa741cf70a
+commit=0318d78c993864712438eac84f47aeaa741cf70a
+tree=824bae5a2b45e87a358902047a84399e4c5705a2
+release_checksum_sha256=ec554bd3646a69999762e2dd3c14d6218f71953b171069af774f9091157d5e6e
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: /tmp/split-host-ci.0lSMul/jain-core
+dependency lock contains a floating, pending, or superseded identity

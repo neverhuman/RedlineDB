@@ -1,0 +1,55 @@
+{
+  "schema_version": "jain.identity-governed-tool-successor/v1",
+  "recorded_at_utc": "2026-07-16T07:43:00Z",
+  "repository": "jeryu/jain-ops",
+  "pull_request": 9,
+  "branch": "claude/v801-identity-jain-ops-20260716",
+  "protected_main": "68569a9344164b76e880fbb54f74839acc598a08",
+  "prior_head": "6f3e4f1020af9f265e1a6242ab8b0844a282ab0f",
+  "head": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+  "tree": "00f383804f9e7f03581e859d0ce79c446f9ab17d",
+  "ancestry": {"ahead": 3, "behind": 0, "linear": true},
+  "supersedes_review_correction_sha256": "1efd5e6cb415d027661e39e4e7a6d8322fd5d80157b8ca37a8acf8e149266086",
+  "complete_diff": {
+    "paths": 13,
+    "insertions": 68,
+    "deletions": 26,
+    "full_index_binary_sha256": "df828129db43c9bc97522bcb6a5c6a9feb1d805af778df20dbe3b22493b74e31"
+  },
+  "repair_commit": {
+    "paths": ["ops/ci/lib.sh", "ops/ci/score.sh"],
+    "insertions": 28,
+    "deletions": 7,
+    "product_or_campaign_semantics_changed": false,
+    "version_or_dependency_changed": false
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "regular_non_symlink_required": true,
+    "adversarial_path_selected_before_source": "/home/ubuntu/.local/bin/jankurai",
+    "adversarial_path_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "dispatch_after_source": "fixed function to governed path",
+    "changed_fast": {"score": 88, "raw_score": 88, "caps": [], "hard_findings": 0, "report_sha256": "3ced813ee8363f7688b11958f22527242933f86c583d518b4d24dc11f9e023a3"},
+    "full": {"score": 93, "raw_score": 93, "caps": [], "hard_findings": 0},
+    "forge_check": {"conclusion": "success", "id": "a8bf8b4b-060a-4186-bab4-5ddaba00fcb0"}
+  },
+  "passed": [
+    "git diff --check",
+    "bash syntax",
+    "ShellCheck changed scripts",
+    "adversarial PATH governed-byte dispatch",
+    "local complete just required including seven binaries and fixtures",
+    "full governed score",
+    "governed changed-fast"
+  ],
+  "canonical_checkout_clean_and_forge_equal": true,
+  "worktree_created": false,
+  "decision": "PASS_PENDING_FRESH_INDEPENDENT_REVIEW_AND_EXACT_HEAD_REQUIRED",
+  "remaining": [
+    "fresh independent review of this exact successor",
+    "publish and read back jain-ops/required at this exact head after producer serialization",
+    "approval, protected merge, immutable split.1 tag, and authority bind"
+  ]
+}

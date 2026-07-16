@@ -1,0 +1,45 @@
+{
+  "action": "verified",
+  "mode": "read-only",
+  "operation": "jeryu-local protection-readback",
+  "repository": "jeryu/redline-web",
+  "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/repos/jeryu/redline-web/branches/main/protection"
+  },
+  "response": {
+    "allow_deletions": {
+      "enabled": false
+    },
+    "allow_force_pushes": {
+      "enabled": false
+    },
+    "enforce_admins": {
+      "enabled": true
+    },
+    "required_jankurai_proof": {
+      "enabled": false
+    },
+    "required_linear_history": {
+      "enabled": true
+    },
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 1
+    },
+    "required_signatures": {
+      "enabled": false
+    },
+    "required_status_checks": {
+      "contexts": [
+        "redline-web/required"
+      ],
+      "strict": true
+    },
+    "updated_at": "2026-07-12T20:20:28.891277819Z",
+    "url": "/repos/jeryu/redline-web/branches/main/protection"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784217130
+}

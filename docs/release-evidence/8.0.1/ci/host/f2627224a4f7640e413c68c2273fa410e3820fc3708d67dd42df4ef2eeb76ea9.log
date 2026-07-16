@@ -1,0 +1,674 @@
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-deploy'...
+HEAD is now at d4f7e07 ci(required): bootstrap the native-vendor tree for the stage plan when a source root is supplied
+lock_blob=ad64056273052a7024b6f4d359e8bffeac1e07d6
+name=jain-deploy
+ref=d4f7e07da198ff272286d509aeebb8001c0e2ab2
+commit=d4f7e07da198ff272286d509aeebb8001c0e2ab2
+tree=4bbccf8edde8c871d64de09738e16f566f562f3e
+release_checksum_sha256=fffbc72066eeb5a38d5a8fdbf1977cca2c7e5a435277b616250eaa6c5a57ce1d
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-smartcluster'...
+HEAD is now at c28c5c8 docs(release): remove active legacy associations
+lock_blob=3a8c5e1f50222f5d4ebfe28522c8ef17658daf73
+name=jain-smartcluster
+ref=jain-smartcluster-v8.0.1-split.0
+commit=c28c5c8348ec58b39cde0e8d510f26fec3cbfb06
+tree=17dd91ad96faaca2f49393d9e1ccead0ba123caa
+release_checksum_sha256=e706b2c6fd097bf5057619807a63c3ae398684fc0bfab5c3928233502a658eac
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain'...
+HEAD is now at 50836c7 docs(portal): align release repair schemas
+lock_blob=absent
+name=jain
+ref=refs/heads/main
+commit=50836c741319c606546d12f55a7ae1ae63112f2d
+tree=3771bb314b475256506f5633f21f73114adbcbd2
+release_checksum_sha256=e3f57d8083c5cea452f1e4d4142e05f42b2ed81a1e04efeba2109e0730c0d889
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-docs'...
+HEAD is now at b024545 manual: GPU image is GPU-only (dynamic-linked libcuda); ch6 pull/dump + port env reality
+lock_blob=absent
+name=jain-docs
+ref=refs/heads/main
+commit=b0245456d73d99a6698db053bf49300d6bbbac12
+tree=ba0e86b3e45b21a406969a6e8a859279ad6abb29
+release_checksum_sha256=aeacf436181a534d54c479d440c488ff781c613fc5de99c69ea65dec6b80fc0d
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-domain'...
+HEAD is now at 07a6879 ci(domain): prove corrective release readiness
+lock_blob=a3c39eca6337d5ac81bb6e2dbf28ba42743f0442
+name=jain-domain
+ref=refs/heads/main
+commit=07a6879beba68ea7efb386231376bd03621fa0a4
+tree=0c45b5e64be08bcee331ca566260e1816ee8aec7
+release_checksum_sha256=fd2b51a80d897650882c57ff884f125ca4dc2a3638fb2108721bbf74a11e6b31
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-math'...
+HEAD is now at 33fcf35 fix(math): bind final Starforge proof successor
+lock_blob=6d463bf847ad2144bfb8a7f8e64261de7a62a6b8
+name=jain-math
+ref=jain-math-v8.0.1-split.0
+commit=33fcf35e6a626a3911e5d52f6633b702d1d89369
+tree=f320a317b481af1725f34751b90d11dafedaa476
+release_checksum_sha256=97a0d01bc58e6427fefee23cc708139af711957ded69b697dd90ed7d52e97278
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-contracts'...
+HEAD is now at fcbb360 test(contracts): register canonical full-v1 demo scenario
+lock_blob=absent
+name=jain-contracts
+ref=refs/heads/main
+commit=fcbb36064e008403a0fd992e7f278a73b6b1d946
+tree=7463de7d79e078c4c90354ee006f07c8cbc350e7
+release_checksum_sha256=e41f3c1fecc9066dbf674e0ec7ddcab8717cc68b8ec204ff178ab3e94ba9be7a
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-catboost'...
+HEAD is now at 056a605 ci(catboost): map native ABI contract proof
+lock_blob=4e3170b4945b335d6910f1e37aabceec51755270
+name=jain-catboost
+ref=refs/heads/main
+commit=056a605dc60554ddcf40c6b5b0cb07d71d68eb96
+tree=0e0cf721a2eac6911c9a4903946cebc2d084ca66
+release_checksum_sha256=68ad55ea6e8f6c38d6ede4caf3623aba26e8eb416dcbfb5ecf44748e86517961
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-xgboost'...
+HEAD is now at 34d3534 release: validate native provenance receipts
+lock_blob=21aaf0a444e35b31e767e9733dd6a9580bacb5b8
+name=jain-xgboost
+ref=refs/heads/main
+commit=34d3534702727b463c4b00c799d06fda0f76438c
+tree=db3e3adff18e75ecc8bf24cfbfe2c0d7d92ad9d6
+release_checksum_sha256=1db30c3baee1542e74e3e0aa75e3b7fae8db51ecaf0792f688026b2105497936
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-lightgbm'...
+HEAD is now at 03102cb release: validate native provenance receipts
+lock_blob=c7c3792a5455ce83e334f2e173778ea17aaac387
+name=jain-lightgbm
+ref=refs/heads/main
+commit=03102cb3c1fa8bda05a66b4fe072c17524fac6fc
+tree=6db633c39c9d43e26a093cae03d6faf82ab0274a
+release_checksum_sha256=412a4ba1ea2427fa48d5a6e6d83d90a89f85bea3df5e264e7e97dd8036f92213
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-jable'...
+HEAD is now at e119908 ci(jable): expose pinned API and data boundary gates
+lock_blob=8101b65e1f342c1c7ff5243cb873782c07b85523
+name=jain-jable
+ref=refs/heads/main
+commit=e119908dd4f522fdbada7ddb461fb10c0dd7f563
+tree=e0730168e5440f97a10d762147413fa4b60bbb71
+release_checksum_sha256=9fe2e6e1bed04fcb97f20d34e373f12633e94aecbbe073d98f2cdb15da72e6f4
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-battle-gpu'...
+HEAD is now at 87b2367 ci(battle-gpu): expose pinned API drift gate
+lock_blob=0f3b48749a9b949822b5451c8993481ac07897f2
+name=jain-battle-gpu
+ref=refs/heads/main
+commit=87b2367f576fc97bb13dab345f2871e4ad19e22b
+tree=312afbb0a1fcf0c67beb7068ab7373758689a015
+release_checksum_sha256=e5ca9003eaeb90c2f65335e170b43a3e2e541571c54c303c68503205d8a54222
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-starforge'...
+HEAD is now at 3034e5c ci(starforge): map authoritative model bundle proofs
+lock_blob=4e7a644eac2f808a2d07e78e251d704973284b4c
+name=jain-starforge
+ref=refs/heads/main
+commit=3034e5c5a1422a1cf80ce65ad23d1815aea8a071
+tree=785baafca731057cc792dbd04685df37b87ad0c5
+release_checksum_sha256=f21d062ef51423600191bd9ced307fbc98111e39822166ac1c74ae3dd58529cb
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-core'...
+HEAD is now at fda3a4c test(core): resolve Hyperion bundle from crate manifest
+lock_blob=55f5b27ba5e518ba7deac1e15eb2c75055e0276d
+name=jain-core
+ref=jain-core-v8.0.1-split.0
+commit=fda3a4cbbfb75d581180093f84493a2cbf7223d8
+tree=c23a886ea9b2a92b7387d3fdaa48f4e990fc7caa
+release_checksum_sha256=527f67bbded04bb37e4d71bda15063f9a20939f22bbb738694d81f6bb4ffe3c9
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-llm'...
+HEAD is now at 9eb84f0 release(jain-llm): add split package identity
+lock_blob=51bf168e81172748b7aa7e3d7b3793b935209413
+name=jain-llm
+ref=jain-llm-v8.0.1-split.0
+commit=9eb84f0e498ee512ac7a38b9b879f984763b68af
+tree=4c0f3a699b6d2960f36cd72c77e2fc901d5d54fb
+release_checksum_sha256=8c116c58478bf0b2c827673ffd7736e430b4e5020b80c1556677ba0723cc7e6d
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-agent'...
+HEAD is now at 76936f5 chore(cleanup): checkpoint working state (Claude-orch owner-directed cleanup); nothing discarded
+lock_blob=aab59d6eab746695178138240d74f4427ecc4d58
+name=jain-agent
+ref=jain-agent-v8.0.1-split.0
+commit=76936f5ae3435c4ce731c1b14cd0188101cf97c6
+tree=ff9cd8e5cf308883b2774d3ccbba598d4ec1dcfd
+release_checksum_sha256=915d35d76295849b200fc2ea3ae883fa3f52ede456fad7e21a5a68dd22cf1b62
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-jnoccio'...
+HEAD is now at 4810be8 release(jain-jnoccio): fix CI package target + changelog repo name
+lock_blob=f75d9a4573d388ae65573d342ee4a61993268a4b
+name=jain-jnoccio
+ref=refs/heads/main
+commit=4810be89abad8e4e52b9be9fa9b49a4891970891
+tree=358b21a3de1026c7821a47b5e6b3d6b86832baf3
+release_checksum_sha256=0e4e95a9027c07af5084ec59edc0396727d199446ee35c5cefae42a281467ad8
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-zyal'...
+HEAD is now at 5737cb7 chore: record jain-zyal 8.0.0 identity
+lock_blob=b3746f2c8519e8aef67c2448af6d4c09e1051793
+name=jain-zyal
+ref=jain-zyal-v8.0.1-split.0
+commit=5737cb78bd4378ba9c4f85cf13868a7c34b2f288
+tree=2db4ea9b7a5f8c9394548f2f783f8ecfa703292e
+release_checksum_sha256=6f3d94c2926b26f07d8b7a65667edd3f9d92d6dac22c793b0319c4b9c1800f0a
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-jailgun'...
+HEAD is now at 9045da0 docs(db): route reserved boundary proof
+lock_blob=602200db1f83313ae6a87b3212a685819a172c54
+name=jain-jailgun
+ref=jain-jailgun-v8.0.1-split.0
+commit=9045da04eed8566b77f2dd8783f9f5deb06b9d3e
+tree=28fb59fbef9b2d10df1e55b497266caab58e2c42
+release_checksum_sha256=480811fe5fdc22e9f3196378c51d9679935e70eeb472d2f043b6def8325422c7
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-research'...
+HEAD is now at c61504a release: re-cut jain-research 8.0.0 split.1
+lock_blob=009680d43c52ee962facb37efe3cd8d313376456
+name=jain-research
+ref=jain-research-v8.0.1-split.0
+commit=c61504a7e25ce62c71100865ef52f49a12c59e1b
+tree=053f1702bc6e77a8ed553ff6a7ad6fe3dce2420b
+release_checksum_sha256=0e3b41832bfcc7713596797daada6231e3bdddd5a8bfc56a90c9f0ecfc81efb5
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-report'...
+HEAD is now at a7511c3 ci(report): raise governed jankurai score 91->93 (contract api-drift + tool adoption)
+lock_blob=05b85009c40e24c0dfda1dba85ad81694326c180
+name=jain-report
+ref=refs/heads/main
+commit=a7511c3078ef407fbf4141c133b16f1f27156c7d
+tree=5fe0fba731d0920fe4575bb86ce05374cfad2374
+release_checksum_sha256=23d05f787404f4c16c6e7d92396a6efb88351be0184ad92fb7f25c025de7ecf7
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-tui'...
+HEAD is now at 09db089 chore(score): raise governed jankurai score 86->91 on the v8.0.1 re-pin
+lock_blob=a21f489e272ef2d04448aa46d6988137a18516f1
+name=jain-tui
+ref=refs/heads/main
+commit=09db089717eea57450747f36033d221265a3dea8
+tree=f29183ef76308c2e4f09f292438832a522b1089c
+release_checksum_sha256=5c3dacdfa6e2bf0c1c50b736604e996458c47fda1d58b9e2fb11b3fa06c749d7
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-cli'...
+HEAD is now at 8d99e46 security(cli): exclude research commands from customer builds
+lock_blob=754e128bf2ec5c11b454879eb4fba00a78e52291
+name=jain-cli
+ref=refs/heads/main
+commit=8d99e46be1d11f22cad0ca3f8247b8dd67981af3
+tree=434fb65ab19260823235bbd2a2d41678c5e13604
+release_checksum_sha256=eda7d5f47bc8fce7f9e2ca99fcac3042b23d12aaf612cbe985055c38fbdeaa43
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-web'...
+HEAD is now at 13ea496 ci(web): force inline training in ci-smoke lane (hermetic api_http lifecycle tests)
+lock_blob=0170e49d5c1dd6a71a87ebc7681b516fde8fb396
+name=jain-web
+ref=refs/heads/main
+commit=13ea4968dde1286111dacf8cd0216fa71e931242
+tree=ad0234862cacb9221c27346f8b570552fd5d74a8
+release_checksum_sha256=787a22a4efaea2e7597f3c729336bc5e9949f1be46b408014b92f3298736c270
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-model-zoo'...
+HEAD is now at fd00a3d release: re-cut jain-model-zoo 8.0.0 split.1
+lock_blob=absent
+name=jain-model-zoo
+ref=refs/heads/main
+commit=fd00a3df96d9769e0282582aba0c3579e568db6c
+tree=236d63f10ee16472e3410cc281c1c134001ee289
+release_checksum_sha256=2f9855e21d0f5554e09c4ec28a2674757673b5a6262221b85b85f8b4b3e706c0
+Cloning into '/tmp/split-host-ci.gdUHcJ/jain-ops'...
+HEAD is now at 6aedc24 ci: complete operations release proof lanes
+lock_blob=absent
+name=jain-ops
+ref=refs/heads/main
+commit=6aedc249bdb30a5cfd5d1ea3cbff9bc03393469d
+tree=10e6ed69fc7bc021b5477f179206ad98b476f255
+release_checksum_sha256=8e022948633eab15e2483872119b109f3956b34748e7fb376cc8df0ded975ed1
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+manifest ok: 25 repos
+check ok: /tmp/split-host-ci.gdUHcJ/jain-deploy
+[ci] Rust required lane: fmt + targeted clippy/test
+ Downloading crates ...
+  Downloaded anstyle v1.0.14
+  Downloaded cfg-if v1.0.4
+  Downloaded block-buffer v0.10.4
+  Downloaded autocfg v1.5.1
+  Downloaded bitflags v2.13.0
+  Downloaded anstyle-query v1.1.5
+  Downloaded anyhow v1.0.103
+  Downloaded utf8parse v0.2.2
+  Downloaded serial_test v3.5.0
+  Downloaded rand_xorshift v0.4.0
+  Downloaded generic-array v0.14.7
+  Downloaded futures-task v0.3.32
+  Downloaded clap_lex v1.1.0
+  Downloaded is_terminal_polyfill v1.70.2
+  Downloaded hex v0.4.3
+  Downloaded version_check v0.9.5
+  Downloaded unarray v0.1.4
+  Downloaded digest v0.10.7
+  Downloaded serial_test_derive v3.5.0
+  Downloaded slab v0.4.12
+  Downloaded rand_core v0.9.5
+  Downloaded signal-hook-registry v1.4.8
+  Downloaded strsim v0.11.1
+  Downloaded smallvec v1.15.2
+  Downloaded quote v1.0.46
+  Downloaded unicode-ident v1.0.24
+  Downloaded serde_derive v1.0.228
+  Downloaded proc-macro2 v1.0.106
+  Downloaded num-traits v0.2.19
+  Downloaded getrandom v0.3.4
+  Downloaded clap v4.6.1
+  Downloaded typenum v1.20.1
+  Downloaded rand v0.9.5
+  Downloaded base64 v0.22.1
+  Downloaded signal-hook v0.3.18
+  Downloaded futures-util v0.3.32
+  Downloaded clap_builder v4.6.0
+  Downloaded proptest v1.11.0
+  Downloaded log v0.4.33
+  Downloaded clap_derive v4.6.1
+  Downloaded zerocopy v0.8.54
+  Downloaded parking_lot_core v0.9.12
+  Downloaded syn v2.0.118
+  Downloaded regex-syntax v0.8.11
+  Downloaded parking_lot v0.12.5
+  Downloaded once_cell v1.21.4
+  Downloaded hmac v0.12.1
+  Downloaded sha2 v0.10.9
+  Downloaded pin-project-lite v0.2.17
+  Downloaded colorchoice v1.0.5
+  Downloaded lock_api v0.4.14
+  Downloaded scopeguard v1.2.0
+  Downloaded rand_chacha v0.9.0
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded futures-executor v0.3.32
+  Downloaded crypto-common v0.1.7
+  Downloaded cpufeatures v0.2.17
+  Downloaded base62 v2.2.4
+  Downloaded anstyle-parse v1.0.0
+  Downloaded anstream v1.0.0
+  Downloaded subtle v2.6.1
+  Downloaded heck v0.5.0
+  Downloaded futures-core v0.3.32
+  Downloaded errno v0.3.14
+  Downloaded libc v0.2.186
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.46
+   Compiling libc v0.2.186
+   Compiling serde v1.0.228
+   Compiling anyhow v1.0.103
+    Checking cfg-if v1.0.4
+    Checking itoa v1.0.18
+    Checking memchr v2.8.3
+   Compiling version_check v0.9.5
+    Checking typenum v1.20.1
+   Compiling getrandom v0.3.4
+    Checking utf8parse v0.2.2
+    Checking anstyle v1.0.14
+    Checking anstyle-query v1.1.5
+   Compiling zerocopy v0.8.54
+    Checking colorchoice v1.0.5
+    Checking is_terminal_polyfill v1.70.2
+    Checking subtle v2.6.1
+   Compiling heck v0.5.0
+   Compiling autocfg v1.5.1
+   Compiling parking_lot_core v0.9.12
+    Checking strsim v0.11.1
+    Checking clap_lex v1.1.0
+    Checking futures-task v0.3.32
+    Checking slab v0.4.12
+    Checking scopeguard v1.2.0
+    Checking smallvec v1.15.2
+    Checking cpufeatures v0.2.17
+    Checking futures-core v0.3.32
+    Checking pin-project-lite v0.2.17
+    Checking base64 v0.22.1
+    Checking hex v0.4.3
+    Checking base62 v2.2.4
+   Compiling signal-hook v0.3.18
+    Checking regex-syntax v0.8.11
+    Checking unarray v0.1.4
+    Checking once_cell v1.21.4
+    Checking bitflags v2.13.0
+    Checking log v0.4.33
+    Checking equivalent v1.0.2
+    Checking hashbrown v0.17.1
+    Checking toml_write v0.1.2
+    Checking winnow v0.7.15
+    Checking serde_core v1.0.228
+    Checking zmij v1.0.21
+   Compiling generic-array v0.14.7
+    Checking anstyle-parse v1.0.0
+    Checking lock_api v0.4.14
+    Checking futures-util v0.3.32
+   Compiling num-traits v0.2.19
+    Checking indexmap v2.14.0
+    Checking anstream v1.0.0
+    Checking errno v0.3.14
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking signal-hook-registry v1.4.8
+    Checking clap_builder v4.6.0
+    Checking parking_lot v0.12.5
+    Checking rand_core v0.9.5
+    Checking serde_json v1.0.150
+    Checking digest v0.10.7
+    Checking futures-executor v0.3.32
+    Checking rand v0.9.5
+    Checking rand_xorshift v0.4.0
+    Checking jain-supervisor v8.0.0 (/tmp/split-host-ci.gdUHcJ/jain-deploy/deployment/ops/supervisor)
+    Checking sha2 v0.10.9
+    Checking hmac v0.12.1
+    Checking ppv-lite86 v0.2.21
+   Compiling syn v2.0.118
+    Checking rand_chacha v0.9.0
+    Checking proptest v1.11.0
+   Compiling serde_derive v1.0.228
+   Compiling clap_derive v4.6.1
+   Compiling serial_test_derive v3.5.0
+    Checking serial_test v3.5.0
+    Checking clap v4.6.1
+    Checking jain-deploy-engine v8.0.0 (/tmp/split-host-ci.gdUHcJ/jain-deploy/crates/jain-deploy-engine)
+    Checking sagemaker-ci v8.0.0 (/tmp/split-host-ci.gdUHcJ/jain-deploy/deployment/ops/sagemaker-ci)
+    Checking serde_spanned v0.6.9
+    Checking toml_datetime v0.6.11
+    Checking toml_edit v0.22.27
+    Checking toml v0.8.23
+    Checking jain-deploy-ops v8.0.0 (/tmp/split-host-ci.gdUHcJ/jain-deploy/ops/split)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 13.07s
+   Compiling cfg-if v1.0.4
+   Compiling typenum v1.20.1
+   Compiling utf8parse v0.2.2
+   Compiling anstyle v1.0.14
+   Compiling anstyle-query v1.1.5
+   Compiling colorchoice v1.0.5
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling subtle v2.6.1
+   Compiling clap_lex v1.1.0
+   Compiling strsim v0.11.1
+   Compiling futures-task v0.3.32
+   Compiling smallvec v1.15.2
+   Compiling slab v0.4.12
+   Compiling scopeguard v1.2.0
+   Compiling pin-project-lite v0.2.17
+   Compiling futures-core v0.3.32
+   Compiling cpufeatures v0.2.17
+   Compiling hex v0.4.3
+   Compiling base62 v2.2.4
+   Compiling base64 v0.22.1
+   Compiling unarray v0.1.4
+   Compiling log v0.4.33
+   Compiling bitflags v2.13.0
+   Compiling regex-syntax v0.8.11
+   Compiling once_cell v1.21.4
+   Compiling libc v0.2.186
+   Compiling anyhow v1.0.103
+   Compiling zerocopy v0.8.54
+   Compiling num-traits v0.2.19
+   Compiling serde v1.0.228
+   Compiling anstyle-parse v1.0.0
+   Compiling futures-util v0.3.32
+   Compiling lock_api v0.4.14
+   Compiling generic-array v0.14.7
+   Compiling anstream v1.0.0
+   Compiling serde_spanned v0.6.9
+   Compiling sagemaker-ci v8.0.0 (/tmp/split-host-ci.gdUHcJ/jain-deploy/deployment/ops/sagemaker-ci)
+   Compiling toml_datetime v0.6.11
+   Compiling clap_builder v4.6.0
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling getrandom v0.3.4
+   Compiling parking_lot_core v0.9.12
+   Compiling errno v0.3.14
+   Compiling toml_edit v0.22.27
+   Compiling digest v0.10.7
+   Compiling parking_lot v0.12.5
+   Compiling signal-hook-registry v1.4.8
+   Compiling rand_core v0.9.5
+   Compiling hmac v0.12.1
+   Compiling sha2 v0.10.9
+   Compiling futures-executor v0.3.32
+   Compiling rand_xorshift v0.4.0
+   Compiling rand v0.9.5
+   Compiling signal-hook v0.3.18
+   Compiling serial_test v3.5.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling jain-supervisor v8.0.0 (/tmp/split-host-ci.gdUHcJ/jain-deploy/deployment/ops/supervisor)
+   Compiling rand_chacha v0.9.0
+   Compiling toml v0.8.23
+   Compiling clap v4.6.1
+   Compiling proptest v1.11.0
+   Compiling jain-deploy-engine v8.0.0 (/tmp/split-host-ci.gdUHcJ/jain-deploy/crates/jain-deploy-engine)
+   Compiling jain-deploy-ops v8.0.0 (/tmp/split-host-ci.gdUHcJ/jain-deploy/ops/split)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 9.88s
+     Running unittests src/lib.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/jain_deploy_engine-6abb168d08cb3719)
+
+running 47 tests
+test caddy::tests::remote_script_targets_proxy_caddy_and_admin_api ... ok
+test caddy::tests::dry_run_upsert_is_offline ... ok
+test caddy::tests::route_payload_uses_canary_prefix_and_strip ... ok
+test caddy::tests::upsert_replaces_existing_slug_route_at_front ... ok
+test canary_auth::tests::rejects_bad_prefix ... ok
+test canary_auth::tests::mint_and_verify_round_trip ... ok
+test canary_auth::tests::mint_and_verify_slot_b ... ok
+test canary_auth::tests::rejects_invalid_slot_mint ... ok
+test canary_auth::tests::rejects_expired_token ... ok
+test canary_gate::tests::crash_probe_scripts_kill_then_start_the_container ... ok
+test canary_auth::tests::rejects_tampered_token ... ok
+test canary_auth::tests::rejects_wrong_secret ... ok
+test canary_gate::tests::gate_filename_matches_the_promote_canary_gate ... ok
+test canary_gate::tests::dry_run_writes_nothing_and_returns_none ... ok
+test canary_gate::tests::gate_report_fails_if_any_runtime_check_fails ... ok
+test canary_gate::tests::gate_report_fails_on_offline_check_failure_too ... ok
+test canary_gate::tests::gate_report_passes_with_passing_runtime_checks ... ok
+test canary_gate::tests::liveness_script_curls_from_inside_the_proxy ... ok
+test canary_gate::tests::upstream_url_targets_the_slot_cockpit ... ok
+test doctor::tests::build_local_passes_with_version ... ok
+test doctor::tests::missing_version_fails ... ok
+test doctor::tests::mode_parses_the_four_gates ... ok
+test doctor::tests::promote_rejects_veox_c_slot ... ok
+test doctor::tests::gate_write_then_require_round_trips ... ok
+test installer_download::tests::canary_runtime_tokens_are_not_download_tokens ... ok
+test installer_download::tests::rejects_empty_secret_or_version ... ok
+test installer_download::tests::mint_and_verify_round_trip ... ok
+test doctor::tests::require_gate_rejects_failed_gate ... ok
+test installer_download::tests::rejects_expired_token ... ok
+test installer_download::tests::rejects_tampered_token ... ok
+test plan::tests::dry_run_never_executes ... ok
+test installer_download::tests::rejects_wrong_secret ... ok
+test plan::tests::escapes_single_quotes ... ok
+test plan::tests::renders_escaped_command ... ok
+test registry::tests::gc_plan_targets_atomicsoul_registry_container ... ok
+test registry::tests::promote_plan_pushes_release_and_latest ... ok
+test registry::tests::promote_requires_digest_pin ... ok
+test registry::tests::publish_rc_plan_tags_and_pushes_rc ... ok
+test registry::tests::rc_reference_is_versioned_rc_tag ... ok
+test registry::tests::registry_const_points_at_public_host ... ok
+test registry::tests::registry_prune_plan_contains_each_cleanup_command ... ok
+test registry::tests::relay_target_uses_local_registry_when_relays_configured ... ok
+test registry::tests::registry_state_plan_reports_storage_pressure_inputs ... ok
+test registry::tests::rewrites_public_registry_prefix ... ok
+test slug::tests::rc_slug_is_deterministic_and_salted ... ok
+test slug::tests::rc_slug_matches_hand_computed_vector ... ok
+test slug::tests::slug_is_base62_alphabet_only ... ok
+
+test result: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/deployctl.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/deployctl-b580ddf2cfee92be)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/deployctl_dry_run.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/deployctl_dry_run-c1431fc8a07d8cdf)
+
+running 2 tests
+test build_local_may_write_only_its_local_gate ... ok
+test network_dry_runs_execute_nothing_leak_no_tokens_and_leave_gates_untouched ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/engine_contract.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/engine_contract-f6ae5fec83435186)
+
+running 8 tests
+test rc_slug_embeds_into_canary_release_path ... ok
+test registry_plans_render_without_execution ... ok
+test token_claims_flow_into_synthetic_tenant_name ... ok
+test shell_escape_is_always_a_closed_quoted_word ... ok
+test any_single_char_mutation_invalidates_token ... ok
+test plans_render_one_line_per_step ... ok
+test slugs_are_deterministic_base62_and_salted ... ok
+test tokens_round_trip_claims ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+     Running tests/installer_download_contract.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/installer_download_contract-b5fe05e721b1148c)
+
+running 6 tests
+test download_prefix_and_scope_match_featweb_constants ... ok
+test canary_runtime_token_still_fails_featweb_download_verify ... ok
+test engine_minted_download_token_verifies_under_featweb_logic ... ok
+test golden_token_encodes_byte_for_byte ... ok
+test featweb_logic_rejects_engine_token_under_wrong_secret ... ok
+test golden_token_verifies_under_featweb_logic_with_exact_claims ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/jain_deploy_ops-47f2d74e9c55d0a5)
+
+running 5 tests
+test tests::legacy_manifest_and_lock_flags_remain_supported ... ok
+test tests::staged_contract_fails_closed_without_the_supervisor ... ok
+test tests::stage_contract_copies_web_and_supervisor_inputs_and_rewrites_git_deps ... ok
+test tests::invention_export_fixture_is_rust_compatible ... ok
+touch /tmp/jain-deploy-stage-test-3632474-1784183245381010698/score-ran
+touch /tmp/jain-deploy-stage-test-3632474-1784183245381010698/check-ran
+test tests::fleet_ci_preserves_score_and_full_lane_selection ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.97s
+
+     Running unittests src/lib.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/jain_supervisor-37e8853db2828069)
+
+running 5 tests
+test tests::only_serve_activates_dual_service_mode ... ok
+test tests::ports_are_separate_and_sagemaker_is_fixed_to_8080 ... ok
+test tests::secret_debug_output_is_always_redacted ... ok
+test tests::startup_errors_do_not_render_inherited_secrets ... ok
+test tests::a_service_failure_terminates_and_reaps_its_peer ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.00s
+
+     Running unittests src/main.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/jain_supervisor-81e36f50579dd283)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/supervisor_process.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/supervisor_process-508f88992187af16)
+
+running 1 test
+test sigterm_reaches_all_services_and_output_redacts_the_token ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.05s
+
+     Running unittests src/lib.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/sagemaker_ci-0a9e0932f807a0ee)
+
+running 19 tests
+test aws_spec::tests::cpu_endpoint_config_omits_gpu_inference_ami_version ... ok
+test aws_spec::tests::gpu_endpoint_config_pins_inference_ami_version ... ok
+test aws_spec::tests::image_uri_must_be_digest_pinned ... ok
+test runtime_contract::tests::gpu_runtime_rejects_bundled_host_driver_libraries ... ok
+test aws_spec::tests::training_specs_switch_starforge_policy_by_instance_family ... ok
+test runtime_contract::tests::manifest_label_hashes_must_match_runtime_files ... ok
+test runtime_contract::tests::image_config_requires_labels_strict_user_and_separate_service_ports ... ok
+test runtime_contract::tests::runtime_directory_modes_require_tmp_sticky_and_writable_sagemaker_dirs ... ok
+test runtime_contract::tests::runtime_inventory_accepts_compressed_chimera_weights ... ok
+test runtime_contract::tests::tar_verbose_parser_normalizes_paths_and_symlinks ... ok
+test runtime_contract::tests::version_consistency_requires_binary_label_and_manifest_to_agree ... ok
+test runtime_contract::tests::inert_base_metadata_is_allowed_but_real_executables_are_blocked ... ok
+test runtime_contract::tests::runtime_inventory_requires_files_and_rejects_forbidden_entries ... ok
+test tests::safe_name_and_command_text_are_stable ... ok
+test tests::collect_files_returns_sorted_files_only ... ok
+test runtime_contract::tests::runtime_inventory_rejects_missing_tabicl_or_chimera_weights ... ok
+test tests::write_json_and_copy_dir_all_preserve_expected_files ... ok
+test tests::run_logged_records_log_and_check_failures ... ok
+test tests::run_capture_records_streams_and_check_failures ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/sagemaker_aws_smoke.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/sagemaker_aws_smoke-5790ca69aec32be8)
+
+running 1 test
+test tests::log_collection_error_records_reason_and_stream ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/sagemaker_contract_test.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/sagemaker_contract_test-02e8bf6c6f7adc18)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests jain_deploy_engine
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests jain_supervisor
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sagemaker_ci
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[ci] deploy required lane: sagemaker-ci + stage plan
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling syn v2.0.118
+   Compiling serde_derive v1.0.228
+    Checking serde v1.0.228
+    Checking sagemaker-ci v8.0.0 (/tmp/split-host-ci.gdUHcJ/jain-deploy/deployment/ops/sagemaker-ci)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 5.91s
+   Compiling serde v1.0.228
+   Compiling sagemaker-ci v8.0.0 (/tmp/split-host-ci.gdUHcJ/jain-deploy/deployment/ops/sagemaker-ci)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.53s
+     Running unittests src/lib.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/sagemaker_ci-61b0432073014f8f)
+
+running 19 tests
+test aws_spec::tests::cpu_endpoint_config_omits_gpu_inference_ami_version ... ok
+test aws_spec::tests::gpu_endpoint_config_pins_inference_ami_version ... ok
+test aws_spec::tests::image_uri_must_be_digest_pinned ... ok
+test aws_spec::tests::training_specs_switch_starforge_policy_by_instance_family ... ok
+test runtime_contract::tests::gpu_runtime_rejects_bundled_host_driver_libraries ... ok
+test runtime_contract::tests::manifest_label_hashes_must_match_runtime_files ... ok
+test runtime_contract::tests::runtime_directory_modes_require_tmp_sticky_and_writable_sagemaker_dirs ... ok
+test runtime_contract::tests::runtime_inventory_rejects_missing_tabicl_or_chimera_weights ... ok
+test runtime_contract::tests::image_config_requires_labels_strict_user_and_separate_service_ports ... ok
+test runtime_contract::tests::runtime_inventory_accepts_compressed_chimera_weights ... ok
+test runtime_contract::tests::inert_base_metadata_is_allowed_but_real_executables_are_blocked ... ok
+test runtime_contract::tests::tar_verbose_parser_normalizes_paths_and_symlinks ... ok
+test runtime_contract::tests::version_consistency_requires_binary_label_and_manifest_to_agree ... ok
+test tests::safe_name_and_command_text_are_stable ... ok
+test runtime_contract::tests::runtime_inventory_requires_files_and_rejects_forbidden_entries ... ok
+test tests::collect_files_returns_sorted_files_only ... ok
+test tests::write_json_and_copy_dir_all_preserve_expected_files ... ok
+test tests::run_capture_records_streams_and_check_failures ... ok
+test tests::run_logged_records_log_and_check_failures ... ok
+
+test result: ok. 19 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/bin/sagemaker_aws_smoke.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/sagemaker_aws_smoke-714ed444dbbd684e)
+
+running 1 test
+test tests::log_collection_error_records_reason_and_stream ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/sagemaker_contract_test.rs (/tmp/split-host-ci.gdUHcJ/cargo-target/debug/deps/sagemaker_contract_test-cac1ef841bb8f0ac)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests sagemaker_ci
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[ci] vendoring native learners from JAIN_NATIVE_SOURCE_ROOT for the stage plan
+lock ok: 26 repos
+required ok: jain-deploy

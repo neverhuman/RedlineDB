@@ -1,0 +1,38 @@
+{
+  "receipt": "claude-web13-boundary-20260716T0620Z",
+  "task": "reg-boundary: empirically map the WEB-13 predict-path failure boundary on the regression fixture",
+  "worker": "Claude worker reg-boundary",
+  "started_utc": "2026-07-16T06:02:00Z",
+  "finished_utc": "2026-07-16T06:20:00Z",
+  "image": "image.neverhuman.org/veox/jain:8.0.1-gpu",
+  "image_id": "sha256:ffbbaf48bda7253785b2d32436eb0cbf1d0ff927a41593b907f7307e07075871",
+  "fixture": "allstate-regression-c4b1f6dfb2a8605f (train.csv 1000x131 numeric, target last; test.csv 999 data rows x 131)",
+  "reference_fixture": "binary-0004ff1bec07b7a0 (72 features + target, 1000 rows, 653KB; web predict PASSED this morning)",
+  "recipe": "JAIN_WEB_CLUSTER=0, JAIN_WEB_MAX_DATA_BYTES=2147483648, JAIN_THREADS=32, --gpus all, 127.0.0.1:8893->8888, effort=low, hyperion_enabled=false, seed fixed 20260616 (not overridable)",
+  "container_policy": "container name prefix e2e-probe-reg-*; fresh container after every failure; healthy containers reused",
+  "probes": [
+    {"label": "A72-first", "train_cols": "f1-f72+target (73)", "scoring": "999x72", "cells": 71928, "result": "UNTESTABLE", "detail": "training itself fails: error.failed 'unsupported artifact backend: bma' (deterministic, seed fixed; NEW bug, distinct from WEB-13)", "session": "d55e761e-5ff8-42a5-b973-0649d6a1aa7d"},
+    {"label": "A72b-last", "train_cols": "f59-f130+target (73)", "scoring": "999x72", "cells": 71928, "result": "PASS", "http": 200, "train_wall_s": 25.4, "predict_wall_s": 7.3, "pred_rows": 999, "session": "5ef13a9a-e3d7-42dd-87a6-50aedd74048c"},
+    {"label": "J73b-last", "train_cols": "f58-f130+target (74)", "scoring": "999x73", "cells": 72927, "result": "PASS", "http": 200, "train_wall_s": 21.0, "predict_wall_s": 3.7, "pred_rows": 999, "session": "5c4b7d3b-be04-48ea-a872-13e80dd20961"},
+    {"label": "J73b-predict2", "train_cols": "same session as J73b", "scoring": "999x73 (2nd identical upload)", "cells": 72927, "result": "FAIL", "http": 500, "predict_wall_s": 0.3, "error": "eviction error (see error_text)", "note": "same session, same file that just passed -> per-upload page-pin LEAK confirmed"},
+    {"label": "I74b-last", "train_cols": "f57-f130+target (75)", "scoring": "999x74", "cells": 73926, "result": "FAIL-HANG", "http": "none (curl exit 28 timeout at 120s)", "train_wall_s": 23.2, "session": "283813fb-2a96-4089-85f8-b5ef7aa96723", "note": "boundary livelock mode: no 500, request never returns"},
+    {"label": "H76b-last", "train_cols": "f55-f130+target (77)", "scoring": "999x76", "cells": 75924, "result": "FAIL", "http": 500, "predict_wall_s": 0.2, "train_wall_s": 23.2, "session": "310e20d5-a953-48eb-a8af-c9e242934130"},
+    {"label": "G76-first", "train_cols": "f1-f76+target (77)", "scoring": "n/a", "result": "UNTESTABLE", "detail": "training fails: 'unsupported artifact backend: bma' (same as A72-first)", "session": "25e8fc9f-0649-4b1e-a886-eb01a3a93e87"},
+    {"label": "F79-first", "train_cols": "f1-f79+target (80)", "scoring": "999x79", "cells": 78921, "result": "FAIL", "http": 500, "predict_wall_s": 0.2, "train_wall_s": 32.7, "session": "737d1e77-3bfe-4975-834d-8a254e1c1591"},
+    {"label": "F86-first", "train_cols": "f1-f86+target (87)", "scoring": "999x86", "cells": 85914, "result": "FAIL", "http": 500, "predict_wall_s": 0.2, "train_wall_s": 21.1, "session": "2ce471d7-67b4-4b37-aefc-ff7ff9ef94c7"},
+    {"label": "B100", "train_cols": "f1-f100+target (101)", "scoring": "999x100", "cells": 99900, "result": "FAIL", "http": 500, "predict_wall_s": 0.1, "train_wall_s": 21.5, "session": "d9270ee8-45e9-4f20-80d6-a098737473c7"},
+    {"label": "C115", "train_cols": "f1-f115+target (116)", "scoring": "999x115", "cells": 114885, "result": "FAIL", "http": 500, "predict_wall_s": 0.1, "train_wall_s": 22.9, "session": "0e6596ac-35e6-46af-b8cf-a2f0bb9c7d71"},
+    {"label": "D130-full", "train_cols": "full train.csv (131)", "scoring": "999x130", "cells": 129870, "result": "FAIL", "http": 500, "predict_wall_s": 0.2, "train_wall_s": 25.8, "session": "af66f709-125e-41cd-ad5c-6f442fbb29df", "note": "confirms morning repro; exact error text captured"},
+    {"label": "E130r50", "train_cols": "full train.csv (131)", "scoring": "50x130 (first 50 rows)", "cells": 6500, "result": "FAIL", "http": 500, "predict_wall_s": 0.2, "train_wall_s": 25.0, "session": "69721a54-2979-4489-ab4b-82210583a045", "note": "kills row-count and cell-count models: 6,500 cells fails while 72,927 cells passes"},
+    {"label": "F-row-bisect", "result": "SKIPPED per task rule: E failed, so rows are irrelevant at 130 cols"}
+  ],
+  "error_text_exact": "{\"code\":\"internal_error\",\"error\":\"1: kernel error: corrupt page: no unpinned frame available for eviction: kernel error: corrupt page: no unpinned frame available for eviction: corrupt page: no unpinned frame available for eviction\",\"message\":...} — identical on every 500 (B/C/D/E/F/H, and J73b-predict2)",
+  "verdict": {
+    "driver": "COLUMN-count driven with per-session accumulation (page-pin leak); NOT row-driven, NOT total-cell driven",
+    "threshold": "first scoring upload: <=73 scoring cols PASS, 74 cols HANG (livelock, no response), >=76 cols instant 500. Independent of which columns (first-N vs last-N families agree) and independent of rows (50 rows still fails at 130 cols).",
+    "arithmetic": "cells = rows x cols: PASS at 999x73 = 72,927 cells but FAIL at 50x130 = 6,500 cells -> cell/byte models dead (binary fixture also passed at 1000x72 = 72,000 cells with LARGER file bytes 653KB vs 620KB). Column-page pin model: session cumulative column-pages = train_cols + sum(scoring_cols per upload). PASS max = 74 train + 73 scoring = 147; HANG = 75 + 74 = 149; hard 500 from 77 + 76 = 153 up. Leak proof: 74 + 73 = 147 passes, then same-session second 73-col upload (147 + 73 = 220) instantly 500s. So frames are pinned per profiled column per upload, never unpinned, budget ~147-148 frames.",
+    "wedge": "after any predict 500 or hang the session sticks and the whole web API of that container becomes unusable (matches WEB-13); fresh container required per probe after failure",
+    "bonus_bug": "TRAIN-side: first-N column subsets at 72 and 76 features deterministically fail training with 'unsupported artifact backend: bma' (blend/BMA wins selection, artifact persistence lacks bma backend). Seed fixed at 20260616 and not overridable via API. Distinct from WEB-13; suggest filing separately (candidate WEB-14)."
+  },
+  "cleanup": "all e2e-probe-reg-* containers removed; scratch /tmp/claude-1000/.../reg-boundary removed; fixtures read-only untouched; jain/codex-*/buildx_* containers untouched"
+}

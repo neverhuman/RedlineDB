@@ -1,0 +1,303 @@
+{
+  "schema_version": "jain.source-successor/v1",
+  "status": "PASS_SOURCE_SUCCESSOR_PENDING_INDEPENDENT_REVIEW_AND_REQUIRED",
+  "recorded_at_utc": "2026-07-16T09:59:35Z",
+  "claim_token": "codex-jain-starforge-pr9-policy-contract-successor-20260716T0936Z",
+  "repository": "jeryu/jain-starforge",
+  "pull_request": 9,
+  "branch": "release/v8.0.1/starforge-identity",
+  "author": "Codex bounded source-successor lane",
+  "reviewer_independence_required": true,
+  "source_or_forge_mutation_performed": true,
+  "mutation_scope": [
+    "agent/audit-policy.toml",
+    "contracts/README.md",
+    "ops/ci/starforge_lfs.sh",
+    "ops/ci/required.sh",
+    "ops/ci/artifact_support.sh",
+    "ops/ci/contract-drift.sh",
+    "non-force advancement of refs/heads/release/v8.0.1/starforge-identity"
+  ],
+  "bound_predecessor_evidence": {
+    "author_receipt": {
+      "path": "jain-starforge-pr9-v801-identity-proof-successor-20260716.json",
+      "sha256": "dfaff2f6aa86e83d1ec1cd87e0aba1e24e91908a15770eeffb516ad3dc912a0c"
+    },
+    "independent_review": {
+      "path": "jain-starforge-pr9-independent-review-20260716.json",
+      "sha256": "9f6f218a6030cb2fb7568ea05f52196f05af775a51d19aa6d1dee166783842c3",
+      "decision": "BLOCK_SOURCE_POLICY_AND_CONTRACT_DRIFT_REQUIRED_ABSENT"
+    }
+  },
+  "git_identity": {
+    "protected_main_sha": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+    "predecessor_head_sha": "c0f2a4904a3ac6f5e475b3f8ea7e4fccad871406",
+    "predecessor_tree_sha": "4f32690dcdcd8ca929c88707d92e10617dd7ce32",
+    "successor_commit_sha": "27d4634ad08966caa243da8717a385b7c16fed1e",
+    "successor_tree_sha": "bdaa1c11249aa3e328398502acd416262b3fd65a",
+    "merge_base": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+    "ahead": 2,
+    "behind": 0,
+    "linear": true,
+    "commit_subject": "ci: bind Starforge release LFS contract",
+    "push": "non-force",
+    "remote_branch_readback_matches": true
+  },
+  "source_delta": {
+    "protected_main_to_successor": {
+      "raw_full_index_diff_sha256": "3c984ae85f94a76d2810bd8e1d7b8ea2a167bef2a46c1eee003a1a716cb521b2",
+      "bytes": 28617,
+      "lines": 626,
+      "files_changed": 17,
+      "insertions": 309,
+      "deletions": 108
+    },
+    "predecessor_to_successor": {
+      "raw_full_index_diff_sha256": "5f02b702d78f670fec6bcfa0b8823aa3dd00fec336fefed043c274c950806db9",
+      "bytes": 16974,
+      "lines": 366,
+      "files_changed": 6,
+      "insertions": 185,
+      "deletions": 96
+    },
+    "changed_file_sha256": {
+      "agent/audit-policy.toml": "e691cfc7516a66a4140b0016422a96f2a53a308c2511bde85f15c075925249c1",
+      "contracts/README.md": "076c42b9401602604b1dc9369500927773a4646c66e4722c5dd349d8d5002200",
+      "ops/ci/starforge_lfs.sh": "1c0f50fe359e32e119b52f70abb325f8c109cced54cd3afcd72a07188cd61855",
+      "ops/ci/required.sh": "c9c09f5ad37163b71d8d6001463138ef21a37f962368e5df1a80408c4554d971",
+      "ops/ci/artifact_support.sh": "f574921da1a3c96de4dfc869a338a6a199abb88bc721ff64631e6d0767ca62b6",
+      "ops/ci/contract-drift.sh": "0c91ee2feec043b9599dafd17a4a5f650b64d3925404cf1122885ac90754af63"
+    }
+  },
+  "corrections": {
+    "governed_jankurai_policy": {
+      "prior_required_tool_version": "1.6.10",
+      "successor_required_tool_version": "1.6.11",
+      "governed_path": "/home/ubuntu/.jeryu/bin/jankurai",
+      "governed_version": "1.6.11",
+      "governed_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+      "ambient_first_path": "/home/ubuntu/.local/bin/jankurai",
+      "ambient_first_version": "1.6.11",
+      "ambient_first_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+      "hostile_path_selected_governed_binary": true,
+      "decision": "PASS"
+    },
+    "central_lfs_contract": {
+      "canonical_source": "ops/ci/starforge_lfs.sh",
+      "canonical_entry_count": 10,
+      "consumers": [
+        "ops/ci/required.sh",
+        "ops/ci/artifact_support.sh",
+        "ops/ci/contract-drift.sh"
+      ],
+      "checks": [
+        "exact tracked path set",
+        "exact pinned LFS OID",
+        "regular non-symlink materialized file",
+        "size greater than 1000000 bytes",
+        "materialized SHA256 equals LFS OID",
+        "authoritative model-bundle index contains each path once with the same digest"
+      ],
+      "materialized_artifact_count": 10,
+      "materialized_bytes": 980791992,
+      "materialized_manifest_sha256": "2c3ead699b1e0eb71ab52dab47d892e8601fdea799eeb77aca3212400995579f",
+      "model_bundle_index_sha256": "5e7884ec1c0e0b955a2381d5b69c54beddad9ec66a1980c94ad279d974486d05",
+      "golden_fixture_sha256": "468e5f42d6c811125114b8eec3b49b9c3b79193e7793f5be7bd01587df78b700",
+      "decision": "PASS"
+    },
+    "contract_receipt_upgrade": {
+      "schema_version": "jain.split.contract-drift/v2",
+      "schemas": 2,
+      "lfs_artifacts": 10,
+      "additional_contract_inputs": [
+        "artifacts/model-bundle.v1.json",
+        "crates/starforge/tests/fixtures/starlight_core_regressor_golden.json"
+      ],
+      "total_release_inputs": 12,
+      "receipt_sha256": "80ff7c294fcf9f7cccd7f165c1ed187b383e93d1a50f9f5c8d2597b992e1a026",
+      "decision": "PASS"
+    }
+  },
+  "negative_probes": [
+    {
+      "name": "missing_tracked_lfs_entry",
+      "mutation": "readback wrapper omitted one of ten git-lfs entries",
+      "expected": "fail with found 9",
+      "result": "PASS_REJECTED"
+    },
+    {
+      "name": "forged_materialized_digest",
+      "mutation": "sha256 readback for one materialized artifact returned all zeroes",
+      "expected": "fail materialized digest mismatch",
+      "result": "PASS_REJECTED"
+    },
+    {
+      "name": "corrupted_model_bundle_index_digest",
+      "mutation": "temporary index declared an all-zero Hyperion digest",
+      "expected": "fail model-bundle index digest mismatch",
+      "result": "PASS_REJECTED"
+    }
+  ],
+  "unchanged_identity": {
+    "predecessor_to_successor_product_tree_sha": "5b3e10629ded9aed82380493d7c7c8f7bc0c56c1",
+    "predecessor_to_successor_artifacts_tree_sha": "2a8f121d69ca411694c652d1a24cb2102d3a966a",
+    "predecessor_to_successor_cargo_lock_blob_sha": "4494baef96709a0694f38dfaeec5b13ffdce1d92",
+    "predecessor_to_successor_cargo_toml_blob_sha": "8b16284bd5e19640e080855a5514fcd58b97ca49",
+    "product_rust_changed": false,
+    "model_or_lfs_content_changed": false,
+    "public_api_changed": false,
+    "dependency_or_registry_lock_changed": false,
+    "release_identity": "jain-starforge-v8.0.1-split.1"
+  },
+  "exact_head_local_gates": {
+    "check": "pass",
+    "fast": "pass",
+    "required": {
+      "status": "pass",
+      "elapsed_seconds": 295.68,
+      "maximum_rss_kb": 1028600,
+      "prime_lime_differential": "pass",
+      "target_encoder_parity": "pass",
+      "lfs_and_model_bundle": "10/10 pass",
+      "starlight_regression_golden": "pass",
+      "chimera_regression_real_weight_cpu": "pass",
+      "chimera_classifier_real_weight_cpu": "pass"
+    },
+    "contract_drift": {
+      "status": "pass",
+      "receipt_sha256": "80ff7c294fcf9f7cccd7f165c1ed187b383e93d1a50f9f5c8d2597b992e1a026"
+    },
+    "artifact_support": {
+      "status": "pass",
+      "receipt_sha256": "a4c117d990a96fe8ab7ab7716c04b9a2098dc36e78ac867031d7c46872a3aac0",
+      "source_archive_sha256": "6edba37acb77c738d87e586a466d2e1264ed7585c496f6d510f89adc97db3ea7",
+      "source_archive_bytes": 982016000,
+      "lfs_manifest_sha256": "2c3ead699b1e0eb71ab52dab47d892e8601fdea799eeb77aca3212400995579f"
+    },
+    "security": {
+      "status": "pass",
+      "receipt_sha256": "b0409916ebc125885cbd904cce4ea4e26f73d898b8eb9c647aa235334b647468"
+    },
+    "coverage": {
+      "status": "pass",
+      "sources": "2/2",
+      "hard_findings": 0,
+      "covered_lines": 3775,
+      "total_lines": 6810,
+      "line_fraction": 0.5543318649045521,
+      "receipt_sha256": "99e64623712226e7741f8da0276cf16fe82ce756f90b1300c203a799ecef7f40"
+    },
+    "score_and_tool_adoption": {
+      "status": "pass",
+      "score": 88,
+      "raw_score": 88,
+      "hard_findings": 0,
+      "caps": 0,
+      "auditor_version": "1.6.11",
+      "report_sha256": "1122a85af3b4acc68db99d871afea26e9021532b5e2cf7e05843cd69132ed29b",
+      "elapsed_seconds": 286.15,
+      "maximum_rss_kb": 1028464
+    },
+    "changed_fast": {
+      "status": "pass",
+      "score": 89,
+      "raw_score": 89,
+      "minimum": 85,
+      "hard_findings": 0,
+      "caps": 0,
+      "changed_files": 17,
+      "report_sha256": "8cd058df94b5a6cf18bd47a9a1e35863f7159e20848efcf71cb788f9086a6b01"
+    }
+  },
+  "forge_readback": {
+    "pull_request_number": 9,
+    "title": "release: align Starforge with Jain 8.0.1",
+    "state": "open",
+    "draft": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "updated_at": "2026-07-16T09:56:19.746431439Z",
+    "base_ref": "main",
+    "base_sha": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+    "head_ref": "release/v8.0.1/starforge-identity",
+    "head_sha": "27d4634ad08966caa243da8717a385b7c16fed1e",
+    "jankurai_proof": {
+      "status": "completed",
+      "conclusion": "success",
+      "check_id": "eebc5e15-a66c-46f0-af5a-5849df8a2672"
+    },
+    "jeryu_autonomy": {
+      "status": "completed",
+      "conclusion": "action_required",
+      "check_id": "62de3b18-d8bc-44eb-869c-fa98ca00c114"
+    },
+    "jain_starforge_required": "absent"
+  },
+  "branch_protection_readback": {
+    "temporary_receipt_path": "/tmp/codex-jain-starforge-pr9-protection-readback-20260716.json",
+    "temporary_receipt_sha256": "2b495508f0ffdaa0c6bb80aba947ae3afc8b899e6d5123efd127615467525280",
+    "removed_after_hash_binding": true,
+    "schema_version": "jain.jeryu-lifecycle/v1",
+    "status": "pass",
+    "mode": "read-only",
+    "action": "verified",
+    "required_status_checks": {
+      "contexts": [
+        "jain-starforge/required"
+      ],
+      "strict": true
+    },
+    "required_approving_review_count": 1,
+    "required_linear_history": true,
+    "enforce_admins": true,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  },
+  "immutable_identity": {
+    "occupied_tag": "jain-starforge-v8.0.1-split.0",
+    "occupied_tag_sha": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+    "next_unused_tag": "jain-starforge-v8.0.1-split.1",
+    "next_unused_tag_absent": true
+  },
+  "canonical_custody": {
+    "path": "/home/ubuntu/jain-split/jain-starforge",
+    "branch": "release/v8.0.1/starforge-identity",
+    "head_sha": "27d4634ad08966caa243da8717a385b7c16fed1e",
+    "tree_sha": "bdaa1c11249aa3e328398502acd416262b3fd65a",
+    "clean_porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "branch_forge_equal": true,
+    "registered_worktrees": 1,
+    "auxiliary_worktrees": 0,
+    "symlink_count": 0,
+    "source_process_holders": 0,
+    "source_processes": 0
+  },
+  "decision": {
+    "bounded_source_correction": "PASS",
+    "local_runtime_evidence": "PASS",
+    "forge_proof": "PASS",
+    "release": "BLOCK",
+    "reason": "The two source blockers are corrected and exact-head local/proof evidence is green, but the author cannot independently accept this successor and genuine jain-starforge/required is absent."
+  },
+  "handoff": [
+    "Obtain a fresh independent source/evidence review of exact head 27d4634ad08966caa243da8717a385b7c16fed1e.",
+    "After independent acceptance, admit exactly one serialized shared host run to publish genuine jain-starforge/required at that unchanged head.",
+    "Only after exact-head proof, required, and independent acceptance are green: independent approval, protected fast-forward merge, immutable split.1 tag/readback, and protected authority binding."
+  ],
+  "excluded_actions_confirmed": [
+    "shared_host_required",
+    "manual_check_post",
+    "pull_request_metadata_mutation",
+    "approval",
+    "merge",
+    "tag",
+    "authority_binding",
+    "protection_change_or_relaxation",
+    "deployment",
+    "force_push",
+    "cleanup_or_stash",
+    "secret_access",
+    "auxiliary_checkout",
+    "git_worktree"
+  ]
+}

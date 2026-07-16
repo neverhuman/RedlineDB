@@ -1,0 +1,56 @@
+Cloning into '/tmp/split-host-ci.RXgcHn/jain-docs'...
+HEAD is now at a44bbd5 ci(docs): govern reproducible PDF toolchain
+lock_blob=absent
+name=jain-docs
+ref=a44bbd5ebb853a8e7918f99513b22477db7bd928
+commit=a44bbd5ebb853a8e7918f99513b22477db7bd928
+tree=c5be820afc0d0e5c8af5e2ca8c01a4ddc27b62f7
+release_checksum_sha256=9b51d877736e4b338343bfa010a133e905c3e7877c103025451bc0673effa212
+check ok: /tmp/split-host-ci.RXgcHn/jain-docs
+[ci] docs required lane: fail-closed links + complete versioned Typst manual
+docs links ok: 25 checked target(s)
+[ci] building jAIn manual v8.0.1 (July 2026); epoch=1784192781; fonts=/home/ubuntu/jain-split/jain-docs/target/ci/tools/fonts
+[ci] Inter/JetBrains Mono embedded
+docs-pdf ok: target/docs/jain-platform-manual-v8.0.1.pdf
+Note: switching to 'a44bbd5ebb853a8e7918f99513b22477db7bd928'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+[ci] building jAIn manual v8.0.1 (July 2026); epoch=1784192781; fonts=/home/ubuntu/jain-split/jain-docs/target/ci/tools/fonts
+[ci] Inter/JetBrains Mono embedded
+docs-pdf ok: target/docs/jain-platform-manual-v8.0.1.pdf
+Note: switching to 'a44bbd5ebb853a8e7918f99513b22477db7bd928'.
+
+You are in 'detached HEAD' state. You can look around, make experimental
+changes and commit them, and you can discard any commits you make in this
+state without impacting any branches by switching back to a branch.
+
+If you want to create a new branch to retain commits you create, you may
+do so (now or later) by using -c with the switch command. Example:
+
+  git switch -c <new-branch-name>
+
+Or undo this operation with:
+
+  git switch -
+
+Turn off this advice by setting config variable advice.detachedHead to false
+
+[ci] building jAIn manual v8.0.1 (July 2026); epoch=1784192781; fonts=/home/ubuntu/jain-split/jain-docs/target/ci/tools/fonts
+[ci] Inter/JetBrains Mono embedded
+docs-pdf ok: target/docs/jain-platform-manual-v8.0.1.pdf
+docs-pdf reproducibility ok: b5105efa358b885df2cfbab03b2594aad803ab01bdeec3f82dc0c865b2d19bc3
+required ok: jain-docs

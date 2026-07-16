@@ -1,0 +1,116 @@
+{
+  "schema_version": "jain.split.identity-remediation/v1",
+  "status": "pass_pending_required",
+  "recorded_at_utc": "2026-07-16T07:24:41Z",
+  "claim_token": "codex-mcp-jain-ops-pr9-v801-proof-remediation-20260716T0719Z",
+  "repository": "jeryu/jain-ops",
+  "pull_request": 9,
+  "branch": "claude/v801-identity-jain-ops-20260716",
+  "base_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+  "prior_head_sha": "1630873b220799aa22df07b15d8c2f23b4216729",
+  "head_sha": "6f3e4f1020af9f265e1a6242ab8b0844a282ab0f",
+  "tree_sha": "f2a821239cd7cc956a8698291264ab494f168d2c",
+  "aggregate_binary_diff_sha256": "c045c0cb53717efe3e1def02345078f45817fb0ccd97a994ce3d60c0874f5556",
+  "changed_paths": [
+    "AGENTS.md",
+    "CHANGELOG.md",
+    "README.md",
+    "VERSION",
+    "agent/standard-version.toml",
+    "db/README.md",
+    "docs/AGENTS.md",
+    "docs/release.md",
+    "ops/ci/artifact_support.sh",
+    "ops/ci/required.sh",
+    "schemas/release-artifact.schema.json"
+  ],
+  "candidate": {
+    "version": "8.0.1",
+    "proposed_corrective_tag": "jain-ops-v8.0.1-split.1",
+    "release_status": "candidate",
+    "formal_ga": false,
+    "production_applied": false,
+    "atomicsoul_push": 0,
+    "rollback_target": "7.0.6",
+    "accepted": false,
+    "tagged": false,
+    "authority_bound": false,
+    "deployed": false
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "1.6.11",
+    "binary_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "before_changed_fast": {
+      "score": 80,
+      "raw_score": 83,
+      "caps": ["release-readiness-gap", "missing-agent-readable-docs"],
+      "hard_findings": 0,
+      "report_sha256": "76a6b6ce6e6db838fc585cf9fbecb090f55d2572aceb2aa6e05458da47fb0b67"
+    },
+    "final_changed_fast": {
+      "score": 88,
+      "raw_score": 88,
+      "caps": [],
+      "hard_findings": 0,
+      "status": "pass",
+      "report_sha256": "c2072bdcc1c0a79918be26d1b530595998d163387c1d2a162a20191b44bc1612"
+    },
+    "final_full": {
+      "score": 93,
+      "raw_score": 93,
+      "caps": [],
+      "hard_findings": 0,
+      "status": "pass",
+      "report_sha256": "2eaa04c6d65e94fd87c741299bd605d1760ebe069eb5b42436cf0f56fae3f2ae"
+    },
+    "forge_check": {
+      "name": "jankurai/proof",
+      "conclusion": "success",
+      "check_id": "c51b65ec-80d0-4583-bab2-552c0d393d27",
+      "head_sha": "6f3e4f1020af9f265e1a6242ab8b0844a282ab0f"
+    }
+  },
+  "native_gates": {
+    "git_diff_check": "pass",
+    "just_fast": "pass",
+    "just_check": "pass",
+    "just_required": {
+      "status": "pass",
+      "rust_test_targets": 7,
+      "rust_test_failures": 0,
+      "release_bins_build": "pass",
+      "validator_fixtures": "pass",
+      "upload_manifest_fixtures": "pass",
+      "shellcheck_error_floor": "pass"
+    },
+    "just_contract_drift": "pass",
+    "just_tool_adoption": "pass",
+    "just_artifact_support": {
+      "status": "pass",
+      "receipt_sha256": "16c63c876740a22d6ce7ef02cedb86d4c9dd96a660849116a98234604dc3c468",
+      "source_archive_sha256": "bfe7af16e491a1b1300dc7e4e4b0f1bdbb062db2d31712669337393579f77afc"
+    }
+  },
+  "forge_readback": {
+    "main_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+    "branch_sha": "6f3e4f1020af9f265e1a6242ab8b0844a282ab0f",
+    "pull_request_head_sha": "6f3e4f1020af9f265e1a6242ab8b0844a282ab0f",
+    "pull_request_state": "open",
+    "mergeable_state": "blocked",
+    "required_check": "jain-ops/required",
+    "required_check_state": "absent"
+  },
+  "excluded_actions": {
+    "host_ci_run": false,
+    "required_check_published": false,
+    "approval": false,
+    "merge": false,
+    "tag": false,
+    "authority_bind": false,
+    "deployment": false,
+    "git_worktree_action": false,
+    "force_operation": false
+  },
+  "next_step": "After the serialized Web/Zyal/Domain producer queue clears, run exactly one governed standalone-clone host CI job at this immutable head to publish jain-ops/required, then obtain independent exact-head approval."
+}

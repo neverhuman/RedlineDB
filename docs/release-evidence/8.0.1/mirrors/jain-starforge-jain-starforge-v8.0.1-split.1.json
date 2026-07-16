@@ -1,0 +1,22 @@
+{
+  "manifest": "repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-starforge.git",
+      "mirror_existed": true,
+      "name": "jain-starforge",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-starforge",
+      "source_head": "db77139987d8aa20c790ffa03880d3d90e65f7f2"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-starforge"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1784213149
+}

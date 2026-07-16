@@ -1,0 +1,59 @@
+{
+  "schema_version": "jain.pr-metadata-correction/v1",
+  "recorded_at_utc": "2026-07-16T08:10:00Z",
+  "claim_token": "codex-root-domain-pr8-proof-description-correction-20260716T0810Z",
+  "repository": "jeryu/jain-domain",
+  "pull_request": 8,
+  "protected_main": "4383aef8b23dd194db12778db3fc378ab526b145",
+  "head": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+  "branch": "codex/v8.0.1-domain-successor-20260716",
+  "governed_integrity_audit": {
+    "path": "jeryu-governed-integrity-audit-jeryu-jain-domain-pr8-3ae83ce1.json",
+    "sha256": "befaa9b1edc060aab5628f66eaa5492e2ba383c5fd03af867985abfc5999041f",
+    "decision": "PASS_INTEGRITY_LIFECYCLE_BLOCKED"
+  },
+  "description_correction": {
+    "endpoint": "/repos/jeryu/jain-domain/pulls/8",
+    "method": "PATCH",
+    "request_payload_sha256": "9d2bb24be529d4ecff4849a32ddf2949d34aa072a5bca37945a9028285175c1d",
+    "readback_body_sha256": "60b51f370e4a2dd414c59af7a69d3f7d6b9093bee0d6991491cf48ab682affbf",
+    "readback_updated_at": "2026-07-16T08:09:17.141350017Z",
+    "stale_red_proof_claim_removed": true,
+    "exact_successful_proof_documented": true,
+    "remaining_lifecycle_gates_documented": true,
+    "title_unchanged": true,
+    "base_branch_unchanged": true,
+    "branch_unchanged": true,
+    "head_unchanged": true,
+    "credential_transmitted_without_argv_or_receipt_exposure": true
+  },
+  "forge_readback": {
+    "jankurai_proof": "success",
+    "jankurai_proof_check_id": "38110b48-a0ae-4b2f-8556-ada796545d21",
+    "jain_domain_required": "absent",
+    "jeryu_autonomy": "neutral"
+  },
+  "mutations": {
+    "pull_request_body": true,
+    "new_receipt": true,
+    "source": false,
+    "index": false,
+    "repository_ref": false,
+    "forge_ref": false,
+    "check_post": false,
+    "approval": false,
+    "merge": false,
+    "tag": false,
+    "authority": false,
+    "protection": false,
+    "deployment": false,
+    "force_operation": false,
+    "git_worktree_action": false
+  },
+  "decision": "CORRECTED_PENDING_REQUIRED_APPROVAL_TAG_BIND",
+  "remaining": [
+    "publish and read back jain-domain/required success at this exact head",
+    "independent approval and protected merge",
+    "immutable split.1 tag readback and protected authority binding"
+  ]
+}

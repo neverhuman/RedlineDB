@@ -1,0 +1,37 @@
+{
+  "schema": "jain.release-preflight-summary/v1",
+  "observed_at_utc": "2026-07-16T05:57:39Z",
+  "release_target": "8.0.1",
+  "command": "target/debug/splitctl release-preflight",
+  "command_exit_code": 1,
+  "status": "fail",
+  "report": {
+    "path": "/home/ubuntu/jain-split/jain-split-ops/target/preflight-report.json",
+    "sha256": "5932b40c2f78fe331dfce69a429c54f8f91d03d14b3ad7e8b4aabb2486ab9ea4",
+    "schema_version": "jain-split-ops.preflight/v1"
+  },
+  "inputs": {
+    "splitctl_sha256": "e38fc13addea378071a78f9c83e8c05aa475f792115fb997d2ecdcef2d7bafda",
+    "control_plane_head_observed_after_run": "85f0c16a0cd1d8c3af068a987285c95b20825364",
+    "authority_manifest_sha256": "dbec989b1b5d2b04a26ad920f6e5946c8233c53db98eea9938860a5d962fc977"
+  },
+  "counts": {
+    "managed_repositories": 26,
+    "accepted": 2,
+    "failed": 24,
+    "managed_family_failures": 44,
+    "infrastructure_failures": 3,
+    "manifest_failures": 0,
+    "external_dependency_failures": 0
+  },
+  "accepted_repositories": [
+    "jain-zyal",
+    "jain-jailgun"
+  ],
+  "decision": "NO_GO",
+  "limitations": [
+    "This is a point-in-time preflight readback, not a release-candidate, release-snapshot, tag, or authority receipt.",
+    "The canonical control-plane checkout is concurrently held and changed during this work; its observed head and the executable digest are recorded independently and no source correspondence is asserted.",
+    "The broader 44-physical-repository super-split and Redline two-consumer acceptance gates remain outside this 26-repository report and remain blocked."
+  ]
+}

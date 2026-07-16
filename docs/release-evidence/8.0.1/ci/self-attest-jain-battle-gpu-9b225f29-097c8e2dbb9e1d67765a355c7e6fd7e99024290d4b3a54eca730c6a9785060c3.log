@@ -1,0 +1,59 @@
+check ok: /home/ubuntu/.cache/claude-orch-ci/recascade/jain-battle-gpu
+[ci] battle-gpu required lane: CPU-safe no-default smoke
+    Checking feat-math v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d)
+    Checking battle-gpu v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/recascade/jain-battle-gpu/crates/battle-gpu)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.22s
+   Compiling feat-math v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d)
+   Compiling battle-gpu v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/recascade/jain-battle-gpu/crates/battle-gpu)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 6.75s
+     Running unittests src/lib.rs (target/debug/deps/battle_gpu-1bf02a53a3f41d2b)
+
+running 12 tests
+test mixture::tests::theta_layout_lengths_are_consistent ... ok
+test queue::tests::cpu_handoff_reason_classifies_queue_timeout ... ok
+test queue::tests::thirty_x_bypass_reports_cpu_handoff ... ok
+test tests::plan_refuses_gpr_refused_shapes ... ok
+test queue::tests::queue_acquires_in_fifo_filename_order ... ok
+test queue::tests::default_lease_removes_ticket_on_drop ... ok
+test tests::top_configs_sorts_desc_and_drops_nan ... ok
+test queue::tests::queue_cleans_expired_tickets ... ok
+test mixture::tests::mixture_plan_is_deterministic_and_splits_configs ... ok
+test tests::plan_is_deterministic_and_mirrors_gpr_init ... ok
+test mixture::tests::rbf_spec_lml_matches_plain_path ... ok
+test tests::cpu_lml_is_finite_and_prefers_sane_configs ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+     Running tests/gpr_plan_properties.rs (target/debug/deps/gpr_plan_properties-5b6a44324af2d399)
+
+running 5 tests
+test params_row_is_positive_and_finite ... ok
+test top_configs_returns_k_best_sorted ... ok
+test configs_respect_clamp_bounds ... ok
+test cpu_reference_lml_is_finite ... ok
+test plans_are_deterministic ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running tests/vram_budget_properties.rs (target/debug/deps/vram_budget_properties-983a94ae5bab20bc)
+
+running 7 tests
+test budget_respects_reserve_and_fraction ... ok
+test budget_is_monotone_in_free ... ok
+test chunk_configs_contract ... ok
+test ridge_bytes_linear_in_count ... ok
+test cfg_bytes_positive_and_monotone ... ok
+test ridge_bytes_monotone_in_padding ... ok
+test chunk_configs_saturates_when_budget_allows ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+   Doc-tests battle_gpu
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+dependency lock ok: exact feat-math v8.0.1-split.1 identity
+required ok: jain-battle-gpu
+CI_EXIT=0

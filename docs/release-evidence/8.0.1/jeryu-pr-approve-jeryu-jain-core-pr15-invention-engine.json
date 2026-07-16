@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T14:22:16.310466865+00:00",
+      "head_sha": "54718d33e6be1e311fcc19d8fc37d5a34c5d554c",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:54718d33e6be1e311fcc19d8fc37d5a34c5d554c:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71#15",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/lime-prime-core-v2-20260716",
+      "head_sha": "54718d33e6be1e311fcc19d8fc37d5a34c5d554c",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "54718d33e6be1e311fcc19d8fc37d5a34c5d554c",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 15,
+      "passport_hash": "passport:54718d33e6be1e311fcc19d8fc37d5a34c5d554c:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71",
+        "name": "jain-core",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat-core: GP-off default + invention-gpu dynamic-linking + typed bma persistence + JAIN_INVENTION_ENGINE override",
+      "updated_at": "2026-07-16T13:16:51.666293446+00:00"
+    }
+  },
+  "repository": "jeryu/jain-core",
+  "request": {
+    "body": {
+      "body_markdown": "W43 CORE-TRAIN review at exact head 54718d33: 10-commit range over main 2652e7b5 (JAIN_INVENTION_ENGINE phase-6 dispatch override legacy|gp/lime/prime, GP-expansion off by default, typed bma persistence + fail-closed serving_pick, strict-GPU no-CPU-fallback path, v8.0.1-split.0 cascade dependency pins). Independent verification in a fresh exact-SHA clone: scripts/ci-local.sh required green — dependency-lock 9 immutable pins ok, fmt+clippy -D warnings clean, 236 tests passed / 0 failed (log sha256 b674b173b37d9e7f429240bcb49d8f2964172ca84e75bd8d304b74b5ad0210c6). Forge jain-core/required=success at this exact head. Closes the ffbbaf48 source/artifact INVENTION_ENGINE gap; enables jain-core-v8.0.1-split.1 successor.",
+      "evidence": null,
+      "expected_head_sha": "54718d33e6be1e311fcc19d8fc37d5a34c5d554c",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-core/pulls/15/reviews"
+  },
+  "response": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T14:22:14.196445686+00:00",
+      "head_sha": "54718d33e6be1e311fcc19d8fc37d5a34c5d554c",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:54718d33e6be1e311fcc19d8fc37d5a34c5d554c:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71#15",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/lime-prime-core-v2-20260716",
+      "head_sha": "54718d33e6be1e311fcc19d8fc37d5a34c5d554c",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "54718d33e6be1e311fcc19d8fc37d5a34c5d554c",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 15,
+      "passport_hash": "passport:54718d33e6be1e311fcc19d8fc37d5a34c5d554c:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71",
+        "name": "jain-core",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "feat-core: GP-off default + invention-gpu dynamic-linking + typed bma persistence + JAIN_INVENTION_ENGINE override",
+      "updated_at": "2026-07-16T13:16:51.666293446+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784211729
+}

@@ -1,0 +1,29 @@
+Cloning into '/tmp/split-host-ci.qERQrz/jain-jnoccio'...
+HEAD is now at 8ce171c docs: prohibit git worktrees
+lock_blob=f75d9a4573d388ae65573d342ee4a61993268a4b
+name=jain-jnoccio
+ref=8ce171cb7dbae2fb454a5ca08bdbb92aad56428d
+commit=8ce171cb7dbae2fb454a5ca08bdbb92aad56428d
+tree=db50467a2939250c8d5af121f465c72f0b63b9f8
+release_checksum_sha256=a321da71dcb3aef546129e46249eafc92a78d357825d2064996d7e0ebba20a6a
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: /tmp/split-host-ci.qERQrz/jain-jnoccio
+[ci] Rust required lane: fmt + targeted clippy/test
+    Updating crates.io index
+    Updating git repository `http://127.0.0.1:8787/git/jeryu/jain-llm.git`
+From file:///home/ubuntu/jain-split/target/bare-mirrors/jain-llm
+ * [new branch]      codex/v8-split1-corrective-20260713 -> origin/codex/v8-split1-corrective-20260713
+ * [new branch]      codex/v8.0.0-release-review -> origin/codex/v8.0.0-release-review
+ * [new branch]      codex/wq-6b-identity-jain-llm-20260714 -> origin/codex/wq-6b-identity-jain-llm-20260714
+ * [new branch]      main                    -> origin/main
+ * [new branch]      release/v8.0.1/llm-identity-20260716 -> origin/release/v8.0.1/llm-identity-20260716
+ * [new ref]         HEAD                    -> origin/HEAD
+ * [new tag]         jain-llm-v7.0.1-split.0 -> jain-llm-v7.0.1-split.0
+ * [new tag]         jain-llm-v8.0.0-split.0 -> jain-llm-v8.0.0-split.0
+ * [new tag]         jain-llm-v8.0.1-split.0 -> jain-llm-v8.0.1-split.0
+error: failed to select a version for the requirement `jain-llm = "*"` (locked to 8.0.0)
+candidate versions found which didn't match: 7.0.1
+location searched: Git repository http://127.0.0.1:8787/git/jeryu/jain-llm.git?tag=jain-llm-v8.0.0-split.0#a8571241
+required by package `jain-jnoccio v8.0.0 (/tmp/split-host-ci.qERQrz/jain-jnoccio)`

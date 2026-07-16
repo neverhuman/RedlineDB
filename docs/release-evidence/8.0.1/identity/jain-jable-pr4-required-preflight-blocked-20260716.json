@@ -1,0 +1,101 @@
+{
+  "schema_version": "jain.required-ci-preflight/v1",
+  "recorded_at_utc": "2026-07-16T08:29:00Z",
+  "claim": "codex-jable-pr4-serialized-required-20260716T0824Z",
+  "repository": "jeryu/jain-jable",
+  "pull_request": 4,
+  "exact_head": "c606b6298bee69b521b1fc8f3144e23be357cb1f",
+  "exact_head_tree": "f68a091af87b4e041e338b2b623f056040bd978c",
+  "live_base_ref": "main",
+  "forge_main": "9a38221906d8918efa3b8d8ef582423f2a23dafc",
+  "pr_api_base_snapshot": "e119908dd4f522fdbada7ddb461fb10c0dd7f563",
+  "head_descends_from_forge_main": true,
+  "checks": {
+    "jankurai_proof": {
+      "id": "72403322-e4d5-442c-815f-84993ef93c01",
+      "conclusion": "success"
+    },
+    "jain_jable_required": "absent"
+  },
+  "independent_review": {
+    "path": "jain-jable-pr4-independent-review-20260716.json",
+    "sha256": "e0f9f661ddc2349013aa678b8f91dc9ee1817c16dde723f838a5f7da31e6047e",
+    "decision": "REVIEW_PASS_PENDING_EXACT_HEAD_REQUIRED_AND_APPROVAL"
+  },
+  "canonical_checkout": {
+    "path": "/home/ubuntu/jain-split/jain-jable",
+    "branch": "claude/v801-identity-jain-jable-20260716",
+    "head": "c606b6298bee69b521b1fc8f3144e23be357cb1f",
+    "clean": true,
+    "forge_equal": true,
+    "worktree_registrations": 1,
+    "active_holder": false
+  },
+  "protection": {
+    "receipt": "../jeryu-protection-readback-jeryu-jain-jable.json",
+    "receipt_sha256": "9cc3cbf5b10edb4bf52c5a62ea91ff9b6115b1b701ca636fd8beea9ea49ad264",
+    "required_approving_review_count": 1,
+    "required_status_checks": [
+      "jain-jable/required"
+    ],
+    "strict_status_checks": true,
+    "required_linear_history": true,
+    "enforce_admins": true,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  },
+  "host_runner": {
+    "path": "../../../ops/ci/split-host-ci.sh",
+    "sha256": "dabf3f81d99ae8bfa3418c85ab312978f49aae4dab4e13dfd966cfae2d12ea03",
+    "release_mode": true,
+    "release_lanes": [
+      "security",
+      "score",
+      "contract-drift",
+      "artifact-support"
+    ],
+    "isolates_home": true,
+    "isolates_cargo_home": true
+  },
+  "committed_scripts": {
+    "ops_ci_required_sha256": "c1ec2e24944efb9664d0590ba958d73020068ad4dfedebe7397f1d1ce93d17c5",
+    "ops_ci_contract_drift_sha256": "2f174bf8d99c790ae18354dbba911241237558a5e5205f042e842b5b8f79feea",
+    "scripts_ci_local_sha256": "8116218daba62df87506067f9ea3a226371a180e72214dbc71a5b8aa7388df22",
+    "cargo_public_api_expected": "cargo-public-api 0.52.0",
+    "contract_command": "cargo public-api -p jable diff origin/main..HEAD --deny removed --deny changed"
+  },
+  "deterministic_reproduction": {
+    "environment": "exact canonical head with isolated HOME, CARGO_HOME, and CARGO_TARGET_DIR matching the host runner boundary",
+    "exit_code": 1,
+    "output_sha256": "414646fee624c15686dc6d2bd12ce1f669860a0192085a79fad7ba8f9370291b",
+    "errors": [
+      "toolchain nightly-x86_64-unknown-linux-gnu is not installed in isolated HOME",
+      "Cargo.toml is a virtual manifest and cargo-public-api reports no specific package selected"
+    ],
+    "sandbox": "/tmp/codex-jable-public-api-preflight.UqXVZq",
+    "sandbox_removed": true
+  },
+  "bare_mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-jable.git",
+    "is_bare": true,
+    "alternates_absent": true,
+    "linked_worktree_registration_absent": true,
+    "lock_files_absent": true,
+    "active_holder": false,
+    "exact_candidate_head_present": false,
+    "candidate_branch_present": false,
+    "mirror_main": "e119908dd4f522fdbada7ddb461fb10c0dd7f563",
+    "refreshed": false,
+    "reason_not_refreshed": "deterministic pre-launch blocker makes mirror mutation unnecessary"
+  },
+  "global_heavy_producer_zero_at_decision": true,
+  "host_ci_launched": false,
+  "check_posted": false,
+  "retry_attempted": false,
+  "smallest_no_waiver_path": [
+    "repair the isolated runner to bind and expose the pinned nightly toolchain",
+    "correct cargo-public-api package-selection invocation for the virtual workspace",
+    "independently verify the runner fix before a new serialized exact-head CI run"
+  ],
+  "decision": "DO_NOT_LAUNCH_DETERMINISTIC_CONTRACT_DRIFT_BLOCKER"
+}

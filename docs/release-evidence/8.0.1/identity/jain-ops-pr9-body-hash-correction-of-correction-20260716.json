@@ -1,0 +1,179 @@
+{
+  "schema_version": "jain.identity-evidence-correction/v2",
+  "status": "CORRECTED_BODY_HASH_PENDING_FRESH_ACCEPTANCE_AND_REQUIRED",
+  "recorded_at_utc": "2026-07-16T08:50:41Z",
+  "claim_token": "codex-jain-ops-pr9-body-hash-correction-20260716T0848Z",
+  "repository": "jeryu/jain-ops",
+  "pull_request": 9,
+  "branch": "claude/v801-identity-jain-ops-20260716",
+  "source_or_forge_mutation_performed": false,
+  "correction_scope": {
+    "superseded_receipt": {
+      "path": "jain-ops-pr9-evidence-description-correction-20260716.json",
+      "sha256": "bceee61003de8736cc7cdb6ef56040b57a6982cd008138610cecf7fdc553ba94"
+    },
+    "superseded_declaration_only": "pull_request_description_correction.readback_body_sha256",
+    "superseded_value": "9e46bca887ef7c85d90d7263d8bdd02f89e5a1bf42d6d1c54914f43be73d16be",
+    "correct_raw_utf8_body_sha256": "6a17aa6b938383855aaed116d75676cd6a14926ff8eb30b5b40d26e2ed7c09c4",
+    "all_other_historical_declarations_preserved": true,
+    "historical_receipts_modified": false
+  },
+  "acceptance_input": {
+    "path": "jain-ops-pr9-corrected-evidence-independent-acceptance-20260716.json",
+    "sha256": "a3f254cf6dc033c27e7a8f3db2d5a1d16dc60ccdb11e23a85acc6f4459266545",
+    "decision": "BLOCK_EVIDENCE_BODY_HASH_AND_REQUIRED",
+    "body_hash_finding_reproduced": true
+  },
+  "authenticated_live_body_readback": {
+    "endpoint": "http://127.0.0.1:8787/repos/jeryu/jain-ops/pulls/9",
+    "method": "GET",
+    "authentication": "Bearer token read by curl from the owner-only token file; token was not placed in argv, output, or evidence",
+    "json_member": "body",
+    "json_type": "string",
+    "encoding": "UTF-8",
+    "utf8_valid": true,
+    "utf8_bytes": 926,
+    "unicode_codepoints": 926,
+    "nul_count": 0,
+    "carriage_return_count": 0,
+    "line_feed_count": 0,
+    "ends_with_line_feed": false,
+    "raw_representation": {
+      "definition": "exact decoded UTF-8 bytes of the live JSON body member, with no prefix, suffix, or synthesized terminator",
+      "sha256": "6a17aa6b938383855aaed116d75676cd6a14926ff8eb30b5b40d26e2ed7c09c4",
+      "direct_authenticated_api_reproduced": true,
+      "splitctl_readback_reproduced": true,
+      "iconv_utf8_roundtrip_reproduced": true
+    },
+    "lf_normalized_representation": {
+      "definition": "the exact raw representation followed by one terminal LF byte, matching jq -r output; there are no pre-existing CR or LF bytes",
+      "sha256": "b23c4d754ae8aa9234862b3493db273d865ef1e1a7c49812fd6bc84aa93d8245",
+      "reproduced": true
+    },
+    "pretty_request_payload_representation": {
+      "definition": "default pretty jq JSON emitted by jq -n --arg body <exact-raw-body> '{body:$body}', including its terminal LF",
+      "sha256": "8e52eaa6b96caa1e627091191c9bca0179695f3775d41a74f858856b2658f407",
+      "matches_preserved_correction_receipt": true
+    },
+    "compact_request_payload_sha256_observed_non_authoritative": "a0f4d96a938c8a0f31eb353a67a5ad9dfefd953894aa2a871c3623892067406a"
+  },
+  "live_pull_request_readback": {
+    "number": 9,
+    "title": "repin v8.0.1: jain-ops",
+    "state": "open",
+    "draft": false,
+    "updated_at": "2026-07-16T08:06:01.403430951Z",
+    "head_ref": "claude/v801-identity-jain-ops-20260716",
+    "head_sha": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+    "head_tree_sha": "00f383804f9e7f03581e859d0ce79c446f9ab17d",
+    "base_ref": "main",
+    "pr_base_metadata_sha": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+    "protected_main_remote_ref_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+    "base_representation_note": "The live PR object's base.sha is its recorded base snapshot and is not asserted to equal the current protected main ref. Both values are bound explicitly.",
+    "merge_base_with_current_protected_main": "68569a9344164b76e880fbb54f74839acc598a08",
+    "ahead_of_current_protected_main": 3,
+    "behind_current_protected_main": 0,
+    "linear_from_current_protected_main": true,
+    "mergeable": false,
+    "mergeable_state": "blocked"
+  },
+  "source_delta_readback": {
+    "raw_full_index_diff_base": "68569a9344164b76e880fbb54f74839acc598a08",
+    "raw_full_index_diff_head": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+    "raw_full_index_diff_sha256": "421dcfc2352813c37c376ef093b6653adf762b4ff80e013bbe95b7ccadd9da57",
+    "files_changed": 13,
+    "insertions": 68,
+    "deletions": 26,
+    "source_delta_decision_adopted_from_independent_review": "PASS",
+    "source_delta_changed_since_acceptance_input": false
+  },
+  "live_checks": {
+    "head_sha": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+    "total_count": 2,
+    "jankurai_proof": {
+      "status": "completed",
+      "conclusion": "success",
+      "check_id": "a8bf8b4b-060a-4186-bab4-5ddaba00fcb0"
+    },
+    "jeryu_autonomy": {
+      "status": "completed",
+      "conclusion": "action_required",
+      "check_id": "a8be2ebc-be1a-405f-b58b-ea274933b5c4"
+    },
+    "jain_ops_required": "absent"
+  },
+  "preserved_receipts": [
+    {
+      "path": "jain-ops-pr9-v801-proof-remediation-20260716.json",
+      "sha256": "f8827bc2cf14cefbe0a4ef7945632e93676f51607758366df286b7c27a732945"
+    },
+    {
+      "path": "jain-ops-pr9-governed-tool-successor-20260716.json",
+      "sha256": "349acc368b6dc15162416deff8a19a7e3879410a5976098ef217f610ce1e5e5d"
+    },
+    {
+      "path": "jain-ops-pr9-independent-review-20260716.json",
+      "sha256": "55d9ed8bd07eaa5537ba57a4557dc883029f23bb899d123eb1d5dce19d2ac825"
+    },
+    {
+      "path": "jain-ops-pr9-independent-review-correction-20260716.json",
+      "sha256": "1efd5e6cb415d027661e39e4e7a6d8322fd5d80157b8ca37a8acf8e149266086"
+    },
+    {
+      "path": "jain-ops-pr9-successor-independent-review-20260716.json",
+      "sha256": "b6c0ac37aa0b23955ed0e3dec5c1a18b6dbb3761c8db372f16a02056255dec0c"
+    },
+    {
+      "path": "jain-ops-pr9-evidence-description-correction-20260716.json",
+      "sha256": "bceee61003de8736cc7cdb6ef56040b57a6982cd008138610cecf7fdc553ba94"
+    },
+    {
+      "path": "jain-ops-pr9-corrected-evidence-independent-acceptance-20260716.json",
+      "sha256": "a3f254cf6dc033c27e7a8f3db2d5a1d16dc60ccdb11e23a85acc6f4459266545"
+    }
+  ],
+  "canonical_checkout": {
+    "path": "/home/ubuntu/jain-split/jain-ops",
+    "branch": "claude/v801-identity-jain-ops-20260716",
+    "head_sha": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+    "tree_sha": "00f383804f9e7f03581e859d0ce79c446f9ab17d",
+    "clean_porcelain_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "branch_forge_equal": true,
+    "sole_registered_worktree": true,
+    "symlink_count": 0,
+    "source_process_holder_observed": false,
+    "local_main_ref_sha_observed_stale_non_authoritative": "6aedc249bdb30a5cfd5d1ea3cbff9bc03393469d",
+    "origin_main_tracking_ref_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+    "protected_main_authority": "git ls-remote origin refs/heads/main"
+  },
+  "decision": {
+    "body_hash_correction": "PASS",
+    "historical_receipt_preservation": "PASS",
+    "release": "BLOCK",
+    "reason": "The body-hash representation defect is corrected append-only, but exact-head jain-ops/required remains absent and fresh independent acceptance is still required."
+  },
+  "remaining_blockers": [
+    "Obtain fresh independent acceptance of this append-only correction-of-correction receipt.",
+    "Publish genuine jain-ops/required success for exact head cead27a303aa91e7fc5c68da7fdce8faf700164e through the serialized shared host lane.",
+    "Perform independent protected approval after exact-head required and evidence acceptance are green.",
+    "Protected fast-forward merge PR 9.",
+    "Cut and read back the next unused immutable jain-ops-v8.0.1 split tag.",
+    "Bind the merged commit and checksum through the protected authority lifecycle."
+  ],
+  "excluded_actions_confirmed": [
+    "source_or_index_mutation",
+    "canonical_or_forge_ref_mutation",
+    "pull_request_mutation",
+    "check_post",
+    "host_ci",
+    "approval",
+    "merge",
+    "tag",
+    "authority_binding",
+    "deployment",
+    "force",
+    "secret_exposure",
+    "historical_receipt_edit",
+    "git_worktree"
+  ]
+}

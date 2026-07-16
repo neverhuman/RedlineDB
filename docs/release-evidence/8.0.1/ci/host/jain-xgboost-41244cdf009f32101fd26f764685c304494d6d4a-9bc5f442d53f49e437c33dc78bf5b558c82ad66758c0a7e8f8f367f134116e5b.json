@@ -1,0 +1,10 @@
+{
+  "schema_version": "jain.host-ci/v1",
+  "owner": "jeryu",
+  "repository": "jain-xgboost",
+  "head_sha": "41244cdf009f32101fd26f764685c304494d6d4a",
+  "check": "jain-xgboost/required",
+  "conclusion": "failure",
+  "log_sha256": "9bc5f442d53f49e437c33dc78bf5b558c82ad66758c0a7e8f8f367f134116e5b",
+  "log_path": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/ci/host/9bc5f442d53f49e437c33dc78bf5b558c82ad66758c0a7e8f8f367f134116e5b.log"
+}

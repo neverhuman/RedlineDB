@@ -1,0 +1,42 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "9b225f29ef70d9480b93b62615f4ea6923ce4030",
+    "remote": "9b225f29ef70d9480b93b62615f4ea6923ce4030"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "9b225f29ef70d9480b93b62615f4ea6923ce4030",
+  "commit_input": "9b225f29ef70d9480b93b62615f4ea6923ce4030",
+  "manifest": "repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-battle-gpu.git",
+    "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/mirrors/jain-battle-gpu-jain-battle-gpu-v8.0.1-split.1.json",
+    "status": "pass",
+    "tag_commit": "9b225f29ef70d9480b93b62615f4ea6923ce4030"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "crates/battle-gpu/Cargo.toml",
+        "name": "battle-gpu",
+        "version": "8.0.1"
+      }
+    ],
+    "expected_product_version": "8.0.1",
+    "status": "pass",
+    "version_file": "jain-battle-gpu-v8.0.1-split.1",
+    "workspace_package_version": "8.0.1"
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git",
+  "remote_main": "9b225f29ef70d9480b93b62615f4ea6923ce4030",
+  "repository": "/home/ubuntu/jain-split/jain-battle-gpu",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-battle-gpu-v8.0.1-split.1",
+  "timestamp_unix": 1784212449
+}

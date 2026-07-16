@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Native 4.1.0-jain.4 production onboarding. Final exact non-force successor bd6bb42114a3213b2615572dae7517d1a794c2fc fixes the two genuine isolated-host failures only. Security binds RustSec commit/tree/archive 9f3e1380/c33f1047/08098d56, rejects missing/symlink/wrong sources, never mutates/trusts shared worktree state, and audits explicit --db --no-fetch. Artifact packaging resolves locked cargo metadata target_directory, rejects linked/missing binaries, and works with runner-owned CARGO_TARGET_DIR. Full local required passes: 9 tests, Clippy, parity, offline security, score 86/raw86, contract, artifact, coverage. Failed required checks fc3957b1 (unseeded RustSec) and the 6e964902 clean-target artifact failure remain preserved. Independent final-head review and fresh genuine required remain mandatory before approval/merge; no tag/authority action claimed.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T11:37:15.180567996+00:00",
+      "head_sha": "bd6bb42114a3213b2615572dae7517d1a794c2fc",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:bd6bb42114a3213b2615572dae7517d1a794c2fc:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "afe38ef6be397d930b9871661f7b8908da81b51d",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "b02069a6-8da2-4d1a-aef0-2f5bc5d659be#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v4.1.0-jain.4/production-onboarding-20260716",
+      "head_sha": "bd6bb42114a3213b2615572dae7517d1a794c2fc",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "bd6bb42114a3213b2615572dae7517d1a794c2fc",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:bd6bb42114a3213b2615572dae7517d1a794c2fc:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "b02069a6-8da2-4d1a-aef0-2f5bc5d659be",
+        "name": "redline-central",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Onboard Redline Central for native 4.1.0",
+      "updated_at": "2026-07-16T11:27:17.041893127+00:00"
+    }
+  },
+  "repository": "jeryu/redline-central",
+  "request": {
+    "body": {
+      "body_markdown": null,
+      "evidence": null,
+      "expected_head_sha": "bd6bb42114a3213b2615572dae7517d1a794c2fc",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fredline-central/pulls/1/reviews"
+  },
+  "response": {
+    "description": "Native 4.1.0-jain.4 production onboarding. Final exact non-force successor bd6bb42114a3213b2615572dae7517d1a794c2fc fixes the two genuine isolated-host failures only. Security binds RustSec commit/tree/archive 9f3e1380/c33f1047/08098d56, rejects missing/symlink/wrong sources, never mutates/trusts shared worktree state, and audits explicit --db --no-fetch. Artifact packaging resolves locked cargo metadata target_directory, rejects linked/missing binaries, and works with runner-owned CARGO_TARGET_DIR. Full local required passes: 9 tests, Clippy, parity, offline security, score 86/raw86, contract, artifact, coverage. Failed required checks fc3957b1 (unseeded RustSec) and the 6e964902 clean-target artifact failure remain preserved. Independent final-head review and fresh genuine required remain mandatory before approval/merge; no tag/authority action claimed.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T11:37:15.170446684+00:00",
+      "head_sha": "bd6bb42114a3213b2615572dae7517d1a794c2fc",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:bd6bb42114a3213b2615572dae7517d1a794c2fc:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "afe38ef6be397d930b9871661f7b8908da81b51d",
+      "checks": {
+        "failing": 1,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "b02069a6-8da2-4d1a-aef0-2f5bc5d659be#1",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v4.1.0-jain.4/production-onboarding-20260716",
+      "head_sha": "bd6bb42114a3213b2615572dae7517d1a794c2fc",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "bd6bb42114a3213b2615572dae7517d1a794c2fc",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 1,
+      "passport_hash": "passport:bd6bb42114a3213b2615572dae7517d1a794c2fc:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "b02069a6-8da2-4d1a-aef0-2f5bc5d659be",
+        "name": "redline-central",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "Onboard Redline Central for native 4.1.0",
+      "updated_at": "2026-07-16T11:27:17.041893127+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784201833
+}

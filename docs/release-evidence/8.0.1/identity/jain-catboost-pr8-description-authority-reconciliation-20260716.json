@@ -1,0 +1,112 @@
+{
+  "schema_version": "jain.pr-metadata-authority-reconciliation/v1",
+  "recorded_at_utc": "2026-07-16T08:14:30Z",
+  "claim_token": "codex-catboost-pr8-metadata-reconciliation-20260716T0810Z",
+  "repository": "jeryu/jain-catboost",
+  "pull_request": 8,
+  "protected_main": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+  "head": "182089fb4caad2c752ba9e5a5bd584adceab4e90",
+  "tree": "6a39984d52f32a11c96aef8df3418ad525c9348c",
+  "branch": "release/v8.0.1/catboost-identity",
+  "independent_review": {
+    "path": "jeryu-independent-review-jeryu-jain-catboost-pr8-182089fb.json",
+    "sha256": "97f50ba36c340d1a5f9d014072d216437084a6d414dbbf578a8e3262ea0bb4f3",
+    "decision": "CONTENT_REVIEW_PASS_LIFECYCLE_BLOCKED_AUTHORITY_IDENTITY_AND_NATIVE_REQUIRED"
+  },
+  "description_correction": {
+    "method": "PATCH",
+    "endpoint": "/repos/jeryu/jain-catboost/pulls/8",
+    "old_body_sha256": "84b2e6135b7ee060f1183c0278d53d9b2c0cd84057ca462410b77f5bfa3118e2",
+    "request_payload_sha256": "0ecc45790a39af7ac910d29f2032da91ef5a3699d23bab3decd291ea79f62cce",
+    "request_body_sha256": "e6fc928033b5d3eae8d88c706167334c3e4dda6db97a171b4fe5e0b176940658",
+    "readback_body_sha256": "e6fc928033b5d3eae8d88c706167334c3e4dda6db97a171b4fe5e0b176940658",
+    "readback_matches_request_body": true,
+    "readback_updated_at": "2026-07-16T08:12:28.496238404Z",
+    "exact_successor_review_and_proof_documented": true,
+    "required_native_and_lcov_absence_documented": true,
+    "authority_split_2_vs_next_unused_split_1_blocker_documented": true,
+    "candidate_and_rollback_boundary_documented": true,
+    "title_unchanged": true,
+    "state_open": true,
+    "draft_unchanged_false": true,
+    "merged_unchanged_false": true,
+    "base_branch_unchanged": true,
+    "base_sha_unchanged": true,
+    "head_branch_unchanged": true,
+    "head_sha_unchanged": true,
+    "credential_transport": "curl --variable token@file with --expand-header and trim",
+    "credential_in_argv": false,
+    "credential_in_output_or_receipt": false,
+    "initial_wrong_api_prefix_attempt": {
+      "endpoint": "/api/v1/repos/jeryu/jain-catboost/pulls/8",
+      "response": "static SPA HTML",
+      "pull_request_mutated": false,
+      "live_updated_at_remained": "2026-07-16T07:55:39.028786250Z"
+    },
+    "temporary_non_secret_payload_removed": true
+  },
+  "forge_readback": {
+    "main": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+    "branch": "182089fb4caad2c752ba9e5a5bd584adceab4e90",
+    "jankurai_proof": {
+      "status": "completed",
+      "conclusion": "success",
+      "id": "38eef35d-9bbb-48b3-80d7-400a16951500"
+    },
+    "jain_catboost_required": "absent",
+    "jeryu_autonomy": {
+      "status": "completed",
+      "conclusion": "action_required",
+      "id": "9766a366-bf19-4890-8fd0-163b3482cd8e"
+    },
+    "split_0_commit": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+    "split_1_present": false,
+    "split_2_present": false,
+    "actual_next_unused": "jain-catboost-v8.0.1-split.1"
+  },
+  "authority_reconciliation": {
+    "authority_path": "jain-split-ops/repos.manifest.toml",
+    "authority_sha256": "dbec989b1b5d2b04a26ad920f6e5946c8233c53db98eea9938860a5d962fc977",
+    "authority_file_modified_by_this_lane": false,
+    "current": {
+      "product_version": "8.0.1",
+      "tag_revision": 2,
+      "current_tag": "jain-catboost-v8.0.1-split.2",
+      "release_commit": "PENDING",
+      "release_checksum_sha256": "PENDING",
+      "required_check": "jain-catboost/required"
+    },
+    "protected_change_required_after_exact_head_merge": {
+      "tag_revision": 1,
+      "current_tag": "jain-catboost-v8.0.1-split.1",
+      "release_commit_if_head_merges_unchanged": "182089fb4caad2c752ba9e5a5bd584adceab4e90",
+      "release_checksum_sha256_if_head_merges_unchanged": "eb02574d43b31d5c44afa45982629a29834c082adf3d748f5a69c040daa2b043",
+      "recompute_from_protected_main_required": true,
+      "sanctioned_generated_outputs_required": true,
+      "independent_approval_and_required_check_required": true
+    },
+    "ordering_constraint": "Current validate_manifest_tag_request requires authority tag, release_commit, and release_checksum_sha256 to equal the immutable-tag request before tag creation.",
+    "note_path": "jain-split-ops/docs/release-evidence/8.0.1/authority/jain-catboost-split-reconciliation-20260716.md",
+    "note_sha256": "a10f85a44742037e7b6c856de97a2fad8329128a68cda458712c5440c5db4fed"
+  },
+  "decision": "METADATA_CORRECTED_AUTHORITY_RECONCILIATION_DOCUMENTED_LIFECYCLE_STILL_BLOCKED",
+  "mutations": {
+    "pull_request_body": true,
+    "new_identity_receipt": true,
+    "new_authority_note": true,
+    "source": false,
+    "index": false,
+    "git_refs": false,
+    "check_post": false,
+    "host_ci": false,
+    "approval": false,
+    "merge": false,
+    "tag": false,
+    "authority_manifest": false,
+    "derived_manifest_or_lock": false,
+    "protection": false,
+    "deployment": false,
+    "force": false,
+    "git_worktree": false
+  }
+}

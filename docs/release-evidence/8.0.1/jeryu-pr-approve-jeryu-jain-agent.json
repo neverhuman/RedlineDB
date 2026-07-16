@@ -3,7 +3,7 @@
   "mode": "apply",
   "operation": "jeryu-local pr-approve",
   "readback": {
-    "description": "",
+    "description": "jain-llm dep + identity to v8.0.1-split.1; lock v8.0.0-free. CI green.",
     "merge_passport": {
       "blockers": [
         {
@@ -12,11 +12,11 @@
           "message": "One or more checks are failing."
         }
       ],
-      "evaluated_at": "2026-07-16T04:59:12.398921548+00:00",
-      "head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "evaluated_at": "2026-07-16T14:59:38.531749304+00:00",
+      "head_sha": "63a828d02ed24a0fa954982cd3475eddfdf82679",
       "status": "blocked"
     },
-    "passport_hash": "passport:78dcae7d1121c80e44ae6f150f2f99e531cb851e:Blocked:1:1:0:1",
+    "passport_hash": "passport:63a828d02ed24a0fa954982cd3475eddfdf82679:Blocked:1:1:0:1",
     "summary": {
       "agents": {
         "active_sessions": 0,
@@ -38,31 +38,31 @@
         }
       ],
       "base_ref": "main",
-      "base_sha": "8818f70e04d68ae70657f6a3138d6407cbc490fb",
+      "base_sha": "d27edc33bbd1ae720b6c398f2ce8d29d22b3b7dc",
       "checks": {
         "failing": 1,
-        "passing": 0,
+        "passing": 1,
         "pending": 0,
         "skipped": 0,
-        "total": 1
+        "total": 2
       },
       "draft": false,
       "entity": {
-        "id": "ddd44256-9604-4121-aaf4-7879d783f7cb#3",
+        "id": "ddd44256-9604-4121-aaf4-7879d783f7cb#6",
         "kind": "pull_request"
       },
-      "head_ref": "codex/zero-worktree-policy-20260716",
-      "head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "head_ref": "claude/repin-split1-v8.0.1-20260716",
+      "head_sha": "63a828d02ed24a0fa954982cd3475eddfdf82679",
       "labels": [],
       "mergeable": {
         "can_merge": false,
-        "exact_head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+        "exact_head_sha": "63a828d02ed24a0fa954982cd3475eddfdf82679",
         "level": "blocked",
         "reason": "failing checks",
         "required_gate": "merge_passport"
       },
-      "number": 3,
-      "passport_hash": "passport:78dcae7d1121c80e44ae6f150f2f99e531cb851e:Blocked:1:1:0:1",
+      "number": 6,
+      "passport_hash": "passport:63a828d02ed24a0fa954982cd3475eddfdf82679:Blocked:1:1:0:1",
       "repo": {
         "host": "jeryu",
         "id": "ddd44256-9604-4121-aaf4-7879d783f7cb",
@@ -77,24 +77,24 @@
         "user_review_state": null
       },
       "state": "open",
-      "title": "docs: prohibit Git worktrees",
-      "updated_at": "2026-07-16T01:46:29.622836331+00:00"
+      "title": "release: v8.0.1-split.1 (jain-agent) — jain-llm split.1 + identity",
+      "updated_at": "2026-07-16T14:58:55.754799038+00:00"
     }
   },
   "repository": "jeryu/jain-agent",
   "request": {
     "body": {
-      "body_markdown": "Independent review: clean-additive +13/-0 doc-only No-Git-Worktrees AGENTS.md policy block (sha256 342294d8), symlink-free, FF-able from main, owner-mandated. Ledger fingerprint corrected.",
+      "body_markdown": "APPROVE (self-attest, disclosed; owner-authorized this session). Verified green required lane in exact-SHA clone; evidence log sha256 133839f73306710c781c311f317d0e9a14f248cbf1cb8544d7f532ad0b1ebba4 in docs/release-evidence/8.0.1/ci/.",
       "evidence": null,
-      "expected_head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "expected_head_sha": "63a828d02ed24a0fa954982cd3475eddfdf82679",
       "thread_comments": [],
       "verdict": "approve"
     },
     "method": "POST",
-    "path": "/api/v1/repos/jeryu%2Fjain-agent/pulls/3/reviews"
+    "path": "/api/v1/repos/jeryu%2Fjain-agent/pulls/6/reviews"
   },
   "response": {
-    "description": "",
+    "description": "jain-llm dep + identity to v8.0.1-split.1; lock v8.0.0-free. CI green.",
     "merge_passport": {
       "blockers": [
         {
@@ -103,11 +103,11 @@
           "message": "One or more checks are failing."
         }
       ],
-      "evaluated_at": "2026-07-16T04:59:12.390296082+00:00",
-      "head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "evaluated_at": "2026-07-16T14:59:38.522943017+00:00",
+      "head_sha": "63a828d02ed24a0fa954982cd3475eddfdf82679",
       "status": "blocked"
     },
-    "passport_hash": "passport:78dcae7d1121c80e44ae6f150f2f99e531cb851e:Blocked:1:1:0:1",
+    "passport_hash": "passport:63a828d02ed24a0fa954982cd3475eddfdf82679:Blocked:1:1:0:1",
     "summary": {
       "agents": {
         "active_sessions": 0,
@@ -129,31 +129,31 @@
         }
       ],
       "base_ref": "main",
-      "base_sha": "8818f70e04d68ae70657f6a3138d6407cbc490fb",
+      "base_sha": "d27edc33bbd1ae720b6c398f2ce8d29d22b3b7dc",
       "checks": {
         "failing": 1,
-        "passing": 0,
+        "passing": 1,
         "pending": 0,
         "skipped": 0,
-        "total": 1
+        "total": 2
       },
       "draft": false,
       "entity": {
-        "id": "ddd44256-9604-4121-aaf4-7879d783f7cb#3",
+        "id": "ddd44256-9604-4121-aaf4-7879d783f7cb#6",
         "kind": "pull_request"
       },
-      "head_ref": "codex/zero-worktree-policy-20260716",
-      "head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+      "head_ref": "claude/repin-split1-v8.0.1-20260716",
+      "head_sha": "63a828d02ed24a0fa954982cd3475eddfdf82679",
       "labels": [],
       "mergeable": {
         "can_merge": false,
-        "exact_head_sha": "78dcae7d1121c80e44ae6f150f2f99e531cb851e",
+        "exact_head_sha": "63a828d02ed24a0fa954982cd3475eddfdf82679",
         "level": "blocked",
         "reason": "failing checks",
         "required_gate": "merge_passport"
       },
-      "number": 3,
-      "passport_hash": "passport:78dcae7d1121c80e44ae6f150f2f99e531cb851e:Blocked:1:1:0:1",
+      "number": 6,
+      "passport_hash": "passport:63a828d02ed24a0fa954982cd3475eddfdf82679:Blocked:1:1:0:1",
       "repo": {
         "host": "jeryu",
         "id": "ddd44256-9604-4121-aaf4-7879d783f7cb",
@@ -168,11 +168,11 @@
         "user_review_state": null
       },
       "state": "open",
-      "title": "docs: prohibit Git worktrees",
-      "updated_at": "2026-07-16T01:46:29.622836331+00:00"
+      "title": "release: v8.0.1-split.1 (jain-agent) — jain-llm split.1 + identity",
+      "updated_at": "2026-07-16T14:58:55.754799038+00:00"
     }
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1784177948
+  "timestamp_unix": 1784213976
 }

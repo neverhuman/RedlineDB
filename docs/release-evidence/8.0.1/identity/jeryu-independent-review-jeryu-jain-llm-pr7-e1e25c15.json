@@ -1,0 +1,192 @@
+{
+  "schema_version": "jain.independent-pr-review/v1",
+  "status": "PASS_PENDING_REQUIRED",
+  "completed_at": "2026-07-16T08:35:12Z",
+  "claim": "codex-jain-llm-pr7-independent-review-20260716T0831Z",
+  "repository": "jeryu/jain-llm",
+  "pull_request": 7,
+  "reviewer_authored_pr_commits": false,
+  "base_sha": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+  "head_sha": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+  "tree_sha": "d955345abc77af93d9a8e1a9942ad69865011663",
+  "commit_count": 3,
+  "author_receipt": {
+    "path": "jain-split-ops/docs/release-evidence/8.0.1/identity/jain-llm-pr7-governed-proof-successor-20260716.json",
+    "sha256": "8b54f1730a8211ad543ff0da086496d346536aaa21e33767a652c1f6ea050f5c"
+  },
+  "complete_pull_request_diff": {
+    "files_changed": 18,
+    "insertions": 92,
+    "deletions": 21,
+    "full_index_binary_diff_sha256": "108fe113e1731c8948fafef97caf546cfbe61c1725028db1ebfcb9ab1651f0b6",
+    "git_archive_sha256": "964397962277b5fca24b53e7355338caa1ad27d21ae0d12eb8ecdf7b1d142273",
+    "author_claims_reproduced": true,
+    "diff_check": "pass",
+    "mode_changes": 0,
+    "renames": 0,
+    "submodules": 0
+  },
+  "governed_remediation_diff": {
+    "from": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+    "to": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+    "files_changed": 10,
+    "insertions": 84,
+    "deletions": 13,
+    "full_index_binary_diff_sha256": "363147ddd20af280426ab263cb2a1921c9d6e3a8a9e24a64bb51c4993f9bcce6",
+    "author_claims_reproduced": true
+  },
+  "scope_review": {
+    "blocking_findings": [],
+    "product_or_provider_source_changed": false,
+    "product_source_tree_base_and_head": "f6e456c9f48cba95e624059d41ddacb742163cbe",
+    "product_test_tree_base_and_head": "3395e001bf5ceeb30b43ba94337cd1142b74e2bb",
+    "llm_or_provider_semantics_changed": false,
+    "dependency_graph_changed": false,
+    "cargo_lock_change": "workspace package version only: 8.0.0 to 8.0.1",
+    "cross_repository_git_dependencies": 0,
+    "local_path_or_floating_dependencies": 0,
+    "release_identity": "consistent 8.0.1 / jain-llm-v8.0.1-split.1 across package, lock, boundary, receipt, and trusted release documentation",
+    "proof_and_security_policy_changes": "bounded governed Jankurai routing, hostile-PATH regression, required scanner posture, coverage adoption, and exact-evidence guidance"
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "path_is_regular_executable_non_symlink": true,
+    "realpath_matches_literal_path": true,
+    "version": "jankurai 1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "ambient_path": "/home/ubuntu/.local/bin/jankurai",
+    "ambient_version": "jankurai 1.6.11",
+    "ambient_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "hostile_path_before_source_selected_ambient": true,
+    "hostile_path_after_source_selected_verified_function": true,
+    "sentinel_regression": "pass",
+    "repository_literal_invocations_route_through_verified_function": true
+  },
+  "local_gates": {
+    "standalone_clone": "git clone --no-local; automatically removed after review",
+    "fast": "pass",
+    "check": "pass",
+    "required": {
+      "status": "pass",
+      "fmt": "pass",
+      "clippy": "pass",
+      "tests_passed": 7,
+      "tests_failed": 0
+    },
+    "public_api": {
+      "status": "pass",
+      "tool": "cargo-public-api 0.52.0",
+      "removed": 0,
+      "changed": 0,
+      "added": 0,
+      "receipt_sha256": "6647e953e90a54818662b8eee1a327ac74d1a708dac67ed6b984b5b28e95b641"
+    },
+    "security_and_sbom": {
+      "status": "pass",
+      "rustsec_database_commit": "9f3e138091487e69144f536d36976e427a7a3307",
+      "findings": 0,
+      "evidence_sha256": "4f42dc30858ef8aa552c9c132d1b13e85a0bc89ca1441f005b82dc904ad8854c",
+      "independent_sbom_sha256": "a4119abe2eeb41ee7784e42a4d9d47d1d8fe24e4cab7d0616cec483f97a071fc"
+    },
+    "artifact_support": {
+      "status": "pass",
+      "version": "8.0.1",
+      "source_archive_sha256": "964397962277b5fca24b53e7355338caa1ad27d21ae0d12eb8ecdf7b1d142273",
+      "receipt_sha256": "5ab75172549504f8c7630e9cce3a1036882f5d2eb625f650e2ebebb90728df03"
+    },
+    "package_identity": {
+      "status": "pass",
+      "version": "8.0.1",
+      "crate_archive_sha256": "c22f3044c10db833d245ebe47bfaaf9643d3fab95cadf89f9d02522280d17a8d",
+      "cargo_lock_sha256": "c04d00eb9e55ee63cba03a792f0c8d31d5295f37dc06ccff06de91c6c0d0dbbf",
+      "independent_receipt_sha256": "1d59e5dc496ebc07ca857af78dc3167d72593a7c96ab4270c5c802b20eed604d",
+      "author_receipt_sha256_verified_in_canonical_checkout": "6df883c2991d55eb3930e596b7cce8f239c0c81e00572dd8dda17ec264baa707",
+      "receipt_hash_difference_reason": "the receipt intentionally contains the absolute checkout-specific crate archive path; all identity fields and the crate digest match"
+    },
+    "coverage": {
+      "status": "pass",
+      "sources_present": 2,
+      "sources_required": 2,
+      "covered_lines": 97,
+      "total_lines": 97,
+      "line_coverage": 1.0,
+      "coverage_audit_sha256": "1edf642bcb2f61654686080fef22dcdcac6954c2f39884623cdaee51ef886221",
+      "independent_lcov_sha256": "7cbb8daa9dafc69501d876656fac8a936d8d750704f6b594fad684d9a9629554",
+      "author_lcov_hash_difference_reason": "LCOV SF fields encode the absolute checkout path and property-test execution counts vary while line presence remains 97/97"
+    },
+    "score_before_tool_adoption": {
+      "status": "pass",
+      "score": 88,
+      "raw_score": 88,
+      "hard_findings": 0,
+      "caps": []
+    },
+    "score_after_tool_adoption": {
+      "status": "pass",
+      "score": 91,
+      "raw_score": 91,
+      "hard_findings": 0,
+      "caps": [],
+      "independent_report_sha256": "d5bf3c99dae2288c264ef7af73faf400ff435748fbb836c8fd241c93e3ae2d99",
+      "author_report_sha256_verified_in_canonical_checkout": "bdf2d49b77dc0010a82b00105ac9357cfea2a75c5cb948f7b8839605c30250e8"
+    },
+    "changed_fast": {
+      "status": "pass",
+      "score": 85,
+      "raw_score": 85,
+      "changed_paths": 18,
+      "hard_findings": 0,
+      "caps": [],
+      "independent_report_sha256": "a660e4a4e5d20ce937e1ceb8572a91ed4efcbbc2b0b2a913d51a7b6504ed5fdd"
+    },
+    "tool_adoption": "pass"
+  },
+  "forge_readback": {
+    "pull_request_state": "open",
+    "draft": false,
+    "base_sha": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+    "head_sha": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+    "mergeable_state": "blocked",
+    "jankurai_proof": "success",
+    "jankurai_proof_check_id": "22b2fa04-dfb0-4e84-b8a2-9af11986b866",
+    "jeryu_autonomy": "neutral",
+    "jeryu_autonomy_check_id": "d4dedbb4-4ea9-4106-a87e-940ff0fcf8ad",
+    "jain_llm_required": "absent",
+    "existing_tag": "jain-llm-v8.0.1-split.0",
+    "existing_tag_sha": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+    "next_unused_tag": "jain-llm-v8.0.1-split.1",
+    "next_unused_tag_absent": true
+  },
+  "canonical_checkout_readback": {
+    "path": "/home/ubuntu/jain-split/jain-llm",
+    "clean": true,
+    "head_sha": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+    "tree_sha": "d955345abc77af93d9a8e1a9942ad69865011663",
+    "branch_equals_forge": true,
+    "registered_worktrees": 1,
+    "symlinks": 0,
+    "open_file_holders_observed": 0
+  },
+  "remaining_blockers": [
+    "Land the reviewed fail-closed isolated-HOME RustSec runner-input repair; the historical required failure at cec2f192 is not reusable.",
+    "Publish genuine jain-llm/required success for exact head e1e25c15aad74b3469ec718ed0c6f65fccf30f95 through the serialized host producer.",
+    "Perform the separate independent exact-head approval action after required is green.",
+    "Protected fast-forward merge PR 7.",
+    "Cut and read back immutable jain-llm-v8.0.1-split.1 without moving occupied split.0.",
+    "Bind merged commit and checksum through the protected authority lifecycle."
+  ],
+  "excluded_actions_confirmed": [
+    "source_or_index_mutation",
+    "canonical_or_forge_ref_mutation",
+    "pull_request_mutation",
+    "check_post",
+    "host_ci",
+    "approval",
+    "merge",
+    "tag",
+    "authority_binding",
+    "deployment",
+    "force",
+    "git_worktree"
+  ]
+}

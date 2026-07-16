@@ -1,0 +1,48 @@
+{
+  "schema": "jain.split.orchestrator-supersede/v1",
+  "claim_token": "codex-stale-orchestrator-supersession-20260716T0547Z",
+  "observed_at_utc": "2026-07-16T05:49:01Z",
+  "release_target": "8.0.1",
+  "status": "superseded_historical_receipt",
+  "original": {
+    "path": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.0/orchestrator/release-candidate.json",
+    "sha256": "fba92741466fa4c76b1c79614b663a76d0d7254ae59adccdd0e02f77cefd8dd1",
+    "size_bytes": 16962,
+    "mtime_utc": "2026-07-13T05:30:16.218334204Z",
+    "schema_version": "jain.release-candidate-runner/v1",
+    "release_version": "8.0.0",
+    "release_status": "candidate",
+    "formal_ga": false,
+    "status_snapshot": "running",
+    "started_at_unix": 1783920602,
+    "started_at_utc": "2026-07-13T05:30:02Z",
+    "last_updated_at_unix": 1783920616,
+    "last_updated_at_utc": "2026-07-13T05:30:16Z",
+    "last_completed_step": "python-boundary",
+    "passing_step_count": 3,
+    "pid_fields_present": [],
+    "production_applied": false,
+    "external_production_mutations": []
+  },
+  "ownership_proof": {
+    "process_scan_command": "pgrep -af 'release[-]candidate|deploy[.]sh|splitctl[ ]release'",
+    "process_scan_exit_code": 1,
+    "matching_process_count": 0,
+    "receipt_open_descriptor_count": 0,
+    "conclusion": "No live release-candidate, deploy.sh, or splitctl release process owns the historical receipt, and the receipt contains no PID field that could identify a live owner."
+  },
+  "custody": {
+    "original_bytes_modified": false,
+    "prior_malformed_marker_preserved": "release-candidate-20260713-superseded-marker-undefined.json",
+    "prior_malformed_marker_sha256": "d88b47b00a7e268acfee8003b56d903ccff4dbbc55f47270bb39295380c46efa",
+    "ruling": "The 8.0.0 running receipt is immutable historical evidence and must not be treated as a current run or as 8.0.1 release evidence."
+  },
+  "next_action": "Only the recorded sole 8.0.1 release writer may generate a fresh release-candidate receipt after all prerequisite gates pass.",
+  "excluded_mutations": [
+    "release orchestration",
+    "authority or Redline",
+    "forge refs, checks, pull requests, approvals, merges, or tags",
+    "host, route, image, or deployment state",
+    "source, worktree, or branch state"
+  ]
+}

@@ -113,6 +113,6 @@
   "repository": "jain-core",
   "schema_version": "jain.release-cargo-execution/v1",
   "status": "fail",
-  "timestamp_unix": 1784177354,
-  "working_directory": "/tmp/split-host-ci.SW21U1/jain-core"
+  "timestamp_unix": 1784178857,
+  "working_directory": "/tmp/split-host-ci.Y8c49X/jain-core"
 }

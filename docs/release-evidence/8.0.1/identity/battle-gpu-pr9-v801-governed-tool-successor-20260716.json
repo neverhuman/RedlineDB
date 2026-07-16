@@ -1,0 +1,229 @@
+{
+  "schema_version": "jain.release-identity-governed-tool-successor/v1",
+  "generated_at": "2026-07-16T07:57:26Z",
+  "status": "pass_pending_independent_rereview_required_and_native",
+  "repository": "jeryu/jain-battle-gpu",
+  "pull_request": {
+    "number": 9,
+    "state": "open",
+    "draft": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "base_ref": "main",
+    "base_sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+    "head_ref": "release/v8.0.1/battle-gpu-identity",
+    "predecessor_head_sha": "6aa1e7e95c3deb3445518c4ef0f46b4b1b98c9c0",
+    "head_sha": "d5e4b5051243295f1a5bfdd6d66abe2182e50484",
+    "tree_sha": "675a0e24d9494b4add6208fc65ff686047d2811e",
+    "linear_commits_over_base": 2,
+    "push": "non-force fast-forward"
+  },
+  "remediation_commit": {
+    "sha": "d5e4b5051243295f1a5bfdd6d66abe2182e50484",
+    "subject": "ci: pin governed Jankurai binary",
+    "files_changed": 4,
+    "insertions": 65,
+    "deletions": 7,
+    "files": [
+      "ops/ci/check.sh",
+      "ops/ci/jankurai-governance-test.sh",
+      "ops/ci/lib.sh",
+      "ops/ci/score.sh"
+    ],
+    "file_sha256": {
+      "ops/ci/check.sh": "77094e377ef3e57591cf6a9930a61b5aef906b8ae7d98f65c1977ef3d8963dd7",
+      "ops/ci/jankurai-governance-test.sh": "35faec859480bbd6efff0689f84c046767fde2f6bd999d9b78d1cedcc36ec6fb",
+      "ops/ci/lib.sh": "804ee027e4c407594d2a76d0139d0be69bf82ca854bbad4c1ca4aa52308a043e",
+      "ops/ci/score.sh": "b2ddcb414d7bc9c6e25e94e6ab6dfe996858d3adb829f68cc5db3b5c534f1d2e",
+      "ops/ci/tool-adoption.sh_unchanged_but_routed_by_sourced_function": "6dae265879e265abecaeefc8b2da6f1a1caa48ac57550ab66c10bb4044fe0ba0"
+    },
+    "new_script_mode": "100755",
+    "product_or_gpu_source_changes": 0,
+    "dependency_graph_changes": 0,
+    "release_identity_changes": 0,
+    "mode_changes_other_than_new_executable": 0,
+    "binary_changes": 0,
+    "symlink_changes": 0
+  },
+  "exact_diff_hashes": {
+    "hash_boundary": "raw /usr/bin/git output, never RTK-rendered output",
+    "full_index_command_shape": "/usr/bin/git -c color.ui=false -c core.pager=cat diff --no-ext-diff --full-index --binary --src-prefix=a/ --dst-prefix=b/ <base>..<head> | /usr/bin/sha256sum",
+    "protected_main_to_successor": {
+      "base": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+      "head": "d5e4b5051243295f1a5bfdd6d66abe2182e50484",
+      "full_index_binary_sha256": "6690a0b89ff9789ba45e5566ce99cdacc25748da3079633c7c010e4d6f215e62",
+      "plain_diff_sha256": "bb7cccc87b4822ddc16a18d58add0dcda945be3944b772ea00a023fb24ec8cc1"
+    },
+    "remediation_delta": {
+      "base": "6aa1e7e95c3deb3445518c4ef0f46b4b1b98c9c0",
+      "head": "d5e4b5051243295f1a5bfdd6d66abe2182e50484",
+      "full_index_binary_sha256": "da19df46096110c5eb09389fb0d22b7a9e2c5bc29158d58603e72b1f7d7cae74",
+      "plain_diff_sha256": "9b1f1007089f3dc029d922e84fd198c8fa800b6b061816d0f5e8954d42112685"
+    },
+    "predecessor_base_to_head_raw_full_index_sha256_preserved": "0f5f9f1eea9a19bd3d96229a67801fabcc5101e340086b7d0db10255f9e9cc79",
+    "nonreproducible_predecessor_receipt_values_superseded": [
+      "76d00219f92bc2d0a51a4719ff37adcba2a98c9d3fc29941cdbd20fa108fd0a2",
+      "909caa43adb7b7a848814a851976d626944b7bb8dddc808513fc4fb5fffb3fd8"
+    ]
+  },
+  "release_identity": {
+    "status": "unchanged_pass",
+    "candidate": "jain-battle-gpu-v8.0.1-split.1",
+    "next_unused": true,
+    "existing_content_invalid_tag": {
+      "name": "jain-battle-gpu-v8.0.1-split.0",
+      "target": "87b2367f576fc97bb13dab345f2871e4ad19e22b"
+    },
+    "authority_product_version": "8.0.1",
+    "authority_tag_revision": 1,
+    "authority_current_tag": "jain-battle-gpu-v8.0.1-split.1",
+    "authority_release_commit": "PENDING",
+    "authority_release_checksum_sha256": "PENDING",
+    "cargo_lock_sha256": "5d25891eaa12cdeeaba32150f3496d7b53f72a6d6d47a3911524f6cc3870584d",
+    "preserved_math_source": "git+http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.0-split.1#2a1e189d727a7b21c2aa68bf9b8cf5212976efd7"
+  },
+  "governed_jankurai": {
+    "status": "pass",
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "path_type": "executable regular file",
+    "path_components_symlink_free": true,
+    "version": "jankurai 1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "enforcement": [
+      "fixed readonly path",
+      "executable regular non-symlink target",
+      "realpath equality rejects symlinked path components",
+      "exact SHA-256",
+      "exact version",
+      "shell function routes literal repository proof calls to fixed path"
+    ],
+    "proof_call_routing": {
+      "ops/ci/score.sh": "require_jankurai then jankurai function",
+      "ops/ci/tool-adoption.sh": "require_jankurai then jankurai function for audit, proof, proofbind, proofmark, rust witness, copy-code, and coverage audit"
+    },
+    "adversarial_real_path": {
+      "ambient_path": "/home/ubuntu/.local/bin/jankurai",
+      "ambient_version": "jankurai 1.6.11",
+      "ambient_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+      "ambient_first_on_path": true,
+      "ambient_execve_count_after_source": 0,
+      "governed_execve_observed": true,
+      "trace_sha256": "5b577085b7ce64373cf769dc3c9d2398e8d2803803340a1c4876043568fe49df"
+    },
+    "permanent_regression": {
+      "path": "ops/ci/jankurai-governance-test.sh",
+      "invoked_by": "ops/ci/check.sh and therefore required/release-gate",
+      "same_version_adversarial_binary": true,
+      "ambient_sentinel_remains_absent": true,
+      "bash_syntax": "pass",
+      "shellcheck": "pass"
+    }
+  },
+  "isolated_exact_head_validation": {
+    "checkout": "automatically removed standalone git clone --no-local from loopback forge",
+    "physical_git_directory": true,
+    "alternates_absent": true,
+    "strict_fsck": "pass",
+    "internal_registrations": 1,
+    "tracked_symlinks": 0,
+    "tracked_status_lines_after_gates": 0,
+    "cargo_net_offline": true,
+    "jobs": 4,
+    "adversarial_ambient_path_first": true,
+    "release_gate": {
+      "status": "pass",
+      "log_sha256": "1c042b7d4d0641488ae8327116443dbe3a3d98eb2648a800155430465e327362",
+      "required_cpu_no_default_tests": 24,
+      "dependency_lock": "pass",
+      "security": "pass",
+      "score": "pass",
+      "contract_drift": "pass",
+      "artifact_support": "pass"
+    },
+    "tool_adoption": {
+      "status": "pass",
+      "log_sha256": "521217d940f1d017a009445bf6b88e6c5a8762812fadb50806acc7f462e1fa0a",
+      "audit_and_repair_queue": "pass",
+      "proof_and_proofbind_errors_bytes": 0,
+      "proofmark_and_rust_witness": "pass",
+      "copy_code": "pass",
+      "security": "pass",
+      "coverage_audit": "pass"
+    },
+    "security": {
+      "rustsec_database_commit": "6e3286f4efa8c142fb33e5ea4342c8db6693cf34",
+      "evidence_sha256": "f00d4d544ad33fedff5c04bb791f7c4b24215a7903ef34edd02a6dfd8b254fe6",
+      "cargo_audit_json_sha256": "d7a47786ca90e115c10142f71a8bbfe4a5863d90b8a91500dbe0e2415bc2742b"
+    },
+    "jankurai_score": {
+      "score": 90,
+      "raw_score": 90,
+      "caps": 0,
+      "hard_findings": 0,
+      "dirty_worktree": false,
+      "report_sha256": "c1fd9e0a55890285cd4b482ffd88addb99c6dd448e0016ab94a0dd325bc19748"
+    },
+    "contract_drift": {
+      "status": "pass",
+      "receipt_sha256": "fb72267df5bce6f090a9f8ff56c4ab77d4d9517753674af526f95192c3e47ea6"
+    },
+    "artifact_support": {
+      "status": "pass",
+      "source_archive_sha256": "126813589ae9d379050161834cd3631067727194d3b4eb0a0a5c5a6670750056",
+      "metadata_sha256": "35e659d71f01316729bccb6840db22f85c2ce2cca91539420375fa21ec4b36f8"
+    },
+    "coverage": {
+      "status": "pass",
+      "sources_present": "2/2",
+      "line_ratio": 0.9050445103857567,
+      "audit_sha256": "64ce06b44bbf673a5e0a0d6b57676b8f69513a8bcf7511b78ecbfe0ca3857251"
+    }
+  },
+  "forge_readback": {
+    "main_sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+    "branch_sha": "d5e4b5051243295f1a5bfdd6d66abe2182e50484",
+    "pull_request_head_sha": "d5e4b5051243295f1a5bfdd6d66abe2182e50484",
+    "jankurai_proof": {
+      "id": "e04158b5-5d0b-4c3f-8e02-4b9fbd195c7e",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    "jeryu_autonomy": {
+      "id": "63f6ce02-3a11-4102-a8fb-f0d968f41fd4",
+      "status": "completed",
+      "conclusion": "action_required"
+    },
+    "required_check": {
+      "name": "jain-battle-gpu/required",
+      "present": false
+    }
+  },
+  "remaining_gates": [
+    "fresh independent exact-head re-review",
+    "exact-head jain-battle-gpu/required",
+    "GPU dynamic-loading and dynamic-linking native evidence",
+    "independent approval",
+    "protected fast-forward merge",
+    "new immutable split.1 tag creation and readback",
+    "protected authority commit/checksum binding"
+  ],
+  "mutations_excluded": [
+    "product or GPU source",
+    "dependencies or release identity",
+    "host required/native-GPU check publication",
+    "approval",
+    "merge",
+    "tag",
+    "authority or protection",
+    "deployment",
+    "force operations",
+    "other repositories",
+    "Git worktree lifecycle"
+  ],
+  "canonical_checkout_final": {
+    "head_sha": "d5e4b5051243295f1a5bfdd6d66abe2182e50484",
+    "branch_forge_equal": true,
+    "tracked_clean": true,
+    "registered_worktrees": 1
+  }
+}

@@ -1,0 +1,134 @@
+{
+  "schema_version": "jain.identity-evidence-correction/v1",
+  "status": "CORRECTED_PENDING_FRESH_ACCEPTANCE_AND_REQUIRED",
+  "recorded_at_utc": "2026-07-16T09:02:26Z",
+  "claim_token": "codex-jain-research-pr4-diff-hash-correction-20260716T0901Z",
+  "repository": "jeryu/jain-research",
+  "pull_request": 4,
+  "branch": "release/v8.0.1/research-identity",
+  "base_sha": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+  "head_sha": "ee6566d87bcd524d9f75516c9d95a82b3b88687c",
+  "tree_sha": "7b415ad00081ea95370a9072f784e4c2abd715b9",
+  "author_receipt": {
+    "path": "jain-research-pr4-governed-proof-successor-20260716.json",
+    "sha256": "98e80fcb1d95cf65763108dcfbaf0917d378af4a1038394f7731556618a33c3c",
+    "byte_preserved": true,
+    "declared_status": "pass_pending_required_and_independent_review"
+  },
+  "independent_review": {
+    "path": "jain-research-pr4-successor-independent-review-20260716.json",
+    "sha256": "27148661e5fba8ab12f9c619617823026be74248c74e9cb7434453c3dd9f7a5d",
+    "byte_preserved": true,
+    "source_decision": "PASS",
+    "evidence_decision": "BLOCK_DIFF_HASH_REPRESENTATION"
+  },
+  "correction_scope": {
+    "superseded_receipt_field_only": "head.full_index_diff_sha256",
+    "superseded_mislabeled_value": "4d341e1e6ab7437f4e185ea3d7ab649fc5f62fcc1bf04a26f59f36db91f3293a",
+    "corrected_raw_standard_git_value": "84be4ca682a2f365bf34be48d9b92db4cc7defc6feecceae46b7eb00f653cf9b",
+    "all_other_author_receipt_fields_preserved": true,
+    "historical_receipts_modified": false,
+    "source_or_forge_state_modified": false
+  },
+  "exact_representations": {
+    "raw_standard_git_full_index_diff": {
+      "definition": "the exact unfiltered byte stream emitted by git diff --binary --full-index c61504a7e25ce62c71100865ef52f49a12c59e1b ee6566d87bcd524d9f75516c9d95a82b3b88687c, with no token filtering or presentation transformation",
+      "sha256": "84be4ca682a2f365bf34be48d9b92db4cc7defc6feecceae46b7eb00f653cf9b",
+      "bytes": 11861,
+      "lines": 276,
+      "canonical_reproduction": "pass",
+      "prior_independent_no_local_clone_reproduction": "pass",
+      "authoritative_diff_binding": true
+    },
+    "rtk_filtered_presentation": {
+      "definition": "the token-optimized rendering emitted by rtk git diff for the same base/head arguments; it is presentation output, not raw Git diff bytes",
+      "sha256": "4d341e1e6ab7437f4e185ea3d7ab649fc5f62fcc1bf04a26f59f36db91f3293a",
+      "bytes": 21843,
+      "lines": 521,
+      "canonical_reproduction": "pass",
+      "matches_superseded_author_value": true,
+      "authoritative_diff_binding": false
+    }
+  },
+  "unchanged_author_evidence": {
+    "changed_files": 14,
+    "insertions": 101,
+    "deletions": 25,
+    "source_archive_sha256": "e940d922a9855ef732bf9670cdede5cb12e6cfd89a1e4c9727859f317d3508a7",
+    "cargo_lock_delta": "jain-research workspace package 8.0.0 to 8.0.1 only",
+    "product_rust_changed": false,
+    "public_api_changed": false,
+    "dependency_requirements_changed": false,
+    "governed_jankurai_version": "1.6.11",
+    "governed_jankurai_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+  },
+  "live_pull_request_readback": {
+    "number": 4,
+    "title": "release: align jain-research with Jain 8.0.1",
+    "state": "open",
+    "draft": false,
+    "updated_at": "2026-07-16T08:50:58.243537986Z",
+    "base_ref": "main",
+    "base_sha": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+    "head_ref": "release/v8.0.1/research-identity",
+    "head_sha": "ee6566d87bcd524d9f75516c9d95a82b3b88687c",
+    "mergeable": false,
+    "mergeable_state": "blocked"
+  },
+  "live_checks": {
+    "head_sha": "ee6566d87bcd524d9f75516c9d95a82b3b88687c",
+    "total_count": 2,
+    "jankurai_proof": {
+      "status": "completed",
+      "conclusion": "success",
+      "check_id": "3489155f-7d1e-4bc1-8079-99f994235a34"
+    },
+    "jeryu_autonomy": {
+      "status": "completed",
+      "conclusion": "action_required",
+      "check_id": "06d63338-1a69-41b2-94ae-f521747a7810"
+    },
+    "jain_research_required": "absent"
+  },
+  "canonical_checkout": {
+    "path": "/home/ubuntu/jain-split/jain-research",
+    "branch": "release/v8.0.1/research-identity",
+    "head_sha": "ee6566d87bcd524d9f75516c9d95a82b3b88687c",
+    "tree_sha": "7b415ad00081ea95370a9072f784e4c2abd715b9",
+    "clean": true,
+    "branch_forge_equal": true,
+    "source_or_index_mutated": false
+  },
+  "decision": {
+    "diff_hash_correction": "PASS",
+    "historical_receipt_preservation": "PASS",
+    "source_review": "PASS_ADOPTED_BY_HASH",
+    "release": "BLOCK",
+    "reason": "The representation defect is corrected append-only. Fresh independent evidence acceptance and exact-head jain-research/required remain outstanding."
+  },
+  "remaining_blockers": [
+    "Obtain fresh independent acceptance of this append-only correction receipt while preserving the author and source-review receipts.",
+    "Publish genuine jain-research/required success for exact head ee6566d87bcd524d9f75516c9d95a82b3b88687c through the serialized shared host lane.",
+    "Perform protected independent approval after evidence acceptance and required are green.",
+    "Protected fast-forward merge PR 4.",
+    "Cut and read back immutable jain-research-v8.0.1-split.1 without moving occupied split.0.",
+    "Bind the merged commit and checksum through the protected authority lifecycle."
+  ],
+  "excluded_actions_confirmed": [
+    "source_or_index_mutation",
+    "canonical_or_forge_ref_mutation",
+    "pull_request_mutation",
+    "check_post",
+    "host_ci",
+    "approval",
+    "merge",
+    "tag",
+    "authority_binding",
+    "deployment",
+    "force",
+    "cleanup_or_stash",
+    "secret_exposure",
+    "historical_receipt_edit",
+    "git_worktree"
+  ]
+}

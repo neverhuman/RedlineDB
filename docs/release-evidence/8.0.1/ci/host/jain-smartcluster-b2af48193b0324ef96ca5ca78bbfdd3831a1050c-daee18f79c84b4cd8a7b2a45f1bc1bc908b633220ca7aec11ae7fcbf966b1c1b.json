@@ -1,0 +1,10 @@
+{
+  "schema_version": "jain.host-ci/v1",
+  "owner": "jain-split",
+  "repository": "jain-smartcluster",
+  "head_sha": "b2af48193b0324ef96ca5ca78bbfdd3831a1050c",
+  "check": "jain-smartcluster/required",
+  "conclusion": "success",
+  "log_sha256": "daee18f79c84b4cd8a7b2a45f1bc1bc908b633220ca7aec11ae7fcbf966b1c1b",
+  "log_path": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/ci/host/daee18f79c84b4cd8a7b2a45f1bc1bc908b633220ca7aec11ae7fcbf966b1c1b.log"
+}

@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T14:41:02.195442382+00:00",
+      "head_sha": "22992f9a2f2dea2d345aa61433cb775595de834d",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:22992f9a2f2dea2d345aa61433cb775595de834d:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71#19",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/feat-core-coverage-20260716",
+      "head_sha": "22992f9a2f2dea2d345aa61433cb775595de834d",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "22992f9a2f2dea2d345aa61433cb775595de834d",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 19,
+      "passport_hash": "passport:22992f9a2f2dea2d345aa61433cb775595de834d:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71",
+        "name": "jain-core",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "test(feat-core): +16 tests — invention adapter, engine dispatch, flow gate, manifest (75.7%→81.4%)",
+      "updated_at": "2026-07-16T14:37:46.314637141+00:00"
+    }
+  },
+  "repository": "jeryu/jain-core",
+  "request": {
+    "body": {
+      "body_markdown": "W43 CORE-TRAIN review at exact head 22992f9a: single test-only commit rebased onto post-#15 main 54718d33 (original 92d280ec tip replayed; superseded old-stack commits dropped; 5-line API adaptation to #15's final surface: evaluation_metric field, honest_finalist external_test arg, InventionConfig defaulted new fields, duplicate-import removal). +16 coverage tests (invention adapter, engine dispatch, standard flow gate, artifact manifest). Fresh exact-SHA required lane green: dependency-lock 9 immutable pins ok, fmt+clippy -D warnings clean, 255 tests passed / 0 failed (log sha256 0bddb770cfef31c3bc6fb59a912013cdbcfb81def7c18d45d180ed365eed91a1, receipt in docs/release-evidence/8.0.1/ci/host/). No product-source change.",
+      "evidence": null,
+      "expected_head_sha": "22992f9a2f2dea2d345aa61433cb775595de834d",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-core/pulls/19/reviews"
+  },
+  "response": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T14:40:59.452480661+00:00",
+      "head_sha": "22992f9a2f2dea2d345aa61433cb775595de834d",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:22992f9a2f2dea2d345aa61433cb775595de834d:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71#19",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/feat-core-coverage-20260716",
+      "head_sha": "22992f9a2f2dea2d345aa61433cb775595de834d",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "22992f9a2f2dea2d345aa61433cb775595de834d",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 19,
+      "passport_hash": "passport:22992f9a2f2dea2d345aa61433cb775595de834d:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "ffc66f97-1969-41dd-93c8-c69729b3da71",
+        "name": "jain-core",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "test(feat-core): +16 tests — invention adapter, engine dispatch, flow gate, manifest (75.7%→81.4%)",
+      "updated_at": "2026-07-16T14:37:46.314637141+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784212854
+}

@@ -1,0 +1,209 @@
+{
+  "schema_version": "jain.governed-integrity-audit/v1",
+  "generated_at": "2026-07-16T08:01:03Z",
+  "claim": "codex-domain-pr8-governed-integrity-audit-20260716T0754Z",
+  "repository": "jeryu/jain-domain",
+  "pull_request": 8,
+  "decision": "AUDIT_PASS_LIFECYCLE_BLOCKED",
+  "reviewer_authored_base_or_head": false,
+  "exact_revision": {
+    "base_sha": "4383aef8b23dd194db12778db3fc378ab526b145",
+    "base_tree": "f4b0cfe6097de6dfe7cb6a01aaa50751e28c1418",
+    "head_sha": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+    "head_tree": "3ba0da9c975bfbf28e42bce819530d0d2e3a24c5",
+    "head_ref": "codex/v8.0.1-domain-successor-20260716",
+    "linear_commits_over_base": 3,
+    "behind_base": 0
+  },
+  "diff": {
+    "changed_files": 14,
+    "insertions": 77,
+    "deletions": 19,
+    "raw_binary_full_index_sha256": "a9b58514fe3bb7b84ccb6e9c10ef0b76f6c7c0fe20c7391b0f59008503c578e0",
+    "binary_files": 0,
+    "mode_changes": 0,
+    "symlinks_in_exact_tree": 0,
+    "product_source_files_changed": 0,
+    "contract_files_changed": 0,
+    "fixture_files_changed": 0,
+    "dependency_graph_changed": false,
+    "lock_change": "domain package self-version 8.0.0 to 8.0.1 only",
+    "test_change": "package identity assertion 8.0.0 to 8.0.1 only",
+    "diff_check": "pass"
+  },
+  "identity_replay_integrity": {
+    "successor_identity_commit": "ece3e875638836eb5dc750e707dc8f9b2009b106",
+    "superseded_identity_head": "8e3844862434b4348e9aab8595bb9fbfed2a456f",
+    "successor_raw_binary_full_index_sha256": "bd4d5a75abf1866190b4ddba3f9a6b30da91867558fc8fd9b917ccb27c1f4e89",
+    "superseded_raw_binary_full_index_sha256": "bd4d5a75abf1866190b4ddba3f9a6b30da91867558fc8fd9b917ccb27c1f4e89",
+    "byte_equivalent": true,
+    "legacy_rtk_rendered_diff_sha256": "385f64e51ba13f8c879736842ee13d37cba2c74c65754151e6b6465b00cb8336",
+    "correction": "The 06:44 coordination entry's 385f64e5 value is reproducible only from RTK-rendered diff output, not raw Git patch bytes. The byte-equivalence conclusion remains correct; bd4d5a75 is the canonical raw binary full-index patch SHA-256 for both identity deltas."
+  },
+  "release_identity": {
+    "package_version": "8.0.1",
+    "version_file": "jain-domain-v8.0.1-split.1",
+    "standard_version": "jain-domain-v8.0.1-split.1",
+    "candidate_tag": "jain-domain-v8.0.1-split.1",
+    "candidate_tag_unused": true,
+    "next_unused_revision": 1,
+    "existing_split_0_commit": "07a6879beba68ea7efb386231376bd03621fa0a4",
+    "existing_split_0_version_file": "jain-domain-v8.0.0-split.1",
+    "existing_split_0_package_version": "8.0.0",
+    "existing_split_0_preserved_immutable": true,
+    "rollback_target": "7.0.6"
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "regular_file": true,
+    "executable": true,
+    "symlink": false,
+    "realpath_exact": true,
+    "version": "1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "lib_sha256": "30f48fb094d89fe02d9ebb6f7a8bbf93beaf06a20dde0ce57f8c7dafd51efdbf",
+    "score_script_sha256": "162b6b48c0fb0c840f8f0456d3cc8b8e368f2e72d24b593d49bb57494956fd91",
+    "adversarial_path": {
+      "ambient_selected_before_repository_helper": "/home/ubuntu/.local/bin/jankurai",
+      "ambient_version": "1.6.11",
+      "ambient_wrong_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+      "repository_dispatch_after_helper": "shell function",
+      "repository_dispatch_target": "/home/ubuntu/.jeryu/bin/jankurai",
+      "wrong_same_version_bytes_used_by_repository_proof": false,
+      "result": "pass"
+    },
+    "invocation_audit": {
+      "direct_repository_invocation_files": [
+        "ops/ci/score.sh",
+        "ops/ci/tool-adoption.sh",
+        "docs/testing.md"
+      ],
+      "all_source_ops_ci_lib": true,
+      "all_call_require_jankurai_before_invocation": true,
+      "score_under_adversarial_path": {
+        "score": 87,
+        "raw_score": 87,
+        "hard_findings": 0,
+        "caps": 0,
+        "report_sha256": "292fb368cb838fd810984005c8cd6fc69ec9dcb36fab0e486f9dca665a886d6b"
+      },
+      "tool_adoption_under_adversarial_path": "pass",
+      "changed_fast_under_adversarial_path": {
+        "score": 85,
+        "raw_score": 85,
+        "hard_findings": 0,
+        "caps": 0,
+        "decision": "pass",
+        "report_sha256": "8bdf84a6c181d320597b3e29091a49d8df2117057ec874c75bd78e257fcbc172"
+      },
+      "changed_scripts_bash_syntax": "pass",
+      "changed_scripts_shellcheck": "pass",
+      "unchanged_tool_adoption_shellcheck_advisory": "SC2050 constant jain-domain == jain-jable condition; pre-existing and outside this PR diff"
+    }
+  },
+  "receipt_integrity": {
+    "prior_independent_review": {
+      "path": "/tmp/codex-domain-pr8-independent-review-receipt.json",
+      "sha256": "426e8d9f71aae98ab4d93b7ec67b683d99dfd91067b5e0d875e7b6a3f09ec830",
+      "exact_base_head_and_raw_diff_hash_match": true
+    },
+    "normal_ref_mirror_correction": {
+      "path": "/tmp/codex-domain-normal-ref-mirror-correction-20260716T0752Z.json",
+      "sha256": "930bb95f6419bc2dcb95ddcdce904070b768e5c9092b4b6b1eb17ce632701b49",
+      "current_bare_ref_tree_and_strict_fsck_match": true
+    },
+    "successor_pr_open": {
+      "path": "/tmp/codex-domain-successor-pr-open-20260716.json",
+      "sha256": "8cd221e0469c84bda5b4d293c370eb898572765a22b9e92d13e364edf2f7cc00",
+      "binds_initial_pr_head": "b8e309210f5e459bf9bfb71a9b51cd3173b7a0d3",
+      "later_non_force_head_progression_documented": true
+    },
+    "superseded_pr_close": {
+      "path": "/tmp/codex-domain-pr7-superseded-close-20260716.json",
+      "sha256": "fe708d5ca92fadd4ad1252c6262eac2c900d05e1c978fc1230f5680368685c16",
+      "status": "applied-and-verified"
+    },
+    "approval_receipt": {
+      "path": "jain-split-ops/docs/release-evidence/8.0.1/jeryu-pr-approve-jeryu-jain-domain.json",
+      "sha256": "c0b4976b306d6cdfa8bce850917e7ad31b3267346e9f36d23d21fdafda7ff45c",
+      "mode": "dry-run",
+      "action": "would-apply",
+      "applied_approval_evidence": false
+    }
+  },
+  "forge_readback": {
+    "pr_state": "open",
+    "draft": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "head_and_base_exact": true,
+    "automatic_proof": {
+      "name": "jankurai/proof",
+      "status": "completed",
+      "conclusion": "success",
+      "check_id": "38110b48-a0ae-4b2f-8556-ada796545d21"
+    },
+    "required_check_name": "jain-domain/required",
+    "required_check": "absent",
+    "pr_body_sha256": "772f3fb52e87fe6d5ddaf3e0e4b0e01666685dbe5cf5c4a44ef0855fd929ad5b",
+    "pr_body_truth": "stale: still states automatic proof is red although the exact-head check is now successful"
+  },
+  "canonical_integrity": {
+    "canonical_path": "/home/ubuntu/jain-split/jain-domain",
+    "branch": "main",
+    "head": "4383aef8b23dd194db12778db3fc378ab526b145",
+    "forge_main": "4383aef8b23dd194db12778db3fc378ab526b145",
+    "clean": true,
+    "ahead": 0,
+    "behind": 0,
+    "single_registered_checkout": true,
+    "physical_git_common_dir": true,
+    "alternates_present": false,
+    "worktree_admin_registry_present": false,
+    "strict_fsck": "pass"
+  },
+  "standalone_audit_sandbox": {
+    "path": "/tmp/codex-domain-pr8-governed-audit-20260716T0754Z",
+    "clone": "git clone --no-local --no-checkout from exact loopback forge",
+    "detached_exact_head": true,
+    "physical_git_common_dir": true,
+    "alternates_present": false,
+    "worktree_admin_registry_present": false,
+    "strict_fsck": "pass",
+    "clean_tracked_state": true,
+    "git_worktree_used": false,
+    "removed_after_audit": true
+  },
+  "authority": {
+    "manifest": "jain-split-ops/repos.manifest.toml",
+    "manifest_sha256": "dbec989b1b5d2b04a26ad920f6e5946c8233c53db98eea9938860a5d962fc977",
+    "current_tag": "jain-domain-v8.0.1-split.0",
+    "tag_revision": 0,
+    "release_commit": "PENDING",
+    "release_checksum_sha256": "PENDING",
+    "accepted": false
+  },
+  "lifecycle_blockers": [
+    "jain-domain/required is absent on the exact PR head",
+    "PR body must be corrected because it still claims the automatic proof is red",
+    "independent approval has not been applied",
+    "protected merge has not occurred",
+    "next-unused immutable jain-domain-v8.0.1-split.1 has not been cut or read back",
+    "authority manifest still points at invalid split.0 content and has PENDING release bindings"
+  ],
+  "mutations": {
+    "source": false,
+    "index": false,
+    "ref": false,
+    "mirror": false,
+    "check_post": false,
+    "host_ci": false,
+    "approval": false,
+    "merge": false,
+    "tag": false,
+    "authority": false,
+    "protection": false,
+    "deployment": false,
+    "git_worktree": false
+  }
+}

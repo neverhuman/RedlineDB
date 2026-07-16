@@ -1,0 +1,224 @@
+{
+  "schema_version": "jain.independent-successor-review/v1",
+  "recorded_at_utc": "2026-07-16T08:00:10Z",
+  "claim_token": "codex-ops-pr9-successor-independent-review-20260716T0751Z",
+  "repository": "jeryu/jain-ops",
+  "pull_request": 9,
+  "reviewer_authored_reviewed_commits": false,
+  "protected_main": "68569a9344164b76e880fbb54f74839acc598a08",
+  "head": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+  "tree": "00f383804f9e7f03581e859d0ce79c446f9ab17d",
+  "branch": "claude/v801-identity-jain-ops-20260716",
+  "graph": {
+    "merge_base": "68569a9344164b76e880fbb54f74839acc598a08",
+    "ahead": 3,
+    "behind": 0,
+    "linear": true,
+    "commits": [
+      "1630873b220799aa22df07b15d8c2f23b4216729",
+      "6f3e4f1020af9f265e1a6242ab8b0844a282ab0f",
+      "cead27a303aa91e7fc5c68da7fdce8faf700164e"
+    ]
+  },
+  "complete_diff": {
+    "paths": 13,
+    "insertions": 68,
+    "deletions": 26,
+    "regular_files_only": true,
+    "symlinks": 0,
+    "actual_full_index_binary_sha256": "421dcfc2352813c37c376ef093b6653adf762b4ff80e013bbe95b7ccadd9da57",
+    "predecessor_range_actual_full_index_binary_sha256": "16c473798a056d2f367844d63428c2f2a849b91ebf028a28d0d0e24eb358dbfe",
+    "governed_tool_repair_actual_full_index_binary_sha256": "c205918976d1a6cf4cc3aee303133531ffeef7db725dae1e22358df4a4ce624e",
+    "changed_paths": [
+      "AGENTS.md",
+      "CHANGELOG.md",
+      "README.md",
+      "VERSION",
+      "agent/standard-version.toml",
+      "db/README.md",
+      "docs/AGENTS.md",
+      "docs/release.md",
+      "ops/ci/artifact_support.sh",
+      "ops/ci/lib.sh",
+      "ops/ci/required.sh",
+      "ops/ci/score.sh",
+      "schemas/release-artifact.schema.json"
+    ]
+  },
+  "scope_review": {
+    "source_only_candidate": true,
+    "candidate_identity": "jain-ops-v8.0.1-split.1",
+    "release_status": "candidate",
+    "formal_ga": false,
+    "production_applied": false,
+    "atomicsoul_push": 0,
+    "rollback_target": "7.0.6",
+    "campaign_semantics_changed": false,
+    "product_source_changed": false,
+    "cargo_manifest_changed": false,
+    "cargo_lock_changed": false,
+    "dependency_resolution_changed": false,
+    "fixtures_changed": false,
+    "contract_payload_changed": false,
+    "remote_operation_performed": false,
+    "publication_performed": false,
+    "container_image_applicable": false
+  },
+  "immutable_identity": {
+    "existing_split_0_tag": "jain-ops-v8.0.1-split.0",
+    "existing_split_0_commit": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+    "existing_split_0_version_payload": "jain-ops-v8.0.0-split.1",
+    "split_1_exists": false,
+    "split_1_is_next_unused_correction": true,
+    "authority_manifest_release_commit": "PENDING",
+    "authority_manifest_release_checksum_sha256": "PENDING"
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "regular_non_symlink_path": true,
+    "ambient_adversarial_path": "/home/ubuntu/.local/bin/jankurai",
+    "ambient_adversarial_version": "1.6.11",
+    "ambient_adversarial_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "ambient_selected_before_source": true,
+    "function_dispatches_governed_path_after_source": true,
+    "all_active_script_invocations_source_guard_and_call_require_jankurai": true,
+    "full_score": 93,
+    "full_raw_score": 93,
+    "full_caps": [],
+    "full_hard_findings": 0,
+    "full_report_sha256": "d41fe0af361420fae1781679babe2086043532d69cff7ebec76f2672e9fab365",
+    "changed_fast_score": 88,
+    "changed_fast_raw_score": 88,
+    "changed_fast_caps": [],
+    "changed_fast_hard_findings": 0,
+    "changed_fast_report_sha256": "715853247195bd00c2e4a68d43b8b2b1944936f2757a5f503ac6f54f8f849bc1"
+  },
+  "exact_head_local_gates": {
+    "git_diff_check": "pass",
+    "bash_syntax": "pass",
+    "shellcheck_repository_error_floor": "pass",
+    "just_required": "pass",
+    "rust_binary_targets": [
+      "fn-tool",
+      "global-bench",
+      "jail-extract",
+      "jail-reconstruct",
+      "jail-validate",
+      "synth-data",
+      "zyal-json"
+    ],
+    "rust_binary_target_count": 7,
+    "rust_test_failures": 0,
+    "release_bins_build": "pass",
+    "validator_fixtures": "pass",
+    "upload_manifest_fixtures": "pass",
+    "just_contract_drift": "pass",
+    "just_artifact_support": "pass",
+    "source_archive_sha256": "9b08f1f579e688abc251ba3a50f1409eb23845a4de70831109281c0d068b2a68",
+    "artifact_inventory_sha256": "ecc96c9a3b1d954c26bd8d3acecedff52463824283e14538f3c576bf08962af2",
+    "cargo_lock_sha256": "9a77d4d42531d88da95dbde78cded3f4e53cc995d656d51dee33ef59c0580a67",
+    "just_tool_adoption": "pass",
+    "security": "pass",
+    "security_receipt_sha256": "8bde2452d459b4c6ea737a1cc1ca538e9ec954f72aea3e5566c01d6cd378fe33",
+    "coverage": "pass",
+    "coverage_receipt_sha256": "032ddbb4f72ffd896f2fe0e6fea00199290b5d090657bdcf6ce8baa5de6e3fe0",
+    "jankurai_proof": "pass",
+    "proof_plan_sha256": "04a6b799ce3edf08f88bb9bec6e04b9a01e18bb58a578e22e2237456d120110a",
+    "proofbind_sha256": "630cd06ac9a14dcf5f18243423ead89934a2bd9a623c0d1e9af39a1918442d10"
+  },
+  "receipt_chain": {
+    "superseded_independent_review": {
+      "path": "jain-ops-pr9-independent-review-20260716.json",
+      "actual_sha256": "55d9ed8bd07eaa5537ba57a4557dc883029f23bb899d123eb1d5dce19d2ac825"
+    },
+    "independent_review_correction": {
+      "path": "jain-ops-pr9-independent-review-correction-20260716.json",
+      "actual_sha256": "1efd5e6cb415d027661e39e4e7a6d8322fd5d80157b8ca37a8acf8e149266086",
+      "superseded_receipt_hash_matches": true
+    },
+    "identity_remediation": {
+      "path": "jain-ops-pr9-v801-proof-remediation-20260716.json",
+      "actual_sha256": "f8827bc2cf14cefbe0a4ef7945632e93676f51607758366df286b7c27a732945",
+      "declared_aggregate_binary_diff_sha256": "c045c0cb53717efe3e1def02345078f45817fb0ccd97a994ce3d60c0874f5556",
+      "actual_full_index_binary_sha256": "16c473798a056d2f367844d63428c2f2a849b91ebf028a28d0d0e24eb358dbfe",
+      "diff_hash_matches": false
+    },
+    "governed_tool_successor": {
+      "path": "jain-ops-pr9-governed-tool-successor-20260716.json",
+      "actual_sha256": "349acc368b6dc15162416deff8a19a7e3879410a5976098ef217f610ce1e5e5d",
+      "declared_full_index_binary_sha256": "df828129db43c9bc97522bcb6a5c6a9feb1d805af778df20dbe3b22493b74e31",
+      "actual_full_index_binary_sha256": "421dcfc2352813c37c376ef093b6653adf762b4ff80e013bbe95b7ccadd9da57",
+      "diff_hash_matches": false,
+      "correction_receipt_hash_matches": true
+    }
+  },
+  "forge_readback": {
+    "main_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+    "branch_sha": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+    "pull_request_head_sha": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+    "pull_request_state": "open",
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "jankurai_proof": "success",
+    "jankurai_proof_check_id": "a8bf8b4b-060a-4186-bab4-5ddaba00fcb0",
+    "jeryu_autonomy": "action_required",
+    "required_check_name": "jain-ops/required",
+    "required_check_state": "absent",
+    "approval": "absent"
+  },
+  "canonical_integrity": {
+    "canonical_head": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+    "canonical_clean": true,
+    "canonical_branch_forge_equal": true,
+    "registered_checkouts": 1,
+    "strict_fsck": "pass",
+    "standalone_clone_no_local": true,
+    "standalone_clone_no_alternates": true,
+    "standalone_clone_strict_fsck": "pass",
+    "standalone_clone_tracked_clean_at_end": true,
+    "standalone_clone_removed": true,
+    "git_worktree_created": false
+  },
+  "findings": [
+    {
+      "severity": "block",
+      "id": "OPS-PR9-RECEIPT-DIFF-HASH-MISMATCH",
+      "detail": "Both the predecessor identity-remediation receipt and the current governed-tool successor receipt contain complete-diff SHA-256 values that do not reproduce from their stated immutable base/head pairs. File-level supersession hashes are correct, but the embedded diff claims are not."
+    },
+    {
+      "severity": "block",
+      "id": "OPS-PR9-REQUIRED-ABSENT",
+      "detail": "Forge readback at the exact successor head contains successful jankurai/proof and action-required autonomy only; jain-ops/required is absent, so protection correctly blocks merge."
+    },
+    {
+      "severity": "block",
+      "id": "OPS-PR9-PR-BODY-STALE",
+      "detail": "The live PR body says there is no Cargo workspace and no locked lane, but the repository owns ops/apex/tools/Cargo.toml and exact-head required runs Cargo with --locked. Correct the PR description without changing source or head."
+    }
+  ],
+  "source_delta_decision": "PASS",
+  "decision": "BLOCK",
+  "blocking_next_actions": [
+    "Append a correction receipt that preserves both bad receipts and binds the reproducible full-index diff hashes above; do not edit or erase historical evidence.",
+    "Correct the PR description so it truthfully describes the nested locked Cargo lane and current three-commit successor.",
+    "After the serialized host-CI producer and pinned RustSec sandbox defect are resolved, publish and read back jain-ops/required=success at this exact head.",
+    "Obtain a new independent acceptance readback after the evidence correction and required success; only then approve, protected-merge, cut immutable split.1, and bind authority."
+  ],
+  "mutations": {
+    "source": false,
+    "index": false,
+    "repository_ref": false,
+    "forge_ref": false,
+    "check_post": false,
+    "approval": false,
+    "merge": false,
+    "tag": false,
+    "authority": false,
+    "protection": false,
+    "deployment": false,
+    "force_operation": false,
+    "git_worktree_action": false
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "schema_version": "jain.pr-metadata-correction-batch/v1",
+  "recorded_at_utc": "2026-07-16T08:17:00Z",
+  "claim_token": "codex-root-identity-terminal-check-description-batch-20260716T0816Z",
+  "credential_transmitted_without_argv_or_receipt_exposure": true,
+  "pull_requests": [
+    {
+      "repository": "jeryu/jain-llm",
+      "number": 7,
+      "head": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+      "request_payload_sha256": "28b72bbc6538e347fcdb19d1730b0eff485d903edb336098fff668fd94c4481a",
+      "request_and_readback_body_sha256": "d255492a8cf8cb6f4ab82b97ff285ed3645ede9ed07a6ca854231ca045a6ea95",
+      "readback_updated_at": "2026-07-16T08:15:12.149620020Z",
+      "jankurai_proof": "failure",
+      "jankurai_proof_check_id": "c9b66cdd-3e0e-4525-8be9-5e0f2256b96d",
+      "required": "failure",
+      "required_check_id": "8d1e3fa3-611c-450d-af0d-25f631268976",
+      "terminal_defect_documented": "isolated HOME lacks pinned RustSec advisory database; proof also remains red"
+    },
+    {
+      "repository": "jeryu/jain-math",
+      "number": 13,
+      "head": "7c9a039c70ab48664c6c39f7fbbebe9351c4660e",
+      "request_payload_sha256": "969742dcd47fed9380db2d383b6c7bd4f187379cc001134a6db71813d3026e9f",
+      "request_and_readback_body_sha256": "a4e277b03b1690d25b95c44ca89b586348ff4aed8643a53247109755e2710ee5",
+      "readback_updated_at": "2026-07-16T08:15:13.787878907Z",
+      "jankurai_proof": "success",
+      "jankurai_proof_check_id": "39c471a3-d4c5-4e1c-bad3-4edab160bfe8",
+      "required": "failure",
+      "required_check_id": "2ce98728-6b09-4092-bb55-6a1dabfa6c08",
+      "host_receipt_sha256": "0c0a6fbae4502151125fdd7b88a503e3d384fd044e0c63acd280d7d0b1123296",
+      "terminal_defect_documented": "isolated HOME lacks pinned nightly and cargo public-api needs workspace package selection"
+    },
+    {
+      "repository": "jeryu/jain-zyal",
+      "number": 6,
+      "head": "cd33b26ab97a965c21ccafb867b39df2341601df",
+      "request_payload_sha256": "e054b12e7c7cda1b01eb1b0d3fdcf778483a6f6f94324bb2ef14914ef412ad04",
+      "request_and_readback_body_sha256": "3573048b17e92ed030fa97d11e8f530d7d7ce3a9f8d0413d68e4e1d679341cc3",
+      "readback_updated_at": "2026-07-16T08:15:10.772703317Z",
+      "independent_review_sha256": "a28a8ae60db63464364a116fdfe1eb8f5fe9f2e961ccf869e387202bdd73dd68",
+      "jankurai_proof": "success",
+      "jankurai_proof_check_id": "c384d22f-bcdc-4045-b042-215228ff0357",
+      "required": "failure",
+      "required_check_id": "b106a740-8027-4afd-b5a7-e7e553defedc",
+      "terminal_defect_documented": "isolated HOME lacks pinned RustSec advisory database"
+    },
+    {
+      "repository": "jeryu/jain-jailgun",
+      "number": 6,
+      "head": "529dd19ef07303fc46f49549863d1631708f12ff",
+      "request_payload_sha256": "95d79159dd54bec011038df740330d7902ad1cdd68a418b1dd31ee5f37a91e00",
+      "request_and_readback_body_sha256": "270a7d42d99d0485c7b4e816b30e2a8b4eaa3e91da76eedcf28f834dbafac6d8",
+      "readback_updated_at": "2026-07-16T08:15:09.130940318Z",
+      "independent_review_sha256": "a28a8ae60db63464364a116fdfe1eb8f5fe9f2e961ccf869e387202bdd73dd68",
+      "jankurai_proof": "success",
+      "jankurai_proof_check_id": "fa427526-a228-43f1-93cd-94fd81785ba5",
+      "required": "absent"
+    },
+    {
+      "repository": "jeryu/jain-contracts",
+      "number": 11,
+      "head": "54357986f4244cf408cc405b7a034bdf4eac0bf4",
+      "request_payload_sha256": "691647cdd406c5dcedf2d91981c46a4d2632e7ff28afc19a1c0a73ccd91ccd5f",
+      "request_and_readback_body_sha256": "5308af91feca79161ee966d3d841384619b54609ee651a48debdf32dcfc11240",
+      "readback_updated_at": "2026-07-16T08:15:15.503620783Z",
+      "independent_review_sha256": "b9bbb5393ae379dc9d9145d77cd4ee9e2fd4980d0f375665d3cc0c72d2323b83",
+      "jankurai_proof": "success",
+      "jankurai_proof_check_id": "0beae497-1b12-4bbd-9003-e182eb9310e1",
+      "required": "absent",
+      "terminal_defect_documented": "protected Deploy full-v1 contract mirror prerequisite unresolved"
+    }
+  ],
+  "readback_invariants": {
+    "titles_unchanged": true,
+    "base_branches_unchanged": true,
+    "branches_unchanged": true,
+    "heads_unchanged": true,
+    "checks_unchanged": true,
+    "checks_synthesized": false,
+    "unchanged_retry_run": false
+  },
+  "mutations": {
+    "pull_request_bodies": 5,
+    "new_receipt": true,
+    "source": false,
+    "index": false,
+    "repository_ref": false,
+    "forge_ref": false,
+    "check_post": false,
+    "host_ci": false,
+    "approval": false,
+    "merge": false,
+    "tag": false,
+    "authority": false,
+    "protection": false,
+    "deployment": false,
+    "force_operation": false,
+    "git_worktree_action": false
+  },
+  "decision": "CORRECTED_PENDING_REVIEWED_RUNNER_FIXES_AND_LIFECYCLE"
+}

@@ -1,0 +1,228 @@
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-deploy'...
+HEAD is now at 627b36d ci(deploy): rewrite artifact-ci scorer in awk (Rust-only language boundary)
+lock_blob=80c2ed13681ae7aad8446ab37a726999af4052ba
+name=jain-deploy
+ref=627b36d3d325b9f9d6e13e948c6149626be8a7ba
+commit=627b36d3d325b9f9d6e13e948c6149626be8a7ba
+tree=5befdb49183975a781fb3c0d73a702585c41a593
+release_checksum_sha256=3394c0365cbd0b9e7b54e7ef2f0e349531c316d74a0684f604a071369de7af97
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-smartcluster'...
+HEAD is now at c28c5c8 docs(release): remove active legacy associations
+lock_blob=3a8c5e1f50222f5d4ebfe28522c8ef17658daf73
+name=jain-smartcluster
+ref=jain-smartcluster-v8.0.1-split.0
+commit=c28c5c8348ec58b39cde0e8d510f26fec3cbfb06
+tree=17dd91ad96faaca2f49393d9e1ccead0ba123caa
+release_checksum_sha256=e706b2c6fd097bf5057619807a63c3ae398684fc0bfab5c3928233502a658eac
+Cloning into '/tmp/split-host-ci.tGbbVd/jain'...
+HEAD is now at 50836c7 docs(portal): align release repair schemas
+lock_blob=absent
+name=jain
+ref=refs/heads/main
+commit=50836c741319c606546d12f55a7ae1ae63112f2d
+tree=3771bb314b475256506f5633f21f73114adbcbd2
+release_checksum_sha256=e3f57d8083c5cea452f1e4d4142e05f42b2ed81a1e04efeba2109e0730c0d889
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-docs'...
+HEAD is now at b024545 manual: GPU image is GPU-only (dynamic-linked libcuda); ch6 pull/dump + port env reality
+lock_blob=absent
+name=jain-docs
+ref=refs/heads/main
+commit=b0245456d73d99a6698db053bf49300d6bbbac12
+tree=ba0e86b3e45b21a406969a6e8a859279ad6abb29
+release_checksum_sha256=aeacf436181a534d54c479d440c488ff781c613fc5de99c69ea65dec6b80fc0d
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-domain'...
+HEAD is now at 07a6879 ci(domain): prove corrective release readiness
+lock_blob=a3c39eca6337d5ac81bb6e2dbf28ba42743f0442
+name=jain-domain
+ref=refs/heads/main
+commit=07a6879beba68ea7efb386231376bd03621fa0a4
+tree=0c45b5e64be08bcee331ca566260e1816ee8aec7
+release_checksum_sha256=fd2b51a80d897650882c57ff884f125ca4dc2a3638fb2108721bbf74a11e6b31
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-math'...
+HEAD is now at 33fcf35 fix(math): bind final Starforge proof successor
+lock_blob=6d463bf847ad2144bfb8a7f8e64261de7a62a6b8
+name=jain-math
+ref=refs/heads/main
+commit=33fcf35e6a626a3911e5d52f6633b702d1d89369
+tree=f320a317b481af1725f34751b90d11dafedaa476
+release_checksum_sha256=97a0d01bc58e6427fefee23cc708139af711957ded69b697dd90ed7d52e97278
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-contracts'...
+HEAD is now at fcbb360 test(contracts): register canonical full-v1 demo scenario
+lock_blob=absent
+name=jain-contracts
+ref=refs/heads/main
+commit=fcbb36064e008403a0fd992e7f278a73b6b1d946
+tree=7463de7d79e078c4c90354ee006f07c8cbc350e7
+release_checksum_sha256=e41f3c1fecc9066dbf674e0ec7ddcab8717cc68b8ec204ff178ab3e94ba9be7a
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-catboost'...
+HEAD is now at 056a605 ci(catboost): map native ABI contract proof
+lock_blob=4e3170b4945b335d6910f1e37aabceec51755270
+name=jain-catboost
+ref=refs/heads/main
+commit=056a605dc60554ddcf40c6b5b0cb07d71d68eb96
+tree=0e0cf721a2eac6911c9a4903946cebc2d084ca66
+release_checksum_sha256=68ad55ea6e8f6c38d6ede4caf3623aba26e8eb416dcbfb5ecf44748e86517961
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-xgboost'...
+HEAD is now at 34d3534 release: validate native provenance receipts
+lock_blob=21aaf0a444e35b31e767e9733dd6a9580bacb5b8
+name=jain-xgboost
+ref=refs/heads/main
+commit=34d3534702727b463c4b00c799d06fda0f76438c
+tree=db3e3adff18e75ecc8bf24cfbfe2c0d7d92ad9d6
+release_checksum_sha256=1db30c3baee1542e74e3e0aa75e3b7fae8db51ecaf0792f688026b2105497936
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-lightgbm'...
+HEAD is now at 03102cb release: validate native provenance receipts
+lock_blob=c7c3792a5455ce83e334f2e173778ea17aaac387
+name=jain-lightgbm
+ref=refs/heads/main
+commit=03102cb3c1fa8bda05a66b4fe072c17524fac6fc
+tree=6db633c39c9d43e26a093cae03d6faf82ab0274a
+release_checksum_sha256=412a4ba1ea2427fa48d5a6e6d83d90a89f85bea3df5e264e7e97dd8036f92213
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-jable'...
+HEAD is now at e119908 ci(jable): expose pinned API and data boundary gates
+lock_blob=8101b65e1f342c1c7ff5243cb873782c07b85523
+name=jain-jable
+ref=refs/heads/main
+commit=e119908dd4f522fdbada7ddb461fb10c0dd7f563
+tree=e0730168e5440f97a10d762147413fa4b60bbb71
+release_checksum_sha256=9fe2e6e1bed04fcb97f20d34e373f12633e94aecbbe073d98f2cdb15da72e6f4
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-battle-gpu'...
+HEAD is now at 87b2367 ci(battle-gpu): expose pinned API drift gate
+lock_blob=0f3b48749a9b949822b5451c8993481ac07897f2
+name=jain-battle-gpu
+ref=refs/heads/main
+commit=87b2367f576fc97bb13dab345f2871e4ad19e22b
+tree=312afbb0a1fcf0c67beb7068ab7373758689a015
+release_checksum_sha256=e5ca9003eaeb90c2f65335e170b43a3e2e541571c54c303c68503205d8a54222
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-starforge'...
+HEAD is now at 8d76be0 ci(starforge): keep default deny checks offline
+lock_blob=572c6aadc9d071785c99a7c92f7caa87528ada7c
+name=jain-starforge
+ref=refs/heads/main
+commit=8d76be0e4429bdc0413aab5462dd44c929bc062b
+tree=cb4a3d4e21bd17941f145378ec67bb16aa21c5f7
+release_checksum_sha256=3f1d45a1cbb4aecb6d2e44a720c084a026ebfe581472f4785af8b9eba0a59a99
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-core'...
+HEAD is now at fda3a4c test(core): resolve Hyperion bundle from crate manifest
+lock_blob=55f5b27ba5e518ba7deac1e15eb2c75055e0276d
+name=jain-core
+ref=jain-core-v8.0.1-split.0
+commit=fda3a4cbbfb75d581180093f84493a2cbf7223d8
+tree=c23a886ea9b2a92b7387d3fdaa48f4e990fc7caa
+release_checksum_sha256=527f67bbded04bb37e4d71bda15063f9a20939f22bbb738694d81f6bb4ffe3c9
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-llm'...
+HEAD is now at 9eb84f0 release(jain-llm): add split package identity
+lock_blob=51bf168e81172748b7aa7e3d7b3793b935209413
+name=jain-llm
+ref=jain-llm-v8.0.1-split.0
+commit=9eb84f0e498ee512ac7a38b9b879f984763b68af
+tree=4c0f3a699b6d2960f36cd72c77e2fc901d5d54fb
+release_checksum_sha256=8c116c58478bf0b2c827673ffd7736e430b4e5020b80c1556677ba0723cc7e6d
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-agent'...
+HEAD is now at 8818f70 release(jain-agent): fix CI package target + changelog repo name
+lock_blob=f246c6ad27830bc3b2c05b70e476ab3540f0f483
+name=jain-agent
+ref=refs/heads/main
+commit=8818f70e04d68ae70657f6a3138d6407cbc490fb
+tree=12fb2c306ba339cc2ecd5a6919e39c4fbc5cf80d
+release_checksum_sha256=5a6b068acd057e56d9593bd5d665b28f8453917c53167fef5b633a4cede4f5a3
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-jnoccio'...
+HEAD is now at 4810be8 release(jain-jnoccio): fix CI package target + changelog repo name
+lock_blob=f75d9a4573d388ae65573d342ee4a61993268a4b
+name=jain-jnoccio
+ref=refs/heads/main
+commit=4810be89abad8e4e52b9be9fa9b49a4891970891
+tree=358b21a3de1026c7821a47b5e6b3d6b86832baf3
+release_checksum_sha256=0e4e95a9027c07af5084ec59edc0396727d199446ee35c5cefae42a281467ad8
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-zyal'...
+HEAD is now at 5737cb7 chore: record jain-zyal 8.0.0 identity
+lock_blob=b3746f2c8519e8aef67c2448af6d4c09e1051793
+name=jain-zyal
+ref=jain-zyal-v8.0.1-split.0
+commit=5737cb78bd4378ba9c4f85cf13868a7c34b2f288
+tree=2db4ea9b7a5f8c9394548f2f783f8ecfa703292e
+release_checksum_sha256=6f3d94c2926b26f07d8b7a65667edd3f9d92d6dac22c793b0319c4b9c1800f0a
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-jailgun'...
+HEAD is now at 9045da0 docs(db): route reserved boundary proof
+lock_blob=602200db1f83313ae6a87b3212a685819a172c54
+name=jain-jailgun
+ref=jain-jailgun-v8.0.1-split.0
+commit=9045da04eed8566b77f2dd8783f9f5deb06b9d3e
+tree=28fb59fbef9b2d10df1e55b497266caab58e2c42
+release_checksum_sha256=480811fe5fdc22e9f3196378c51d9679935e70eeb472d2f043b6def8325422c7
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-research'...
+HEAD is now at c61504a release: re-cut jain-research 8.0.0 split.1
+lock_blob=009680d43c52ee962facb37efe3cd8d313376456
+name=jain-research
+ref=jain-research-v8.0.1-split.0
+commit=c61504a7e25ce62c71100865ef52f49a12c59e1b
+tree=053f1702bc6e77a8ed553ff6a7ad6fe3dce2420b
+release_checksum_sha256=0e3b41832bfcc7713596797daada6231e3bdddd5a8bfc56a90c9f0ecfc81efb5
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-report'...
+HEAD is now at 97cd728 feat(report): identify matched Hyperion system arms
+lock_blob=25ad9bcef4f1ae78f99d7444bc62266742aa02fb
+name=jain-report
+ref=refs/heads/main
+commit=97cd728792160c2e86bd0d2108f4608635dde4e1
+tree=b2f676b8c18223d54904808439a9c7da1e5b9f7d
+release_checksum_sha256=b82840363b5f9a9ad189fc2291e11baa223fcfc8e34030c5c573fe547c54b486
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-tui'...
+HEAD is now at b96010d release: prepare jain-tui 8.0.0 candidate
+lock_blob=1683ee1697989814e8378849ad5781e62c77098e
+name=jain-tui
+ref=refs/heads/main
+commit=b96010d56b07c54972dd9f2d29f691b2cb1cb375
+tree=bafb412931eb6d1f41090eb505c8ccf5aee466ca
+release_checksum_sha256=925cebd737aa11ba68e001fee9c8262cb722a165229526a7bb3d5497c3d05e42
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-cli'...
+HEAD is now at 8d99e46 security(cli): exclude research commands from customer builds
+lock_blob=754e128bf2ec5c11b454879eb4fba00a78e52291
+name=jain-cli
+ref=refs/heads/main
+commit=8d99e46be1d11f22cad0ca3f8247b8dd67981af3
+tree=434fb65ab19260823235bbd2a2d41678c5e13604
+release_checksum_sha256=eda7d5f47bc8fce7f9e2ca99fcac3042b23d12aaf612cbe985055c38fbdeaa43
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-web'...
+HEAD is now at 1c80c91 audit: route Redline evidence schema
+lock_blob=41732e3a64fd33334f696df16bc0c435f9a62eb2
+name=jain-web
+ref=refs/heads/main
+commit=1c80c91cb62176a6ffab62d7a62a57b8fcb712b0
+tree=dcdc448c57b8fa6319cc59826ba8b7a9da69bad0
+release_checksum_sha256=80baa5271d90e946fa9b9cc028a9cd1f72cfbdee7ef5d2d4bd95b7c231f3bc7b
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-model-zoo'...
+HEAD is now at fd00a3d release: re-cut jain-model-zoo 8.0.0 split.1
+lock_blob=absent
+name=jain-model-zoo
+ref=refs/heads/main
+commit=fd00a3df96d9769e0282582aba0c3579e568db6c
+tree=236d63f10ee16472e3410cc281c1c134001ee289
+release_checksum_sha256=2f9855e21d0f5554e09c4ec28a2674757673b5a6262221b85b85f8b4b3e706c0
+Cloning into '/tmp/split-host-ci.tGbbVd/jain-ops'...
+HEAD is now at 6aedc24 ci: complete operations release proof lanes
+lock_blob=absent
+name=jain-ops
+ref=refs/heads/main
+commit=6aedc249bdb30a5cfd5d1ea3cbff9bc03393469d
+tree=10e6ed69fc7bc021b5477f179206ad98b476f255
+release_checksum_sha256=8e022948633eab15e2483872119b109f3956b34748e7fb376cc8df0ded975ed1
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+fatal: couldn't find remote ref refs/tags/jain-cli-v8.0.1-split.0
+fatal: couldn't find remote ref refs/tags/jain-cli-v8.0.1-split.0
+fatal: couldn't find remote ref refs/tags/jain-cli-v8.0.1-split.0
+fatal: couldn't find remote ref refs/tags/jain-cli-v8.0.1-split.0
+error: failed to get `feat-cli` as a dependency of package `jain-product v8.0.1 (/tmp/split-host-ci.tGbbVd/jain-deploy/deployment/product)`
+
+Caused by:
+  failed to load source for dependency `feat-cli`
+
+Caused by:
+  unable to update http://127.0.0.1:8787/git/jeryu/jain-cli.git?tag=jain-cli-v8.0.1-split.0
+
+Caused by:
+  failed to clone into: /tmp/split-host-ci.tGbbVd/cargo-home/git/db/jain-cli-b699a38321adf500
+
+Caused by:
+  process didn't exit successfully: `git fetch --no-tags --quiet --force --update-head-ok 'http://127.0.0.1:8787/git/jeryu/jain-cli.git' '+refs/tags/jain-cli-v8.0.1-split.0:refs/remotes/origin/tags/jain-cli-v8.0.1-split.0'` (exit status: 128)

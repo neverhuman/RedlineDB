@@ -1,0 +1,207 @@
+{
+  "schema_version": "jain.identity-successor-independent-review/v1",
+  "recorded_at_utc": "2026-07-16T08:08:04Z",
+  "claim_token": "codex-catboost-pr8-successor-review-20260716T0800Z",
+  "repository": "jeryu/jain-catboost",
+  "pull_request": 8,
+  "branch": "release/v8.0.1/catboost-identity",
+  "reviewer_did_not_author_reviewed_commits": true,
+  "protected_main": {
+    "commit": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+    "tree": "0e0cf721a2eac6911c9a4903946cebc2d084ca66",
+    "live_forge_equal": true
+  },
+  "reviewed_head": {
+    "commit": "182089fb4caad2c752ba9e5a5bd584adceab4e90",
+    "tree": "6a39984d52f32a11c96aef8df3418ad525c9348c",
+    "live_branch_equal": true,
+    "canonical_checkout_clean_and_equal": true
+  },
+  "lineage": {
+    "merge_base_equals_protected_main": true,
+    "ahead": 4,
+    "behind": 0,
+    "linear": true,
+    "commits_oldest_first": [
+      "8ba6b347071dfbd04e2fdc7b6cd3440587404e56",
+      "1dd4aed5b7d018b13b500a05603f47eef45abb04",
+      "d24e6a2d80d82cdbed65785a5dbd871cb00750dc",
+      "182089fb4caad2c752ba9e5a5bd584adceab4e90"
+    ]
+  },
+  "complete_diff": {
+    "paths": 11,
+    "insertions": 44,
+    "deletions": 17,
+    "full_index_binary_sha256": "ae5f2c5b7cd8d028df6dd1b1e1886f22efd2c054a2d29b12a5cccafdda14b95a",
+    "author_receipt_hash_matches": true,
+    "diff_check_passed": true,
+    "mode_changes": 0,
+    "symlink_entries_in_head": 0,
+    "changed_paths": [
+      "CHANGELOG.md",
+      "Cargo.lock",
+      "Cargo.toml",
+      "README.md",
+      "VERSION",
+      "agent/audit-policy.toml",
+      "agent/standard-version.toml",
+      "db/README.md",
+      "docs/release.md",
+      "ops/ci/lib.sh",
+      "ops/ci/score.sh"
+    ],
+    "product_source_changed": false,
+    "native_or_abi_surface_changed": false,
+    "contract_or_fixture_changed": false,
+    "binary_changed": false,
+    "dependency_resolution_changed": false,
+    "cargo_changes_only_workspace_and_local_package_version_8_0_0_to_8_0_1": true
+  },
+  "author_successor_receipt": {
+    "path": "jain-split-ops/docs/release-evidence/8.0.1/identity/jain-catboost-pr8-governed-tool-successor-20260716.json",
+    "expected_sha256": "21e2c8069aad2d27b7e46f6e6ea3d12bf5c439a843594aa729e11eb21365158a",
+    "actual_sha256": "21e2c8069aad2d27b7e46f6e6ea3d12bf5c439a843594aa729e11eb21365158a",
+    "matches": true
+  },
+  "release_identity": {
+    "product_version": "8.0.1",
+    "head_version": "jain-catboost-v8.0.1-split.1",
+    "head_standard_version": "jain-catboost-v8.0.1-split.1",
+    "head_changelog_identity": "jain-catboost-v8.0.1-split.1",
+    "existing_split_0_commit": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+    "existing_split_0_payload_version": "jain-catboost-v8.0.0-split.2",
+    "existing_split_0_payload_is_invalid_for_8_0_1": true,
+    "split_1_tag_present": false,
+    "actual_next_unused_tag": "jain-catboost-v8.0.1-split.1",
+    "immutable_tags_moved": false,
+    "candidate_only": true,
+    "formal_ga": false,
+    "production_applied": false,
+    "atomicsoul_push": 0,
+    "rollback_target": "7.0.6"
+  },
+  "authority_manifest_readback": {
+    "path": "jain-split-ops/repos.manifest.toml",
+    "sha256": "dbec989b1b5d2b04a26ad920f6e5946c8233c53db98eea9938860a5d962fc977",
+    "product_version": "8.0.1",
+    "tag_revision": 2,
+    "current_tag": "jain-catboost-v8.0.1-split.2",
+    "release_commit": "PENDING",
+    "release_checksum_sha256": "PENDING",
+    "required_check": "jain-catboost/required",
+    "matches_branch_and_actual_next_unused_identity": false,
+    "blocker": "The authority declares split.2 while the internally consistent branch and live next-unused tag are split.1. The immutable-tag command cannot accept split.1 until this mismatch is resolved through the protected authority lifecycle; never hand-edit or skip this gate."
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "regular_file": true,
+    "symlink": false,
+    "realpath_exact": true,
+    "version": "1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "ambient_same_version_path": "/home/ubuntu/.local/bin/jankurai",
+    "ambient_same_version_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "literal_invocation_files": [
+      "ops/ci/score.sh",
+      "ops/ci/tool-adoption.sh"
+    ],
+    "literal_invocation_count": 10,
+    "both_invocation_files_source_lib_and_require_before_invocation": true,
+    "dispatch_is_fixed_shell_function": true,
+    "adversarial_path_selected_governed_bytes": true,
+    "strace_execved_governed_path": true,
+    "strace_execved_ambient_path": false,
+    "strace_sha256": "f36def37f939c742e610ab1536febd092f266538748a51f50f40636e95722ae0"
+  },
+  "independent_bounded_validation": {
+    "bash_syntax": "pass",
+    "shellcheck_changed_scripts": "pass",
+    "locked_offline_metadata": "pass",
+    "just_check": "pass",
+    "just_fast": "pass-native-vendor-deferred",
+    "just_contract_drift": "pass",
+    "just_artifact_support": "pass-bootstrap",
+    "just_score": {
+      "status": "pass",
+      "score": 94,
+      "raw_score": 94,
+      "caps": [],
+      "hard_findings": 0,
+      "report_sha256": "5c59005898c6202629a5ea9181a8c074590943f7c46a20aea5a70d9d87f6f731"
+    },
+    "changed_fast": {
+      "status": "pass",
+      "score": 87,
+      "raw_score": 87,
+      "caps": [],
+      "hard_findings": 0,
+      "report_sha256": "a4b768df8ac03fce7bb771da8ee9740fc1e0429aad38919177c0cd00af2efd9e"
+    },
+    "just_security": "pass",
+    "just_tool_adoption": "pass",
+    "coverage_audit": {
+      "status": "warn",
+      "sources_present": 1,
+      "sources_total": 2,
+      "missing": "rust-lcov",
+      "hard_findings": 0,
+      "credit_withheld_until_required_lane": true
+    },
+    "preexisting_unchanged_tool_adoption_shellcheck_warning": "SC2050 constant jain-catboost == jain-jable condition"
+  },
+  "live_forge": {
+    "pr_state": "open",
+    "draft": false,
+    "base_sha_exact": true,
+    "head_sha_exact": true,
+    "mergeable_state": "blocked",
+    "jankurai_proof": {
+      "status": "completed",
+      "conclusion": "success",
+      "id": "38eef35d-9bbb-48b3-80d7-400a16951500"
+    },
+    "required_check": {
+      "name": "jain-catboost/required",
+      "present": false
+    },
+    "jeryu_autonomy": {
+      "conclusion": "action_required",
+      "id": "9766a366-bf19-4890-8fd0-163b3482cd8e"
+    },
+    "pr_body_is_stale": true,
+    "pr_body_staleness": "The body still describes three commits and cites independent proof only at superseded head d24e6a2d; the live head is the four-commit successor 182089fb."
+  },
+  "standalone_review_clone": {
+    "clone_no_local": true,
+    "physical_git_directory": true,
+    "alternates_absent": true,
+    "worktree_admin_directory_absent": true,
+    "strict_fsck": "pass",
+    "clean_after_validation": true,
+    "removed_after_review": true
+  },
+  "decision": "CONTENT_REVIEW_PASS_LIFECYCLE_BLOCKED_AUTHORITY_IDENTITY_AND_NATIVE_REQUIRED",
+  "remaining_blockers": [
+    "Resolve the authority-manifest split.2 versus actual next-unused/internal split.1 mismatch through a protected authority change; do not hand-edit, skip, or move a tag.",
+    "Run vendor-backed native exact-head required CI, produce the missing LCOV source, and publish jain-catboost/required.",
+    "Refresh the stale PR body before independent approval so it names the exact four-commit successor head and current proof.",
+    "Obtain independent approval, protected fast-forward merge, cut only the authority-approved immutable corrective tag, and bind commit/checksum through protected authority review."
+  ],
+  "mutations_excluded": [
+    "source",
+    "index",
+    "git refs",
+    "pull request",
+    "check publication",
+    "host CI",
+    "approval",
+    "merge",
+    "tag",
+    "authority manifest",
+    "protection",
+    "deployment",
+    "force operation",
+    "git worktree"
+  ]
+}

@@ -1,0 +1,10 @@
+HTTP/2 201 
+alt-svc: h3=":443"; ma=2592000
+content-type: application/json
+date: Thu, 16 Jul 2026 14:08:01 GMT
+set-cookie: jain_lease=a36a3749a31f605ab525316380cc38aa; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=3600
+set-cookie: jain_visitor=0e4ac16ba64f1813baaa55436aaf3e82; Secure; HttpOnly; SameSite=Strict; Path=/; Max-Age=31536000
+via: 1.1 Caddy
+via: 1.1 Caddy
+content-length: 166
+

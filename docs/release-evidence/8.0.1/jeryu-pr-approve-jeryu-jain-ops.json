@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T06:03:38.182938870+00:00",
+      "head_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:68569a9344164b76e880fbb54f74839acc598a08:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "checks": {
+        "failing": 1,
+        "passing": 0,
+        "pending": 0,
+        "skipped": 1,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "5d7f66a4-d0e0-42c7-8f61-a9e145a1844e#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "head_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 7,
+      "passport_hash": "passport:68569a9344164b76e880fbb54f74839acc598a08:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "5d7f66a4-d0e0-42c7-8f61-a9e145a1844e",
+        "name": "jain-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "docs: prohibit Git worktrees",
+      "updated_at": "2026-07-16T06:03:19.872428427+00:00"
+    }
+  },
+  "repository": "jeryu/jain-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Independent review: No-Git-Worktrees AGENTS.md policy (+13 block sha256 342294d8) plus benign guidance-prose rewrite of the split-host-ci.sh paragraph; +18/-3 AGENTS.md-only, symlink-free, FF-able, owner-mandated. Branch restored to reviewed head; identity bump preserved on claude/v801-identity-jain-ops-20260716.",
+      "evidence": null,
+      "expected_head_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-ops/pulls/7/reviews"
+  },
+  "response": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T06:03:38.173214648+00:00",
+      "head_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:68569a9344164b76e880fbb54f74839acc598a08:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "checks": {
+        "failing": 1,
+        "passing": 0,
+        "pending": 0,
+        "skipped": 1,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "5d7f66a4-d0e0-42c7-8f61-a9e145a1844e#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "head_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 7,
+      "passport_hash": "passport:68569a9344164b76e880fbb54f74839acc598a08:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "5d7f66a4-d0e0-42c7-8f61-a9e145a1844e",
+        "name": "jain-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "docs: prohibit Git worktrees",
+      "updated_at": "2026-07-16T06:03:19.872428427+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784181816
+}

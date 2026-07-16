@@ -1,0 +1,20 @@
+JOPE Lane 6 (Claude-DEPLOY-SURFACE) — appliance release 8.0.1 image digests
+Built 2026-07-16 on xbabe2 from canonical clones (no worktrees, --no-local):
+  jain-deploy   main d4f7e07da198ff272286d509aeebb8001c0e2ab2 (appliance configs, guestd crate)
+  jain-web      main c51bf1f06cbf48b2771bacd0dff23d3fa43b8813 (contains web #24 13ea4968; jain-web-control binary)
+  jain-smartcluster main ec9f7e959a6999eee45a92936c0dc8ce5a2a0014 (scqd, jain-worker binaries)
+
+Images (containerd image store: image ID == OCI manifest digest; digest-addressable locally on xbabe2+xbabe3, tagged image.local/jain/<role>:build on xbabe2 and image.l6/jain/<role>:8.0.1 on both; NOT pushed — image.neverhuman.org push is owner-gated ATOMICSOUL_PUSH):
+  web-control  sha256:fc8d48175fe04bdf15b904accf854301d21986e79c36232eced3d05161bc7f3a  (FROM scratch, static musl, stripped 1.76M)
+  scqd         sha256:5e174a20921bbe6d46e9195066280b6da85896a6f9d93fb2386608c6024fb4bf  (distroless/cc-debian12; binary rebuilt in rust:1.96-bookworm, max GLIBC_2.34)
+  worker-cpu   sha256:95d13c9d7f420f1c1c87aaa29572fdb644e053f4b0d8db0701f88ebd4598617c  (distroless/cc-debian12, bookworm-built jain-worker)
+  worker-gpu   sha256:590a3d330e5f8f7eed238f1a401bc0fc1f1c8acdeb45d42eae9347a42b594b86  (nvidia/cuda:12.4.1-base-ubuntu22.04@sha256:0f6bfcbf267e65... local pin; canonical Dockerfile placeholder digest is unbuildable)
+
+Staged binary sha256:
+  jain-web-control 94baff3c08b4885f84f88ef56791cb26dcceb16747e290a4bce35d283d47ed73 (pre-strip musl build)
+  scqd             2da03d7cadac2c7656bf4324f5aad263827e0c57f4f68635f07a7b55af442873 (bookworm)
+  jain-worker      c2ad156bb818bd7d93b4e573b25b90de9baaa4e5451b2a4d393a132ddef83bd6 (bookworm)
+
+Full dist bundle (spec, pinned compose, SBOMs, grype scans): built at
+<jain-deploy clone>/deployment/appliance/dist/8.0.1 — UNCOMMITTED (release spec commit is a
+follow-up PR decision; release_eligible=false fail-closed as designed).

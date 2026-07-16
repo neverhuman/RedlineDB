@@ -1,0 +1,94 @@
+{
+  "admin": {
+    "listen": "localhost:2019"
+  },
+  "apps": {
+    "http": {
+      "servers": {
+        "srv0": {
+          "listen": [
+            ":8082"
+          ],
+          "routes": [
+            {
+              "@id": "jain-web-try",
+              "match": [
+                {
+                  "host": [
+                    "www.neverhuman.org"
+                  ],
+                  "path": [
+                    "/try"
+                  ]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [
+                    {
+                      "dial": "jain-web-control:8080"
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "@id": "jain-web-api-public",
+              "match": [
+                {
+                  "host": [
+                    "www.neverhuman.org"
+                  ],
+                  "path": [
+                    "/api/public/*"
+                  ]
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [
+                    {
+                      "dial": "jain-web-control:8080"
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            },
+            {
+              "@id": "jain-web-live-slots",
+              "match": [
+                {
+                  "host": [
+                    "www.neverhuman.org"
+                  ],
+                  "path_regexp": {
+                    "name": "slot",
+                    "pattern": "^/live/g([0-9]{2})(/.*)?$"
+                  }
+                }
+              ],
+              "handle": [
+                {
+                  "handler": "reverse_proxy",
+                  "upstreams": [
+                    {
+                      "dial": "jain-web-control:8080"
+                    }
+                  ]
+                }
+              ],
+              "terminal": true
+            }
+          ],
+          "automatic_https": {
+            "disable": true
+          }
+        }
+      }
+    }
+  }
+}

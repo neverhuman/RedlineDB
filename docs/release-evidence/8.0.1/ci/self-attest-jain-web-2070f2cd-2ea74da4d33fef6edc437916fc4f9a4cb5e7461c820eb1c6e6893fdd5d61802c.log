@@ -1,0 +1,371 @@
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+Python boundary ok: no files or runtime invocations
+check ok: /home/ubuntu/.cache/claude-orch-ci/webt0-merge/jain-web
+[ci] Redline Jain-family consumer contract and evidence controls
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1.16s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.38s
+     Running unittests src/lib.rs (target/ci-smoke/debug/deps/jain_redline_consumer_contract-61449c4992626de1)
+
+running 5 tests
+test tests::lowercase_hash_validation_is_exact ... ok
+test tests::release_identity_rejects_half_bound_release ... ok
+test tests::dependency_proof_accepts_paired_pending_split_zero_identity ... ok
+test tests::release_identity_rejects_floating_or_mismatched_tag ... ok
+test tests::release_identity_uses_declared_revision ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/bin/validate_jain_release_manifest.rs (target/ci-smoke/debug/deps/validate_jain_release_manifest-3f672e196c68e6fa)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/durable_contract.rs (target/ci-smoke/debug/deps/durable_contract-bfad1cb9a1a31901)
+
+running 1 test
+test jain_model_and_release_state_survives_transaction_checkpoint_and_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.51s
+
+   Doc-tests jain_redline_consumer_contract
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[ci] web Rust required lane: ci-smoke
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.07s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.32s
+     Running unittests src/lib.rs (target/ci-smoke/debug/deps/feat_web-7abd8f20552f0c54)
+
+running 88 tests
+test installer_auth::tests::extract_prefers_bearer_then_query ... ok
+test routes::tests::request_timeout_parses_env_and_falls_back_to_default ... ok
+test runner::tests::effort_knobs_scale_monotonically ... ok
+test runner::tests::resolved_training_knobs_persists_chimera_override ... ok
+test routes::tests::upload_validation_allows_only_csv_and_tsv ... ok
+test store::store_research::tests::full_v1_research_outcomes_are_deterministic ... ok
+test jope::tests::lime_requires_a_staged_input ... ok
+test auth::tests::disabled_authenticates_everyone_as_local ... ok
+test auth::tests::empty_token_set_degrades_to_disabled ... ok
+test session_repo::tests::rejects_unsafe_paths ... ok
+test installer_auth::tests::hmac_matches_known_rfc4231_vector ... ok
+test routes::tests::artifact_scope_rejects_paths_outside_data_dir ... ok
+test runner::tests::a_plan_of_native_members_is_not_disclosed_as_invented ... ok
+test runner::tests::any_member_carrying_a_math_genome_is_disclosed_as_invented ... ok
+test protocol::tests::target_request_defaults_to_approved ... ok
+test installer_auth::tests::golden_token_encodes_byte_for_byte ... ok
+test installer_auth::tests::rejects_wrong_secret ... ok
+test installer_auth::tests::rejects_tampered_token ... ok
+test target::tests::manual_override_approves_requested_target ... ok
+test target::tests::ambiguous_profile_stays_low_confidence ... ok
+test auth::tests::a_non_owner_or_wrong_user_token_is_forbidden ... ok
+test auth::tests::token_gate_requires_a_valid_token ... ok
+test target::tests::final_id_column_requires_manual_target ... ok
+test auth::tests::distinct_tokens_are_distinct_owners ... ok
+test auth::tests::token_owner_hash_is_stable_short_and_not_the_token ... ok
+test installer_auth::tests::golden_token_signature_is_actually_checked ... ok
+test target::tests::last_label_column_is_high_confidence ... ok
+test runner::tests::reasoning_message_keeps_concise_notes_and_suppresses_noisy_chatter ... ok
+test installer_auth::tests::rejects_expired_token ... ok
+test installer_auth::tests::mint_and_verify_round_trip ... ok
+test installer_auth::tests::golden_token_passes_signature_and_scope_failing_only_on_expiry ... ok
+test runner::tests::supervisor_advance_flags_are_fresh_and_one_shot ... ok
+test demo::tests::full_v1_contract_is_self_consistent ... ok
+test auth::tests::resolve_generates_persists_and_reuses_a_token_file ... ok
+test session_repo::tests::creates_commit_and_checkpoint_ref ... ok
+test session_repo::tests::stores_large_file_as_lfs_pointer_and_hydrates_checkout ... ok
+test lifecycle::tests::health_snapshot_is_ok_on_a_live_store ... ok
+test store::tests::jope_event_queries_bind_hostile_job_ids_without_cross_row_access ... ok
+test store::tests::research_runs_record_setup_required_and_cancel_events ... ok
+test jope::tests::cancellation_is_terminal_against_late_progress ... ok
+test routes::tests::jope_routes_stage_owner_scoped_jobs_and_replay_events ... ok
+test jope::tests::terminal_projection_hashes_published_artifacts ... ok
+test store::tests::event_sequence_binds_session_id_as_data ... ok
+test store::tests::llm_credentials_are_owner_scoped_redacted_and_create_route_slots ... ok
+test routes::tests::system_route_returns_host_snapshot ... ok
+test routes::tests::create_session_route_returns_medium_default ... ok
+test lifecycle::tests::reconcile_sweeps_orphan_staging_dirs ... ok
+test store::tests::event_store_replays_in_sequence_order ... ok
+test routes::tests::llm_and_research_routes_cover_the_typed_browser_contract ... ok
+test routes::tests::report_pdf_route_can_download_pdf_as_attachment ... ok
+test store::tests::target_rejection_keeps_session_awaiting_target ... ok
+test store::tests::concurrent_same_session_events_have_unique_contiguous_sequences ... ok
+test routes::tests::session_manifest_missing_uses_stable_error_code ... ok
+test routes::tests::session_manifest_routes_return_json_and_download ... ok
+test routes::tests::report_pdf_route_rejects_non_report_artifacts ... ok
+test routes::tests::algorithm_export_rejects_restricted_artifacts_without_invention ... ok
+test routes::tests::model_directory_download_returns_zip ... ok
+test store::tests::storage_report_counts_rows_files_artifacts_and_events ... ok
+test store::tests::pooled_connections_support_concurrent_request_work ... ok
+test store::tests::prune_storage_dry_run_reports_but_keeps_old_sessions_and_orphans ... ok
+test routes::tests::report_pdf_route_returns_inline_pdf ... ok
+test routes::tests::report_pdf_route_returns_not_found_when_pdf_is_missing ... ok
+test runner::tests::finish_training_success_sets_state_and_emits_terminal_event ... ok
+test store::tests::trim_session_events_leaves_active_and_missing_sessions_alone ... ok
+test store::tests::owner_scoping_isolates_sessions_across_owners ... ok
+test runner::tests::mock_training_stops_promptly_when_cancelled ... ok
+test store::tests::auto_names_sessions_from_dataset_stem_with_dedup ... ok
+test store::tests::lists_renames_and_deletes_sessions ... ok
+test routes::tests::algorithm_export_includes_readme_manifest_and_invented_code ... ok
+test routes::tests::delete_all_sessions_route_clears_the_list ... ok
+test lifecycle::tests::reconcile_fails_stranded_sessions_and_emits_terminal_event ... ok
+test store::tests::prune_storage_can_enforce_a_session_tree_size_cap ... ok
+test lifecycle::tests::reconcile_leaves_stable_states_alone ... ok
+test store::tests::checkpoint_advances_redline_durable_state ... ok
+test store::tests::prune_storage_removes_old_sessions_rows_files_artifacts_events_and_orphans ... ok
+test store::tests::trim_session_events_keeps_last_rows_and_terminal_kinds ... ok
+test lifecycle::tests::gc_sweep_never_trims_an_active_session ... ok
+test lifecycle::tests::shutdown_cleanup_fails_inflight_sessions_and_checkpoints_redline ... ok
+test lifecycle::tests::gc_sweep_prunes_old_sessions_and_checkpoints ... ok
+test jope::tests::ownership_and_replay_survive_store_reopen ... ok
+test store::tests::seed_defaults_and_survives_reopen ... ok
+test store::tests::served_invented_defaults_off_and_survives_reopen ... ok
+test store::tests::redline_backup_reopens_and_vacuum_remains_available ... ok
+test store::tests::delete_session_removes_owned_rows_directory_and_stays_deleted_after_reopen ... ok
+test store::tests::delete_all_sessions_removes_owned_rows_tree_and_stays_empty_after_reopen ... ok
+test routes::tests::install_script_route_is_key_gated ... ok
+test runner::tests::mock_runner_emits_artifact_and_completion_events ... ok
+test store::tests::events_after_chunk_pages_through_a_large_backlog ... ok
+
+test result: ok. 88 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 33.25s
+
+     Running unittests src/main.rs (target/ci-smoke/debug/deps/jain_web-b3511360dba1eb87)
+
+running 5 tests
+test tests::ci_smoke_allows_non_default_ports_without_override ... ok
+test tests::ci_smoke_allows_the_normal_local_port_with_explicit_override ... ok
+test tests::ci_smoke_refuses_the_normal_local_port_without_override ... ok
+test tests::probe_errors_on_unsupported_or_unreachable_targets ... ok
+test tests::probe_reports_the_http_status_of_a_live_server ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/api_http.rs (target/ci-smoke/debug/deps/api_http-c553eef2b0d9f8e7)
+
+running 44 tests
+test get_unknown_session_is_an_error ... ok
+test unknown_session_upload_is_rejected_without_creating_session_dir ... ok
+test health_route_reports_ok_with_version_and_uptime ... ok
+test path_traversal_session_ids_get_404_and_touch_no_files ... ok
+test system_route_returns_cpu_memory_and_gpu_list ... ok
+test a_valid_key_mints_a_cookie_that_authenticates_subsequent_requests ... ok
+test unauthenticated_requests_are_rejected_when_the_token_gate_is_on ... ok
+test bad_extension_upload_restores_state_and_leaves_no_file_rows ... ok
+test rerun_requires_an_approved_target ... ok
+test training_config_change_is_rejected_while_training ... ok
+test storage_routes_report_usage_and_prune_dry_run_by_default ... ok
+test session_view_surfaces_the_reproducibility_seed ... ok
+test explicit_train_or_holdout_upload_during_training_conflicts ... ok
+test session_requests_accept_optional_training_overrides ... ok
+test advance_session_is_safe_noop_when_not_training ... ok
+test a_caller_cannot_see_or_delete_another_owners_session ... ok
+test oversize_upload_returns_413_and_cleans_partial_file_and_row ... ok
+test timed_rest_routes_still_respond_under_the_timeout_layer ... ok
+test demo_matrix_rejects_injected_ids_and_unsupported_uploads_at_the_boundary ... ok
+test collaborator_routes_require_full_access_and_preserve_read_only_access ... ok
+test cancel_sets_cancelled_state ... ok
+test lists_and_deletes_sessions_over_http ... ok
+test delete_all_sessions_over_http_returns_empty_list_before_recreate ... ok
+test create_session_defaults_and_persists_each_effort ... ok
+test events_replay_respects_the_after_cursor ... ok
+test suspicious_final_column_pauses_for_manual_target ... ok
+test change_effort_updates_the_session_before_training ... ok
+test upload_autoselects_final_column_and_blocks_training_by_default ... ok
+test files_route_lists_uploaded_temp_paths_only ... ok
+test predict_without_a_model_is_an_error ... ok
+test auto_upload_without_names_uses_smaller_companion_for_scoring ... ok
+test low_confidence_final_binary_target_is_ready_when_smoke_training_is_blocked ... ok
+test upload_profiles_csv_and_rejects_other_extensions ... ok
+test target_approve_and_reject_transition_state ... ok
+test smoke_training_disabled_rejects_manual_start_and_rerun ... ok
+test start_requires_an_approved_target ... ok
+test checkpoint_revert_restores_session_files_and_artifacts ... ok
+test scoring_upload_during_training_preserves_state_and_is_predicted ... ok
+test auto_train_and_test_upload_scores_test_rows ... ok
+test full_lifecycle_trains_predicts_and_downloads ... ok
+test two_concurrent_runs_on_distinct_sessions_both_run_without_queueing ... ok
+test upload_above_axum_default_body_limit_is_accepted ... ok
+test queued_run_reports_its_position_when_the_pool_is_full ... ok
+test rerun_reuses_the_same_data_and_completes_again ... ok
+
+test result: ok. 44 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.49s
+
+     Running tests/recovery.rs (target/ci-smoke/debug/deps/recovery-39e88fe24c7ee4bd)
+
+running 4 tests
+test second_start_on_a_live_run_conflicts_without_a_duplicate_job ... ok
+test supervisor_flags_are_released_after_the_run ... ok
+test run_panic_marks_session_failed_and_emits_error_event ... ok
+test startup_reconciliation_fails_stranded_sessions_over_http ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.80s
+
+     Running tests/redline_persistence.rs (target/ci-smoke/debug/deps/redline_persistence-58fafdd6382bbe89)
+
+running 1 test
+test checkpointed_row_survives_close_and_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.24s
+     Running tests/ws_stream.rs (target/ci-smoke/debug/deps/ws_stream-3fd827e67f44d468)
+
+running 5 tests
+test isolates_events_by_session ... ok
+test pushes_live_events_exactly_once ... ok
+test recovers_from_broadcast_lag_without_gaps ... ok
+test replays_a_multi_chunk_backlog_completely_and_in_order ... ok
+test replays_events_after_the_cursor_in_order ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 254.30s
+
+[ci] web Rust migration lane: frozen SQLite reader to Redline
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.28s
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/ci-smoke/debug/deps/jain_web_sqlite_migration-0080766d95e9b53b)
+
+running 11 tests
+test implementation::tests::runtime_refuses_orphan_sqlite_and_migration_markers ... ok
+test implementation::tests::exclusive_lock_rejects_a_second_migrator ... ok
+test implementation::tests::runtime_refuses_unmigrated_sqlite_state ... ok
+test implementation::tests::refuses_oversized_sources_before_creating_redline_state ... ok
+test implementation::tests::refuses_to_overwrite_existing_redline_state ... ok
+test implementation::tests::refuses_unknown_sqlite_tables_instead_of_dropping_them ... ok
+test implementation::tests::resumes_after_archive_publication_is_interrupted ... ok
+test implementation::tests::resumes_after_only_a_wal_side_file_was_staged ... ok
+test implementation::tests::resumes_from_a_verified_staged_database_before_publication ... ok
+test implementation::tests::migrates_rows_archives_source_and_reopens ... ok
+test implementation::tests::migrates_a_stable_uncheckpointed_wal_snapshot ... ok
+
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.60s
+
+     Running unittests src/main.rs (target/ci-smoke/debug/deps/jain_web_sqlite_migration-52f6c39fa1d5b61c)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests jain_web_sqlite_migration
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+[ci] web required lane: pnpm typecheck, vitest, build
+Already up to date
+Done in 416ms using pnpm v11.9.0
+$ tsc -p tsconfig.json --pretty false
+$ vitest run
+
+ RUN  v3.2.6 /home/ubuntu/.cache/claude-orch-ci/webt0-merge/jain-web/apps/web
+
+ ✓ src/lib/feedLayout.test.ts (6 tests) 3ms
+ ✓ src/lib/uiPrefs.test.ts (1 test) 3ms
+ ✓ src/lib/inventionCopy.test.ts (2 tests) 3ms
+ ✓ src/components/charts/terminal.test.ts (4 tests) 4ms
+ ✓ src/components/charts/scales.test.ts (16 tests) 9ms
+ ✓ src/lib/flashPreview.test.ts (6 tests) 18ms
+ ✓ src/generated/apiTransport.test.ts (3 tests) 13ms
+ ✓ src/lib/account.test.ts (3 tests) 6ms
+ ✓ src/components/HyperionConcernChart.test.tsx (1 test) 30ms
+ ✓ src/components/ReasoningLine.test.tsx (3 tests) 50ms
+ ✓ src/components/PyCode.test.tsx (3 tests) 57ms
+ ✓ src/components/ColumnProfilePanel.test.tsx (1 test) 86ms
+ ✓ src/hooks/useFileActions.test.ts (4 tests) 5ms
+ ✓ src/upload.test.ts (6 tests) 6ms
+ ✓ src/components/ErrorBoundary.test.tsx (7 tests) 163ms
+ ✓ src/protocol.contract.test.ts (3 tests) 13ms
+ ✓ src/components/HyperionSweepLive.test.tsx (6 tests) 136ms
+ ✓ src/lib/defaults.test.ts (7 tests) 8ms
+ ✓ src/protocol.test.ts (11 tests) 11ms
+ ✓ src/lib/payload.test.ts (19 tests) 13ms
+stderr | src/hooks/useSessionSocket.test.ts > useSessionSocket > connects, delivers valid frames, drops malformed frames, and resumes from the last seq
+dropping malformed ws frame [
+  {
+    code: [32m'invalid_type'[39m,
+    expected: [32m'number'[39m,
+    received: [32m'undefined'[39m,
+    path: [ [32m'seq'[39m ],
+    message: [32m'Required'[39m
+  },
+  {
+    code: [32m'invalid_type'[39m,
+    expected: [32m'string'[39m,
+    received: [32m'undefined'[39m,
+    path: [ [32m'session_id'[39m ],
+    message: [32m'Required'[39m
+  },
+  {
+    code: [32m'invalid_type'[39m,
+    expected: [32m'string'[39m,
+    received: [32m'undefined'[39m,
+    path: [ [32m'ts'[39m ],
+    message: [32m'Required'[39m
+  },
+  {
+    code: [32m'invalid_type'[39m,
+    expected: [32m'string'[39m,
+    received: [32m'undefined'[39m,
+    path: [ [32m'kind'[39m ],
+    message: [32m'Required'[39m
+  },
+  {
+    code: [32m'invalid_type'[39m,
+    expected: [32m'string'[39m,
+    received: [32m'undefined'[39m,
+    path: [ [32m'message'[39m ],
+    message: [32m'Required'[39m
+  }
+]
+
+ ✓ src/lib/commands.test.ts (9 tests) 20ms
+ ✓ src/lib/feedItems.test.tsx (8 tests) 12ms
+ ✓ src/components/FeatureImportance.test.tsx (2 tests) 35ms
+ ✓ src/components/LiftBar.test.tsx (2 tests) 35ms
+ ✓ src/components/Feed.test.tsx (4 tests) 56ms
+ ✓ src/components/ComputeStream.test.tsx (1 test) 53ms
+ ✓ src/components/CvHeatmap.test.tsx (2 tests) 50ms
+ ✓ src/components/FlashPreview.test.tsx (1 test) 86ms
+ ✓ src/components/TargetApproval.test.tsx (2 tests) 108ms
+(node:1168091) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/Sidebar.test.tsx (8 tests) 246ms
+ ✓ src/components/ReportPreviewPane.test.tsx (2 tests) 227ms
+ ✓ src/components/GpWinners.test.tsx (5 tests) 76ms
+ ✓ src/state.test.ts (39 tests) 80ms
+ ✓ src/components/EffortSelector.test.tsx (1 test) 112ms
+(node:1168022) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/DisplayPrimitives.test.tsx (6 tests) 141ms
+ ✓ src/components/Composer.test.tsx (6 tests) 312ms
+ ✓ src/components/InventionLab.test.tsx (13 tests) 236ms
+(node:1168023) ExperimentalWarning: localStorage is not available because --localstorage-file was not provided.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ src/components/SettingsScreen.test.tsx (4 tests) 301ms
+ ✓ src/hooks/useSessionSocket.test.ts (11 tests) 652ms
+   ✓ useSessionSocket > connects, delivers valid frames, drops malformed frames, and resumes from the last seq  623ms
+ ✓ src/App.test.tsx (11 tests) 478ms
+
+ Test Files  40 passed (40)
+      Tests  249 passed (249)
+   Start at  12:30:33
+   Duration  3.05s (transform 7.12s, setup 9.21s, collect 18.76s, tests 3.95s, environment 27.33s, prepare 4.91s)
+
+$ tsc -p tsconfig.json && vite build
+vite v6.4.3 building for production...
+transforming...
+✓ 1719 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.52 kB │ gzip:   0.32 kB
+dist/assets/index-x4VoM_gH.css   66.39 kB │ gzip:  13.31 kB
+dist/assets/index-0sTyrAAn.js   403.67 kB │ gzip: 122.98 kB
+✓ built in 3.25s
+required ok: jain-web
+CI_EXIT=0

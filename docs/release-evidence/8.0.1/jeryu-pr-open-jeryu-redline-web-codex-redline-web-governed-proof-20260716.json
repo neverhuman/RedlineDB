@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-web"
+      },
+      "sha": "09fd93be10238cd85abc164b0b01cf0f681ea304"
+    },
+    "body": "",
+    "created_at": "2026-07-16T11:02:46.694792154Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-web-governed-proof-20260716",
+      "ref": "codex/redline-web-governed-proof-20260716",
+      "repo": {
+        "full_name": "jeryu/redline-web"
+      },
+      "sha": "55636f32676b1527628c82793acd7755d4b1c70c"
+    },
+    "html_url": "/jeryu/redline-web/pull/3",
+    "id": "8649b3d6-2121-4788-b506-2a6ef8385696",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 3,
+    "source_repository": "jeryu/redline-web",
+    "state": "open",
+    "title": "ci: govern Redline Web proof evidence",
+    "updated_at": "2026-07-16T11:02:46.694792154Z",
+    "url": "/repos/jeryu/redline-web/pulls/3",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/redline-web",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codex/redline-web-governed-proof-20260716",
+      "title": "ci: govern Redline Web proof evidence"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-web/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-web"
+      },
+      "sha": "09fd93be10238cd85abc164b0b01cf0f681ea304"
+    },
+    "body": "",
+    "created_at": "2026-07-16T11:02:46.694792154Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-web-governed-proof-20260716",
+      "ref": "codex/redline-web-governed-proof-20260716",
+      "repo": {
+        "full_name": "jeryu/redline-web"
+      },
+      "sha": "55636f32676b1527628c82793acd7755d4b1c70c"
+    },
+    "html_url": "/jeryu/redline-web/pull/3",
+    "id": "8649b3d6-2121-4788-b506-2a6ef8385696",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 3,
+    "source_repository": "jeryu/redline-web",
+    "state": "open",
+    "title": "ci: govern Redline Web proof evidence",
+    "updated_at": "2026-07-16T11:02:46.694792154Z",
+    "url": "/repos/jeryu/redline-web/pulls/3",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784199766
+}

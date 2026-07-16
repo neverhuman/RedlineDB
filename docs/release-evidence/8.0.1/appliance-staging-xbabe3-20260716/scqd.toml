@@ -1,0 +1,11 @@
+# Lane 6 staging scqd config (in-container). Paths match the l6 override mounts.
+socket_path = "/run/jain-smartcluster/scqd.sock"
+state_path = "/var/lib/scqd-l6/scqd.redb"
+event_dir = "/var/lib/scqd-l6/events"
+# Unprivileged container: cgroup delegation is unavailable; embedded = true
+# degrades to single-allocation isolation instead of failing closed.
+cgroup_root = "/sys/fs/cgroup"
+embedded = true
+
+[workers]
+jain_worker = "/usr/libexec/jain/jain-worker"

@@ -1,0 +1,85 @@
+{
+  "schema_version": "jain.independent-protected-lifecycle/v1",
+  "recorded_at_utc": "2026-07-16T08:22:00Z",
+  "claim": "codex-domain-pr8-independent-protected-lifecycle-20260716T0816Z",
+  "repository": "jeryu/jain-domain",
+  "pull_request": 8,
+  "protected_main_before": "4383aef8b23dd194db12778db3fc378ab526b145",
+  "exact_head": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+  "admission": {
+    "jankurai_proof": {
+      "check_run_id": "38110b48-a0ae-4b2f-8556-ada796545d21",
+      "conclusion": "success"
+    },
+    "required": {
+      "name": "jain-domain/required",
+      "check_run_id": "7dd3236a-c07e-4b83-8840-c7d849fd676b",
+      "conclusion": "success"
+    },
+    "host_receipt": {
+      "path": "../ci/host/jain-domain-3ae83ce17bb57f5f8dd52f087991ff59bda5afbc-234b3754afb8c5840628608ea1ac0c231c03160ecd01f63d577ff1f79c7e6256.json",
+      "sha256": "9fe03726ca56246dec3363d9ea437e402772b30691ea3354c570ee00f19a688e"
+    },
+    "independent_audit": {
+      "path": "jeryu-governed-integrity-audit-jeryu-jain-domain-pr8-3ae83ce1.json",
+      "sha256": "befaa9b1edc060aab5628f66eaa5492e2ba383c5fd03af867985abfc5999041f"
+    }
+  },
+  "metadata_correction": {
+    "endpoint": "/repos/jeryu/jain-domain/pulls/8",
+    "method": "PATCH",
+    "request_payload_sha256": "ffb2667505d4cf99c3ac1c900b742baab8757547effff4eb85b7143ccdd566be",
+    "request_and_readback_body_sha256": "e5ad1b9cd67dfeda73455903d051def3b9bff68233b9047dd43976e46a06a8bd",
+    "updated_at": "2026-07-16T08:19:59.515554281Z",
+    "title_base_branch_and_head_unchanged": true,
+    "required_success_documented": true
+  },
+  "protection": {
+    "receipt": "../jeryu-protection-readback-jeryu-jain-domain.json",
+    "receipt_sha256": "2e245df93ace80fe081ca7c22b9cc6dfe63643da913f6f49794a74e91a15afa4",
+    "required_approving_review_count": 1,
+    "required_status_checks": [
+      "jain-domain/required"
+    ],
+    "strict_status_checks": true,
+    "required_linear_history": true,
+    "enforce_admins": true,
+    "allow_force_pushes": false,
+    "allow_deletions": false
+  },
+  "approval": {
+    "receipt": "../jeryu-pr-approve-jeryu-jain-domain-pr8-3ae83ce1.json",
+    "receipt_sha256": "7a7188568e1968be83e474bbab98e13dec2b7c1df8421385e3778276b9209693",
+    "status": "pass",
+    "expected_head": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+    "approvals_readback": 1,
+    "merge_passport": "pass"
+  },
+  "merge": {
+    "receipt": "../jeryu-pr-merge-jeryu-jain-domain-pr8-3ae83ce1.json",
+    "receipt_sha256": "a1768e715a47b3f2e2af3b5a65a1fa7af9a73182128f62aede85960029eb86f1",
+    "status": "pass",
+    "merged": true,
+    "merged_at": "2026-07-16T08:21:22.686898033Z",
+    "merged_main": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+    "fast_forward_exact_head": true
+  },
+  "canonical_checkout": {
+    "path": "/home/ubuntu/jain-split/jain-domain",
+    "clean": true,
+    "worktree_count": 1,
+    "local_checkout_unchanged": true
+  },
+  "remaining_release_gates": [
+    "immutable corrective 8.0.1 tag",
+    "protected authority commit and checksum binding"
+  ],
+  "mutations": [
+    "PR body metadata correction",
+    "independent exact-head approval",
+    "protected fast-forward merge",
+    "machine evidence receipts"
+  ],
+  "forbidden_mutations_observed": false,
+  "decision": "PROTECTED_MERGE_PASS_TAG_AND_AUTHORITY_PENDING"
+}

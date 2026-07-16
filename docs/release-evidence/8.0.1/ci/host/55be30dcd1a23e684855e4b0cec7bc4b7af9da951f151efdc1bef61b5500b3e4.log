@@ -1,0 +1,17 @@
+Cloning into '/home/ubuntu/.cache/split-host-ci-tmp/split-host-ci.OtFDm6/jain-split-ops'...
+HEAD is now at ac1db7c ci(worktree-ban): enforce single-checkout policy mechanically
+lock_blob=f604eeb8630901717b05a285b3f857d24cd17aee
+name=jain-split-ops
+ref=ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa
+commit=ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa
+tree=dfbb660ba3fd008edcf9bfc83776bf8b96949d76
+release_checksum_sha256=4cb6fcb58b6d925f5b95c6eda48c2d41e78362edeca3432f621126c2cca89c42
+[required:jain-split-ops] shell: bash -n + shellcheck (error level) on all ops shell scripts
+native runtime build/link contract ok
+native materializer authority/evidence contract ok
+host CI exact orchestration contract ok
+fatal: '/home/ubuntu/.cache/split-host-ci-tmp/split-host-ci.OtFDm6/home/.cargo/advisory-db' does not appear to be a git repository
+fatal: Could not read from remote repository.
+
+Please make sure you have the correct access rights
+and the repository exists.

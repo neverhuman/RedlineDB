@@ -1,0 +1,79 @@
+{
+  "claim": "claude-e2e-artifact-ci-undefined",
+  "kind": "contract-level-e2e-artifact-ci",
+  "timestamp_utc": "2026-07-16T05:46:54Z",
+  "image": "image.neverhuman.org/veox/jain@sha256:ffbbaf48bda7253785b2d32436eb0cbf1d0ff927a41593b907f7307e07075871",
+  "image_resolved_tags": ["8.0.1-gpu", "latest"],
+  "harness": {
+    "script": "/home/ubuntu/jain-split/jain-deploy/scripts/artifact-ci.sh",
+    "script_sha256": "7e03e437218429be0af38fa0bf584f23c02232719fa916c311f7ac9007db4758",
+    "patched_copy": null,
+    "patched_copy_sha256": null,
+    "mode": "full (not --quick)",
+    "port": 18080,
+    "port_note": "JAIN_ARTIFACT_CI_PORT=18080 exported explicitly; script default is already 18080, no collision with long-running 'jain' container on 127.0.0.1:8080, so no patched copy was needed",
+    "serve_container_name": "jain-aci-serve",
+    "testdata": "/home/ubuntu/jain-split/jain-deploy/deployment/testdata (read in place)"
+  },
+  "result": {
+    "exit_code": 0,
+    "checks_passed": 15,
+    "checks_failed": 0,
+    "checks_total": 15
+  },
+  "checks": [
+    "serve smoke: /ping responds (503 fail-closed with no model, correct)",
+    "regression: sagemaker train contract (exit 0, manifest.json present)",
+    "regression: /ping 200 with model loaded",
+    "regression: /invocations 200 (batch predictions)",
+    "regression: 415 on non-CSV content-type",
+    "regression: 405 on GET /invocations",
+    "regression: 400 on wrong row width",
+    "regression: quality gate (r2 >= 0.40)",
+    "binary: sagemaker train contract (exit 0, manifest.json present)",
+    "binary: /ping 200 with model loaded",
+    "binary: /invocations 200 (batch predictions)",
+    "binary: 415 on non-CSV content-type",
+    "binary: 405 on GET /invocations",
+    "binary: 400 on wrong row width",
+    "binary: quality gate (auc >= 0.62)"
+  ],
+  "quality_gates": {
+    "regression": {
+      "fixture": "allstate-regression-c4b1f6dfb2a8605f",
+      "metric": "r2",
+      "value": 0.54853,
+      "floor": 0.40,
+      "n": 999,
+      "pass": true,
+      "baseline_context": "beats ard_regression 0.39968 and ada_boost 0.36216; autogluon_300s target is 0.49494 — beaten"
+    },
+    "binary": {
+      "fixture": "binary-0004ff1bec07b7a0",
+      "metric": "auc",
+      "value": 0.68657,
+      "floor": 0.62,
+      "n": 1000,
+      "pass": true,
+      "baseline_context": "beats voting_soft 0.67962, catboost 0.66927, lightgbm 0.65325; tabpfn/tabicl frontier ~0.69"
+    }
+  },
+  "prior_web_path_results_this_run": {
+    "regression": {"pass": false, "note": "web API predict path failure (kernel 'corrupt page' 500), NOT a model-quality failure; this SageMaker-contract path trains and scores the same fixture successfully"},
+    "binary": {"pass": true, "metric": 0.686567, "note": "matches this run's contract-path auc 0.68657 to 4 decimal places"}
+  },
+  "run_log": {
+    "path": "jain-split-ops/docs/release-evidence/8.0.1/e2e/claude-e2e-artifact-ci-undefined.run.log",
+    "sha256": "c54f99c0af71a0bff04525dcdf8a70f9fe95ac4adaaef4165ee03d702db5bc4c"
+  },
+  "cleanup": {
+    "containers": "jain-aci-serve removed by the script's EXIT trap; docker ps readback confirms 'jain' (Up 35h) and all codex-*/buildx_* containers untouched",
+    "leftover_workdir": "/tmp/jain-artifact-ci.rYM85g partially remains: model outputs written root-owned by the container resist unprivileged rm; consistent with 6 other leftover /tmp/jain-artifact-ci.* dirs from prior runs by other lanes"
+  },
+  "caveats": [
+    "quality-gate metrics (r2, rank-based AUC) are computed by an inline python3 heredoc inside artifact-ci.sh — acceptable as a verification oracle only; no Python added to any repo, product code remains Rust-only",
+    "binary training report notes 'PDF skipped/failed; see report-error.json' inside the model bundle — the report PDF is not part of the SageMaker contract and no check depends on it",
+    "GPU: shared RTX 3090, idle before the run; this was the only heavy GPU job in this phase"
+  ],
+  "operator": "Claude worker e2e-artifact-ci"
+}

@@ -1,0 +1,504 @@
+check ok: /home/ubuntu/.cache/claude-orch-ci/cli-repin/jain-cli
+[ci] cli required lane: no-native ci-smoke
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.46
+    Checking cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling version_check v0.9.5
+    Checking bitflags v2.13.0
+   Compiling autocfg v1.5.1
+    Checking bytemuck v1.25.0
+   Compiling nano-gemm-codegen v0.2.1
+   Compiling serde_core v1.0.228
+   Compiling libm v0.2.16
+   Compiling paste v1.0.15
+   Compiling serde v1.0.228
+    Checking either v1.16.0
+    Checking itoa v1.0.18
+    Checking foldhash v0.2.0
+   Compiling crossbeam-utils v0.8.22
+    Checking reborrow v0.5.5
+   Compiling zerocopy v0.8.54
+    Checking pulp-wasm-simd-flag v0.1.1
+    Checking allocator-api2 v0.2.21
+    Checking equivalent v1.0.2
+   Compiling dyn-stack-macros v0.1.3
+   Compiling thiserror v2.0.18
+    Checking log v0.4.33
+   Compiling crossbeam-epoch v0.9.20
+    Checking typenum v1.20.1
+   Compiling crossbeam-deque v0.8.7
+    Checking once_cell v1.21.4
+   Compiling syn v1.0.109
+    Checking raw-cpuid v11.6.0
+   Compiling seq-macro v0.3.6
+   Compiling num-traits v0.2.19
+   Compiling pulp v0.22.3
+   Compiling generic-array v0.14.7
+    Checking hashbrown v0.17.1
+    Checking memchr v2.8.3
+    Checking ryu v1.0.23
+   Compiling getrandom v0.3.4
+   Compiling rustversion v1.0.23
+    Checking dyn-stack v0.13.2
+    Checking nano-gemm-core v0.2.1
+   Compiling rayon-core v1.13.0
+   Compiling zmij v1.0.21
+    Checking scopeguard v1.2.0
+   Compiling heck v0.5.0
+    Checking errno v0.3.14
+   Compiling serde_json v1.0.150
+   Compiling ident_case v1.0.1
+   Compiling strsim v0.11.1
+   Compiling anyhow v1.0.103
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling nano-gemm-f64 v0.2.1
+    Checking lock_api v0.4.14
+    Checking signal-hook-registry v1.4.8
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling crc32fast v1.5.0
+   Compiling rustix v1.1.4
+   Compiling defer v0.2.1
+    Checking cpufeatures v0.2.17
+    Checking rand_core v0.9.5
+    Checking mio v1.2.1
+    Checking hashbrown v0.16.1
+    Checking itertools v0.14.0
+    Checking simd-adler32 v0.3.9
+   Compiling parking_lot_core v0.9.12
+    Checking unicode-segmentation v1.13.3
+    Checking unicode-width v0.2.2
+    Checking static_assertions v1.1.0
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking num-complex v0.4.6
+    Checking castaway v0.2.4
+   Compiling instability v0.3.12
+    Checking linux-raw-sys v0.12.1
+   Compiling syn v2.0.118
+    Checking rayon v1.12.0
+   Compiling signal-hook v0.3.18
+    Checking digest v0.10.7
+    Checking lru v0.18.1
+    Checking num_cpus v1.17.0
+    Checking getrandom v0.2.17
+   Compiling convert_case v0.10.0
+   Compiling equator-macro v0.6.0
+   Compiling indoc v2.0.7
+    Checking adler2 v2.0.1
+    Checking unicode-truncate v2.0.1
+    Checking compact_str v0.9.1
+    Checking smallvec v1.15.2
+    Checking sha2 v0.10.9
+    Checking critical-section v1.2.0
+   Compiling semver v1.0.28
+    Checking ppv-lite86 v0.2.21
+    Checking generativity v1.2.1
+    Checking rand_core v0.6.4
+    Checking equator v0.6.0
+   Compiling litrs v1.0.0
+    Checking miniz_oxide v0.8.9
+    Checking deranged v0.5.8
+   Compiling rustc_version v0.4.1
+    Checking num_threads v0.1.7
+    Checking time-core v0.1.9
+    Checking rand_chacha v0.9.0
+    Checking zlib-rs v0.6.6
+    Checking num-conv v0.2.2
+    Checking powerfmt v0.2.0
+   Compiling interpol v0.2.1
+    Checking bumpalo v3.20.3
+    Checking signal-hook-mio v0.2.5
+   Compiling document-features v0.2.12
+   Compiling heapless v0.7.17
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling darling_core v0.23.0
+   Compiling strum_macros v0.28.0
+   Compiling equator-macro v0.2.1
+   Compiling derive_more-impl v2.1.1
+    Checking zopfli v0.8.3
+    Checking time v0.3.53
+    Checking rand v0.9.4
+    Checking parking_lot v0.12.5
+    Checking flate2 v1.1.9
+   Compiling private-gemm-x86 v0.1.20
+    Checking rand_chacha v0.3.1
+    Checking csv-core v0.1.13
+    Checking indexmap v2.14.0
+    Checking line-clipping v0.3.7
+    Checking equator v0.2.2
+    Checking typed-path v0.12.3
+    Checking byteorder v1.5.0
+    Checking derive_more v2.1.1
+    Checking utf8parse v0.2.2
+    Checking csv v1.4.0
+    Checking rand v0.8.6
+    Checking hash32 v0.2.1
+    Checking spin v0.9.9
+    Checking anstyle-parse v1.0.0
+    Checking colorchoice v1.0.5
+    Checking zip v8.6.0
+    Checking stable_deref_trait v1.2.1
+    Checking anstyle-query v1.1.5
+    Checking is_terminal_polyfill v1.70.2
+    Checking anstyle v1.0.14
+   Compiling tokio-macros v2.7.0
+    Checking socket2 v0.6.5
+    Checking pin-project-lite v0.2.17
+    Checking kasuari v0.4.12
+    Checking cobs v0.3.0
+    Checking bytes v1.12.1
+    Checking strum v0.28.0
+    Checking anstream v1.0.0
+    Checking clap_lex v1.1.0
+   Compiling clap_derive v4.6.1
+   Compiling async-trait v0.1.89
+    Checking crossbeam-channel v0.5.16
+    Checking filetime v0.2.29
+    Checking futures-core v0.3.32
+    Checking chunked_transfer v1.5.0
+    Checking clap_builder v4.6.0
+    Checking ascii v1.1.0
+    Checking ratatui-core v0.1.2
+    Checking tokio v1.52.3
+    Checking httpdate v1.0.3
+    Checking rand_xorshift v0.4.0
+    Checking unarray v0.1.4
+    Checking regex-syntax v0.8.11
+    Checking crossterm v0.29.0
+    Checking xattr v1.6.1
+    Checking tiny_http v0.12.0
+   Compiling darling_macro v0.23.0
+    Checking proptest v1.11.0
+    Checking tar v0.4.46
+   Compiling darling v0.23.0
+    Checking clap v4.6.1
+    Checking feat-math v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.0-split.1#2a1e189d)
+    Checking domain v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-domain.git?tag=jain-domain-v8.0.0-split.1#07a6879b)
+    Checking ulid v1.2.1
+    Checking feat-math v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.0#33fcf35e)
+    Checking ratatui-widgets v0.3.2
+    Checking ratatui-crossterm v0.1.2
+    Checking jain-smartcluster-core v8.0.0 (http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git?tag=jain-smartcluster-v8.0.1-split.0#c28c5c83)
+    Checking postcard v1.1.3
+    Checking gemm-common v0.19.0
+    Checking qd v0.8.0
+    Checking faer-traits v0.24.0
+    Checking ratatui-macros v0.7.2
+    Checking gemm-f64 v0.19.0
+    Checking gemm-c32 v0.19.0
+    Checking gemm-f32 v0.19.0
+    Checking gemm-c64 v0.19.0
+    Checking ratatui v0.30.2
+    Checking battle-gpu v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git?tag=jain-battle-gpu-v8.0.1-split.0#87b2367f)
+    Checking gemm v0.19.0
+    Checking jain-smartcluster v8.0.0 (http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git?tag=jain-smartcluster-v8.0.1-split.0#c28c5c83)
+    Checking nano-gemm v0.2.2
+    Checking faer v0.24.4
+    Checking jable v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-jable.git?tag=jain-jable-v8.0.0-split.1#e119908d)
+    Checking feat-core v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-core.git?tag=jain-core-v8.0.1-split.0#fda3a4cb)
+    Checking feat-tui v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-tui.git?tag=jain-tui-v8.0.1-split.0#70c6c578)
+    Checking feat-report v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-report.git?tag=jain-report-v8.0.1-split.0#8dff8bce)
+    Checking feat-cli v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/cli-repin/jain-cli/crates/feat-cli)
+warning: unused import: `Args as ClapArgs`
+ --> crates/feat-cli/src/args/mod.rs:2:12
+  |
+2 | use clap::{Args as ClapArgs, Parser, Subcommand, ValueEnum};
+  |            ^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `feat-cli` (lib) generated 1 warning (run `cargo clippy --fix --lib -p feat-cli -- ` to apply 1 suggestion)
+warning: function `synth_headerless_regression` is never used
+   --> crates/feat-cli/tests/cli_contract.rs:110:4
+    |
+110 | fn synth_headerless_regression(rows: usize) -> String {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `feat-cli` (lib test) generated 1 warning (1 duplicate)
+warning: `feat-cli` (test "cli_contract") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 29.92s
+   Compiling cfg-if v1.0.4
+   Compiling bitflags v2.13.0
+   Compiling bytemuck v1.25.0
+   Compiling either v1.16.0
+   Compiling itoa v1.0.18
+   Compiling reborrow v0.5.5
+   Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.2.0
+   Compiling equivalent v1.0.2
+   Compiling pulp-wasm-simd-flag v0.1.1
+   Compiling libc v0.2.186
+   Compiling serde_core v1.0.228
+   Compiling libm v0.2.16
+   Compiling num-traits v0.2.19
+   Compiling log v0.4.33
+   Compiling crossbeam-utils v0.8.22
+   Compiling zerocopy v0.8.54
+   Compiling typenum v1.20.1
+   Compiling thiserror v2.0.18
+   Compiling strsim v0.11.1
+   Compiling unicode-segmentation v1.13.3
+   Compiling once_cell v1.21.4
+   Compiling raw-cpuid v11.6.0
+   Compiling memchr v2.8.3
+   Compiling nano-gemm-core v0.2.1
+   Compiling ryu v1.0.23
+   Compiling scopeguard v1.2.0
+   Compiling zmij v1.0.21
+   Compiling hashbrown v0.17.1
+   Compiling crossbeam-epoch v0.9.20
+   Compiling darling_core v0.23.0
+   Compiling cpufeatures v0.2.17
+   Compiling castaway v0.2.4
+   Compiling itertools v0.14.0
+   Compiling generic-array v0.14.7
+   Compiling hashbrown v0.16.1
+   Compiling anyhow v1.0.103
+   Compiling lock_api v0.4.14
+   Compiling simd-adler32 v0.3.9
+   Compiling static_assertions v1.1.0
+   Compiling num-complex v0.4.6
+   Compiling dyn-stack v0.13.2
+   Compiling unicode-width v0.2.2
+   Compiling linux-raw-sys v0.12.1
+   Compiling crossbeam-deque v0.8.7
+   Compiling convert_case v0.10.0
+   Compiling lru v0.18.1
+   Compiling equator v0.2.2
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling strum v0.28.0
+   Compiling errno v0.3.14
+   Compiling getrandom v0.3.4
+   Compiling mio v1.2.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling kasuari v0.4.12
+   Compiling rayon-core v1.13.0
+   Compiling compact_str v0.9.1
+   Compiling unicode-truncate v2.0.1
+   Compiling getrandom v0.2.17
+   Compiling rustix v1.1.4
+   Compiling num_cpus v1.17.0
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling nano-gemm-f64 v0.2.1
+   Compiling digest v0.10.7
+   Compiling signal-hook-registry v1.4.8
+   Compiling crc32fast v1.5.0
+   Compiling critical-section v1.2.0
+   Compiling adler2 v2.0.1
+   Compiling pulp v0.22.3
+   Compiling rayon v1.12.0
+   Compiling rand_core v0.9.5
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling smallvec v1.15.2
+   Compiling generativity v1.2.1
+   Compiling rand_core v0.6.4
+   Compiling private-gemm-x86 v0.1.20
+   Compiling sha2 v0.10.9
+   Compiling signal-hook v0.3.18
+   Compiling equator v0.6.0
+   Compiling rand_chacha v0.9.0
+   Compiling miniz_oxide v0.8.9
+   Compiling derive_more-impl v2.1.1
+   Compiling deranged v0.5.8
+   Compiling parking_lot_core v0.9.12
+   Compiling time-core v0.1.9
+   Compiling num-conv v0.2.2
+   Compiling powerfmt v0.2.0
+   Compiling ratatui-core v0.1.2
+   Compiling zlib-rs v0.6.6
+   Compiling bumpalo v3.20.3
+   Compiling num_threads v0.1.7
+   Compiling parking_lot v0.12.5
+   Compiling rand v0.9.4
+   Compiling signal-hook-mio v0.2.5
+   Compiling zopfli v0.8.3
+   Compiling rand_chacha v0.3.1
+   Compiling derive_more v2.1.1
+   Compiling indexmap v2.14.0
+   Compiling csv-core v0.1.13
+   Compiling time v0.3.53
+   Compiling line-clipping v0.3.7
+   Compiling byteorder v1.5.0
+   Compiling utf8parse v0.2.2
+   Compiling darling_macro v0.23.0
+   Compiling typed-path v0.12.3
+   Compiling flate2 v1.1.9
+   Compiling rand v0.8.6
+   Compiling spin v0.9.9
+   Compiling anstyle-query v1.1.5
+   Compiling hash32 v0.2.1
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling darling v0.23.0
+   Compiling anstyle-parse v1.0.0
+   Compiling stable_deref_trait v1.2.1
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.150
+   Compiling csv v1.4.0
+   Compiling colorchoice v1.0.5
+   Compiling anstyle v1.0.14
+   Compiling socket2 v0.6.5
+   Compiling cobs v0.3.0
+   Compiling pin-project-lite v0.2.17
+   Compiling clap_lex v1.1.0
+   Compiling bytes v1.12.1
+   Compiling instability v0.3.12
+   Compiling filetime v0.2.29
+   Compiling anstream v1.0.0
+   Compiling zip v8.6.0
+   Compiling crossbeam-channel v0.5.16
+   Compiling chunked_transfer v1.5.0
+   Compiling httpdate v1.0.3
+   Compiling futures-core v0.3.32
+   Compiling ascii v1.1.0
+   Compiling clap_builder v4.6.0
+   Compiling rand_xorshift v0.4.0
+   Compiling regex-syntax v0.8.11
+   Compiling tokio v1.52.3
+   Compiling unarray v0.1.4
+   Compiling ratatui-widgets v0.3.2
+   Compiling domain v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-domain.git?tag=jain-domain-v8.0.0-split.1#07a6879b)
+   Compiling heapless v0.7.17
+   Compiling ulid v1.2.1
+   Compiling crossterm v0.29.0
+   Compiling xattr v1.6.1
+   Compiling tiny_http v0.12.0
+   Compiling jain-smartcluster-core v8.0.0 (http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git?tag=jain-smartcluster-v8.0.1-split.0#c28c5c83)
+   Compiling clap v4.6.1
+   Compiling proptest v1.11.0
+   Compiling tar v0.4.46
+   Compiling feat-math v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.0-split.1#2a1e189d)
+   Compiling feat-math v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.0#33fcf35e)
+   Compiling postcard v1.1.3
+   Compiling ratatui-crossterm v0.1.2
+   Compiling gemm-common v0.19.0
+   Compiling qd v0.8.0
+   Compiling ratatui-macros v0.7.2
+   Compiling faer-traits v0.24.0
+   Compiling ratatui v0.30.2
+   Compiling gemm-c64 v0.19.0
+   Compiling gemm-c32 v0.19.0
+   Compiling gemm-f64 v0.19.0
+   Compiling gemm-f32 v0.19.0
+   Compiling battle-gpu v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-battle-gpu.git?tag=jain-battle-gpu-v8.0.1-split.0#87b2367f)
+   Compiling gemm v0.19.0
+   Compiling jain-smartcluster v8.0.0 (http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git?tag=jain-smartcluster-v8.0.1-split.0#c28c5c83)
+   Compiling nano-gemm v0.2.2
+   Compiling faer v0.24.4
+   Compiling jable v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-jable.git?tag=jain-jable-v8.0.0-split.1#e119908d)
+   Compiling feat-core v8.0.0 (http://127.0.0.1:8787/git/jeryu/jain-core.git?tag=jain-core-v8.0.1-split.0#fda3a4cb)
+   Compiling feat-report v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-report.git?tag=jain-report-v8.0.1-split.0#8dff8bce)
+   Compiling feat-tui v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-tui.git?tag=jain-tui-v8.0.1-split.0#70c6c578)
+   Compiling feat-cli v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/cli-repin/jain-cli/crates/feat-cli)
+warning: unused import: `Args as ClapArgs`
+ --> crates/feat-cli/src/args/mod.rs:2:12
+  |
+2 | use clap::{Args as ClapArgs, Parser, Subcommand, ValueEnum};
+  |            ^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `feat-cli` (lib test) generated 1 warning (1 duplicate)
+warning: `feat-cli` (lib) generated 1 warning (run `cargo fix --lib -p feat-cli` to apply 1 suggestion)
+warning: function `synth_headerless_regression` is never used
+   --> crates/feat-cli/tests/cli_contract.rs:110:4
+    |
+110 | fn synth_headerless_regression(rows: usize) -> String {
+    |    ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    |
+    = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: `feat-cli` (test "cli_contract") generated 1 warning
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 41.79s
+     Running unittests src/lib.rs (target/debug/deps/feat_cli-d84c58f3703313de)
+
+running 26 tests
+test config::presets::tests::light_preset_applies_before_explicit_overrides ... ok
+test config::tests::gp_overfit_gap_resolves_presets_and_custom_override ... ok
+test config::tests::gp_overfit_gap_rejects_custom_without_value_and_invalid_values ... ok
+test config::tests::hyperion_gate_config_maps_effort ... ok
+test config::runtime::tests::starforge_config_parses_cli_values ... ok
+test data::tests::auto_target_uses_last_header_column_without_metadata ... ok
+test data::tests::primary_target_enables_multi_target_family ... ok
+test demo::tests::generated_demo_uses_last_column_targets ... ok
+test output::tests::metric_labels_are_task_specific ... ok
+test data::tests::sibling_targets_are_excluded_without_enabling_mimo ... ok
+test artifact::save::tests::publish_artifact_preserves_starforge_context_dir ... ok
+test runtime::tests::count_cpuset_handles_lists_and_ranges ... ok
+test runtime::tests::count_cpuset_rejects_descending_ranges ... ok
+test runtime::tests::resolve_threads_prefers_explicit_then_env_then_cgroup_then_available ... ok
+test sagemaker::tests::hyperparameters_accept_target_features_aliases ... ok
+test sagemaker::tests::hyperparameters_reject_conflicting_target_features_aliases ... ok
+test sagemaker::tests::hyperparameters_accept_dashed_underscored_and_typed_values ... ok
+test sagemaker::tests::hyperparameters_treat_null_and_empty_values_as_noops ... ok
+test sagemaker::tests::hyperparameters_reject_invalid_values ... ok
+test server::tests::parse_usize_rejects_non_numeric_values ... ok
+test server::tests::text_csv_content_type_allows_parameters_case_insensitively ... ok
+test sagemaker::tests::train_channel_discovery_reports_missing_data ... ok
+test sagemaker::tests::train_channel_discovery_prefers_sorted_train_csv_candidates ... ok
+test export::tests::dump_emits_chunked_zip_parts_from_fixture_ledger ... ok
+test data::properties::header_mode_accepts_only_documented_values ... ok
+test data::properties::detect_targets_upholds_shape_invariants ... ok
+
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.10s
+
+     Running unittests src/bin/hyperion_encode.rs (target/debug/deps/hyperion_encode-75b0e44fbedb8f27)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/hyperion_regression_recalc/main.rs (target/debug/deps/hyperion_regression_recalc-4293f39119ea3c5d)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/hyperion_vs/main.rs (target/debug/deps/hyperion_vs-e0ee229a6f5078dc)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (target/debug/deps/jain-f9bc881e55bbba79)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/jain-entrypoint.rs (target/debug/deps/jain_entrypoint-072b7d32397bf624)
+
+running 3 tests
+test tests::explicit_gpu_flags_select_gpu_binary ... ok
+test tests::cpu_mode_sets_disable_gpu_exec ... ok
+test tests::nvidia_device_selects_gpu_binary ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cli_contract.rs (target/debug/deps/cli_contract-2f09866e7a6f4b71)
+
+running 6 tests
+test customer_build_omits_internal_research_commands ... ok
+test serve_sagemaker_http_contract_routes_in_process ... ok
+test bench_bakeoff_runs_on_headerless_binary_csv ... ok
+test train_target_features_alias_caps_selected_cols ... ok
+test bench_runs_on_headerless_binary_csv ... ok
+test public_cli_commands_run_on_synthetic_data ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 12.36s
+
+   Doc-tests feat_cli
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+required ok: jain-cli
+CI_EXIT=0

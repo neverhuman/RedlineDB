@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-close",
+  "repository": "jeryu/jain-research",
+  "request": {
+    "body": {
+      "state": "closed"
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-research/pulls/5"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-research"
+      },
+      "sha": "c61504a7e25ce62c71100865ef52f49a12c59e1b"
+    },
+    "body": "Corrects active jain-research source, package, candidate, agent, and evidence identity to 8.0.1 (jain-research-v8.0.1-split.1) without changing dependencies or moving the occupied split.0 tag. Local fmt, test (11 passed), and jankurai score (88, hard=0, caps=0) gates pass at head 14f4d338d31efdb80b08a94b8543e08b1cb1d6e5.",
+    "created_at": "2026-07-16T05:05:42.904186914Z",
+    "draft": false,
+    "head": {
+      "label": "release/v8.0.1/research-identity",
+      "ref": "release/v8.0.1/research-identity",
+      "repo": {
+        "full_name": "jeryu/jain-research"
+      },
+      "sha": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5"
+    },
+    "html_url": "/jeryu/jain-research/pull/5",
+    "id": "deabe63a-156e-4363-a387-ea916ed31bb3",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "closed",
+    "merged": false,
+    "merged_at": null,
+    "number": 5,
+    "source_repository": "jeryu/jain-research",
+    "state": "closed",
+    "title": "chore(release): align jain-research identity to 8.0.1",
+    "updated_at": "2026-07-16T05:14:55.424979561Z",
+    "url": "/repos/jeryu/jain-research/pulls/5",
+    "user": {
+      "login": "claude",
+      "type": "User",
+      "url": "/users/claude"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784178895
+}

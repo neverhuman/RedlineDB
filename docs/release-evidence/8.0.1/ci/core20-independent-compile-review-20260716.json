@@ -1,0 +1,94 @@
+{
+  "schema_version": "jain.independent-repair-review/v1",
+  "generated_at": "2026-07-16T07:05:19Z",
+  "status": "pass_repair_only_pr_blocked",
+  "decision": "REVIEW_PASS_REPAIR_ONLY_PENDING_REBASE_PROOF_REQUIRED",
+  "repository": "jeryu/jain-core",
+  "pull_request": 20,
+  "branch": "claude/lime-prime-core-v2-20260716",
+  "protected_main_sha": "09823c4012d228c8d73df625329340afc1bc27f4",
+  "merge_base_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+  "branch_ahead_of_main": 17,
+  "branch_behind_main": 14,
+  "failed_head_sha": "c2603cea6760e532cb78886323ea41049e9675c8",
+  "repaired_head_sha": "9fef25f721689390788487f7fa178b2681dcf827",
+  "repaired_tree_sha": "7affc57d4b64ec6792520c85baf8363cbfb72528",
+  "repaired_head_parent_sha": "c2603cea6760e532cb78886323ea41049e9675c8",
+  "repair_diff_sha256": "541aec1e0cc7f7f9cf7f1e2cd5378482f2a207470e8a13d9e383ac5129ca9ddd",
+  "repair_scope": {
+    "files_changed": 4,
+    "insertions": 4,
+    "deletions": 21,
+    "all_paths_regular_text_mode_100644": true,
+    "binary_or_symlink_or_mode_changes": false,
+    "paths": [
+      "crates/feat-core/src/ensemble/selection/regression.rs",
+      "crates/feat-core/src/invention.rs",
+      "crates/feat-core/src/lime_invention.rs",
+      "crates/feat-core/tests/unit.rs"
+    ]
+  },
+  "findings": [],
+  "semantic_review": {
+    "production_control_flow_changed_by_repair": false,
+    "engine_evaluator_trait_import_restored": true,
+    "unused_lime_candidate_ceiling_import_removed": true,
+    "test_only_invention_execution_receipt_import_restored": true,
+    "test_only_finalist_execution_field_initialized_with_struct_default": true,
+    "removed_best_persistable_member_index_call_sites_at_failed_head": 0,
+    "serving_pick_was_already_the_live_selection_path_at_failed_head": true,
+    "serving_pick_focused_tests_preserved": 4,
+    "semantic_regression_found": false,
+    "assessment": "The deleted private helper had zero call sites on the failed head. The live path already builds member_persistable and calls serving_pick, whose focused tests remain unchanged. The other three edits are the minimum trait/fixture completeness corrections required by warning-denied all-target compilation and do not alter runtime algorithm behavior."
+  },
+  "independent_verification": {
+    "standalone_clone": "physical .git clone made with git clone --no-local from the clean canonical checkout after exact forge branch readback",
+    "detached_exact_head": true,
+    "git_fsck_full_strict": "pass",
+    "cargo_fmt_all_check": "pass",
+    "rustflags_deny_warnings_cargo_check_locked_feat_core_all_targets": "pass",
+    "cargo_test_locked_feat_core_lib": "pass_114_tests",
+    "standalone_clone_removed": true,
+    "worktree_created": false
+  },
+  "forge_readback": {
+    "pr_state": "open",
+    "pr_draft": false,
+    "pr_head_matches": true,
+    "pr_base_matches_protected_main": true,
+    "pr_mergeable": false,
+    "pr_mergeable_state": "blocked",
+    "jankurai_proof": "failure_null_output",
+    "jain_core_required": "absent",
+    "protection": {
+      "required_status_checks": [
+        "jain-core/required"
+      ],
+      "strict": true,
+      "required_approving_review_count": 1,
+      "required_linear_history": true,
+      "enforce_admins": true,
+      "allow_force_pushes": false,
+      "allow_deletions": false
+    }
+  },
+  "remaining_gates": [
+    "Rebase or otherwise construct a reviewed successor directly on current protected main; this exact head is 14 commits behind main and is not fast-forward mergeable.",
+    "Repeat exact-head fmt, warning-denied all-target check, and tests after that rebase.",
+    "Repair and read back successful jankurai/proof on the eventual exact head.",
+    "Run and read back successful exact-head jain-core/required host CI.",
+    "Obtain independent full-PR approval only after all required checks pass, then protected fast-forward merge."
+  ],
+  "mutations": {
+    "source": false,
+    "index_or_ref": false,
+    "pull_request": false,
+    "ci_or_check": false,
+    "approval_or_merge": false,
+    "tag_or_authority": false,
+    "protection": false,
+    "deployment": false,
+    "git_worktree_lifecycle": false,
+    "receipt_only": true
+  }
+}

@@ -1,0 +1,107 @@
+{
+  "schema": "jain.git-bundle-custody/v1",
+  "release_scope": "8.0.1",
+  "observed_at_utc": "2026-07-16T05:20:17Z",
+  "owner": "/root/cleanup_jeryu_safe_batch",
+  "claim_token": "codex-web-f235a471-bundle-custody-20260716T0518Z",
+  "status": "pass_preserved_pending_reviewed_symlink_cleanup",
+  "scope": {
+    "source_repository": "/tmp/split-host-ci.9cFgEg/jain-web",
+    "custody_directory": "/home/ubuntu/jain-split/jain-web/.bundles",
+    "bundle": "/home/ubuntu/jain-split/jain-web/.bundles/orphan-web-f235a471-20260716.bundle",
+    "sandbox_modified": false,
+    "sandbox_removed": false,
+    "symlinks_modified": false,
+    "source_files_modified": false,
+    "source_index_modified": false,
+    "source_refs_modified": false,
+    "forge_refs_modified": false,
+    "branches_or_pull_requests_modified": false,
+    "worktree_operation_performed": false,
+    "cache_modified": false
+  },
+  "source_identity": {
+    "repository": "jeryu/jain-web",
+    "head": "f235a471ff716c3d8bd5577f3f241d2ce07a09ed",
+    "tree": "931251b99857373e9645269400c6b8a2afd85aa4",
+    "parent": "525c8ecbbe98dc6b264f259537fdf5d38a00160a",
+    "subject": "test(web): deadline-based lifecycle polling in api_http",
+    "detached_head": true,
+    "status_entries_before": 0,
+    "status_entries_after": 0,
+    "source_ref_manifest_sha256_before": "303b0548f33e0a730c237dc629fdd790bf58c682d3dbb9710a67e59c56c46911",
+    "source_ref_manifest_sha256_after": "303b0548f33e0a730c237dc629fdd790bf58c682d3dbb9710a67e59c56c46911",
+    "source_refs_unchanged": true
+  },
+  "bundle": {
+    "format": "git-bundle",
+    "hash_algorithm": "sha1",
+    "sha256": "367ecb496b63f81e8b04a81cca5ac6c26d8fa43795bce661c86688aa75bd9cd0",
+    "bytes": 1771429,
+    "mode": "0664",
+    "owner_uid": 1000,
+    "owner_gid": 1000,
+    "advertised_ref_count": 1,
+    "advertised_refs": [
+      {
+        "name": "HEAD",
+        "object": "f235a471ff716c3d8bd5577f3f241d2ce07a09ed"
+      }
+    ],
+    "complete_history": true,
+    "reachable_commit_count": 72,
+    "reachable_object_count": 1700,
+    "reachable_object_manifest_sha256": "db31bcd195283015d922f47e19533742663bc2f45eee679687327a15c8c655aa",
+    "boundedness": "The bundle advertises only detached HEAD at f235a471 and contains only the complete reachable ancestry and object closure required to clone that commit independently; no branch or tag is advertised."
+  },
+  "independent_verification": {
+    "method": "git clone --no-local from the bundle into a newly created standalone temporary directory, followed by exact HEAD/tree checks, clean-status check, git fsck --full --strict, and reachable-object closure comparison",
+    "checkout_kind": "standalone_clone_not_registered_worktree",
+    "clone_head": "f235a471ff716c3d8bd5577f3f241d2ce07a09ed",
+    "clone_tree": "931251b99857373e9645269400c6b8a2afd85aa4",
+    "clone_status_entries": 0,
+    "git_fsck_full_strict": "pass",
+    "clone_reachable_commit_count": 72,
+    "clone_reachable_object_count": 1700,
+    "clone_reachable_object_manifest_sha256": "db31bcd195283015d922f47e19533742663bc2f45eee679687327a15c8c655aa",
+    "source_and_clone_object_closure_identical": true,
+    "temporary_directory": "/tmp/codex-bundle-verify.f235a471.K7Pceh",
+    "temporary_directory_removed": true
+  },
+  "secret_scan": {
+    "tool": "gitleaks",
+    "version": "8.21.2",
+    "scope": "bundle clone reachable history at HEAD",
+    "tool_reported_commits_scanned": 71,
+    "raw_finding_count": 5,
+    "unique_fingerprint_count": 3,
+    "finding_rule": "generic-api-key",
+    "finding_paths": [
+      "vendor-crates/catboost-sys/.cargo-checksum.json",
+      "vendor-crates/feat-core/.cargo-checksum.json",
+      "vendor-crates/feat-math/.cargo-checksum.json"
+    ],
+    "finding_commit": "59896410a10beae3fa5394c3a883a1acd809ffac",
+    "finding_commit_subject": "vendor: cross-repo crates for offline CI (git deps -> vendor-crates/, crates.io warm-cached) [skip-version]",
+    "classification": "false_positive_checksum_metadata",
+    "classification_evidence": "Each reported file is Cargo .cargo-checksum.json with only files/package top-level keys; every package value and every file-map value is exactly a lowercase 64-hex SHA-256 checksum. No credential value was printed or retained.",
+    "actual_secret_count": 0,
+    "temporary_scan_directories_removed": true
+  },
+  "canonical_custody_checkout": {
+    "path": "/home/ubuntu/jain-split/jain-web",
+    "branch": "codex/v8-web-jope-smartcluster-20260713",
+    "preexisting_dirty_source_entries": 4,
+    "new_custody_artifact_status": "untracked",
+    "source_or_index_mutated_for_custody": false,
+    "existing_bundle": ".bundles/audit-20260713-1784174143.bundle",
+    "existing_bundle_observed_sha256": "b4a56ad6e132f43e3dee46e70c991d681c7855a36090687264e7fe1db5563496",
+    "existing_bundle_targeted_or_modified": false
+  },
+  "handoff": {
+    "preservation_predicate": "pass_bundle_exists_and_independently_verifies",
+    "sandbox_path_still_present": true,
+    "sandbox_removal_authorized_by_this_receipt": false,
+    "next_action": "Before any sandbox removal, independently re-read and verify the bundle SHA-256, protect the currently untracked custody artifact through its reviewed custody path, enumerate and review all 662 sandbox symlinks plus inbound/broken links, replace or remove each symlink through its owning reviewed change, and complete the previously unevaluated cache, lock, and secret/removal predicates. Never use git worktree remove, prune, force, or broad /tmp deletion for this standalone sandbox."
+  }
+}

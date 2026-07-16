@@ -1,0 +1,62 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "226e24783865b0f10949e40edf8eb54798904e51",
+    "remote": "226e24783865b0f10949e40edf8eb54798904e51"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "226e24783865b0f10949e40edf8eb54798904e51",
+  "commit_input": "226e24783865b0f10949e40edf8eb54798904e51",
+  "manifest": "repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-deploy.git",
+    "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/mirrors/jain-deploy-jain-deploy-v8.0.1-split.0.json",
+    "status": "pass",
+    "tag_commit": "226e24783865b0f10949e40edf8eb54798904e51"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "crates/jain-deploy-engine/Cargo.toml",
+        "name": "jain-deploy-engine",
+        "version": "8.0.1"
+      },
+      {
+        "manifest": "deployment/ops/sagemaker-ci/Cargo.toml",
+        "name": "sagemaker-ci",
+        "version": "8.0.1"
+      },
+      {
+        "manifest": "deployment/ops/supervisor/Cargo.toml",
+        "name": "jain-supervisor",
+        "version": "8.0.1"
+      },
+      {
+        "manifest": "deployment/product/Cargo.toml",
+        "name": "jain-product",
+        "version": "8.0.1"
+      },
+      {
+        "manifest": "ops/split/Cargo.toml",
+        "name": "jain-deploy-ops",
+        "version": "8.0.1"
+      }
+    ],
+    "expected_product_version": "8.0.1",
+    "status": "pass",
+    "version_file": "jain-deploy-v8.0.1-split.0",
+    "workspace_package_version": "8.0.1"
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-deploy.git",
+  "remote_main": "226e24783865b0f10949e40edf8eb54798904e51",
+  "repository": "/home/ubuntu/jain-split/jain-deploy",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-deploy-v8.0.1-split.0",
+  "timestamp_unix": 1784210576
+}

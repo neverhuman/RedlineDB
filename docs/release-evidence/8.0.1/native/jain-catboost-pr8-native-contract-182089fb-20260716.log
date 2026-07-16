@@ -1,0 +1,2 @@
+./ops/ci/contract-drift.sh
+contract drift ok: CatBoost C ABI symbols and source hashes verified

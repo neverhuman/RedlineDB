@@ -1,0 +1,81 @@
+{
+  "schema": "jain.serialized-required-execution/v1",
+  "repository": "jeryu/jain-xgboost",
+  "pull_request": 8,
+  "head_sha": "41244cdf009f32101fd26f764685c304494d6d4a",
+  "tree_sha": "12b75831158f4bff8e302cffeacbdf2742b0d183",
+  "protected_main_sha": "8457e1906850c0cf48cd9547c01f9161b6db5484",
+  "automatic_proof": {
+    "id": "3197f4b1-bbea-438e-9c6c-6e844be31c2f",
+    "conclusion": "success"
+  },
+  "required_check": {
+    "name": "jain-xgboost/required",
+    "id": "4fd71deb-0216-47a6-bce3-1ec15cf65c94",
+    "conclusion": "failure",
+    "completed_at": "2026-07-16T09:00:23.360905067Z"
+  },
+  "execution": {
+    "attempts": 1,
+    "retry_performed": false,
+    "wrapper_pid": 2058001,
+    "runner_pid": 2058002,
+    "sandbox": "/tmp/split-host-ci.7MgyXG",
+    "sandbox_removed": true,
+    "runner_sha256": "dabf3f81d99ae8bfa3418c85ab312978f49aae4dab4e13dfd966cfae2d12ea03"
+  },
+  "admission_evidence": {
+    "independent_review_sha256": "c32c7979ae64ea523d5c511d2f98a27b36b1e95012ef3235db7c40efa1a2acff",
+    "native_pass_sha256": "6132f3e725e2a740794e25a6253d6c625c88d578f24cb3bed82e5e146764dad3",
+    "protection_readback_sha256": "90900a21debeb36a615b46414d37a1a142ec560a832fcc6a960141a9a59fa6cb",
+    "catboost_handoff_recorded": true,
+    "global_heavy_producer_count": 0
+  },
+  "mirror": {
+    "path": "target/bare-mirrors/jain-xgboost.git",
+    "origin": "http://127.0.0.1:8787/git/jeryu/jain-xgboost.git",
+    "main_sha": "8457e1906850c0cf48cd9547c01f9161b6db5484",
+    "candidate_ref": "refs/heads/claude/v801-identity-jain-xgboost-20260716",
+    "candidate_sha": "41244cdf009f32101fd26f764685c304494d6d4a",
+    "refresh": "non-force --no-tags ordinary refs",
+    "bare": true,
+    "alternates": false,
+    "symlinks": false,
+    "locks": false,
+    "holders": false,
+    "physical_no_local_clone_exact": true,
+    "physical_clone_removed": true
+  },
+  "failure": {
+    "stage": "release Cargo policy build-all-features",
+    "exit_code": 101,
+    "error": "ModuleNotFoundError: No module named 'cmake'",
+    "root_cause": "The isolated runner HOME changes Python's user-site root, but inherited PATH resolves cmake to /home/ubuntu/.local/bin/cmake. That Python wrapper imports the cmake module stored under /home/ubuntu/.local/lib/python3.12/site-packages, which is no longer discoverable under the isolated HOME.",
+    "cmake_wrapper": "/home/ubuntu/.local/bin/cmake",
+    "cmake_wrapper_sha256": "871dbae75e8e3793e919594ee4617b2ccd9470392c39c718dcdfbda27cbf1158",
+    "classification": "deterministic current-runner tool provisioning defect; candidate source/native evidence unchanged",
+    "smallest_no_waiver_path": "Land and independently verify a fail-closed runner repair that provisions or selects checksum-pinned CMake inside the isolated environment, then authorize one fresh exact-head run. Do not retry the unchanged runner."
+  },
+  "evidence": {
+    "cargo_receipt": "jain-split-ops/docs/release-evidence/8.0.1/ci/jain-xgboost-41244cdf009f32101fd26f764685c304494d6d4a-cargo.json",
+    "cargo_receipt_sha256": "bae823da3732d228f48fdaf420b50bb6b999bf50e48a3b0436258b21c240a280",
+    "host_log": "jain-split-ops/docs/release-evidence/8.0.1/ci/host/9bc5f442d53f49e437c33dc78bf5b558c82ad66758c0a7e8f8f367f134116e5b.log",
+    "host_log_sha256": "9bc5f442d53f49e437c33dc78bf5b558c82ad66758c0a7e8f8f367f134116e5b",
+    "host_receipt": "jain-split-ops/docs/release-evidence/8.0.1/ci/host/jain-xgboost-41244cdf009f32101fd26f764685c304494d6d4a-9bc5f442d53f49e437c33dc78bf5b558c82ad66758c0a7e8f8f367f134116e5b.json",
+    "host_receipt_sha256": "05b6f1a652f883fb0271a4dffa54af83dae1cdc0285716c0395fb29fd458938d"
+  },
+  "final_custody": {
+    "canonical_head_unchanged": true,
+    "canonical_clean": true,
+    "forge_refs_unchanged": true,
+    "active_runner_processes": 0
+  },
+  "forbidden_mutations": {
+    "source_or_index": false,
+    "pr_metadata": false,
+    "approval_or_merge": false,
+    "tag_or_authority_or_protection_or_deploy": false,
+    "force": false,
+    "git_worktree": false
+  }
+}

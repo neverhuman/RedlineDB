@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T14:52:46.902409357+00:00",
+      "head_sha": "918002585f8d054bd786dda0ba66d45bc54802db",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:918002585f8d054bd786dda0ba66d45bc54802db:Blocked:1:1:0:2",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "c28c5c8348ec58b39cde0e8d510f26fec3cbfb06",
+      "checks": {
+        "failing": 1,
+        "passing": 0,
+        "pending": 0,
+        "skipped": 1,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "71fee502-3df9-46ac-b2c6-c071446a70d0#6",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/scq-node-v1-20260716",
+      "head_sha": "918002585f8d054bd786dda0ba66d45bc54802db",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "918002585f8d054bd786dda0ba66d45bc54802db",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 6,
+      "passport_hash": "passport:918002585f8d054bd786dda0ba66d45bc54802db:Blocked:1:1:0:2",
+      "repo": {
+        "host": "jeryu",
+        "id": "71fee502-3df9-46ac-b2c6-c071446a70d0",
+        "name": "jain-smartcluster",
+        "owner": "jain-split"
+      },
+      "review": {
+        "approvals": 2,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "scq-node: node-1.3 outbound agent (recomposed from salvaged Codex checkpoint 61ed3e2c) — DO NOT MERGE without independent review",
+      "updated_at": "2026-07-16T14:52:07.575111685+00:00"
+    }
+  },
+  "repository": "jain-split/jain-smartcluster",
+  "request": {
+    "body": {
+      "body_markdown": "Approval at exact head 91800258 — a mechanical successor of the fully re-reviewed head bc64f163, stated as such per fleet precedent: (a) one whitespace-only cargo-fmt commit over the reviewed stack (the sole cause of the first required failure; every reformatted file verified token-identical after whitespace stripping — zero semantic delta); (b) rebase of the full 15-commit stack onto post-PR#7 main b2af4819 — zero conflicts, PR #7 file set fully disjoint, combined diff verified PATCH-IDENTICAL across the rebase (stable patch-id b730bb17aa5e2cbd633991c6c05465d820117056, 8354-line patch both sides). Full re-review evidence recorded in the prior approval at bc64f163 and the UPGRADE_CHAT receipt: all 3 transport defects (ack livelock, replay wedge, edge session race) verifiably fixed with tight scope binding on the new daemon idempotency surface (full LeaseScope equality incl. node identity; revoked/expiry checks precede replay receipts; regressions/gaps fail closed), e2e loop coverage landed, original clobber probe now fails closed on the journal flock. Gates re-run at THIS head: full scripts/ci-local.sh required lane green locally (fmt, clippy -D warnings, workspace tests, release-control, compatibility, fuzz-check, scq-integration) — also validating PR#6 x PR#7 daemon integration. fabric.edge_enabled remains default-off; rollout items and the documented reject-receipt residual are post-merge follow-ups.",
+      "evidence": null,
+      "expected_head_sha": "918002585f8d054bd786dda0ba66d45bc54802db",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jain-split%2Fjain-smartcluster/pulls/6/reviews"
+  },
+  "response": {
+    "description": "",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T14:52:46.893579993+00:00",
+      "head_sha": "918002585f8d054bd786dda0ba66d45bc54802db",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:918002585f8d054bd786dda0ba66d45bc54802db:Blocked:1:1:0:2",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "c28c5c8348ec58b39cde0e8d510f26fec3cbfb06",
+      "checks": {
+        "failing": 1,
+        "passing": 0,
+        "pending": 0,
+        "skipped": 1,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "71fee502-3df9-46ac-b2c6-c071446a70d0#6",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/scq-node-v1-20260716",
+      "head_sha": "918002585f8d054bd786dda0ba66d45bc54802db",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "918002585f8d054bd786dda0ba66d45bc54802db",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 6,
+      "passport_hash": "passport:918002585f8d054bd786dda0ba66d45bc54802db:Blocked:1:1:0:2",
+      "repo": {
+        "host": "jeryu",
+        "id": "71fee502-3df9-46ac-b2c6-c071446a70d0",
+        "name": "jain-smartcluster",
+        "owner": "jain-split"
+      },
+      "review": {
+        "approvals": 2,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "scq-node: node-1.3 outbound agent (recomposed from salvaged Codex checkpoint 61ed3e2c) — DO NOT MERGE without independent review",
+      "updated_at": "2026-07-16T14:52:07.575111685+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784213565
+}

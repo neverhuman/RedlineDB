@@ -1,0 +1,6 @@
+./tools/security-lane.sh # actionlint zizmor gitleaks detect cargo audit npm audit syft
+ INFO zizmor: 🌈 zizmor v1.25.2
+ INFO audit: zizmor: 🌈 completed .github/workflows/ci.yml
+jankurai-security-step={"label":"gitleaks","tool":"gitleaks","shell_command":"gitleaks detect --source . --redact --no-banner","status":"ran","advisory":false,"exit_code":0}
+jankurai-security-step={"label":"actionlint","tool":"actionlint","shell_command":"actionlint","status":"ran","advisory":false,"exit_code":0}
+security ok (tabpfn_hits=0, fallback_advisory=0)

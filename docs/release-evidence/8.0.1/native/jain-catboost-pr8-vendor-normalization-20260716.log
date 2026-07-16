@@ -1,0 +1,29 @@
+source_path=/home/ubuntu/jain_small/vendor/catboost
+normalization=physical shallow git clone --no-local
+commit=b1bd2a6d77219e82a1acfcedfccb8e6f6c1ee084
+tree=7da64b65183cd767998e63c63c56cd529229267d
+tag=v1.2.10
+git_dir=/tmp/codex-catboost-native-evidence-20260716/normalizer/vendor/catboost/.git
+alternates=0
+tracked_symlinks=0
+filesystem_symlinks_before=0
+pristine_archive_sha256=d96055c5345bc14ecab6c59c2791a19a9ec358e77eb3260de572d93ff6de8daf
+prune_script_sha256=0461a7cdc19c0c07f7b103357cb3030a452b1f474293308e0d1142253dc5499d
+removed vendor/catboost/catboost/R-package
+removed vendor/catboost/catboost/python-package
+removed vendor/catboost/catboost/jvm-packages
+removed vendor/catboost/catboost/dotnet
+removed vendor/catboost/catboost/node-package
+removed vendor/catboost/catboost/spark
+removed vendor/catboost/catboost/pytest
+removed vendor/catboost/catboost/docs
+removed vendor/catboost/catboost/tutorials
+removed vendor/catboost/catboost/benchmarks
+removed vendor/catboost/catboost/docker
+removed vendor/catboost/catboost/debian
+dirty_entries=6842
+nondelete_entries=0
+pruned_diff_sha256=733500877b9457a61d9514bb485814b4cfc1bd1aaad85e8bf3958b8b611de024
+pruned_paths_sha256=df7a6149f7274f9a47bb324ec81634e50c3f5e68af83bbc48385cfa4c0ad66f6
+filesystem_symlinks_after=0
+pruned_content_sha256=96466697dd2ca6b02d036932833ab34ce0f53dd4a7842c628c64717d9558a99e

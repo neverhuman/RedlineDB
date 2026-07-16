@@ -1,0 +1,61 @@
+{
+  "claim_token": "claude-e2e-regression-undefined",
+  "task": "e2e-regression-web",
+  "release": "8.0.1",
+  "image": "image.neverhuman.org/veox/jain@sha256:ffbbaf48bda7253785b2d32436eb0cbf1d0ff927a41593b907f7307e07075871",
+  "host": "xbabe2",
+  "started_utc": "2026-07-16T05:01:00Z",
+  "finished_utc": "2026-07-16T05:41:54Z",
+  "fixture": {
+    "dir": "/home/ubuntu/jain-split/jain-deploy/deployment/testdata/allstate-regression-c4b1f6dfb2a8605f",
+    "dataset_hash": "c4b1f6dfb2a8605f",
+    "train_rows": 1000,
+    "test_rows": 999,
+    "columns": 131,
+    "has_header": true
+  },
+  "web_api": {
+    "endpoint": "http://127.0.0.1:8891",
+    "effort": "low",
+    "overrides": { "hyperion_enabled": false },
+    "env": { "JAIN_WEB_CLUSTER": "0", "JAIN_WEB_MAX_DATA_BYTES": "2147483648", "JAIN_THREADS": "32" }
+  },
+  "attempts": [
+    {
+      "attempt": 1,
+      "container_id": "440198480ee71a5578e5cb302d64f45c58be2e09e73a65b160ae1c3a853394be",
+      "session_id": "f2e9b86b-c83d-45df-bf51-77c056fd84bf",
+      "training": { "status": "complete", "duration_s": 23, "best_holdout_r2": 0.4768313719389794 },
+      "predict": {
+        "status": "fail",
+        "http": 500,
+        "error": "1: kernel error: corrupt page: no unpinned frame available for eviction: kernel error: corrupt page: no unpinned frame available for eviction: corrupt page: no unpinned frame available for eviction",
+        "retry": "hung >16min; session stuck in state=profiling after upload.complete (seq 69, 05:03:20Z), busy-spin ~50-100% CPU, no further events"
+      }
+    },
+    {
+      "attempt": 2,
+      "container_id": "301ed78ddddcacd9dfbb2029eff698e394cbd05611740a6275a748eed423bb3e",
+      "session_id": "088cacc4-602f-4ac4-a4df-be84e53cde66",
+      "training": { "status": "complete" },
+      "predict": {
+        "status": "fail",
+        "http": 500,
+        "error": "identical corrupt-page eviction error on fresh container + fresh session",
+        "aftermath": "session stuck in state=profiling at 100% CPU; follow-up 10-row predict timed out (curl 000 after 180s); web API then fully unresponsive (GET / and GET /api/sessions both time out)"
+      }
+    }
+  ],
+  "terminal_status": "training complete on both attempts; predict endpoint reproducibly returns HTTP 500 'kernel error: corrupt page: no unpinned frame available for eviction' and wedges the server",
+  "predictions_artifact_downloaded": false,
+  "prediction_rows": 0,
+  "metric": { "name": "r2", "value": null, "floor": 0.4, "computed": false, "reason": "no predictions artifact obtainable" },
+  "pass": false,
+  "notes": [
+    "Predict flow: POST /api/sessions/:id/predict with role=scoring, features-only CSV (999 rows x 130 cols, last column stripped from test.csv).",
+    "Failure is deterministic: 2/2 fresh containers, first predict on a completed session fails immediately with the redline buffer-pool eviction error; server left spinning in 'profiling'.",
+    "Container stdout logs contain no error lines; the error surfaces only in the HTTP 500 body and the session event stream (profile.started with no profile.complete).",
+    "Training path (upload train.csv -> auto-train inline, JAIN_WEB_CLUSTER=0, hyperion off) is healthy: complete in ~23s, best_holdout r2 0.4768 vs floor 0.40.",
+    "Containers created and destroyed by this lane only: e2e-reg-20260716 (both instances removed)."
+  ]
+}

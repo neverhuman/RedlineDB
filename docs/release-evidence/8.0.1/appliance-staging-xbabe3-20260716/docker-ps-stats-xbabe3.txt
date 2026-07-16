@@ -1,0 +1,30 @@
+NAMES                   IMAGE          STATUS                   PORTS
+jain-l6-caddy           caddy:2        Up 3 minutes             80/tcp, 443/tcp, 2019/tcp, 443/udp, 0.0.0.0:8082->8082/tcp, [::]:8082->8082/tcp
+jain-l6-scqd-1          5e174a20921b   Up 4 minutes             7700/tcp
+jain-l6-web-control-1   fc8d48175fe0   Up 8 minutes (healthy)   8080/tcp
+NAMES        IMAGE          STATUS
+guestd-g03   fc8d48175fe0   Up 7 minutes (healthy)
+guestd-g02   fc8d48175fe0   Up 7 minutes (healthy)
+guestd-g01   fc8d48175fe0   Up 7 minutes (healthy)
+
+NAME                    CPU %     MEM USAGE / LIMIT
+jain-l6-caddy           0.00%     16.34MiB / 125.6GiB
+jain-l6-scqd-1          0.01%     9.691MiB / 125.6GiB
+jain-l6-web-control-1   0.00%     696KiB / 125.6GiB
+guestd-g03              0.00%     604KiB / 512MiB
+guestd-g02              0.00%     592KiB / 512MiB
+guestd-g01              0.00%     592KiB / 512MiB
+
+guestd log:
+[1784207226451] guestd-supervisor start: wal=/home/ubuntu/jain-l6-appliance/guestd/leases.wal warm=3 slots=10 poll_ms=1000 next_deadline=None once=false
+[1784207227882] guestd-supervisor tick: expiry(applied=0 fenced=0 deferred=0) reconcile(respawned=0 warmed=3)
+
+scqd log tail:
+[2m2026-07-16T13:10:19.208439Z[0m [33m WARN[0m [2mscqd[0m[2m:[0m PSI unavailable in embedded safe mode [3merror[0m[2m=[0mcannot open PSI source /sys/fs/cgroup/cpu.pressure: Permission denied (os error 13)
+[2m2026-07-16T13:10:19.230127Z[0m [32m INFO[0m [2mscqd[0m[2m:[0m scqd ready [3msocket[0m[2m=[0m/run/jain-smartcluster/scqd.sock [3mmode[0m[2m=[0mSafeSingleAllocation [3mcapabilities[0m[2m=[0mSchedulerCapabilities { cgroup_v2: true, cgroup_delegated: false, clone_into_cgroup: false, pidfd: false, freezer: false, psi: false, nvml: false, mps: false, mps_unavailable_reason: Some("MPS sharing requires delegated cgroup-v2 isolation"), mig_inventory: false, pty: true, scratch_quota: false }
+
+scqd admission socket (host bind view):
+total 8
+drwxr-x--- 2 nobody nogroup 4096 Jul 16 13:10 .
+drwxrwxr-x 5 ubuntu ubuntu  4096 Jul 16 13:06 ..
+srw-rw---- 1 nobody nogroup    0 Jul 16 13:10 scqd.sock

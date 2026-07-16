@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "generated_by": "jankurai coverage audit",
+  "repo_root": ".",
+  "config_path": "agent/coverage-sources.toml",
+  "strict": false,
+  "changed_from": null,
+  "summary": {
+    "status": "pass",
+    "sources_total": 2,
+    "sources_present": 2,
+    "sources_missing": 0,
+    "hard_findings": 0,
+    "soft_findings": 0
+  },
+  "sources": [
+    {
+      "id": "rust-lcov",
+      "kind": "line_coverage",
+      "format": "lcov",
+      "mode": "advisory",
+      "status": "pass",
+      "artifact_paths": [
+        "target/llvm-cov/lcov.info",
+        "target/jankurai/coverage/rust-lcov.info"
+      ],
+      "matched_artifact": "target/llvm-cov/lcov.info",
+      "applies_to": [
+        "crates/**/*.rs"
+      ],
+      "owner": "tools",
+      "lane": "coverage-audit",
+      "metrics": {
+        "covered_branches": 0,
+        "covered_lines": 127,
+        "present": true,
+        "total_branches": 0,
+        "total_line_coverage": 0.8246753246753247,
+        "total_lines": 154
+      },
+      "parser_warnings": []
+    },
+    {
+      "id": "security-evidence",
+      "kind": "supply_chain",
+      "format": "generic-json-summary",
+      "mode": "auto",
+      "status": "pass",
+      "artifact_paths": [
+        "target/jankurai/security/evidence.json",
+        "target/security/evidence.json"
+      ],
+      "matched_artifact": "target/jankurai/security/evidence.json",
+      "applies_to": [
+        ".github/**",
+        "Cargo.toml",
+        "Cargo.lock",
+        "package.json",
+        "apps/web/package.json"
+      ],
+      "owner": "ops",
+      "lane": "security",
+      "metrics": {
+        "fallback_advisory_files": 0,
+        "present": true,
+        "tabpfn_hits": 0
+      },
+      "parser_warnings": []
+    }
+  ],
+  "findings": []
+}

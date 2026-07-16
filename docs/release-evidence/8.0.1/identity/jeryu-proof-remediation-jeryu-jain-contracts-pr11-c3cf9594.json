@@ -1,0 +1,155 @@
+{
+  "schema_version": "jain.identity-proof-remediation/v1",
+  "status": "PROOF_PASS_PENDING_REQUIRED_AND_REVIEW",
+  "completed_at": "2026-07-16T07:19:32Z",
+  "repository": "jeryu/jain-contracts",
+  "pull_request": 11,
+  "branch": "release/v8.0.1/contracts-corrective-identity-20260716",
+  "base_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+  "prior_head_sha": "f7086dcecf19ececa97df33f16326f5d3d51aabf",
+  "head_sha": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+  "remediation_commit": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+  "remediation": {
+    "commit_subject": "docs(contracts): make release proof agent-readable",
+    "files": [
+      "README.md",
+      "contracts/AGENTS.md",
+      "docs/testing.md"
+    ],
+    "insertions": 21,
+    "deletions": 2,
+    "full_index_binary_diff_sha256": "b628619284522a7669a3010dc30f7981ee6cc02df343632b7918e01c764b5e10",
+    "purpose": [
+      "Route release reviewers to the existing release contract and immutable proof predicate.",
+      "State that identity-only revisions may not edit mirrored schemas or fixtures.",
+      "Replace prohibited detached-worktree guidance with an automatically removed physical standalone clone.",
+      "Record exact proof-report and check-readback handoff requirements."
+    ]
+  },
+  "complete_pull_request_diff": {
+    "commit_count": 2,
+    "files": [
+      "CHANGELOG.md",
+      "README.md",
+      "VERSION",
+      "agent/standard-version.toml",
+      "contracts/AGENTS.md",
+      "docs/release.md",
+      "docs/testing.md"
+    ],
+    "full_index_binary_diff_sha256": "561bc3e70783cc40975547ca38dd047eb5af6a3464d2b70b17d4b64a6781f643",
+    "schema_changes": 0,
+    "fixture_changes": 0,
+    "runtime_changes": 0,
+    "dependency_changes": 0,
+    "policy_floor_or_baseline_changes": 0,
+    "demo_fixture_tree_base": "705575d2c0abf06399509fc13182083c9c7678b1",
+    "demo_fixture_tree_head": "705575d2c0abf06399509fc13182083c9c7678b1",
+    "ops_tree_base": "5fc3737c94ad5bba584eae39d05ca81713eea063",
+    "ops_tree_head": "5fc3737c94ad5bba584eae39d05ca81713eea063"
+  },
+  "governed_changed_fast": {
+    "tool": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "jankurai 1.6.11",
+    "binary_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "command": "jankurai diff-audit . --base-ref origin/main --out-dir target/jankurai/pr11-diff-review",
+    "before": {
+      "head_sha": "f7086dcecf19ececa97df33f16326f5d3d51aabf",
+      "score": 80,
+      "raw_score": 82,
+      "hard_findings": 0,
+      "caps": [
+        "missing-agent-readable-docs"
+      ],
+      "soft_findings": 7,
+      "status": "fail"
+    },
+    "after": {
+      "head_sha": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+      "score": 87,
+      "raw_score": 87,
+      "minimum_score": 85,
+      "hard_findings": 0,
+      "caps": [],
+      "soft_findings": 4,
+      "status": "pass",
+      "report_sha256": "dfeb0ab45deff9b86d19fc1e406a0e2a25d9c7b9b696f8a270ced77bfacf70c8",
+      "proof_plan_sha256": "3d4a2986657c58ca4de2ef4233d39a4085cd49e847d44b49a77d6bfcec2de76e",
+      "changed_list_sha256": "be2766800ed10873fc7e1c828df236b3c284b4b02794d4b491b9f1d128fbcbf6"
+    }
+  },
+  "bounded_gates": {
+    "fast": "pass",
+    "required": "pass",
+    "contract_drift": {
+      "status": "pass",
+      "protected_core_main_sha": "09823c4012d228c8d73df625329340afc1bc27f4",
+      "receipt_sha256": "59283742d0b6f16f74b3edc1cd5058acd75dcb096e9dc4067806c3390586e470"
+    },
+    "artifact_support": {
+      "status": "pass",
+      "artifact_count": 14,
+      "inventory_sha256": "7c644fa058b65987fa5faa1d635b8060a26cc2319fc3d499294f80059381f786",
+      "metadata_sha256": "134a698be706e192639cbdce934a1de6daed11c57fdf0bc730719f3b5eb21f38"
+    },
+    "security": {
+      "status": "pass",
+      "gitleaks": "pass",
+      "actionlint": "pass",
+      "tabpfn_hits": 0,
+      "fallback_advisory_files": 0,
+      "evidence_sha256": "6f778f535083fa9e98276d31229e4016e8648e67766dd40d5a120a3771c9b98b"
+    },
+    "full_score": {
+      "status": "pass",
+      "score": 88,
+      "raw_score": 88,
+      "hard_findings": 0,
+      "caps": 0,
+      "report_sha256": "2b1be1ed876ef2ca1e9d7a1c0fcd8ff968e54201d2ed7c00db3ecb367cc433c0"
+    },
+    "tool_adoption": "pass",
+    "diff_check": "pass",
+    "git_fsck_strict": "pass"
+  },
+  "forge_readback": {
+    "push": "non-force fast-forward",
+    "main_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+    "branch_sha": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+    "pr_head_sha": "c3cf9594f0f81e9cad6908d964828ad3b2424820",
+    "pr_state": "open",
+    "pr_mergeable_state": "blocked",
+    "checks": [
+      {
+        "id": "75b4f2e8-6a07-4cb3-9e09-1cb9bb3f31af",
+        "name": "jankurai/proof",
+        "status": "completed",
+        "conclusion": "success"
+      },
+      {
+        "id": "8710603b-37fa-4b26-8f65-75ff7c4265ad",
+        "name": "jeryu/autonomy",
+        "status": "completed",
+        "conclusion": "neutral"
+      }
+    ],
+    "required_check": "jain-contracts/required",
+    "required_check_present": false
+  },
+  "remaining_blockers": [
+    "Run exact-head host CI and read back jain-contracts/required=success.",
+    "Obtain a new independent review for c3cf9594f0f81e9cad6908d964828ad3b2424820; the prior review binds the superseded head.",
+    "Protected-land the separately owned Deploy full-v1 mirror before claiming release-mode family contract drift."
+  ],
+  "mutations_excluded": [
+    "contract schemas or demo fixtures",
+    "Deploy or any other repository",
+    "policy, score floor, ratchet, or baseline",
+    "host CI or required-check publication",
+    "approval or merge",
+    "tag or authority binding",
+    "protection or deployment",
+    "force operation",
+    "Git worktree lifecycle"
+  ]
+}

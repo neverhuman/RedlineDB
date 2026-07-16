@@ -1,0 +1,1 @@
+coverage-audit status=pass sources=2/2 hard=0 soft=0 json=target/jankurai/coverage/coverage-audit.json md=target/jankurai/coverage/coverage-audit.md

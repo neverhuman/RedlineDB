@@ -1,0 +1,78 @@
+{
+  "schema_version": "jain.pr-metadata-correction-batch/v1",
+  "recorded_at_utc": "2026-07-16T08:13:00Z",
+  "claim_token": "codex-root-identity-pr-description-batch-20260716T0812Z",
+  "credential_transmitted_without_argv_or_receipt_exposure": true,
+  "pull_requests": [
+    {
+      "repository": "jeryu/jain-xgboost",
+      "number": 8,
+      "title": "repin v8.0.1: jain-xgboost",
+      "branch": "claude/v801-identity-jain-xgboost-20260716",
+      "head": "41244cdf009f32101fd26f764685c304494d6d4a",
+      "request_payload_sha256": "103ac609e3b1095b01b6a5638b403d351abca0258b1cafbaf27eb7c3901d1817",
+      "request_and_readback_body_sha256": "b7f2081d10d618178000e9db6aac335c2648ee3698f1634d505cf46aec7e4319",
+      "readback_updated_at": "2026-07-16T08:11:57.045002486Z",
+      "independent_review_sha256": "c32c7979ae64ea523d5c511d2f98a27b36b1e95012ef3235db7c40efa1a2acff",
+      "jankurai_proof": "success",
+      "jankurai_proof_check_id": "3197f4b1-bbea-438e-9c6c-6e844be31c2f",
+      "required_check": "absent"
+    },
+    {
+      "repository": "jeryu/jain-lightgbm",
+      "number": 9,
+      "title": "release: recut LightGBM 8.0.1 identity as split.1",
+      "branch": "codex/v8.0.1-lightgbm-identity-successor-20260716",
+      "head": "625139b5af66bcca45e23454e684134e057f1197",
+      "request_payload_sha256": "702af6837862598e09b4a7698bb60e5b9cdb772d319ffc291ddf41d302e902cf",
+      "request_and_readback_body_sha256": "e587bd83169e66a4a86f486e91e9cd121b8cd20e940e2079f39c6df3b5d3568c",
+      "readback_updated_at": "2026-07-16T08:11:53.666027249Z",
+      "independent_review_sha256": "2ffe356b87502d3aa59dd76f40f857f4172fc5e6b0c302dab2ffa069b61f8417",
+      "native_vendor_revision": "d02a01ac",
+      "native_release_tests": 2,
+      "jankurai_proof": "success",
+      "jankurai_proof_check_id": "bfd0b37e-a563-4c46-ab88-7795c80ffccc",
+      "required_check": "absent"
+    },
+    {
+      "repository": "jeryu/jain-jable",
+      "number": 4,
+      "title": "repin v8.0.1: jain-jable",
+      "branch": "claude/v801-identity-jain-jable-20260716",
+      "head": "c606b6298bee69b521b1fc8f3144e23be357cb1f",
+      "request_payload_sha256": "28d0a12f3342d21abb41d026b022164f07080d8603316a8fb82838e8ae229b53",
+      "request_and_readback_body_sha256": "c604a422c3dd877b0e9e13586c9c9ad1decf82b90b4a09580b71c5b2fe565485",
+      "readback_updated_at": "2026-07-16T08:11:55.324777776Z",
+      "independent_review_sha256": "e0f9f661ddc2349013aa678b8f91dc9ee1817c16dde723f838a5f7da31e6047e",
+      "jankurai_proof": "success",
+      "jankurai_proof_check_id": "72403322-e4d5-442c-815f-84993ef93c01",
+      "required_check": "absent"
+    }
+  ],
+  "readback_invariants": {
+    "titles_unchanged": true,
+    "base_branches_unchanged": true,
+    "branches_unchanged": true,
+    "heads_unchanged": true,
+    "proof_checks_unchanged": true,
+    "required_checks_synthesized": false
+  },
+  "mutations": {
+    "pull_request_bodies": 3,
+    "new_receipt": true,
+    "source": false,
+    "index": false,
+    "repository_ref": false,
+    "forge_ref": false,
+    "check_post": false,
+    "approval": false,
+    "merge": false,
+    "tag": false,
+    "authority": false,
+    "protection": false,
+    "deployment": false,
+    "force_operation": false,
+    "git_worktree_action": false
+  },
+  "decision": "CORRECTED_PENDING_REQUIRED_APPROVAL_MERGE_TAG_BIND"
+}

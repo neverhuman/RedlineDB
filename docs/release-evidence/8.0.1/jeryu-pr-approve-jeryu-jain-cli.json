@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Family pins to v8.0.1-split.1 (+smartcluster split.0); lock v8.0.0-free; identity to split.1. Adapts feat-cli config to the split.1 feat-core API (InventionConfig +selection_budget_secs/require_gpu/algorithm_maker_top_k; PipelineConfig +invention_engine, defaulted to Legacy/env-overridable). CI green (required lane, exit 0).",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T15:10:26.074324967+00:00",
+      "head_sha": "440339ce7d68c83be965b7ef0a24cb927916e067",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:440339ce7d68c83be965b7ef0a24cb927916e067:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "c19961a954328161d983dd728d337c540d5b4567",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "9c462700-0120-42aa-b580-f49dd63274bb#11",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/repin-split1-v8.0.1-20260716",
+      "head_sha": "440339ce7d68c83be965b7ef0a24cb927916e067",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "440339ce7d68c83be965b7ef0a24cb927916e067",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 11,
+      "passport_hash": "passport:440339ce7d68c83be965b7ef0a24cb927916e067:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "9c462700-0120-42aa-b580-f49dd63274bb",
+        "name": "jain-cli",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: v8.0.1-split.1 (jain-cli) — deps + identity",
+      "updated_at": "2026-07-16T15:09:04.707931373+00:00"
+    }
+  },
+  "repository": "jeryu/jain-cli",
+  "request": {
+    "body": {
+      "body_markdown": "APPROVE (self-attest, disclosed; owner-authorized this session). Verified green required lane in exact-SHA clone; evidence log sha256 de20a4dca2d2dc64b982d5046f4d98480a914e4c38231ac48666b222c4425da8 in docs/release-evidence/8.0.1/ci/.",
+      "evidence": null,
+      "expected_head_sha": "440339ce7d68c83be965b7ef0a24cb927916e067",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-cli/pulls/11/reviews"
+  },
+  "response": {
+    "description": "Family pins to v8.0.1-split.1 (+smartcluster split.0); lock v8.0.0-free; identity to split.1. Adapts feat-cli config to the split.1 feat-core API (InventionConfig +selection_budget_secs/require_gpu/algorithm_maker_top_k; PipelineConfig +invention_engine, defaulted to Legacy/env-overridable). CI green (required lane, exit 0).",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T15:10:26.065755232+00:00",
+      "head_sha": "440339ce7d68c83be965b7ef0a24cb927916e067",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:440339ce7d68c83be965b7ef0a24cb927916e067:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "c19961a954328161d983dd728d337c540d5b4567",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "9c462700-0120-42aa-b580-f49dd63274bb#11",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/repin-split1-v8.0.1-20260716",
+      "head_sha": "440339ce7d68c83be965b7ef0a24cb927916e067",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "440339ce7d68c83be965b7ef0a24cb927916e067",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 11,
+      "passport_hash": "passport:440339ce7d68c83be965b7ef0a24cb927916e067:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "9c462700-0120-42aa-b580-f49dd63274bb",
+        "name": "jain-cli",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: v8.0.1-split.1 (jain-cli) — deps + identity",
+      "updated_at": "2026-07-16T15:09:04.707931373+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784214623
+}

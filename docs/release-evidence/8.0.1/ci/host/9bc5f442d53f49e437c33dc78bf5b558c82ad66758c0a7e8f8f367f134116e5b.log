@@ -1,0 +1,135 @@
+Cloning into '/tmp/split-host-ci.7MgyXG/jain-xgboost'...
+HEAD is now at 41244cd ci: pin governed Jankurai binary
+lock_blob=ef3cf007e0dc7d5024d05522873def8dc7fe9faa
+name=jain-xgboost
+ref=41244cdf009f32101fd26f764685c304494d6d4a
+commit=41244cdf009f32101fd26f764685c304494d6d4a
+tree=12b75831158f4bff8e302cffeacbdf2742b0d183
+release_checksum_sha256=4855cda1132120b0d9a8bce59876baddd141dc3c8dfc11d2250a0c0d8999f74e
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: /tmp/split-host-ci.7MgyXG/jain-xgboost
+[ci] native learner required lane: metadata + vendor-backed release smoke
+[ci] JAIN_VENDOR_ROOT not set; native release smoke deferred to deploy integration
+required ok: jain-xgboost
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded unarray v0.1.4
+  Downloaded bit-set v0.8.0
+  Downloaded quick-error v1.2.3
+  Downloaded aho-corasick v1.1.4
+  Downloaded wait-timeout v0.2.1
+  Downloaded fnv v1.0.7
+  Downloaded errno v0.3.14
+  Downloaded windows-link v0.2.1
+  Downloaded rand_xorshift v0.4.0
+  Downloaded rustc-hash v1.1.0
+  Downloaded cfg-if v1.0.4
+  Downloaded bit-vec v0.8.0
+  Downloaded autocfg v1.5.1
+  Downloaded shlex v1.3.0
+  Downloaded glob v0.3.3
+  Downloaded once_cell v1.21.4
+  Downloaded tempfile v3.27.0
+  Downloaded unicode-ident v1.0.24
+  Downloaded wit-bindgen v0.57.1
+  Downloaded r-efi v5.3.0
+  Downloaded getrandom v0.4.3
+  Downloaded num-traits v0.2.19
+  Downloaded rand v0.9.4
+  Downloaded zerocopy-derive v0.8.53
+  Downloaded wasip2 v1.0.4+wasi-0.2.12
+  Downloaded regex v1.12.4
+  Downloaded itertools v0.13.0
+  Downloaded nom v7.1.3
+  Downloaded bindgen v0.70.1
+  Downloaded proptest v1.11.0
+  Downloaded minimal-lexical v0.2.1
+  Downloaded zerocopy v0.8.53
+  Downloaded syn v2.0.118
+  Downloaded memchr v2.8.2
+  Downloaded prettyplease v0.2.37
+  Downloaded getrandom v0.3.4
+  Downloaded log v0.4.33
+  Downloaded regex-syntax v0.8.11
+  Downloaded rustix v1.1.4
+  Downloaded bitflags v2.13.0
+  Downloaded r-efi v6.0.0
+  Downloaded proc-macro2 v1.0.106
+  Downloaded clang-sys v1.8.1
+  Downloaded cexpr v0.6.0
+  Downloaded rusty-fork v0.3.1
+  Downloaded rand_core v0.9.5
+  Downloaded rand_chacha v0.9.0
+  Downloaded quote v1.0.46
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded libloading v0.8.9
+  Downloaded fastrand v2.4.1
+  Downloaded regex-automata v0.4.14
+  Downloaded either v1.16.0
+  Downloaded libc v0.2.186
+  Downloaded windows-sys v0.61.2
+  Downloaded linux-raw-sys v0.12.1
+running release Cargo command: build-all-features
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling glob v0.3.3
+   Compiling unicode-ident v1.0.24
+   Compiling clang-sys v1.8.1
+   Compiling getrandom v0.3.4
+   Compiling prettyplease v0.2.37
+   Compiling memchr v2.8.2
+   Compiling regex-syntax v0.8.11
+   Compiling minimal-lexical v0.2.1
+   Compiling nom v7.1.3
+   Compiling regex-automata v0.4.14
+   Compiling libloading v0.8.9
+   Compiling syn v2.0.118
+   Compiling zerocopy v0.8.53
+   Compiling getrandom v0.4.3
+   Compiling rustix v1.1.4
+   Compiling either v1.16.0
+   Compiling bindgen v0.70.1
+   Compiling itertools v0.13.0
+   Compiling rand_core v0.9.5
+   Compiling regex v1.12.4
+   Compiling cexpr v0.6.0
+   Compiling rustc-hash v1.1.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling bitflags v2.13.0
+   Compiling log v0.4.33
+   Compiling shlex v1.3.0
+   Compiling autocfg v1.5.1
+   Compiling num-traits v0.2.19
+   Compiling once_cell v1.21.4
+   Compiling fastrand v2.4.1
+   Compiling tempfile v3.27.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling xgboost v8.0.1 (/tmp/split-host-ci.7MgyXG/jain-xgboost/crates/xgboost)
+   Compiling wait-timeout v0.2.1
+   Compiling quick-error v1.2.3
+   Compiling bit-vec v0.8.0
+   Compiling fnv v1.0.7
+   Compiling rusty-fork v0.3.1
+   Compiling bit-set v0.8.0
+error: failed to run custom build command for `xgboost v8.0.1 (/tmp/split-host-ci.7MgyXG/jain-xgboost/crates/xgboost)`
+
+Caused by:
+  process didn't exit successfully: `/tmp/split-host-ci.7MgyXG/cargo-target/release/build/xgboost-b7c00113f399a116/build-script-build` (exit status: 101)
+  --- stdout
+  cargo:rerun-if-env-changed=JAIN_VENDOR_ROOT
+
+  --- stderr
+  Traceback (most recent call last):
+    File "/home/ubuntu/.local/bin/cmake", line 5, in <module>
+      from cmake import cmake
+  ModuleNotFoundError: No module named 'cmake'
+
+  thread 'main' (2136225) panicked at crates/xgboost/build.rs:57:9:
+  xgboost cmake configure failed
+  note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+wrote /home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/ci/jain-xgboost-41244cdf009f32101fd26f764685c304494d6d4a-cargo.json
+Error: "release Cargo command failed: build-all-features"

@@ -1,0 +1,68 @@
+{
+  "schema_version": "jain.authority-tag-reconciliation/v1",
+  "recorded_at_utc": "2026-07-16T08:31:00Z",
+  "claim_token": "codex-root-domain-authority-tag-reconciliation-20260716T0828Z",
+  "repository": "jeryu/jain-domain",
+  "protected_merged_main": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+  "tree": "3ba0da9c975bfbf28e42bce819530d0d2e3a24c5",
+  "release_archive_sha256": "63467819b78a8c196eca6045e1c618d2758a61f813676a694543cec1f4eb4134",
+  "authority": {
+    "path": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+    "observed_sha256": "dbec989b1b5d2b04a26ad920f6e5946c8233c53db98eea9938860a5d962fc977",
+    "protected_main": "88a673c6c0e829721eebf8265036c1b18f2ef139",
+    "held_checkout_head": "85f0c16a0cd1d8c3af068a987285c95b20825364",
+    "current_tag_revision": 0,
+    "current_tag": "jain-domain-v8.0.1-split.0",
+    "current_release_commit": "PENDING",
+    "current_release_checksum_sha256": "PENDING"
+  },
+  "tag_namespace": {
+    "occupied_split_0_commit": "07a6879beba68ea7efb386231376bd03621fa0a4",
+    "split_0_must_not_move": true,
+    "split_1_exists": false,
+    "next_unused_corrective_tag": "jain-domain-v8.0.1-split.1"
+  },
+  "non_apply_dry_run": {
+    "status": "fail_closed_as_expected",
+    "receipt": "jain-domain-split1-immutable-tag-dryrun-20260716.json",
+    "receipt_sha256": "15a0dcd70f640c03b166aa1774d70421132d6ed29c7d4b85d4cc4dbe476bcb14",
+    "ref_operation_reached": false,
+    "reason": "requested split.1 tag, merged commit, and archive checksum differ from authority split.0/PENDING selection"
+  },
+  "reconciliation_note": {
+    "path": "jain-domain-split-reconciliation-20260716.md",
+    "sha256": "2cd43eb943b24494c428dc36af586448750de8c57b1585450109f1b1cba3ec2d"
+  },
+  "required_protected_authority_values": {
+    "product_version": "8.0.1",
+    "tag_revision": 1,
+    "current_tag": "jain-domain-v8.0.1-split.1",
+    "release_commit": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+    "release_checksum_sha256": "63467819b78a8c196eca6045e1c618d2758a61f813676a694543cec1f4eb4134",
+    "required_check": "jain-domain/required"
+  },
+  "ordering": [
+    "stopped clean authority handoff",
+    "recompute merged-main commit and archive checksum",
+    "protected authority PR selects and binds split.1",
+    "governed immutable-tag create/readback",
+    "authority-derived mirror/snapshot refresh"
+  ],
+  "mutations": {
+    "new_evidence": true,
+    "non_apply_tag_dry_run": true,
+    "authority_manifest": false,
+    "derived_manifest": false,
+    "domain_source_or_ref": false,
+    "tag": false,
+    "check": false,
+    "pull_request": false,
+    "approval": false,
+    "merge": false,
+    "protection": false,
+    "deployment": false,
+    "force_operation": false,
+    "git_worktree_action": false
+  },
+  "decision": "BLOCKED_PENDING_PROTECTED_AUTHORITY_RECONCILIATION"
+}

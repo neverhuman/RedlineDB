@@ -1,0 +1,75 @@
+=== required lane start 2026-07-16T14:33:13Z ===
+check ok: /home/ubuntu/.cache/claude-orch-ci/leaf/jain-xgboost
+[ci] native learner required lane: metadata + vendor-backed release smoke
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling proc-macro2 v1.0.106
+   Compiling glob v0.3.3
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling prettyplease v0.2.37
+   Compiling getrandom v0.3.4
+   Compiling memchr v2.8.2
+   Compiling regex-syntax v0.8.11
+   Compiling minimal-lexical v0.2.1
+   Compiling clang-sys v1.8.1
+   Compiling zerocopy v0.8.53
+   Compiling nom v7.1.3
+   Compiling regex-automata v0.4.14
+   Compiling libloading v0.8.9
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+   Compiling bindgen v0.70.1
+   Compiling either v1.16.0
+   Compiling bitflags v2.13.0
+   Compiling regex v1.12.4
+   Compiling cexpr v0.6.0
+   Compiling rustc-hash v1.1.0
+   Compiling rand_core v0.9.5
+   Compiling itertools v0.13.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling log v0.4.33
+   Compiling autocfg v1.5.1
+   Compiling shlex v1.3.0
+   Compiling once_cell v1.21.4
+   Compiling num-traits v0.2.19
+   Compiling fastrand v2.4.1
+   Compiling syn v2.0.118
+   Compiling wait-timeout v0.2.1
+   Compiling quick-error v1.2.3
+   Compiling bit-vec v0.8.0
+   Compiling fnv v1.0.7
+   Compiling rand v0.9.4
+   Compiling bit-set v0.8.0
+   Compiling tempfile v3.27.0
+   Compiling rand_xorshift v0.4.0
+   Compiling unarray v0.1.4
+   Compiling rusty-fork v0.3.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling rand_chacha v0.9.0
+   Compiling proptest v1.11.0
+   Compiling xgboost v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/leaf/jain-xgboost/crates/xgboost)
+    Finished `release` profile [optimized + debuginfo] target(s) in 14.21s
+     Running unittests src/lib.rs (target/release/deps/xgboost-1749122c5530469a)
+
+running 2 tests
+test tests::row_major_transpose_maps_every_cell ... ok
+test tests::row_major_transpose_round_trips ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/smoke.rs (target/release/deps/smoke-16835429cebddd34)
+
+running 1 test
+test xgb_train_predict ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+   Doc-tests xgboost
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+required ok: jain-xgboost
+=== required lane exit rc=0 2026-07-16T14:33:27Z ===

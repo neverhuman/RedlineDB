@@ -1,0 +1,89 @@
+{
+  "schema_version": "jain.required-ci-execution/v1",
+  "recorded_at_utc": "2026-07-16T08:38:00Z",
+  "claim": "codex-jain-docs-pr13-serialized-required-20260716T0832Z",
+  "repository": "jeryu/jain-docs",
+  "pull_request": 13,
+  "base_sha": "8b5ab9ab6b224821622eccfd5a8cb9cde5350e51",
+  "head_sha": "0b278ec716fcccd74abd0a2b3b051d8729c140e2",
+  "head_tree": "709e062c92638c5ac862126496a7aa9951a4999a",
+  "admission": {
+    "pr_open_exact": true,
+    "proof_check_id": "902521d6-6e58-4198-81ce-41a3281c13de",
+    "proof_conclusion": "success",
+    "independent_review_path": "jeryu-independent-review-jeryu-jain-docs-pr13-0b278ec7.json",
+    "independent_review_sha256": "1b35fdfbd450ffeb079fe11527422ee870423a8246d720362500a6b8088b0870",
+    "canonical_clean_stopped_forge_equal": true,
+    "canonical_worktree_registrations": 1,
+    "global_heavy_producer_zero": true,
+    "protection_receipt": "../jeryu-protection-readback-jeryu-jain-docs.json",
+    "protection_receipt_sha256": "168a3e8a41aad9187db2cd6586b60f3e9af8a32009c9f642351b0ec0f996adfc"
+  },
+  "execution_path": {
+    "host_runner_sha256": "dabf3f81d99ae8bfa3418c85ab312978f49aae4dab4e13dfd966cfae2d12ea03",
+    "required_script_sha256": "2c098d2d5059dc6a46bd97cf332a0f1ff32e2ea8014a3bc2a0aabfcc0fb1b33e",
+    "docs_pdf_script_sha256": "f9c7a913e9a6cfbea56aecae085650dc4d77df7d155e0b5a85b56ee3b9e9456c",
+    "docs_links_script_sha256": "2b71f9f9ebe8280a5aee6dcd365c26439e2ac21ff74d0c640fc9aff0ef73a755",
+    "scripts_ci_local_sha256": "8116218daba62df87506067f9ea3a226371a180e72214dbc71a5b8aa7388df22",
+    "root_cargo_manifest_absent": true,
+    "release_cargo_and_rust_release_lanes_skipped": true,
+    "current_required_gate": [
+      "shell and metadata checks",
+      "25 repository-relative documentation links",
+      "one Typst 0.15.0 manual build",
+      "non-empty identical within-run stable/versioned PDF copies"
+    ],
+    "cross_run_pdf_byte_reproducibility_is_separate_terminal_evidence": true
+  },
+  "bare_mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-docs.git",
+    "bare": true,
+    "alternates_absent": true,
+    "linked_registration_absent": true,
+    "locks_absent": true,
+    "active_holder_absent": true,
+    "origin_before": "/home/ubuntu/jain-split/jain-docs",
+    "origin_after": "http://127.0.0.1:8787/git/jeryu/jain-docs.git",
+    "ordinary_ref": "refs/heads/codex/v8.0.1/docs-proof-successor-20260716",
+    "ordinary_ref_head": "0b278ec716fcccd74abd0a2b3b051d8729c140e2",
+    "fetch_force": false,
+    "fetch_tags": false,
+    "no_local_clone_proof_sandbox": "/tmp/codex-docs-mirror-proof.6tOUWW",
+    "no_local_clone_proof_removed": true
+  },
+  "launch": {
+    "count": 1,
+    "wrapper_pid": 1746682,
+    "runner_pid": 1746686,
+    "sandbox": "/tmp/split-host-ci.YDx5zX",
+    "sandbox_head": "0b278ec716fcccd74abd0a2b3b051d8729c140e2",
+    "sandbox_removed": true,
+    "retry_count": 0
+  },
+  "result": {
+    "conclusion": "success",
+    "required_check": "jain-docs/required",
+    "required_check_id": "3f086bc8-6486-49e4-8f93-5dca7a6827bc",
+    "required_completed_at": "2026-07-16T08:37:27.817156947Z",
+    "host_receipt": "../ci/host/jain-docs-0b278ec716fcccd74abd0a2b3b051d8729c140e2-df0b428a047370c484c87245c8e8716052c563b0464c3682d120b06912618537.json",
+    "host_receipt_sha256": "eece92d8d17d13deb87ac69fa253e27a8a1964b1114cfd00c2ce67f2520c9785",
+    "log": "../ci/host/df0b428a047370c484c87245c8e8716052c563b0464c3682d120b06912618537.log",
+    "log_sha256": "df0b428a047370c484c87245c8e8716052c563b0464c3682d120b06912618537",
+    "pr_still_open_at_exact_head": true
+  },
+  "canonical_post_run": {
+    "clean": false,
+    "reason": "a separately claimed reproducible-PDF remediation owner began source work after this exact-head isolated CI launch",
+    "other_claim": "codex-jain-docs-pr13-reproducible-pdf-20260716T0832Z",
+    "this_execution_mutated_canonical_source": false,
+    "no_sync_or_cleanup_attempted": true
+  },
+  "mutations": [
+    "bare mirror origin correction and ordinary exact-branch refresh",
+    "one exact-head isolated host CI run",
+    "genuine required check-run and commit-status publication",
+    "machine evidence receipts"
+  ],
+  "approval_merge_tag_authority_or_deploy_mutation": false,
+  "decision": "PASS_REQUIRED_POSTRUN_CANONICAL_OWNERSHIP_TRANSFER"
+}

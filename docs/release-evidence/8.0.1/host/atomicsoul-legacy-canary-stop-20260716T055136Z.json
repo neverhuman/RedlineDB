@@ -1,0 +1,55 @@
+{
+  "schema": "jain.host-resource-retirement/v1",
+  "claim_token": "codex-atomicsoul-legacy-canary-stop-20260716T0552Z",
+  "observed_at_utc": "2026-07-16T05:51:36Z",
+  "release_target": "8.0.1",
+  "host": "atomicsoul",
+  "action": "docker_stop_only",
+  "result": "pass",
+  "authority": {
+    "audit_receipt": "docs/release-evidence/8.0.1/host-capacity-shutdown-audit-20260716T054658Z.md",
+    "audit_sha256": "f8daf61fb7becdbd5af29b5407c8c01a207a8084b8cef1581f72deff96483e93",
+    "user_authorization": "Aggressively turn off resources only when positively safe and helpful."
+  },
+  "resource": {
+    "name": "jain-canary",
+    "container_id": "780ce7cd8e93772a92c25bd6ef988672e5f7d79ad957e8f56238e6a53f4b9d85",
+    "image_id": "sha256:9dcf5cb0a0d6fd6104b593141e529686b853825042db3f1e32933c2182713e06",
+    "version": "7.0.5",
+    "rollback_target": "7.0.6",
+    "classification": "SAFE_TO_STOP",
+    "state_before": "running",
+    "state_after": "exited"
+  },
+  "preconditions": {
+    "exact_container_id": true,
+    "exact_image_id": true,
+    "published_port_count": 0,
+    "caddy_reference_count": 0,
+    "dependent_container_count": 0,
+    "recent_15_minute_log_line_count": 0,
+    "landing_http_ok": true,
+    "try_http_ok": true,
+    "xbabe3_health_http_ok": true
+  },
+  "postconditions": {
+    "container_running": false,
+    "container_preserved": true,
+    "image_preserved": true,
+    "volume_jain_canary_data_preserved": true,
+    "landing_http_ok": true,
+    "try_http_ok": true,
+    "xbabe3_health_http_ok": true,
+    "caddy_runtime_config_sha256_before": "dd0ba160450106212ca6523d7a64c96f174a264eaf1f999159d00291e74d7ca2",
+    "caddy_runtime_config_sha256_after": "dd0ba160450106212ca6523d7a64c96f174a264eaf1f999159d00291e74d7ca2",
+    "caddy_runtime_config_unchanged": true
+  },
+  "excluded_actions": [
+    "docker rm",
+    "volume or image removal",
+    "docker prune",
+    "Caddy, route, firewall, or source mutation",
+    "stopping jain-landing, jain-web-control, or scqd",
+    "forge, release, authority, Redline, or worktree mutation"
+  ]
+}

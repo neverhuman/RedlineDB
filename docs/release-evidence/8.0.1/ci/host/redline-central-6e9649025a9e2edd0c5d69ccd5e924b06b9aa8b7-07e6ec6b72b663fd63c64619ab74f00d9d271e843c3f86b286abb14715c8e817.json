@@ -1,0 +1,10 @@
+{
+  "schema_version": "jain.host-ci/v1",
+  "owner": "jeryu",
+  "repository": "redline-central",
+  "head_sha": "6e9649025a9e2edd0c5d69ccd5e924b06b9aa8b7",
+  "check": "redline-central/required",
+  "conclusion": "failure",
+  "log_sha256": "07e6ec6b72b663fd63c64619ab74f00d9d271e843c3f86b286abb14715c8e817",
+  "log_path": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/ci/host/07e6ec6b72b663fd63c64619ab74f00d9d271e843c3f86b286abb14715c8e817.log"
+}

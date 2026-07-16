@@ -1,0 +1,281 @@
+{
+  "schema": "jain.identity-ci-scheduler-audit/v1",
+  "snapshot_at": "2026-07-16T08:41:03Z",
+  "scope": "Jain 8.0.1 identity-train open PR exact-head scheduling",
+  "upgrade_chat": {
+    "path": "UPGRADE_CHAT.md",
+    "line_count": 16212,
+    "sha256": "f32881306ed2714b5d0492ace547c89105ec105adcd8e375024c6fb33661de2b"
+  },
+  "host_runner": {
+    "path": "jain-split-ops/ops/ci/split-host-ci.sh",
+    "sha256": "dabf3f81d99ae8bfa3418c85ab312978f49aae4dab4e13dfd966cfae2d12ea03",
+    "heavy_producer_count_at_snapshot": 0
+  },
+  "protection_readback": {
+    "repositories_verified": 17,
+    "uniform_policy": {
+      "required_context": "<repo>/required",
+      "strict": true,
+      "required_approvals": 1,
+      "linear_history": true,
+      "enforce_admins": true,
+      "allow_force_pushes": false,
+      "allow_deletions": false
+    }
+  },
+  "rows": [
+    {
+      "repository": "jeryu/jain-docs",
+      "pr": 13,
+      "base_sha": "8b5ab9ab6b224821622eccfd5a8cb9cde5350e51",
+      "head_sha": "abaee0720716d59f29058b8b523f67ec2ec0f315",
+      "proof": {"id": "8504c268-6f01-4a27-a472-987894b0099e", "conclusion": "success"},
+      "required": {"conclusion": "absent", "note": "success 3f086bc8-6486-49e4-8f93-5dca7a6827bc belongs to superseded head 0b278ec716fcccd74abd0a2b3b051d8729c140e2"},
+      "independent_review": "superseded_by_new_head",
+      "forge_approval_credit": false,
+      "owner": "codex-jain-docs-pr13-reproducible-pdf-20260716T0832Z active",
+      "eligible": false,
+      "blocker": "active source owner; successor needs fresh exact-head review and required"
+    },
+    {
+      "repository": "jeryu/jain-math",
+      "pr": 13,
+      "base_sha": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+      "head_sha": "7c9a039c70ab48664c6c39f7fbbebe9351c4660e",
+      "proof": {"id": "39c471a3-d4c5-4e1c-bad3-4edab160bfe8", "conclusion": "success"},
+      "required": {"id": "2ce98728-6b09-4092-bb55-6a1dabfa6c08", "conclusion": "failure"},
+      "independent_review": "pass_exact_head",
+      "forge_approval_credit": false,
+      "owner": null,
+      "eligible": false,
+      "blocker": "current runner lacks pinned nightly and cargo-public-api rejects the virtual-workspace package selection"
+    },
+    {
+      "repository": "jeryu/jain-contracts",
+      "pr": 11,
+      "base_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+      "head_sha": "54357986f4244cf408cc405b7a034bdf4eac0bf4",
+      "proof": {"id": "0beae497-1b12-4bbd-9003-e182eb9310e1", "conclusion": "success"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "pass_exact_head:b9bbb5393ae379dc9d9145d77cd4ee9e2fd4980d0f375665d3cc0c72d2323b83",
+      "forge_approval_credit": false,
+      "owner": null,
+      "eligible": false,
+      "blocker": "target-only host sandbox omits required full-v1 sibling contract mirrors; first exact error is ../jain-web/contracts/demo"
+    },
+    {
+      "repository": "jeryu/jain-catboost",
+      "pr": 8,
+      "base_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "head_sha": "182089fb4caad2c752ba9e5a5bd584adceab4e90",
+      "proof": {"id": "38eef35d-9bbb-48b3-80d7-400a16951500", "conclusion": "success"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "content_pass_exact_head:97f50ba36c340d1a5f9d014072d216437084a6d414dbbf578a8e3262ea0bb4f3",
+      "forge_approval_credit": false,
+      "owner": "codex-catboost-pr8-bounded-native-evidence-20260716T0838Z active",
+      "eligible": false,
+      "blocker": "active native-evidence owner; current canonical runner lacks pristine-vendor restore and authority split.2 disagrees with branch split.1"
+    },
+    {
+      "repository": "jeryu/jain-xgboost",
+      "pr": 8,
+      "base_sha": "34d3534702727b463c4b00c799d06fda0f76438c",
+      "live_main_sha": "8457e1906850c0cf48cd9547c01f9161b6db5484",
+      "live_main_is_ancestor": true,
+      "head_sha": "41244cdf009f32101fd26f764685c304494d6d4a",
+      "proof": {"id": "3197f4b1-bbea-438e-9c6c-6e844be31c2f", "conclusion": "success"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "pass_exact_head:c32c7979ae64ea523d5c511d2f98a27b36b1e95012ef3235db7c40efa1a2acff",
+      "native_review": "pass_exact_head:6132f3e725e2a740794e25a6253d6c625c88d578f24cb3bed82e5e146764dad3",
+      "forge_approval_credit": false,
+      "owner": null,
+      "eligible": true,
+      "blocker": null
+    },
+    {
+      "repository": "jeryu/jain-lightgbm",
+      "pr": 9,
+      "base_sha": "84a1c776903b64d32c10d375e21bb876b921405b",
+      "live_main_sha": "84a1c776903b64d32c10d375e21bb876b921405b",
+      "live_main_is_ancestor": true,
+      "head_sha": "625139b5af66bcca45e23454e684134e057f1197",
+      "proof": {"id": "bfd0b37e-a563-4c46-ab88-7795c80ffccc", "conclusion": "success"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "native_backed_pass_exact_head:2ffe356b87502d3aa59dd76f40f857f4172fc5e6b0c302dab2ffa069b61f8417",
+      "forge_approval_credit": false,
+      "owner": null,
+      "eligible": true,
+      "blocker": null
+    },
+    {
+      "repository": "jeryu/jain-jable",
+      "pr": 4,
+      "base_sha": "e119908dd4f522fdbada7ddb461fb10c0dd7f563",
+      "live_main_sha": "9a38221906d8918efa3b8d8ef582423f2a23dafc",
+      "head_sha": "c606b6298bee69b521b1fc8f3144e23be357cb1f",
+      "proof": {"id": "72403322-e4d5-442c-815f-84993ef93c01", "conclusion": "success"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "pass_exact_head:e0f9f661ddc2349013aa678b8f91dc9ee1817c16dde723f838a5f7da31e6047e",
+      "forge_approval_credit": false,
+      "owner": null,
+      "eligible": false,
+      "blocker": "current runner lacks pinned nightly and exact cargo-public-api virtual-workspace invocation fails"
+    },
+    {
+      "repository": "jeryu/jain-battle-gpu",
+      "pr": 9,
+      "base_sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+      "head_sha": "d5e4b5051243295f1a5bfdd6d66abe2182e50484",
+      "proof": {"id": "e04158b5-5d0b-4c3f-8e02-4b9fbd195c7e", "conclusion": "success"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "source_pass_release_blocked:6a2b3ccf212ae746f8f2a0782249a6dc5dff158ccba43e41a2e0d746dceea1f7",
+      "forge_approval_credit": false,
+      "owner": null,
+      "eligible": false,
+      "blocker": "current runner isolated RustSec input plus manifest-required native dynamic-loading/dynamic-linking host evidence"
+    },
+    {
+      "repository": "jeryu/jain-core",
+      "pr": 18,
+      "base_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "head_sha": "aa601624b4d292dd8858dc4eb8346103293be4ab",
+      "proof": {"id": "c99c2b43-49a7-41ff-a94b-ee48a9123a3b", "conclusion": "failure"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "not_credited",
+      "forge_approval_credit": false,
+      "owner": "separate Core successor/compile owners exist",
+      "eligible": false,
+      "blocker": "proof failure and current-runner lib_lightgbm.so native-loader failure"
+    },
+    {
+      "repository": "jeryu/jain-llm",
+      "pr": 7,
+      "base_sha": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+      "head_sha": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+      "proof": {"id": "22b2fa04-dfb0-4e84-b8a2-9af11986b866", "conclusion": "success"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "pass_exact_head:2ee78bc253a174830daf8588ca067fb9383596e06f11aa72ccb15e84ce70c346",
+      "forge_approval_credit": false,
+      "owner": null,
+      "eligible": false,
+      "blocker": "current host runner does not provision the pinned RustSec database into isolated HOME"
+    },
+    {
+      "repository": "jeryu/jain-zyal",
+      "pr": 6,
+      "base_sha": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
+      "head_sha": "cd33b26ab97a965c21ccafb867b39df2341601df",
+      "proof": {"id": "c384d22f-bcdc-4045-b042-215228ff0357", "conclusion": "success"},
+      "required": {"id": "b106a740-8027-4afd-b5a7-e7e553defedc", "conclusion": "failure"},
+      "independent_review": "not_credited",
+      "forge_approval_credit": false,
+      "owner": null,
+      "eligible": false,
+      "blocker": "exact required failure: isolated RustSec database absent"
+    },
+    {
+      "repository": "jeryu/jain-jailgun",
+      "pr": 6,
+      "base_sha": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+      "head_sha": "529dd19ef07303fc46f49549863d1631708f12ff",
+      "proof": {"id": "fa427526-a228-43f1-93cd-94fd81785ba5", "conclusion": "success"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "not_credited",
+      "forge_approval_credit": false,
+      "owner": null,
+      "eligible": false,
+      "blocker": "exact scripts unconditionally require isolated RustSec database and cargo public-api"
+    },
+    {
+      "repository": "jeryu/jain-research",
+      "pr": 4,
+      "base_sha": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+      "head_sha": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5",
+      "proof": {"id": "93b42acf-d2fa-4b00-b438-d8ab30640f85", "conclusion": "failure"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "not_credited",
+      "forge_approval_credit": false,
+      "owner": null,
+      "eligible": false,
+      "blocker": "automatic proof failure"
+    },
+    {
+      "repository": "jeryu/jain-tui",
+      "pr": 12,
+      "base_sha": "09db089717eea57450747f36033d221265a3dea8",
+      "head_sha": "5ad7f64299e7a0015aee738d115597e36265bfae",
+      "proof": {"id": "3897076b-e90a-417f-8106-d88e2dddf53e", "conclusion": "failure"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "not_credited",
+      "forge_approval_credit": false,
+      "owner": "separate TUI owner exists",
+      "eligible": false,
+      "blocker": "automatic proof failure"
+    },
+    {
+      "repository": "jeryu/jain-web",
+      "pr": 31,
+      "base_sha": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "head_sha": "92f1d3a055829f106319103bb5760b35a00591ae",
+      "proof": {"id": "26c870f8-e09f-4e11-bf15-33c4bafaec23", "conclusion": "failure"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "not_credited",
+      "forge_approval_credit": false,
+      "owner": "separate Web owners exist",
+      "eligible": false,
+      "blocker": "automatic proof failure"
+    },
+    {
+      "repository": "jeryu/jain-ops",
+      "pr": 9,
+      "base_sha": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "head_sha": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+      "proof": {"id": "a8bf8b4b-060a-4186-bab4-5ddaba00fcb0", "conclusion": "success"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "source_pass_release_blocked:b6c0ac37aa0b23955ed0e3dec5c1a18b6dbb3761c8db372f16a02056255dec0c",
+      "forge_approval_credit": false,
+      "owner": "codex-jain-ops-pr9-corrected-evidence-acceptance-20260716T0839Z active",
+      "eligible": false,
+      "blocker": "active evidence owner and current runner isolated RustSec input"
+    },
+    {
+      "repository": "jeryu/jain-deploy",
+      "pr": 27,
+      "base_sha": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "head_sha": "ec08477512319f6c7cda64e0ef33349840e23105",
+      "proof": {"id": "b3e6c856-17d7-4384-a26c-6b9b1ec70635", "conclusion": "failure"},
+      "required": {"conclusion": "absent"},
+      "independent_review": "not_credited",
+      "forge_approval_credit": false,
+      "owner": "separate Deploy owners exist",
+      "eligible": false,
+      "blocker": "automatic proof failure; Deploy remains dependency-last"
+    }
+  ],
+  "recommended_serialized_order": [
+    {
+      "position": 1,
+      "repository": "jeryu/jain-xgboost",
+      "pr": 8,
+      "head_sha": "41244cdf009f32101fd26f764685c304494d6d4a"
+    },
+    {
+      "position": 2,
+      "repository": "jeryu/jain-lightgbm",
+      "pr": 9,
+      "head_sha": "625139b5af66bcca45e23454e684134e057f1197"
+    }
+  ],
+  "third_candidate": null,
+  "reason_no_third": "After excluding active owners and deterministic current-runner blockers, only two genuine candidates remain. Inventing a third would risk a known failure or ownership collision.",
+  "mutations": {
+    "host_ci": false,
+    "mirror": false,
+    "source_or_index": false,
+    "refs_or_prs_or_checks": false,
+    "protection_or_approval_or_merge": false,
+    "tag_or_authority_or_deploy": false,
+    "git_worktree": false
+  }
+}

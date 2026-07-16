@@ -1,0 +1,316 @@
+Cloning into '/tmp/split-host-ci.qtTHFP/jain-jable'...
+HEAD is now at 9a38221 docs: prohibit git worktrees
+lock_blob=8101b65e1f342c1c7ff5243cb873782c07b85523
+name=jain-jable
+ref=9a38221906d8918efa3b8d8ef582423f2a23dafc
+commit=9a38221906d8918efa3b8d8ef582423f2a23dafc
+tree=5b62c5cdac04696d16dfaab279635ae1c1c34132
+release_checksum_sha256=23fbbfd46295e21a95282b5c93219d2cabe2117d826c0ad5dd51def5c9f53dda
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: /tmp/split-host-ci.qtTHFP/jain-jable
+[ci] Rust required lane: fmt + targeted clippy/test
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded bit-set v0.8.0
+  Downloaded bit-vec v0.8.0
+  Downloaded anyhow v1.0.103
+  Downloaded num_cpus v1.17.0
+  Downloaded wait-timeout v0.2.1
+  Downloaded zmij v1.0.21
+  Downloaded unarray v0.1.4
+  Downloaded itoa v1.0.18
+  Downloaded qd v0.8.0
+  Downloaded reborrow v0.5.5
+  Downloaded paste v1.0.15
+  Downloaded rand_xorshift v0.4.0
+  Downloaded version_check v0.9.5
+  Downloaded quick-error v1.2.3
+  Downloaded interpol v0.2.1
+  Downloaded cfg-if v1.0.4
+  Downloaded pulp-wasm-simd-flag v0.1.1
+  Downloaded proc-macro2 v1.0.106
+  Downloaded seq-macro v0.3.6
+  Downloaded unicode-ident v1.0.24
+  Downloaded tempfile v3.27.0
+  Downloaded private-gemm-x86 v0.1.20
+  Downloaded num-complex v0.4.6
+  Downloaded crossbeam-deque v0.8.7
+  Downloaded rusty-fork v0.3.1
+  Downloaded rand_chacha v0.9.0
+  Downloaded quote v1.0.46
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded fastrand v2.4.1
+  Downloaded getrandom v0.3.4
+  Downloaded serde_derive v1.0.228
+  Downloaded serde v1.0.228
+  Downloaded zerocopy-derive v0.8.54
+  Downloaded raw-cpuid v11.6.0
+  Downloaded rayon v1.12.0
+  Downloaded pulp v0.22.3
+  Downloaded syn v1.0.109
+  Downloaded serde_json v1.0.150
+  Downloaded proptest v1.11.0
+  Downloaded libm v0.2.16
+  Downloaded memchr v2.8.3
+  Downloaded zerocopy v0.8.54
+  Downloaded rand v0.9.4
+  Downloaded syn v2.0.118
+  Downloaded num-traits v0.2.19
+  Downloaded regex-syntax v0.8.11
+  Downloaded serde_core v1.0.228
+  Downloaded rayon-core v1.13.0
+  Downloaded dyn-stack v0.13.2
+  Downloaded rustix v1.1.4
+  Downloaded crossbeam-epoch v0.9.20
+  Downloaded bytemuck v1.25.1
+  Downloaded half v2.7.1
+  Downloaded getrandom v0.4.3
+  Downloaded gemm-common v0.19.0
+  Downloaded either v1.16.0
+  Downloaded rand_core v0.9.5
+  Downloaded bytemuck_derive v1.11.0
+  Downloaded gemm-f64 v0.19.0
+  Downloaded gemm-c64 v0.19.0
+  Downloaded faer-traits v0.24.0
+  Downloaded errno v0.3.14
+  Downloaded equator-macro v0.6.0
+  Downloaded dyn-stack-macros v0.1.3
+  Downloaded once_cell v1.21.4
+  Downloaded nano-gemm-f32 v0.2.1
+  Downloaded generativity v1.2.1
+  Downloaded gemm-f16 v0.19.0
+  Downloaded defer v0.2.1
+  Downloaded nano-gemm-c64 v0.2.1
+  Downloaded gemm-f32 v0.19.0
+  Downloaded libc v0.2.186
+  Downloaded gemm-c32 v0.19.0
+  Downloaded equator v0.6.0
+  Downloaded equator v0.2.2
+  Downloaded crossbeam-utils v0.8.22
+  Downloaded nano-gemm-codegen v0.2.1
+  Downloaded nano-gemm-c32 v0.2.1
+  Downloaded fnv v1.0.7
+  Downloaded equator-macro v0.2.1
+  Downloaded nano-gemm-core v0.2.1
+  Downloaded nano-gemm v0.2.2
+  Downloaded gemm v0.19.0
+  Downloaded nano-gemm-f64 v0.2.1
+  Downloaded bitflags v2.13.0
+  Downloaded autocfg v1.5.1
+  Downloaded faer v0.24.4
+  Downloaded linux-raw-sys v0.12.1
+    Checking cfg-if v1.0.4
+   Compiling autocfg v1.5.1
+   Compiling num-traits v0.2.19
+    Checking bitflags v2.13.0
+   Compiling libc v0.2.186
+    Checking bytemuck v1.25.1
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling nano-gemm-codegen v0.2.1
+   Compiling quote v1.0.46
+    Checking num-complex v0.4.6
+   Compiling libm v0.2.16
+   Compiling version_check v0.9.5
+   Compiling paste v1.0.15
+   Compiling pulp v0.22.3
+    Checking raw-cpuid v11.6.0
+    Checking reborrow v0.5.5
+    Checking pulp-wasm-simd-flag v0.1.1
+    Checking once_cell v1.21.4
+   Compiling dyn-stack-macros v0.1.3
+    Checking dyn-stack v0.13.2
+   Compiling seq-macro v0.3.6
+   Compiling syn v1.0.109
+    Checking gemm-common v0.19.0
+   Compiling syn v2.0.118
+   Compiling getrandom v0.3.4
+   Compiling crossbeam-utils v0.8.22
+    Checking nano-gemm-core v0.2.1
+   Compiling crossbeam-epoch v0.9.20
+   Compiling interpol v0.2.1
+   Compiling nano-gemm-f64 v0.2.1
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling zerocopy v0.8.54
+   Compiling defer v0.2.1
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+   Compiling serde_core v1.0.228
+   Compiling crossbeam-deque v0.8.7
+   Compiling private-gemm-x86 v0.1.20
+    Checking rand_core v0.9.5
+   Compiling equator-macro v0.2.1
+   Compiling rayon-core v1.13.0
+   Compiling zmij v1.0.21
+    Checking linux-raw-sys v0.12.1
+    Checking equator v0.2.2
+    Checking gemm-f64 v0.19.0
+    Checking gemm-c64 v0.19.0
+    Checking gemm-f32 v0.19.0
+    Checking gemm-c32 v0.19.0
+    Checking qd v0.8.0
+    Checking num_cpus v1.17.0
+   Compiling serde_json v1.0.150
+   Compiling serde v1.0.228
+    Checking generativity v1.2.1
+   Compiling equator-macro v0.6.0
+   Compiling anyhow v1.0.103
+    Checking fastrand v2.4.1
+    Checking tempfile v3.27.0
+    Checking equator v0.6.0
+    Checking faer-traits v0.24.0
+    Checking gemm v0.19.0
+    Checking ppv-lite86 v0.2.21
+    Checking nano-gemm v0.2.2
+   Compiling serde_derive v1.0.228
+    Checking wait-timeout v0.2.1
+    Checking bit-vec v0.8.0
+    Checking itoa v1.0.18
+    Checking quick-error v1.2.3
+    Checking memchr v2.8.3
+    Checking fnv v1.0.7
+    Checking either v1.16.0
+    Checking rayon v1.12.0
+    Checking rusty-fork v0.3.1
+    Checking bit-set v0.8.0
+    Checking faer v0.24.4
+    Checking rand_chacha v0.9.0
+    Checking rand_xorshift v0.4.0
+    Checking rand v0.9.4
+    Checking unarray v0.1.4
+    Checking regex-syntax v0.8.11
+    Checking proptest v1.11.0
+    Checking jable v8.0.0 (/tmp/split-host-ci.qtTHFP/jain-jable/crates/jable)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 1m 40s
+   Compiling cfg-if v1.0.4
+   Compiling bitflags v2.13.0
+   Compiling num-traits v0.2.19
+   Compiling bytemuck v1.25.1
+   Compiling libc v0.2.186
+   Compiling num-complex v0.4.6
+   Compiling raw-cpuid v11.6.0
+   Compiling libm v0.2.16
+   Compiling pulp-wasm-simd-flag v0.1.1
+   Compiling reborrow v0.5.5
+   Compiling once_cell v1.21.4
+   Compiling pulp v0.22.3
+   Compiling dyn-stack v0.13.2
+   Compiling gemm-common v0.19.0
+   Compiling nano-gemm-core v0.2.1
+   Compiling crossbeam-utils v0.8.22
+   Compiling getrandom v0.3.4
+   Compiling rand_core v0.9.5
+   Compiling crossbeam-epoch v0.9.20
+   Compiling linux-raw-sys v0.12.1
+   Compiling rustix v1.1.4
+   Compiling equator v0.2.2
+   Compiling crossbeam-deque v0.8.7
+   Compiling nano-gemm-f64 v0.2.1
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling serde_core v1.0.228
+   Compiling zerocopy v0.8.54
+   Compiling getrandom v0.4.3
+   Compiling gemm-f64 v0.19.0
+   Compiling gemm-c32 v0.19.0
+   Compiling gemm-f32 v0.19.0
+   Compiling gemm-c64 v0.19.0
+   Compiling qd v0.8.0
+   Compiling num_cpus v1.17.0
+   Compiling generativity v1.2.1
+   Compiling fastrand v2.4.1
+   Compiling tempfile v3.27.0
+   Compiling equator v0.6.0
+   Compiling faer-traits v0.24.0
+   Compiling private-gemm-x86 v0.1.20
+   Compiling gemm v0.19.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling nano-gemm v0.2.2
+   Compiling rayon-core v1.13.0
+   Compiling zmij v1.0.21
+   Compiling wait-timeout v0.2.1
+   Compiling quick-error v1.2.3
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling fnv v1.0.7
+   Compiling bit-vec v0.8.0
+   Compiling either v1.16.0
+   Compiling rayon v1.12.0
+   Compiling bit-set v0.8.0
+   Compiling rusty-fork v0.3.1
+   Compiling serde_json v1.0.150
+   Compiling serde v1.0.228
+   Compiling faer v0.24.4
+   Compiling rand_chacha v0.9.0
+   Compiling anyhow v1.0.103
+   Compiling rand v0.9.4
+   Compiling rand_xorshift v0.4.0
+   Compiling unarray v0.1.4
+   Compiling regex-syntax v0.8.11
+   Compiling proptest v1.11.0
+   Compiling jable v8.0.0 (/tmp/split-host-ci.qtTHFP/jain-jable/crates/jable)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 38s
+     Running unittests src/lib.rs (/tmp/split-host-ci.qtTHFP/cargo-target/debug/deps/jable-f1684e457be552cd)
+
+running 7 tests
+test backend::tests::compute_backend_defaults_to_auto_and_round_trips ... ok
+test backend::tests::cuda_disabled_build_falls_back ... ok
+test backend::tests::explicit_cpu_never_selects_cuda ... ok
+test backend::tests::invalid_dimensions_do_not_mutate_selection ... ok
+test backend::tests::old_metrics_json_defaults_peak_device_bytes ... ok
+test backend::tests::simulated_allocation_and_launch_failures_disable_request ... ok
+test backend::tests::workload_estimates_are_checked ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/cuda_rff.rs (/tmp/split-host-ci.qtTHFP/cargo-target/debug/deps/cuda_rff-a5a5d35e0a7d6bfd)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/fixtures.rs (/tmp/split-host-ci.qtTHFP/cargo-target/debug/deps/fixtures-3bd58d9de6bd5024)
+
+running 2 tests
+test committed_regression_fixture_matches_f32_adapter_gate ... ok
+test committed_regression_fixture_matches_f64_gate ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/properties.rs (/tmp/split-host-ci.qtTHFP/cargo-target/debug/deps/properties-95378187ded87301)
+
+running 1 test
+test fit_predict_is_finite_and_deterministic ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.42s
+
+     Running tests/unit.rs (/tmp/split-host-ci.qtTHFP/cargo-target/debug/deps/unit-db65d7020b26a3cf)
+
+running 12 tests
+test rng_core_is_mt19937_compatible_for_rand ... ok
+test pre_backend_schema_v1_json_loads ... ok
+test degenerate_constant_target_uses_mean_head ... ok
+test planner_reports_budget_and_row_limit_skips ... ok
+test cuda_request_in_cpu_only_build_falls_back ... ok
+test f32_adapter_round_trips ... ok
+test nan_and_inf_are_sanitized ... ok
+test wide_projection_path_is_stable ... ok
+test automatic_threads_are_bounded_and_explicit_cpu_is_reported ... ok
+test deterministic_fit_predicts_same_values ... ok
+test json_artifact_round_trips_predictions ... ok
+test cpu_results_are_exact_across_thread_settings ... ok
+
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.49s
+
+   Doc-tests jable
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+required ok: jain-jable

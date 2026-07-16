@@ -1,0 +1,121 @@
+{
+  "schema_version": "jain.split-ops.dirty-custody-inventory/v1",
+  "release_version": "8.0.1",
+  "claim_id": "codex-split-ops-85f0c16-dirty-custody-phase1-20260716T1650Z",
+  "generated_at": "2026-07-16T17:04:07Z",
+  "purpose": "historical byte preservation only; selective protected-main recomposition is required",
+  "checkout": {
+    "path": "/home/ubuntu/jain-split/jain-split-ops",
+    "branch": "claude/v8-release-fixes-20260714",
+    "head": "85f0c16a0cd1d8c3af068a987285c95b20825364",
+    "tree": "39f2c4f8521b2d40d4e8b701b91ebb1612aa962b",
+    "live_branch_head": "85f0c16a0cd1d8c3af068a987285c95b20825364",
+    "live_protected_main": "ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa",
+    "ahead_of_live_main": 46,
+    "behind_live_main": 13,
+    "pre_preservation_status_sha256": "1583a169241697073b11d19e7a09fd529f0d050f76687721c814c9fbca66e67e"
+  },
+  "pre_existing_inventory": {
+    "scope": "all Git-tracked working-tree files plus every untracked, non-ignored file; .git and Git-ignored paths excluded",
+    "stream_format": "for each Git NUL-delimited path in command order: scope NUL stat(%F|%f|%u|%g|%d|%i|%h|%s) NUL sha256 NUL path NUL",
+    "tracked": {
+      "path_count": 1057,
+      "byte_count": 7354120,
+      "inventory_sha256": "cc5ed8fb76506a73c3c2f899235f65149bf716a88414ed2882d45c446724c441",
+      "path_types": {
+        "regular_empty_file_mode_0664_owner_ubuntu_link_count_1": 71,
+        "regular_file_mode_0644_owner_ubuntu_link_count_1": 7,
+        "regular_file_mode_0664_owner_ubuntu_link_count_1": 953,
+        "regular_file_mode_0755_owner_ubuntu_link_count_1": 1,
+        "regular_file_mode_0775_owner_ubuntu_link_count_1": 25
+      }
+    },
+    "untracked": {
+      "path_count": 495,
+      "byte_count": 4128930,
+      "inventory_sha256": "38adf74709f3ce6fcb302c4a67dec9b3303ad3b400690e2506bc1b972caae6b8",
+      "path_types": {
+        "regular_file_mode_0644_owner_ubuntu_link_count_1": 4,
+        "regular_file_mode_0664_owner_ubuntu_link_count_1": 489,
+        "regular_file_mode_0664_owner_jain_host_ci_parent_link_count_1": 2
+      },
+      "non_ubuntu_owned_paths": [
+        "docs/release-evidence/8.0.1/ci/host/55ecafae1205062a56da51ab9a6f28fc26ad9042ea1d74ce821ebdcc389d2251.log",
+        "docs/release-evidence/8.0.1/ci/host/jain-web-13ea4968dde1286111dacf8cd0216fa71e931242-55ecafae1205062a56da51ab9a6f28fc26ad9042ea1d74ce821ebdcc389d2251.json"
+      ]
+    },
+    "filesystem_symlink_count": 0,
+    "unsupported_special_path_count": 0,
+    "git_metadata_lock_count": 0
+  },
+  "secret_classification": {
+    "tool": {
+      "name": "gitleaks",
+      "version": "8.21.2",
+      "resolved_path": "/home/ubuntu/.cargo/bin/gitleaks",
+      "sha256": "50b742abd7daad8bbddb6301f3017efb680632d9a5b3b4d8f137b3aac250e359",
+      "redaction_percent": 100
+    },
+    "scopes_with_zero_findings": [
+      "ops/ci",
+      "tools/splitctl/src",
+      "repos.manifest.toml",
+      "python-parity-exceptions.toml"
+    ],
+    "evidence_scope_finding_count": 6,
+    "evidence_scope_path_rule_line_sha256": "a90ea0b125e8bff1b00585d627ba56db4cc226df36f1b48b08e8901cdbf70a28",
+    "deterministic_non_secret_classifications": [
+      {
+        "path": "docs/release-evidence/8.0.1/gpu-admission-pr7/xbabe1-first-gpu-receipt-01KXNQT99JYCYE3JY3DSHXJX65.json",
+        "rule": "generic-api-key",
+        "line": 6,
+        "json_path": "spec.idempotency_key",
+        "classification": "26-character ULID workload idempotency identifier; not authentication material"
+      },
+      {
+        "path": "docs/release-evidence/8.0.1/gpu-admission-pr7/xbabe3-gpu-receipt-01KXNQXVMT56Q15TSGR3509KM5.json",
+        "rule": "generic-api-key",
+        "line": 6,
+        "json_path": "spec.idempotency_key",
+        "classification": "26-character ULID workload idempotency identifier; not authentication material"
+      },
+      {
+        "path": "docs/release-evidence/8.0.1/download/public-download-acceptance-audit-20260716.json",
+        "rule": "generic-api-key",
+        "line": 114,
+        "json_path": "signature_verification.key_sha256",
+        "classification": "64-character SHA-256 digest of a public verification key"
+      },
+      {
+        "path": "docs/release-evidence/8.0.1/identity/jain-jable-pr4-required-preflight-blocked-20260716.json",
+        "rule": "generic-api-key",
+        "line": 11,
+        "json_path": "pr_api_base_snapshot",
+        "classification": "40-character Git commit object identifier"
+      },
+      {
+        "path": "docs/release-evidence/8.0.1/identity/jain-xgboost-pr8-independent-rereview-20260716.json",
+        "rule": "generic-api-key",
+        "line": 14,
+        "json_path": "pull_request.api_base_sha_at_open",
+        "classification": "40-character Git commit object identifier"
+      },
+      {
+        "path": "docs/release-evidence/8.0.1/identity/jeryu-independent-review-jeryu-jain-xgboost-pr8.json",
+        "rule": "generic-api-key",
+        "line": 14,
+        "json_path": "pull_request.api_base_sha_at_open",
+        "classification": "40-character Git commit object identifier"
+      }
+    ],
+    "possible_secret_risk_count": 0,
+    "publication_gate": "clear_for_historical_custody_only"
+  },
+  "review_disposition": "SELECTIVE_RECOMPOSITION_REQUIRED",
+  "prohibited_credit": [
+    "protected-main acceptance",
+    "required-check credit",
+    "release credit",
+    "tag or authority credit"
+  ]
+}

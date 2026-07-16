@@ -1,0 +1,100 @@
+# ---------------------------------------------------------------------------
+# DRAFT — appliance composition TEMPLATE. NOT deployed by this change.
+# ---------------------------------------------------------------------------
+# Invariants (owner-locked):
+#   * Every image reference is digest-pinned. The @sha256 zero placeholders
+#     below MUST be replaced by the release orchestrator from the signed image
+#     receipts — never a floating tag, never :latest.
+#   * Read-only root filesystems, non-root users, all capabilities dropped,
+#     no-new-privileges everywhere.
+#   * NO docker.sock mount anywhere and NO DinD: guest slot containers are
+#     managed by guestd on the HOST side through its DockerLifecycle
+#     implementation — never from inside the appliance.
+#   * `appliance_internal` is internal-only. The only externally reachable
+#     path is Caddy (proxy-caddy-1 on the existing `nht_net` edge network) ->
+#     web-control, per deployment/appliance/caddy-routes.json. scqd and the
+#     workers are never published and never join the edge network.
+#
+# Long-running services: web-control (edge) and scqd (dispatch). There is NO
+# standing worker service — jain-worker is a per-job launcher, not a server (see
+# the "no worker service" note below). GPU vs CPU is chosen by jain-appliance.sh
+# autodetect and handed to scqd, not by a compose profile.
+#
+# Deployment shapes (see deployment/appliance/README.md):
+#   * DOWNLOADABLE appliance (this file): scqd launches a jain-worker per job on
+#     THIS host as a child process (see the "no worker service" note below).
+#   * PRODUCTION cloud slots: NO local worker — scqd/dispatch reads
+#     deployment/appliance/worker-endpoints.toml and places jobs on the remote
+#     xbabe1/xbabe2/xbabe3 fleet. That file is never shipped in the appliance.
+
+services:
+  web-control:
+    # Dockerfile.web-scratch (FROM scratch, static musl jain-web-control)
+    image: image.local/jain/web-control@sha256:fc8d48175fe04bdf15b904accf854301d21986e79c36232eced3d05161bc7f3a
+    read_only: true
+    user: "65534:65534"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    networks:
+      edge:
+        aliases:
+          - jain-web-control # dial target of the Caddy routes (caddy-routes.json)
+      appliance_internal: {}
+    expose:
+      - "8080"
+    command: ["--host", "0.0.0.0", "--port", "8080"]
+    restart: unless-stopped
+
+  scqd:
+    # Dockerfile.scq-scratch (FROM scratch, static musl scqd)
+    image: image.local/jain/scqd@sha256:5e174a20921bbe6d46e9195066280b6da85896a6f9d93fb2386608c6024fb4bf
+    read_only: true
+    user: "65534:65534"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    tmpfs:
+      - /tmp:size=16m,mode=1777
+    volumes:
+      # Durable SCQ lease/receipt state; the named volume is the ONLY writable
+      # persistent surface, owned by this service alone.
+      - scqd-state:/var/lib/scqd
+    networks:
+      appliance_internal: {}
+    expose:
+      - "7700"
+    restart: unless-stopped
+
+  # ---------------------------------------------------------------------------
+  # NO worker service — by design. jain-worker is a PER-JOB launcher, not a
+  # server: scqd exec's it once per job with a typed workload template + an
+  # inherited SCQ control FD, and it exits when the job finishes. It has no
+  # network listener and no health endpoint. Declaring it as a
+  # `restart: unless-stopped` compose service made the bare entrypoint (no
+  # control FD, no template) exit immediately and crash-loop — the bug this
+  # file previously shipped (worker-cpu / worker-gpu services, W10 finding).
+  #
+  # Instead: the release orchestrator still builds and digest-pins the
+  # worker-cpu and worker-gpu images (build-appliance-release.sh) and stages the
+  # reviewed jain-worker binary into the scqd tier, so the scqd service above
+  # launches each per-job worker as a child process on THIS host. No docker.sock
+  # is ever mounted (see invariants at the top), so workers are child processes
+  # of scqd, never separately-scheduled containers. GPU vs CPU is selected by
+  # jain-appliance.sh autodetect (JAIN_WORKER_MODE) and handed to scqd; there is
+  # no `gpu`/`cpu` compose profile.
+  # ---------------------------------------------------------------------------
+
+volumes:
+  scqd-state: {}
+
+networks:
+  # Internal-only: no host egress, no published ports, unreachable from outside.
+  appliance_internal:
+    internal: true
+  # Existing shared proxy network on atomicsoul; proxy-caddy-1 is attached.
+  edge:
+    external: true
+    name: nht_net

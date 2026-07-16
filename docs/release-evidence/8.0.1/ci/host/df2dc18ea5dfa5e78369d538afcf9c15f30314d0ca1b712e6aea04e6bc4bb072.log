@@ -1,0 +1,13 @@
+Cloning into '/tmp/split-host-ci.11CYKM/jain-web'...
+HEAD is now at 0378a3e feat(web): support blind test uploads and cluster parity
+lock_blob=9ff8b72e3ae6cf7e0dd4fdca8f19fce501f37590
+name=jain-web
+ref=0378a3ec278fe3f36e5160d8358776acfc0a3542
+commit=0378a3ec278fe3f36e5160d8358776acfc0a3542
+tree=eed32d7038b7cadebac60e3b39a77fcf112bec47
+release_checksum_sha256=3220e77e55e3b40ef614b4d6a7d789ba5482bba43087ac735ea5cf0414d94b0e
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+error: cannot update the lock file /tmp/split-host-ci.11CYKM/jain-web/tools/web-ci/Cargo.lock because --locked was passed to prevent this
+help: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.

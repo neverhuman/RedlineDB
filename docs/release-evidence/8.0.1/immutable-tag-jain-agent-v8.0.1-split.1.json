@@ -1,0 +1,42 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "63a828d02ed24a0fa954982cd3475eddfdf82679",
+    "remote": "63a828d02ed24a0fa954982cd3475eddfdf82679"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "63a828d02ed24a0fa954982cd3475eddfdf82679",
+  "commit_input": "63a828d02ed24a0fa954982cd3475eddfdf82679",
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-agent.git",
+    "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/mirrors/jain-agent-jain-agent-v8.0.1-split.1.json",
+    "status": "pass",
+    "tag_commit": "63a828d02ed24a0fa954982cd3475eddfdf82679"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "Cargo.toml",
+        "name": "jain-agent",
+        "version": "8.0.1"
+      }
+    ],
+    "expected_product_version": "8.0.1",
+    "status": "pass",
+    "version_file": "jain-agent-v8.0.1-split.1",
+    "workspace_package_version": null
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-agent.git",
+  "remote_main": "63a828d02ed24a0fa954982cd3475eddfdf82679",
+  "repository": "/home/ubuntu/jain-split/jain-agent",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-agent-v8.0.1-split.1",
+  "timestamp_unix": 1784214014
+}

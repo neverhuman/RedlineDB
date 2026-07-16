@@ -1,0 +1,83 @@
+{
+  "schema_version": "jain.pr-metadata-correction/v1",
+  "recorded_at_utc": "2026-07-16T08:16:11Z",
+  "claim_token": "codex-battle-gpu-pr9-metadata-correction-20260716T0812Z",
+  "repository": "jeryu/jain-battle-gpu",
+  "pull_request": 9,
+  "protected_main": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+  "head": "d5e4b5051243295f1a5bfdd6d66abe2182e50484",
+  "branch": "release/v8.0.1/battle-gpu-identity",
+  "successor_receipt": {
+    "path": "battle-gpu-pr9-v801-governed-tool-successor-20260716.json",
+    "sha256": "a9ceaaea5bcaec0f1f5fb95394d3a6272a93f0322513eded5e86dc63a58cdc24"
+  },
+  "independent_review": {
+    "path": "jain-battle-gpu-pr9-successor-independent-rereview-20260716.json",
+    "sha256": "6a2b3ccf212ae746f8f2a0782249a6dc5dff158ccba43e41a2e0d746dceea1f7",
+    "source_decision": "PASS",
+    "release_admission": "BLOCK"
+  },
+  "description_correction": {
+    "endpoint": "/repos/jeryu/jain-battle-gpu/pulls/9",
+    "method": "PATCH",
+    "http_status": 200,
+    "request_payload_sha256": "8dbcea9ef16d12e7c3fb2a226dd0cc1b98d49072a8101bfc960f6cc440a496c3",
+    "prior_body_sha256": "87ce0b361be234e1cffb204c93c6a73317222c78bc2e161e20b7e7855d48829d",
+    "requested_body_sha256": "7d609a75af1f7d5a3cbb93e461078600f69bc4f960b5ee737c537d8d9c930e3b",
+    "readback_body_sha256": "7d609a75af1f7d5a3cbb93e461078600f69bc4f960b5ee737c537d8d9c930e3b",
+    "readback_updated_at": "2026-07-16T08:15:25.417648651Z",
+    "governed_successor_documented": true,
+    "independent_review_documented": true,
+    "cpu_no_default_local_tests_documented": 24,
+    "default_feature_gpu_property_local_tests_documented": 30,
+    "local_gpu_tests_not_presented_as_native_host_evidence": true,
+    "native_gpu_hardware_host_required_absence_documented": true,
+    "jankurai_proof_success_documented": true,
+    "remaining_lifecycle_gates_documented": true,
+    "title_unchanged": true,
+    "base_branch_unchanged": true,
+    "base_sha_unchanged": true,
+    "branch_unchanged": true,
+    "head_unchanged": true,
+    "credential_transmitted_by_curl_file_backed_variable_expansion": true,
+    "credential_absent_from_argv_output_and_receipt": true
+  },
+  "forge_readback": {
+    "pull_request_state": "open",
+    "draft": false,
+    "title": "release(battle-gpu): correct 8.0.1 identity",
+    "jankurai_proof": "success",
+    "jankurai_proof_check_id": "e04158b5-5d0b-4c3f-8e02-4b9fbd195c7e",
+    "jain_battle_gpu_required": "absent",
+    "jeryu_autonomy": "action_required",
+    "jeryu_autonomy_check_id": "63f6ce02-3a11-4102-a8fb-f0d968f41fd4",
+    "main_ref_unchanged": true,
+    "branch_ref_unchanged": true
+  },
+  "mutations": {
+    "pull_request_body": true,
+    "new_receipt": true,
+    "source": false,
+    "index": false,
+    "repository_ref": false,
+    "forge_ref": false,
+    "check_post": false,
+    "host_ci": false,
+    "approval": false,
+    "merge": false,
+    "tag": false,
+    "authority": false,
+    "protection": false,
+    "deployment": false,
+    "force_operation": false,
+    "git_worktree_action": false
+  },
+  "decision": "CORRECTED_PENDING_NATIVE_REQUIRED_APPROVAL_TAG_BIND",
+  "remaining": [
+    "publish and read back jain-battle-gpu/required success at this exact head",
+    "produce the manifest-required native gpu+gpu-dynamic-loading host evidence",
+    "produce the manifest-required native gpu-dynamic-linking host evidence",
+    "independent approval and protected fast-forward merge",
+    "immutable split.1 tag creation/readback and protected authority commit/checksum binding"
+  ]
+}

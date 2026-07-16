@@ -1,0 +1,6 @@
+./tools/security-lane.sh # gitleaks detect + actionlint + cargo deny + syft SBOM; cargo audit when JAIN_SECURITY_NETWORK=1
+jankurai-security-step={"label":"gitleaks","tool":"gitleaks","shell_command":"gitleaks detect --source . --redact --no-banner","status":"ran","advisory":false,"exit_code":0}
+jankurai-security-step={"label":"actionlint","tool":"actionlint","shell_command":"actionlint","status":"ran","advisory":false,"exit_code":0}
+[0000]  WARN no explicit name and version provided for directory source, deriving artifact ID from the given path (which is not ideal)
+security ok (tabpfn_hits=0, fallback_advisory=0)
+if [[ -f package-lock.json ]]; then npm audit; fi # explicit N/A guard for this Rust-only repository

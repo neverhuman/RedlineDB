@@ -1,0 +1,455 @@
+{
+  "allowed": [
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "e3bf5349e78f09bf31e696830d411d80c04849281346bd3c0db9573757daa49b",
+      "invocation_paths": [],
+      "justification": "Frozen export fixture exercised by the Rust compatibility implementation.",
+      "output_path": "jain-deploy/ops/ci/testdata/invention-export/reference_predictions.txt",
+      "output_sha256": "0b9b9a1cd0b25b3ff3d92ea5e35b973f52cdab18d3f51f95d1a3672f24c8a0e0",
+      "path": "jain-deploy/ops/ci/testdata/invention-export/model.py",
+      "rust_evidence": "jain-deploy/ops/ci/testdata/invention-export/model.rs",
+      "rust_owner": "jain-deploy/release-engineering"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "d1ef84935bbad864a8bd36c79658e95349eb29f32ce82216e8883b8f74d2839f",
+      "invocation_paths": [
+        "jain-model-zoo/ops/parity/run.sh"
+      ],
+      "justification": "Frozen cross-model reference driver whose recorded result is consumed by Rust release validation.",
+      "output_path": "jain-model-zoo/ops/parity/parity_errors.json",
+      "output_sha256": "e0cf0965edb49fe6fce0d760330244bd4fbdbe6a8005c891f6a05e43ec7ade58",
+      "path": "jain-model-zoo/ops/parity/parity_suite.py",
+      "rust_evidence": "jain-model-zoo/tools/model-zoo-ops/src/main.rs",
+      "rust_owner": "jain-model-zoo/model-parity"
+    },
+    {
+      "comparison": "byte-identical",
+      "input_sha256": "f0859005fae4242b0eb88afad33f253fcb17323e9c8acd2140f2242349e3239b",
+      "invocation_paths": [],
+      "justification": "Frozen renderer retained only to explain the checksummed parity report image.",
+      "output_path": "jain-model-zoo/ops/parity/parity_errors.png",
+      "output_sha256": "c7d63fcb5346742961681a36f143859264db8119ed79aced43704c34563cdff1",
+      "path": "jain-model-zoo/ops/parity/plot_errors.py",
+      "rust_evidence": "jain-model-zoo/tools/model-zoo-ops/src/main.rs",
+      "rust_owner": "jain-model-zoo/model-parity"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "78f8d6d05f2b7b8ee0a7e4bb141d5587dbf85a21d6f628b59e022b93853e220f",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath transform oracle bound to committed Rust expected matrices.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs",
+      "output_sha256": "8162dda92170d093883bb3b8ca35c99d1cbf8264774ad535828f4987c8deb0a3",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform1_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "5668e1ad1cb317706b62eda0b8b38d340171b0cec048f47e481998d077f6a08b",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath transform oracle bound to committed Rust expected matrices.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs",
+      "output_sha256": "5c4f892f3a79d0fe26c060d817c1da484131ceb4efd60a32a1b28696bccb0bd5",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform2_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "48352edad011addd7366b19f5191e80accd2670554a52df65cf45c4f22e9a7a1",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath transform oracle bound to committed Rust expected matrices.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs",
+      "output_sha256": "fbe6c82b5b4f312fe3fe98deea6bacc5d87e6dcd6dd59569276c698cb979692b",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform3_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "788be280714fa2c99978cc77313723bd5ff1c47ddb3792b8516c51a868e79d3c",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath transform oracle bound to committed Rust expected matrices.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs",
+      "output_sha256": "7199f0694ba2885656a18ca36fa1886a81741b536c92ba130edb6ac92e5a9eed",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/nm_xform4_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "1229906a5766c04b38f1e1e159c4770d50309a2e03e31505978a6662e98b8e7f",
+      "invocation_paths": [
+        "jain-model-zoo/reference/ported/_nm/parity/verify_parity.sh",
+        "jain-model-zoo/reference/ported/_nm/parity/verify_parity_apex67.sh"
+      ],
+      "justification": "Frozen NewMath classification oracle bound to committed Rust expected matrices.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs",
+      "output_sha256": "89793636db12c47e700c7642f333e71897d599d60572ebc07f0aec88fb4413ad",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "89963f2fdc511055d0592ec21c3f5bf6492c143103e46240085f4d7d51ebf3d1",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath regression oracle bound to the Rust regression report tests.",
+      "output_path": "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs",
+      "output_sha256": "2097bd7fd27c77a7ad473a197b54da67ebb7ac865c9f2fc593e49321be511b5f",
+      "path": "jain-model-zoo/reference/ported/_nm/parity/regression_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "4052fcbc07fc3b82dae53472a6b8cf62c354870bf5690d9c5d4972959362b3aa",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath oracle whose constants are asserted by the named Rust test.",
+      "output_path": "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs",
+      "output_sha256": "8642081ea681c9780e5fa7569f6768d624b6f0410074fc2129d9f9682efa8c46",
+      "path": "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/parity/oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "53abd3b8e51cdb8153c5504bfa098711f5117120d84d8251c6fe202fa4660e9d",
+      "invocation_paths": [],
+      "justification": "Frozen NewMath oracle whose constants are asserted by the named Rust test.",
+      "output_path": "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs",
+      "output_sha256": "a6235b561e6bf93dc1c11b8df964238b66b0b123e923fbb10604e13cd411b751",
+      "path": "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/parity/oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs",
+      "rust_owner": "jain-model-zoo/newmath-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "115bf2fa7847d8b33f6c19fecaacd045e36f18464084cbef310fb0fff6963619",
+      "invocation_paths": [],
+      "justification": "Frozen TabDPT classifier oracle source for the committed probability fixture.",
+      "output_path": "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump/p1.npy",
+      "output_sha256": "5dd1c10c80361c60c4ac02ccc706f120357b622fff5ced610fb2295bb6af7550",
+      "path": "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/tabdpt_classifier/src/bin/verify_oracle.rs",
+      "rust_owner": "jain-model-zoo/tabdpt-classifier-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "eab410657cada0c0490a7438d6e9b27b02ed2f352746f3b8a3e6ced5d31596d4",
+      "invocation_paths": [],
+      "justification": "Frozen TabDPT regressor oracle source for the committed prediction fixture.",
+      "output_path": "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump/yhat.npy",
+      "output_sha256": "b7e3d30e532aaaae40081777bc673e6058b60b195e92cd2b54f65586a06ea5ff",
+      "path": "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/tabdpt_regressor/src/bin/verify_oracle.rs",
+      "rust_owner": "jain-model-zoo/tabdpt-regressor-port"
+    },
+    {
+      "comparison": "normalized-semantic",
+      "input_sha256": "6c5a799f55cde924c4c6e8a9059fd62ca0a4af6e8f18b507c9720ae9cfcd2ff0",
+      "invocation_paths": [],
+      "justification": "Frozen TabICL oracle source for the committed probability fixture.",
+      "output_path": "jain-model-zoo/reference/ported/tabicl/oracle/dump/proba.npy",
+      "output_sha256": "daa40b29b04740e7e77c7adc04b866f3d5b0aac0532e8c537c97d2324eba2116",
+      "path": "jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py",
+      "rust_evidence": "jain-model-zoo/reference/ported/tabicl/tests/e2e_parity.rs",
+      "rust_owner": "jain-model-zoo/tabicl-port"
+    }
+  ],
+  "allowed_count": 14,
+  "allowed_runtime_invocation_count": 7,
+  "allowed_runtime_invocations": [
+    {
+      "line": 60,
+      "path": "jain-math/crates/feat-math/tests/champion_parity.rs",
+      "text": "if std::process::Command::new(\"python3\")"
+    },
+    {
+      "line": 98,
+      "path": "jain-math/crates/feat-math/tests/champion_parity.rs",
+      "text": "let out = std::process::Command::new(\"python3\")"
+    },
+    {
+      "line": 55,
+      "path": "jain-math/crates/feat-math/tests/golden.rs",
+      "text": "let out = Command::new(\"python3\")"
+    },
+    {
+      "line": 590,
+      "path": "jain-math/crates/feat-math/tests/golden.rs",
+      "text": "let out = Command::new(\"python3\")"
+    },
+    {
+      "line": 16,
+      "path": "jain-model-zoo/ops/parity/run.sh",
+      "text": "exec python3 \"$REPO/ops/parity/parity_suite.py\" \"$@\""
+    },
+    {
+      "line": 15,
+      "path": "jain-model-zoo/reference/ported/_nm/parity/verify_parity.sh",
+      "text": "python3 \"$PORTED/_nm/parity/oracle.py\" \"$OUT\" \"$DS\" 2>/dev/null | sed 's/^/   /'"
+    },
+    {
+      "line": 35,
+      "path": "jain-model-zoo/reference/ported/_nm/parity/verify_parity_apex67.sh",
+      "text": "python3 \"$PORTED/_nm/parity/oracle.py\" \"$OUT\" \"$DS\" 2>/dev/null | sed 's/^/   /'"
+    }
+  ],
+  "error": "Python outside the Rust-parity boundary:\njain-python/python/ai-service/examples/quickstart_local.py\njain-python/python/ai-service/src/jain_sagemaker/__init__.py\njain-python/python/ai-service/src/jain_sagemaker/__main__.py\njain-python/python/ai-service/src/jain_sagemaker/backends/__init__.py\njain-python/python/ai-service/src/jain_sagemaker/backends/aws.py\njain-python/python/ai-service/src/jain_sagemaker/backends/base.py\njain-python/python/ai-service/src/jain_sagemaker/backends/local_docker.py\njain-python/python/ai-service/src/jain_sagemaker/cli.py\njain-python/python/ai-service/src/jain_sagemaker/client.py\njain-python/python/ai-service/src/jain_sagemaker/contract.py\njain-python/python/ai-service/src/jain_sagemaker/csvio.py\njain-python/python/ai-service/src/jain_sagemaker/endpoint.py\njain-python/python/ai-service/src/jain_sagemaker/errors.py\njain-python/python/ai-service/src/jain_sagemaker/exports.py\njain-python/python/ai-service/src/jain_sagemaker/mcp_server.py\njain-python/python/ai-service/src/jain_sagemaker/models.py\njain-python/python/ai-service/src/jain_sagemaker/progress/__init__.py\njain-python/python/ai-service/src/jain_sagemaker/progress/engine.py\njain-python/python/ai-service/src/jain_sagemaker/progress/events.py\njain-python/python/ai-service/src/jain_sagemaker/progress/grammar.py\njain-python/python/ai-service/src/jain_sagemaker/progress/sources.py\njain-python/python/ai-service/src/jain_sagemaker/progress/stages.py\njain-python/python/ai-service/src/jain_sagemaker/progress/status.py\njain-python/python/ai-service/src/jain_sagemaker/render/__init__.py\njain-python/python/ai-service/src/jain_sagemaker/render/base.py\njain-python/python/ai-service/src/jain_sagemaker/render/detect.py\njain-python/python/ai-service/src/jain_sagemaker/render/notebook.py\njain-python/python/ai-service/src/jain_sagemaker/render/plain.py\njain-python/python/ai-service/tests/test_aws.py\njain-python/python/ai-service/tests/test_contract.py\njain-python/python/ai-service/tests/test_csvio.py\njain-python/python/ai-service/tests/test_endpoint.py\njain-python/python/ai-service/tests/test_exports.py\njain-python/python/ai-service/tests/test_no_banned_terms.py\njain-python/python/ai-service/tests/test_progress.py\njain-smartcluster/jope/admission-check.py\njain-smartcluster/jope/hard-runtime.py\njain-smartcluster/jope/prepare-isolated-stage-a.py\njain-smartcluster/jope/run-diagnostic-tournament.py\njain-jekko/jekko/agent/test-map.json:0: structured command field contains a Python interpreter or tool\njain-jekko/jekko/ops/ci/agent-merge.sh:159: parsed=$(printf '%s' \"$content\" | python3 -c '\njain-jekko/jekko/ops/ci/artifact_support.sh:118: python3 - \"$out_dir\" \"$entrypoint\" \"$sha\" \"$tree\" \"$generated_at\" \"$workers\" <<'PY'\njain-jekko/jekko/ops/ci/setup-git-committer.sh:31: python3 - <<'PY' >/tmp/jekko-app.jwt\njain-jekko/jekko/ops/deploy/telemetry.sh:45: python3 - \"$repo\" \"$sha\" \"$ring_percent\" \"$slug\" \"$store_root\" <<'PY'\njain-jekko/jekko/paper/bin/latexminted:2: exec /opt/homebrew/bin/python3.13 /opt/homebrew/bin/latexminted \"$@\"\njain-jekko/jekko/scripts/zyal-live-report.sh:217: python3 - \"$first_prom\" \"$latest_prom\" > \"$delta_prom\" 2>/dev/null <<'PY' || true\njain-jekko/jekko/scripts/zyal-live-report.sh:267: python3 - \"$latest_prom\" 2>/dev/null <<'PY' || true\njain-jekko/jekko/tools/proof-receipt.sh:33: start_ms=\"$(python3 -c 'import time; print(int(time.time()*1000))')\"\njain-jekko/jekko/tools/proof-receipt.sh:41: end_ms=\"$(python3 -c 'import time; print(int(time.time()*1000))')\"\njain-jekko/jekko/tools/proof-receipt.sh:47: python3 - \"$receipt_path\" \"$lane\" \"$command_str\" \"$exit_code\" \"$elapsed_ms\" \"$git_head\" \"$iso_now\" \"$log_path\" <<'PY'\njain-jekko/jekko-jailgun/ops/jailgun/ci/artifact_support.sh:118: python3 - \"$out_dir\" \"$entrypoint\" \"$sha\" \"$tree\" \"$generated_at\" \"$workers\" <<'PY'\njain-jekko/jekko-jailgun/ops/jailgun/ci/e2e.sh:25: python3 -c \"import json,sys; json.load(open(sys.argv[1]))\" \"$fixture\"\njain-jekko/jekko-jailgun/ops/jailgun/ci/jankurai.sh:17: python3 - \"$mode\" <<'PY'\njain-jekko/jekko-jailgun/ops/jailgun/ci/release.sh:17: python3 - <<'PY'\njain-jekko/jekko-jailgun/ops/jailgun/ci/release.sh:56: python3 - <<'PY'\njain-jekko/jekko-jailgun/ops/jailgun/deploy/telemetry.sh:45: python3 - \"$repo\" \"$sha\" \"$ring_percent\" \"$slug\" \"$store_root\" <<'PY'\njain-python/agent/generated-zones.toml:0: structured command field contains a Python interpreter or tool\njain-python/ops/ci/artifact_support.sh:9: python3 -m venv .venv\njain-python/ops/ci/artifact_support.sh:12: python -m pip install -e 'python/ai-service[dev]' > \"$out/pip-install.log\" 2>&1\njain-python/ops/ci/artifact_support.sh:13: python -m pip wheel --no-deps -w \"$out/wheels\" python/ai-service > \"$out/wheel-build.log\" 2>&1\njain-python/ops/ci/artifact_support.sh:14: ruff check python/ai-service > \"$out/ruff.log\" 2>&1\njain-python/ops/ci/artifact_support.sh:15: pytest -q python/ai-service/tests > \"$out/pytest.log\" 2>&1\njain-python/ops/ci/artifact_support.sh:16: python3 - <<'PY_ART'\njain-python/ops/ci/artifact_support.sh:28: \"python\": {\njain-python/ops/ci/artifact_support.sh:31: \"ruff\": \"pass\",\njain-python/ops/ci/artifact_support.sh:32: \"pytest\": \"pass\",\njain-python/ops/ci/check.sh:22: python3 -m compileall -q python/ai-service\njain-python/ops/ci/check.sh:25: python3 - <<'PY'\njain-python/ops/ci/contract-drift.sh:9: python3 -m json.tool contracts/progress-event.schema.json >/dev/null\njain-python/ops/ci/contract-drift.sh:10: python3 - <<'PY'\njain-python/ops/ci/required.sh:12: python3 -m venv .venv\njain-python/ops/ci/required.sh:15: python -m pip install -e 'python/ai-service[dev]'\njain-python/ops/ci/required.sh:16: ruff check python/ai-service\njain-python/ops/ci/required.sh:17: pytest -q python/ai-service/tests\njain-python/ops/ci/required.sh:18: python - <<'PY'\njain-python/ops/ci/score.sh:35: python3 - <<'PY_SCORE'\njain-python/ops/ci/security.sh:56: python3 - <<'PY'\njain-starforge/crates/starforge/tests/novel_input_differential.rs:499: let mut child = Command::new(PYTHON)",
+  "mode": "dry-run",
+  "operation": "python-boundary",
+  "policy": "Python is permitted only for parity testing against Rust implementations",
+  "registry": {
+    "file_exception_count": 14,
+    "inline_exception_count": 2,
+    "path": "/home/ubuntu/jain-split/jain-split-ops/python-parity-exceptions.toml",
+    "sha256": "4905a2495df9ae23f3c78d4f71bc0d4aa742493994ce5e21f7b22494e66dfd53"
+  },
+  "schema_version": "jain.rust-parity-python-boundary/v1",
+  "status": "fail",
+  "timestamp_unix": 1784205630,
+  "unexpected": [
+    "jain-python/python/ai-service/examples/quickstart_local.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/__init__.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/__main__.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/backends/__init__.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/backends/aws.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/backends/base.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/backends/local_docker.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/cli.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/client.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/contract.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/csvio.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/endpoint.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/errors.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/exports.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/mcp_server.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/models.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/__init__.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/engine.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/events.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/grammar.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/sources.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/stages.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/progress/status.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/render/__init__.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/render/base.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/render/detect.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/render/notebook.py",
+    "jain-python/python/ai-service/src/jain_sagemaker/render/plain.py",
+    "jain-python/python/ai-service/tests/test_aws.py",
+    "jain-python/python/ai-service/tests/test_contract.py",
+    "jain-python/python/ai-service/tests/test_csvio.py",
+    "jain-python/python/ai-service/tests/test_endpoint.py",
+    "jain-python/python/ai-service/tests/test_exports.py",
+    "jain-python/python/ai-service/tests/test_no_banned_terms.py",
+    "jain-python/python/ai-service/tests/test_progress.py",
+    "jain-smartcluster/jope/admission-check.py",
+    "jain-smartcluster/jope/hard-runtime.py",
+    "jain-smartcluster/jope/prepare-isolated-stage-a.py",
+    "jain-smartcluster/jope/run-diagnostic-tournament.py"
+  ],
+  "unexpected_count": 39,
+  "unexpected_runtime_invocation_count": 39,
+  "unexpected_runtime_invocations": [
+    {
+      "line": 0,
+      "path": "jain-jekko/jekko/agent/test-map.json",
+      "text": "structured command field contains a Python interpreter or tool"
+    },
+    {
+      "line": 159,
+      "path": "jain-jekko/jekko/ops/ci/agent-merge.sh",
+      "text": "parsed=$(printf '%s' \"$content\" | python3 -c '"
+    },
+    {
+      "line": 118,
+      "path": "jain-jekko/jekko/ops/ci/artifact_support.sh",
+      "text": "python3 - \"$out_dir\" \"$entrypoint\" \"$sha\" \"$tree\" \"$generated_at\" \"$workers\" <<'PY'"
+    },
+    {
+      "line": 31,
+      "path": "jain-jekko/jekko/ops/ci/setup-git-committer.sh",
+      "text": "python3 - <<'PY' >/tmp/jekko-app.jwt"
+    },
+    {
+      "line": 45,
+      "path": "jain-jekko/jekko/ops/deploy/telemetry.sh",
+      "text": "python3 - \"$repo\" \"$sha\" \"$ring_percent\" \"$slug\" \"$store_root\" <<'PY'"
+    },
+    {
+      "line": 2,
+      "path": "jain-jekko/jekko/paper/bin/latexminted",
+      "text": "exec /opt/homebrew/bin/python3.13 /opt/homebrew/bin/latexminted \"$@\""
+    },
+    {
+      "line": 217,
+      "path": "jain-jekko/jekko/scripts/zyal-live-report.sh",
+      "text": "python3 - \"$first_prom\" \"$latest_prom\" > \"$delta_prom\" 2>/dev/null <<'PY' || true"
+    },
+    {
+      "line": 267,
+      "path": "jain-jekko/jekko/scripts/zyal-live-report.sh",
+      "text": "python3 - \"$latest_prom\" 2>/dev/null <<'PY' || true"
+    },
+    {
+      "line": 33,
+      "path": "jain-jekko/jekko/tools/proof-receipt.sh",
+      "text": "start_ms=\"$(python3 -c 'import time; print(int(time.time()*1000))')\""
+    },
+    {
+      "line": 41,
+      "path": "jain-jekko/jekko/tools/proof-receipt.sh",
+      "text": "end_ms=\"$(python3 -c 'import time; print(int(time.time()*1000))')\""
+    },
+    {
+      "line": 47,
+      "path": "jain-jekko/jekko/tools/proof-receipt.sh",
+      "text": "python3 - \"$receipt_path\" \"$lane\" \"$command_str\" \"$exit_code\" \"$elapsed_ms\" \"$git_head\" \"$iso_now\" \"$log_path\" <<'PY'"
+    },
+    {
+      "line": 118,
+      "path": "jain-jekko/jekko-jailgun/ops/jailgun/ci/artifact_support.sh",
+      "text": "python3 - \"$out_dir\" \"$entrypoint\" \"$sha\" \"$tree\" \"$generated_at\" \"$workers\" <<'PY'"
+    },
+    {
+      "line": 25,
+      "path": "jain-jekko/jekko-jailgun/ops/jailgun/ci/e2e.sh",
+      "text": "python3 -c \"import json,sys; json.load(open(sys.argv[1]))\" \"$fixture\""
+    },
+    {
+      "line": 17,
+      "path": "jain-jekko/jekko-jailgun/ops/jailgun/ci/jankurai.sh",
+      "text": "python3 - \"$mode\" <<'PY'"
+    },
+    {
+      "line": 17,
+      "path": "jain-jekko/jekko-jailgun/ops/jailgun/ci/release.sh",
+      "text": "python3 - <<'PY'"
+    },
+    {
+      "line": 56,
+      "path": "jain-jekko/jekko-jailgun/ops/jailgun/ci/release.sh",
+      "text": "python3 - <<'PY'"
+    },
+    {
+      "line": 45,
+      "path": "jain-jekko/jekko-jailgun/ops/jailgun/deploy/telemetry.sh",
+      "text": "python3 - \"$repo\" \"$sha\" \"$ring_percent\" \"$slug\" \"$store_root\" <<'PY'"
+    },
+    {
+      "line": 0,
+      "path": "jain-python/agent/generated-zones.toml",
+      "text": "structured command field contains a Python interpreter or tool"
+    },
+    {
+      "line": 9,
+      "path": "jain-python/ops/ci/artifact_support.sh",
+      "text": "python3 -m venv .venv"
+    },
+    {
+      "line": 12,
+      "path": "jain-python/ops/ci/artifact_support.sh",
+      "text": "python -m pip install -e 'python/ai-service[dev]' > \"$out/pip-install.log\" 2>&1"
+    },
+    {
+      "line": 13,
+      "path": "jain-python/ops/ci/artifact_support.sh",
+      "text": "python -m pip wheel --no-deps -w \"$out/wheels\" python/ai-service > \"$out/wheel-build.log\" 2>&1"
+    },
+    {
+      "line": 14,
+      "path": "jain-python/ops/ci/artifact_support.sh",
+      "text": "ruff check python/ai-service > \"$out/ruff.log\" 2>&1"
+    },
+    {
+      "line": 15,
+      "path": "jain-python/ops/ci/artifact_support.sh",
+      "text": "pytest -q python/ai-service/tests > \"$out/pytest.log\" 2>&1"
+    },
+    {
+      "line": 16,
+      "path": "jain-python/ops/ci/artifact_support.sh",
+      "text": "python3 - <<'PY_ART'"
+    },
+    {
+      "line": 28,
+      "path": "jain-python/ops/ci/artifact_support.sh",
+      "text": "\"python\": {"
+    },
+    {
+      "line": 31,
+      "path": "jain-python/ops/ci/artifact_support.sh",
+      "text": "\"ruff\": \"pass\","
+    },
+    {
+      "line": 32,
+      "path": "jain-python/ops/ci/artifact_support.sh",
+      "text": "\"pytest\": \"pass\","
+    },
+    {
+      "line": 22,
+      "path": "jain-python/ops/ci/check.sh",
+      "text": "python3 -m compileall -q python/ai-service"
+    },
+    {
+      "line": 25,
+      "path": "jain-python/ops/ci/check.sh",
+      "text": "python3 - <<'PY'"
+    },
+    {
+      "line": 9,
+      "path": "jain-python/ops/ci/contract-drift.sh",
+      "text": "python3 -m json.tool contracts/progress-event.schema.json >/dev/null"
+    },
+    {
+      "line": 10,
+      "path": "jain-python/ops/ci/contract-drift.sh",
+      "text": "python3 - <<'PY'"
+    },
+    {
+      "line": 12,
+      "path": "jain-python/ops/ci/required.sh",
+      "text": "python3 -m venv .venv"
+    },
+    {
+      "line": 15,
+      "path": "jain-python/ops/ci/required.sh",
+      "text": "python -m pip install -e 'python/ai-service[dev]'"
+    },
+    {
+      "line": 16,
+      "path": "jain-python/ops/ci/required.sh",
+      "text": "ruff check python/ai-service"
+    },
+    {
+      "line": 17,
+      "path": "jain-python/ops/ci/required.sh",
+      "text": "pytest -q python/ai-service/tests"
+    },
+    {
+      "line": 18,
+      "path": "jain-python/ops/ci/required.sh",
+      "text": "python - <<'PY'"
+    },
+    {
+      "line": 35,
+      "path": "jain-python/ops/ci/score.sh",
+      "text": "python3 - <<'PY_SCORE'"
+    },
+    {
+      "line": 56,
+      "path": "jain-python/ops/ci/security.sh",
+      "text": "python3 - <<'PY'"
+    },
+    {
+      "line": 499,
+      "path": "jain-starforge/crates/starforge/tests/novel_input_differential.rs",
+      "text": "let mut child = Command::new(PYTHON)"
+    }
+  ]
+}

@@ -1,0 +1,184 @@
+{
+  "schema": "jain.cloud.evidence/v1",
+  "kind": "e1-kpi-partial",
+  "lane": "Claude-QUALIFY (E1/E2/E3, punchlist Phase E prep)",
+  "at_utc": "2026-07-16T12:52:01Z",
+  "host": "xbabe3",
+  "daemon": {
+    "version": "8.0.0",
+    "protocol": {
+      "major": 1,
+      "minor": 3
+    },
+    "mode": "full",
+    "started_at": 1784163896394
+  },
+  "classification": "PARTIAL, client-side/probe-level measurements on live standby scqd (binaries c28c5c8). NOT a substitute for the exact-SHA target-host KPI receipts (CLOUD_PRODUCTION_PLAN 'Exact-SHA target-host gate'); those two blocked lanes stay blocked.",
+  "method_constraints": [
+    "no daemon restart or reconfiguration (running standby preserved)",
+    "governed submissions only: 100x typed jain-template=research, tier=low, preemptible, 1 CPU / 1 GB, on idle xbabe3",
+    "shallow queue depth (0-100), NOT the budget's queue=10,000 condition",
+    "client wall times include scq CLI process spawn + Unix-socket RTT (ping p50 13.57 ms baseline) -> all submit numbers are UPPER BOUNDS on server-side durable submit"
+  ],
+  "budgets": {
+    "durable_submit_p99_ms": {
+      "budget": 10,
+      "budget_condition": "at queue 10,000",
+      "measured_today": {
+        "cli_wall": {
+          "n": 100,
+          "p50_ms": 62.095,
+          "p95_ms": 89.314,
+          "p99_ms": 91.658,
+          "max_ms": 95.041,
+          "mean_ms": 49.99
+        },
+        "ping_rtt_corrected": {
+          "n": 100,
+          "p50_ms": 48.527,
+          "p95_ms": 75.746,
+          "p99_ms": 78.09,
+          "max_ms": 81.472,
+          "mean_ms": 36.421
+        },
+        "failures": 0
+      },
+      "verdict": "NOT-DECIDABLE from client wall (upper bound p99 91.7 ms incl. CLI spawn; corrected 78.1 ms). Mean submit-minus-ping ~36 ms suggests real durable-commit cost well above trivial; server-side instrumented lane required."
+    },
+    "attached_output_p99_ms": {
+      "budget": 50,
+      "measured_today": {
+        "events_follow_delivery_proxy": {
+          "n": 598,
+          "p50_ms": 17.203,
+          "p95_ms": 64.593,
+          "p99_ms": 109.523,
+          "max_ms": 145.472,
+          "mean_ms": 22.006
+        }
+      },
+      "verdict": "PROXY EXCEEDS at p99 (109.5 ms) under 100-job burst; p50 17.2 ms. Delivery lag grows under load -> risk signal for the attached-output lane; needs instrumented attach-path measurement."
+    },
+    "psi_nvml_reaction_p99_ms": {
+      "budget": 100,
+      "measured_today": {
+        "nvml_query_probe": {
+          "n": 200,
+          "p50_ms": 0.046,
+          "p95_ms": 0.056,
+          "p99_ms": 0.062,
+          "max_ms": 2.524,
+          "mean_ms": 0.06
+        },
+        "psi_read_probe_all3": {
+          "n": 200,
+          "p50_ms": 0.187,
+          "p95_ms": 0.207,
+          "p99_ms": 0.242,
+          "max_ms": 0.259,
+          "mean_ms": 0.16
+        }
+      },
+      "verdict": "PROBE-ONLY: lower layers have huge headroom (NVML query p99 0.062 ms; PSI 3-file read p99 0.242 ms). End-to-end reaction needs a sanctioned pressure/fault drill; none exists (only preemption-drill.kpi-schema.json, no runner)."
+    },
+    "live_cgroup_restart_adoption_s": {
+      "budget": 2,
+      "measured_today": null,
+      "verdict": "SKIPPED per constraint: measurement requires restarting the live delegated-cgroup daemon and no sanctioned drill script exists. Existing evidence is in-process only (v8.0.0 release receipt durable_restart 127.9 ms, diagnostic lane, not target-host)."
+    },
+    "warm_invocations_p99_ms": {
+      "budget": 100,
+      "budget_note": "plan line 889 also states p99 < 2 ms over >=100 samples for warm /invocations overhead; hard-KPI table says p99 < 100 on host.role==AtomicSoulEdge",
+      "measured_today": null,
+      "verdict": "NOT MEASURABLE: AtomicSoul edge does not exist (standby shape: fabric dark, edge disabled, Unix-socket only; port 8080 on xbabe3 is an unrelated docker-proxy answering 404)."
+    }
+  },
+  "incidental_findings": [
+    {
+      "id": "gpu-typed-admission-clamped-by-unaccounted-vram-health-gate",
+      "detail": "NVML v1 used=476,839,936 B with 0 compute processes on idle RTX 3090 trips refresh_gpu_availability() unaccounted_usage -> healthy=false -> GPU jobs never admitted. Same v1 accounting on xbabe1 (504,496,128 B) means the 4090 will clamp on its first GPU-demand pass. See e2-typed-allocation-xbabe3-20260716.json blocker_found."
+    },
+    {
+      "id": "paused-job-with-no-adopted-cgroup-is-unresumable",
+      "detail": "1 of 100 burst jobs (01KXNFR0FDFFJXBZMMB1XDNYB7) was auto-paused mid-burst and left with no adopted cgroup; scq resume fails permanently with 'Conflict: paused job has no adopted cgroup'; only cancel clears it. Pause/exit race under opportunistic backpressure -> wedged job. 99/100 completed clean."
+    }
+  ],
+  "raw_probe": {
+    "schema": "jain.cloud.kpi-partial/e1-probe.v1",
+    "host": "xbabe3",
+    "at_utc": "2026-07-16T12:52:01Z",
+    "daemon": {
+      "version": "8.0.0",
+      "protocol": {
+        "major": 1,
+        "minor": 3
+      },
+      "mode": "full",
+      "started_at": 1784163896394
+    },
+    "ping_cli_wall": {
+      "n": 100,
+      "p50_ms": 13.568,
+      "p95_ms": 14.234,
+      "p99_ms": 14.983,
+      "max_ms": 17.85,
+      "mean_ms": 13.653
+    },
+    "durable_submit_cli_wall": {
+      "n": 100,
+      "p50_ms": 62.095,
+      "p95_ms": 89.314,
+      "p99_ms": 91.658,
+      "max_ms": 95.041,
+      "mean_ms": 49.99
+    },
+    "durable_submit_failures": 0,
+    "durable_submit_rtt_corrected": {
+      "n": 100,
+      "p50_ms": 48.527,
+      "p95_ms": 75.746,
+      "p99_ms": 78.09,
+      "max_ms": 81.472,
+      "mean_ms": 36.421
+    },
+    "submitted_jobs": 100,
+    "terminal_states": {
+      "completed": 99
+    },
+    "undrained_jobs": [
+      "01KXNFR0FDFFJXBZMMB1XDNYB7"
+    ],
+    "event_delivery_follow_stream": {
+      "n": 598,
+      "p50_ms": 17.203,
+      "p95_ms": 64.593,
+      "p99_ms": 109.523,
+      "max_ms": 145.472,
+      "mean_ms": 22.006
+    },
+    "nvml_used_bytes_v1": 476839936,
+    "nvml_compute_processes": 0,
+    "nvml_query_probe": {
+      "n": 200,
+      "p50_ms": 0.046,
+      "p95_ms": 0.056,
+      "p99_ms": 0.062,
+      "max_ms": 2.524,
+      "mean_ms": 0.06
+    },
+    "psi_read_probe_all3": {
+      "n": 200,
+      "p50_ms": 0.187,
+      "p95_ms": 0.207,
+      "p99_ms": 0.242,
+      "max_ms": 0.259,
+      "mean_ms": 0.16
+    },
+    "psi_snapshot": {
+      "cpu": "some avg10=0.00 avg60=0.08 avg300=0.08 total=750981439\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=0",
+      "memory": "some avg10=0.00 avg60=0.00 avg300=0.00 total=34743366\nfull avg10=0.00 avg60=0.00 avg300=0.00 total=34721765",
+      "io": "some avg10=0.00 avg60=0.04 avg300=0.05 total=742278608\nfull avg10=0.00 avg60=0.04 avg300=0.04 total=740171546"
+    }
+  },
+  "cleanup": "queue drained to 0 active; wedged job cancelled; GPU idle; no daemon disturbance"
+}

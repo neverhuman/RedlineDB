@@ -1,0 +1,203 @@
+{
+  "schema_version": "jain.identity-independent-review-correction/v1",
+  "status": "REVIEW_REJECT_GOVERNED_TOOL_AND_REQUIRED_NATIVE_GAPS",
+  "reviewed_at": "2026-07-16T07:47:32Z",
+  "repository": "jeryu/jain-battle-gpu",
+  "pull_request": {
+    "number": 9,
+    "state": "open",
+    "draft": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "base_ref": "main",
+    "base_sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+    "head_ref": "release/v8.0.1/battle-gpu-identity",
+    "head_sha": "6aa1e7e95c3deb3445518c4ef0f46b4b1b98c9c0",
+    "tree_sha": "d05650bc6f0c32157af1dee7faf3e49bdb412a24",
+    "linear_commits_over_base": 1
+  },
+  "exact_diff": {
+    "status": "pass",
+    "file_count": 8,
+    "insertions": 20,
+    "deletions": 11,
+    "files": [
+      "CHANGELOG.md",
+      "Cargo.lock",
+      "Cargo.toml",
+      "README.md",
+      "VERSION",
+      "agent/standard-version.toml",
+      "db/README.md",
+      "docs/release.md"
+    ],
+    "product_or_gpu_source_changes": 0,
+    "dependency_graph_changes_other_than_workspace_package_version": 0,
+    "mode_changes": 0,
+    "binary_changes": 0,
+    "tracked_symlinks_at_head": 0,
+    "raw_deterministic_full_index_binary_diff_command": "/usr/bin/git -c color.ui=false -c core.pager=cat diff --no-ext-diff --full-index --binary --src-prefix=a/ --dst-prefix=b/ 87b2367f576fc97bb13dab345f2871e4ad19e22b..6aa1e7e95c3deb3445518c4ef0f46b4b1b98c9c0 | /usr/bin/sha256sum",
+    "raw_deterministic_full_index_binary_diff_sha256": "0f5f9f1eea9a19bd3d96229a67801fabcc5101e340086b7d0db10255f9e9cc79",
+    "cargo_lock_sha256": "5d25891eaa12cdeeaba32150f3496d7b53f72a6d6d47a3911524f6cc3870584d",
+    "preserved_math_source": "git+http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.0-split.1#2a1e189d727a7b21c2aa68bf9b8cf5212976efd7"
+  },
+  "release_identity": {
+    "status": "pass",
+    "candidate": "jain-battle-gpu-v8.0.1-split.1",
+    "next_unused": true,
+    "existing_content_invalid_tag": {
+      "name": "jain-battle-gpu-v8.0.1-split.0",
+      "target": "87b2367f576fc97bb13dab345f2871e4ad19e22b"
+    },
+    "authority_product_version": "8.0.1",
+    "authority_tag_revision": 1,
+    "authority_current_tag": "jain-battle-gpu-v8.0.1-split.1",
+    "authority_release_commit": "PENDING",
+    "authority_release_checksum_sha256": "PENDING"
+  },
+  "isolated_checkout": {
+    "kind": "automatically removed standalone git clone --no-local",
+    "physical_git_directory": true,
+    "alternates_absent": true,
+    "strict_fsck": "pass",
+    "registrations_inside_clone": 1,
+    "git_worktree_created": false
+  },
+  "governed_jankurai": {
+    "status": "fail",
+    "required_path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "required_version": "jankurai 1.6.11",
+    "required_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "required_path_type": "regular file",
+    "required_path_mode": "0755",
+    "required_path_components_symlink_free": true,
+    "adversarial_path_selected": "/home/ubuntu/.local/bin/jankurai",
+    "adversarial_version": "jankurai 1.6.11",
+    "adversarial_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "require_jankurai_adversarial_result": "incorrectly accepted",
+    "score_execve_path": "/home/ubuntu/.local/bin/jankurai",
+    "score_under_adversarial_path": {
+      "exit_code": 0,
+      "score": 90,
+      "raw_score": 90,
+      "caps": 0,
+      "hard_findings": 0
+    },
+    "score_execve_trace_sha256": "67028105e6f12d81b462f5844528b83144259b2ec72be093ee3ddcb3f776288c",
+    "score_log_sha256": "9a2bd932c6995321c5f2f314d2dc38b69c95ed108afab25b812d40ab00783997",
+    "source_findings": [
+      "ops/ci/lib.sh require_jankurai validates only the ambient binary version string",
+      "ops/ci/score.sh invokes ambient jankurai",
+      "ops/ci/tool-adoption.sh invokes ambient jankurai for audit, proof, proofbind, proofmark, rust witness, copy-code, and coverage"
+    ],
+    "required_remediation": "Route every repository proof invocation through a fixed regular non-symlink /home/ubuntu/.jeryu/bin/jankurai and fail closed on exact version and SHA-256 before any audit or proof command; add an adversarial-PATH regression test."
+  },
+  "bounded_current_gate_reproduction": {
+    "status": "pass_but_not_governed_tool_acceptance",
+    "path_order": "/home/ubuntu/.jeryu/bin before /home/ubuntu/.local/bin",
+    "cargo_net_offline": true,
+    "jobs": 4,
+    "release_gate_exit_code": 0,
+    "release_gate_log_sha256": "c73270c3ba10ae58d7c7337b31d8d11aafb507671f8217dcf2db4d2adbd4f813",
+    "required_cpu_no_default_features": {
+      "status": "pass",
+      "tests_passed": 24,
+      "tests_failed": 0,
+      "dependency_lock": "pass"
+    },
+    "security": {
+      "status": "pass",
+      "rustsec_database_commit": "6e3286f4efa8c142fb33e5ea4342c8db6693cf34",
+      "evidence_sha256": "f00d4d544ad33fedff5c04bb791f7c4b24215a7903ef34edd02a6dfd8b254fe6",
+      "cargo_audit_json_sha256": "d7a47786ca90e115c10142f71a8bbfe4a5863d90b8a91500dbe0e2415bc2742b"
+    },
+    "jankurai_score": {
+      "score": 90,
+      "raw_score": 90,
+      "caps": 0,
+      "hard_findings": 0,
+      "report_sha256": "3bacd826387bd211de1282c70078c7e5f69ecdf6be278b2295d739bc9c0dac6b"
+    },
+    "contract_drift": {
+      "status": "pass",
+      "receipt_sha256": "110342263c31392c4f6a7d8e6b3bb214d218ff7a5963478dd58ed53a282597be"
+    },
+    "artifact_support": {
+      "status": "pass",
+      "source_archive_sha256": "b5ff7f1d873258c7a883c0473ee78393d0cea5a51023e5765ecc9fcd6dded301",
+      "metadata_sha256": "4eeadc06b1e8ed8a283fe7fe17debe4210d907f716d297c5efcbb66dea5b72f5"
+    }
+  },
+  "forge_readback": {
+    "main_sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+    "head_sha": "6aa1e7e95c3deb3445518c4ef0f46b4b1b98c9c0",
+    "jankurai_proof": {
+      "id": "8f5bb830-0258-4558-9299-a05ba176f5b9",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    "required_check": {
+      "name": "jain-battle-gpu/required",
+      "present": false
+    },
+    "protection": {
+      "enforce_admins": true,
+      "required_linear_history": true,
+      "required_approvals": 1,
+      "strict_required_checks": true,
+      "allow_force_pushes": false,
+      "allow_deletions": false
+    }
+  },
+  "native_gpu_state": {
+    "status": "not_accepted",
+    "bounded_required_lane_scope": "CPU-safe no-default-features only",
+    "repository_release_requirement": "build and test GPU dynamic-loading and GPU dynamic-linking feature sets",
+    "exact_head_host_required_receipt_present": false,
+    "exact_head_native_gpu_receipt_present": false
+  },
+  "supersession": {
+    "supersedes_status_of": [
+      "identity/jeryu-independent-review-jeryu-jain-battle-gpu-pr9.json"
+    ],
+    "supersedes_nonreproducible_diff_checksums": [
+      "76d00219f92bc2d0a51a4719ff37adcba2a98c9d3fc29941cdbd20fa108fd0a2",
+      "909caa43adb7b7a848814a851976d626944b7bb8dddc808513fc4fb5fffb3fd8"
+    ],
+    "preserves_prior_evidence": [
+      "exact PR/base/head/tree identity",
+      "narrow version/docs/lock-only source scope",
+      "next-unused split.1 identity",
+      "preserved Math split.1 dependency",
+      "bounded release-gate results where independently reproduced",
+      "automatic forge proof success",
+      "required-check absence"
+    ]
+  },
+  "decision": {
+    "review": "reject",
+    "merge_authorized_by_this_receipt": false,
+    "blocking_next_gate": "Land and independently review governed-tool fail-closure at this PR head or a direct successor, then publish exact-head jain-battle-gpu/required and native GPU evidence.",
+    "remaining_after_remediation": [
+      "fresh independent exact-head review",
+      "exact-head jain-battle-gpu/required",
+      "GPU dynamic-loading and dynamic-linking native evidence",
+      "independent approval",
+      "protected fast-forward merge",
+      "new immutable split.1 tag creation and readback",
+      "protected authority commit/checksum binding"
+    ]
+  },
+  "mutations_excluded": [
+    "Battle-GPU source or index",
+    "branch or forge refs",
+    "host CI or check publication",
+    "approval",
+    "merge",
+    "tag",
+    "authority or protection",
+    "deployment",
+    "force operations",
+    "Git worktree lifecycle"
+  ]
+}

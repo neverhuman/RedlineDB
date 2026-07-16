@@ -9,6 +9,8 @@ use std::{
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 
 const RELEASE_VERSION: &str = "8.0.1";
 const FAMILY_SOURCE_VERSION: &str = "8.0.0";
@@ -194,7 +196,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-inventory [--manifest PATH] [--json PATH] [--patch-dir PATH] | release-candidate [--plan] [--repo NAME]... [--from-wave N] [--through-wave N] [--force] [--no-tags] [--no-atomicsoul] | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --manifest PATH --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | defer-worktree --repo PATH --destination PATH --expected-head SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--receipt PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-inventory [--manifest PATH] [--json PATH] [--patch-dir PATH] | release-candidate [--plan] [--repo NAME]... [--from-wave N] [--through-wave N] [--force] [--no-tags] [--no-atomicsoul] | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --manifest PATH --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | defer-worktree --repo PATH --destination PATH --expected-head SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary [--manifest PATH] [--mode parent|child] [--exclude PATH] ... [--receipt PATH] | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -1534,6 +1536,7 @@ fn validate_manifest_data(
     let repos = family_repos(data)?;
     let mut names = std::collections::BTreeSet::new();
     let mut paths = std::collections::BTreeSet::new();
+    let mut git_dirs = std::collections::BTreeMap::new();
     for raw in &repos {
         let name = string(raw, "name").unwrap_or_else(|| "<missing-name>".to_owned());
         if !names.insert(name.clone()) {
@@ -1546,6 +1549,18 @@ fn validate_manifest_data(
                 continue;
             }
         };
+        if let Some(split_root) = &split_root {
+            if let Some(git_dir) =
+                validate_manifest_path_integrity(split_root, &name, &path, "family repository", &mut errors)
+            {
+                if let Some(previous) = git_dirs.insert(git_dir.clone(), name.clone()) {
+                    errors.push(format!(
+                        "{name}: .git directory is shared with {previous}: {}",
+                        git_dir.display()
+                    ));
+                }
+            }
+        }
         if !paths.insert(path.clone()) {
             errors.push(format!("duplicate repository path: {}", path.display()));
         }
@@ -1719,6 +1734,7 @@ fn validate_manifest_data(
             "manifest_path",
             "/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml",
         ),
+        ("mode", "parent"),
         ("container_path", "/home/ubuntu/jain-split/redline-split"),
         ("control_plane", "/home/ubuntu/jain-split/redline-split-ops"),
         ("engine_repository", "redline-core"),
@@ -1744,6 +1760,122 @@ fn validate_manifest_data(
         .into());
     }
     Ok(())
+}
+
+fn validate_manifest_path_integrity(
+    split_root: &Path,
+    name: &str,
+    path: &Path,
+    kind: &str,
+    errors: &mut Vec<String>,
+) -> Option<PathBuf> {
+    let expected = split_root.join(name);
+    if path != &expected {
+        errors.push(format!(
+            "{name}: {kind} path must be {}, found {}",
+            expected.display(),
+            path.display()
+        ));
+        return None;
+    }
+    let expected = split_root.join(name);
+    let mut cursor = PathBuf::new();
+    for component in expected.components() {
+        cursor.push(component);
+        if let Ok(metadata) = fs::symlink_metadata(&cursor) {
+            if metadata.file_type().is_symlink() {
+                errors.push(format!(
+                    "{}: {} path component is a symlink: {}",
+                    name,
+                    kind,
+                    cursor.display()
+                ));
+                return None;
+            }
+        }
+    }
+    let git_path = expected.join(".git");
+    match fs::symlink_metadata(&git_path) {
+        Ok(metadata) => {
+            if metadata.file_type().is_symlink() {
+                errors.push(format!("{name}: {kind} uses .git symlink indirection"));
+                return None;
+            }
+            if !metadata.is_dir() {
+                errors.push(format!("{name}: {kind} .git is not a directory"));
+                return None;
+            }
+        }
+        Err(error) => {
+            errors.push(format!(
+                "{}: {} .git is missing ({})",
+                name,
+                kind,
+                error
+            ));
+            return None;
+        }
+    }
+    let objects_path = git_path.join("objects");
+    match fs::symlink_metadata(&objects_path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            errors.push(format!(
+                "{}: {} .git objects is a symlink: {}",
+                name,
+                kind,
+                objects_path.display()
+            ));
+            return None;
+        }
+        Ok(metadata) if !metadata.is_dir() => {
+            errors.push(format!(
+                "{}: {} .git objects is not a directory: {}",
+                name,
+                kind,
+                objects_path.display()
+            ));
+            return None;
+        }
+        Err(error) => {
+            errors.push(format!(
+                "{}: {} cannot read .git objects ({})",
+                name,
+                kind,
+                error
+            ));
+            return None;
+        }
+        Ok(_) => {}
+    }
+    let alternates = git_path.join("objects/info/alternates");
+    match fs::read_to_string(&alternates) {
+        Ok(contents) if !contents.trim().is_empty() => {
+            errors.push(format!("{name}: {kind} uses git alternates ({})", alternates.display()))
+        }
+        Ok(_) | Err(_) => {}
+    }
+    let git_dir = match fs::canonicalize(&git_path) {
+        Ok(value) => value,
+        Err(error) => {
+            errors.push(format!(
+                "{}: {} canonical git dir unavailable ({})",
+                name,
+                kind,
+                error
+            ));
+            return None;
+        }
+    };
+    if !git_dir.is_dir() {
+        errors.push(format!(
+            "{}: {} git directory is not a directory: {}",
+            name,
+            kind,
+            git_dir.display()
+        ));
+        return None;
+    }
+    Some(git_dir)
 }
 
 fn validate_release_metadata(
@@ -3604,18 +3736,25 @@ fn strict_git_output(repo: &Path, args: &[&str]) -> Result<String, Box<dyn std::
 fn run_git_strict(repo: &Path, args: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
     let mut command = Command::new("git");
     command.arg("-C").arg(repo).args(args);
+    let mut auth_config: Option<PathBuf> = None;
     if args.first() == Some(&"push") {
         if let Ok(token) = local_jeryu_token() {
-            command
-                .env("GIT_CONFIG_COUNT", "1")
-                .env("GIT_CONFIG_KEY_0", "http.extraHeader")
-                .env(
-                    "GIT_CONFIG_VALUE_0",
-                    format!("Authorization: Bearer {token}"),
-                );
+            auth_config = Some(git_auth_config(&token)?);
+            command.env("GIT_CONFIG_GLOBAL", auth_config.as_ref().unwrap());
         }
     }
-    let output = command.output()?;
+    let output = match command.output() {
+        Ok(output) => output,
+        Err(error) => {
+            if let Some(config) = auth_config {
+                let _ = fs::remove_file(config);
+            }
+            return Err(format!("git {} failed in {}: {}", args.join(" "), repo.display(), error).into());
+        }
+    };
+    if let Some(config) = auth_config {
+        let _ = fs::remove_file(config);
+    }
     if !output.status.success() {
         return Err(format!(
             "git {} failed in {}: {}",
@@ -4202,14 +4341,17 @@ fn execute_jeryu_request(
     request: &JeryuRequest,
 ) -> Result<JsonValue, Box<dyn std::error::Error>> {
     let mut curl = Command::new("curl");
+    let mut auth_config = None;
+    if request.method != "DELETE" {
+        auth_config = Some(curl_auth_config(token)?);
+        curl.arg("--config").arg(auth_config.as_ref().unwrap());
+    }
     curl.args([
         "-fsS",
         "--max-time",
         "15",
         "-H",
         "accept: application/json",
-        "-H",
-        &format!("authorization: Bearer {token}"),
     ]);
     if let Some(body) = &request.body {
         curl.args([
@@ -4225,7 +4367,19 @@ fn execute_jeryu_request(
     }
     let output = curl
         .arg(format!("{}{}", base.trim_end_matches('/'), request.path))
-        .output()?;
+        .output();
+    let output = match output {
+        Ok(output) => output,
+        Err(error) => {
+            if let Some(config) = auth_config {
+                let _ = fs::remove_file(config);
+            }
+            return Err(format!("local Jeryu request failed: {error}").into());
+        }
+    };
+    if let Some(config) = auth_config {
+        let _ = fs::remove_file(config);
+    }
     if !output.status.success() {
         return Err(format!(
             "local Jeryu request failed: {}",
@@ -4239,6 +4393,34 @@ fn execute_jeryu_request(
     } else {
         serde_json::from_str(&raw).map_err(Into::into)
     }
+}
+
+fn git_auth_config(token: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    write_temp_config(format!("[http]\n\textraHeader = \"Authorization: Bearer {token}\"\n"))
+}
+
+fn curl_auth_config(token: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    write_temp_config(format!("header = \"authorization: Bearer {token}\"\n"))
+}
+
+fn write_temp_config(contents: String) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut candidate = std::env::temp_dir();
+    candidate.push(format!(
+        "splitctl-secure-config-{}-{}",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)?
+            .as_nanos()
+    ));
+    fs::write(&candidate, contents)?;
+    #[cfg(unix)]
+    {
+        fs::set_permissions(
+            &candidate,
+            fs::Permissions::from_mode(0o600),
+        )?;
+    }
+    Ok(candidate)
 }
 
 fn validate_protection_policy(
@@ -4654,23 +4836,60 @@ fn source_coverage(manifest: &Path, json_output: bool) -> Result<(), Box<dyn std
 }
 
 fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
     let mut receipt = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("target/python-boundary.json");
+    let mut mode = String::from("parent");
+    let mut excludes = Vec::new();
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
+            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
             "--receipt" => receipt = PathBuf::from(iter.next().ok_or("--receipt needs a path")?),
+            "--mode" => mode = iter.next().ok_or("--mode needs parent|child")?,
+            "--exclude" => excludes.push(iter.next().ok_or("--exclude needs a path")?),
             value => return Err(format!("unknown python-boundary argument: {value}").into()),
         }
     }
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    if mode != "parent" && mode != "child" {
+        return Err("--mode must be parent or child".into());
+    }
+    let root = manifest
         .parent()
-        .ok_or("split root unavailable")?
+        .ok_or("manifest has no parent path")?
         .to_path_buf();
     let registry_path =
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("python-parity-exceptions.toml");
     let exceptions = load_python_parity_exceptions(&root, &registry_path)?;
     let inline_exceptions = load_python_inline_parity_exceptions(&root, &registry_path)?;
-    let tracked_files = release_tracked_files(&root)?;
+    let manifest_data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+    let (scope_manifest, scope_manifest_path) = if mode == "parent" {
+        (manifest_data, manifest)
+    } else {
+        let nested = declared_nested_manifest_path(&manifest_data, &manifest)
+            .ok_or("parent manifest is missing nested_families.redline.manifest_path")?;
+        let nested_data = fs::read_to_string(&nested)?.parse::<toml::Value>()?;
+        (nested_data, nested)
+    };
+    let scoped_roots = python_scope_repos(&scope_manifest, &scope_manifest_path)?;
+    let exclude_roots = if excludes.is_empty() {
+        Vec::new()
+    } else {
+        let scope_root = scope_manifest_path
+            .parent()
+            .unwrap_or(Path::new("."));
+        excludes
+            .into_iter()
+            .map(|path| {
+                let value = PathBuf::from(path);
+                if value.is_absolute() {
+                    value
+                } else {
+                    scope_root.join(value)
+                }
+            })
+            .collect()
+    };
+    let tracked_files = release_tracked_files(&scoped_roots, &exclude_roots)?;
     let files = tracked_files
         .iter()
         .filter(|path| {
@@ -4825,6 +5044,33 @@ fn python_boundary(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> 
             .into())
         };
     finish_receipted_operation(&receipt, &mut report, result)
+}
+
+fn python_scope_repos(
+    manifest: &toml::Value,
+    manifest_path: &Path,
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    let mut paths = std::collections::BTreeSet::new();
+    let base = manifest_path
+        .parent()
+        .ok_or("manifest has no parent path")?
+        .to_path_buf();
+    for repo in manifest_repos(manifest)? {
+        let raw = string(repo, "path").ok_or("manifest repository is missing path")?;
+        let path = PathBuf::from(raw);
+        paths.insert(if path.is_absolute() { path } else { base.join(path) });
+    }
+    if let Some(control) = manifest.get("control_plane") {
+        if let Some(raw) = string(control, "path") {
+            let path = PathBuf::from(raw);
+            paths.insert(if path.is_absolute() {
+                path
+            } else {
+                base.join(path)
+            });
+        }
+    }
+    Ok(paths.into_iter().collect())
 }
 
 fn load_python_parity_exceptions(
@@ -5038,9 +5284,10 @@ fn python_runtime_source(path: &Path) -> io::Result<bool> {
         || executable_text_file(path)?)
 }
 
-fn release_tracked_files(root: &Path) -> io::Result<Vec<PathBuf>> {
-    let mut repositories = Vec::new();
-    discover_release_worktrees(root, &mut repositories)?;
+fn release_tracked_files(
+    repositories: &[PathBuf],
+    excludes: &[PathBuf],
+) -> io::Result<Vec<PathBuf>> {
     let mut files = std::collections::BTreeSet::new();
     for repository in repositories {
         let output = Command::new("git")
@@ -5070,7 +5317,7 @@ fn release_tracked_files(root: &Path) -> io::Result<Vec<PathBuf>> {
                 )
             })?;
             let path = repository.join(relative);
-            if path.is_file() {
+            if path.is_file() && !is_excluded_from_python_boundary(&path, excludes) {
                 files.insert(path);
             }
         }
@@ -5078,34 +5325,10 @@ fn release_tracked_files(root: &Path) -> io::Result<Vec<PathBuf>> {
     Ok(files.into_iter().collect())
 }
 
-fn discover_release_worktrees(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
-    if !root.is_dir() {
-        return Ok(());
-    }
-    if root.join(".git").exists() {
-        out.push(root.to_path_buf());
-        return Ok(());
-    }
-    for entry in fs::read_dir(root)? {
-        let path = entry?.path();
-        if !path.is_dir() {
-            continue;
-        }
-        if path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| {
-                matches!(
-                    name,
-                    ".git" | "target" | ".stage" | ".venv" | "vendor" | "node_modules"
-                )
-            })
-        {
-            continue;
-        }
-        discover_release_worktrees(&path, out)?;
-    }
-    Ok(())
+fn is_excluded_from_python_boundary(path: &Path, excludes: &[PathBuf]) -> bool {
+    excludes
+        .iter()
+        .any(|exclude| path == exclude || path.starts_with(exclude))
 }
 
 fn line_has_python_runtime(path: &Path, line: &str) -> bool {

@@ -1,0 +1,191 @@
+{
+  "schema_version": "jain.catboost-deterministic-native-successor/v1",
+  "recorded_at_utc": "2026-07-16T10:46:05Z",
+  "claim_token": "codex-catboost-pr8-canonical-deterministic-evidence-successor-20260716T0953Z",
+  "repository": "jeryu/jain-catboost",
+  "pull_request": 8,
+  "branch": "release/v8.0.1/catboost-identity",
+  "protected_main": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+  "predecessor_head": "182089fb4caad2c752ba9e5a5bd584adceab4e90",
+  "successor_head": "b9a54a4b59f58d8c3ecf3c9a97ef3caa240ac34f",
+  "successor_tree": "71e44970ab3eb17bfe3146060a6f97f35784eaea",
+  "correction_diff_sha256": "538a3fc75045dc3d16e75930d12b5856ad71735debb68872bfe7762ff628510d",
+  "protected_main_full_diff_sha256": "b225e73c5f56017d193abeb1569719311c69946cb1bb9e0cc3033f76bafb1b07",
+  "source_archive_sha256": "5f1f34a43ce613fe2e34036090644c2f8c0879cc799f7b4c92edde237eb1fe3d",
+  "custody": {
+    "canonical_path": "/home/ubuntu/jain-split/jain-catboost",
+    "canonical_registered_worktrees": 1,
+    "canonical_clean_after_push": true,
+    "canonical_branch_forge_equal_after_push": true,
+    "canonical_filesystem_symlinks": 0,
+    "temporary_repo_clones_used_git_clone_no_local": true,
+    "temporary_repo_clone_alternates": 0,
+    "temporary_repo_clone_worktree_admin_directories": 0,
+    "temporary_clone_symlinks_before_removal": 0,
+    "temporary_clone_and_private_cache_paths_removed": true,
+    "git_worktree_action": false,
+    "force_operation": false
+  },
+  "vendor": {
+    "upstream_tag": "v1.2.10",
+    "commit": "b1bd2a6d77219e82a1acfcedfccb8e6f6c1ee084",
+    "deleted_entries": 6842,
+    "nondelete_entries": 0,
+    "raw_git_diff_sha256": "d048ae6b55703485796f0efa7f56309b6dda62d1c8a59a32adcfdb1d8f8b5dad",
+    "private_index_tree": "95a1c3f8906f740716cbca28ad80f398d4384074",
+    "recursive_ls_tree_nul_sha256": "dfdbc81e6e04398b1d0c175164ff9a55a9100d7eded0d12970d7032543a2a955",
+    "archive_mtime_literal": "1970-01-01T00:00:00Z",
+    "canonical_tar_sha256": "0f1127e35cf8c43a79fa18e1be11293fef5a4d67d262fd4443b3251fe6bd9918",
+    "two_final_build_inputs_byte_identical": true
+  },
+  "toolchain": {
+    "network_used": false,
+    "cargo_offline": true,
+    "builder_image": "jain-builder:local",
+    "builder_image_id": "sha256:7f1dfaa6ca6320d382d7c119215465aac87a741cef57505526372e75df8021fb",
+    "ragel_version": "6.10",
+    "ragel_sha256": "8778570514deb478f4ca1bf1721eb79748582270ea78e1a32b235a1202217598",
+    "yasm_version": "1.3.0",
+    "yasm_sha256": "6173850a8d1fb2b316617079b814ffd0b0d62e3f453002b625e4eaecef503225",
+    "rustc_version": "1.96.0",
+    "rustc_sha256": "ba4b837efb6612dfa8d941c5a72b8a50d1d03a0f36216743b173949aa8d9eb75",
+    "cargo_version": "1.96.0",
+    "cargo_sha256": "f30f9fd1b1d0b8fd10dc33219eb4cd4bec3543f40e434ac71f5a03fd0359063f",
+    "cmake_version": "4.3.2",
+    "cmake_sha256": "871dbae75e8e3793e919594ee4617b2ccd9470392c39c718dcdfbda27cbf1158",
+    "ninja_version": "1.13.0.git.kitware.jobserver-pipe-1",
+    "ninja_sha256": "696f9628a79d9ce50314cf9556d7cd1a1d1ec52b8fd52828f6f9db1719565b67",
+    "clang_version": "18.1.3",
+    "clang_sha256": "8ef402d453d1ba4902e4ee0f0f847f6cfa01400c95aa43c24e97818b9c0e3f45",
+    "linker_version": "LLD 21.1.8",
+    "linker_path": "/home/ubuntu/.local/bin/ld.lld",
+    "linker_sha256": "dbf1a9db834a83954221bff446c35f5b39dd04f09aede3f963a095dd2b718f73",
+    "llvm_ar_18_sha256": "eedd2efbdee80acf60e17e10adeddf31be0347226245f935be95efa3ae00ec79",
+    "llvm_ranlib_18_sha256": "eedd2efbdee80acf60e17e10adeddf31be0347226245f935be95efa3ae00ec79",
+    "governed_jankurai_path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "governed_jankurai_version": "1.6.11",
+    "governed_jankurai_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+  },
+  "initial_fail_closed_comparison": {
+    "source_head": "593dbe4f09e6199286e24a16fa9b67bd152aacbb",
+    "run_1_raw_elf_sha256": "be034b1884ed15512d0c713067556fc6a3c16e2f15752f5a310f71e2d728376e",
+    "run_1_build_id": "8d08302576709ed88a7a12a23325332f3ded8ce7",
+    "run_2_raw_elf_sha256": "7112d5345539001419b85f8d9536c714bae8d8d1656f8dcb83fbfad189ccbe92",
+    "run_2_build_id": "3b731eb9a205362690dc191a4c7b56689d11b965",
+    "size_bytes_each": 28943968,
+    "raw_elf_equal": false,
+    "build_id_equal": false,
+    "physical_root_counts_each": {
+      "vendor": 3,
+      "build": 1,
+      "checkout": 4,
+      "overlap_counted_total": 8,
+      "unique": 4
+    },
+    "release_accepted": false
+  },
+  "section_diagnostic": {
+    "diagnostic_raw_elf_sha256": "a3d2b1a387fced9a26da17fec5e8a8f8320c1f80b62d0ac904b930a57cc47860",
+    "diagnostic_build_id": "7c8de91c6dfb1eccf94d84b0321fd5865dbbbbd1",
+    "note": "The initial pair was removed after its zero-symlink scans before section mapping. A third clean build of the same uncorrected source and exact tool inputs reproduced the same four path classes and mapped them before removal.",
+    "occurrences": [
+      {
+        "file_offset_hex": "0x145128a",
+        "section": ".debug_line",
+        "section_offset_hex": "0x145126f",
+        "section_size_hex": "0xbb",
+        "value_class": "vendor util/system directory"
+      },
+      {
+        "file_offset_hex": "0x145135e",
+        "section": ".debug_info",
+        "section_offset_hex": "0x145133e",
+        "section_size_hex": "0xd3",
+        "value_class": "vendor context_x86.asm"
+      },
+      {
+        "file_offset_hex": "0x14513b6",
+        "section": ".debug_info",
+        "section_offset_hex": "0x145133e",
+        "section_size_hex": "0xd3",
+        "value_class": "native build util directory"
+      },
+      {
+        "file_offset_hex": "0x15f2f95",
+        "section": ".strtab",
+        "section_offset_hex": "0x15b90e1",
+        "section_size_hex": "0x5e0af7",
+        "value_class": "vendor context_x86.asm"
+      }
+    ],
+    "sections_allocated_at_runtime": false,
+    "binary_rewrite_or_strip_used": false
+  },
+  "bounded_source_correction": {
+    "compiler_file_debug_macro_prefix_maps": true,
+    "source_date_epoch": "0",
+    "build_info_filters_prefix_map_flags": true,
+    "yasm_absolute_arguments_changed_to_relative": true,
+    "yasm_assembly_only_dwarf_omitted": true,
+    "runtime_or_c_abi_change": false,
+    "post_link_mutation": false,
+    "weak_or_semantic_digest_substitution": false
+  },
+  "final_exact_head_comparison": {
+    "run_1_raw_elf_sha256": "64337e1618d34a7ef0f6423512564eff7461c97c3149283928def45b072293dc",
+    "run_1_build_id": "fbebceb73b6b7344f77ac3e5c64e880e01dae214",
+    "run_2_raw_elf_sha256": "64337e1618d34a7ef0f6423512564eff7461c97c3149283928def45b072293dc",
+    "run_2_build_id": "fbebceb73b6b7344f77ac3e5c64e880e01dae214",
+    "size_bytes_each": 28943136,
+    "raw_elf_equal": true,
+    "build_id_equal": true,
+    "physical_root_occurrences_each": 0,
+    "fresh_repo_clones": 2,
+    "fresh_vendor_clones": 2,
+    "fresh_cargo_targets": 2,
+    "fresh_native_build_roots": 2,
+    "author_lane_release_accepted": false,
+    "acceptance_note": "The author lane reports exact equality and zero roots but does not self-approve release acceptance; independent review and the protected required lifecycle remain mandatory."
+  },
+  "coverage": {
+    "fixed_proptest_cases": 256,
+    "fixed_proptest_seed": 801,
+    "failure_persistence_disabled": true,
+    "path_normalized": true,
+    "clean_runs": 2,
+    "lcov_sha256_each": "3c3a103a9d424416fdcebbd385eb7066e23fa04c0866ebbc931f310b42b39964",
+    "sources": 18,
+    "lines_hit": 911,
+    "lines_found": 1092
+  },
+  "validation": {
+    "rust_native_evidence_tests": "4/4 pass",
+    "required_tests": "21/21 pass",
+    "fast": "pass",
+    "required": "pass",
+    "contract_drift": "pass",
+    "artifact_support": "bootstrap pass; not deployable provenance",
+    "security": "pass",
+    "tool_adoption": "pass",
+    "jankurai_full_score": 94,
+    "jankurai_diff_audit_score": 88,
+    "jankurai_diff_audit_hard": 0,
+    "jankurai_diff_audit_caps": 0
+  },
+  "forge_readback": {
+    "branch_head": "b9a54a4b59f58d8c3ecf3c9a97ef3caa240ac34f",
+    "jankurai_proof_check_id": "f54dc106-f9d9-4321-8bf3-b257903994be",
+    "jankurai_proof_status": "completed",
+    "jankurai_proof_conclusion": "success",
+    "jeryu_autonomy_check_id": "8e4ca52b-a97d-476b-9888-6b9af20cf375",
+    "jeryu_autonomy_conclusion": "action_required",
+    "jain_catboost_required_present": false
+  },
+  "decision": "SOURCE_CORRECTION_PUSHED_RAW_IDENTITY_REPRODUCED_PENDING_INDEPENDENT_REVIEW_AND_REQUIRED",
+  "remaining": [
+    "Independent exact-successor source and native-evidence review.",
+    "One genuine serialized exact-head jain-catboost/required host check.",
+    "Protected expected-head approval and merge after all checks are green.",
+    "Next unused immutable 8.0.1 split tag, forge readback, and protected authority binding."
+  ]
+}

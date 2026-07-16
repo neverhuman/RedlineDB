@@ -1,0 +1,11 @@
+{
+  "schema_version": "jain.host-ci/v1",
+  "owner": "jeryu",
+  "repository": "jain-split-ops",
+  "head_sha": "ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa",
+  "check": "jain-split-ops/required",
+  "conclusion": "success",
+  "log_sha256": "762b976e067e238b3a9a004e7e695472808f873237019056da93226a0f9371d7",
+  "log_path": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/ci/host/762b976e067e238b3a9a004e7e695472808f873237019056da93226a0f9371d7.log",
+  "runner_note": "Claude-ENFORCE: full scripts/ci-local.sh required in a fresh --no-local exact-SHA clone at the PR head under a clean durable parent (~/.cache/enforce-ci), real HOME (pinned advisory-db 6e3286f4 present); canonical sandbox runner variants fail closed on this host (durable-evidence guard / advisory materialization / root-broker caller identity) - see UPGRADE_CHAT Claude-ENFORCE entry."
+}

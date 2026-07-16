@@ -1,0 +1,35 @@
+# ---------------------------------------------------------------------------
+# Lane 6 STAGING override (xbabe3) — layered on docker-compose.appliance.pinned.yml.
+# Canonical pinned compose references image.local/jain/<role>@<digest>; on this
+# staging host the same digests are tagged under image.l6/jain to avoid touching
+# the concurrent jain-appliance project's image.local tags. Digests are identical
+# (containerd image store: image ID == OCI manifest digest).
+#
+# scqd deltas (all are staging workarounds for canonical defects, reported in
+# UPGRADE_CHAT.md):
+#   * command --config + mounted scqd.toml: the image ships no config and the
+#     binary exits 1 without one.
+#   * healthcheck disabled: Dockerfile.scq-scratch's `--probe` flag does not
+#     exist on the scqd binary (clap rejects it), so the shipped HEALTHCHECK
+#     can never pass. Liveness is verified from the host via the UDS bind mount.
+#   * /usr/libexec/jain/jain-worker bind: the compose header says the reviewed
+#     jain-worker is staged into the scqd tier, but Dockerfile.scq-scratch never
+#     COPYs it.
+#   * state/run bind mounts at /var/lib/scqd-l6 and /run/jain-smartcluster
+#     (uid 65532, mode 750): the named scqd-state volume initializes root-owned,
+#     unwritable by the nonroot user; scqd rejects world-writable state dirs.
+# ---------------------------------------------------------------------------
+services:
+  web-control:
+    image: image.l6/jain/web-control@sha256:fc8d48175fe04bdf15b904accf854301d21986e79c36232eced3d05161bc7f3a
+
+  scqd:
+    image: image.l6/jain/scqd@sha256:5e174a20921bbe6d46e9195066280b6da85896a6f9d93fb2386608c6024fb4bf
+    command: ["--config", "/etc/jain-smartcluster/scqd.toml"]
+    healthcheck:
+      disable: true
+    volumes:
+      - ./scqd.toml:/etc/jain-smartcluster/scqd.toml:ro
+      - ./jain-worker:/usr/libexec/jain/jain-worker:ro
+      - ./state:/var/lib/scqd-l6
+      - ./run:/run/jain-smartcluster

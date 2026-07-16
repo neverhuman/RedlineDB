@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "13ea4968dde1286111dacf8cd0216fa71e931242"
+    },
+    "body": "Adds order-independent train/test upload roles, report-only blind metrics, prediction artifacts, telemetry, and SmartCluster parity.",
+    "created_at": "2026-07-16T06:30:38.344264841Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8-web-jope-smartcluster-20260713",
+      "ref": "codex/v8-web-jope-smartcluster-20260713",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "0378a3ec278fe3f36e5160d8358776acfc0a3542"
+    },
+    "html_url": "/jeryu/jain-web/pull/32",
+    "id": "d47b57ad-72f0-4157-9fb9-57e757d7880c",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 32,
+    "source_repository": "jeryu/jain-web",
+    "state": "open",
+    "title": "Support blind test uploads and cluster parity",
+    "updated_at": "2026-07-16T06:30:38.344264841Z",
+    "url": "/repos/jeryu/jain-web/pulls/32",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-web",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Adds order-independent train/test upload roles, report-only blind metrics, prediction artifacts, telemetry, and SmartCluster parity.",
+      "draft": false,
+      "head": "codex/v8-web-jope-smartcluster-20260713",
+      "title": "Support blind test uploads and cluster parity"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-web/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "13ea4968dde1286111dacf8cd0216fa71e931242"
+    },
+    "body": "Adds order-independent train/test upload roles, report-only blind metrics, prediction artifacts, telemetry, and SmartCluster parity.",
+    "created_at": "2026-07-16T06:30:38.344264841Z",
+    "draft": false,
+    "head": {
+      "label": "codex/v8-web-jope-smartcluster-20260713",
+      "ref": "codex/v8-web-jope-smartcluster-20260713",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "0378a3ec278fe3f36e5160d8358776acfc0a3542"
+    },
+    "html_url": "/jeryu/jain-web/pull/32",
+    "id": "d47b57ad-72f0-4157-9fb9-57e757d7880c",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 32,
+    "source_repository": "jeryu/jain-web",
+    "state": "open",
+    "title": "Support blind test uploads and cluster parity",
+    "updated_at": "2026-07-16T06:30:38.344264841Z",
+    "url": "/repos/jeryu/jain-web/pulls/32",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784183431
+}

@@ -1,0 +1,153 @@
+{
+  "schema_version": "jain.policy-batch-release-audit/v1",
+  "observed_at": "2026-07-16T06:31:11Z",
+  "mode": "read-only",
+  "scope": [
+    "jain-domain@4383aef8b23dd194db12778db3fc378ab526b145",
+    "jain-jable@9a38221906d8918efa3b8d8ef582423f2a23dafc",
+    "jain-lightgbm@84a1c776903b64d32c10d375e21bb876b921405b",
+    "jain-ops@68569a9344164b76e880fbb54f74839acc598a08",
+    "jain-xgboost@8457e1906850c0cf48cd9547c01f9161b6db5484",
+    "jain-tui@33d45089a107cc1eebd95b233b0dcf4a20e8c9e3"
+  ],
+  "decision": {
+    "policy_heads_ready_for_approval_or_merge": [],
+    "policy_heads_already_protected_merged": [
+      "jain-domain",
+      "jain-jable",
+      "jain-lightgbm",
+      "jain-ops",
+      "jain-xgboost"
+    ],
+    "policy_heads_blocked": ["jain-tui"],
+    "v8_0_1_identity_heads_ready_for_approval_or_merge": [],
+    "reason": "Five exact heads are already merged policy-only commits with 8.0.0 self identity and failing jankurai/proof readback. TUI is divergent from current main and has no required check. Every open 8.0.1 identity head has jankurai/proof=failure and no required success."
+  },
+  "authority": {
+    "path": "jain-split-ops/repos.manifest.toml",
+    "product_version": "8.0.1",
+    "all_six_release_commits": "PENDING",
+    "all_six_current_tag_revision": 0,
+    "note": "The five pre-existing 8.0.1-split.0 tags below point at 8.0.0-content commits and are immutable; they cannot be moved. TUI has no 8.0.1 tag."
+  },
+  "protection": {
+    "all_six": "pass",
+    "contract": "one approval, repository/required, strict/linear main, enforce_admins, no force-push, no deletion",
+    "readback_receipt_sha256": {
+      "jain-domain": "b537ac83e4b2150c654fc8874592c713df337387495fe0d94d1ffcbbc54cb83c",
+      "jain-jable": "33b8563d11c3d21cbc5926dd8b36175968f25e48529c697bf08ea1a9aad903c4",
+      "jain-lightgbm": "18575e79bc60a87dda32d67d04e3591ed46a49f21e96237a8dde893946a1b3fb",
+      "jain-ops": "7b3cc66ea227cda76acf12ab660b811c9d4886affc1bba7a77aa776c91129c18",
+      "jain-xgboost": "afb057eef725ccb51aa6558107739318801d7ba903c22be178d60ab09c69fed1",
+      "jain-tui": "acb35fe26d4e889b0c1c5a45d8889ae1b0bc5f5c204d410ab05490926d1e82bc"
+    }
+  },
+  "repositories": [
+    {
+      "repo": "jain-domain",
+      "policy_pr": 6,
+      "policy_state": "merged",
+      "merged_at": "2026-07-16T06:20:43.946593901Z",
+      "main": "4383aef8b23dd194db12778db3fc378ab526b145",
+      "policy_self_identity": "jain-domain-v8.0.0-split.1",
+      "policy_checks": {"jain-domain/required": "success", "jankurai/proof": "failure"},
+      "ci_log_sha256": "f56c4b704072e1786acb27fb793f8f29e22312d15268078ccc13af6c25ac8209",
+      "ci_receipt_sha256": "3c330d943154c14e21becb5ffbfb920bb021a2ae9dbe1189b0f50fd5a78d6e90",
+      "approval_receipt_sha256": "9d912e644909503ebdf01dce4a988a45f5ec78c5470785e414f64ed3c08a4afb",
+      "merge_receipt_sha256": "504438ea37dd066abb96cb4c7405fc9b1cc1d6b139d1121e1f07a62d3f06acc0",
+      "merge_receipt_note": "Receipt timed out and says fail; later live forge readback proves PR 6 merged at the exact head.",
+      "existing_immutable_tag": {"name": "jain-domain-v8.0.1-split.0", "commit": "07a6879beba68ea7efb386231376bd03621fa0a4", "content_identity": "8.0.0"},
+      "identity_pr": {"number": 7, "head": "8e3844862434b4348e9aab8595bb9fbfed2a456f", "self_identity": "jain-domain-v8.0.1-split.1", "descends_from_current_main": false, "required": "absent", "proof": "failure"},
+      "next_action": "Recompose the minimal identity change onto current protected main, then run exact-head required and proof, obtain independent approval, protected-merge, cut the next immutable correction tag, and authority-bind it."
+    },
+    {
+      "repo": "jain-jable",
+      "policy_pr": 3,
+      "policy_state": "merged",
+      "merged_at": "2026-07-16T06:21:25.853759809Z",
+      "main": "9a38221906d8918efa3b8d8ef582423f2a23dafc",
+      "policy_self_identity": "jain-jable-v8.0.0-split.1",
+      "policy_checks": {"jain-jable/required": "success", "jankurai/proof": "failure"},
+      "ci_log_sha256": "c459daab7faa5b0e8d9719e0b429941ee9eeabcdfeea04f8c151a3bcbadb7d42",
+      "ci_receipt_sha256": "3d67ae6e4c48820a79780dae46d1ff7a44cac5876f101d0740ee83df4eda1ca3",
+      "approval_receipt_sha256": "93ccd96d4e7588fbb2d9ef09b578d25b1cfb0cdc7e643421be0e89c6457c230a",
+      "merge_receipt_sha256": "b708aef739210c14500cbebe7d504e87515aab1cecb4afabef22d7e2e8e20ba1",
+      "existing_immutable_tag": {"name": "jain-jable-v8.0.1-split.0", "commit": "e119908dd4f522fdbada7ddb461fb10c0dd7f563", "content_identity": "8.0.0"},
+      "identity_pr": {"number": 4, "head": "4fb7d2dc0178dd8030d3d116d8267943c3e56470", "self_identity": "jain-jable-v8.0.1-split.1", "descends_from_current_main": true, "required": "absent", "proof": "failure"},
+      "next_action": "Run exact-head required and governed proof on PR 4, independently approve only if both pass, protected-merge, cut immutable split.1, and authority-bind it."
+    },
+    {
+      "repo": "jain-lightgbm",
+      "policy_pr": 7,
+      "policy_state": "merged",
+      "merged_at": "2026-07-16T06:21:37.004349830Z",
+      "main": "84a1c776903b64d32c10d375e21bb876b921405b",
+      "policy_self_identity": "jain-lightgbm-v8.0.0-split.2",
+      "policy_checks": {"jain-lightgbm/required": "success", "jankurai/proof": "failure"},
+      "ci_log_sha256": "c308dc0c9a6cb41430dcad8258e384ff7c1f31e67a09188c4fdb4560018a735b",
+      "ci_receipt_sha256": "09a350daa33a80519697a5b182e7cd46752968efd58e9cc4fb32e55e6bc3b416",
+      "approval_receipt_sha256": "2f9adb35da15f901ff9e4285fae721439a907d9eb3ba16a0f1b220787f46452a",
+      "merge_receipt_sha256": "74aa060ec9d9b8c7936e3ea9ad78b19b80e81bad5bca65e04b035982b1fa68ed",
+      "existing_immutable_tag": {"name": "jain-lightgbm-v8.0.1-split.0", "commit": "03102cb3c1fa8bda05a66b4fe072c17524fac6fc", "content_identity": "8.0.0"},
+      "identity_pr": {"number": 8, "head": "a97e401bdab4779d31060735f285837352bc8741", "self_identity": "jain-lightgbm-v8.0.1-split.2", "descends_from_current_main": true, "required": "absent", "proof": "failure"},
+      "next_action": "First reconcile the split.2 self identity with authority current split.0 and the next unused immutable correction revision; then run exact-head required/proof and the reviewed merge/tag/bind lifecycle."
+    },
+    {
+      "repo": "jain-ops",
+      "policy_pr": 7,
+      "policy_state": "merged",
+      "merged_at": "2026-07-16T06:21:49.678337973Z",
+      "main": "68569a9344164b76e880fbb54f74839acc598a08",
+      "policy_self_identity": "jain-ops-v8.0.0-split.1",
+      "policy_checks": {"jain-ops/required": "success", "jankurai/proof": "failure"},
+      "ci_log_sha256": "68c7cc9cb282c3e06469329a95d5d8aeda8582d82cec51794a576c35b29a08e9",
+      "ci_receipt_sha256": "ca289b6620dcafb163b6cac5612b3e48b8892d868ee9d55b3dcfe739ea925b29",
+      "approval_receipt_sha256": "88967a9610012b225063175590df02911f8cc7ee38f42e5b47650795f9dd801e",
+      "merge_receipt_sha256": "9654b5c40d4b9a2ad721c4d0e760e7b69bb57b3c24e37241cddc440ea634aa62",
+      "existing_immutable_tag": {"name": "jain-ops-v8.0.1-split.0", "commit": "128636cd00e93d09560b77d4829f9ea3b68afbe7", "content_identity": "8.0.0"},
+      "identity_pr": {"number": 9, "head": "1630873b220799aa22df07b15d8c2f23b4216729", "self_identity": "jain-ops-v8.0.1-split.1", "descends_from_current_main": true, "required": "absent", "proof": "failure"},
+      "next_action": "Run the non-Cargo exact-head required and governed proof lanes on PR 9, independently approve only if both pass, protected-merge, cut immutable split.1, and authority-bind it."
+    },
+    {
+      "repo": "jain-xgboost",
+      "policy_pr": 7,
+      "policy_state": "merged",
+      "merged_at": "2026-07-16T06:22:01.655248261Z",
+      "main": "8457e1906850c0cf48cd9547c01f9161b6db5484",
+      "policy_self_identity": "jain-xgboost-v8.0.0-split.2",
+      "policy_checks": {"jain-xgboost/required": "success", "jankurai/proof": "failure"},
+      "ci_log_sha256": "ea4144519412913f9203afa5915ce87113880eca70dd6aac3d7211410137906a",
+      "ci_receipt_sha256": "0ee7f7bf732f507a5507d6c481d5ea8ae067d28a5438282dd7f8dcbfc9d2cf3e",
+      "approval_receipt_sha256": "d1c00ae0cdb099885cc4b5fa40abc9e38908ac4b66ec72f62b5077eddf95aa6f",
+      "merge_receipt_sha256": "1cddbbee9ab2fe236cc51ebbdfc545e6fba3058d32b5763eff5bd83035b04c7c",
+      "existing_immutable_tag": {"name": "jain-xgboost-v8.0.1-split.0", "commit": "34d3534702727b463c4b00c799d06fda0f76438c", "content_identity": "8.0.0"},
+      "identity_pr": {"number": 8, "head": "c2b8bd0c72de261ce2c96233c46fdf2fc94d1ea8", "self_identity": "jain-xgboost-v8.0.1-split.2", "descends_from_current_main": true, "required": "absent", "proof": "failure"},
+      "next_action": "First reconcile the split.2 self identity with authority current split.0 and the next unused immutable correction revision; then run exact-head required/proof and the reviewed merge/tag/bind lifecycle."
+    },
+    {
+      "repo": "jain-tui",
+      "policy_pr": 8,
+      "policy_state": "open-blocked",
+      "current_main": "09db089717eea57450747f36033d221265a3dea8",
+      "current_main_note": "PR 11 core-repin commit; required=success, jankurai/proof=failure, still not the complete self identity.",
+      "policy_base": "b96010d56b07c54972dd9f2d29f691b2cb1cb375",
+      "policy_self_identity": "jain-tui-v8.0.0-split.0",
+      "policy_dependency_identity": ["jain-domain-v8.0.0-split.0", "jain-core-v8.0.0-split.0", "jain-math-v8.0.0-split.0", "jain-jable-v8.0.0-split.0"],
+      "policy_checks": {"jain-tui/required": "absent", "jankurai/proof": "failure"},
+      "ci_log_sha256": null,
+      "ci_receipt_sha256": null,
+      "ci_failure": "The batch failed closed before checkout because the then-dirty authority manifest pinned jain-tui release_commit=09db0897 instead of policy head 33d45089; no host-CI log/receipt was emitted. Authority is now PENDING, but main has advanced and the old policy head is no longer fast-forwardable.",
+      "existing_immutable_tag": null,
+      "identity_pr": {"number": 12, "head": "5ad7f64299e7a0015aee738d115597e36265bfae", "self_identity": "jain-tui-v8.0.1-split.0", "known_dependencies": ["jain-core-v8.0.1-split.0", "remaining transitive 8.0.0-family pins"], "descends_from_current_main": false, "required": "absent", "proof": "failure"},
+      "next_action": "Recompose the exact zero-worktree policy, self identity, core repin, and lock-sync changes onto current main without a merge commit; align remaining dependency pins by wave; then run exact-head required/proof, independent approval, protected merge, first immutable 8.0.1 tag, and authority bind."
+    }
+  ],
+  "safety": {
+    "git_worktrees_created": 0,
+    "source_edits": 0,
+    "forge_writes": 0,
+    "process_signals": 0,
+    "ci_started": 0,
+    "only_persistent_write": "this evidence receipt"
+  }
+}

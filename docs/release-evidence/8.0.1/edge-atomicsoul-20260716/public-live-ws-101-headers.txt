@@ -1,0 +1,9 @@
+HTTP/1.1 101 Switching Protocols
+Alt-Svc: h3=":443"; ma=2592000
+Connection: upgrade
+Date: Thu, 16 Jul 2026 14:09:02 GMT
+Sec-WebSocket-Accept: N2hGoRQLgtzdZdI1mO4Z6XO4eW0=
+Server: Caddy
+Server: Caddy
+Upgrade: websocket
+

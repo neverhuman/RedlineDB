@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-cli"
+      },
+      "sha": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3"
+    },
+    "body": "Adds optional blind-test training input, top-k/GPU mappings, and cached machine-readable model readiness.",
+    "created_at": "2026-07-16T06:30:35.068543874Z",
+    "draft": false,
+    "head": {
+      "label": "codex/jope-lime-rust-20260713",
+      "ref": "codex/jope-lime-rust-20260713",
+      "repo": {
+        "full_name": "jeryu/jain-cli"
+      },
+      "sha": "1fdb6e4103aa1a79850fc56fed6aead508c875ef"
+    },
+    "html_url": "/jeryu/jain-cli/pull/9",
+    "id": "c0695c8f-3207-4144-abc3-7a740b0d32d0",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 9,
+    "source_repository": "jeryu/jain-cli",
+    "state": "open",
+    "title": "Add SageMaker test channel and cached readiness",
+    "updated_at": "2026-07-16T06:30:35.068543874Z",
+    "url": "/repos/jeryu/jain-cli/pulls/9",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-cli",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "Adds optional blind-test training input, top-k/GPU mappings, and cached machine-readable model readiness.",
+      "draft": false,
+      "head": "codex/jope-lime-rust-20260713",
+      "title": "Add SageMaker test channel and cached readiness"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-cli/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-cli"
+      },
+      "sha": "8d99e46be1d11f22cad0ca3f8247b8dd67981af3"
+    },
+    "body": "Adds optional blind-test training input, top-k/GPU mappings, and cached machine-readable model readiness.",
+    "created_at": "2026-07-16T06:30:35.068543874Z",
+    "draft": false,
+    "head": {
+      "label": "codex/jope-lime-rust-20260713",
+      "ref": "codex/jope-lime-rust-20260713",
+      "repo": {
+        "full_name": "jeryu/jain-cli"
+      },
+      "sha": "1fdb6e4103aa1a79850fc56fed6aead508c875ef"
+    },
+    "html_url": "/jeryu/jain-cli/pull/9",
+    "id": "c0695c8f-3207-4144-abc3-7a740b0d32d0",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 9,
+    "source_repository": "jeryu/jain-cli",
+    "state": "open",
+    "title": "Add SageMaker test channel and cached readiness",
+    "updated_at": "2026-07-16T06:30:35.068543874Z",
+    "url": "/repos/jeryu/jain-cli/pulls/9",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784183431
+}

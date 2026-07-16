@@ -1,0 +1,74 @@
+{
+  "schema_version": "jain.independent-review/v1",
+  "recorded_at_utc": "2026-07-16T07:36:00Z",
+  "reviewer": "codex-root",
+  "repository": "jeryu/jain-lightgbm",
+  "pull_request": 9,
+  "protected_main": "84a1c776903b64d32c10d375e21bb876b921405b",
+  "head": "ce1f8e10f8e0ce9a4fcc4d70fcace0a35570ca21",
+  "ancestry": {"ahead": 3, "behind": 0, "linear": true},
+  "diff": {
+    "paths": 11,
+    "insertions": 35,
+    "deletions": 17,
+    "full_index_binary_sha256": "eab145976ac924a572af7c8ec87b586f76afd2323ec151b88363f868361362eb",
+    "product_source_changed": false,
+    "dependency_graph_changed": false,
+    "lock_change": "only root lightgbm package version 8.0.0 to 8.0.1"
+  },
+  "identity": {
+    "candidate_tag": "jain-lightgbm-v8.0.1-split.1",
+    "next_unused_revision": true,
+    "invalid_immutable_split_0_payload_version": "jain-lightgbm-v8.0.0-split.2",
+    "historical_8_0_0_changelog_preserved": true,
+    "release_status": "candidate",
+    "formal_ga": false,
+    "production_applied": false,
+    "atomicsoul_push": 0,
+    "rollback_target": "7.0.6",
+    "accepted": false,
+    "tagged": false,
+    "authority_bound": false,
+    "deployed": false
+  },
+  "custody": {
+    "superseded_pull_request_8_closed_unmerged": true,
+    "superseded_branch_preserved": true
+  },
+  "forge": {
+    "branch_and_pull_request_head_match": true,
+    "jankurai_proof": {"conclusion": "success", "id": "bf4312b2-c5dd-4a4d-b164-be8401ce2d8c"},
+    "required_check": "absent"
+  },
+  "standalone_clone": {
+    "mode": "--no-local --single-branch",
+    "strict_fsck": "pass",
+    "alternates_absent": true,
+    "diff_check": "pass",
+    "locked_offline_metadata": "pass",
+    "fast": "pass_native_vendor_deferred",
+    "check": "pass",
+    "governed_changed_fast": {"score": 85, "raw_score": 85, "caps": [], "hard_findings": 0},
+    "governed_full_score": {"score": 92, "raw_score": 92, "caps": [], "hard_findings": 0},
+    "release_readiness": {"status": "pass", "sha256": "d6c2ebc94903ce4eb8eb952c901a13fce621120ceb147b2b71bd1ab05cde8332"},
+    "sandbox_removed": true,
+    "git_worktree_used": false
+  },
+  "governed_tool_blocker": {
+    "expected_path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "expected_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "adversarial_selected_path": "/home/ubuntu/.local/bin/jankurai",
+    "adversarial_selected_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "version_only_guard_accepted_wrong_bytes": true,
+    "score_script_uses_ambient_path": true
+  },
+  "canonical_checkout_clean_and_forge_equal": true,
+  "decision": "REVIEW_REJECT_GOVERNED_TOOL_AND_NATIVE_REQUIRED_GAPS",
+  "remaining": [
+    "route all repository proof invocations through the governed fixed path and exact digest",
+    "add adversarial PATH and source guards",
+    "run vendor-backed native proof and publish jain-lightgbm/required at the exact repaired head",
+    "fresh independent review and approval",
+    "protected merge, immutable split.1 tag readback, and authority binding"
+  ]
+}

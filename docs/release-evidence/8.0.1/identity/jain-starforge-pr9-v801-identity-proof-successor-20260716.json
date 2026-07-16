@@ -1,0 +1,118 @@
+{
+  "schema_version": "jain.identity-remediation/v1",
+  "generated_at": "2026-07-16T09:11:30Z",
+  "status": "pass_pending_required_and_independent_review",
+  "repository": "jeryu/jain-starforge",
+  "pull_request": 9,
+  "branch": "release/v8.0.1/starforge-identity",
+  "base": {
+    "branch": "main",
+    "commit": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071"
+  },
+  "head": {
+    "commit": "c0f2a4904a3ac6f5e475b3f8ea7e4fccad871406",
+    "tree": "4f32690dcdcd8ca929c88707d92e10617dd7ce32",
+    "raw_full_index_diff_sha256": "1fb4adbe5e8bacec501d8eebe32a0568e91b6a58c6506f70ed58d70063d7f736",
+    "source_archive_sha256": "66bb6844feb9ef436b58c2cf5d5407d2fef53f5819cd9657b3fcf04945f45505",
+    "changed_files": 12,
+    "insertions": 150,
+    "deletions": 38
+  },
+  "scope": {
+    "product_rust_changed": false,
+    "model_or_lfs_content_changed": false,
+    "public_api_changed": false,
+    "dependency_requirements_changed": false,
+    "registry_lock_entries_changed": false,
+    "cargo_lock_delta": "starforge workspace package 8.0.0 to 8.0.1 only",
+    "identity": "jain-starforge-v8.0.1-split.1",
+    "occupied_content_invalid_tag_preserved": "jain-starforge-v8.0.1-split.0",
+    "candidate_metadata_unchanged": true,
+    "rollback_target": "7.0.6"
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "regular_non_symlink": true,
+    "hostile_path_regression": "pass",
+    "ambient_same_version_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c"
+  },
+  "verification": {
+    "required": {
+      "status": "pass",
+      "rust_unit": "34_pass_1_ignored_slow_200mb_roundtrip",
+      "foundation_parity": "2_pass",
+      "golden_parity": "6_pass",
+      "prime_lime_differential": "pass_150.38_seconds",
+      "target_encoder_parity": "pass",
+      "lfs_materialized": "10/10_oid_and_content_sha256",
+      "starlight_regression_golden": "pass",
+      "chimera_real_weight_cpu": "regression_pass_classifier_pass"
+    },
+    "security": {
+      "status": "pass",
+      "receipt_sha256": "b0409916ebc125885cbd904cce4ea4e26f73d898b8eb9c647aa235334b647468"
+    },
+    "contract_drift": "pass_zero_public_api_drift_2_schemas_7_inputs",
+    "artifact_support": {
+      "status": "pass",
+      "schema_version": "jain.split.artifact-support/v2",
+      "receipt_sha256": "f4bcca25440fd50c274c73834fc60a861ec636785e4f86c631c2621d9d20d2c2",
+      "lfs_materialized_manifest_sha256": "2c3ead699b1e0eb71ab52dab47d892e8601fdea799eeb77aca3212400995579f",
+      "lfs_artifact_count": 10
+    },
+    "coverage": {
+      "status": "pass",
+      "sources": "2/2",
+      "lines": "3775/6810",
+      "line_fraction": 0.5543318649045521,
+      "policy": "repository_advisory_unchanged_product_surface",
+      "hard_findings": 0,
+      "receipt_sha256": "99e64623712226e7741f8da0276cf16fe82ce756f90b1300c203a799ecef7f40"
+    },
+    "full_score": {
+      "score": 88,
+      "raw_score": 88,
+      "caps": 0,
+      "hard_findings": 0,
+      "report_sha256": "38d3d7ceef8bf67e027e52e36c1ea82c50becadb187f0e5c81e023b00b499bd9"
+    },
+    "changed_fast": {
+      "score": 86,
+      "raw_score": 86,
+      "caps": 0,
+      "hard_findings": 0,
+      "report_sha256": "cc1411c72b7cc8631991a403c74a72d282997c198c31bebc17c52f5da0d434fc"
+    }
+  },
+  "forge_readback": {
+    "branch_head_matches": true,
+    "pull_request_head_matches": true,
+    "pull_request_base_matches": true,
+    "pr_open_receipt_sha256": "8079732642592f2b2fb7664bbe26ef202498eead0b9adbf232e2245cf2be92dd",
+    "jankurai_proof": {
+      "status": "completed",
+      "conclusion": "success",
+      "check_id": "ef947bcb-5ed7-4f81-a970-3fb2e664881d"
+    },
+    "jain_starforge_required": "absent"
+  },
+  "custody": {
+    "canonical_checkout_clean": true,
+    "canonical_branch_forge_equal": true,
+    "registered_worktrees": 1,
+    "auxiliary_worktrees": 0,
+    "source_processes": 0,
+    "stale_zero_byte_index_lock_removed_after_no_holder_proof": true,
+    "divergent_cleanup_commit_preserved_by_named_branch": true
+  },
+  "remaining": [
+    "independent exact-successor review",
+    "fresh serialized exact-head jain-starforge/required host CI",
+    "independent approval and protected fast-forward merge",
+    "next-unused immutable jain-starforge-v8.0.1-split.1 tag and readback",
+    "protected authority commit and LFS-aware checksum binding"
+  ],
+  "prohibited_actions_performed": []
+}

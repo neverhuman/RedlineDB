@@ -1,0 +1,78 @@
+{
+  "schema_version": "jain.identity-evidence-correction/v1",
+  "recorded_at_utc": "2026-07-16T08:07:00Z",
+  "claim_token": "codex-root-ops-pr9-evidence-description-correction-20260716T0804Z",
+  "repository": "jeryu/jain-ops",
+  "pull_request": 9,
+  "protected_main": "68569a9344164b76e880fbb54f74839acc598a08",
+  "head": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+  "branch": "claude/v801-identity-jain-ops-20260716",
+  "independent_review": {
+    "path": "jain-ops-pr9-successor-independent-review-20260716.json",
+    "sha256": "b6c0ac37aa0b23955ed0e3dec5c1a18b6dbb3761c8db372f16a02056255dec0c",
+    "source_delta_decision": "PASS",
+    "release_decision": "BLOCK"
+  },
+  "historical_receipts_preserved_byte_unchanged": true,
+  "receipt_corrections": [
+    {
+      "path": "jain-ops-pr9-v801-proof-remediation-20260716.json",
+      "receipt_sha256": "f8827bc2cf14cefbe0a4ef7945632e93676f51607758366df286b7c27a732945",
+      "declared_non_reproducible_diff_sha256": "c045c0cb53717efe3e1def02345078f45817fb0ccd97a994ce3d60c0874f5556",
+      "reproduced_raw_full_index_diff_sha256": "16c473798a056d2f367844d63428c2f2a849b91ebf028a28d0d0e24eb358dbfe"
+    },
+    {
+      "path": "jain-ops-pr9-governed-tool-successor-20260716.json",
+      "receipt_sha256": "349acc368b6dc15162416deff8a19a7e3879410a5976098ef217f610ce1e5e5d",
+      "declared_non_reproducible_diff_sha256": "df828129db43c9bc97522bcb6a5c6a9feb1d805af778df20dbe3b22493b74e31",
+      "reproduced_raw_full_index_diff_sha256": "421dcfc2352813c37c376ef093b6653adf762b4ff80e013bbe95b7ccadd9da57"
+    }
+  ],
+  "pull_request_description_correction": {
+    "endpoint": "/repos/jeryu/jain-ops/pulls/9",
+    "method": "PATCH",
+    "request_payload_sha256": "8e52eaa6b96caa1e627091191c9bca0179695f3775d41a74f858856b2658f407",
+    "readback_body_sha256": "9e46bca887ef7c85d90d7263d8bdd02f89e5a1bf42d6d1c54914f43be73d16be",
+    "readback_updated_at": "2026-07-16T08:06:01.403430951Z",
+    "head_unchanged": true,
+    "base_branch_unchanged": true,
+    "title_unchanged": true,
+    "nested_cargo_workspace_documented": "ops/apex/tools",
+    "locked_lane_documented": true,
+    "remaining_blockers_documented": true,
+    "credential_transmitted_without_argv_or_receipt_exposure": true
+  },
+  "forge_readback": {
+    "main_sha": "68569a9344164b76e880fbb54f74839acc598a08",
+    "branch_sha": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+    "pull_request_head_sha": "cead27a303aa91e7fc5c68da7fdce8faf700164e",
+    "jankurai_proof": "success",
+    "jankurai_proof_check_id": "a8bf8b4b-060a-4186-bab4-5ddaba00fcb0",
+    "jain_ops_required": "absent",
+    "jeryu_autonomy": "action_required"
+  },
+  "mutations": {
+    "historical_receipt": false,
+    "new_correction_receipt": true,
+    "pull_request_body": true,
+    "source": false,
+    "index": false,
+    "repository_ref": false,
+    "forge_ref": false,
+    "check_post": false,
+    "approval": false,
+    "merge": false,
+    "tag": false,
+    "authority": false,
+    "protection": false,
+    "deployment": false,
+    "force_operation": false,
+    "git_worktree_action": false
+  },
+  "decision": "CORRECTED_PENDING_REQUIRED_AND_FRESH_ACCEPTANCE",
+  "remaining": [
+    "publish and read back jain-ops/required success at the exact unchanged head",
+    "fresh independent acceptance of this correction chain and exact required state",
+    "independent approval, protected merge, immutable split.1 tag, and authority bind"
+  ]
+}

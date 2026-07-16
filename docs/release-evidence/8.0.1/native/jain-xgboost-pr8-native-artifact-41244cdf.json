@@ -1,0 +1,31 @@
+{
+  "schema_version": "jain.split.artifact-support/v3",
+  "status": "pass",
+  "repo": "jain-xgboost",
+  "commit": "41244cdf009f32101fd26f764685c304494d6d4a",
+  "tree": "12b75831158f4bff8e302cffeacbdf2742b0d183",
+  "release_tag": "jain-xgboost-v8.0.1-split.1",
+  "generated_at": "2026-07-16T08:26:33Z",
+  "release_status": "candidate",
+  "formal_ga": false,
+  "production_applied": false,
+  "atomicsoul_push": false,
+  "external_mutations": [],
+  "package": {
+    "name": "xgboost",
+    "version": "8.0.1",
+    "file_list_sha256": "e66df3322b842598aeece7f22b6b1efc2e31d02a05dd984b29312d8519fbb457"
+  },
+  "inventory": {
+    "cargo_metadata_sha256": "7b0931c643bb09afa457203d4acf898a4c90aa767e83a91f4daaeff4d3c74907",
+    "tracked_tree_sha256": "50ce71193bea0ab012290f4d255ed82c33cc4c1173b4f3fa9eb945150e2378f7",
+    "native_vendor_schema_sha256": "91bf4f6c740af8516e0755d09ba2ae419f22dc6ba2d8158c1bd0ffa6d47abe5a"
+  },
+  "native_source": {
+    "status": "pass-pruned",
+    "revision": "62e7923619352c4079b24303b367134486b1c84f",
+    "pruned_tracked_files": 939,
+    "pruned_paths_sha256": "483b34ad29c7d1cef2663cca3ee4c255f5e50bd83e7084d6e5e3b1c3b1227cfe"
+  },
+  "rerun_command": "just artifact-support"
+}

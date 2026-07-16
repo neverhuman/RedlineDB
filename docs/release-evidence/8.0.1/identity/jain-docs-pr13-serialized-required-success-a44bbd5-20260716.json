@@ -1,0 +1,192 @@
+{
+  "schema_version": "jain.required-ci-execution/v1",
+  "status": "PASS_REQUIRED_SUCCESS_PENDING_APPROVAL",
+  "recorded_at_utc": "2026-07-16T09:34:31Z",
+  "readiness_claim": "codex-jain-docs-pr13-a44bbd5-required-readiness-20260716T0916Z",
+  "execution_claim": "codex-jain-docs-pr13-a44bbd5-required-execution-20260716T0927Z",
+  "repository": "jeryu/jain-docs",
+  "pull_request": 13,
+  "base_sha": "8b5ab9ab6b224821622eccfd5a8cb9cde5350e51",
+  "head_sha": "a44bbd5ebb853a8e7918f99513b22477db7bd928",
+  "head_tree": "c5be820afc0d0e5c8af5e2ca8c01a4ddc27b62f7",
+  "admission": {
+    "pull_request_open_exact": true,
+    "pull_request_base_exact": true,
+    "pull_request_head_exact": true,
+    "proof_check_id": "357b55cc-38bb-43ff-bffa-044efa8ab14e",
+    "proof_conclusion": "success",
+    "independent_review": {
+      "path": "jain-split-ops/docs/release-evidence/8.0.1/identity/jeryu-independent-review-jeryu-jain-docs-pr13-a44bbd5.json",
+      "sha256": "2532794fafa0e9be3f7ae1b47929475634f2cd57e1e1a8f5551d83b2e5b27c68",
+      "status": "ACCEPT_PENDING_REQUIRED"
+    },
+    "custody_audit": {
+      "path": "jain-split-ops/docs/release-evidence/8.0.1/identity/jain-docs-pr13-six-file-custody-audit-20260716.json",
+      "sha256": "da02437dd35baf73678429fae9c02c4db3886453281cc2b42d2ca80b513f95b7",
+      "status": "ADOPT_STOPPED_HEAD_FOR_INDEPENDENT_REVIEW_BLOCK_RELEASE_REQUIRED_ABSENT"
+    },
+    "author_correction_receipt": {
+      "path": "/tmp/codex-jain-docs-pr13-governed-typst-font-successor-20260716.json",
+      "sha256": "0be863f70c82b949312e947a2ab8acd6f13ee706cfb6a241801a14b3a6767437"
+    },
+    "protection_readback": {
+      "path": "/tmp/codex-jain-docs-pr13-a44bbd5-execution-protection-readback-20260716.json",
+      "sha256": "f527b3eddfcccdbc705eea45273f75e03fe38bba7cc94a1cd36ab6866541a71e",
+      "required_check": "jain-docs/required",
+      "strict": true,
+      "approvals": 1,
+      "linear_history": true,
+      "enforce_admins": true,
+      "force_push": false,
+      "delete": false
+    },
+    "canonical_clean_stopped_forge_equal": true,
+    "canonical_registered_worktrees": 1,
+    "initial_readiness_observation": {
+      "at": "2026-07-16T09:27:20Z",
+      "status": "WAIT_HEAVY_PRODUCER",
+      "producer": "Starforge independent coverage",
+      "cargo_llvm_cov_pid": 2476207,
+      "cargo_test_pid": 2477236,
+      "producer_started_at": "2026-07-16T09:23:01Z"
+    },
+    "producer_terminal_evidence": {
+      "lcov_mtime": "2026-07-16T09:27:51.150768282Z",
+      "final_repo_score_mtime": "2026-07-16T09:27:55.686835524Z",
+      "docs_launch_after_terminal_seconds": 16,
+      "overlap_observed": false
+    },
+    "execution_owner_fresh_zero_producer_scan": true,
+    "other_required_ci_running_at_launch": false,
+    "proof_refresh_running_at_launch": false,
+    "release_candidate_running_at_launch": false
+  },
+  "runner": {
+    "path": "/home/ubuntu/jain-split/jain-split-ops/ops/ci/split-host-ci.sh",
+    "sha256": "dabf3f81d99ae8bfa3418c85ab312978f49aae4dab4e13dfd966cfae2d12ea03",
+    "lines": 348,
+    "bash_syntax": "pass",
+    "shellcheck": "pass",
+    "target_clone_command": "git clone --no-local --no-checkout",
+    "exact_detached_checkout": true,
+    "tree_and_archive_identity_verified": true,
+    "git_worktree_command_present": false,
+    "standalone_physical_clone_only": true,
+    "sandbox_cleanup_exit_trap": true,
+    "symlink_preserve_fail_closed": true,
+    "explicit_font_environment_inherited": true
+  },
+  "bare_mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-docs.git",
+    "bare": true,
+    "non_symlink": true,
+    "origin": "http://127.0.0.1:8787/git/jeryu/jain-docs.git",
+    "alternates_absent": true,
+    "linked_worktree_administration_absent": true,
+    "locks_absent": true,
+    "active_holders_absent_before_launch": true,
+    "strict_fsck": "pass_with_one_unreachable_dangling_commit_advisory",
+    "ordinary_candidate_ref": "a44bbd5ebb853a8e7918f99513b22477db7bd928",
+    "ordinary_main_ref": "8b5ab9ab6b224821622eccfd5a8cb9cde5350e51",
+    "candidate_tree": "c5be820afc0d0e5c8af5e2ca8c01a4ddc27b62f7",
+    "refresh_mode": "fast-forward-only no-tags",
+    "runner_clone_identity_proof": true
+  },
+  "reviewed_tool_inputs": {
+    "font_directory": "/home/ubuntu/jain-split/jain-docs/target/ci/tools/fonts",
+    "font_directory_non_symlink": true,
+    "files": 9,
+    "font_faces": 7,
+    "license_files": 2,
+    "other_entries": 0,
+    "nested_symlinks": 0,
+    "font_manifest_sha256": "ccfb22007e11197ce881f451e1687dd43a616aa24ee42d2b5336ea33fb41c0cb",
+    "font_manifest_matches_exact_candidate": true,
+    "font_manifest_strict_check": "pass",
+    "typst_path": "/home/ubuntu/jain-split/target/runtime-tools/sha256/a852e595ba046074d1cb63fd9fed14e00f36031dee4d2ad330783c92e7982d45/typst",
+    "typst_regular_executable_non_symlink": true,
+    "typst_version": "typst 0.15.0 (unknown commit)",
+    "typst_sha256": "a852e595ba046074d1cb63fd9fed14e00f36031dee4d2ad330783c92e7982d45"
+  },
+  "launch": {
+    "count": 1,
+    "retry_count": 0,
+    "started_at": "2026-07-16T09:28:12Z",
+    "completed_at": "2026-07-16T09:30:36.259566572Z",
+    "wrapper_pid": 2541897,
+    "runner_pid": 2541917,
+    "sandbox": "/tmp/split-host-ci.RXgcHn",
+    "sandbox_head": "a44bbd5ebb853a8e7918f99513b22477db7bd928",
+    "sandbox_tree": "c5be820afc0d0e5c8af5e2ca8c01a4ddc27b62f7",
+    "sandbox_source_archive_sha256": "9b51d877736e4b338343bfa010a133e905c3e7877c103025451bc0673effa212",
+    "jain_release_ci": true,
+    "jain_font_path": "/home/ubuntu/jain-split/jain-docs/target/ci/tools/fonts",
+    "cargo_manifest_absent": true,
+    "native_vendor_bootstrap_generic_setup": "pass",
+    "cargo_only_post_required_release_lanes_skipped": true,
+    "sandbox_removed": true,
+    "nested_reproducibility_clones_removed": true
+  },
+  "result": {
+    "conclusion": "success",
+    "required_check": "jain-docs/required",
+    "required_check_id": "478a18ae-a431-4d19-ba7c-95251206a290",
+    "required_completed_at": "2026-07-16T09:30:36.259566572Z",
+    "jankurai_proof_check_id": "357b55cc-38bb-43ff-bffa-044efa8ab14e",
+    "jankurai_proof_conclusion": "success",
+    "host_receipt": "jain-split-ops/docs/release-evidence/8.0.1/ci/host/jain-docs-a44bbd5ebb853a8e7918f99513b22477db7bd928-3e609c76e435aff0bb2224f3d216bc6cd5e2335b72ac41df7470db50177d42c3.json",
+    "host_receipt_sha256": "d85b9a5d9b53c5e49db958624826b5796275bb6bf5908fd63057911a90f79a23",
+    "log": "jain-split-ops/docs/release-evidence/8.0.1/ci/host/3e609c76e435aff0bb2224f3d216bc6cd5e2335b72ac41df7470db50177d42c3.log",
+    "log_sha256": "3e609c76e435aff0bb2224f3d216bc6cd5e2335b72ac41df7470db50177d42c3",
+    "links_checked": 25,
+    "pdf_sha256": "b5105efa358b885df2cfbab03b2594aad803ab01bdeec3f82dc0c865b2d19bc3",
+    "stable_equals_versioned": true,
+    "cross_clone_byte_identical": true,
+    "pull_request_still_open_at_exact_head": true
+  },
+  "canonical_post_run": {
+    "head_sha": "a44bbd5ebb853a8e7918f99513b22477db7bd928",
+    "tree_sha": "c5be820afc0d0e5c8af5e2ca8c01a4ddc27b62f7",
+    "clean": true,
+    "branch_forge_equal": true,
+    "local_main_forge_equal": true,
+    "registered_worktrees": 1,
+    "locks": 0,
+    "source_mutated_by_runner": false
+  },
+  "tag_state": {
+    "occupied_tag": "jain-docs-v8.0.1-split.0",
+    "occupied_tag_sha": "b0245456d73d99a6698db053bf49300d6bbbac12",
+    "next_unused_tag": "jain-docs-v8.0.1-split.1",
+    "tag_created": false
+  },
+  "decision": {
+    "required_ci": "ACCEPT_SUCCESS",
+    "proof": "ACCEPT_SUCCESS",
+    "independent_review": "ACCEPT",
+    "safe_next_step": "Obtain a fresh independent protected approval for exact head a44bbd5, protected fast-forward merge PR 13, then cut/read back unused immutable split.1 and bind the merged commit/checksum through the protected authority lifecycle.",
+    "release_lifecycle": "READY_FOR_INDEPENDENT_APPROVAL"
+  },
+  "release_metadata": {
+    "product_version": "8.0.1",
+    "status": "candidate",
+    "formal_ga": false,
+    "production_applied": false,
+    "rollback_target": "7.0.6"
+  },
+  "excluded_actions_confirmed": [
+    "second_or_retry_host_ci",
+    "source_edit",
+    "canonical_index_or_ref_mutation",
+    "pull_request_metadata_mutation",
+    "approval",
+    "merge",
+    "tag",
+    "authority_binding",
+    "protection_mutation",
+    "deployment",
+    "force",
+    "clean_or_stash",
+    "git_worktree"
+  ]
+}

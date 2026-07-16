@@ -1,0 +1,250 @@
+start: 2026-07-16T14:53:31Z
+check ok: /home/ubuntu/.cache/claude-orch-ci/repin/jain-report
+[ci] Rust required lane: fmt + targeted clippy/test
+    Checking cfg-if v1.0.4
+   Compiling version_check v0.9.5
+   Compiling libc v0.2.186
+   Compiling autocfg v1.5.1
+   Compiling proc-macro2 v1.0.106
+    Checking bitflags v2.13.0
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.46
+    Checking bytemuck v1.25.1
+   Compiling nano-gemm-codegen v0.2.1
+   Compiling libm v0.2.16
+   Compiling paste v1.0.15
+   Compiling pulp v0.22.3
+    Checking pulp-wasm-simd-flag v0.1.1
+    Checking reborrow v0.5.5
+    Checking raw-cpuid v11.6.0
+    Checking once_cell v1.21.4
+   Compiling num-traits v0.2.19
+   Compiling dyn-stack-macros v0.1.3
+   Compiling crossbeam-utils v0.8.22
+   Compiling seq-macro v0.3.6
+   Compiling serde_core v1.0.228
+    Checking dyn-stack v0.13.2
+   Compiling syn v1.0.109
+   Compiling generic-array v0.14.7
+    Checking nano-gemm-core v0.2.1
+   Compiling zerocopy v0.8.53
+   Compiling crossbeam-epoch v0.9.20
+   Compiling crossbeam-deque v0.8.7
+    Checking typenum v1.20.1
+    Checking memchr v2.8.2
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling nano-gemm-c64 v0.2.1
+    Checking num-complex v0.4.6
+   Compiling nano-gemm-f64 v0.2.1
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling zmij v1.0.21
+   Compiling defer v0.2.1
+   Compiling rayon-core v1.13.0
+   Compiling getrandom v0.3.4
+   Compiling serde v1.0.228
+   Compiling syn v2.0.118
+   Compiling crc32fast v1.5.0
+   Compiling anyhow v1.0.103
+    Checking itoa v1.0.18
+   Compiling serde_json v1.0.150
+    Checking ppv-lite86 v0.2.21
+    Checking crypto-common v0.1.7
+    Checking block-buffer v0.10.4
+   Compiling equator-macro v0.2.1
+   Compiling interpol v0.2.1
+   Compiling serde_derive v1.0.228
+    Checking num_cpus v1.17.0
+    Checking getrandom v0.2.17
+    Checking equator v0.2.2
+   Compiling private-gemm-x86 v0.1.20
+   Compiling rustix v1.1.4
+    Checking generativity v1.2.1
+    Checking either v1.16.0
+   Compiling getrandom v0.4.3
+   Compiling equator-macro v0.6.0
+    Checking rayon v1.12.0
+    Checking equator v0.6.0
+    Checking rand_core v0.6.4
+    Checking rand_core v0.9.5
+    Checking digest v0.10.7
+    Checking hashbrown v0.17.1
+    Checking bumpalo v3.20.3
+    Checking linux-raw-sys v0.12.1
+    Checking log v0.4.33
+    Checking zlib-rs v0.6.6
+    Checking simd-adler32 v0.3.9
+    Checking equivalent v1.0.2
+    Checking gemm-common v0.19.0
+    Checking qd v0.8.0
+    Checking cpufeatures v0.2.17
+    Checking zopfli v0.8.3
+    Checking indexmap v2.14.0
+    Checking sha2 v0.10.9
+    Checking faer-traits v0.24.0
+    Checking flate2 v1.1.9
+    Checking rand_chacha v0.3.1
+    Checking gemm-c64 v0.19.0
+    Checking gemm-c32 v0.19.0
+    Checking gemm-f64 v0.19.0
+    Checking gemm-f32 v0.19.0
+    Checking csv-core v0.1.13
+    Checking fastrand v2.4.1
+    Checking ryu v1.0.23
+    Checking gemm v0.19.0
+    Checking typed-path v0.12.3
+    Checking rand v0.8.6
+    Checking tempfile v3.27.0
+    Checking csv v1.4.0
+    Checking feat-math v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d)
+    Checking domain v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-domain.git?tag=jain-domain-v8.0.1-split.1#3ae83ce1)
+    Checking wait-timeout v0.2.1
+    Checking bit-vec v0.8.0
+    Checking zip v8.6.0
+    Checking fnv v1.0.7
+    Checking quick-error v1.2.3
+    Checking bit-set v0.8.0
+    Checking rand_xorshift v0.4.0
+    Checking rand v0.9.4
+    Checking rand_chacha v0.9.0
+    Checking regex-syntax v0.8.11
+    Checking unarray v0.1.4
+    Checking rusty-fork v0.3.1
+    Checking proptest v1.11.0
+    Checking nano-gemm v0.2.2
+    Checking faer v0.24.4
+    Checking jable v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-jable.git?tag=jain-jable-v8.0.1-split.1#89939c3f)
+    Checking feat-core v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-core.git?tag=jain-core-v8.0.1-split.1#64790b4b)
+    Checking feat-report v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/repin/jain-report/crates/feat-report)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 29.48s
+   Compiling cfg-if v1.0.4
+   Compiling bitflags v2.13.0
+   Compiling bytemuck v1.25.1
+   Compiling libc v0.2.186
+   Compiling once_cell v1.21.4
+   Compiling num-traits v0.2.19
+   Compiling libm v0.2.16
+   Compiling pulp-wasm-simd-flag v0.1.1
+   Compiling reborrow v0.5.5
+   Compiling nano-gemm-core v0.2.1
+   Compiling serde_core v1.0.228
+   Compiling crossbeam-utils v0.8.22
+   Compiling memchr v2.8.2
+   Compiling raw-cpuid v11.6.0
+   Compiling typenum v1.20.1
+   Compiling zerocopy v0.8.53
+   Compiling itoa v1.0.18
+   Compiling num-complex v0.4.6
+   Compiling dyn-stack v0.13.2
+   Compiling num_cpus v1.17.0
+   Compiling crossbeam-epoch v0.9.20
+   Compiling getrandom v0.3.4
+   Compiling getrandom v0.2.17
+   Compiling generic-array v0.14.7
+   Compiling nano-gemm-c64 v0.2.1
+   Compiling nano-gemm-c32 v0.2.1
+   Compiling equator v0.2.2
+   Compiling pulp v0.22.3
+   Compiling nano-gemm-f64 v0.2.1
+   Compiling crossbeam-deque v0.8.7
+   Compiling nano-gemm-f32 v0.2.1
+   Compiling ppv-lite86 v0.2.21
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling rayon-core v1.13.0
+   Compiling serde v1.0.228
+   Compiling zmij v1.0.21
+   Compiling either v1.16.0
+   Compiling generativity v1.2.1
+   Compiling equator v0.6.0
+   Compiling serde_json v1.0.150
+   Compiling rayon v1.12.0
+   Compiling digest v0.10.7
+   Compiling private-gemm-x86 v0.1.20
+   Compiling rand_core v0.6.4
+   Compiling rand_core v0.9.5
+   Compiling crc32fast v1.5.0
+   Compiling anyhow v1.0.103
+   Compiling cpufeatures v0.2.17
+   Compiling linux-raw-sys v0.12.1
+   Compiling log v0.4.33
+   Compiling bumpalo v3.20.3
+   Compiling hashbrown v0.17.1
+   Compiling equivalent v1.0.2
+   Compiling zlib-rs v0.6.6
+   Compiling simd-adler32 v0.3.9
+   Compiling rustix v1.1.4
+   Compiling indexmap v2.14.0
+   Compiling zopfli v0.8.3
+   Compiling flate2 v1.1.9
+   Compiling sha2 v0.10.9
+   Compiling rand_chacha v0.3.1
+   Compiling getrandom v0.4.3
+   Compiling csv-core v0.1.13
+   Compiling typed-path v0.12.3
+   Compiling fastrand v2.4.1
+   Compiling ryu v1.0.23
+   Compiling rand v0.8.6
+   Compiling tempfile v3.27.0
+   Compiling feat-math v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d)
+   Compiling zip v8.6.0
+   Compiling csv v1.4.0
+   Compiling domain v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-domain.git?tag=jain-domain-v8.0.1-split.1#3ae83ce1)
+   Compiling wait-timeout v0.2.1
+   Compiling bit-vec v0.8.0
+   Compiling fnv v1.0.7
+   Compiling quick-error v1.2.3
+   Compiling bit-set v0.8.0
+   Compiling rand v0.9.4
+   Compiling rand_xorshift v0.4.0
+   Compiling rand_chacha v0.9.0
+   Compiling rusty-fork v0.3.1
+   Compiling regex-syntax v0.8.11
+   Compiling unarray v0.1.4
+   Compiling gemm-common v0.19.0
+   Compiling qd v0.8.0
+   Compiling faer-traits v0.24.0
+   Compiling gemm-f64 v0.19.0
+   Compiling gemm-f32 v0.19.0
+   Compiling gemm-c64 v0.19.0
+   Compiling gemm-c32 v0.19.0
+   Compiling proptest v1.11.0
+   Compiling gemm v0.19.0
+   Compiling nano-gemm v0.2.2
+   Compiling faer v0.24.4
+   Compiling jable v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-jable.git?tag=jain-jable-v8.0.1-split.1#89939c3f)
+   Compiling feat-core v8.0.1 (http://127.0.0.1:8787/git/jeryu/jain-core.git?tag=jain-core-v8.0.1-split.1#64790b4b)
+   Compiling feat-report v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/repin/jain-report/crates/feat-report)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 46.05s
+     Running unittests src/lib.rs (target/debug/deps/feat_report-5ded1834cefb5fba)
+
+running 9 tests
+test tests::collect_models_marks_math_done_selected_after_data_only_final_summary ... ok
+test tests::highlight_has_line_numbers_and_keyword_spans ... ok
+test tests::outlier_ranking_finds_extreme_row ... ok
+test tests::typst_escape_escapes_markup ... ok
+test tests::preview_truncates_and_profiles ... ok
+test tests::live_events_stream_before_render ... ok
+test tests::plots_have_svg_and_eps_bounding_box ... ok
+test tests::mock_report_writes_status_manifest_and_plot_index_without_pdf_requirement ... ok
+test tests::large_profile_uses_deterministic_sampling ... ok
+
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.04s
+
+     Running tests/report_invariants.rs (target/debug/deps/report_invariants-455d842fc7f9d06d)
+
+running 4 tests
+test report_metadata_records_creation_time_and_fields ... ok
+test typst_escape_neutralizes_markup ... ok
+test run_ids_embed_command_and_stay_unique ... ok
+test highlight_preserves_line_structure ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+   Doc-tests feat_report
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+required ok: jain-report
+CI_EXIT_CODE=0

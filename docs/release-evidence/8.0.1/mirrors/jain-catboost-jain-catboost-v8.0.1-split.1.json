@@ -1,0 +1,22 @@
+{
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-catboost.git",
+      "mirror_existed": true,
+      "name": "jain-catboost",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-catboost",
+      "source_head": "83c04b8a4a4abf4441c3f4411a8b7cb338359974"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-catboost"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1784212526
+}

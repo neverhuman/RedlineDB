@@ -1,0 +1,135 @@
+    Finished `release` profile [optimized + debuginfo] target(s) in 0.12s
+     Running unittests src/lib.rs (/tmp/codex-catboost-native-evidence-20260716/cargo-target-required/release/deps/catboost-4f3576bd7408a893)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/smoke.rs (/tmp/codex-catboost-native-evidence-20260716/cargo-target-required/release/deps/smoke-e08880d819f3dfb2)
+
+running 2 tests
+test multilabel_train_predict ... ok
+test single_target_train_predict_importance ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.11s
+
+     Running unittests src/lib.rs (/tmp/codex-catboost-native-evidence-20260716/cargo-target-required/release/deps/catboost_sys-d9b23c2a9b66a061)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests cbtool/main.rs (/tmp/codex-catboost-native-evidence-20260716/cargo-target-required/release/deps/catboost_cbtool-11f8cb3f86e47f37)
+
+running 15 tests
+Patched by re_replace: /tmp/catboost-cbtool-dispatch-1989301-1/input.txt
+test tests::build_info_gen_filters_arcadia_paths_and_escapes_defines ... ok
+test tests::export_script_gen_writes_gnu_version_script ... ok
+test tests::gen_join_srcs_emits_expected_pragmas_and_includes ... ok
+cbtool: expected a script path as first argument
+cbtool: unhandled script 'unknown.py'
+run_tool: missing --
+export_script_gen: unknown format unknown
+link_lib: unsupported arch_type BAD_AR
+create_recursive_library: no --linking-cmdline
+Patched by re_replace: /tmp/catboost-cbtool-replace-1989301-8/types.h
+test tests::missing_inputs_and_bad_arguments_return_errors ... ok
+test tests::process_link_input_classifies_global_nonglobal_and_response_file_inputs ... ok
+test tests::rodata2cpp_writes_byte_array_and_size_symbol ... ok
+test tests::split_ext_reassembles_and_keeps_dots_out_of_directories ... ok
+test tests::vcs_generators_write_reduced_metadata ... ok
+test tests::response_file_expansion_skips_command_file_markers ... ok
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-10/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-10/decl.h
+test tests::link_lib_invokes_archiver_for_plain_object_inputs ... ok
+test tests::re_replace_removes_final_from_supported_struct_and_class_declarations ... ok
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-27/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-27/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-44/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-44/decl.h
+test tests::dispatch_smoke_tests_every_supported_script_basename ... ok
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-63/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-63/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-82/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-82/decl.h
+test tests::export_script_gen_gnu_output_is_deterministic_and_covers_all_c_symbols ... ok
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-99/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-99/decl.h
+test tests::rodata2cpp_embeds_every_input_byte_in_order ... ok
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-113/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-113/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-114/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-114/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-115/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-115/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-116/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-116/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-117/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-117/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-118/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-118/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-119/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-119/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-120/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-120/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-121/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-121/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-122/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-122/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-123/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-123/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-124/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-124/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-125/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-125/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-126/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-126/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-127/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-127/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-128/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-128/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-129/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-129/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-130/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-130/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-131/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-131/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-132/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-132/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-133/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-133/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-134/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-134/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-135/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-135/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-136/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-136/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-137/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-137/decl.h
+Patched by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-138/decl.h
+Skipped by re_replace: /tmp/catboost-cbtool-replace-prop-1989301-138/decl.h
+test tests::re_replace_strips_final_exactly_once_and_is_idempotent ... ok
+
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+     Running tests/export_contract.rs (/tmp/codex-catboost-native-evidence-20260716/cargo-target-required/release/deps/export_contract-da98bf38bfaec4f0)
+
+running 3 tests
+test export_contract::tests::reconciliation_is_idempotent ... ok
+test export_contract::tests::cached_library_must_export_the_exact_abi_namespace ... ok
+test export_contract::tests::replaces_stale_cb_exports_and_preserves_upstream_symbols ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests catboost
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests catboost_sys
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+

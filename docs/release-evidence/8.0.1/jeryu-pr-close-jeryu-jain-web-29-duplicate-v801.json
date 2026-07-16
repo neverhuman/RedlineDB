@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-close",
+  "repository": "jeryu/jain-web",
+  "request": {
+    "body": {
+      "state": "closed"
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-web/pulls/29"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "6adcda48e5711dcf5934934236be09fcc959ff10"
+    },
+    "body": "",
+    "created_at": "2026-07-16T04:59:54.461599776Z",
+    "draft": false,
+    "head": {
+      "label": "claude/web-control-20260715",
+      "ref": "claude/web-control-20260715",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "022a1a64ba65f8aa45ab6e28a16dab139278c2f2"
+    },
+    "html_url": "/jeryu/jain-web/pull/29",
+    "id": "2feb0e41-f15a-4344-b18c-2f9fd9344743",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "closed",
+    "merged": false,
+    "merged_at": null,
+    "number": 29,
+    "source_repository": "jeryu/jain-web",
+    "state": "closed",
+    "title": "web-control: model-free /try cockpit + WS + identity",
+    "updated_at": "2026-07-16T05:16:16.477088105Z",
+    "url": "/repos/jeryu/jain-web/pulls/29",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784178976
+}

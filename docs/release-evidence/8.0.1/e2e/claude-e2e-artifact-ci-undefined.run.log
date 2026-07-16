@@ -1,0 +1,19 @@
+== artifact-ci: image.neverhuman.org/veox/jain@sha256:ffbbaf48bda7253785b2d32436eb0cbf1d0ff927a41593b907f7307e07075871 (quick=0) ==
+  PASS  serve smoke: /ping responds (503; 503 = fail-closed with no model, correct)
+  PASS  regression: sagemaker train contract (exit 0, manifest.json present)
+  PASS  regression: /ping 200 with model loaded
+  PASS  regression: /invocations 200 (batch predictions)
+  PASS  regression: 415 on non-CSV content-type
+  PASS  regression: 405 on GET /invocations
+  PASS  regression: 400 on wrong row width
+  regression: r2=0.54853 (floor 0.40, n=999)
+  PASS  regression: quality gate (r2 >= 0.40)
+  PASS  binary: sagemaker train contract (exit 0, manifest.json present)
+  PASS  binary: /ping 200 with model loaded
+  PASS  binary: /invocations 200 (batch predictions)
+  PASS  binary: 415 on non-CSV content-type
+  PASS  binary: 405 on GET /invocations
+  PASS  binary: 400 on wrong row width
+  binary: auc=0.68657 (floor 0.62, n=1000)
+  PASS  binary: quality gate (auc >= 0.62)
+== artifact-ci: 15 pass, 0 fail ==

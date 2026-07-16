@@ -1,0 +1,42 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "ff4f18e75d84bb0791750df35307dfc36236bd53",
+    "remote": "ff4f18e75d84bb0791750df35307dfc36236bd53"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "ff4f18e75d84bb0791750df35307dfc36236bd53",
+  "commit_input": "ff4f18e75d84bb0791750df35307dfc36236bd53",
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-xgboost.git",
+    "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/mirrors/jain-xgboost-jain-xgboost-v8.0.1-split.1.json",
+    "status": "pass",
+    "tag_commit": "ff4f18e75d84bb0791750df35307dfc36236bd53"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "crates/xgboost/Cargo.toml",
+        "name": "xgboost",
+        "version": "8.0.1"
+      }
+    ],
+    "expected_product_version": "8.0.1",
+    "status": "pass",
+    "version_file": "jain-xgboost-v8.0.1-split.1",
+    "workspace_package_version": "8.0.1"
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-xgboost.git",
+  "remote_main": "ff4f18e75d84bb0791750df35307dfc36236bd53",
+  "repository": "/home/ubuntu/jain-split/jain-xgboost",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-xgboost-v8.0.1-split.1",
+  "timestamp_unix": 1784212585
+}

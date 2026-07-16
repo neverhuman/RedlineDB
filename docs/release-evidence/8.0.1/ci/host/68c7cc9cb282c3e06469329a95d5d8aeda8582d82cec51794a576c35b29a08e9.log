@@ -1,0 +1,119 @@
+Cloning into '/tmp/split-host-ci.Xa2GU8/jain-ops'...
+HEAD is now at 68569a9 docs: prohibit git worktrees
+lock_blob=absent
+name=jain-ops
+ref=68569a9344164b76e880fbb54f74839acc598a08
+commit=68569a9344164b76e880fbb54f74839acc598a08
+tree=855639b798bfdade2bf707de59b079c7e769c4e6
+release_checksum_sha256=9ef712115cd31175272abd199b1b43838f9285b1db18f3c13225580c614a36a6
+check ok: /tmp/split-host-ci.Xa2GU8/jain-ops
+[ci] ops required lane: jail-tools tests + hermetic fixtures + shellcheck
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded errno v0.3.14
+  Downloaded adler2 v2.0.1
+  Downloaded filetime v0.2.29
+  Downloaded cfg-if v1.0.4
+  Downloaded bitflags v2.13.0
+  Downloaded simd-adler32 v0.3.9
+  Downloaded xattr v1.6.1
+  Downloaded crc32fast v1.5.0
+  Downloaded itoa v1.0.18
+  Downloaded zmij v1.0.21
+  Downloaded serde_core v1.0.228
+  Downloaded tar v0.4.46
+  Downloaded miniz_oxide v0.8.9
+  Downloaded memchr v2.8.2
+  Downloaded flate2 v1.1.9
+  Downloaded serde_json v1.0.150
+  Downloaded rustix v1.1.4
+  Downloaded libc v0.2.186
+  Downloaded linux-raw-sys v0.12.1
+   Compiling cfg-if v1.0.4
+   Compiling rustix v1.1.4
+   Compiling libc v0.2.186
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.21
+   Compiling linux-raw-sys v0.12.1
+   Compiling bitflags v2.13.0
+   Compiling crc32fast v1.5.0
+   Compiling adler2 v2.0.1
+   Compiling serde_json v1.0.150
+   Compiling simd-adler32 v0.3.9
+   Compiling miniz_oxide v0.8.9
+   Compiling filetime v0.2.29
+   Compiling xattr v1.6.1
+   Compiling itoa v1.0.18
+   Compiling memchr v2.8.2
+   Compiling flate2 v1.1.9
+   Compiling tar v0.4.46
+   Compiling jail-tools v0.1.0 (/tmp/split-host-ci.Xa2GU8/jain-ops/ops/apex/tools)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 16.35s
+     Running unittests src/bin/fn-tool.rs (/tmp/split-host-ci.Xa2GU8/cargo-target/debug/deps/fn_tool-9ea0607700454858)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/global-bench.rs (/tmp/split-host-ci.Xa2GU8/cargo-target/debug/deps/global_bench-df18f7d4dbd421b0)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/jail-extract.rs (/tmp/split-host-ci.Xa2GU8/cargo-target/debug/deps/jail_extract-f5212ae0b880cbe8)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/jail-reconstruct.rs (/tmp/split-host-ci.Xa2GU8/cargo-target/debug/deps/jail_reconstruct-45c107f8087de148)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/jail-validate.rs (/tmp/split-host-ci.Xa2GU8/cargo-target/debug/deps/jail_validate-f5e2534fefa74055)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/synth-data.rs (/tmp/split-host-ci.Xa2GU8/cargo-target/debug/deps/synth_data-14c00feca3c742de)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/bin/zyal-json.rs (/tmp/split-host-ci.Xa2GU8/cargo-target/debug/deps/zyal_json-f07996b48e47d059)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling cfg-if v1.0.4
+   Compiling rustix v1.1.4
+   Compiling libc v0.2.186
+   Compiling serde_core v1.0.228
+   Compiling bitflags v2.13.0
+   Compiling crc32fast v1.5.0
+   Compiling zmij v1.0.21
+   Compiling linux-raw-sys v0.12.1
+   Compiling simd-adler32 v0.3.9
+   Compiling adler2 v2.0.1
+   Compiling serde_json v1.0.150
+   Compiling miniz_oxide v0.8.9
+   Compiling filetime v0.2.29
+   Compiling xattr v1.6.1
+   Compiling memchr v2.8.2
+   Compiling itoa v1.0.18
+   Compiling tar v0.4.46
+   Compiling flate2 v1.1.9
+   Compiling jail-tools v0.1.0 (/tmp/split-host-ci.Xa2GU8/jain-ops/ops/apex/tools)
+    Finished `release` profile [optimized] target(s) in 19.29s
+validator fixtures: ok
+upload manifest fixtures: ok
+required ok: jain-ops

@@ -1,0 +1,161 @@
+{
+  "schema_version": "jain.identity-independent-review/v1",
+  "status": "REVIEW_REJECT",
+  "reviewed_at": "2026-07-16T07:05:31Z",
+  "repository": "jeryu/jain-contracts",
+  "pull_request": {
+    "number": 11,
+    "id": "a4336208-4d39-498f-890a-d4b2d0b17c82",
+    "state": "open",
+    "draft": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "base_ref": "main",
+    "base_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+    "head_ref": "release/v8.0.1/contracts-corrective-identity-20260716",
+    "head_sha": "f7086dcecf19ececa97df33f16326f5d3d51aabf",
+    "linear_commits_over_base": 1
+  },
+  "exact_diff": {
+    "file_count": 4,
+    "insertions": 11,
+    "deletions": 3,
+    "full_index_binary_diff_sha256": "f26bd1ea7fb4a9eda3180be233b55562b75c7f345d772521c2ef0af14ab3f90e",
+    "files": [
+      "CHANGELOG.md",
+      "VERSION",
+      "agent/standard-version.toml",
+      "docs/release.md"
+    ],
+    "all_changed_modes": "100644",
+    "mode_changes": 0,
+    "binary_changes": 0,
+    "symlinks_in_exact_head": 0,
+    "contract_changes": 0,
+    "fixture_changes": 0,
+    "runtime_changes": 0,
+    "dependency_changes": 0,
+    "dependency_manifests_present": false
+  },
+  "unchanged_tree_proof": {
+    "contracts_tree_base": "106afcc56669693d50de73a312f044873cfb5afa",
+    "contracts_tree_head": "106afcc56669693d50de73a312f044873cfb5afa",
+    "demo_fixture_tree_base": "705575d2c0abf06399509fc13182083c9c7678b1",
+    "demo_fixture_tree_head": "705575d2c0abf06399509fc13182083c9c7678b1",
+    "ops_tree_base": "5fc3737c94ad5bba584eae39d05ca81713eea063",
+    "ops_tree_head": "5fc3737c94ad5bba584eae39d05ca81713eea063",
+    "cargo_toml": "absent",
+    "cargo_lock": "absent"
+  },
+  "release_identity": {
+    "candidate": "jain-contracts-v8.0.1-split.1",
+    "next_unused": true,
+    "live_v8_0_1_tags": {
+      "jain-contracts-v8.0.1-split.0": "fcbb36064e008403a0fd992e7f278a73b6b1d946"
+    },
+    "split_0_authored_version": "jain-contracts-v8.0.0-split.2",
+    "authority_product_version": "8.0.1",
+    "authority_tag_revision": 1,
+    "authority_current_tag": "jain-contracts-v8.0.1-split.1",
+    "authority_release_commit": "PENDING",
+    "authority_release_checksum_sha256": "PENDING"
+  },
+  "isolated_validation": {
+    "checkout": "automatically removed standalone no-local exact-head clone",
+    "checkout_git_layout": "physical .git directory; not a Git worktree",
+    "cargo_net_offline": true,
+    "jobs": 4,
+    "local_bounded": {
+      "fast": "pass",
+      "required_non_release": "pass",
+      "contract_drift_non_release": "pass",
+      "contract_drift_receipt_sha256": "6c953fbafb831974b8accfdb563e442e7f19b833b5742e4bba386f17b3840a4f",
+      "artifact_support": "pass",
+      "artifact_count": 14,
+      "artifact_inventory_sha256": "a4969f776335d9ed4454c145dce7316a934f95d6c882030989fcb25a8606a89f",
+      "security": "pass",
+      "security_evidence_sha256": "6f778f535083fa9e98276d31229e4016e8648e67766dd40d5a120a3771c9b98b",
+      "gitleaks": "pass",
+      "actionlint": "pass",
+      "tabpfn_hits": 0,
+      "fallback_advisory_files": 0,
+      "tool_adoption": "pass",
+      "coverage_sources_present": "1/1",
+      "coverage_audit_sha256": "032ddbb4f72ffd896f2fe0e6fea00199290b5d090657bdcf6ce8baa5de6e3fe0"
+    },
+    "release_mode": {
+      "status": "fail",
+      "command": "JAIN_RELEASE_CI=1 JAIN_CI_JOBS=4 CARGO_NET_OFFLINE=true just required",
+      "core_main_sha": "09823c4012d228c8d73df625329340afc1bc27f4",
+      "web_main_sha": "13ea4968dde1286111dacf8cd0216fa71e931242",
+      "deploy_main_sha": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "failure": "release contract drift requires full-v1 mirror at ../jain-deploy/contracts/demo"
+    },
+    "governed_jankurai": {
+      "path": "/home/ubuntu/.jeryu/bin/jankurai",
+      "version": "jankurai 1.6.11",
+      "binary_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+      "score": 88,
+      "raw_score": 88,
+      "minimum_score": 85,
+      "caps": 0,
+      "hard_findings": 0,
+      "score_json_sha256": "ea4e8e2c1cefe350fb7d80fb24e8fd34073a4b5513fb7d242475fe4a5bea3f80",
+      "direct_proof_plan": "pass",
+      "direct_proof_plan_sha256": "a7298a4e8936ce0fbab9d192b1afed7aa5e58a720d8f981160c80fa0b6d60c75",
+      "proofbind_mode": "advisory",
+      "proofbind_exit": 0,
+      "proofbind_obligations_satisfied": "0/4",
+      "proofbind_obligations_sha256": "afd11372476f89bf6af68051e975d5bb49e79796a835051bee07e410a5ff9579"
+    }
+  },
+  "forge_readback": {
+    "main_sha": "fcbb36064e008403a0fd992e7f278a73b6b1d946",
+    "head_sha": "f7086dcecf19ececa97df33f16326f5d3d51aabf",
+    "protection": {
+      "status": "pass",
+      "enforce_admins": true,
+      "required_linear_history": true,
+      "required_approvals": 1,
+      "required_check": "jain-contracts/required",
+      "strict_required_checks": true,
+      "allow_force_pushes": false,
+      "allow_deletions": false
+    },
+    "checks": [
+      {
+        "id": "3d6b77ff-ea67-4535-8674-ca4affb447ab",
+        "name": "jankurai/proof",
+        "status": "completed",
+        "conclusion": "failure",
+        "output": null
+      }
+    ],
+    "jankurai_proof_success": false,
+    "required_check_present": false
+  },
+  "decision": {
+    "content_review": "pass",
+    "review": "reject",
+    "merge_authorized_by_this_receipt": false,
+    "blocking_reasons": [
+      "The exact-head forge check jankurai/proof is failure, not success.",
+      "The fresh release-mode required lane is not reproducible because protected jain-deploy main lacks contracts/demo."
+    ],
+    "required_before_re_review": [
+      "Repair and rerun jankurai/proof on exact head f7086dcecf19ececa97df33f16326f5d3d51aabf until forge readback is success.",
+      "Protected-land the exact full-v1 Deploy mirror, then rerun the Contracts release-mode required lane with physical exact sibling clones.",
+      "Run exact-head host CI and read back jain-contracts/required=success."
+    ]
+  },
+  "mutations_excluded": [
+    "PR source or forge refs",
+    "host CI or check publication",
+    "approval",
+    "merge",
+    "tag",
+    "authority",
+    "deployment",
+    "Git worktree lifecycle"
+  ]
+}

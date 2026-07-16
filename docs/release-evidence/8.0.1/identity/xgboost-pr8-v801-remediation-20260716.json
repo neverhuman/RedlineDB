@@ -1,0 +1,53 @@
+{
+  "schema_version": "jain.identity-remediation/v1",
+  "generated_at": "2026-07-16T07:25:00Z",
+  "repository": "jeryu/jain-xgboost",
+  "pull_request": 8,
+  "branch": "claude/v801-identity-jain-xgboost-20260716",
+  "protected_main": "8457e1906850c0cf48cd9547c01f9161b6db5484",
+  "prior_head": "c2b8bd0c72de261ce2c96233c46fdf2fc94d1ea8",
+  "head": "2c023191344b665c8257b6c17274727c16414ab4",
+  "tree": "5006c60a08233e947c69028807da19ca58a3dd99",
+  "ahead_behind_main": {"ahead": 2, "behind": 0},
+  "candidate_tag": "jain-xgboost-v8.0.1-split.1",
+  "release_status": "candidate",
+  "formal_ga": false,
+  "production_applied": false,
+  "atomicsoul_push": false,
+  "rollback_target": "7.0.6",
+  "diff": {
+    "files": 12,
+    "binary_sha256": "56ca9f61ef20c21318f314fba32cb9c1e69f7d282a3c709e3d7fe120c4fefd1f",
+    "remediation_files": 9,
+    "remediation_insertions": 27,
+    "remediation_deletions": 12
+  },
+  "jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "1.6.11",
+    "before": {"score": 80, "raw_score": 81, "caps": ["release-readiness-gap", "missing-agent-readable-docs"], "hard_findings": 0, "report_sha256": "157613b915ef3de7a1dd4b5d97df41d4517310e20243b85f0424eb9328d4ecdf"},
+    "after": {"score": 86, "raw_score": 86, "caps": [], "hard_findings": 0, "report_sha256": "b35fdb5d3c74861eb93fd3956ae23ddf4c164f1030367bd6c0fb5ef59a19ac19"},
+    "forge_check": {"name": "jankurai/proof", "conclusion": "success", "id": "19ea8762-2de5-496c-86d2-ad2323f74fa8"}
+  },
+  "passed": [
+    "git diff --check",
+    "cargo metadata --locked --offline --no-deps",
+    "just fast",
+    "just check",
+    "just contract-drift",
+    "just artifact-support",
+    "JAIN_SECURITY_NETWORK=0 just security",
+    "just score (91/raw91, zero caps, zero hard findings)",
+    "just release-readiness"
+  ],
+  "release_readiness_sha256": "3b09f096fa147c12f7c9defb95e4edf03b9aa19c9cdc26744966f4be6b030c28",
+  "forge_branch_readback": "2c023191344b665c8257b6c17274727c16414ab4",
+  "canonical_checkout_clean": true,
+  "worktree_created": false,
+  "limitations": [
+    "native vendor source was not present, so the vendor-backed native lane remains required",
+    "jain-xgboost/required is absent",
+    "independent review, protected merge, immutable tag, and authority bind remain pending"
+  ],
+  "decision": "PASS_PENDING_NATIVE_REQUIRED_AND_INDEPENDENT_REVIEW"
+}

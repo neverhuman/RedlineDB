@@ -1,0 +1,84 @@
+{
+  "schema": "jain.redline-testing-proof-green-successor/v1",
+  "generated_at": "2026-07-16T10:57:34Z",
+  "decision": "PROOF_GREEN_PENDING_INDEPENDENT_REVIEW_AND_REQUIRED",
+  "repository": "jeryu/redline-testing",
+  "pull_request": 11,
+  "base_commit": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+  "head_commit": "c8e636f3fb2cdc1e253e246df68e8db70b6b2e3a",
+  "tree": "2621dffda716616a176e0ed726069eb310697155",
+  "raw_full_index_diff_sha256": "7d4c39a4ddc43a1e3edae72cc3e54536f668b456eae57fa3dd8fddb7cc297097",
+  "source_archive_sha256": "32246521d5f711c2d8fa01ec93bac720a1ab692a07f770eb37255fbfb5569048",
+  "jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "forge_parity_diff_audit": {
+      "score": 87,
+      "raw_score": 87,
+      "hard_findings": 0,
+      "caps": [],
+      "dirty_worktree": false,
+      "receipt_sha256": "942fb6ae52986edee79c0ec693ec13db0041358bcba23ca970e03f9620685cde"
+    },
+    "full_audit": {
+      "score": 86,
+      "raw_score": 86,
+      "hard_findings": 0,
+      "caps": [],
+      "dirty_worktree": false,
+      "receipt_sha256": "925a8b6348111548054afdfa215f082917808e4cdbea841171e190160cbf7d2a"
+    },
+    "forge_check": {
+      "id": "a26032dd-35f4-47cd-b6a7-89715a4f3ef7",
+      "status": "completed",
+      "conclusion": "success",
+      "head_sha": "c8e636f3fb2cdc1e253e246df68e8db70b6b2e3a"
+    }
+  },
+  "local_validation": {
+    "product_and_package": {
+      "status": "pass",
+      "rust_tests_passed": 50,
+      "rust_tests_ignored": 1,
+      "release_validation_tests_passed": 10,
+      "artifact_hashes": 41,
+      "release_tar_sha256": "68e46250f6077008a661bf3587f752636322c128b16f36c52f75982769cdd0f7"
+    },
+    "proof_control": {
+      "governed_identity_and_negative_tests": "pass",
+      "error_receipt_black_box_test": "pass",
+      "schema_json_validation": "pass"
+    },
+    "integrated_security": {
+      "status": "blocked_external_shared_state",
+      "reason": "/home/ubuntu/.cargo/advisory-db acquired foreign untracked db.lock and nested advisory-db-3157b0e258782691 after the earlier clean pass; both active Redline sibling owners deny ownership and no process or open descriptor was found",
+      "cleanup_performed": false
+    },
+    "isolated_exact_security": {
+      "status": "pass",
+      "rustsec_commit": "9f3e138091487e69144f536d36976e427a7a3307",
+      "rustsec_clone": "/tmp/codex-redline-testing-rustsec-db-20260716T1055Z",
+      "cargo_network_offline": true,
+      "cargo_audit_no_fetch": true,
+      "gitleaks": "pass",
+      "cargo_audit": "pass",
+      "cargo_deny": "pass",
+      "zizmor": "pass",
+      "syft_no_update": "pass",
+      "sbom_sha256": "5cf060fdf491ab6417e9b77afd0d629989622f3bc8b78af3616202f17d5348a5"
+    }
+  },
+  "custody": {
+    "canonical_clean": true,
+    "forge_branch_equal": true,
+    "git_worktree_created": false,
+    "force_push_used": false
+  },
+  "remaining": [
+    "Obtain an independent exact-head source/native-evidence review.",
+    "Run one serialized genuine exact-head redline-testing/required lane after the shared RustSec custody issue is resolved or the runner seeds an isolated clean database.",
+    "Obtain independent approval and protected fast-forward merge.",
+    "Cut/read back the next unused immutable corrective tag and bind through protected authority review."
+  ]
+}

@@ -1,0 +1,321 @@
+{
+  "schema": "jain.host-disk-custody-audit/v1",
+  "operation": "read-only Jain-only disk-pressure custody audit",
+  "host": "xbabe3",
+  "status": "pass",
+  "removal_decision": "BLOCK_NO_CURRENT_SAFE_TO_REMOVE_OBJECTS",
+  "claim_token": "codex-mcp-xbabe3-jain-disk-custody-audit-20260716T0600Z",
+  "snapshot_started_at": "2026-07-16T06:01:48Z",
+  "snapshot_completed_at": "2026-07-16T06:11:13Z",
+  "scope": {
+    "included": [
+      "Jain and SmartCluster Docker images/containers",
+      "aggregate inactive Docker build-cache metadata without unrelated record disclosure",
+      "Jain and SmartCluster named source, target, artifact, run, state, and log paths",
+      "Jain systemd, process, container, and open-file references"
+    ],
+    "excluded": [
+      "Jeryu and GitLab",
+      "Signalhouse",
+      "Neverhuman data not belonging to the Jain image repository",
+      "unrelated Docker images, containers, volumes, networks, and cache-record identities",
+      "secret files, process environments, container environments, credentials, and log contents",
+      "source, forge, ref, and worktree mutation"
+    ]
+  },
+  "filesystem": {
+    "mount": "/",
+    "filesystem": "/dev/nvme1n1p2",
+    "reported_use_percent": 81,
+    "block_size": 4096,
+    "blocks": 239804694,
+    "free_blocks": 48947526,
+    "available_blocks": 46504283,
+    "total_bytes": 982240026624,
+    "used_bytes": 781751017472,
+    "available_bytes": 190481485824,
+    "note": "Root usage increased by 5,627,904 bytes during the ten-minute read-only observation window because of ambient host activity; this audit performed no deletion or write on xbabe3."
+  },
+  "summary": {
+    "safe_to_remove_count": 0,
+    "keep_count": 9,
+    "unknown_count": 9,
+    "jain_stopped_containers": 0,
+    "jain_running_containers": 1,
+    "jain_images": 4,
+    "aggregate_build_cache_records": 14,
+    "aggregate_build_cache_bytes": 4404354512,
+    "aggregate_build_cache_in_use": 0,
+    "conclusion": "The 81% root pressure cannot be safely relieved by a Jain-only deletion under current custody proof. No broad Docker or system prune is authorized."
+  },
+  "safe_to_remove": [],
+  "docker": {
+    "containers": [
+      {
+        "classification": "KEEP",
+        "id": "2fa014b56481504a59fecc7528f13a896a5b71ed31344f31ce25dc6377415b4b",
+        "name": "jain-web-control",
+        "image_id": "sha256:388e20bc5ea98ab7f689739c2f8fefbcb25a9b972b388b28635cb2a33d68b069",
+        "state": "running",
+        "health": "healthy",
+        "pid": 3681615,
+        "restart_policy": "unless-stopped",
+        "restart_count": 1,
+        "writable_bytes": 4096,
+        "rootfs_bytes": 1802240,
+        "json_log_bytes": 0,
+        "mounts": [],
+        "reason": "Active healthy Jain Web control service; its image has one live container reference."
+      }
+    ],
+    "stopped_jain_containers": [],
+    "volumes_matching_jain_identity": [],
+    "networks_matching_jain_identity": [],
+    "images": [
+      {
+        "classification": "KEEP",
+        "ref": "image.local/jain/web-control:build",
+        "id": "sha256:388e20bc5ea98ab7f689739c2f8fefbcb25a9b972b388b28635cb2a33d68b069",
+        "repo_digest": "image.local/jain/web-control@sha256:388e20bc5ea98ab7f689739c2f8fefbcb25a9b972b388b28635cb2a33d68b069",
+        "inspect_content_bytes": 871711,
+        "system_df_bytes": 2641183,
+        "shared_bytes": 0,
+        "container_references": 1,
+        "created": "2026-07-16T02:04:14Z",
+        "reason": "Referenced by the active healthy jain-web-control container."
+      },
+      {
+        "classification": "UNKNOWN",
+        "ref": "image.local/jain/worker-gpu:build",
+        "id": "sha256:3587b65b0876954f839d4fa64bc8eaf51e73b2b9c1db72d5cd3b829a4aadc2b6",
+        "repo_digest": "image.local/jain/worker-gpu@sha256:3587b65b0876954f839d4fa64bc8eaf51e73b2b9c1db72d5cd3b829a4aadc2b6",
+        "inspect_content_bytes": 92010722,
+        "system_df_bytes": 351959266,
+        "shared_bytes": 0,
+        "container_references": 0,
+        "created": "2026-07-16T02:04:14Z",
+        "reason": "Unreferenced at the snapshot but locally built, missing Jain source/revision provenance, and not proven recoverable from a reachable registry or independently verified OCI archive."
+      },
+      {
+        "classification": "KEEP",
+        "ref": "image.neverhuman.org/veox/jain:8.0.1-gpu",
+        "id": "sha256:ffbbaf48bda7253785b2d32436eb0cbf1d0ff927a41593b907f7307e07075871",
+        "repo_digest": "image.neverhuman.org/veox/jain@sha256:ffbbaf48bda7253785b2d32436eb0cbf1d0ff927a41593b907f7307e07075871",
+        "inspect_content_bytes": 1748108471,
+        "system_df_bytes": 4497737983,
+        "shared_bytes": 11792384,
+        "container_references": 0,
+        "registry_manifest_readback": "pass_oci_index",
+        "created": "2026-07-14T18:35:31.858104549Z",
+        "reason": "Current owner-selected 8.0.1 GPU release digest and registry manifest; preserve for qualification, canary, and rollback of same-digest staging."
+      },
+      {
+        "classification": "UNKNOWN",
+        "ref": "image.neverhuman.org/veox/jain:8.0.0-gpu-canary-local.c6d3ade",
+        "id": "sha256:0f8537390521fb338c943784f8f90a4ec75e0ac241776a923bd4a00bc8bec767",
+        "repo_digest": "image.neverhuman.org/veox/jain@sha256:0f8537390521fb338c943784f8f90a4ec75e0ac241776a923bd4a00bc8bec767",
+        "inspect_content_bytes": 1391972338,
+        "system_df_bytes": 3378140295,
+        "shared_bytes": 11792384,
+        "container_references": 0,
+        "created": "2026-07-14T11:40:38.295752396Z",
+        "oci_version_label": "8.0.0",
+        "oci_revision_label": "16c06dac848be4f3ca093e818309b40c497b629c",
+        "registry_manifest_readback": "failure_no_such_manifest",
+        "reason": "Content-addressed and unreferenced, but the exact registry manifest is unavailable and no independently verified external OCI archive was found. Removing it now would destroy the only proven local copy."
+      }
+    ],
+    "build_cache": {
+      "classification": "UNKNOWN",
+      "records": 14,
+      "bytes": 4404354512,
+      "in_use_records": 0,
+      "usage_count_sum": 15,
+      "reason": "Docker reports all records inactive but exposes no accepted Jain ownership/provenance boundary in the aggregate audit. Record-level inspection or any builder/system prune would cross into unrelated workloads."
+    }
+  },
+  "services_and_open_references": {
+    "scqd": {
+      "classification": "KEEP",
+      "unit": "scqd.service",
+      "active": true,
+      "enabled": true,
+      "main_pid": 3110219,
+      "restart": "on-failure",
+      "restart_delay": "2s",
+      "slice": "jain-smartcluster.slice",
+      "memory_current_bytes": 27607040,
+      "binary": "/usr/local/bin/scqd",
+      "binary_bytes": 6742224,
+      "binary_sha256": "0cb26b6f13a6ea2581df65ef64e7ab1082af5cbf33173311227fc117e07c428e",
+      "launcher_sha256": "7f7ac70e799460ec2121a3e2b35d6b4a2e9bd24f066c387ed557b5ab599dfd7f",
+      "unit_sha256": "8c7353cc43672c27bcfe72148d31fe086e2e81394f59b6aeb17a3c1b917db081",
+      "config_sha256": "02c38ea03a5f005e5ba6d998f187567b7f2878df18a04558a2c032b2e164b388",
+      "open_files": [
+        "/usr/local/bin/scqd",
+        "/var/lib/jain-smartcluster/scqd.redb",
+        "/var/lib/jain-smartcluster/events/00000000000000000000.seg"
+      ]
+    },
+    "transient_workload_observation": {
+      "classification": "KEEP",
+      "path": "/home/ubuntu/smart_cluster/target/release/scq",
+      "observation": "PID 3989398 held this executable during the first open-file scan and exited before detailed process readback. This proves the target binary is an actively submitted workload surface, not disposable cache."
+    },
+    "unrelated_process_exclusion": "A postgres process whose user name matched the Jain filter was traced only far enough to its jeryu-gitlab container cgroup and then excluded; no GitLab data was inventoried."
+  },
+  "filesystem_objects": [
+    {
+      "classification": "KEEP",
+      "path": "/var/lib/jain-smartcluster",
+      "bytes": 630784,
+      "files": 3,
+      "symlinks": 0,
+      "reason": "Current scqd state/event directory; scqd holds its database and event segment open."
+    },
+    {
+      "classification": "KEEP",
+      "path": "/home/ubuntu/smart_cluster",
+      "bytes": 117698560,
+      "target_bytes": 6565888,
+      "var_bytes": 111108096,
+      "reason": "Legacy SmartCluster root has recent run-state writes and its release scq binary was observed executing during the audit."
+    },
+    {
+      "classification": "KEEP",
+      "path": "/home/ubuntu/jain_small_full",
+      "bytes": 1848745984,
+      "git_checkout": false,
+      "cargo_lock_sha256": "80f73cd02091ef7770d7808906eb9dc8f4decc80efb0df2ee3b5949628e29d30",
+      "breakdown": {
+        "artifacts_bytes": 929116160,
+        "vendor_bytes": 574484480,
+        "target_bytes": 277327872
+      },
+      "reason": "Plain unversioned source/vendor/artifact custody root. Its target may be mechanically reproducible from current bytes, but no Git source identity or independent artifact custody exists, so partial deletion is not authorized."
+    },
+    {
+      "classification": "KEEP",
+      "path": "/home/ubuntu/jain_small",
+      "bytes": 127041536,
+      "git_checkout": false,
+      "cargo_lock_sha256": "80f73cd02091ef7770d7808906eb9dc8f4decc80efb0df2ee3b5949628e29d30",
+      "reason": "Plain source custody root with no Git identity; preserve."
+    },
+    {
+      "classification": "UNKNOWN",
+      "path": "/home/ubuntu/jope",
+      "bytes": 49000218624,
+      "git_checkout": false,
+      "cargo_lock_sha256": "6c15c99d9d1f2b88f87dfe47dd40f3aef63b0b00121e33533981820737b04ae0",
+      "breakdown": {
+        "processed_data_bytes": 38791532544,
+        "artifacts_bytes": 6269739008,
+        "runs_bytes": 3698413568,
+        "rust_bytes": 237453312
+      },
+      "reason": "Largest Jain-associated named root, but it is an unversioned data/model/run corpus with no external custody proof. No process held it open at final readback, which is necessary but not sufficient for deletion."
+    },
+    {
+      "classification": "UNKNOWN",
+      "path": "/home/ubuntu/jope/artifacts/v5_remote_asset_bundles/e65aa42dc4bcc9d34ce63783560b8809cb70a69ef28b0f20ef6b5b675f75b689",
+      "receipt_schema": "innovationzero.v5.dataset_asset_bundle.v1",
+      "receipt_status": "passed",
+      "inventory_sha256": "e65aa42dc4bcc9d34ce63783560b8809cb70a69ef28b0f20ef6b5b675f75b689",
+      "inventory_receipt_sha256": "34717336377fe4fdd2f72c1bd069e9b6b9efcc62dc7aab0b648c93917a56b18c",
+      "object_inventory_sha256": "4a5eb612fe85b39f2aa5db83c052b428feeffc6fb8cd0ccb1eef584d2cb603ce",
+      "objects": 11610,
+      "receipt_total_bytes": 2206953858,
+      "hardlinked_view": true,
+      "reason": "Content-addressed locally, but no independent external bundle verification or regeneration source was proven. Hardlink topology also requires a reverse-link audit before any removal."
+    },
+    {
+      "classification": "UNKNOWN",
+      "path": "/home/ubuntu/jope-lime",
+      "bytes": 4039278592,
+      "runs_bytes": 4038582272,
+      "files": 8658,
+      "symlinks": 1,
+      "symlink": "/home/ubuntu/jope-lime/runs/embed_cache.npz -> /home/ubuntu/jope/runs/v35/hunt9b/embed_cache.npz",
+      "reason": "Recent run corpus with an outbound dependency on Jope and no Git or external custody."
+    },
+    {
+      "classification": "UNKNOWN",
+      "path": "/home/ubuntu/.cache/jain_small",
+      "bytes": 56954880,
+      "reason": "Cache-named but not bound to a source/tree/lock receipt or independent reproducibility proof."
+    },
+    {
+      "classification": "UNKNOWN",
+      "path": "/home/ubuntu/jain_sweep",
+      "bytes": 9240576,
+      "reason": "Unversioned named Jain experiment root; ownership and custody not independently proven."
+    },
+    {
+      "classification": "UNKNOWN",
+      "path": "/home/ubuntu/jain_test",
+      "bytes": 4096,
+      "reason": "Negligible size and unversioned provenance; removal offers no useful pressure relief."
+    }
+  ],
+  "logs": {
+    "jain_web_control_json_log_bytes": 0,
+    "legacy_smart_cluster_scqd_log_bytes": 2232,
+    "legacy_smart_cluster_scqd_state_bytes": 3686400,
+    "current_scqd_state_bytes": 1589248,
+    "classification": "KEEP_OR_UNKNOWN",
+    "reason": "Current state is open by scqd; legacy log/state is small and lacks replacement/custody proof. Systemd journal storage is shared with unrelated services and was not treated as Jain-removable."
+  },
+  "guarded_future_sequences": [
+    {
+      "object": "sha256:0f8537390521fb338c943784f8f90a4ec75e0ac241776a923bd4a00bc8bec767",
+      "current_classification": "UNKNOWN",
+      "potential_reclaim_upper_bound_bytes": 3366347911,
+      "do_not_execute_now": true,
+      "preconditions": [
+        "Release owner signs that the 8.0.0 local canary is superseded and is not rollback target 7.0.6 or referenced by any release specification.",
+        "Export the exact image to custody on a different filesystem/host, record archive SHA-256, and independently load it to prove the restored image ID is byte-identical; or restore registry readback for the exact digest.",
+        "Repeat exact image-ID checks across every container, service configuration, release spec, process, and open file and require zero references.",
+        "Record free-space and image inventory immediately before mutation and obtain explicit cleanup authorization."
+      ],
+      "exact_removal_after_all_preconditions": "docker image rm sha256:0f8537390521fb338c943784f8f90a4ec75e0ac241776a923bd4a00bc8bec767",
+      "postconditions": [
+        "Read back that only the exact ID is absent and all KEEP images/containers are unchanged.",
+        "Read back root free bytes and record actual reclaimed bytes; do not run image/system prune."
+      ],
+      "rollback": "docker load the independently verified external OCI archive and require restored ID sha256:0f8537390521fb338c943784f8f90a4ec75e0ac241776a923bd4a00bc8bec767, or pull the same digest after registry custody is restored. Never rebuild or retag a different image as rollback."
+    },
+    {
+      "object": "sha256:3587b65b0876954f839d4fa64bc8eaf51e73b2b9c1db72d5cd3b829a4aadc2b6",
+      "current_classification": "UNKNOWN",
+      "potential_reclaim_upper_bound_bytes": 351959266,
+      "do_not_execute_now": true,
+      "preconditions": [
+        "Bind source/tag/tree, Dockerfile/config, SBOM/provenance, and expected worker role to this exact image ID.",
+        "Prove the image exists by digest in a reachable registry or independently verified external OCI archive.",
+        "Prove it is not the staged GPU worker required by the current production qualification and repeat zero-reference readback."
+      ],
+      "exact_removal_after_all_preconditions": "docker image rm sha256:3587b65b0876954f839d4fa64bc8eaf51e73b2b9c1db72d5cd3b829a4aadc2b6",
+      "rollback": "Restore only the same verified digest from registry/archive; do not rebuild between custody and rollback."
+    }
+  ],
+  "prohibited_actions": [
+    "docker system prune",
+    "docker image prune",
+    "docker builder prune",
+    "docker volume prune",
+    "broad rm/find-delete under /home/ubuntu, /var/lib/docker, or /var/lib",
+    "stopping or restarting scqd or jain-web-control",
+    "removing any Jope/Jain run, artifact, source, state, target, or log path without the missing custody proof"
+  ],
+  "acceptance": {
+    "deletions": 0,
+    "containers_stopped_or_restarted": 0,
+    "services_stopped_or_restarted": 0,
+    "images_pulled_or_built": 0,
+    "prune_commands": 0,
+    "secrets_read": 0,
+    "source_or_forge_mutations": 0,
+    "worktree_actions": 0
+  }
+}

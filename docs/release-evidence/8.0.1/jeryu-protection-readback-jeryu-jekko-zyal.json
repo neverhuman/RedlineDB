@@ -1,0 +1,43 @@
+{
+  "error": "branch protection readback does not satisfy the immutable-main policy",
+  "mode": "read-only",
+  "operation": "jeryu-local protection-readback",
+  "repository": "jeryu/jekko-zyal",
+  "request": {
+    "body": null,
+    "method": "GET",
+    "path": "/repos/jeryu/jekko-zyal/branches/main/protection"
+  },
+  "response": {
+    "allow_deletions": {
+      "enabled": false
+    },
+    "allow_force_pushes": {
+      "enabled": false
+    },
+    "enforce_admins": {
+      "enabled": false
+    },
+    "required_jankurai_proof": {
+      "enabled": false
+    },
+    "required_linear_history": {
+      "enabled": true
+    },
+    "required_pull_request_reviews": {
+      "required_approving_review_count": 0
+    },
+    "required_signatures": {
+      "enabled": false
+    },
+    "required_status_checks": {
+      "contexts": [],
+      "strict": true
+    },
+    "updated_at": "2026-06-11T13:53:44.351705163Z",
+    "url": "/repos/jeryu/jekko-zyal/branches/main/protection"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "fail",
+  "timestamp_unix": 1784205397
+}

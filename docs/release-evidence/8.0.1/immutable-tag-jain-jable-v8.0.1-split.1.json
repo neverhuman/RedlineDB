@@ -1,0 +1,42 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "89939c3f92a044ac577f5b326067eb9cc2179677",
+    "remote": "89939c3f92a044ac577f5b326067eb9cc2179677"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "89939c3f92a044ac577f5b326067eb9cc2179677",
+  "commit_input": "89939c3f92a044ac577f5b326067eb9cc2179677",
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-jable.git",
+    "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/mirrors/jain-jable-jain-jable-v8.0.1-split.1.json",
+    "status": "pass",
+    "tag_commit": "89939c3f92a044ac577f5b326067eb9cc2179677"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "crates/jable/Cargo.toml",
+        "name": "jable",
+        "version": "8.0.1"
+      }
+    ],
+    "expected_product_version": "8.0.1",
+    "status": "pass",
+    "version_file": "jain-jable-v8.0.1-split.1",
+    "workspace_package_version": "8.0.1"
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-jable.git",
+  "remote_main": "89939c3f92a044ac577f5b326067eb9cc2179677",
+  "repository": "/home/ubuntu/jain-split/jain-jable",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-jable-v8.0.1-split.1",
+  "timestamp_unix": 1784212537
+}

@@ -164,8 +164,8 @@ justification = "Rust parity tests generate deterministic Python and Rust artifa
 rust_owner = "jain-math/feat-math"
 input_path = "jain-math/crates/feat-math/tests/golden.rs"
 output_path = "jain-math/crates/feat-math/tests/golden.rs"
-input_sha256 = "41a840102209fca342e1483b2e4cfda78dfd13acdcfcbeaf22ac40e2ecf34b8a"
-output_sha256 = "41a840102209fca342e1483b2e4cfda78dfd13acdcfcbeaf22ac40e2ecf34b8a"
+input_sha256 = "0a222254ab9ff7ee30bb00243b1a52071bfe3637e0881fe70f625233960e11ec"
+output_sha256 = "0a222254ab9ff7ee30bb00243b1a52071bfe3637e0881fe70f625233960e11ec"
 comparison = "byte-identical"
 
 [[inline_exception]]

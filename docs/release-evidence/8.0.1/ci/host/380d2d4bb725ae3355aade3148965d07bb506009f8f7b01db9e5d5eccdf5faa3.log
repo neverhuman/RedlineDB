@@ -1,0 +1,250 @@
+Cloning into '/tmp/split-host-ci.huidVP/jain-llm'...
+HEAD is now at cec2f19 chore(release): align jain-llm identity to 8.0.1
+lock_blob=0f373673837a470e971a3286522afd4368810092
+name=jain-llm
+ref=cec2f1923c93185cc8e2333d78b13c777a7b938e
+commit=cec2f1923c93185cc8e2333d78b13c777a7b938e
+tree=5cbc7040a0dd1c545e2e83862e209786122141e9
+release_checksum_sha256=d374a1e6de95302322329659910f5693ad7f0e3fe58c3c909701afc38b9aa41d
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: /tmp/split-host-ci.huidVP/jain-llm
+    Updating crates.io index
+warning: manifest has no documentation, homepage or repository
+  |
+  = note: see https://doc.rust-lang.org/cargo/reference/manifest.html#package-metadata for more info
+   Packaging jain-llm v8.0.1 (/tmp/split-host-ci.huidVP/jain-llm/crates/jain-llm)
+    Updating crates.io index
+    Packaged 9 files, 28.4KiB (7.7KiB compressed)
+   Verifying jain-llm v8.0.1 (/tmp/split-host-ci.huidVP/jain-llm/crates/jain-llm)
+ Downloading crates ...
+  Downloaded anyhow v1.0.103
+  Downloaded itoa v1.0.18
+  Downloaded quote v1.0.46
+  Downloaded proc-macro2 v1.0.106
+  Downloaded zmij v1.0.21
+  Downloaded memchr v2.8.3
+  Downloaded unicode-ident v1.0.24
+  Downloaded serde_core v1.0.228
+  Downloaded serde v1.0.228
+  Downloaded serde_derive v1.0.228
+  Downloaded serde_json v1.0.150
+  Downloaded syn v2.0.118
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.21
+   Compiling syn v2.0.118
+   Compiling serde_json v1.0.150
+   Compiling anyhow v1.0.103
+   Compiling serde v1.0.228
+   Compiling serde_derive v1.0.228
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling jain-llm v8.0.1 (/tmp/split-host-ci.huidVP/cargo-target/package/jain-llm-8.0.1)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 15.83s
+package identity ok: jain-llm 8.0.1
+[ci] Rust required lane: complete native provider/router package
+ Downloading crates ...
+  Downloaded bit-set v0.8.0
+  Downloaded bit-vec v0.8.0
+  Downloaded bitflags v2.13.0
+  Downloaded cfg-if v1.0.4
+  Downloaded autocfg v1.5.1
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded errno v0.3.14
+  Downloaded unarray v0.1.4
+  Downloaded rand_core v0.9.5
+  Downloaded fnv v1.0.7
+  Downloaded quick-error v1.2.3
+  Downloaded wait-timeout v0.2.1
+  Downloaded rusty-fork v0.3.1
+  Downloaded tempfile v3.27.0
+  Downloaded getrandom v0.4.3
+  Downloaded getrandom v0.3.4
+  Downloaded rand v0.9.4
+  Downloaded num-traits v0.2.19
+  Downloaded fastrand v2.4.1
+  Downloaded once_cell v1.21.4
+  Downloaded rand_xorshift v0.4.0
+  Downloaded rand_chacha v0.9.0
+  Downloaded proptest v1.11.0
+  Downloaded zerocopy v0.8.54
+  Downloaded regex-syntax v0.8.11
+  Downloaded rustix v1.1.4
+  Downloaded libc v0.2.186
+  Downloaded linux-raw-sys v0.12.1
+   Compiling libc v0.2.186
+    Checking cfg-if v1.0.4
+   Compiling getrandom v0.3.4
+   Compiling zerocopy v0.8.54
+   Compiling getrandom v0.4.3
+   Compiling rustix v1.1.4
+    Checking rand_core v0.9.5
+   Compiling autocfg v1.5.1
+    Checking bitflags v2.13.0
+    Checking linux-raw-sys v0.12.1
+   Compiling num-traits v0.2.19
+    Checking serde_core v1.0.228
+    Checking once_cell v1.21.4
+    Checking fastrand v2.4.1
+    Checking tempfile v3.27.0
+    Checking ppv-lite86 v0.2.21
+    Checking zmij v1.0.21
+    Checking wait-timeout v0.2.1
+    Checking itoa v1.0.18
+    Checking bit-vec v0.8.0
+    Checking quick-error v1.2.3
+    Checking memchr v2.8.3
+    Checking fnv v1.0.7
+    Checking rusty-fork v0.3.1
+    Checking serde_json v1.0.150
+    Checking bit-set v0.8.0
+    Checking serde v1.0.228
+    Checking rand_chacha v0.9.0
+    Checking anyhow v1.0.103
+    Checking rand_xorshift v0.4.0
+    Checking rand v0.9.4
+    Checking unarray v0.1.4
+    Checking regex-syntax v0.8.11
+    Checking proptest v1.11.0
+    Checking jain-llm v8.0.1 (/tmp/split-host-ci.huidVP/jain-llm/crates/jain-llm)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 25.61s
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling getrandom v0.3.4
+   Compiling rand_core v0.9.5
+   Compiling linux-raw-sys v0.12.1
+   Compiling bitflags v2.13.0
+   Compiling rustix v1.1.4
+   Compiling getrandom v0.4.3
+   Compiling zerocopy v0.8.54
+   Compiling fastrand v2.4.1
+   Compiling once_cell v1.21.4
+   Compiling tempfile v3.27.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling wait-timeout v0.2.1
+   Compiling fnv v1.0.7
+   Compiling quick-error v1.2.3
+   Compiling bit-vec v0.8.0
+   Compiling bit-set v0.8.0
+   Compiling rusty-fork v0.3.1
+   Compiling num-traits v0.2.19
+   Compiling rand_chacha v0.9.0
+   Compiling rand_xorshift v0.4.0
+   Compiling rand v0.9.4
+   Compiling regex-syntax v0.8.11
+   Compiling unarray v0.1.4
+   Compiling proptest v1.11.0
+   Compiling jain-llm v8.0.1 (/tmp/split-host-ci.huidVP/jain-llm/crates/jain-llm)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 20.56s
+     Running unittests src/lib.rs (/tmp/split-host-ci.huidVP/cargo-target/debug/deps/jain_llm-c537fc63feb2f8eb)
+
+running 4 tests
+test tests::llm_client_contract_is_testable_with_a_fake_provider ... ok
+test tests::route_request_serializes_without_secret_material ... ok
+test tests::credential_debug_output_always_redacts_secret_material ... ok
+test tests::task_roles_are_stable_wire_values ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/contracts.rs (/tmp/split-host-ci.huidVP/cargo-target/debug/deps/contracts-592e390a5e05d904)
+
+running 1 test
+test credential_and_client_traits_support_provider_free_integration_tests ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/properties.rs (/tmp/split-host-ci.huidVP/cargo-target/debug/deps/properties-c82a8aafe48d7384)
+
+running 2 tests
+test prop_task_role_wire_value_round_trips ... ok
+test prop_route_request_serializes_without_credential_material ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+required ok: jain-llm
+ Downloading crates ...
+  Downloaded windows-link v0.2.1
+  Downloaded r-efi v5.3.0
+  Downloaded wasip2 v1.0.4+wasi-0.2.12
+  Downloaded r-efi v6.0.0
+  Downloaded wit-bindgen v0.57.1
+  Downloaded zerocopy-derive v0.8.54
+  Downloaded windows-sys v0.61.2
+running release Cargo command: build-all-features
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling getrandom v0.3.4
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling unicode-ident v1.0.24
+   Compiling getrandom v0.4.3
+   Compiling zerocopy v0.8.54
+   Compiling serde_core v1.0.228
+   Compiling rustix v1.1.4
+   Compiling rand_core v0.9.5
+   Compiling autocfg v1.5.1
+   Compiling bitflags v2.13.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling zmij v1.0.21
+   Compiling num-traits v0.2.19
+   Compiling syn v2.0.118
+   Compiling serde_json v1.0.150
+   Compiling anyhow v1.0.103
+   Compiling serde v1.0.228
+   Compiling fastrand v2.4.1
+   Compiling once_cell v1.21.4
+   Compiling tempfile v3.27.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling serde_derive v1.0.228
+   Compiling wait-timeout v0.2.1
+   Compiling bit-vec v0.8.0
+   Compiling fnv v1.0.7
+   Compiling itoa v1.0.18
+   Compiling quick-error v1.2.3
+   Compiling memchr v2.8.3
+   Compiling rusty-fork v0.3.1
+   Compiling bit-set v0.8.0
+   Compiling rand_chacha v0.9.0
+   Compiling rand v0.9.4
+   Compiling rand_xorshift v0.4.0
+   Compiling unarray v0.1.4
+   Compiling regex-syntax v0.8.11
+   Compiling proptest v1.11.0
+   Compiling jain-llm v8.0.1 (/tmp/split-host-ci.huidVP/jain-llm/crates/jain-llm)
+    Finished `release` profile [optimized] target(s) in 34.26s
+running release Cargo command: test-all-features
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.04s
+     Running unittests src/lib.rs (/tmp/split-host-ci.huidVP/cargo-target/debug/deps/jain_llm-c537fc63feb2f8eb)
+
+running 4 tests
+test tests::credential_debug_output_always_redacts_secret_material ... ok
+test tests::llm_client_contract_is_testable_with_a_fake_provider ... ok
+test tests::route_request_serializes_without_secret_material ... ok
+test tests::task_roles_are_stable_wire_values ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/contracts.rs (/tmp/split-host-ci.huidVP/cargo-target/debug/deps/contracts-592e390a5e05d904)
+
+running 1 test
+test credential_and_client_traits_support_provider_free_integration_tests ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/properties.rs (/tmp/split-host-ci.huidVP/cargo-target/debug/deps/properties-c82a8aafe48d7384)
+
+running 2 tests
+test prop_task_role_wire_value_round_trips ... ok
+test prop_route_request_serializes_without_credential_material ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+wrote /home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/ci/jain-llm-cec2f1923c93185cc8e2333d78b13c777a7b938e-cargo.json
+jankurai-security-step={"label":"gitleaks","tool":"gitleaks","shell_command":"gitleaks detect --source . --redact --no-banner","status":"ran","advisory":false,"exit_code":0}
+jankurai-security-step={"label":"actionlint","tool":"actionlint","shell_command":"actionlint","status":"ran","advisory":false,"exit_code":0}
+jankurai-security-step={"label":"cargo-deny","tool":"cargo-deny","shell_command":"cargo deny check bans licenses sources","status":"ran","advisory":false,"exit_code":0}
+pinned local RustSec advisory database is unavailable: /tmp/split-host-ci.huidVP/home/.cargo/advisory-db

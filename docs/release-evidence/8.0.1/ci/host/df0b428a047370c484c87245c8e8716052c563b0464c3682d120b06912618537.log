@@ -1,0 +1,148 @@
+Cloning into '/tmp/split-host-ci.YDx5zX/jain-docs'...
+HEAD is now at 0b278ec docs: bind artifact schema to its producer
+lock_blob=absent
+name=jain-docs
+ref=0b278ec716fcccd74abd0a2b3b051d8729c140e2
+commit=0b278ec716fcccd74abd0a2b3b051d8729c140e2
+tree=709e062c92638c5ac862126496a7aa9951a4999a
+release_checksum_sha256=84cc5c964090bf20a3fa17a0b38e072257d39c4ff0ce3f82cc406169913e01b1
+check ok: /tmp/split-host-ci.YDx5zX/jain-docs
+[ci] docs required lane: fail-closed links + complete versioned Typst manual
+docs links ok: 25 checked target(s)
+[ci] no Inter/JetBrains Mono directory; building with fallback fonts [advisory]
+[ci] run ops/ci/install-docs-tools.sh to provision them
+[ci] building jAIn manual v8.0.1 (July 2026); fonts=<fallback>
+warning: unknown font family: inter
+   ┌─ docs/manual/template/veox.typ:57:14
+   │
+57 │   #text(font: veox-sans, size: 7.5pt, weight: 700, tracking: 0.8pt, fill: accent)[#upper(label)]
+   │               ^^^^^^^^^
+
+warning: unknown font family: inter
+   ┌─ docs/manual/template/veox.typ:72:27
+   │
+72 │ #let th(body) = text(font: veox-sans, size: 8.5pt, weight: 700, fill: veox-ink)[#body]
+   │                            ^^^^^^^^^
+
+warning: unknown font family: inter
+    ┌─ docs/manual/template/veox.typ:119:17
+    │
+119 │   set text(font: veox-sans, size: 10pt, fill: veox-ink, lang: "en")
+    │                  ^^^^^^^^^
+
+warning: unknown font family: inter
+   ┌─ docs/manual/template/veox.typ:38:8
+   │
+38 │   font: veox-sans, size: size, weight: 800, tracking: 1.2pt, fill: color,
+   │         ^^^^^^^^^
+
+warning: unknown font family: inter
+   ┌─ docs/manual/template/veox.typ:83:16
+   │
+83 │     #text(font: veox-sans, size: 15pt, weight: 500, fill: veox-muted)[#subtitle]
+   │                 ^^^^^^^^^
+
+warning: unknown font family: inter
+   ┌─ docs/manual/template/veox.typ:43:8
+   │
+43 │   font: veox-sans, size: size, weight: weight, fill: color,
+   │         ^^^^^^^^^
+
+warning: unknown font family: inter
+   ┌─ docs/manual/template/veox.typ:89:16
+   │
+89 │     #text(font: veox-sans, size: 12pt, fill: veox-muted, style: "italic")[#tagline]
+   │                 ^^^^^^^^^
+
+warning: unknown font family: jetbrains mono
+   ┌─ docs/manual/template/veox.typ:91:16
+   │
+91 │     #text(font: veox-mono, size: 11pt, weight: 500, fill: veox-teal)[Version #version]
+   │                 ^^^^^^^^^
+
+warning: unknown font family: jetbrains mono
+   ┌─ docs/manual/template/veox.typ:92:25
+   │
+92 │     #h(14pt) #text(font: veox-mono, size: 11pt, fill: veox-muted)[#date]
+   │                          ^^^^^^^^^
+
+warning: unknown font family: inter
+   ┌─ docs/manual/template/veox.typ:98:16
+   │
+98 │     #text(font: veox-sans, size: 8.5pt, fill: veox-muted)[
+   │                 ^^^^^^^^^
+
+warning: unknown font family: inter
+    ┌─ docs/manual/template/veox.typ:102:16
+    │
+102 │     #text(font: veox-sans, size: 7.5pt, fill: veox-muted)[
+    │                 ^^^^^^^^^
+
+warning: unknown font family: inter
+    ┌─ docs/manual/template/veox.typ:168:16
+    │
+168 │     #text(font: veox-sans, size: 20pt, weight: 800, fill: veox-ink)[Contents]
+    │                 ^^^^^^^^^
+
+warning: unknown font family: inter
+    ┌─ docs/manual/template/veox.typ:176:17
+    │
+176 │       text(font: veox-sans, weight: 700, fill: veox-ink)[#it]
+    │                  ^^^^^^^^^
+
+warning: unknown font family: inter
+    ┌─ docs/manual/template/veox.typ:140:18
+    │
+140 │       #text(font: veox-sans, size: 9pt, weight: 700, fill: veox-teal, tracking: 1.5pt)[
+    │                   ^^^^^^^^^
+
+warning: unknown font family: inter
+    ┌─ docs/manual/template/veox.typ:144:18
+    │
+144 │       #text(font: veox-sans, size: 23pt, weight: 800, fill: veox-ink)[#it.body]
+    │                   ^^^^^^^^^
+
+warning: unknown font family: jetbrains mono
+    ┌─ docs/manual/template/veox.typ:128:16
+    │
+128 │   )[#text(font: veox-mono, size: 0.92em, fill: veox-ink)[#it]]
+    │                 ^^^^^^^^^
+
+warning: unknown font family: inter
+    ┌─ docs/manual/template/veox.typ:150:16
+    │
+150 │     #text(font: veox-sans, size: 14pt, weight: 700, fill: veox-ink)[
+    │                 ^^^^^^^^^
+
+warning: unknown font family: jetbrains mono
+    ┌─ docs/manual/template/veox.typ:132:20
+    │
+132 │   )[#set text(font: veox-mono, size: 8.6pt); #it]
+    │                     ^^^^^^^^^
+
+warning: unknown font family: inter
+    ┌─ docs/manual/template/veox.typ:155:16
+    │
+155 │     #text(font: veox-sans, size: 11pt, weight: 700, fill: veox-ink)[#it.body]
+    │                 ^^^^^^^^^
+
+warning: unknown font family: inter
+    ┌─ docs/manual/template/veox.typ:191:21
+    │
+191 │       set text(font: veox-sans, size: 8pt, fill: veox-muted)
+    │                      ^^^^^^^^^
+
+warning: unknown font family: inter
+    ┌─ docs/manual/template/veox.typ:199:21
+    │
+199 │       set text(font: veox-sans, size: 8pt, fill: veox-muted)
+    │                      ^^^^^^^^^
+
+warning: unknown font family: jetbrains mono
+    ┌─ docs/manual/template/veox.typ:203:34
+    │
+203 │         align(center)[#text(font: veox-mono)[v#version]],
+    │                                   ^^^^^^^^^
+
+docs-pdf ok: target/docs/jain-platform-manual-v8.0.1.pdf
+required ok: jain-docs

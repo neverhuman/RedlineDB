@@ -1,0 +1,9 @@
+Cloning into '/tmp/split-host-ci.YNHUGa/jain-web'...
+HEAD is now at 13ea496 ci(web): force inline training in ci-smoke lane (hermetic api_http lifecycle tests)
+lock_blob=0170e49d5c1dd6a71a87ebc7681b516fde8fb396
+name=jain-web
+ref=13ea4968dde1286111dacf8cd0216fa71e931242
+commit=13ea4968dde1286111dacf8cd0216fa71e931242
+tree=ad0234862cacb9221c27346f8b570552fd5d74a8
+release_checksum_sha256=787a22a4efaea2e7597f3c729336bc5e9949f1be46b408014b92f3298736c270
+ops/ci/check.sh: line 6: cargo: command not found

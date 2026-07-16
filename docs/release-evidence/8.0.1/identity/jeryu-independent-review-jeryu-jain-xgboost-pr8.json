@@ -1,0 +1,163 @@
+{
+  "schema_version": "jain.identity-independent-review/v1",
+  "status": "REVIEW_REJECT_GOVERNED_TOOL_AND_RECEIPT_HASH_GAPS",
+  "reviewed_at": "2026-07-16T07:32:19Z",
+  "repository": "jeryu/jain-xgboost",
+  "pull_request": {
+    "number": 8,
+    "id": "5a09ecd3-2140-43dd-9a7c-f5b040fb38c4",
+    "state": "open",
+    "draft": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "base_ref": "main",
+    "api_base_sha_at_open": "34d3534702727b463c4b00c799d06fda0f76438c",
+    "protected_main_sha_at_review": "8457e1906850c0cf48cd9547c01f9161b6db5484",
+    "head_ref": "claude/v801-identity-jain-xgboost-20260716",
+    "head_sha": "2c023191344b665c8257b6c17274727c16414ab4",
+    "tree_sha": "5006c60a08233e947c69028807da19ca58a3dd99",
+    "linear_commits_over_current_main": 2,
+    "behind_current_main": 0,
+    "current_main_is_direct_second_parent_ancestor": true
+  },
+  "exact_diff": {
+    "file_count": 12,
+    "insertions": 31,
+    "deletions": 16,
+    "plain_diff_sha256": "9ee9c6cfa42881aa42fa3706a2fcf42215dfba7a34b1e9eddaa7678f4669255b",
+    "full_index_binary_diff_sha256": "29ee88c8fa5fbfa3199bbde25b76a33b6c5a0bb44c09ede8d02a25be2b5f3398",
+    "files": [
+      "CHANGELOG.md",
+      "Cargo.lock",
+      "Cargo.toml",
+      "README.md",
+      "RELEASE.md",
+      "VERSION",
+      "agent/standard-version.toml",
+      "db/README.md",
+      "docs/architecture.md",
+      "docs/release.md",
+      "ops/ci/artifact_support.sh",
+      "ops/ci/release-readiness.sh"
+    ],
+    "mode_changes": 0,
+    "binary_changes": 0,
+    "symlinks_in_exact_head": 0,
+    "product_source_changes": 0,
+    "contract_or_schema_changes": 0,
+    "dependency_source_or_resolution_changes": 0,
+    "cargo_changes": [
+      "workspace.package version 8.0.0 -> 8.0.1",
+      "Cargo.lock xgboost package version 8.0.0 -> 8.0.1"
+    ]
+  },
+  "release_identity": {
+    "candidate": "jain-xgboost-v8.0.1-split.1",
+    "next_unused": true,
+    "authority_product_version": "8.0.1",
+    "authority_current_tag_before_correction": "jain-xgboost-v8.0.1-split.0",
+    "authority_release_commit": "PENDING",
+    "authority_release_checksum_sha256": "PENDING",
+    "live_v8_0_1_tags": {
+      "jain-xgboost-v8.0.1-split.0": "34d3534702727b463c4b00c799d06fda0f76438c"
+    },
+    "split_0_is_invalid_identity": {
+      "tag_target_version_file": "jain-xgboost-v8.0.0-split.2",
+      "tag_target_cargo_version": "8.0.0"
+    },
+    "split_1_exists_on_forge": false,
+    "split_2_exists_on_forge": false,
+    "immutable_8_0_0_history_preserved": true,
+    "release_status": "candidate",
+    "formal_ga": false,
+    "production_applied": false,
+    "atomicsoul_push": false,
+    "rollback_target": "7.0.6"
+  },
+  "isolated_validation": {
+    "checkout": "automatically removed standalone --no-local exact-head clone",
+    "checkout_git_layout": "physical .git directory; no worktree registry and no alternates",
+    "strict_fsck": "pass",
+    "clean_exact_head": true,
+    "direct_linear_ancestry": "pass",
+    "git_diff_check": "pass",
+    "shell_syntax": "pass",
+    "cargo_metadata_locked_offline_no_deps": "pass",
+    "fast_without_native_vendor": "pass_with_explicit_native_deferral",
+    "check": "pass",
+    "contract_drift": "pass",
+    "artifact_support": "pass_native_not_provided",
+    "canonical_checkout_clean": true,
+    "canonical_checkout_forge_equal": true
+  },
+  "governed_jankurai": {
+    "forge_check": {
+      "id": "19ea8762-2de5-496c-86d2-ad2323f74fa8",
+      "name": "jankurai/proof",
+      "head_sha": "2c023191344b665c8257b6c17274727c16414ab4",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    "independent_binary_path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "independent_binary_version": "jankurai 1.6.11",
+    "independent_binary_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "changed_fast_score": 86,
+    "changed_fast_raw_score": 86,
+    "caps": 0,
+    "hard_findings": 0,
+    "soft_findings": 5,
+    "report_sha256": "8b84bc6456d5aa0c3a37114a23cd363cd4fcf9c01848abf1b596bc564740b5ad"
+  },
+  "hard_blockers": [
+    {
+      "id": "governed-jankurai-digest-not-enforced",
+      "evidence": "ops/ci/lib.sh require_jankurai accepts any PATH binary that reports jankurai 1.6.11; ops/ci/score.sh checks only command presence",
+      "adversarial_path_accepted": "/home/ubuntu/.local/bin/jankurai",
+      "adversarial_binary_version": "jankurai 1.6.11",
+      "adversarial_binary_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+      "required_repair": "Require the exact regular non-symlink governed path, version, and SHA-256 in one shared helper; route every repository Jankurai invocation through it; add adversarial-PATH proof."
+    },
+    {
+      "id": "authored-receipt-diff-hash-does-not-reproduce",
+      "authored_receipt": "docs/release-evidence/8.0.1/identity/xgboost-pr8-v801-remediation-20260716.json",
+      "authored_receipt_sha256": "918d212313a0063570cfa6f31bc76dd94ec28ac5c615e098445c6a5db4232110",
+      "recorded_binary_diff_sha256": "56ca9f61ef20c21318f314fba32cb9c1e69f7d282a3c709e3d7fe120c4fefd1f",
+      "independently_reproduced_full_index_binary_diff_sha256": "29ee88c8fa5fbfa3199bbde25b76a33b6c5a0bb44c09ede8d02a25be2b5f3398",
+      "required_repair": "Regenerate the authored receipt from the exact protected-main-to-head diff and verify its checksum before relying on it."
+    },
+    {
+      "id": "exact-head-native-required-absent",
+      "required_check": "jain-xgboost/required",
+      "present": false,
+      "native_vendor_input_available_in_independent_clone": false,
+      "required_repair": "Run the serialized exact-head host lane with the governed native vendor input and read back jain-xgboost/required=success at this exact head."
+    }
+  ],
+  "forge_protection": {
+    "enforce_admins": true,
+    "required_linear_history": true,
+    "required_approvals": 1,
+    "required_check": "jain-xgboost/required",
+    "strict_required_checks": true,
+    "allow_force_pushes": false,
+    "allow_deletions": false,
+    "readback_receipt_sha256": "343fc0e6c2470e4ffb1412a7aacfd2d2588e652e5b4efa318932c59111c8efb8"
+  },
+  "decision": {
+    "review": "reject",
+    "merge_authorized_by_this_receipt": false,
+    "content_delta_otherwise_surgical": true,
+    "next_step": "Repair the governed-tool boundary and authored receipt hash on the same keeper, rerun the automatic proof, obtain a fresh independent review, then run exact-head native required."
+  },
+  "mutations_excluded": [
+    "source or index",
+    "branch or tag refs",
+    "PR state",
+    "check publication",
+    "approval",
+    "merge",
+    "authority or protection mutation",
+    "deployment",
+    "Git worktree lifecycle"
+  ]
+}

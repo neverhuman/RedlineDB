@@ -1,0 +1,42 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "e53d46478bf9059af7b7926bfe26e3ba63800dd8",
+    "remote": "e53d46478bf9059af7b7926bfe26e3ba63800dd8"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "e53d46478bf9059af7b7926bfe26e3ba63800dd8",
+  "commit_input": "e53d46478bf9059af7b7926bfe26e3ba63800dd8",
+  "manifest": "repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-jnoccio.git",
+    "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/mirrors/jain-jnoccio-jain-jnoccio-v8.0.1-split.0.json",
+    "status": "pass",
+    "tag_commit": "e53d46478bf9059af7b7926bfe26e3ba63800dd8"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "Cargo.toml",
+        "name": "jain-jnoccio",
+        "version": "8.0.1"
+      }
+    ],
+    "expected_product_version": "8.0.1",
+    "status": "pass",
+    "version_file": "jain-jnoccio-v8.0.1-split.0",
+    "workspace_package_version": null
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-jnoccio.git",
+  "remote_main": "e53d46478bf9059af7b7926bfe26e3ba63800dd8",
+  "repository": "/home/ubuntu/jain-split/jain-jnoccio",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-jnoccio-v8.0.1-split.0",
+  "timestamp_unix": 1784183280
+}

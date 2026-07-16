@@ -153,10 +153,15 @@ clone_exact() {
     }
   fi
   if [ -n "$expected_checksum" ] && [ "$expected_checksum" != "PENDING" ]; then
-    [ "$expected_checksum" = "$checksum" ] || {
+    if [ "${GIT_LFS_SKIP_SMUDGE:-0}" = "1" ]; then
+      # Manifest checksums are bound over smudged LFS content; a pointer-only
+      # sibling tree hashes differently by design. Tree identity vs the bare
+      # mirror (verified above) already pins the exact content.
+      say "$name manifest-checksum comparison skipped (GIT_LFS_SKIP_SMUDGE=1 pointer tree)"
+    elif [ "$expected_checksum" != "$checksum" ]; then
       say "$name manifest checksum $expected_checksum differs from $checksum"
       return 1
-    }
+    fi
   fi
   verify_lock_identity "$dest" "$commit" || return 1
   git -C "$dest" diff --quiet --exit-code || { say "$name clone is dirty after checkout"; return 1; }
@@ -254,6 +259,10 @@ git config --file "$gitconfig" filter.lfs.smudge 'git-lfs smudge -- %f'
 git config --file "$gitconfig" filter.lfs.process 'git-lfs filter-process'
 git config --file "$gitconfig" filter.lfs.required true
 export HOME="$tmp/home" CARGO_HOME="$tmp/cargo-home" CARGO_TARGET_DIR="$tmp/cargo-target"
+# The ephemeral sandbox HOME hides the host's Playwright browser cache, so the
+# frontend e2e lane fails to launch chromium (env failure, not a test regression).
+# Point it at the host-installed browsers (chromium-1228 etc.); read-only reuse.
+[ -d /home/ubuntu/.cache/ms-playwright ] && export PLAYWRIGHT_BROWSERS_PATH=/home/ubuntu/.cache/ms-playwright
 export GIT_CONFIG_GLOBAL="$gitconfig" GIT_CONFIG_NOSYSTEM=1
 export PATH="$CARGO_HOME/bin:$PATH"
 # The sandbox HOME breaks Python user-site, so ~/.local/bin/cmake (a pip shim)
@@ -284,6 +293,34 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
     say "release CI native-vendor bootstrap failed"
     exit 1
   }
+  # vendor-all.sh copies the canonical vendor WORKING TREE (minus .git), so
+  # another lane's in-place catboost-sys patches leak into the sandbox copy —
+  # e.g. a newer catboost.exports listing cb_gpu_device_count /
+  # cb_predict_threaded / cb_feature_importance_threaded that the pinned
+  # jain-catboost tag never defines (ld.lld: version script symbol not
+  # defined). The pinned build.rs self-heals these via best-effort
+  # `git checkout --`, which is a silent no-op in the .git-less copy. Restore
+  # its exact patch-target files to pristine vendor-git content here instead.
+  canonical_catboost="$SPLIT_ROOT/vendor/catboost"
+  if git -C "$canonical_catboost" rev-parse --verify HEAD^{commit} >/dev/null 2>&1; then
+    for rel in \
+      cmake/common.cmake \
+      cmake/archive.cmake \
+      cmake/recursive_library.cmake \
+      library/cpp/build_info/CMakeLists.linux-x86_64.txt \
+      catboost/libs/train_interface/CMakeLists.linux-x86_64.txt \
+      catboost/libs/train_interface/catboost.exports; do
+      dest="$native_vendor/catboost/$rel"
+      [ -e "$dest" ] || continue
+      git -C "$canonical_catboost" show "HEAD:$rel" > "$dest.pristine" || {
+        rm -f "$dest.pristine"
+        say "failed to restore pristine vendor file: $rel"
+        exit 1
+      }
+      mv -- "$dest.pristine" "$dest"
+    done
+    say "restored pristine catboost patch-target files in the sandbox vendor copy"
+  fi
   mkdir -p "$wt/target"
   cp -a "$native_vendor" "$wt/target/native-vendor"
 fi
@@ -299,13 +336,13 @@ if [ "$REPO" = "jain-web" ]; then
     sib_mirror="$(mirror_for "$sib")" || exit 2
     sib_commit="$(git --git-dir "$sib_mirror" rev-parse --verify "$sib_tag^{commit}" 2>/dev/null || true)"
     if [ -n "$sib_commit" ]; then
-      clone_exact "$sib" "$sib_mirror" "$sib_tag" "$sib_commit" "$tmp/$sib" \
+      GIT_LFS_SKIP_SMUDGE=1 clone_exact "$sib" "$sib_mirror" "$sib_tag" "$sib_commit" "$tmp/$sib" \
         || { say "exact sibling checkout failed for $sib@$sib_tag"; exit 1; }
       say "sibling $sib at manifest tag $sib_tag ($sib_commit)"
     else
       sib_commit="$(git --git-dir "$sib_mirror" rev-parse --verify refs/heads/main 2>/dev/null)" || {
         say "$sib mirror has no main; refresh the mirror"; exit 2; }
-      clone_exact "$sib" "$sib_mirror" refs/heads/main "$sib_commit" "$tmp/$sib" \
+      GIT_LFS_SKIP_SMUDGE=1 clone_exact "$sib" "$sib_mirror" refs/heads/main "$sib_commit" "$tmp/$sib" \
         || { say "reviewed-main sibling checkout failed for $sib"; exit 1; }
       say "sibling $sib at REVIEWED MAIN $sib_commit (manifest tag $sib_tag absent — pre-cascade fallback)"
     fi
@@ -315,6 +352,14 @@ fi
 # Deploy and explicit integration lanes need sibling path dependencies. Every
 # sibling is a separate clone at the manifest's immutable tag; a missing tag or
 # mirror is a hard failure rather than a fallback to a canonical checkout.
+#
+# Sibling clones set GIT_LFS_SKIP_SMUDGE=1 (scoped to each clone_exact call,
+# never exported script-wide): the build only needs sibling crate SOURCE for
+# Cargo path/tag resolution and compilation, not LFS artifact content, and the
+# bare-mirror LFS store may lack large objects (e.g. jain-starforge's 110MB
+# safetensors). The TARGET checkout above must keep smudging — its
+# release_checksum is bound over real LFS content (see the filter.lfs gitconfig
+# comment) — so the skip is per-invocation only.
 if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
   while IFS= read -r sib; do
     [ -n "$sib" ] || continue
@@ -333,7 +378,7 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
       say "sibling $sib at REVIEWED MAIN $sib_commit (manifest tag $tag absent — pre-cascade fallback)"
       tag="refs/heads/main"
     fi
-    clone_exact "$sib" "$sib_mirror" "$tag" "$sib_commit" "$tmp/$sib" || {
+    GIT_LFS_SKIP_SMUDGE=1 clone_exact "$sib" "$sib_mirror" "$tag" "$sib_commit" "$tmp/$sib" || {
       say "exact sibling checkout failed for $sib@$tag"
       exit 1
     }

@@ -1,0 +1,761 @@
+Cloning into '/tmp/split-host-ci.Ilul6S/redline-web'...
+HEAD is now at f91edc8 docs: complete proof ownership routing
+lock_blob=fc3ea48f70c68d70ee75f0d47b9c2712aa38721f
+name=redline-web
+ref=f91edc8b3ea2e3a2cd2e7a21af9aac1a85d4d647
+commit=f91edc8b3ea2e3a2cd2e7a21af9aac1a85d4d647
+tree=8b3e2efe0e8c0b353813ad56d23e5c41ddcc1a85
+release_checksum_sha256=70cd92034315c2f6dacc0c567041707fdcd0634a72fff8b41f2e8740564eb91d
+[redline-ci] pr-ci: fast lane
+[redline-ci] fast: checking shell syntax
+[redline-ci] fast: governed Jankurai hostile identity tests
+governed-Jankurai must be an executable regular non-symlink: /tmp/redline-web-governed-jankurai.uuuWPv/missing
+governed-Jankurai must be an executable regular non-symlink: /tmp/redline-web-governed-jankurai.uuuWPv/linked-jankurai
+governed-Jankurai digest mismatch: /tmp/redline-web-governed-jankurai.uuuWPv/jankurai
+governed Jankurai version mismatch: jankurai fixture-1
+governed Jankurai hostile identity tests passed
+[redline-ci] fast: checking CI language boundary
+info: syncing channel updates for 1.95.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-04-16 for version 1.95.0 (59807616e 2026-04-14)
+info: downloading 6 components
+    Checking redline-web-release-control v0.1.0 (/tmp/split-host-ci.Ilul6S/redline-web/tools/release-control)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.25s
+   Compiling redline-web-release-control v0.1.0 (/tmp/split-host-ci.Ilul6S/redline-web/tools/release-control)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.54s
+     Running unittests src/main.rs (/tmp/split-host-ci.Ilul6S/cargo-target/debug/deps/redline_web_release_control-70a6615ff3357b33)
+
+running 4 tests
+test tests::detects_direct_and_split_interpreter_commands ... ok
+test tests::detects_source_extensions_case_insensitively ... ok
+test tests::ignores_documentation_comments_and_unrelated_words ... ok
+test tests::repository_satisfies_language_boundary ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+language boundary: no forbidden interpreter files or invocations
+[redline-ci] fast: rust fmt + check
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded anstyle v1.0.14
+  Downloaded adler2 v2.0.1
+  Downloaded anstyle-query v1.1.5
+  Downloaded anstyle-parse v1.0.0
+  Downloaded ahash v0.8.12
+  Downloaded errno v0.3.14
+  Downloaded anstream v1.0.0
+  Downloaded mime v0.3.17
+  Downloaded lazy_static v1.5.0
+  Downloaded scopeguard v1.2.0
+  Downloaded quick-error v1.2.3
+  Downloaded itoa v1.0.18
+  Downloaded is_terminal_polyfill v1.70.2
+  Downloaded generic-array v0.14.7
+  Downloaded crypto-common v0.1.7
+  Downloaded http-body v1.0.1
+  Downloaded cpufeatures v0.2.17
+  Downloaded serde_core v1.0.228
+  Downloaded same-file v1.0.6
+  Downloaded block-buffer v0.10.4
+  Downloaded atomic-waker v1.1.2
+  Downloaded rust-embed-impl v8.11.0
+  Downloaded rust-embed-utils v8.11.0
+  Downloaded httpdate v1.0.3
+  Downloaded compression-core v0.4.32
+  Downloaded pin-project-lite v0.2.17
+  Downloaded nu-ansi-term v0.50.3
+  Downloaded digest v0.10.7
+  Downloaded lock_api v0.4.14
+  Downloaded fastrand v2.4.1
+  Downloaded bit-set v0.8.0
+  Downloaded rand_xorshift v0.4.0
+  Downloaded utf8parse v0.2.2
+  Downloaded percent-encoding v2.3.2
+  Downloaded option-ext v0.2.0
+  Downloaded http-range-header v0.4.2
+  Downloaded wait-timeout v0.2.1
+  Downloaded version_check v0.9.5
+  Downloaded tower-service v0.3.3
+  Downloaded tokio-macros v2.7.0
+  Downloaded sync_wrapper v1.0.2
+  Downloaded tower-layer v0.3.3
+  Downloaded unarray v0.1.4
+  Downloaded once_cell v1.21.4
+  Downloaded flate2 v1.1.9
+  Downloaded slab v0.4.12
+  Downloaded walkdir v2.5.0
+  Downloaded thiserror-impl v2.0.18
+  Downloaded thread_local v1.1.9
+  Downloaded hyper v1.10.1
+  Downloaded proptest v1.11.0
+  Downloaded zmij v1.0.21
+  Downloaded unicase v2.9.0
+  Downloaded thiserror v2.0.18
+  Downloaded axum v0.8.9
+  Downloaded tracing-log v0.2.0
+  Downloaded smallvec v1.15.1
+  Downloaded sha2 v0.10.9
+  Downloaded tempfile v3.27.0
+  Downloaded tracing-attributes v0.1.31
+  Downloaded tokio-stream v0.1.18
+  Downloaded regex-syntax v0.8.11
+  Downloaded shlex v2.0.1
+  Downloaded socket2 v0.6.4
+  Downloaded signal-hook-registry v1.4.8
+  Downloaded futures-util v0.3.32
+  Downloaded unicode-ident v1.0.24
+  Downloaded tracing-core v0.1.36
+  Downloaded sharded-slab v0.1.7
+  Downloaded ryu v1.0.23
+  Downloaded clap_builder v4.6.0
+  Downloaded serde_path_to_error v0.1.20
+  Downloaded serde_derive v1.0.228
+  Downloaded regex-automata v0.4.14
+  Downloaded http v1.4.2
+  Downloaded hashbrown v0.14.5
+  Downloaded shellexpand v3.1.2
+  Downloaded hyper-util v0.1.20
+  Downloaded aho-corasick v1.1.4
+  Downloaded simd-adler32 v0.3.9
+  Downloaded rusty-fork v0.3.1
+  Downloaded rand v0.9.4
+  Downloaded mio v1.2.1
+  Downloaded typenum v1.20.1
+  Downloaded serde v1.0.228
+  Downloaded libc v0.2.186
+  Downloaded tower v0.5.3
+  Downloaded rust-embed v8.11.0
+  Downloaded rusqlite v0.32.1
+  Downloaded memchr v2.8.1
+  Downloaded cc v1.2.63
+  Downloaded bytes v1.11.1
+  Downloaded tokio-util v0.7.18
+  Downloaded serde_json v1.0.150
+  Downloaded tower-http v0.6.11
+  Downloaded clap v4.6.1
+  Downloaded miniz_oxide v0.8.9
+  Downloaded hashlink v0.9.1
+  Downloaded futures v0.3.32
+  Downloaded bitflags v2.13.0
+  Downloaded axum-macros v0.5.1
+  Downloaded tracing-subscriber v0.3.23
+  Downloaded vcpkg v0.2.15
+  Downloaded rand_core v0.9.5
+  Downloaded quote v1.0.45
+  Downloaded proc-macro2 v1.0.106
+  Downloaded num-traits v0.2.19
+  Downloaded matchit v0.8.4
+  Downloaded log v0.4.32
+  Downloaded syn v2.0.117
+  Downloaded zerocopy v0.8.52
+  Downloaded httparse v1.10.1
+  Downloaded getrandom v0.4.2
+  Downloaded getrandom v0.3.4
+  Downloaded futures-executor v0.3.32
+  Downloaded futures-channel v0.3.32
+  Downloaded find-msvc-tools v0.1.9
+  Downloaded crc32fast v1.5.0
+  Downloaded clap_derive v4.6.1
+  Downloaded rustix v1.1.4
+  Downloaded axum-core v0.5.6
+  Downloaded autocfg v1.5.1
+  Downloaded tracing v0.1.44
+  Downloaded async-compression v0.4.42
+  Downloaded strsim v0.11.1
+  Downloaded rand_chacha v0.9.0
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded pkg-config v0.3.33
+  Downloaded parking_lot_core v0.9.12
+  Downloaded parking_lot v0.12.5
+  Downloaded mime_guess v2.0.5
+  Downloaded http-body-util v0.1.3
+  Downloaded compression-codecs v0.4.38
+  Downloaded serde_urlencoded v0.7.1
+  Downloaded fallible-iterator v0.3.0
+  Downloaded bit-vec v0.8.0
+  Downloaded futures-macro v0.3.32
+  Downloaded futures-io v0.3.32
+  Downloaded clap_lex v1.1.0
+  Downloaded cfg-if v1.0.4
+  Downloaded colorchoice v1.0.5
+  Downloaded dirs v6.0.0
+  Downloaded matchers v0.2.0
+  Downloaded form_urlencoded v1.2.2
+  Downloaded fnv v1.0.7
+  Downloaded heck v0.5.0
+  Downloaded futures-task v0.3.32
+  Downloaded tokio v1.52.3
+  Downloaded futures-sink v0.3.32
+  Downloaded futures-core v0.3.32
+  Downloaded fallible-streaming-iterator v0.1.9
+  Downloaded dirs-sys v0.5.0
+  Downloaded anyhow v1.0.103
+  Downloaded linux-raw-sys v0.12.1
+  Downloaded libsqlite3-sys v0.30.1
+   Compiling libc v0.2.186
+    Checking cfg-if v1.0.4
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling syn v2.0.117
+   Compiling version_check v0.9.5
+    Checking pin-project-lite v0.2.17
+   Compiling generic-array v0.14.7
+    Checking once_cell v1.21.4
+    Checking smallvec v1.15.1
+    Checking bytes v1.11.1
+    Checking futures-core v0.3.32
+   Compiling parking_lot_core v0.9.12
+    Checking itoa v1.0.18
+    Checking scopeguard v1.2.0
+    Checking futures-sink v0.3.32
+    Checking lock_api v0.4.14
+    Checking errno v0.3.14
+    Checking signal-hook-registry v1.4.8
+    Checking parking_lot v0.12.5
+    Checking socket2 v0.6.4
+    Checking mio v1.2.1
+   Compiling tokio-macros v2.7.0
+   Compiling zerocopy v0.8.52
+   Compiling unicase v2.9.0
+    Checking memchr v2.8.1
+   Compiling mime_guess v2.0.5
+    Checking tokio v1.52.3
+    Checking futures-channel v0.3.32
+   Compiling typenum v1.20.1
+    Checking http v1.4.2
+    Checking tracing-core v0.1.36
+   Compiling serde_core v1.0.228
+    Checking log v0.4.32
+    Checking http-body v1.0.1
+   Compiling tracing-attributes v0.1.31
+   Compiling futures-macro v0.3.32
+    Checking mime v0.3.17
+    Checking futures-task v0.3.32
+    Checking slab v0.4.12
+    Checking bitflags v2.13.0
+    Checking futures-io v0.3.32
+   Compiling crc32fast v1.5.0
+    Checking futures-util v0.3.32
+    Checking tracing v0.1.44
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling ahash v0.8.12
+   Compiling getrandom v0.3.4
+   Compiling httparse v1.10.1
+   Compiling shlex v2.0.1
+    Checking adler2 v2.0.1
+   Compiling option-ext v0.2.0
+    Checking simd-adler32 v0.3.9
+   Compiling find-msvc-tools v0.1.9
+    Checking tower-service v0.3.3
+   Compiling cc v1.2.63
+    Checking miniz_oxide v0.8.9
+   Compiling dirs-sys v0.5.0
+   Compiling digest v0.10.7
+   Compiling cpufeatures v0.2.17
+    Checking utf8parse v0.2.2
+   Compiling vcpkg v0.2.15
+   Compiling serde v1.0.228
+    Checking tower-layer v0.3.3
+   Compiling pkg-config v0.3.33
+    Checking percent-encoding v2.3.2
+    Checking httpdate v1.0.3
+    Checking regex-syntax v0.8.11
+   Compiling same-file v1.0.6
+   Compiling zmij v1.0.21
+   Compiling walkdir v2.5.0
+   Compiling libsqlite3-sys v0.30.1
+   Compiling sha2 v0.10.9
+    Checking anstyle-parse v1.0.0
+    Checking flate2 v1.1.9
+   Compiling dirs v6.0.0
+    Checking http-body-util v0.1.3
+   Compiling serde_derive v1.0.228
+    Checking compression-core v0.4.32
+   Compiling rustix v1.1.4
+    Checking atomic-waker v1.1.2
+    Checking anstyle-query v1.1.5
+    Checking sync_wrapper v1.0.2
+    Checking colorchoice v1.0.5
+   Compiling getrandom v0.4.2
+   Compiling serde_json v1.0.150
+    Checking anstyle v1.0.14
+    Checking is_terminal_polyfill v1.70.2
+    Checking anstream v1.0.0
+    Checking hyper v1.10.1
+    Checking compression-codecs v0.4.38
+   Compiling shellexpand v3.1.2
+    Checking rand_core v0.9.5
+    Checking hashbrown v0.14.5
+   Compiling rust-embed-utils v8.11.0
+    Checking regex-automata v0.4.14
+    Checking form_urlencoded v1.2.2
+    Checking tokio-util v0.7.18
+   Compiling thiserror v2.0.18
+    Checking linux-raw-sys v0.12.1
+    Checking clap_lex v1.1.0
+   Compiling anyhow v1.0.103
+   Compiling heck v0.5.0
+    Checking strsim v0.11.1
+    Checking lazy_static v1.5.0
+   Compiling autocfg v1.5.1
+    Checking ryu v1.0.23
+    Checking serde_urlencoded v0.7.1
+   Compiling num-traits v0.2.19
+    Checking sharded-slab v0.1.7
+    Checking clap_builder v4.6.0
+   Compiling clap_derive v4.6.1
+    Checking matchers v0.2.0
+   Compiling rust-embed-impl v8.11.0
+    Checking hashlink v0.9.1
+    Checking async-compression v0.4.42
+    Checking hyper-util v0.1.20
+    Checking tower v0.5.3
+    Checking axum-core v0.5.6
+    Checking serde_path_to_error v0.1.20
+    Checking futures-executor v0.3.32
+    Checking tracing-log v0.2.0
+   Compiling thiserror-impl v2.0.18
+   Compiling axum-macros v0.5.1
+    Checking thread_local v1.1.9
+    Checking fallible-iterator v0.3.0
+    Checking matchit v0.8.4
+    Checking http-range-header v0.4.2
+    Checking fallible-streaming-iterator v0.1.9
+    Checking fastrand v2.4.1
+    Checking nu-ansi-term v0.50.3
+    Checking tracing-subscriber v0.3.23
+    Checking tempfile v3.27.0
+    Checking rusqlite v0.32.1
+    Checking tower-http v0.6.11
+    Checking axum v0.8.9
+    Checking futures v0.3.32
+    Checking rust-embed v8.11.0
+    Checking clap v4.6.1
+    Checking tokio-stream v0.1.18
+    Checking ppv-lite86 v0.2.21
+    Checking wait-timeout v0.2.1
+    Checking fnv v1.0.7
+    Checking quick-error v1.2.3
+    Checking bit-vec v0.8.0
+    Checking bit-set v0.8.0
+    Checking rusty-fork v0.3.1
+    Checking rand_chacha v0.9.0
+    Checking rand v0.9.4
+    Checking rand_xorshift v0.4.0
+    Checking unarray v0.1.4
+    Checking proptest v1.11.0
+    Checking redline-web-server v0.1.0 (/tmp/split-host-ci.Ilul6S/redline-web/apps/api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 53.99s
+[redline-ci] fast: verifying npm lockfile
+npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+npm warn deprecated recharts@2.15.4: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
+
+added 329 packages in 3s
+npm notice
+npm notice New major version of npm available! 11.13.0 -> 12.0.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.0.1
+npm notice To update run: npm install -g npm@12.0.1
+npm notice
+[redline-ci] fast: linting GitHub Actions
+[redline-ci] fast: complete
+[redline-ci] pr-ci: frontend lane
+[redline-ci] web: npm ci
+npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+npm warn deprecated recharts@2.15.4: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
+
+added 329 packages in 2s
+[redline-ci] web: typecheck
+
+> @neverhuman/redline-web@0.1.0 typecheck
+> tsc --noEmit
+
+[redline-ci] web: lint
+
+> @neverhuman/redline-web@0.1.0 lint
+> eslint . --max-warnings=0
+
+[redline-ci] web: unit tests
+
+> @neverhuman/redline-web@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /tmp/split-host-ci.Ilul6S/redline-web/apps/web
+
+ ✓ src/lib/playwright-config.test.ts (2 tests) 3ms
+ ✓ src/api/client.test.ts (5 tests) 4ms
+ ✓ src/lib/format.test.ts (13 tests) 19ms
+ ✓ src/components/ResultsGrid.test.tsx (2 tests) 33ms
+ ✓ src/components/QueryConsole.test.tsx (3 tests) 140ms
+
+ Test Files  5 passed (5)
+      Tests  25 passed (25)
+   Start at  11:55:14
+   Duration  1.23s (transform 218ms, setup 311ms, collect 421ms, tests 199ms, environment 1.45s, prepare 343ms)
+
+[redline-ci] web: build
+
+> @neverhuman/redline-web@0.1.0 build
+> tsc -b && vite build
+
+vite v6.4.3 building for production...
+transforming...
+✓ 706 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.49 kB │ gzip:   0.32 kB
+dist/assets/index-BYKRgdJ7.css   12.42 kB │ gzip:   2.99 kB
+dist/assets/index-CwNOHE9X.js   651.81 kB │ gzip: 188.44 kB │ map: 2,838.69 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.98s
+[redline-ci] web: complete
+[redline-ci] pr-ci: backend lane
+[redline-ci] backend: fmt
+[redline-ci] backend: clippy
+    Checking redline-web-server v0.1.0 (/tmp/split-host-ci.Ilul6S/redline-web/apps/api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 2.53s
+[redline-ci] backend: tests
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling pin-project-lite v0.2.17
+   Compiling once_cell v1.21.4
+   Compiling bytes v1.11.1
+   Compiling futures-core v0.3.32
+   Compiling smallvec v1.15.1
+   Compiling itoa v1.0.18
+   Compiling futures-sink v0.3.32
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling parking_lot_core v0.9.12
+   Compiling errno v0.3.14
+   Compiling signal-hook-registry v1.4.8
+   Compiling parking_lot v0.12.5
+   Compiling socket2 v0.6.4
+   Compiling mio v1.2.1
+   Compiling memchr v2.8.1
+   Compiling tokio v1.52.3
+   Compiling futures-channel v0.3.32
+   Compiling typenum v1.20.1
+   Compiling generic-array v0.14.7
+   Compiling zerocopy v0.8.52
+   Compiling http v1.4.2
+   Compiling tracing-core v0.1.36
+   Compiling log v0.4.32
+   Compiling unicase v2.9.0
+   Compiling mime v0.3.17
+   Compiling mime_guess v2.0.5
+   Compiling http-body v1.0.1
+   Compiling futures-io v0.3.32
+   Compiling futures-task v0.3.32
+   Compiling bitflags v2.13.0
+   Compiling slab v0.4.12
+   Compiling futures-util v0.3.32
+   Compiling tracing v0.1.44
+   Compiling serde_core v1.0.228
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling tower-service v0.3.3
+   Compiling simd-adler32 v0.3.9
+   Compiling adler2 v2.0.1
+   Compiling miniz_oxide v0.8.9
+   Compiling dirs-sys v0.5.0
+   Compiling digest v0.10.7
+   Compiling crc32fast v1.5.0
+   Compiling tower-layer v0.3.3
+   Compiling httpdate v1.0.3
+   Compiling same-file v1.0.6
+   Compiling utf8parse v0.2.2
+   Compiling cpufeatures v0.2.17
+   Compiling regex-syntax v0.8.11
+   Compiling percent-encoding v2.3.2
+   Compiling sha2 v0.10.9
+   Compiling anstyle-parse v1.0.0
+   Compiling walkdir v2.5.0
+   Compiling flate2 v1.1.9
+   Compiling ahash v0.8.12
+   Compiling httparse v1.10.1
+   Compiling dirs v6.0.0
+   Compiling getrandom v0.3.4
+   Compiling http-body-util v0.1.3
+   Compiling colorchoice v1.0.5
+   Compiling sync_wrapper v1.0.2
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling atomic-waker v1.1.2
+   Compiling anstyle-query v1.1.5
+   Compiling compression-core v0.4.32
+   Compiling anstyle v1.0.14
+   Compiling anstream v1.0.0
+   Compiling compression-codecs v0.4.38
+   Compiling hyper v1.10.1
+   Compiling serde v1.0.228
+   Compiling rand_core v0.9.5
+   Compiling shellexpand v3.1.2
+   Compiling hashbrown v0.14.5
+   Compiling zmij v1.0.21
+   Compiling rust-embed-utils v8.11.0
+   Compiling form_urlencoded v1.2.2
+   Compiling regex-automata v0.4.14
+   Compiling tokio-util v0.7.18
+   Compiling linux-raw-sys v0.12.1
+   Compiling ryu v1.0.23
+   Compiling lazy_static v1.5.0
+   Compiling clap_lex v1.1.0
+   Compiling strsim v0.11.1
+   Compiling clap_builder v4.6.0
+   Compiling sharded-slab v0.1.7
+   Compiling serde_urlencoded v0.7.1
+   Compiling rustix v1.1.4
+   Compiling matchers v0.2.0
+   Compiling libsqlite3-sys v0.30.1
+   Compiling rust-embed-impl v8.11.0
+   Compiling serde_json v1.0.150
+   Compiling hashlink v0.9.1
+   Compiling getrandom v0.4.2
+   Compiling hyper-util v0.1.20
+   Compiling async-compression v0.4.42
+   Compiling tower v0.5.3
+   Compiling axum-core v0.5.6
+   Compiling serde_path_to_error v0.1.20
+   Compiling futures-executor v0.3.32
+   Compiling tracing-log v0.2.0
+   Compiling thread_local v1.1.9
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling nu-ansi-term v0.50.3
+   Compiling matchit v0.8.4
+   Compiling fallible-iterator v0.3.0
+   Compiling http-range-header v0.4.2
+   Compiling fastrand v2.4.1
+   Compiling tempfile v3.27.0
+   Compiling tower-http v0.6.11
+   Compiling rusqlite v0.32.1
+   Compiling axum v0.8.9
+   Compiling tracing-subscriber v0.3.23
+   Compiling thiserror v2.0.18
+   Compiling futures v0.3.32
+   Compiling rust-embed v8.11.0
+   Compiling clap v4.6.1
+   Compiling anyhow v1.0.103
+   Compiling tokio-stream v0.1.18
+   Compiling ppv-lite86 v0.2.21
+   Compiling wait-timeout v0.2.1
+   Compiling bit-vec v0.8.0
+   Compiling fnv v1.0.7
+   Compiling quick-error v1.2.3
+   Compiling rusty-fork v0.3.1
+   Compiling bit-set v0.8.0
+   Compiling rand_chacha v0.9.0
+   Compiling num-traits v0.2.19
+   Compiling rand_xorshift v0.4.0
+   Compiling rand v0.9.4
+   Compiling unarray v0.1.4
+   Compiling proptest v1.11.0
+   Compiling redline-web-server v0.1.0 (/tmp/split-host-ci.Ilul6S/redline-web/apps/api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 55.46s
+     Running unittests src/lib.rs (/tmp/split-host-ci.Ilul6S/cargo-target/debug/deps/redline_web_server-a799085e23abb463)
+
+running 8 tests
+test connector::target_bin::tests::empty_cell_is_null ... ok
+test connector::target_bin::tests::parses_tab_output ... ok
+test connector::tests::ident_quoting ... ok
+test connector::tests::read_only_detection ... ok
+test metrics::tests::percentiles_are_nearest_rank ... ok
+test connector::target_bin::tests::unsupported_ops_error_cleanly ... ok
+test metrics::tests::records_and_counts ... ok
+test repair::tests::read_only_hint_points_at_the_authz_proof ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/tmp/split-host-ci.Ilul6S/cargo-target/debug/deps/redline_web-e19ef8feb3043cb9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/api.rs (/tmp/split-host-ci.Ilul6S/cargo-target/debug/deps/api-5aa102b7cfa1e285)
+
+running 5 tests
+test write_rejected_when_read_only ... ok
+test health_is_ok ... ok
+test query_select_returns_one ... ok
+test metrics_counters_increment ... ok
+test schema_lists_seeded_tables ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+
+     Running tests/connector.rs (/tmp/split-host-ci.Ilul6S/cargo-target/debug/deps/connector-81d84b1936fdb3e4)
+
+running 6 tests
+test read_only_rejects_writes ... ok
+test rejects_unknown_order_by ... ok
+test truncates_at_max_rows ... ok
+test seeds_demo_schema ... ok
+test select_returns_rows ... ok
+test query_truncates_when_over_cap ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/property.rs (/tmp/split-host-ci.Ilul6S/cargo-target/debug/deps/property-8d636936f5c304d2)
+
+running 6 tests
+test commented_write_is_rejected ... ok
+test quote_ident_neutralises_breakout ... ok
+test read_statements_are_always_read_only ... ok
+test write_statements_are_never_read_only ... ok
+test quote_ident_is_always_well_formed ... ok
+test quote_ident_round_trips ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+[redline-ci] backend: release build
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling syn v2.0.117
+   Compiling libc v0.2.186
+   Compiling version_check v0.9.5
+   Compiling generic-array v0.14.7
+   Compiling pin-project-lite v0.2.17
+   Compiling cfg-if v1.0.4
+   Compiling futures-core v0.3.32
+   Compiling bytes v1.11.1
+   Compiling once_cell v1.21.4
+   Compiling futures-sink v0.3.32
+   Compiling itoa v1.0.18
+   Compiling errno v0.3.14
+   Compiling unicase v2.9.0
+   Compiling mime_guess v2.0.5
+   Compiling signal-hook-registry v1.4.8
+   Compiling socket2 v0.6.4
+   Compiling mio v1.2.1
+   Compiling tokio-macros v2.7.0
+   Compiling memchr v2.8.1
+   Compiling tokio v1.52.3
+   Compiling futures-channel v0.3.32
+   Compiling typenum v1.20.1
+   Compiling http v1.4.2
+   Compiling tracing-core v0.1.36
+   Compiling log v0.4.32
+   Compiling serde_core v1.0.228
+   Compiling smallvec v1.15.1
+   Compiling http-body v1.0.1
+   Compiling tracing-attributes v0.1.31
+   Compiling futures-macro v0.3.32
+   Compiling mime v0.3.17
+   Compiling zerocopy v0.8.52
+   Compiling futures-io v0.3.32
+   Compiling crc32fast v1.5.0
+   Compiling slab v0.4.12
+   Compiling futures-task v0.3.32
+   Compiling futures-util v0.3.32
+   Compiling tracing v0.1.44
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling ahash v0.8.12
+   Compiling shlex v2.0.1
+   Compiling tower-service v0.3.3
+   Compiling find-msvc-tools v0.1.9
+   Compiling simd-adler32 v0.3.9
+   Compiling httparse v1.10.1
+   Compiling adler2 v2.0.1
+   Compiling option-ext v0.2.0
+   Compiling dirs-sys v0.5.0
+   Compiling miniz_oxide v0.8.9
+   Compiling cc v1.2.63
+   Compiling digest v0.10.7
+   Compiling httpdate v1.0.3
+   Compiling utf8parse v0.2.2
+   Compiling zmij v1.0.21
+   Compiling pkg-config v0.3.33
+   Compiling same-file v1.0.6
+   Compiling serde v1.0.228
+   Compiling cpufeatures v0.2.17
+   Compiling vcpkg v0.2.15
+   Compiling tower-layer v0.3.3
+   Compiling percent-encoding v2.3.2
+   Compiling libsqlite3-sys v0.30.1
+   Compiling sha2 v0.10.9
+   Compiling walkdir v2.5.0
+   Compiling anstyle-parse v1.0.0
+   Compiling flate2 v1.1.9
+   Compiling dirs v6.0.0
+   Compiling http-body-util v0.1.3
+   Compiling serde_derive v1.0.228
+   Compiling parking_lot_core v0.9.12
+   Compiling anstyle v1.0.14
+   Compiling sync_wrapper v1.0.2
+   Compiling colorchoice v1.0.5
+   Compiling atomic-waker v1.1.2
+   Compiling anstyle-query v1.1.5
+   Compiling serde_json v1.0.150
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling compression-core v0.4.32
+   Compiling regex-syntax v0.8.11
+   Compiling regex-automata v0.4.14
+   Compiling compression-codecs v0.4.38
+   Compiling anstream v1.0.0
+   Compiling hyper v1.10.1
+   Compiling shellexpand v3.1.2
+   Compiling hashbrown v0.14.5
+   Compiling rust-embed-utils v8.11.0
+   Compiling form_urlencoded v1.2.2
+   Compiling tokio-util v0.7.18
+   Compiling anyhow v1.0.103
+   Compiling strsim v0.11.1
+   Compiling scopeguard v1.2.0
+   Compiling lazy_static v1.5.0
+   Compiling clap_lex v1.1.0
+   Compiling ryu v1.0.23
+   Compiling bitflags v2.13.0
+   Compiling heck v0.5.0
+   Compiling thiserror v2.0.18
+   Compiling clap_derive v4.6.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling clap_builder v4.6.0
+   Compiling sharded-slab v0.1.7
+   Compiling lock_api v0.4.14
+   Compiling rust-embed-impl v8.11.0
+   Compiling hashlink v0.9.1
+   Compiling hyper-util v0.1.20
+   Compiling async-compression v0.4.42
+   Compiling matchers v0.2.0
+   Compiling tower v0.5.3
+   Compiling axum-core v0.5.6
+   Compiling serde_path_to_error v0.1.20
+   Compiling futures-executor v0.3.32
+   Compiling tracing-log v0.2.0
+   Compiling thread_local v1.1.9
+   Compiling axum-macros v0.5.1
+   Compiling thiserror-impl v2.0.18
+   Compiling matchit v0.8.4
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling nu-ansi-term v0.50.3
+   Compiling http-range-header v0.4.2
+   Compiling fallible-iterator v0.3.0
+   Compiling rusqlite v0.32.1
+   Compiling tower-http v0.6.11
+   Compiling tracing-subscriber v0.3.23
+   Compiling axum v0.8.9
+   Compiling futures v0.3.32
+   Compiling rust-embed v8.11.0
+   Compiling parking_lot v0.12.5
+   Compiling clap v4.6.1
+   Compiling tokio-stream v0.1.18
+   Compiling redline-web-server v0.1.0 (/tmp/split-host-ci.Ilul6S/redline-web/apps/api)
+    Finished `release` profile [optimized] target(s) in 2m 03s
+[redline-ci] backend: complete
+[redline-ci] pr-ci: contract-drift lane
+[redline-ci] contract-drift: checking OpenAPI <-> Rust DTOs <-> TS DTOs
+[redline-ci] contract-drift: ok: 16 schemas, 10 paths in sync
+[redline-ci] contract-drift: complete
+[redline-ci] pr-ci: security lane
+[redline-ci] security: pinned local gitleaks
+[90m11:58AM[0m [32mINF[0m 10 commits scanned.
+[90m11:58AM[0m [32mINF[0m scan completed in 3.92s
+[90m11:58AM[0m [32mINF[0m no leaks found
+[redline-ci] security: pinned local RustSec database
+[redline-ci] security: pinned local cargo-deny

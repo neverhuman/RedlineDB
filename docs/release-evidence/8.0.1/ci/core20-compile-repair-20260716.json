@@ -1,0 +1,42 @@
+{
+  "schema_version": "jain.exact-head-compile-repair/v1",
+  "generated_at": "2026-07-16T07:00:00Z",
+  "status": "pass_pending_host_required",
+  "repository": "jeryu/jain-core",
+  "pull_request": 20,
+  "branch": "claude/lime-prime-core-v2-20260716",
+  "failed_head_sha": "c2603cea6760e532cb78886323ea41049e9675c8",
+  "repaired_head_sha": "9fef25f721689390788487f7fa178b2681dcf827",
+  "repaired_tree_sha": "7affc57d4b64ec6792520c85baf8363cbfb72528",
+  "repair_diff_sha256": "541aec1e0cc7f7f9cf7f1e2cd5378482f2a207470e8a13d9e383ac5129ca9ddd",
+  "files_changed": 4,
+  "insertions": 4,
+  "deletions": 21,
+  "original_required_log_sha256": "518498c014e83ccdf842a7ff14d45c2ebed83721dd2064f831a55393506d61a5",
+  "original_failures": [
+    "missing EngineEvaluator import in lime_invention.rs",
+    "warning-denied unused LIME_CANDIDATE_CEILING import",
+    "missing InventionExecutionReceipt test import exposed by all-targets",
+    "dead unused best_persistable_member_index replaced by serving_pick",
+    "missing execution field in tests/unit.rs finalist fixture"
+  ],
+  "verification": {
+    "cargo_fmt_all_check": "pass",
+    "rustflags_deny_warnings_cargo_check_locked_feat_core_all_targets": "pass",
+    "cargo_test_locked_feat_core_lib": "pass_114_tests"
+  },
+  "forge_checks": {
+    "jankurai/proof": "failure_null_output",
+    "jain-core/required": "absent_at_repaired_head"
+  },
+  "checkout_clean": true,
+  "registered_worktrees": 1,
+  "worktree_created": false,
+  "remaining_gates": [
+    "independent review",
+    "exact-head jain-core/required",
+    "proof service repair",
+    "independent approval",
+    "protected merge"
+  ]
+}

@@ -1,0 +1,2168 @@
+{
+  "schema": "jain.open-pr-release-triage/v1",
+  "operation": "read-only all-managed-repository open-PR release-train triage",
+  "status": "pass",
+  "release_decision": "BLOCK",
+  "claim_token": "codex-mcp-open-pr-release-triage-20260716T0520Z",
+  "snapshot_at": "2026-07-16T05:30:50.609Z",
+  "authority_manifest": "jain-split-ops/repos.manifest.toml",
+  "release_target": "8.0.1",
+  "mutation_policy": "No PR, source, branch/ref, CI/check, approval, merge, tag, protection, authority, Redline, worktree, host, image, route, service, or deployment mutation.",
+  "summary": {
+    "repositories_read": 26,
+    "repository_read_errors": 0,
+    "open_prs": 41,
+    "exact_duplicate_groups": 0,
+    "all_open_prs_mergeable_state_blocked": true,
+    "draft_prs": [
+      "jeryu/jain-web#21",
+      "jeryu/jain-catboost#4",
+      "jeryu/jain-web#16"
+    ],
+    "classification_counts": {
+      "deploy-critical current": 8,
+      "blocked/rejected diff": 13,
+      "8.0.1 identity current": 10,
+      "unrelated-but-required-before-100": 2,
+      "superseded/obsolete needing custody": 8
+    },
+    "latest_required_conclusions": {
+      "missing": 29,
+      "completed/failure": 7,
+      "completed/success": 5
+    },
+    "latest_jankurai_proof_conclusions": {
+      "completed/failure": 35,
+      "completed/success": 6
+    }
+  },
+  "protection_summary": {
+    "repositories_verified": 26,
+    "all_pass": true,
+    "contract": "one exact <repo>/required context, one approval, linear history, enforce_admins, no force-push, no deletion",
+    "repositories": [
+      {
+        "repo": "jeryu/jain",
+        "status": "pass",
+        "required_context": "jain/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-docs",
+        "status": "pass",
+        "required_context": "jain-docs/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-domain",
+        "status": "pass",
+        "required_context": "jain-domain/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-math",
+        "status": "pass",
+        "required_context": "jain-math/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-contracts",
+        "status": "pass",
+        "required_context": "jain-contracts/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-catboost",
+        "status": "pass",
+        "required_context": "jain-catboost/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-xgboost",
+        "status": "pass",
+        "required_context": "jain-xgboost/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-lightgbm",
+        "status": "pass",
+        "required_context": "jain-lightgbm/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-jable",
+        "status": "pass",
+        "required_context": "jain-jable/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-battle-gpu",
+        "status": "pass",
+        "required_context": "jain-battle-gpu/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-starforge",
+        "status": "pass",
+        "required_context": "jain-starforge/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-core",
+        "status": "pass",
+        "required_context": "jain-core/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-llm",
+        "status": "pass",
+        "required_context": "jain-llm/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-agent",
+        "status": "pass",
+        "required_context": "jain-agent/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-jnoccio",
+        "status": "pass",
+        "required_context": "jain-jnoccio/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-zyal",
+        "status": "pass",
+        "required_context": "jain-zyal/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-jailgun",
+        "status": "pass",
+        "required_context": "jain-jailgun/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-research",
+        "status": "pass",
+        "required_context": "jain-research/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-report",
+        "status": "pass",
+        "required_context": "jain-report/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-tui",
+        "status": "pass",
+        "required_context": "jain-tui/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-cli",
+        "status": "pass",
+        "required_context": "jain-cli/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-web",
+        "status": "pass",
+        "required_context": "jain-web/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-model-zoo",
+        "status": "pass",
+        "required_context": "jain-model-zoo/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-ops",
+        "status": "pass",
+        "required_context": "jain-ops/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jeryu/jain-deploy",
+        "status": "pass",
+        "required_context": "jain-deploy/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      {
+        "repo": "jain-split/jain-smartcluster",
+        "status": "pass",
+        "required_context": "jain-smartcluster/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      }
+    ]
+  },
+  "drift_from_initial_41_pr_snapshot": {
+    "initial_snapshot_at": "2026-07-16T05:23:04.138Z",
+    "final_snapshot_at": "2026-07-16T05:30:50.609Z",
+    "added": [],
+    "removed": [],
+    "moved": [
+      {
+        "repo": "jeryu/jain-web",
+        "number": 28,
+        "old_head": "b9f316048d4df5dd2c71bb3ec9f588bf0d2c196c",
+        "new_head": "3144411e9f2e6d54077c31a11b2060b23a7c3ec1",
+        "old_base": "6adcda48e5711dcf5934934236be09fcc959ff10",
+        "new_base": "6adcda48e5711dcf5934934236be09fcc959ff10"
+      },
+      {
+        "repo": "jeryu/jain-web",
+        "number": 25,
+        "old_head": "e793e37fe652ad3fa350515b04daa183047dd2f6",
+        "new_head": "f2df3b4e0c4bd033e152d946e579a45aebe037f2",
+        "old_base": "6adcda48e5711dcf5934934236be09fcc959ff10",
+        "new_base": "6adcda48e5711dcf5934934236be09fcc959ff10"
+      },
+      {
+        "repo": "jeryu/jain-web",
+        "number": 24,
+        "old_head": "022a1a64ba65f8aa45ab6e28a16dab139278c2f2",
+        "new_head": "13ea4968dde1286111dacf8cd0216fa71e931242",
+        "old_base": "6adcda48e5711dcf5934934236be09fcc959ff10",
+        "new_base": "6adcda48e5711dcf5934934236be09fcc959ff10"
+      },
+      {
+        "repo": "jeryu/jain-zyal",
+        "number": 6,
+        "old_head": "f385b20ab613fbc691f985c4d7489133512878b0",
+        "new_head": "cd33b26ab97a965c21ccafb867b39df2341601df",
+        "old_base": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
+        "new_base": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288"
+      },
+      {
+        "repo": "jeryu/jain-jailgun",
+        "number": 6,
+        "old_head": "6c51a10dda78cac94f2355c0bf032665887ba218",
+        "new_head": "529dd19ef07303fc46f49549863d1631708f12ff",
+        "old_base": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+        "new_base": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e"
+      }
+    ],
+    "interpretation": "The Web train and two repaired identity heads moved under active owners during triage. Stale heads must not be reviewed, approved, or merged."
+  },
+  "top_blockers": [
+    {
+      "rank": 1,
+      "area": "Core",
+      "evidence": "Core #15 lacks required and proof fails; Core #14 required/proof fail and independent review rejected its 43-file mixed transport+divergent-engine diff.",
+      "next": "Fix #15 CPU-only CatBoost linking, then re-cut #14 as the six-file transport seed on post-engine main."
+    },
+    {
+      "rank": 2,
+      "area": "SmartCluster",
+      "evidence": "#3 remains based on pre-foundation ec9f7e95 with missing required/proof failure; #5 is a clean c28c5c8 successor but also has missing required/proof failure and no current exact-head owner.",
+      "next": "Recompose typed routing on c28c5c8, then run #5's full node-v1.3 hardware/security/compatibility gates."
+    },
+    {
+      "rank": 3,
+      "area": "Web",
+      "evidence": "#28/#25/#24 moved during triage to 3144411e/f2df3b4e/13ea4968. #28 proof succeeds but required is missing; #25/#24 proof fail and required is missing; all remain blocked.",
+      "next": "Freeze the active writer, finish #28 required, then process #25 and #24 with fresh exact-head CI and review."
+    },
+    {
+      "rank": 4,
+      "area": "Deploy",
+      "evidence": "#22 was independently rejected and still lacks required/proof; #23 lacks required and proof fails; #26 required/proof fail. Real Docker guestd, one-file appliance, supply-chain, and deployctl contracts remain incomplete.",
+      "next": "Re-cut #22 as a root-built Rust-only real-Docker guestd successor, then stack #23 and #26."
+    },
+    {
+      "rank": 5,
+      "area": "Gate fleet",
+      "evidence": "Required contexts: 29 missing, 7 failing, 5 success. Jankurai proof: 35 failing, 6 success. All 41 PRs are merge-blocked.",
+      "next": "Do not approve or merge until each intended head has genuine required+proof success and independent exact-head review."
+    },
+    {
+      "rank": 6,
+      "area": "Identity waves",
+      "evidence": "CatBoost and Research remain rejected for unrelated lock/scope drift; Zyal and Jailgun moved to lock-lineage repair heads but still lack required; LLM required is missing; Agent/Report/TUI required checks fail; multiple wave repos have no identity PR.",
+      "next": "Repair/review existing identity heads, then create missing current-main identity PRs wave-by-wave before corrective tags and authority binds."
+    }
+  ],
+  "missing_open_identity_lanes": [
+    {
+      "wave": 1,
+      "repos": [
+        "jain-domain",
+        "jain-math",
+        "jain-contracts",
+        "jain-xgboost",
+        "jain-lightgbm"
+      ],
+      "note": "Domain and Math recuts were claimed after the forge snapshot by /root/hegel; no open identity PR existed at snapshot time. Contracts/XGBoost/LightGBM remained unclaimed."
+    },
+    {
+      "wave": 2,
+      "repos": [
+        "jain-jable",
+        "jain-battle-gpu",
+        "jain-starforge"
+      ]
+    },
+    {
+      "wave": 5,
+      "repos": [
+        "jain-jnoccio",
+        "jain-smartcluster"
+      ]
+    },
+    {
+      "wave": 6,
+      "repos": [
+        "jain-cli"
+      ]
+    },
+    {
+      "wave": 7,
+      "repos": [
+        "jain-ops"
+      ],
+      "note": "jain-model-zoo identity is merged but its corrective tag/authority bind remains outside this open-PR census."
+    },
+    {
+      "wave": 9,
+      "repos": [
+        "jain"
+      ],
+      "note": "The sole portal PR has an invalid literal base 'base' and is not an identity lane."
+    }
+  ],
+  "priority_queue": [
+    {
+      "order": 1,
+      "priority_key": 1,
+      "repo": "jeryu/jain-core",
+      "pr": 15,
+      "head": "e69e0a5ed4cb741c1734d37b62d382c8d8821792",
+      "classification": "deploy-critical current",
+      "next_action": "Fix the CPU-only CatBoost version-script/link contract, then publish genuine required/proof on this exact head."
+    },
+    {
+      "order": 2,
+      "priority_key": 2,
+      "repo": "jeryu/jain-core",
+      "pr": 14,
+      "head": "09823c4012d228c8d73df625329340afc1bc27f4",
+      "classification": "blocked/rejected diff",
+      "next_action": "Re-cut only the six-file transport-v2 seed on the post-engine Core main and rerun exact-head gates/review."
+    },
+    {
+      "order": 3,
+      "priority_key": 3,
+      "repo": "jeryu/jain-core",
+      "pr": 19,
+      "head": "92d280ecdd5a07d5ccba0244e30d43294b5c9569",
+      "classification": "deploy-critical current",
+      "next_action": "Rebase coverage tests onto accepted #15, raise changed release-critical line coverage to at least 85%, and run coverage/required."
+    },
+    {
+      "order": 4,
+      "priority_key": 4,
+      "repo": "jeryu/jain-core",
+      "pr": 18,
+      "head": "aa601624b4d292dd8858dc4eb8346103293be4ab",
+      "classification": "8.0.1 identity current",
+      "next_action": "Hold until Core runtime/transport lands, then rebase the identity-only commit on final Core main and run exact-head gates."
+    },
+    {
+      "order": 5,
+      "priority_key": 5,
+      "repo": "jain-split/jain-smartcluster",
+      "pr": 3,
+      "head": "630e1944fdcd43502b2436750089175b20e58eb8",
+      "classification": "blocked/rejected diff",
+      "next_action": "Recompose typed JOPE/Lime routing on protected foundation c28c5c8 and obtain fresh exact-head review/required."
+    },
+    {
+      "order": 6,
+      "priority_key": 6,
+      "repo": "jain-split/jain-smartcluster",
+      "pr": 5,
+      "head": "61ed3e2c64e370dd638803f406f84bd0825ada31",
+      "classification": "deploy-critical current",
+      "next_action": "Run the full node-v1.3 exact-head hardware/security/compatibility suite and publish required/proof before review."
+    },
+    {
+      "order": 7,
+      "priority_key": 7,
+      "repo": "jeryu/jain-web",
+      "pr": 28,
+      "head": "3144411e9f2e6d54077c31a11b2060b23a7c3ec1",
+      "classification": "deploy-critical current",
+      "next_action": "Apply the deadline-poll fix to this exact Redline-consumer line and drive jain-web/required green."
+    },
+    {
+      "order": 8,
+      "priority_key": 8,
+      "repo": "jeryu/jain-web",
+      "pr": 25,
+      "head": "f2df3b4e0c4bd033e152d946e579a45aebe037f2",
+      "classification": "deploy-critical current",
+      "next_action": "After #28, rebase the T0 successor and obtain green required/proof plus a fresh exact-head review."
+    },
+    {
+      "order": 9,
+      "priority_key": 9,
+      "repo": "jeryu/jain-web",
+      "pr": 24,
+      "head": "13ea4968dde1286111dacf8cd0216fa71e931242",
+      "classification": "deploy-critical current",
+      "next_action": "After #28 and #25, rebase with hermetic SCQ-off CI, fix score ownership maps, then obtain fresh exact-head review."
+    },
+    {
+      "order": 10,
+      "priority_key": 10,
+      "repo": "jeryu/jain-web",
+      "pr": 31,
+      "head": "92f1d3a055829f106319103bb5760b35a00591ae",
+      "classification": "8.0.1 identity current",
+      "next_action": "Hold until #28→#25→#24 lands, then rebase identity-only on final Web main and run exact-head gates."
+    },
+    {
+      "order": 11,
+      "priority_key": 11,
+      "repo": "jeryu/jain-deploy",
+      "pr": 22,
+      "head": "f8afefce3c0e5c7face360fde3f89205fdac1910",
+      "classification": "blocked/rejected diff",
+      "next_action": "Re-cut a current-main guestd successor that is root-built, Rust-only, real-Docker-backed, score-clean, and free of PIN-ME placeholders."
+    },
+    {
+      "order": 12,
+      "priority_key": 12,
+      "repo": "jeryu/jain-deploy",
+      "pr": 23,
+      "head": "429bfc7f7a33262533981552129f85e9cc006aa8",
+      "classification": "deploy-critical current",
+      "next_action": "Consolidate artifact-quality, jain.sh, and single-Dockerfile work on accepted dependencies, then publish required/proof."
+    },
+    {
+      "order": 13,
+      "priority_key": 13,
+      "repo": "jeryu/jain-deploy",
+      "pr": 26,
+      "head": "40e589852eed0bb82544626c4326141be149a6a4",
+      "classification": "deploy-critical current",
+      "next_action": "Rebase appliance driver/supervisor fixes on accepted #22/#23 successors and rerun exact-head release gates."
+    },
+    {
+      "order": 14,
+      "priority_key": 14,
+      "repo": "jeryu/jain-deploy",
+      "pr": 27,
+      "head": "ec08477512319f6c7cda64e0ef33349840e23105",
+      "classification": "8.0.1 identity current",
+      "next_action": "Hold until the Deploy runtime stack lands, then rebase identity-only on final Deploy main and run exact-head gates."
+    },
+    {
+      "order": 15,
+      "priority_key": 15,
+      "repo": "jeryu/jain-llm",
+      "pr": 7,
+      "head": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+      "classification": "8.0.1 identity current",
+      "next_action": "Let the claimed serialized runner finish and publish jain-llm/required for cec2f192 before independent review."
+    },
+    {
+      "order": 16,
+      "priority_key": 16,
+      "repo": "jeryu/jain-catboost",
+      "pr": 8,
+      "head": "8ba6b347071dfbd04e2fdc7b6cd3440587404e56",
+      "classification": "blocked/rejected diff",
+      "next_action": "Remove the eight unrelated Cargo.lock upgrades and false split.0 README claim, then request fresh exact-head review."
+    },
+    {
+      "order": 17,
+      "priority_key": 17,
+      "repo": "jeryu/jain-zyal",
+      "pr": 6,
+      "head": "cd33b26ab97a965c21ccafb867b39df2341601df",
+      "classification": "8.0.1 identity current",
+      "next_action": "Run a fresh exact-head scope review of cd33b26, then publish jain-zyal/required before approval."
+    },
+    {
+      "order": 18,
+      "priority_key": 18,
+      "repo": "jeryu/jain-jailgun",
+      "pr": 6,
+      "head": "529dd19ef07303fc46f49549863d1631708f12ff",
+      "classification": "8.0.1 identity current",
+      "next_action": "Run a fresh exact-head scope review of 529dd19, then publish jain-jailgun/required before approval."
+    },
+    {
+      "order": 19,
+      "priority_key": 19,
+      "repo": "jeryu/jain-research",
+      "pr": 4,
+      "head": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5",
+      "classification": "blocked/rejected diff",
+      "next_action": "Restore the four unrelated Cargo.lock entries and revalidate the added standard-version file before fresh required/review."
+    },
+    {
+      "order": 20,
+      "priority_key": 20,
+      "repo": "jeryu/jain-agent",
+      "pr": 5,
+      "head": "ffbccc31d9c194f74b6253cf91c85b264a582d1d",
+      "classification": "8.0.1 identity current",
+      "next_action": "Compose the green score successor, rerun required with JAIN_VENDOR_ROOT after the LLM identity lands, then review."
+    },
+    {
+      "order": 21,
+      "priority_key": 21,
+      "repo": "jeryu/jain-report",
+      "pr": 8,
+      "head": "c8a9743929d315aa2b409d3ed965622b9ce7e7db",
+      "classification": "8.0.1 identity current",
+      "next_action": "Compose the score successor and rerun required with JAIN_VENDOR_ROOT after final Core/Math tags exist."
+    },
+    {
+      "order": 22,
+      "priority_key": 22,
+      "repo": "jeryu/jain-tui",
+      "pr": 11,
+      "head": "fe9bfe3c48dbd0123f0c56e4dee69a0169b68bea",
+      "classification": "8.0.1 identity current",
+      "next_action": "Compose the score successor and rerun required with JAIN_VENDOR_ROOT after final Core tag exists."
+    },
+    {
+      "order": 23,
+      "priority_key": 23,
+      "repo": "jeryu/jain-docs",
+      "pr": 12,
+      "head": "413bfa288bf4016b00538ee8080d8f8fb8db5a34",
+      "classification": "8.0.1 identity current",
+      "next_action": "Rebase onto merged docs main #11, resolve the required.sh version conflict, then run exact-head required/proof."
+    },
+    {
+      "order": 24,
+      "priority_key": 30,
+      "repo": "jeryu/jain-web",
+      "pr": 21,
+      "head": "faf56fdd60275fa6d4a825f39823680e778ddf52",
+      "classification": "unrelated-but-required-before-100",
+      "next_action": "Recompose the minimal feed-order fix on post-train Web main and rerun browser/order regression coverage."
+    },
+    {
+      "order": 25,
+      "priority_key": 31,
+      "repo": "jeryu/jain-web",
+      "pr": 22,
+      "head": "d71265e78b0274857253fa5c3ebefaf540b92756",
+      "classification": "unrelated-but-required-before-100",
+      "next_action": "Recompose the fail-closed auth/upload fix on post-train Web main and run focused security/browser acceptance."
+    },
+    {
+      "order": 26,
+      "priority_key": 40,
+      "repo": "jeryu/jain-domain",
+      "pr": 6,
+      "head": "2478280deeab809988faccdc36a96d9a8e625938",
+      "classification": "blocked/rejected diff",
+      "next_action": "Re-cut the owner-approved +13 additive policy block from current main and obtain a fresh exact-head review."
+    },
+    {
+      "order": 27,
+      "priority_key": 41,
+      "repo": "jeryu/jain-xgboost",
+      "pr": 7,
+      "head": "c2b8bd0c72de261ce2c96233c46fdf2fc94d1ea8",
+      "classification": "blocked/rejected diff",
+      "next_action": "Re-cut the policy-only change from current main without the unapproved CI-guidance rewrite."
+    },
+    {
+      "order": 28,
+      "priority_key": 42,
+      "repo": "jeryu/jain-lightgbm",
+      "pr": 7,
+      "head": "a97e401bdab4779d31060735f285837352bc8741",
+      "classification": "blocked/rejected diff",
+      "next_action": "Re-cut the policy-only change from current main without the unapproved CI-guidance rewrite."
+    },
+    {
+      "order": 29,
+      "priority_key": 43,
+      "repo": "jeryu/jain-jable",
+      "pr": 3,
+      "head": "4fb7d2dc0178dd8030d3d116d8267943c3e56470",
+      "classification": "blocked/rejected diff",
+      "next_action": "Re-cut the policy-only change from current main without the unapproved CI-guidance rewrite."
+    },
+    {
+      "order": 30,
+      "priority_key": 44,
+      "repo": "jeryu/jain-agent",
+      "pr": 3,
+      "head": "772c6d55d6bf5de0b3eb76f5a549b3d49ed98fa9",
+      "classification": "blocked/rejected diff",
+      "next_action": "Re-cut the clean additive policy change from current main without the contaminating 8.0.1 repin and discard stale approval."
+    },
+    {
+      "order": 31,
+      "priority_key": 45,
+      "repo": "jeryu/jain-jnoccio",
+      "pr": 3,
+      "head": "b67f1ece0b42e1f2d1d36d9d3e7528a6b123f62c",
+      "classification": "blocked/rejected diff",
+      "next_action": "Re-read the moved head and re-cut the approved additive policy block from current main before CI/review."
+    },
+    {
+      "order": 32,
+      "priority_key": 46,
+      "repo": "jeryu/jain-tui",
+      "pr": 8,
+      "head": "457227dab89c3cc34791823a243ac21781beb10e",
+      "classification": "blocked/rejected diff",
+      "next_action": "Re-cut the policy-only change from current main without the unapproved CI-guidance rewrite."
+    },
+    {
+      "order": 33,
+      "priority_key": 47,
+      "repo": "jeryu/jain-ops",
+      "pr": 7,
+      "head": "1630873b220799aa22df07b15d8c2f23b4216729",
+      "classification": "blocked/rejected diff",
+      "next_action": "Re-cut the policy-only change from current main without the unapproved CI-guidance rewrite."
+    },
+    {
+      "order": 34,
+      "priority_key": 50,
+      "repo": "jeryu/jain",
+      "pr": 3,
+      "head": "77e616ef86919219f73215df5efd82b0680e68ec",
+      "classification": "superseded/obsolete needing custody",
+      "next_action": "Compare against current portal main; bundle any unique guide assets, then retire this invalid-base PR through a separate custody action."
+    },
+    {
+      "order": 35,
+      "priority_key": 51,
+      "repo": "jeryu/jain-catboost",
+      "pr": 4,
+      "head": "aa0320d903fbdac80f07f02f2cab043803deefea",
+      "classification": "superseded/obsolete needing custody",
+      "next_action": "Preserve the unique adaptive-GPU draft in a verified bundle and defer it outside the frozen release train."
+    },
+    {
+      "order": 36,
+      "priority_key": 52,
+      "repo": "jeryu/jain-core",
+      "pr": 12,
+      "head": "0a4097376f08d42a42d4a7326242bd2921e06eb8",
+      "classification": "superseded/obsolete needing custody",
+      "next_action": "Diff it against the accepted #15 engine line, bundle unique work, and do not broad-merge the stale release head."
+    },
+    {
+      "order": 37,
+      "priority_key": 53,
+      "repo": "jeryu/jain-web",
+      "pr": 13,
+      "head": "5e70ab4b6678729b8e5d340f5931d0ec5a1911c3",
+      "classification": "superseded/obsolete needing custody",
+      "next_action": "Prove whether manifest-download work is already contained; bundle only unique bytes and retire outside this train."
+    },
+    {
+      "order": 38,
+      "priority_key": 54,
+      "repo": "jeryu/jain-web",
+      "pr": 16,
+      "head": "adf5cdb4dff67e755b2dfb08ee16509de7fddff6",
+      "classification": "superseded/obsolete needing custody",
+      "next_action": "Bundle the old draft feature-expansion control plane and defer it under the release feature freeze."
+    },
+    {
+      "order": 39,
+      "priority_key": 55,
+      "repo": "jeryu/jain-deploy",
+      "pr": 12,
+      "head": "932cd623bc73c8a86e41191af0cdc25403a685b5",
+      "classification": "superseded/obsolete needing custody",
+      "next_action": "Compare the v7 progress-contract sync to current main, bundle unique bytes, and retire it outside the release train."
+    },
+    {
+      "order": 40,
+      "priority_key": 56,
+      "repo": "jeryu/jain-deploy",
+      "pr": 20,
+      "head": "1decb42f7dac587a42227945e2f978d718c21f61",
+      "classification": "superseded/obsolete needing custody",
+      "next_action": "Extract any still-unique runtime contract tests into the final Deploy successor and custody the stale PR."
+    },
+    {
+      "order": 41,
+      "priority_key": 57,
+      "repo": "jeryu/jain-deploy",
+      "pr": 21,
+      "head": "305903dd257d084222e302ab73f936a5fbbac1e4",
+      "classification": "superseded/obsolete needing custody",
+      "next_action": "Compare its image/Starforge proof with #23/#26, bundle only unique evidence, and do not merge the stale v8.0.0 line."
+    }
+  ],
+  "pull_requests": [
+    {
+      "repo": "jeryu/jain-core",
+      "pr": 15,
+      "title": "feat-core: GP-off default + invention-gpu dynamic-linking + typed bma persistence + JAIN_INVENTION_ENGINE override",
+      "classification": "deploy-critical current",
+      "priority_key": 1,
+      "head": "e69e0a5ed4cb741c1734d37b62d382c8d8821792",
+      "head_ref": "claude/lime-prime-core-v2-20260716",
+      "base": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-core/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/neutral",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-core/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy) W24 active",
+      "next_action": "Fix the CPU-only CatBoost version-script/link contract, then publish genuine required/proof on this exact head."
+    },
+    {
+      "repo": "jeryu/jain-core",
+      "pr": 14,
+      "title": "contracts: web-api-transport-v2 seed",
+      "classification": "blocked/rejected diff",
+      "priority_key": 2,
+      "head": "09823c4012d228c8d73df625329340afc1bc27f4",
+      "head_ref": "claude/web-transport-v2-20260715",
+      "base": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-core/required",
+        "result": "completed/failure"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/neutral",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-core/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy) Core lane active; Claude-RV-1 rejected current diff",
+      "next_action": "Re-cut only the six-file transport-v2 seed on the post-engine Core main and rerun exact-head gates/review."
+    },
+    {
+      "repo": "jeryu/jain-core",
+      "pr": 19,
+      "title": "test(feat-core): +16 tests — invention adapter, engine dispatch, flow gate, manifest (75.7%→81.4%)",
+      "classification": "deploy-critical current",
+      "priority_key": 3,
+      "head": "92d280ecdd5a07d5ccba0244e30d43294b5c9569",
+      "head_ref": "claude/feat-core-coverage-20260716",
+      "base": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-core/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-core/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy) W20 active",
+      "next_action": "Rebase coverage tests onto accepted #15, raise changed release-critical line coverage to at least 85%, and run coverage/required."
+    },
+    {
+      "repo": "jeryu/jain-core",
+      "pr": 18,
+      "title": "release: v8.0.1 split identity (jain-core)",
+      "classification": "8.0.1 identity current",
+      "priority_key": 4,
+      "head": "aa601624b4d292dd8858dc4eb8346103293be4ab",
+      "head_ref": "claude/v801-identity-20260716",
+      "base": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-core/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-core/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy) W21 active",
+      "next_action": "Hold until Core runtime/transport lands, then rebase the identity-only commit on final Core main and run exact-head gates."
+    },
+    {
+      "repo": "jain-split/jain-smartcluster",
+      "pr": 3,
+      "title": "feat: route typed JOPE and Lime workloads",
+      "classification": "blocked/rejected diff",
+      "priority_key": 5,
+      "head": "630e1944fdcd43502b2436750089175b20e58eb8",
+      "head_ref": "codex/jope-lime-smartcluster-20260713",
+      "base": "ec9f7e959a6999eee45a92936c0dc8ce5a2a0014",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-smartcluster/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-smartcluster/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none exact-head; prior Claude-orch runtime lane",
+      "next_action": "Recompose typed JOPE/Lime routing on protected foundation c28c5c8 and obtain fresh exact-head review/required."
+    },
+    {
+      "repo": "jain-split/jain-smartcluster",
+      "pr": 5,
+      "title": "feat: harden SmartCluster node protocol 1.3",
+      "classification": "deploy-critical current",
+      "priority_key": 6,
+      "head": "61ed3e2c64e370dd638803f406f84bd0825ada31",
+      "head_ref": "codex/scq-node-v1.3-20260715",
+      "base": "c28c5c8348ec58b39cde0e8d510f26fec3cbfb06",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-smartcluster/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-smartcluster/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none; prior /root/smartcluster_node_pr claim completed",
+      "next_action": "Run the full node-v1.3 exact-head hardware/security/compatibility suite and publish required/proof before review."
+    },
+    {
+      "repo": "jeryu/jain-web",
+      "pr": 28,
+      "title": "release: verify Redline core jain.4 consumer + protected Web release gate",
+      "classification": "deploy-critical current",
+      "priority_key": 7,
+      "head": "3144411e9f2e6d54077c31a11b2060b23a7c3ec1",
+      "head_ref": "codex/redline-jain4-consumer-20260714",
+      "base": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-web/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/success",
+      "latest_jeryu_autonomy": "completed/neutral",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-web/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy) W25 active",
+      "next_action": "Apply the deadline-poll fix to this exact Redline-consumer line and drive jain-web/required green."
+    },
+    {
+      "repo": "jeryu/jain-web",
+      "pr": 25,
+      "title": "test: T0 browserless lane + installer-HMAC golden + fast gate",
+      "classification": "deploy-critical current",
+      "priority_key": 8,
+      "head": "f2df3b4e0c4bd033e152d946e579a45aebe037f2",
+      "head_ref": "claude/web-t0-tests-20260715",
+      "base": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-web/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-web/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy)/Claude-orch W14 train active",
+      "next_action": "After #28, rebase the T0 successor and obtain green required/proof plus a fresh exact-head review."
+    },
+    {
+      "repo": "jeryu/jain-web",
+      "pr": 24,
+      "title": "web-control: model-free guest runtime (runtime/alloc/cockpit/WS/identity)",
+      "classification": "deploy-critical current",
+      "priority_key": 9,
+      "head": "13ea4968dde1286111dacf8cd0216fa71e931242",
+      "head_ref": "claude/web-control-20260715",
+      "base": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-web/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-web/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy)/Claude-orch Web train active",
+      "next_action": "After #28 and #25, rebase with hermetic SCQ-off CI, fix score ownership maps, then obtain fresh exact-head review."
+    },
+    {
+      "repo": "jeryu/jain-web",
+      "pr": 31,
+      "title": "release: v8.0.1 split identity (jain-web)",
+      "classification": "8.0.1 identity current",
+      "priority_key": 10,
+      "head": "92f1d3a055829f106319103bb5760b35a00591ae",
+      "head_ref": "claude/v801-identity-20260716",
+      "base": "6adcda48e5711dcf5934934236be09fcc959ff10",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-web/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-web/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy) W21 active",
+      "next_action": "Hold until #28→#25→#24 lands, then rebase identity-only on final Web main and run exact-head gates."
+    },
+    {
+      "repo": "jeryu/jain-deploy",
+      "pr": 22,
+      "title": "deploy: guestd + GPU-autodetect appliance + CloudReleaseSpecV1",
+      "classification": "blocked/rejected diff",
+      "priority_key": 11,
+      "head": "f8afefce3c0e5c7face360fde3f89205fdac1910",
+      "head_ref": "claude/guestd-20260715",
+      "base": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-deploy/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/neutral",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-deploy/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy) Deploy lane active; Claude-RV-3 rejected current diff",
+      "next_action": "Re-cut a current-main guestd successor that is root-built, Rust-only, real-Docker-backed, score-clean, and free of PIN-ME placeholders."
+    },
+    {
+      "repo": "jeryu/jain-deploy",
+      "pr": 23,
+      "title": "release CI: artifact quality gates + jain.sh landing + GPU image parity with proven 8.0.1 runtime",
+      "classification": "deploy-critical current",
+      "priority_key": 12,
+      "head": "429bfc7f7a33262533981552129f85e9cc006aa8",
+      "head_ref": "claude/release-testdata-20260714",
+      "base": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-deploy/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/neutral",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-deploy/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy)/Claude-orch Deploy train active",
+      "next_action": "Consolidate artifact-quality, jain.sh, and single-Dockerfile work on accepted dependencies, then publish required/proof."
+    },
+    {
+      "repo": "jeryu/jain-deploy",
+      "pr": 26,
+      "title": "deploy(v8.0.1): appliance guestd driver + supervisor + worker-model fix",
+      "classification": "deploy-critical current",
+      "priority_key": 13,
+      "head": "40e589852eed0bb82544626c4326141be149a6a4",
+      "head_ref": "claude/appliance-v8.0.1-20260716",
+      "base": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-deploy/required",
+        "result": "completed/failure"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-deploy/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy)/Claude-orch appliance lane active",
+      "next_action": "Rebase appliance driver/supervisor fixes on accepted #22/#23 successors and rerun exact-head release gates."
+    },
+    {
+      "repo": "jeryu/jain-deploy",
+      "pr": 27,
+      "title": "release: v8.0.1 split identity (jain-deploy)",
+      "classification": "8.0.1 identity current",
+      "priority_key": 14,
+      "head": "ec08477512319f6c7cda64e0ef33349840e23105",
+      "head_ref": "claude/v801-identity-20260716",
+      "base": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-deploy/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-deploy/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy) W21 active",
+      "next_action": "Hold until the Deploy runtime stack lands, then rebase identity-only on final Deploy main and run exact-head gates."
+    },
+    {
+      "repo": "jeryu/jain-llm",
+      "pr": 7,
+      "title": "chore(release): align jain-llm identity to 8.0.1",
+      "classification": "8.0.1 identity current",
+      "priority_key": 15,
+      "head": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+      "head_ref": "release/v8.0.1/llm-identity-20260716",
+      "base": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-llm/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-llm/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Codex serialized host-CI claim active",
+      "next_action": "Let the claimed serialized runner finish and publish jain-llm/required for cec2f192 before independent review."
+    },
+    {
+      "repo": "jeryu/jain-catboost",
+      "pr": 8,
+      "title": "chore(release): align CatBoost identity to 8.0.1",
+      "classification": "blocked/rejected diff",
+      "priority_key": 16,
+      "head": "8ba6b347071dfbd04e2fdc7b6cd3440587404e56",
+      "head_ref": "release/v8.0.1/catboost-identity",
+      "base": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-catboost/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/success",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-catboost/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Codex catboost lock-repair claim active",
+      "next_action": "Remove the eight unrelated Cargo.lock upgrades and false split.0 README claim, then request fresh exact-head review."
+    },
+    {
+      "repo": "jeryu/jain-zyal",
+      "pr": 6,
+      "title": "release: align jain-zyal with Jain 8.0.1",
+      "classification": "8.0.1 identity current",
+      "priority_key": 17,
+      "head": "cd33b26ab97a965c21ccafb867b39df2341601df",
+      "head_ref": "release/v8.0.1/zyal-identity",
+      "base": "5737cb78bd4378ba9c4f85cf13868a7c34b2f288",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-zyal/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/success",
+      "latest_jeryu_autonomy": "completed/failure",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-zyal/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Codex Epicurus lock-lineage repair completed; exact-head required CI queued behind LLM",
+      "next_action": "Run a fresh exact-head scope review of cd33b26, then publish jain-zyal/required before approval."
+    },
+    {
+      "repo": "jeryu/jain-jailgun",
+      "pr": 6,
+      "title": "release: align jain-jailgun with Jain 8.0.1",
+      "classification": "8.0.1 identity current",
+      "priority_key": 18,
+      "head": "529dd19ef07303fc46f49549863d1631708f12ff",
+      "head_ref": "release/v8.0.1/jailgun-identity",
+      "base": "9045da04eed8566b77f2dd8783f9f5deb06b9d3e",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-jailgun/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/success",
+      "latest_jeryu_autonomy": "completed/failure",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-jailgun/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Codex Epicurus lock-lineage repair completed; exact-head required CI queued behind LLM",
+      "next_action": "Run a fresh exact-head scope review of 529dd19, then publish jain-jailgun/required before approval."
+    },
+    {
+      "repo": "jeryu/jain-research",
+      "pr": 4,
+      "title": "release: align jain-research with Jain 8.0.1",
+      "classification": "blocked/rejected diff",
+      "priority_key": 19,
+      "head": "14f4d338d31efdb80b08a94b8543e08b1cb1d6e5",
+      "head_ref": "release/v8.0.1/research-identity",
+      "base": "c61504a7e25ce62c71100865ef52f49a12c59e1b",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-research/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-research/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none after four-repo WITHHOLD",
+      "next_action": "Restore the four unrelated Cargo.lock entries and revalidate the added standard-version file before fresh required/review."
+    },
+    {
+      "repo": "jeryu/jain-agent",
+      "pr": 5,
+      "title": "repin v8.0.1: bump jain-llm to jain-llm-v8.0.1-split.0",
+      "classification": "8.0.1 identity current",
+      "priority_key": 20,
+      "head": "ffbccc31d9c194f74b6253cf91c85b264a582d1d",
+      "head_ref": "claude/repin-v8.0.1-20260716",
+      "base": "8818f70e04d68ae70657f6a3138d6407cbc490fb",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-agent/required",
+        "result": "completed/failure"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-agent/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude-orch score/repin fleet active",
+      "next_action": "Compose the green score successor, rerun required with JAIN_VENDOR_ROOT after the LLM identity lands, then review."
+    },
+    {
+      "repo": "jeryu/jain-report",
+      "pr": 8,
+      "title": "repin v8.0.1: bump feat-core + feat-math to v8.0.1-split.0",
+      "classification": "8.0.1 identity current",
+      "priority_key": 21,
+      "head": "c8a9743929d315aa2b409d3ed965622b9ce7e7db",
+      "head_ref": "claude/repin-v8.0.1-20260716",
+      "base": "5cef1d0079908485857009ff18db79d8e4078068",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-report/required",
+        "result": "completed/failure"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-report/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude-orch score/repin fleet active",
+      "next_action": "Compose the score successor and rerun required with JAIN_VENDOR_ROOT after final Core/Math tags exist."
+    },
+    {
+      "repo": "jeryu/jain-tui",
+      "pr": 11,
+      "title": "repin v8.0.1: bump feat-core to jain-core-v8.0.1-split.0",
+      "classification": "8.0.1 identity current",
+      "priority_key": 22,
+      "head": "fe9bfe3c48dbd0123f0c56e4dee69a0169b68bea",
+      "head_ref": "claude/repin-v8.0.1-20260716",
+      "base": "b96010d56b07c54972dd9f2d29f691b2cb1cb375",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-tui/required",
+        "result": "completed/failure"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-tui/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude-orch score/repin fleet active",
+      "next_action": "Compose the score successor and rerun required with JAIN_VENDOR_ROOT after final Core tag exists."
+    },
+    {
+      "repo": "jeryu/jain-docs",
+      "pr": 12,
+      "title": "release: v8.0.1 split identity (jain-docs)",
+      "classification": "8.0.1 identity current",
+      "priority_key": 23,
+      "head": "413bfa288bf4016b00538ee8080d8f8fb8db5a34",
+      "head_ref": "claude/v801-identity-20260716",
+      "base": "1002b27254f1c7b72ef239c3e21950dc38df3815",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-docs/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-docs/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "Claude(prod-deploy) W21",
+      "next_action": "Rebase onto merged docs main #11, resolve the required.sh version conflict, then run exact-head required/proof."
+    },
+    {
+      "repo": "jeryu/jain-web",
+      "pr": 21,
+      "title": "fix(web): preserve chronological session feed order",
+      "classification": "unrelated-but-required-before-100",
+      "priority_key": 30,
+      "head": "faf56fdd60275fa6d4a825f39823680e778ddf52",
+      "head_ref": "agent/session-feed-order",
+      "base": "1c80c91cb62176a6ffab62d7a62a57b8fcb712b0",
+      "base_ref": "main",
+      "draft": true,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-web/required",
+        "result": "completed/success"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-web/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none",
+      "next_action": "Recompose the minimal feed-order fix on post-train Web main and rerun browser/order regression coverage."
+    },
+    {
+      "repo": "jeryu/jain-web",
+      "pr": 22,
+      "title": "fix(web): fail closed before accepting unauthenticated uploads",
+      "classification": "unrelated-but-required-before-100",
+      "priority_key": 31,
+      "head": "d71265e78b0274857253fa5c3ebefaf540b92756",
+      "head_ref": "codex/jain-web-fail-closed-upload-20260714",
+      "base": "1c80c91cb62176a6ffab62d7a62a57b8fcb712b0",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-web/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/neutral",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-web/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none",
+      "next_action": "Recompose the fail-closed auth/upload fix on post-train Web main and run focused security/browser acceptance."
+    },
+    {
+      "repo": "jeryu/jain-domain",
+      "pr": 6,
+      "title": "docs: prohibit Git worktrees",
+      "classification": "blocked/rejected diff",
+      "priority_key": 40,
+      "head": "2478280deeab809988faccdc36a96d9a8e625938",
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "base": "07a6879beba68ea7efb386231376bd03621fa0a4",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-domain/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-domain/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none; Claude-RV-4 withheld",
+      "next_action": "Re-cut the owner-approved +13 additive policy block from current main and obtain a fresh exact-head review."
+    },
+    {
+      "repo": "jeryu/jain-xgboost",
+      "pr": 7,
+      "title": "docs: prohibit Git worktrees",
+      "classification": "blocked/rejected diff",
+      "priority_key": 41,
+      "head": "c2b8bd0c72de261ce2c96233c46fdf2fc94d1ea8",
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "base": "34d3534702727b463c4b00c799d06fda0f76438c",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-xgboost/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-xgboost/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none; Claude-RV-4 withheld",
+      "next_action": "Re-cut the policy-only change from current main without the unapproved CI-guidance rewrite."
+    },
+    {
+      "repo": "jeryu/jain-lightgbm",
+      "pr": 7,
+      "title": "docs: prohibit Git worktrees",
+      "classification": "blocked/rejected diff",
+      "priority_key": 42,
+      "head": "a97e401bdab4779d31060735f285837352bc8741",
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "base": "03102cb3c1fa8bda05a66b4fe072c17524fac6fc",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-lightgbm/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-lightgbm/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none; Claude-RV-4 withheld",
+      "next_action": "Re-cut the policy-only change from current main without the unapproved CI-guidance rewrite."
+    },
+    {
+      "repo": "jeryu/jain-jable",
+      "pr": 3,
+      "title": "docs: prohibit Git worktrees",
+      "classification": "blocked/rejected diff",
+      "priority_key": 43,
+      "head": "4fb7d2dc0178dd8030d3d116d8267943c3e56470",
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "base": "e119908dd4f522fdbada7ddb461fb10c0dd7f563",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-jable/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-jable/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none; Claude-RV-4 withheld",
+      "next_action": "Re-cut the policy-only change from current main without the unapproved CI-guidance rewrite."
+    },
+    {
+      "repo": "jeryu/jain-agent",
+      "pr": 3,
+      "title": "docs: prohibit Git worktrees",
+      "classification": "blocked/rejected diff",
+      "priority_key": 44,
+      "head": "772c6d55d6bf5de0b3eb76f5a549b3d49ed98fa9",
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "base": "8818f70e04d68ae70657f6a3138d6407cbc490fb",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-agent/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-agent/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none; prior merge canary stopped",
+      "next_action": "Re-cut the clean additive policy change from current main without the contaminating 8.0.1 repin and discard stale approval."
+    },
+    {
+      "repo": "jeryu/jain-jnoccio",
+      "pr": 3,
+      "title": "docs: prohibit Git worktrees",
+      "classification": "blocked/rejected diff",
+      "priority_key": 45,
+      "head": "b67f1ece0b42e1f2d1d36d9d3e7528a6b123f62c",
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "base": "4810be89abad8e4e52b9be9fa9b49a4891970891",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-jnoccio/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-jnoccio/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none; Claude-RV-4 withheld",
+      "next_action": "Re-read the moved head and re-cut the approved additive policy block from current main before CI/review."
+    },
+    {
+      "repo": "jeryu/jain-tui",
+      "pr": 8,
+      "title": "docs: prohibit Git worktrees",
+      "classification": "blocked/rejected diff",
+      "priority_key": 46,
+      "head": "457227dab89c3cc34791823a243ac21781beb10e",
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "base": "b96010d56b07c54972dd9f2d29f691b2cb1cb375",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-tui/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-tui/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none; Claude-RV-4 withheld",
+      "next_action": "Re-cut the policy-only change from current main without the unapproved CI-guidance rewrite."
+    },
+    {
+      "repo": "jeryu/jain-ops",
+      "pr": 7,
+      "title": "docs: prohibit Git worktrees",
+      "classification": "blocked/rejected diff",
+      "priority_key": 47,
+      "head": "1630873b220799aa22df07b15d8c2f23b4216729",
+      "head_ref": "codex/zero-worktree-policy-20260716",
+      "base": "128636cd00e93d09560b77d4829f9ea3b68afbe7",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-ops/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-ops/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none; Claude-RV-4 withheld",
+      "next_action": "Re-cut the policy-only change from current main without the unapproved CI-guidance rewrite."
+    },
+    {
+      "repo": "jeryu/jain",
+      "pr": 3,
+      "title": "docs: VEOX-branded jain User Guide PDF, built in CI",
+      "classification": "superseded/obsolete needing custody",
+      "priority_key": 50,
+      "head": "77e616ef86919219f73215df5efd82b0680e68ec",
+      "head_ref": "docs-user-guide",
+      "base": "base",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/success",
+      "latest_jeryu_autonomy": "completed/action_required",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none",
+      "next_action": "Compare against current portal main; bundle any unique guide assets, then retire this invalid-base PR through a separate custody action."
+    },
+    {
+      "repo": "jeryu/jain-catboost",
+      "pr": 4,
+      "title": "feat(catboost): add adaptive GPU acceleration",
+      "classification": "superseded/obsolete needing custody",
+      "priority_key": 51,
+      "head": "aa0320d903fbdac80f07f02f2cab043803deefea",
+      "head_ref": "agent/catboost-gpu-acceleration",
+      "base": "4717dee649d4ebeb70b5af945b9ec177d49ad2d9",
+      "base_ref": "main",
+      "draft": true,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-catboost/required",
+        "result": "completed/success"
+      },
+      "latest_jankurai_proof": "completed/success",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-catboost/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none",
+      "next_action": "Preserve the unique adaptive-GPU draft in a verified bundle and defer it outside the frozen release train."
+    },
+    {
+      "repo": "jeryu/jain-core",
+      "pr": 12,
+      "title": "release(core): v8 head — JOPE/Lime port + effort-gated Lime/Prime engine + fail-closed hardening",
+      "classification": "superseded/obsolete needing custody",
+      "priority_key": 52,
+      "head": "0a4097376f08d42a42d4a7326242bd2921e06eb8",
+      "head_ref": "claude/core-v8-release-landing",
+      "base": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-core/required",
+        "result": "missing"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-core/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none",
+      "next_action": "Diff it against the accepted #15 engine line, bundle unique work, and do not broad-merge the stale release head."
+    },
+    {
+      "repo": "jeryu/jain-web",
+      "pr": 13,
+      "title": "feat-web: expose full run manifest in artifacts",
+      "classification": "superseded/obsolete needing custody",
+      "priority_key": 53,
+      "head": "5e70ab4b6678729b8e5d340f5931d0ec5a1911c3",
+      "head_ref": "agent/full-run-manifest",
+      "base": "cb9c886625ac3401fdc95d8f925d7a55b869c1b5",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-web/required",
+        "result": "completed/success"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/neutral",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-web/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none",
+      "next_action": "Prove whether manifest-download work is already contained; bundle only unique bytes and retire outside this train."
+    },
+    {
+      "repo": "jeryu/jain-web",
+      "pr": 16,
+      "title": "feat(web): authenticated live feature-expansion control plane",
+      "classification": "superseded/obsolete needing custody",
+      "priority_key": 54,
+      "head": "adf5cdb4dff67e755b2dfb08ee16509de7fddff6",
+      "head_ref": "agent/live-key-feature-expansion",
+      "base": "8c091829a3fc2b3f2e276806253f7cf90485636f",
+      "base_ref": "main",
+      "draft": true,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-web/required",
+        "result": "completed/success"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/neutral",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-web/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none",
+      "next_action": "Bundle the old draft feature-expansion control plane and defer it under the release feature freeze."
+    },
+    {
+      "repo": "jeryu/jain-deploy",
+      "pr": 12,
+      "title": "deploy: sync progress contract v11",
+      "classification": "superseded/obsolete needing custody",
+      "priority_key": 55,
+      "head": "932cd623bc73c8a86e41191af0cdc25403a685b5",
+      "head_ref": "codex/jable-contract-sync",
+      "base": "fc3db5eed646b39b7bbef277e2b7f0997bc6f305",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-deploy/required",
+        "result": "completed/success"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-deploy/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none",
+      "next_action": "Compare the v7 progress-contract sync to current main, bundle unique bytes, and retire it outside the release train."
+    },
+    {
+      "repo": "jeryu/jain-deploy",
+      "pr": 20,
+      "title": "test(deploy): add runtime contract integration coverage",
+      "classification": "superseded/obsolete needing custody",
+      "priority_key": 56,
+      "head": "1decb42f7dac587a42227945e2f978d718c21f61",
+      "head_ref": "codex/jain-deploy-release-tests-20260714",
+      "base": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-deploy/required",
+        "result": "completed/failure"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "missing",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-deploy/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none",
+      "next_action": "Extract any still-unique runtime contract tests into the final Deploy successor and custody the stale PR."
+    },
+    {
+      "repo": "jeryu/jain-deploy",
+      "pr": 21,
+      "title": "release(deploy): lock v8 image identity and Starforge assets",
+      "classification": "superseded/obsolete needing custody",
+      "priority_key": 57,
+      "head": "305903dd257d084222e302ab73f936a5fbbac1e4",
+      "head_ref": "codex/v8-image-authority-proof-20260714",
+      "base": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74",
+      "base_ref": "main",
+      "draft": false,
+      "state": "open",
+      "merged": false,
+      "mergeable": false,
+      "mergeable_state": "blocked",
+      "latest_required": {
+        "context": "jain-deploy/required",
+        "result": "completed/failure"
+      },
+      "latest_jankurai_proof": "completed/failure",
+      "latest_jeryu_autonomy": "completed/neutral",
+      "protection": {
+        "status": "pass",
+        "required_context": "jain-deploy/required",
+        "required_approvals": 1,
+        "linear_history": true,
+        "enforce_admins": true,
+        "allow_force_pushes": false,
+        "allow_deletions": false
+      },
+      "active_owner_claim": "none",
+      "next_action": "Compare its image/Starforge proof with #23/#26, bundle only unique evidence, and do not merge the stale v8.0.0 line."
+    }
+  ],
+  "acceptance": "Triage completeness only. Production release remains blocked."
+}

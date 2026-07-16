@@ -1,0 +1,52 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "c51bf1f06cbf48b2771bacd0dff23d3fa43b8813",
+    "remote": "c51bf1f06cbf48b2771bacd0dff23d3fa43b8813"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "c51bf1f06cbf48b2771bacd0dff23d3fa43b8813",
+  "commit_input": "c51bf1f06cbf48b2771bacd0dff23d3fa43b8813",
+  "manifest": "repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-web.git",
+    "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/mirrors/jain-web-jain-web-v8.0.1-split.0.json",
+    "status": "pass",
+    "tag_commit": "c51bf1f06cbf48b2771bacd0dff23d3fa43b8813"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "crates/feat-web/Cargo.toml",
+        "name": "feat-web",
+        "version": "8.0.1"
+      },
+      {
+        "manifest": "crates/jain-web-control/Cargo.toml",
+        "name": "jain-web-control",
+        "version": "8.0.1"
+      },
+      {
+        "manifest": "crates/jain-web-sqlite-migration/Cargo.toml",
+        "name": "jain-web-sqlite-migration",
+        "version": "8.0.1"
+      }
+    ],
+    "expected_product_version": "8.0.1",
+    "status": "pass",
+    "version_file": "jain-web-v8.0.1-split.0",
+    "workspace_package_version": "8.0.1"
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-web.git",
+  "remote_main": "c51bf1f06cbf48b2771bacd0dff23d3fa43b8813",
+  "repository": "/home/ubuntu/jain-split/jain-web",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-web-v8.0.1-split.0",
+  "timestamp_unix": 1784205988
+}

@@ -1,0 +1,77 @@
+{
+  "schema_version": "jain.cloud-release-spec/v1",
+  "release": "8.0.0",
+  "source": {
+    "repo": "jain-split/jain-deploy",
+    "commit": "d4f7e07da198ff272286d509aeebb8001c0e2ab2",
+    "immutable_tag": "jain-deploy-v8.0.0-split.1",
+    "tree_sha256": "4bbccf8edde8c871d64de09738e16f566f562f3e"
+  },
+  "images": [
+    {
+      "role": "web-control",
+      "repository": "image.local/jain/web-control",
+      "digest": "sha256:fc8d48175fe04bdf15b904accf854301d21986e79c36232eced3d05161bc7f3a",
+      "dockerfile": "deployment/appliance/Dockerfile.web-scratch",
+      "reproducible": false,
+      "sbom_sha256": "75ab31ef3af227458f183f65db06a9f95293b0ad4131b5b7d51f4edcbdc00a22",
+      "grype_findings_high_plus": 0,
+      "cosign_bundle_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "digest_note": "corrected: script pinned first-of-double-build digest sha256:4edf13e95fc0eaa79ec8ded5d5f6148b79314186fa582a5c35705ec93fe76dc9 which was GC'd (non-reproducible double build keeps only the second image); evidence (sbom/grype) was generated from the surviving image"
+    },
+    {
+      "role": "scqd",
+      "repository": "image.local/jain/scqd",
+      "digest": "sha256:5e174a20921bbe6d46e9195066280b6da85896a6f9d93fb2386608c6024fb4bf",
+      "dockerfile": "deployment/appliance/Dockerfile.scq-scratch",
+      "reproducible": false,
+      "sbom_sha256": "8e0f0544c2c9b25c92c96247730f3244870a456b73aa0f490c4ee859fa6cacae",
+      "grype_findings_high_plus": 3,
+      "cosign_bundle_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "digest_note": "rebuilt 2026-07-16 Lane 6: binary rebuilt in rust:1.96-bookworm (glibc 2.34<=2.36) \u2014 host-toolchain build required GLIBC_2.39, unloadable on the canonical distroless/cc-debian12 base"
+    },
+    {
+      "role": "worker-cpu",
+      "repository": "image.local/jain/worker-cpu",
+      "digest": "sha256:95d13c9d7f420f1c1c87aaa29572fdb644e053f4b0d8db0701f88ebd4598617c",
+      "dockerfile": "deployment/appliance/Dockerfile.worker-cpu",
+      "reproducible": false,
+      "sbom_sha256": "71690bc13a107c0a757fdd86985f784734a25a941d8ba2c9b31524c16730640d",
+      "grype_findings_high_plus": 3,
+      "cosign_bundle_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "digest_note": "rebuilt 2026-07-16 Lane 6: binary rebuilt in rust:1.96-bookworm (glibc 2.34<=2.36) \u2014 host-toolchain build required GLIBC_2.39, unloadable on the canonical distroless/cc-debian12 base"
+    },
+    {
+      "role": "worker-gpu",
+      "repository": "image.local/jain/worker-gpu",
+      "digest": "sha256:590a3d330e5f8f7eed238f1a401bc0fc1f1c8acdeb45d42eae9347a42b594b86",
+      "dockerfile": "deployment/appliance/Dockerfile.worker-gpu",
+      "reproducible": false,
+      "sbom_sha256": "ad67c0212d7e07777ef3953fba4c8c63e9ba58824d83befce03acc054710d84c",
+      "grype_findings_high_plus": 14,
+      "cosign_bundle_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+      "digest_note": "corrected: script pinned first-of-double-build digest sha256:c66b1144fe1a3700837a2ab7167264c3a0be4dae95359b2fb2a20b24bca3018b which was GC'd (non-reproducible double build keeps only the second image); evidence (sbom/grype) was generated from the surviving image"
+    }
+  ],
+  "compose": {
+    "path": "deployment/appliance/docker-compose.appliance.yml",
+    "content_sha256": "901df45724fec061f6f55ecc684aeb61c1fc061fef5132b20eb2b7648deb2fe9",
+    "digests_pinned": true
+  },
+  "caddy_routes": {
+    "path": "deployment/appliance/caddy-routes.json",
+    "content_sha256": "1421a1ed164bafefccf357bba7b88e1cd067d0436acacc18a9e61182f6cd4f5e"
+  },
+  "gates": {
+    "reproducible_double_build": false,
+    "all_digests_pinned": true,
+    "grype_clean": false,
+    "cosign_verified": false,
+    "no_docker_socket": true,
+    "canary_soak_clean": false
+  },
+  "signatures": [],
+  "release_eligible": false,
+  "emitted_unix_ms": 1784207385868,
+  "note": "Prep artifact. release_eligible is fail-closed false: needs every gate green + 2 owner signatures over signatures=[] sha256. Push is the separate owner-gated release-atomicsoul.sh (ATOMICSOUL_PUSH). DIGEST CORRECTION (Lane 6 staging, 2026-07-16): image digests re-pinned to the surviving tagged image IDs (containerd store manifest digests); the script's d1 pins were GC'd because the double build is not reproducible."
+}

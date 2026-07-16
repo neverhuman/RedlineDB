@@ -1,0 +1,202 @@
+{
+  "schema_version": "jain.source-custody-audit/v1",
+  "status": "ADOPT_STOPPED_HEAD_FOR_INDEPENDENT_REVIEW_BLOCK_RELEASE_REQUIRED_ABSENT",
+  "completed_at": "2026-07-16T09:15:58Z",
+  "claim": "codex-jain-docs-six-file-postreview-custody-audit-20260716T0914Z",
+  "repository": "jeryu/jain-docs",
+  "pull_request": 13,
+  "canonical_path": "/home/ubuntu/jain-split/jain-docs",
+  "observed_parent_head": "abaee0720716d59f29058b8b523f67ec2ec0f315",
+  "adoptable_stopped_head": "a44bbd5ebb853a8e7918f99513b22477db7bd928",
+  "adoptable_stopped_tree": "c5be820afc0d0e5c8af5e2ca8c01a4ddc27b62f7",
+  "protected_main": "8b5ab9ab6b224821622eccfd5a8cb9cde5350e51",
+  "branch": "codex/v8.0.1/docs-proof-successor-20260716",
+  "commit": {
+    "subject": "ci(docs): govern reproducible PDF toolchain",
+    "author": "Claude-orch <noreply@anthropic.com>",
+    "author_date": "2026-07-16T09:06:21+00:00",
+    "committer": "Claude-orch <noreply@anthropic.com>",
+    "commit_date": "2026-07-16T09:06:21+00:00",
+    "parent_exact": true,
+    "non_force_branch_readback_exact": true
+  },
+  "corrective_diff": {
+    "files_changed": 6,
+    "insertions": 78,
+    "deletions": 43,
+    "raw_git_full_index_binary_bytes": 9211,
+    "raw_git_full_index_binary_lines": 216,
+    "raw_git_full_index_binary_sha256": "15d2a1f543bd72d1dd6662d17d5467b9405b90a9a1b8463389830792ead64b42",
+    "diff_check": "pass",
+    "current_complete_pr_raw_git_full_index_binary_bytes": 32144,
+    "current_complete_pr_raw_git_full_index_binary_sha256": "4a02d1b1385c594b2727dcc898ff2d44c9de2a203f58444baacc7d1a12963a13"
+  },
+  "files": [
+    {
+      "path": "Justfile",
+      "git_blob": "c176aa93ac40605c8663110e487285d2a33dea21",
+      "sha256": "b7d8f89870cbb9c8d66eae054980852bc6df56b05bdd080c7fbe215e65b93d21",
+      "mode": "100644",
+      "size": 670,
+      "mtime": "2026-07-16T09:01:31.687349118Z"
+    },
+    {
+      "path": "ops/ci/check.sh",
+      "git_blob": "3e51c068d019d1951da4ee9621c1a059e123caa7",
+      "sha256": "3d4cee685868c4a68885cbebe8da50a542405d3390cd4877d557a9e7dff177dc",
+      "mode": "100755",
+      "size": 2436,
+      "mtime": "2026-07-16T09:02:42.064562443Z"
+    },
+    {
+      "path": "ops/ci/docs-pdf-reproducible.sh",
+      "git_blob": "3784bc1cb0e4a93cb2079866e3b740e94ae9e26d",
+      "sha256": "02f775f6f9f88e0c647890726ebc2180dda526e01cadc0f62413064e7ff76373",
+      "mode": "100755",
+      "size": 2626,
+      "mtime": "2026-07-16T09:01:31.686349101Z"
+    },
+    {
+      "path": "ops/ci/docs-pdf.sh",
+      "git_blob": "6673bcdd789ef4e5f8d5ac4f4ae72e96de60f1a8",
+      "sha256": "c8827ae442fbbb164dce5f6c018bdda6b3939a38a2b4ed2a82db5b9539fdcae3",
+      "mode": "100755",
+      "size": 4269,
+      "mtime": "2026-07-16T09:01:31.685349084Z"
+    },
+    {
+      "path": "ops/ci/install-docs-tools.sh",
+      "git_blob": "ee4f5cab9c04d5b01f626bc7feae9e7070c50d6b",
+      "sha256": "0a5fdf872492f2b0e03ed39086db949d5670b3b746e407dbb09246145d8200aa",
+      "mode": "100755",
+      "size": 3660,
+      "mtime": "2026-07-16T09:02:06.618951761Z"
+    },
+    {
+      "path": "ops/ci/lib.sh",
+      "git_blob": "28675dac67866a42a8d8a0efa78db4e904ec5eab",
+      "sha256": "82e47385581c3c0b4f204d5bac132b9456aa41bd9a3e766606f1f5e47558f3d7",
+      "mode": "100755",
+      "size": 3155,
+      "mtime": "2026-07-16T09:01:31.685349084Z"
+    }
+  ],
+  "intent_match": {
+    "governed_typst_absolute_path": "/home/ubuntu/jain-split/target/runtime-tools/sha256/a852e595ba046074d1cb63fd9fed14e00f36031dee4d2ad330783c92e7982d45/typst",
+    "governed_typst_regular_executable_non_symlink": true,
+    "governed_typst_realpath_equal": true,
+    "governed_typst_sha256": "a852e595ba046074d1cb63fd9fed14e00f36031dee4d2ad330783c92e7982d45",
+    "governed_typst_version": "typst 0.15.0 (unknown commit)",
+    "alternate_relative_same_version_path_rejected_by_code": true,
+    "installer_verifies_typst_before_network": true,
+    "font_directory_symlink_rejected_before_realpath": true,
+    "bounded_negative_regressions_present": true,
+    "binary_or_font_bytes_changed": false,
+    "dependencies_or_locks_changed": false,
+    "manual_semantics_changed": false,
+    "release_identity_or_candidate_metadata_changed": false,
+    "matches_stricter_requested_fix": true
+  },
+  "ownership_timeline": [
+    {
+      "at": "2026-07-16T08:58:00Z",
+      "event": "exclusive source claim codex-jain-docs-pr13-governed-typst-font-successor-20260716T0858Z"
+    },
+    {
+      "at": "2026-07-16T09:01:00Z",
+      "event": "observer stopped on dirty custody before ownership was clarified"
+    },
+    {
+      "at": "2026-07-16T09:04:00Z",
+      "event": "root explicitly identified /root/zyal_required_ci as owner and resumed the existing claim"
+    },
+    {
+      "at": "2026-07-16T09:06:21Z",
+      "event": "six-file correction committed by Claude-orch"
+    },
+    {
+      "at": "2026-07-16T09:09:21Z",
+      "event": "author machine receipt completed"
+    },
+    {
+      "at": "2026-07-16T09:14:00Z",
+      "event": "explicit RESULT + HANDOFF appended; source claim released"
+    }
+  ],
+  "author_receipt": {
+    "path": "/tmp/codex-jain-docs-pr13-governed-typst-font-successor-20260716.json",
+    "sha256": "0be863f70c82b949312e947a2ab8acd6f13ee706cfb6a241801a14b3a6767437",
+    "json_valid": true,
+    "status": "PASS_PENDING_INDEPENDENT_REVIEW_AND_REQUIRED",
+    "raw_corrective_diff_matches": true,
+    "raw_complete_pr_diff_matches": true
+  },
+  "stopped_head_handoff": {
+    "exists": true,
+    "coordination_heading": "2026-07-16 09:14 UTC — Codex MCP Jain Docs PR #13 governed Typst/font successor RESULT + HANDOFF",
+    "claim_released": true,
+    "head_exact": true,
+    "tree_exact": true,
+    "clean": true,
+    "forge_equal": true,
+    "sole_registered_checkout": true
+  },
+  "custody_readback": {
+    "working_diff_files": 0,
+    "staged_diff_files": 0,
+    "untracked_files": 0,
+    "status_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "branch_ahead": 0,
+    "branch_behind": 0,
+    "local_main_forge_equal": true,
+    "registered_worktrees": 1,
+    "source_symlinks": 0,
+    "git_locks": 0,
+    "repo_process_matches": 0,
+    "repo_open_descriptors": 0,
+    "governed_typst_process_matches": 0,
+    "governed_typst_open_descriptors": 0,
+    "lsof_namespace_warnings_observed": true
+  },
+  "forge_readback": {
+    "pull_request_open": true,
+    "pull_request_head_exact": true,
+    "pull_request_base_exact": true,
+    "pull_request_body_bytes": 2446,
+    "pull_request_body_sha256": "e450ae7845c705db4aa85b57f76c5a911541da842fffa21bd9e015714c4a85b1",
+    "jankurai_proof": {
+      "conclusion": "success",
+      "check_id": "357b55cc-38bb-43ff-bffa-044efa8ab14e"
+    },
+    "autonomy": {
+      "conclusion": "action_required",
+      "check_id": "f1663715-3d65-4fcf-8e8c-db78215ab3fe"
+    },
+    "jain_docs_required_present": false,
+    "mergeable": false,
+    "mergeable_state": "blocked"
+  },
+  "decision": {
+    "custody": "ADOPT_EXPLICIT_STOPPED_HEAD_HANDOFF",
+    "bytes": "ADOPT_AS_EXACT_STRICTER_TYPST_AND_FONT_SYMLINK_FIX_INPUT",
+    "independent_source_acceptance": "PENDING_SEPARATE_EXACT_HEAD_REVIEW",
+    "protected_release_lifecycle": "BLOCKED_EXACT_HEAD_REQUIRED_ABSENT",
+    "safe_next_step": "An independent reviewer may now clone and review exact a44bbd5; only after acceptance may the serialized host lane publish genuine exact-head jain-docs/required."
+  },
+  "excluded_actions_confirmed": [
+    "source_edit",
+    "clean_or_stash",
+    "index_or_ref_mutation",
+    "pull_request_or_check_mutation",
+    "host_ci",
+    "approval",
+    "merge",
+    "tag",
+    "authority_binding",
+    "protection_mutation",
+    "deployment",
+    "force",
+    "process_termination",
+    "git_worktree"
+  ]
+}

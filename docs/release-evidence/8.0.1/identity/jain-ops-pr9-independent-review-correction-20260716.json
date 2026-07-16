@@ -1,0 +1,28 @@
+{
+  "schema_version": "jain.independent-review-correction/v1",
+  "recorded_at_utc": "2026-07-16T07:39:00Z",
+  "repository": "jeryu/jain-ops",
+  "pull_request": 9,
+  "head": "6f3e4f1020af9f265e1a6242ab8b0844a282ab0f",
+  "supersedes_receipt": "jain-ops-pr9-independent-review-20260716.json",
+  "superseded_receipt_sha256": "55d9ed8bd07eaa5537ba57a4557dc883029f23bb899d123eb1d5dce19d2ac825",
+  "reason": "the prior review did not adversarially test repository-local Jankurai selection",
+  "new_evidence": {
+    "score_script_invocation": "ambient jankurai",
+    "version_only_guard_present": true,
+    "expected_governed_path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "expected_governed_sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "adversarial_selected_path": "/home/ubuntu/.local/bin/jankurai",
+    "adversarial_selected_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "both_report_version": "jankurai 1.6.11",
+    "wrong_bytes_accepted": true
+  },
+  "unchanged_positive_evidence": [
+    "identity and active docs consistently describe unaccepted v8.0.1 split.1",
+    "no product campaign semantics or dependency graph changed",
+    "standalone required, seven Rust binaries, fixtures, ShellCheck, contract, and artifact gates pass",
+    "forge automatic proof succeeds because the forge selects the governed binary"
+  ],
+  "corrected_decision": "REVIEW_REJECT_GOVERNED_TOOL_AND_EXACT_HEAD_REQUIRED_GAPS",
+  "worktree_created": false
+}

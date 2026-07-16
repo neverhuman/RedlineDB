@@ -1,0 +1,112 @@
+{
+  "receipt": "WEB-13 root-cause analysis (read-only diagnosis)",
+  "punchlist_id": "WEB-13",
+  "analyzed_at": "2026-07-16T06:10Z",
+  "analyst": "Claude worker web13-rootcause",
+  "release_image_digest_prefix": "ffbbaf48",
+  "repos_analyzed": [
+    {
+      "repo": "/home/ubuntu/jain-split/jain-web",
+      "branch": "codex/v8-web-jope-smartcluster-20260713",
+      "head": "c8015162671843de1229625c63a49c4a69aaac60",
+      "dirty": true,
+      "note": "working tree has uncommitted modifications INCLUDING analyzed files (crates/feat-web/src/profile/*, routes/*, protocol/*); analysis reflects checked-out state as instructed, which may differ from the ffbbaf48 image build"
+    },
+    {
+      "repo": "/home/ubuntu/jain-split/redline-split/redline-core",
+      "branch": "main",
+      "head": "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+      "dirty": false
+    }
+  ],
+  "error_site": {
+    "construction": "redline-core/crates/kernel/src/storage/buffer.rs:598-602 (Inner::ensure_capacity returns Error::CorruptPage(\"no unpinned frame available for eviction\") when evict_one returns false)",
+    "display_chain": "kernel Error::CorruptPage (kernel/src/error.rs:37 '#[error(\"corrupt page: {0}\")]') -> sql Error::Kernel (sql/src/error.rs:6 'kernel error: {0}') -> redlinedb Error Display '{code as i32}: {message}' => \"1: kernel error: corrupt page: ...\"",
+    "trigger": "ensure_capacity(buffer.rs:588-605): resident >= capacity and one evict_one sweep (buffer.rs:607-655, 2x all frames under the single Inner::eviction mutex) finds no evictable frame"
+  },
+  "pool_config": {
+    "open_site": "jain-web/crates/feat-web/src/redline.rs:24-36 — single on-disk RedlineDatabase (state.redline), OpenOptions::default(), Durability::Strict, connection Pool max 8",
+    "capacity_derivation": "redline-core/crates/redlinedb/src/handle.rs:348-363 sql_options(): buffer_pool_pages = memory.cache_bytes / page_size (lean_ephemeral is OFF for on-disk opens)",
+    "cache_bytes_default": 16777216,
+    "cache_bytes_default_site": "redline-core/crates/redlinedb/src/options.rs:11-17 (MemoryOptions::default = 16 MiB)",
+    "page_size": 16384,
+    "page_size_site": "redline-core/crates/kernel/src/format/page.rs:11 DEFAULT_PAGE_SIZE = 16*1024; engine/mod.rs:170",
+    "pool_frames": 1024,
+    "max_cell_bytes": 16316,
+    "max_cell_site": "append.rs ensure_cell_size: page_size - PAGE_HEADER_LEN(64) - SLOT_LEN(4) (kernel/src/engine/page_heap/mutation/write/append.rs:251-260)",
+    "lean_pool_note": "LEAN_BUFFER_POOL_PAGES=256 (options.rs:75) applies only to :memory:/ephemeral opens — NOT this path"
+  },
+  "pin_and_eviction_contract": {
+    "raii_guard": "PageGuard (buffer.rs:103-107); pin_count incremented at buffer.rs:369/398/409, decremented in Drop (buffer.rs:872-879)",
+    "holders_audited": "heap append (append.rs:154-249), heap read (mutation/read.rs), heap scan (page_heap/scan.rs:253-259), btree insert/delete/lookup/cursor (index/mutate/insert.rs:57-99, index/lookup.rs:44) — all pin ONE page at a time and drop before the next; no struct stores PageGuard outside buffer.rs; no per-column writer exists (web store writes whole-row JSON blobs)",
+    "key_finding_not_a_pin_leak": "ensure_capacity is ONLY ever called with durable_lsn=Lsn::ZERO — buffer.rs:363 (allocate) and buffer.rs:404 (pin cold path). evict_one skips every dirty frame whose page_lsn > durable_lsn (buffer.rs:634) and flush_frame_if_durable refuses to flush them (buffer.rs:772-779). Therefore ALL DIRTY FRAMES ARE PERMANENTLY UNEVICTABLE from the allocate/pin path regardless of actual WAL durability. The error text ('no unpinned frame') is misleading: exhaustion is by dirty frames, not pinned frames.",
+    "only_relief_valves": "explicit Database::checkpoint() (engine/maintenance.rs:203-241 flush_dirty_batches with real durable LSN). jain-web calls it ONLY at shutdown (lifecycle.rs:139), hourly GC sweep (main.rs:214-230, DEFAULT_GC_INTERVAL_SECS=3600, lifecycle.rs:217), and backup. No engine-internal auto-checkpoint exists.",
+    "page_reuse_debt_confirmed": "page ids are append-only monotonic (buffer.rs:150 next_page_id=page_count+1, buffer.rs:364 fetch_add); reusable pages are produced only by vacuum (page_heap/directory/vacuum.rs:124-139) and Store::vacuum (feat-web store/storage.rs:91-93) has no runtime callers"
+  },
+  "web_predict_path": [
+    "POST /sessions/:id/predict -> predict (jain-web crates/feat-web/src/routes/actions.rs:209-242)",
+    "-> upload_files (routes/uploads.rs:1-141): add_file INSERT, upload.started/progress/complete events, create_automatic_checkpoint (git worktree commit + small rows; CSV bytes go to filesystem, not redline)",
+    "-> set_state(Uploaded) then profile::profile_session (uploads.rs:121-124)",
+    "-> profile_session_inner (profile/session.rs:19-156): transition_with_event Profiling + 'profile.started' (24-35); profiles ALL files incl. the train file (42-47, profile_file reads CSVs from disk only)",
+    "-> redline writes: set_file_profile per file (~100 B/col JSON; store/sessions.rs:238-246), update_file_role, set_session_profile (all files' profiles + schema_diff; store/sessions.rs:124-132), reasoning.profile + profile.complete events with full SessionProfile payload (session.rs:117-149), each via persist_event tx = UPDATE sessions row + INSERT events row (store/events.rs:108-169)",
+    "each such write appends a NEW MVCC tuple version + full before-image undo record (append_update_version, kernel page_heap/mutation/write/append.rs:12-60) + btree leaf dirtying for events PK(session_id,seq); heap has 4 append lanes (engine/mod.rs:169)"
+  ],
+  "threshold_arithmetic": {
+    "budget": "pool = 16 MiB / 16 KiB = 1024 frames; because dirty frames are unevictable (buffer.rs:634 @ durable_lsn=ZERO) and no checkpoint runs during the E2E window (first GC sweep at t+3600 s), the process has a hard lifetime budget of ~1024 DISTINCT DIRTIED PAGES (~16 MiB of heap+undo+index page dirtying) from container start until the first checkpoint",
+    "column_proportional_writers": [
+      "profile_json ~= 95-105 B/column: 130 cols ~= 13 KB (~1 page/write), 72 cols ~= 7 KB (<1/2 page)",
+      "at predict-time profiling both files (train 1000x130 + scoring 999x130) are re-profiled: 2x set_file_profile + set_session_profile (2-file profile + schema_diff ~= 26-30 KB) + profile.complete event payload duplicating it",
+      "every UPDATE also writes a full before-image undo cell (append_update_version) => byte volume x2",
+      "MVCC multiplier: after initial profiling, sessions.profile_json rides in the sessions row; EVERY subsequent state transition (transition_with_event/set_state, ~12-15 per run) appends a complete new row version + full before-image => ~2-4 fresh 16 KiB pages per transition at 130 cols vs ~1-2 at 72 cols",
+      "training progress: every feat-core progress event + reasoning.note is persisted (runner/sink.rs:80-99); hundreds to low-thousands of event INSERTs/run, each dirtying heap+undo+PK-btree pages; payload sizes and event counts grow with feature count (phases 1-6 iterate over features)"
+    ],
+    "why_130_fails_72_passes": "cumulative distinct dirtied pages over (training run + predict upload + re-profiling) crosses the 1024-frame cliff for the 130-col Allstate run and stays under it for the 72-col fixture; the predict-time double-profile burst (~40-80 fresh pages at 130 cols, roughly half at 72) is the straw. The relationship is capacity-proportional in total bytes written since boot, dominated by column-proportional JSON blobs and their MVCC/undo copies — matching the observed 'more columns -> more pages' signature. Exact page counts need runtime counters (BufferPoolStats.resident_pages/evictions) — see limitations",
+    "sagemaker_control": "/invocations path does not write session events/profiles to the web redline store, so it passes both fixtures",
+    "jain_web_max_data_bytes_irrelevant": "JAIN_WEB_MAX_DATA_BYTES=2147483648 only feeds GC prune sizing (lifecycle.rs:172-187); the binding cap is the 16 MiB buffer pool"
+  },
+  "wedge_mechanism": {
+    "stuck_in_profiling": "upload_files error path restores previous state with `let _ = state.store.set_state(&id, previous_state)` (uploads.rs:131-139) — that UPDATE itself needs a heap append -> fails against the saturated pool and is silently swallowed; every later transition fails the same way, so the session is pinned at 'profiling' until restart (lifecycle reconcile runs only at boot, lifecycle.rs:41-72)",
+    "cpu_and_api_hang": "no literal unbounded loop exists at the error site (ensure_capacity errors out; SQL autocommit retry excludes CorruptPage — exec/mod.rs:1556-1565). The sustained ~100% CPU + API-wide unresponsiveness is explained by: (a) EVERY cold pin/allocate across all requests serializes on the single Inner::eviction mutex (buffer.rs:65, 593-596) and runs an O(2x1024) sweep including an all_frames() Vec+Arc-clone of the whole pool (buffer.rs:725-738) with zero backoff — at/near saturation nearly every session poll, WS replay and event write does this; the few remaining clean frames thrash (evict -> immediately reloaded); (b) conflict-class errors (SerializationFailure/WriteConflict/LockTimeout) between concurrent event writers on the shared sessions row enter the autocommit retry loop: up to 4096 immediate retries with only std::thread::yield_now() (sql/src/exec/mod.rs:1406, 1527-1539); (c) the 8-connection pool (redline.rs:9) queues behind (a)+(b), so all handlers (reads included, they share the pool) stall",
+    "gc_relief_fragile": "even the hourly relief is ordering-fragile: run_gc_sweep does prune_storage + trim_session_events BEFORE store.checkpoint() (lifecycle.rs:207-222); if any of those needs a write against the saturated pool it errors and the checkpoint is skipped",
+    "confidence": "stuck-state mechanism: high (direct code path). CPU/hang attribution: medium — consistent with all code paths found, but a stack sample (e.g. perf top / gdb thread apply all bt on a wedged container) is required to close it definitively"
+  },
+  "adjacent_risk_noted": "any single row whose encoded cell exceeds 16316 B (e.g. sessions row carrying a 2-file wide-column profile_json) hits Error::RecordTooLarge (append.rs:251-260) — no overflow/TOAST mechanism exists in the SQL layer; wide datasets are also near this cliff independent of the buffer pool",
+  "fix_proposals_ranked": [
+    {
+      "rank": 1,
+      "scope": "redline-core kernel (minimal, correct fix)",
+      "proposal": "give BufferPool access to the real WAL durable LSN (e.g. Arc<AtomicU64> installed by the engine after WAL init at engine/recovery.rs:65-71) and use it instead of Lsn::ZERO at buffer.rs:363 and buffer.rs:404, so ensure_capacity/evict_one can flush-and-evict dirty pages whose LSN is durable (with Strict commit durability nearly all dirty pages become flushable immediately). Pool then self-heals under write pressure.",
+      "anchors": "buffer.rs:363,404,588-605,627-646,744-779; engine/recovery.rs:65-71"
+    },
+    {
+      "rank": 2,
+      "scope": "redline-core engine (backpressure)",
+      "proposal": "auto-checkpoint watermark: when dirty/resident crosses e.g. 50% of capacity, run flush_dirty_batches with the current durable LSN (background thread or inline in allocate path) instead of relying solely on caller checkpoints.",
+      "anchors": "engine/maintenance.rs:203-241; storage/buffer.rs:282-288"
+    },
+    {
+      "rank": 3,
+      "scope": "jain-web (ops mitigation, ship-now)",
+      "proposal": "decouple checkpointing from GC: short-interval store.checkpoint() (30-60 s or every N events) in its own tokio task, AND reorder/guard run_gc_sweep so checkpoint() runs first (or in a finally) so failing prunes can't skip the relief valve.",
+      "anchors": "jain-web main.rs:214-230; lifecycle.rs:207-222; store/storage.rs:86-88"
+    },
+    {
+      "rank": 4,
+      "scope": "jain-web (headroom, not a fix)",
+      "proposal": "raise memory.cache_bytes for the web store open (e.g. 256 MiB => 16384 frames) — moves the cliff, does not remove it.",
+      "anchors": "jain-web crates/feat-web/src/redline.rs:26-32; redlinedb options.rs:11-17"
+    },
+    {
+      "rank": 5,
+      "scope": "redline-core (diagnosability + wedge softening)",
+      "proposal": "split the error into 'all frames pinned' vs 'dirty pages exceed durable horizon'; add bounded backoff + one forced flush attempt before failing; surface BufferPoolStats in the web /api/system for early warning.",
+      "anchors": "buffer.rs:597-604; feat-web routes (system view)"
+    }
+  ],
+  "analysis_limitations": [
+    "static analysis only — no container run, no page-count instrumentation; the 1024-frame budget and the mechanism are exact, but the per-run dirty-page totals for 130 vs 72 columns are estimates",
+    "jain-web working tree is dirty (uncommitted edits to analyzed files); image ffbbaf48 may differ slightly",
+    "CPU-spin attribution is code-consistent but unconfirmed by a runtime stack sample",
+    "event volume of the effort=low GPU training run (count x payload size) not measured; recommended: rerun E2E capturing store.stats() / BufferPoolStats before predict"
+  ]
+}

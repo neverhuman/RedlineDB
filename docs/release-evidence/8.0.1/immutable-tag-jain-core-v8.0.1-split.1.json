@@ -1,0 +1,47 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "64790b4b7b0556f72aa65999947bac0110821e27",
+    "remote": "64790b4b7b0556f72aa65999947bac0110821e27"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "64790b4b7b0556f72aa65999947bac0110821e27",
+  "commit_input": "64790b4b7b0556f72aa65999947bac0110821e27",
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mirror": {
+    "path": "/home/ubuntu/jain-split/target/bare-mirrors/jain-core.git",
+    "receipt": "/home/ubuntu/jain-split/jain-split-ops/docs/release-evidence/8.0.1/mirrors/jain-core-jain-core-v8.0.1-split.1.json",
+    "status": "pass",
+    "tag_commit": "64790b4b7b0556f72aa65999947bac0110821e27"
+  },
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "release_identity": {
+    "cargo_packages": [
+      {
+        "manifest": "crates/feat-core/Cargo.toml",
+        "name": "feat-core",
+        "version": "8.0.1"
+      },
+      {
+        "manifest": "crates/jain-redline-store/Cargo.toml",
+        "name": "jain-redline-store",
+        "version": "8.0.1"
+      }
+    ],
+    "expected_product_version": "8.0.1",
+    "status": "pass",
+    "version_file": "jain-core-v8.0.1-split.1",
+    "workspace_package_version": "8.0.1"
+  },
+  "remote": "http://127.0.0.1:8787/git/jeryu/jain-core.git",
+  "remote_main": "64790b4b7b0556f72aa65999947bac0110821e27",
+  "repository": "/home/ubuntu/jain-split/jain-core",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-core-v8.0.1-split.1",
+  "timestamp_unix": 1784213367
+}

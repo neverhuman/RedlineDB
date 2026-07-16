@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "d698fa18650802d13c404ce8aa8977446639bb9d"
+    },
+    "body": "",
+    "created_at": "2026-07-16T07:04:07.583852538Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-physical-family-ci-20260716",
+      "ref": "codex/redline-physical-family-ci-20260716",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "d941a967e2324b1ca1b7eff152c81327f876b2e9"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/18",
+    "id": "e57d3899-99be-4abc-a58f-c85c38a49413",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 18,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "Replace Redline family CI worktrees with physical clones",
+    "updated_at": "2026-07-16T07:04:07.583852538Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/18",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/redline-split-ops",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "codex/redline-physical-family-ci-20260716",
+      "title": "Replace Redline family CI worktrees with physical clones"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/redline-split-ops/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "d698fa18650802d13c404ce8aa8977446639bb9d"
+    },
+    "body": "",
+    "created_at": "2026-07-16T07:04:07.583852538Z",
+    "draft": false,
+    "head": {
+      "label": "codex/redline-physical-family-ci-20260716",
+      "ref": "codex/redline-physical-family-ci-20260716",
+      "repo": {
+        "full_name": "jeryu/redline-split-ops"
+      },
+      "sha": "d941a967e2324b1ca1b7eff152c81327f876b2e9"
+    },
+    "html_url": "/jeryu/redline-split-ops/pull/18",
+    "id": "e57d3899-99be-4abc-a58f-c85c38a49413",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 18,
+    "source_repository": "jeryu/redline-split-ops",
+    "state": "open",
+    "title": "Replace Redline family CI worktrees with physical clones",
+    "updated_at": "2026-07-16T07:04:07.583852538Z",
+    "url": "/repos/jeryu/redline-split-ops/pulls/18",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784185447
+}

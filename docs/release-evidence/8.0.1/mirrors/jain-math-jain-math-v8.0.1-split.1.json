@@ -1,0 +1,22 @@
+{
+  "manifest": "repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-math.git",
+      "mirror_existed": true,
+      "name": "jain-math",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-math",
+      "source_head": "33fcf35e6a626a3911e5d52f6633b702d1d89369"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-math"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1784212353
+}

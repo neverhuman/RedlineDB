@@ -1,0 +1,122 @@
+{
+  "schema_version": "jain.identity-proof-successor/v1",
+  "status": "PROOF_PASS_PENDING_REQUIRED_AND_REVIEW",
+  "completed_at": "2026-07-16T08:20:00Z",
+  "repository": "jeryu/jain-docs",
+  "pull_request": 13,
+  "branch": "codex/v8.0.1/docs-proof-successor-20260716",
+  "base_sha": "8b5ab9ab6b224821622eccfd5a8cb9cde5350e51",
+  "head_sha": "0b278ec716fcccd74abd0a2b3b051d8729c140e2",
+  "tree_sha": "709e062c92638c5ac862126496a7aa9951a4999a",
+  "commit_count": 3,
+  "pull_request_diff": {
+    "files": [
+      "README.md",
+      "db/AGENTS.md",
+      "docs/AGENTS.md",
+      "docs/release.md",
+      "docs/testing.md",
+      "ops/AGENTS.md",
+      "ops/ci/check.sh",
+      "ops/ci/lib.sh",
+      "ops/ci/score.sh",
+      "schemas/docs-artifact.schema.json"
+    ],
+    "insertions": 83,
+    "deletions": 14,
+    "full_index_binary_diff_sha256": "315d4e80a8ce91841321fc84fd04ff4d33f57d6848bc0fbf76b0b64005477c01",
+    "product_or_manual_semantics_changed": false,
+    "dependency_or_lock_changed": false,
+    "schema_validation_semantics_changed": false,
+    "schema_annotation_only": true
+  },
+  "identity": {
+    "product_version": "8.0.1",
+    "version": "jain-docs-v8.0.1-split.1",
+    "existing_immutable_tag": "jain-docs-v8.0.1-split.0",
+    "existing_immutable_tag_sha": "b0245456d73d99a6698db053bf49300d6bbbac12",
+    "next_unused_tag": "jain-docs-v8.0.1-split.1",
+    "tag_created": false,
+    "authority_bound": false,
+    "production_applied": false
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "regular": true,
+    "executable": true,
+    "symlink": false,
+    "version": "jankurai 1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "ambient_same_version_path": "/home/ubuntu/.local/bin/jankurai",
+    "ambient_same_version_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "hostile_path_regression": "pass",
+    "repository_invocations_route_through_verified_function": true
+  },
+  "local_gates": {
+    "git_diff_check": "pass",
+    "fast": "pass",
+    "required_manual_and_links": "pass",
+    "artifact_support": "pass",
+    "contract_drift": "pass",
+    "security": "pass",
+    "score": {
+      "status": "pass",
+      "score": 91,
+      "raw_score": 91,
+      "hard_findings": 0,
+      "caps": [],
+      "report_sha256": "4928df4cb664e2937c59d7d3090c5d640f8d6d1147cffa45e6e7e85e926c2d8f"
+    },
+    "tool_adoption": "pass",
+    "changed_fast": {
+      "status": "pass",
+      "score": 86,
+      "raw_score": 86,
+      "hard_findings": 0,
+      "caps": [],
+      "report_sha256": "cf7715c0eb5190e2b978bd0830cfe5ec8bc8f9ac06c9ef7c0e997772b23a787e"
+    }
+  },
+  "artifacts": {
+    "artifact_support_receipt_sha256": "0cfc10c931adf4f1243969b15233cb5df764b648e91bf9680e44f9a913260d3b",
+    "source_archive_sha256": "84cc5c964090bf20a3fa17a0b38e072257d39c4ff0ce3f82cc406169913e01b1",
+    "manual_pdf_sha256": "45f54e35bbc76521e37789f8054b86b243f130852bb8fe8c10d6fed9aeda82ad",
+    "contract_receipt_sha256": "d4a566fd4f8a35dc3b68181384c42890dc8d5126d551e7f9af15278737e50b11",
+    "security_receipt_sha256": "c26b2c13f8e970a5ef4ddb7bc3a55c27c4d03a86290a0acabda7178f9ea572ed",
+    "pr_open_receipt_sha256": "dc67d3bce4c784db6ff4a8565e29077941ffa5f19651c27575d5963478d6632d"
+  },
+  "forge_readback": {
+    "branch_sha": "0b278ec716fcccd74abd0a2b3b051d8729c140e2",
+    "base_sha": "8b5ab9ab6b224821622eccfd5a8cb9cde5350e51",
+    "pull_request_state": "open",
+    "mergeable_state": "blocked",
+    "jankurai_proof": "success",
+    "jankurai_proof_check_id": "902521d6-6e58-4198-81ce-41a3281c13de",
+    "jain_docs_required": "absent",
+    "approval": "absent"
+  },
+  "checkout": {
+    "clean": true,
+    "registered_worktrees": 1,
+    "symlinks": 0,
+    "local_branch_equals_forge": true
+  },
+  "remaining_blockers": [
+    "Publish genuine jain-docs/required success for this exact head through the serialized governed host producer.",
+    "Obtain an independent exact-head review and approval.",
+    "Protected fast-forward merge PR 13.",
+    "Cut and read back immutable jain-docs-v8.0.1-split.1 without moving split.0.",
+    "Bind the merged commit and checksum in the protected authority manifest."
+  ],
+  "excluded_actions_confirmed": [
+    "host_ci",
+    "required_check_post",
+    "approval",
+    "merge",
+    "tag",
+    "authority_binding",
+    "deployment",
+    "force_push",
+    "git_worktree"
+  ]
+}

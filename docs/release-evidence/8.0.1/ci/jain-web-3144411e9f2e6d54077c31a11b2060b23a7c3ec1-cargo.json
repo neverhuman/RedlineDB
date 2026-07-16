@@ -1,0 +1,148 @@
+{
+  "executed": [
+    {
+      "args": [
+        "build",
+        "--locked",
+        "--release",
+        "--workspace",
+        "--no-default-features",
+        "--features",
+        "feat-web/ci-smoke,feat-web/jable,feat-web/migration-api",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "label": "build-feature-set-1",
+      "program": "cargo",
+      "status": "pass"
+    },
+    {
+      "args": [
+        "test",
+        "--locked",
+        "--workspace",
+        "--no-default-features",
+        "--features",
+        "feat-web/ci-smoke,feat-web/jable,feat-web/migration-api",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "label": "test-feature-set-1",
+      "program": "cargo",
+      "status": "pass"
+    },
+    {
+      "args": [
+        "build",
+        "--locked",
+        "--release",
+        "--workspace",
+        "--no-default-features",
+        "--features",
+        "feat-web/ci-smoke,feat-web/jable,feat-web/starforge-cpu",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "label": "build-feature-set-2",
+      "program": "cargo",
+      "status": "pass"
+    },
+    {
+      "args": [
+        "test",
+        "--locked",
+        "--workspace",
+        "--no-default-features",
+        "--features",
+        "feat-web/ci-smoke,feat-web/jable,feat-web/starforge-cpu",
+        "--all-targets"
+      ],
+      "exit_code": 0,
+      "label": "test-feature-set-2",
+      "program": "cargo",
+      "status": "pass"
+    }
+  ],
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "run-release-cargo-commands",
+  "policy": {
+    "commands": [
+      {
+        "args": [
+          "build",
+          "--locked",
+          "--release",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "feat-web/ci-smoke,feat-web/jable,feat-web/migration-api",
+          "--all-targets"
+        ],
+        "label": "build-feature-set-1",
+        "program": "cargo"
+      },
+      {
+        "args": [
+          "test",
+          "--locked",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "feat-web/ci-smoke,feat-web/jable,feat-web/migration-api",
+          "--all-targets"
+        ],
+        "label": "test-feature-set-1",
+        "program": "cargo"
+      },
+      {
+        "args": [
+          "build",
+          "--locked",
+          "--release",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "feat-web/ci-smoke,feat-web/jable,feat-web/starforge-cpu",
+          "--all-targets"
+        ],
+        "label": "build-feature-set-2",
+        "program": "cargo"
+      },
+      {
+        "args": [
+          "test",
+          "--locked",
+          "--workspace",
+          "--no-default-features",
+          "--features",
+          "feat-web/ci-smoke,feat-web/jable,feat-web/starforge-cpu",
+          "--all-targets"
+        ],
+        "label": "test-feature-set-2",
+        "program": "cargo"
+      }
+    ],
+    "mode": "feature-matrix",
+    "release_feature_sets": [
+      [
+        "ci-smoke",
+        "jable",
+        "migration-api"
+      ],
+      [
+        "ci-smoke",
+        "jable",
+        "starforge-cpu"
+      ]
+    ],
+    "release_package": "feat-web",
+    "repo": "jain-web",
+    "schema_version": "jain.split.release-cargo-commands/v1"
+  },
+  "repository": "jain-web",
+  "schema_version": "jain.release-cargo-execution/v1",
+  "status": "pass",
+  "timestamp_unix": 1784183466,
+  "working_directory": "/tmp/split-host-ci.OZdPoq/jain-web"
+}

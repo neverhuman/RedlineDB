@@ -1,0 +1,194 @@
+{
+  "schema_version": "jain.identity-governed-proof-successor/v1",
+  "recorded_at_utc": "2026-07-16T08:28:31Z",
+  "claim_token": "codex-jain-llm-pr7-governed-proof-remediation-20260716T0817Z",
+  "repository": "jeryu/jain-llm",
+  "pull_request": 7,
+  "protected_main": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+  "branch": "release/v8.0.1/llm-identity-20260716",
+  "predecessor_head": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+  "predecessor_tree": "5cbc7040a0dd1c545e2e83862e209786122141e9",
+  "successor_head": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+  "successor_tree": "d955345abc77af93d9a8e1a9942ad69865011663",
+  "successor_commits": [
+    "3bf296ac6a4035f9a6ba394e0fe47049099cab60",
+    "e1e25c15aad74b3469ec718ed0c6f65fccf30f95"
+  ],
+  "custody": {
+    "canonical_checkout": "/home/ubuntu/jain-split/jain-llm",
+    "canonical_clean_after_push": true,
+    "canonical_branch_exact": true,
+    "forge_branch_equal": true,
+    "forge_main_equal": true,
+    "registered_worktrees": 1,
+    "registered_worktree_is_canonical_primary": true,
+    "new_worktree_created": false,
+    "symlinks_in_checkout": 0,
+    "force_push": false,
+    "product_or_provider_semantics_changed": false,
+    "dependency_resolution_changed_by_remediation": false,
+    "cargo_lock_changed_by_remediation": false,
+    "source_files_changed_by_remediation": 0
+  },
+  "remediation_delta": {
+    "from": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+    "to": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+    "files": 10,
+    "insertions": 84,
+    "deletions": 13,
+    "full_index_binary_diff_sha256": "363147ddd20af280426ab263cb2a1921c9d6e3a8a9e24a64bb51c4993f9bcce6",
+    "paths": [
+      "CHANGELOG.md",
+      "README.md",
+      "agent/security-policy.toml",
+      "agent/tool-adoption.toml",
+      "db/README.md",
+      "docs/release.md",
+      "docs/testing.md",
+      "ops/ci/check.sh",
+      "ops/ci/jankurai-governance-test.sh",
+      "ops/ci/lib.sh"
+    ],
+    "scope": "governed Jankurai routing, hostile-PATH regression, and directly stale proof/release declarations only"
+  },
+  "complete_pr_delta": {
+    "base": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+    "head": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+    "files": 18,
+    "insertions": 92,
+    "deletions": 21,
+    "full_index_binary_diff_sha256": "108fe113e1731c8948fafef97caf546cfbe61c1725028db1ebfcb9ab1651f0b6",
+    "git_archive_sha256": "964397962277b5fca24b53e7355338caa1ad27d21ae0d12eb8ecdf7b1d142273"
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "path_is_regular_executable_non_symlink": true,
+    "realpath_is_exact": true,
+    "version": "jankurai 1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "ambient_same_version_path": "/home/ubuntu/.local/bin/jankurai",
+    "ambient_same_version_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "hostile_path_regression": "pass",
+    "all_repository_literal_invocations_route_through_fixed_function": true
+  },
+  "exact_head_local_evidence": {
+    "required": {
+      "status": "pass",
+      "rust_tests_passed": 7,
+      "fmt": "pass",
+      "clippy": "pass",
+      "package_identity_receipt_sha256": "6df883c2991d55eb3930e596b7cce8f239c0c81e00572dd8dda17ec264baa707"
+    },
+    "package_identity": {
+      "status": "pass",
+      "version": "8.0.1",
+      "head": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+      "crate_archive_sha256": "c22f3044c10db833d245ebe47bfaaf9643d3fab95cadf89f9d02522280d17a8d",
+      "cargo_lock_sha256": "c04d00eb9e55ee63cba03a792f0c8d31d5295f37dc06ccff06de91c6c0d0dbbf",
+      "cross_repository_git_dependencies": 0
+    },
+    "contract_drift": {
+      "status": "pass",
+      "head": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+      "tool": "cargo-public-api 0.52.0",
+      "receipt_sha256": "6647e953e90a54818662b8eee1a327ac74d1a708dac67ed6b984b5b28e95b641"
+    },
+    "artifact_support": {
+      "status": "pass",
+      "head": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+      "source_archive_sha256": "964397962277b5fca24b53e7355338caa1ad27d21ae0d12eb8ecdf7b1d142273",
+      "receipt_sha256": "5ab75172549504f8c7630e9cce3a1036882f5d2eb625f650e2ebebb90728df03"
+    },
+    "score": {
+      "just_score": 88,
+      "post_tool_adoption_full_score": 91,
+      "caps": 0,
+      "hard_findings": 0,
+      "post_tool_adoption_report_sha256": "bdf2d49b77dc0010a82b00105ac9357cfea2a75c5cb948f7b8839605c30250e8"
+    },
+    "forge_parity_diff_audit": {
+      "status": "pass",
+      "score": 85,
+      "minimum_score": 85,
+      "changed_paths": 18,
+      "caps": 0,
+      "hard_findings": 0,
+      "score_report_sha256": "be854f8d1eff71997b0bd65608638790e4c602a65d5286fa23cf7998385ce8cf",
+      "proof_plan_sha256": "872e1773b36f54fecefd446b9e13f179e2a915b39a5a123aea73bc4540fd13a6"
+    },
+    "security": {
+      "status": "pass",
+      "rustsec_database_commit": "9f3e138091487e69144f536d36976e427a7a3307",
+      "findings": 0,
+      "evidence_sha256": "4f42dc30858ef8aa552c9c132d1b13e85a0bc89ca1441f005b82dc904ad8854c",
+      "sbom_sha256": "e67b39052073acc64ea328f400f4839d949bd8a10912a8a0a5940d7a71a19adc"
+    },
+    "coverage": {
+      "status": "pass",
+      "sources_present": 2,
+      "sources_required": 2,
+      "rust_line_coverage": 1.0,
+      "lcov_sha256": "aa6e65a38e0a39efa18a4c9e54ce68f500922c78931bd2478ecb9d261b810e25",
+      "audit_sha256": "1edf642bcb2f61654686080fef22dcdcac6954c2f39884623cdaee51ef886221"
+    }
+  },
+  "forge_checks": {
+    "intermediate_head_superseded": "3bf296ac6a4035f9a6ba394e0fe47049099cab60",
+    "intermediate_proof_check": "ee9dda13-e361-441b-837c-f69c6775d337",
+    "intermediate_proof_conclusion": "failure",
+    "intermediate_failure_reason": "forge-parity diff-audit score 83 below unchanged floor 85",
+    "successor_proof_check": "22b2fa04-dfb0-4e84-b8a2-9af11986b866",
+    "successor_proof_conclusion": "success",
+    "successor_autonomy_check": "d4dedbb4-4ea9-4106-a87e-940ff0fcf8ad",
+    "successor_autonomy_conclusion": "neutral",
+    "successor_required_check_present": false,
+    "historical_required_failure_head": "cec2f1923c93185cc8e2333d78b13c777a7b938e",
+    "historical_required_failure_not_reusable": true,
+    "historical_required_failure_reason": "isolated HOME lacked pinned RustSec advisory database"
+  },
+  "pull_request_metadata": {
+    "title": "chore(release): align jain-llm identity to 8.0.1",
+    "state": "open",
+    "draft": false,
+    "merged": false,
+    "base": "main",
+    "base_sha": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+    "head_branch": "release/v8.0.1/llm-identity-20260716",
+    "head_sha": "e1e25c15aad74b3469ec718ed0c6f65fccf30f95",
+    "old_body_sha256": "b6486a5da059e31c28f628caca9b150c3492b1cad92b8f1e5e4078b8df5637e7",
+    "request_and_readback_body_sha256": "886bdfb3318dd30d94d22a98f53d3c706a290cc079683dec4a6da05eba6af362",
+    "body_readback_matches_request": true,
+    "updated_at": "2026-07-16T08:27:09.959095657Z",
+    "credential_transport": "curl --variable token@file with --expand-header and trim",
+    "credential_in_argv_output_or_receipt": false
+  },
+  "release_identity_blocker": {
+    "occupied_tag": "jain-llm-v8.0.1-split.0",
+    "occupied_tag_commit": "9eb84f0e498ee512ac7a38b9b879f984763b68af",
+    "next_unused_corrective_tag": "jain-llm-v8.0.1-split.1",
+    "branch_internal_tag": "jain-llm-v8.0.1-split.1",
+    "authority_current_tag": "jain-llm-v8.0.1-split.0",
+    "authority_release_commit": "PENDING",
+    "authority_release_checksum_sha256": "PENDING",
+    "resolution": "after protected merge, advance and bind split.1 only through protected authority review; never move split.0"
+  },
+  "decision": "SOURCE_AND_PROOF_PASS_LIFECYCLE_BLOCKED",
+  "remaining_blockers": [
+    "independent exact-head content review",
+    "reviewed isolated-HOME RustSec runner-input repair",
+    "fresh exact-head jain-llm/required success",
+    "independent approval and protected fast-forward merge",
+    "protected authority advance and binding for next-unused split.1",
+    "immutable split.1 creation and forge readback"
+  ],
+  "forbidden_actions_not_taken": [
+    "host CI execution or retry",
+    "synthetic check posting",
+    "approval or merge",
+    "tag creation or movement",
+    "authority or protection mutation",
+    "deployment",
+    "force push",
+    "Git worktree creation"
+  ]
+}

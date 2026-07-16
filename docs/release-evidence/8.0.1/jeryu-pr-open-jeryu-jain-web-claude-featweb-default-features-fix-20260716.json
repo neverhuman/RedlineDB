@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "c51bf1f06cbf48b2771bacd0dff23d3fa43b8813"
+    },
+    "body": "",
+    "created_at": "2026-07-16T12:56:38.548149566Z",
+    "draft": false,
+    "head": {
+      "label": "claude/featweb-default-features-fix-20260716",
+      "ref": "claude/featweb-default-features-fix-20260716",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "8d97cdd37a601dff8208613da7d873aedc1847ac"
+    },
+    "html_url": "/jeryu/jain-web/pull/35",
+    "id": "430ea636-5179-41db-812c-d618e2d85d71",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 35,
+    "source_repository": "jeryu/jain-web",
+    "state": "open",
+    "title": "fix(web): default-features build — include! doc comments + smartcluster path patch",
+    "updated_at": "2026-07-16T12:56:38.548149566Z",
+    "url": "/repos/jeryu/jain-web/pulls/35",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "jeryu/jain-web",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "",
+      "draft": false,
+      "head": "claude/featweb-default-features-fix-20260716",
+      "title": "fix(web): default-features build — include! doc comments + smartcluster path patch"
+    },
+    "method": "POST",
+    "path": "/repos/jeryu/jain-web/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "c51bf1f06cbf48b2771bacd0dff23d3fa43b8813"
+    },
+    "body": "",
+    "created_at": "2026-07-16T12:56:38.548149566Z",
+    "draft": false,
+    "head": {
+      "label": "claude/featweb-default-features-fix-20260716",
+      "ref": "claude/featweb-default-features-fix-20260716",
+      "repo": {
+        "full_name": "jeryu/jain-web"
+      },
+      "sha": "8d97cdd37a601dff8208613da7d873aedc1847ac"
+    },
+    "html_url": "/jeryu/jain-web/pull/35",
+    "id": "430ea636-5179-41db-812c-d618e2d85d71",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 35,
+    "source_repository": "jeryu/jain-web",
+    "state": "open",
+    "title": "fix(web): default-features build — include! doc comments + smartcluster path patch",
+    "updated_at": "2026-07-16T12:56:38.548149566Z",
+    "url": "/repos/jeryu/jain-web/pulls/35",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784206598
+}

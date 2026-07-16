@@ -1,0 +1,55 @@
+{
+  "schema": "jain.identity-implementation-preflight/v1",
+  "operation": "canonical-checkout preflight before surgical 8.0.1 identity implementation",
+  "repository": "jeryu/jain-jnoccio",
+  "canonical_path": "/home/ubuntu/jain-split/jain-jnoccio",
+  "release": "8.0.1",
+  "status": "blocked",
+  "decision": "STOP_NO_MUTATION",
+  "claim_token": "codex-mcp-jnoccio-v801-identity-implementation-20260716T0558Z",
+  "snapshot_at": "2026-07-16T05:58:00Z",
+  "required_preconditions": {
+    "canonical_primary_clean": false,
+    "checked_out_on_protected_main": false,
+    "head_equals_live_forge_main": false,
+    "single_registered_checkout": true,
+    "conflicting_live_ledger_claim": false,
+    "path_referencing_process_found": false,
+    "open_file_entry_found": false
+  },
+  "observed": {
+    "branch": "codex/zero-worktree-policy-20260716",
+    "head": "b67f1ece0b42e1f2d1d36d9d3e7528a6b123f62c",
+    "live_forge_main": "4810be89abad8e4e52b9be9fa9b49a4891970891",
+    "registered_checkouts": 1,
+    "porcelain": ["?? .jankurai/repo-score.md"],
+    "untracked_custody": [
+      {
+        "path": ".jankurai/repo-score.md",
+        "sha256": "7c5b395557b8cb7921008ea9a87c9869542cd7a5d5f000f10a5a3d4a44849d0d"
+      }
+    ],
+    "lsof_namespace_warnings": true
+  },
+  "blockers": [
+    "canonical checkout is not on protected main",
+    "canonical HEAD is not live forge main",
+    "canonical checkout contains untracked governed Jankurai evidence",
+    "stopped-head handoff from the policy/evidence owner is absent"
+  ],
+  "acceptance": {
+    "source_edits": 0,
+    "branch_switches": 0,
+    "stashes": 0,
+    "resets": 0,
+    "commits": 0,
+    "pushes": 0,
+    "prs_opened": 0,
+    "ci_runs": 0,
+    "approvals": 0,
+    "merges": 0,
+    "tags": 0,
+    "worktrees_created": 0
+  },
+  "next_action": "Obtain a stopped-head handoff, preserve or accept the untracked Jankurai receipt, and return the canonical checkout to clean forge-equal protected main before reclaiming identity implementation."
+}

@@ -1,0 +1,80 @@
+{
+  "id": "01KXNQT99JYCYE3JY3DSHXJX65",
+  "spec": {
+    "tenant": "unix:0",
+    "project": "pr7-gpu-receipt",
+    "idempotency_key": "01KXNQT99JR8VMT0KAFN1Z1P81",
+    "priority": "opportunistic",
+    "workload": {
+      "jain": {
+        "template": "research",
+        "arguments": [],
+        "environment": {}
+      }
+    },
+    "resources": {
+      "cpu": {
+        "minimum_millicores": 1000,
+        "desired_millicores": 1000,
+        "maximum_millicores": 1000
+      },
+      "ram": {
+        "soft_bytes": 805306368,
+        "hard_bytes": 1073741824
+      },
+      "scratch_bytes": 0,
+      "gpu": {
+        "count": 1,
+        "vram_bytes": 18446744073709551615,
+        "compute_share_per_mille": 1000,
+        "mode": "exclusive"
+      }
+    },
+    "retry": {
+      "max_failures": 3,
+      "initial_backoff_ms": 500,
+      "maximum_backoff_ms": 30000,
+      "jitter_per_mille": 200,
+      "retry_on": [
+        "infrastructure",
+        "gpu_transient",
+        "network",
+        "host_out_of_memory",
+        "shared_cuda_out_of_memory",
+        "preempted",
+        "daemon_restart"
+      ]
+    },
+    "preemption": {
+      "preemptible": true,
+      "checkpoint": {
+        "signal": {
+          "signal": 15,
+          "grace_ms": 90000
+        }
+      }
+    },
+    "io": "pipes",
+    "deadline": null,
+    "labels": {
+      "adapter.source": "scq-toml-v0"
+    }
+  },
+  "submitted_by": {
+    "unix": {
+      "uid": 0
+    }
+  },
+  "state": "completed",
+  "active_attempt": null,
+  "attempt_count": 1,
+  "failure_count": 0,
+  "created_at": 1784214791474,
+  "updated_at": 1784214794497,
+  "terminal": {
+    "completed": {
+      "exit_code": 0,
+      "at": 1784214794497
+    }
+  }
+}

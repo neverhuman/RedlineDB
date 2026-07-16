@@ -1,0 +1,1014 @@
+Cloning into '/tmp/split-host-ci.x6TXYR/jain-smartcluster'...
+HEAD is now at b2af481 style(daemon): apply cargo fmt to the PR #7 fix and test code
+lock_blob=3a8c5e1f50222f5d4ebfe28522c8ef17658daf73
+name=jain-smartcluster
+ref=b2af48193b0324ef96ca5ca78bbfdd3831a1050c
+commit=b2af48193b0324ef96ca5ca78bbfdd3831a1050c
+tree=a41846ecc26e98bc1c130da150f53674c87cfda8
+release_checksum_sha256=051ddb5319ba5c7166d9302ea846c75003263c9ba2905922208f105ba1f66f12
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: jain-smartcluster
+immutable inventory receipt ok: entries=57 digest=4940d0890131293c0faaac5022fedca5ae31d3383a5ea94464096f2fbc2d68cd
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded anstyle v1.0.14
+  Downloaded aead v0.5.2
+  Downloaded anstyle-parse v1.0.0
+  Downloaded equivalent v1.0.2
+  Downloaded anstream v1.0.0
+  Downloaded quick-error v1.2.3
+  Downloaded rand_xorshift v0.4.0
+  Downloaded embedded-io v0.4.0
+  Downloaded crypto-common v0.1.7
+  Downloaded block-buffer v0.10.4
+  Downloaded darling_macro v0.20.11
+  Downloaded cobs v0.3.0
+  Downloaded cfg_aliases v0.2.1
+  Downloaded bit-set v0.8.0
+  Downloaded errno v0.3.14
+  Downloaded opaque-debug v0.3.1
+  Downloaded rand_core v0.6.4
+  Downloaded matchers v0.2.0
+  Downloaded rand_core v0.9.5
+  Downloaded unarray v0.1.4
+  Downloaded rand_chacha v0.3.1
+  Downloaded is_terminal_polyfill v1.70.2
+  Downloaded inout v0.1.4
+  Downloaded memoffset v0.9.1
+  Downloaded rustc_version v0.4.1
+  Downloaded poly1305 v0.8.0
+  Downloaded wait-timeout v0.2.1
+  Downloaded scopeguard v1.2.0
+  Downloaded libloading v0.8.9
+  Downloaded futures-task v0.3.32
+  Downloaded digest v0.10.7
+  Downloaded nu-ansi-term v0.50.3
+  Downloaded base64ct v1.8.3
+  Downloaded pkcs8 v0.10.2
+  Downloaded fastrand v2.4.1
+  Downloaded ident_case v1.0.1
+  Downloaded convert_case v0.10.0
+  Downloaded ppv-lite86 v0.2.21
+  Downloaded postcard v1.1.3
+  Downloaded once_cell v1.21.4
+  Downloaded quote v1.0.46
+  Downloaded proc-macro2 v1.0.106
+  Downloaded wrapcenum-derive v0.4.1
+  Downloaded toml_write v0.1.2
+  Downloaded mio v1.2.1
+  Downloaded zeroize v1.9.0
+  Downloaded futures-util v0.3.32
+  Downloaded thiserror-impl v1.0.69
+  Downloaded zmij v1.0.21
+  Downloaded ulid v1.2.1
+  Downloaded thiserror-impl v2.0.18
+  Downloaded tracing-log v0.2.0
+  Downloaded nix v0.29.0
+  Downloaded spin v0.9.8
+  Downloaded nix v0.31.3
+  Downloaded toml v0.8.23
+  Downloaded serde_derive v1.0.228
+  Downloaded smallvec v1.15.2
+  Downloaded unicode-ident v1.0.24
+  Downloaded tracing-attributes v0.1.31
+  Downloaded socket2 v0.6.4
+  Downloaded semver v1.0.28
+  Downloaded tracing-core v0.1.36
+  Downloaded serde_core v1.0.228
+  Downloaded curve25519-dalek v4.1.3
+  Downloaded tempfile v3.27.0
+  Downloaded sharded-slab v0.1.7
+  Downloaded proptest v1.11.0
+  Downloaded signal-hook v0.3.18
+  Downloaded clap_builder v4.6.0
+  Downloaded toml_edit v0.22.27
+  Downloaded libc v0.2.186
+  Downloaded thiserror v1.0.69
+  Downloaded static_assertions v1.1.0
+  Downloaded serde v1.0.228
+  Downloaded spki v0.7.3
+  Downloaded slab v0.4.12
+  Downloaded signal-hook-registry v1.4.8
+  Downloaded sha2 v0.10.9
+  Downloaded rusty-fork v0.3.1
+  Downloaded hashbrown v0.17.1
+  Downloaded unicode-segmentation v1.13.3
+  Downloaded typenum v1.20.1
+  Downloaded crossterm v0.29.0
+  Downloaded indexmap v2.14.0
+  Downloaded toml_datetime v0.6.11
+  Downloaded subtle v2.6.1
+  Downloaded strsim v0.11.1
+  Downloaded memchr v2.8.3
+  Downloaded derive_more-impl v2.1.1
+  Downloaded version_check v0.9.5
+  Downloaded utf8parse v0.2.2
+  Downloaded universal-hash v0.5.1
+  Downloaded tokio-macros v2.7.0
+  Downloaded thread_local v1.1.10
+  Downloaded stable_deref_trait v1.2.1
+  Downloaded signature v2.2.0
+  Downloaded signal-hook-mio v0.2.5
+  Downloaded serde_spanned v0.6.9
+  Downloaded rand v0.9.5
+  Downloaded nvml-wrapper v0.12.1
+  Downloaded ed25519-dalek v2.2.0
+  Downloaded derive_more v2.1.1
+  Downloaded serde_json v1.0.150
+  Downloaded der v0.7.10
+  Downloaded darling_core v0.20.11
+  Downloaded chacha20poly1305 v0.10.1
+  Downloaded bytes v1.12.1
+  Downloaded bitflags v2.13.0
+  Downloaded aho-corasick v1.1.4
+  Downloaded winnow v0.7.15
+  Downloaded num-traits v0.2.19
+  Downloaded log v0.4.33
+  Downloaded heapless v0.7.17
+  Downloaded getrandom v0.4.3
+  Downloaded tracing-subscriber v0.3.23
+  Downloaded crc32fast v1.5.0
+  Downloaded redb v2.6.3
+  Downloaded clap v4.6.1
+  Downloaded parking_lot v0.12.5
+  Downloaded nvml-wrapper-sys v0.9.1
+  Downloaded getrandom v0.3.4
+  Downloaded darling v0.20.11
+  Downloaded getrandom v0.2.17
+  Downloaded const-oid v0.9.6
+  Downloaded clap_derive v4.6.1
+  Downloaded cfg-if v1.0.4
+  Downloaded autocfg v1.5.1
+  Downloaded anyhow v1.0.103
+  Downloaded pin-project-lite v0.2.17
+  Downloaded parking_lot_core v0.9.12
+  Downloaded zerocopy v0.8.54
+  Downloaded syn v2.0.118
+  Downloaded lock_api v0.4.14
+  Downloaded pidfd-util v0.1.0
+  Downloaded linux-raw-sys v0.12.1
+  Downloaded litrs v1.0.0
+  Downloaded async-trait v0.1.89
+  Downloaded regex-syntax v0.8.11
+  Downloaded chacha20 v0.9.1
+  Downloaded byteorder v1.5.0
+  Downloaded generic-array v0.14.7
+  Downloaded fnv v1.0.7
+  Downloaded rustix v1.1.4
+  Downloaded futures-core v0.3.32
+  Downloaded embedded-io v0.6.1
+  Downloaded tracing v0.1.44
+  Downloaded itoa v1.0.18
+  Downloaded hash32 v0.2.1
+  Downloaded thiserror v2.0.18
+  Downloaded rand_chacha v0.9.0
+  Downloaded rand v0.8.7
+  Downloaded futures-macro v0.3.32
+  Downloaded bit-vec v0.8.0
+  Downloaded lazy_static v1.5.0
+  Downloaded hex v0.4.3
+  Downloaded heck v0.5.0
+  Downloaded regex-automata v0.4.15
+  Downloaded ed25519 v2.2.3
+  Downloaded document-features v0.2.12
+  Downloaded colorchoice v1.0.5
+  Downloaded cipher v0.4.4
+  Downloaded curve25519-dalek-derive v0.1.1
+  Downloaded cpufeatures v0.2.17
+  Downloaded clap_lex v1.1.0
+  Downloaded anstyle-query v1.1.5
+  Downloaded tokio v1.52.3
+   Compiling libc v0.2.186
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.46
+    Checking cfg-if v1.0.4
+   Compiling version_check v0.9.5
+   Compiling generic-array v0.14.7
+   Compiling syn v2.0.118
+   Compiling serde_core v1.0.228
+    Checking getrandom v0.2.17
+    Checking typenum v1.20.1
+    Checking rand_core v0.6.4
+   Compiling zerocopy v0.8.54
+   Compiling serde v1.0.228
+   Compiling serde_derive v1.0.228
+   Compiling getrandom v0.3.4
+   Compiling semver v1.0.28
+   Compiling rustc_version v0.4.1
+    Checking crypto-common v0.1.7
+    Checking rand_core v0.9.5
+    Checking bitflags v2.13.0
+   Compiling thiserror v2.0.18
+    Checking scopeguard v1.2.0
+    Checking ppv-lite86 v0.2.21
+    Checking lock_api v0.4.14
+    Checking rand_chacha v0.9.0
+   Compiling thiserror-impl v2.0.18
+    Checking rand v0.9.5
+    Checking cpufeatures v0.2.17
+   Compiling heapless v0.7.17
+    Checking byteorder v1.5.0
+    Checking ulid v1.2.1
+    Checking hash32 v0.2.1
+    Checking spin v0.9.8
+    Checking block-buffer v0.10.4
+    Checking log v0.4.33
+    Checking stable_deref_trait v1.2.1
+   Compiling rustix v1.1.4
+   Compiling autocfg v1.5.1
+    Checking digest v0.10.7
+    Checking cobs v0.3.0
+    Checking errno v0.3.14
+    Checking linux-raw-sys v0.12.1
+    Checking once_cell v1.21.4
+    Checking signal-hook-registry v1.4.8
+    Checking postcard v1.1.3
+    Checking jain-smartcluster-core v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster-core)
+    Checking pin-project-lite v0.2.17
+   Compiling cfg_aliases v0.2.1
+    Checking sha2 v0.10.9
+    Checking mio v1.2.1
+   Compiling zmij v1.0.21
+   Compiling tokio-macros v2.7.0
+    Checking socket2 v0.6.4
+   Compiling getrandom v0.4.3
+    Checking utf8parse v0.2.2
+   Compiling serde_json v1.0.150
+    Checking bytes v1.12.1
+    Checking anstyle-parse v1.0.0
+    Checking tokio v1.52.3
+   Compiling memoffset v0.9.1
+    Checking hashbrown v0.17.1
+    Checking anstyle-query v1.1.5
+    Checking memchr v2.8.3
+    Checking equivalent v1.0.2
+    Checking colorchoice v1.0.5
+    Checking is_terminal_polyfill v1.70.2
+    Checking itoa v1.0.18
+    Checking anstyle v1.0.14
+    Checking subtle v2.6.1
+    Checking zeroize v1.9.0
+    Checking anstream v1.0.0
+    Checking indexmap v2.14.0
+   Compiling nix v0.29.0
+    Checking toml_datetime v0.6.11
+    Checking serde_spanned v0.6.9
+    Checking futures-core v0.3.32
+    Checking toml_write v0.1.2
+    Checking strsim v0.11.1
+    Checking smallvec v1.15.2
+   Compiling heck v0.5.0
+    Checking winnow v0.7.15
+    Checking fastrand v2.4.1
+   Compiling anyhow v1.0.103
+    Checking clap_lex v1.1.0
+    Checking clap_builder v4.6.0
+    Checking toml_edit v0.22.27
+    Checking tempfile v3.27.0
+   Compiling clap_derive v4.6.1
+   Compiling async-trait v0.1.89
+    Checking clap v4.6.1
+    Checking toml v0.8.23
+    Checking jain-smartcluster v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster)
+   Compiling fnv v1.0.7
+    Checking regex-syntax v0.8.11
+   Compiling ident_case v1.0.1
+   Compiling darling_core v0.20.11
+   Compiling nix v0.31.3
+    Checking tracing-core v0.1.36
+    Checking inout v0.1.4
+   Compiling thiserror v1.0.69
+   Compiling darling_macro v0.20.11
+   Compiling darling v0.20.11
+    Checking cipher v0.4.4
+    Checking regex-automata v0.4.15
+    Checking universal-hash v0.5.1
+   Compiling num-traits v0.2.19
+    Checking rand_chacha v0.3.1
+   Compiling tracing-attributes v0.1.31
+   Compiling thiserror-impl v1.0.69
+    Checking libloading v0.8.9
+    Checking lazy_static v1.5.0
+   Compiling crc32fast v1.5.0
+   Compiling redb v2.6.3
+    Checking opaque-debug v0.3.1
+    Checking sharded-slab v0.1.7
+    Checking poly1305 v0.8.0
+    Checking nvml-wrapper-sys v0.9.1
+    Checking tracing v0.1.44
+    Checking matchers v0.2.0
+    Checking rand v0.8.7
+    Checking chacha20 v0.9.1
+   Compiling wrapcenum-derive v0.4.1
+    Checking tracing-log v0.2.0
+    Checking aead v0.5.2
+    Checking thread_local v1.1.10
+    Checking wait-timeout v0.2.1
+    Checking quick-error v1.2.3
+    Checking bit-vec v0.8.0
+    Checking static_assertions v1.1.0
+    Checking nu-ansi-term v0.50.3
+    Checking rusty-fork v0.3.1
+    Checking tracing-subscriber v0.3.23
+    Checking bit-set v0.8.0
+    Checking nvml-wrapper v0.12.1
+    Checking pidfd-util v0.1.0
+    Checking chacha20poly1305 v0.10.1
+    Checking rand_xorshift v0.4.0
+    Checking hex v0.4.3
+    Checking unarray v0.1.4
+    Checking proptest v1.11.0
+    Checking jain-smartcluster-daemon v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster-daemon)
+   Compiling parking_lot_core v0.9.12
+   Compiling signal-hook v0.3.18
+   Compiling unicode-segmentation v1.13.3
+   Compiling convert_case v0.10.0
+   Compiling curve25519-dalek v4.1.3
+   Compiling derive_more-impl v2.1.1
+   Compiling curve25519-dalek-derive v0.1.1
+    Checking signature v2.2.0
+   Compiling litrs v1.0.0
+    Checking ed25519 v2.2.3
+   Compiling document-features v0.2.12
+    Checking derive_more v2.1.1
+    Checking signal-hook-mio v0.2.5
+    Checking parking_lot v0.12.5
+   Compiling futures-macro v0.3.32
+    Checking slab v0.4.12
+    Checking futures-task v0.3.32
+    Checking crossterm v0.29.0
+    Checking futures-util v0.3.32
+    Checking ed25519-dalek v2.2.0
+    Checking jain-smartcluster-executor v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster-executor)
+    Checking scq-node v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/scq-node)
+    Checking scq v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/scq)
+    Checking jain-worker v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-worker)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 53.69s
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling typenum v1.20.1
+   Compiling generic-array v0.14.7
+   Compiling getrandom v0.2.17
+   Compiling serde_core v1.0.228
+   Compiling rand_core v0.6.4
+   Compiling zerocopy v0.8.54
+   Compiling serde v1.0.228
+   Compiling getrandom v0.3.4
+   Compiling crypto-common v0.1.7
+   Compiling bitflags v2.13.0
+   Compiling rand_core v0.9.5
+   Compiling ppv-lite86 v0.2.21
+   Compiling scopeguard v1.2.0
+   Compiling lock_api v0.4.14
+   Compiling rand_chacha v0.9.0
+   Compiling thiserror v2.0.18
+   Compiling cpufeatures v0.2.17
+   Compiling rand v0.9.5
+   Compiling once_cell v1.21.4
+   Compiling linux-raw-sys v0.12.1
+   Compiling ulid v1.2.1
+   Compiling rustix v1.1.4
+   Compiling block-buffer v0.10.4
+   Compiling byteorder v1.5.0
+   Compiling hash32 v0.2.1
+   Compiling digest v0.10.7
+   Compiling spin v0.9.8
+   Compiling stable_deref_trait v1.2.1
+   Compiling log v0.4.33
+   Compiling heapless v0.7.17
+   Compiling jain-smartcluster-core v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster-core)
+   Compiling cobs v0.3.0
+   Compiling errno v0.3.14
+   Compiling signal-hook-registry v1.4.8
+   Compiling postcard v1.1.3
+   Compiling sha2 v0.10.9
+   Compiling pin-project-lite v0.2.17
+   Compiling getrandom v0.4.3
+   Compiling mio v1.2.1
+   Compiling strsim v0.11.1
+   Compiling fastrand v2.4.1
+   Compiling socket2 v0.6.4
+   Compiling tempfile v3.27.0
+   Compiling bytes v1.12.1
+   Compiling utf8parse v0.2.2
+   Compiling futures-core v0.3.32
+   Compiling tokio v1.52.3
+   Compiling zeroize v1.9.0
+   Compiling fnv v1.0.7
+   Compiling subtle v2.6.1
+   Compiling anstyle-parse v1.0.0
+   Compiling smallvec v1.15.2
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling hashbrown v0.17.1
+   Compiling anstyle v1.0.14
+   Compiling anstyle-query v1.1.5
+   Compiling equivalent v1.0.2
+   Compiling colorchoice v1.0.5
+   Compiling anstream v1.0.0
+   Compiling indexmap v2.14.0
+   Compiling zmij v1.0.21
+   Compiling toml_datetime v0.6.11
+   Compiling serde_spanned v0.6.9
+   Compiling winnow v0.7.15
+   Compiling clap_lex v1.1.0
+   Compiling memchr v2.8.3
+   Compiling itoa v1.0.18
+   Compiling toml_write v0.1.2
+   Compiling serde_json v1.0.150
+   Compiling toml_edit v0.22.27
+   Compiling clap_builder v4.6.0
+   Compiling memoffset v0.9.1
+   Compiling jain-smartcluster v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster)
+   Compiling regex-syntax v0.8.11
+   Compiling clap v4.6.1
+   Compiling nix v0.29.0
+   Compiling toml v0.8.23
+   Compiling anyhow v1.0.103
+   Compiling darling_core v0.20.11
+   Compiling tracing-core v0.1.36
+   Compiling rand_chacha v0.3.1
+   Compiling inout v0.1.4
+   Compiling darling_macro v0.20.11
+   Compiling cipher v0.4.4
+   Compiling darling v0.20.11
+   Compiling rand v0.8.7
+   Compiling regex-automata v0.4.15
+   Compiling universal-hash v0.5.1
+   Compiling wait-timeout v0.2.1
+   Compiling libloading v0.8.9
+   Compiling lazy_static v1.5.0
+   Compiling quick-error v1.2.3
+   Compiling bit-vec v0.8.0
+   Compiling opaque-debug v0.3.1
+   Compiling poly1305 v0.8.0
+   Compiling bit-set v0.8.0
+   Compiling rusty-fork v0.3.1
+   Compiling matchers v0.2.0
+   Compiling sharded-slab v0.1.7
+   Compiling nvml-wrapper-sys v0.9.1
+   Compiling tracing v0.1.44
+   Compiling thiserror v1.0.69
+   Compiling nix v0.31.3
+   Compiling num-traits v0.2.19
+   Compiling wrapcenum-derive v0.4.1
+   Compiling chacha20 v0.9.1
+   Compiling tracing-log v0.2.0
+   Compiling rand_xorshift v0.4.0
+   Compiling aead v0.5.2
+   Compiling thread_local v1.1.10
+   Compiling nu-ansi-term v0.50.3
+   Compiling static_assertions v1.1.0
+   Compiling unarray v0.1.4
+   Compiling tracing-subscriber v0.3.23
+   Compiling proptest v1.11.0
+   Compiling nvml-wrapper v0.12.1
+   Compiling chacha20poly1305 v0.10.1
+   Compiling pidfd-util v0.1.0
+   Compiling crc32fast v1.5.0
+   Compiling redb v2.6.3
+   Compiling hex v0.4.3
+   Compiling parking_lot_core v0.9.12
+   Compiling signal-hook v0.3.18
+   Compiling signature v2.2.0
+   Compiling ed25519 v2.2.3
+   Compiling curve25519-dalek v4.1.3
+   Compiling jain-smartcluster-daemon v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster-daemon)
+   Compiling signal-hook-mio v0.2.5
+   Compiling parking_lot v0.12.5
+   Compiling derive_more v2.1.1
+   Compiling slab v0.4.12
+   Compiling futures-task v0.3.32
+   Compiling futures-util v0.3.32
+   Compiling crossterm v0.29.0
+   Compiling ed25519-dalek v2.2.0
+   Compiling jain-smartcluster-executor v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster-executor)
+   Compiling scq v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/scq)
+   Compiling scq-node v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/scq-node)
+   Compiling jain-worker v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-worker)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1m 03s
+     Running unittests src/lib.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/jain_smartcluster-1b4570a134badb37)
+
+running 10 tests
+test client::tests::client_implements_object_safe_dispatch_interface ... ok
+test framing::tests::clean_eof_is_distinct_from_truncated_frame ... ok
+test framing::tests::minor_three_control_variants_remain_append_only ... ok
+test framing::tests::node_frame_prefix_and_payload_are_strictly_bounded ... ok
+test framing::tests::oversized_prefix_is_rejected_before_payload_allocation ... ok
+test framing::tests::frames_round_trip_over_fragmentable_io ... ok
+test framing::tests::trailing_bytes_are_rejected ... ok
+test client::tests::same_major_different_minor_response_is_rejected ... ok
+test client::tests::subscription_and_attachment_stream_events_and_input ... ok
+test client::tests::every_unary_operation_maps_to_its_typed_response ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/wire_contract.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/wire_contract-06c758d8596a8653)
+
+running 3 tests
+test invalid_client_frame_discriminant_is_rejected ... ok
+test truncated_golden_frames_are_rejected ... ok
+test postcard_wire_contract_matches_golden_fixtures ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/jain_smartcluster_core-93b62569a4e73344)
+
+running 38 tests
+test cloud::tests::capabilities_are_redacted_and_input_size_is_bounded ... ok
+test cloud::tests::delegate_context_includes_the_expiry_fence ... ok
+test event::tests::event_offsets_advance_without_wrapping ... ok
+test cloud::tests::slot_ids_are_limited_to_the_ten_predeclared_routes ... ok
+test event::tests::output_chunks_are_bounded ... ok
+test event::tests::progress_never_exceeds_known_total ... ok
+test event::tests::stream_gaps_identify_a_resumable_retained_range ... ok
+test fabric::node_protocol::tests::exact_version_and_certificate_identity_are_required ... ok
+test fabric::node_protocol::tests::heartbeat_lease_list_is_bounded_and_unique ... ok
+test fabric::node_protocol::tests::mutation_frames_never_permit_early_data ... ok
+test fabric::tests::trust_never_leaks_sensitive_data_to_untrusted_nodes ... ok
+test fabric::tests::artifact_paths_reject_traversal ... ok
+test fabric::tests::artifact_ids_have_canonical_lowercase_encoding ... ok
+test identity::tests::identifiers_reject_control_and_shell_characters ... ok
+test identity::tests::principals_have_stable_external_names ... ok
+test job::tests::idempotency_is_scoped_by_effective_principal_and_project ... ok
+test job::tests::job_spec_validates_deeply ... ok
+test job::tests::preemption_and_restart_do_not_consume_failure_budget ... ok
+test job::tests::nonterminal_record_cannot_carry_terminal_result ... ok
+test job::tests::retry_policy_rejects_unbounded_or_immediate_storms ... ok
+test protocol::tests::application_controls_are_bounded ... ok
+test protocol::tests::protocol_compatibility_supports_the_previous_minor ... ok
+test protocol::tests::delegate_wrapper_preserves_scope_and_rejects_privileged_nesting ... ok
+test protocol::tests::request_validation_bounds_list_pages ... ok
+test protocol::tests::server_errors_provide_local_repair_guidance ... ok
+test protocol::tests::typed_worker_failures_require_a_bounded_message ... ok
+test resource::tests::cpu_only_workload_cannot_bypass_drf_with_zero_minima ... ok
+test resource::tests::exclusive_gpu_requests_full_compute_share ... ok
+test resource::tests::invalid_resource_ranges_are_rejected ... ok
+test resource::tests::shareable_gpu_request_must_be_representable_by_mps ... ok
+test state::tests::superseded_attempt_cannot_renew_lease ... ok
+test state::tests::terminal_states_never_transition ... ok
+test state::tests::transition_matrix_is_explicit_and_has_no_self_transitions ... ok
+test workload::tests::argv_is_structured_and_rejects_nul ... ok
+test workload::tests::jope_lime_workloads_are_typed_and_allowlisted ... ok
+test workload::tests::web_principals_can_submit_allowlisted_jain_workloads ... ok
+test workload::tests::web_principals_cannot_submit_argv_or_service_workloads ... ok
+test resource::tests::ordered_cpu_ranges_validate ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running unittests src/lib.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/jain_smartcluster_daemon-4c7cdf58d9aaed34)
+
+running 139 tests
+test actor::requests::fabric::nodes::ingress::tests::worker_application_payload_maps_to_durable_browser_event ... ok
+test actor::requests::fabric::nodes::leases::tests::slot_reservation_never_overcommits_cpu_memory_or_gpu ... ok
+test actor::mps::tests::shared_allocations_are_detected_without_counting_exclusive_devices ... ok
+test actor::runtime::output_tests::pty_eio_after_slave_close_is_normal_eof ... ok
+test actor::scheduling::gpu::tests::clamped_device_recovers_when_readings_normalize ... ok
+test actor::scheduling::gpu::tests::idle_driver_reservation_stays_healthy ... ok
+test actor::scheduling::gpu::tests::leaked_vram_without_processes_is_flagged ... ok
+test actor::scheduling::gpu::tests::process_owned_vram_is_not_unaccounted ... ok
+test actor::scheduling::gpu::tests::reported_reservation_is_discounted_before_the_threshold ... ok
+test actor::scheduling::tests::completion_waits_for_process_tree_and_every_output_reader ... ok
+test actor::scheduling::tests::only_registered_jain_templates_can_unlock_gpu_sharing ... ok
+test actor::tests::cgroup_oom_precedes_generic_exit_classification ... ok
+test actor::tests::delegated_web_environment_is_detectable ... ok
+test actor::tests::gpu_history_requires_observed_exclusive_run ... ok
+test actor::tests::filters_are_owner_and_label_scoped ... ok
+test actor::tests::target_host_psi_and_nvml_reaction_p99_meets_budget ... ignored, release-only governed target-host PSI/NVML reaction lane
+test actor::tests::restart_retry_wait_preserves_remaining_backoff ... ok
+test actor::tests::retry_delay_is_capped ... ok
+test actor::tests::tenant_is_bound_to_effective_principal ... ok
+test auth::tests::edge_uid_has_no_direct_or_delegated_principal ... ok
+test auth::tests::broker_uid_has_no_direct_or_delegated_principal ... ok
+test auth::tests::only_web_peer_can_delegate_owner ... ok
+test auth::tests::scoped_web_peer_cannot_cross_owner_boundary ... ok
+test auth::tests::peer_credentials_come_from_the_kernel ... ok
+test auth::tests::web_argv_fails_closed ... ok
+test capacity::tests::affinity_parser_uses_kernel_allowed_list ... ok
+test capacity::tests::cpu_limit_uses_ceiling_millicores ... ok
+test capacity::tests::cpuset_round_trip_compacts_ranges ... ok
+test capacity::tests::invalid_descending_cpu_range_is_rejected ... ok
+test cgroup::tests::cgroup_names_round_trip_without_path_syntax ... ok
+test capacity::tests::allocation_root_outside_daemon_cgroup_fails_closed ... ok
+test cgroup::tests::cpu_quota_is_expressed_in_millicores ... ok
+test cgroup::tests::rejects_path_traversal_tokens ... ok
+test cgroup::tests::unbounded_memory_uses_kernel_max_sentinel ... ok
+test config::settings::fabric::tests::atomicsoul_commitment_ceiling_is_exactly_one_per_class ... ok
+test capacity::tests::cpuset_walks_from_leaf_to_parent ... ok
+test config::tests::broker_uid_cannot_overlap_any_broader_role ... ok
+test capacity::tests::systemd_delegated_parent_without_required_controllers_fails_closed ... ok
+test config::tests::mps_paths_are_an_absolute_pair ... ok
+test capacity::tests::systemd_delegated_parent_with_processes_fails_closed ... ok
+test capacity::tests::allocation_root_capacity_includes_tighter_child_limits ... ok
+test config::tests::rejects_socket_privilege_bits ... ok
+test config::tests::worker_identity_is_an_atomic_pair ... ok
+test control::tests::worker_descriptor_survives_exec ... ok
+test event_log::tests::side_effect_free_parser_validates_bounds_and_checksum ... ok
+test control::tests::frames_are_bounded_and_versioned ... ok
+test executor::tests::cpu_allocations_hide_every_cuda_device ... ok
+test executor::tests::administrator_argv_is_not_wrapped_in_a_shell ... ok
+test executor::tests::data_bearing_templates_use_the_product_worker_when_configured ... ok
+test config::tests::example_surface_parses ... ok
+test executor::tests::helper_identity_prefix_is_unambiguous ... ok
+test executor::tests::jain_templates_resolve_to_fixed_worker_argv ... ok
+test executor::tests::process_group_pid_conversion_rejects_values_outside_linux_pid_range ... ok
+test executor::tests::relative_programs_fail_closed ... ok
+test executor::tests::reserved_environment_cannot_replace_fencing_or_loader_policy ... ok
+test fabric_scheduler::tests::atomicsoul_reserve_is_exact_and_untrusted_capacity_does_not_count ... ok
+test fabric_scheduler::tests::commitment_status_distinguishes_active_web_and_reclaimable_capacity ... ok
+test fabric_scheduler::tests::expired_commitment_reports_full_deficit ... ok
+test fabric_scheduler::tests::reclaim_order_is_priority_safety_then_least_sunk_runtime ... ok
+test fabric_scheduler::tests::reclaim_rejects_web_system_private_and_non_restartable_work ... ok
+test capacity::tests::systemd_delegated_supervisor_parent_is_an_allocation_root ... ok
+test fanout::tests::old_offsets_are_filtered ... ok
+test gpu::controller::tests::client_environment_is_budgeted_and_deterministic ... ok
+test gpu::controller::tests::client_environment_rejects_unrepresentable_limits ... ok
+test fanout::tests::slow_subscriber_is_disconnected_with_resume_offset ... ok
+test gpu::controller::tests::probes_real_mps_control_daemon_when_provisioned ... ignored, requires an administrator-provisioned NVIDIA MPS control daemon
+test gpu::controller::tests::parses_bounded_mps_process_snapshots ... ok
+test gpu::controller::tests::termination_requires_the_exact_success_response ... ok
+test gpu::inventory::tests::mig_uuid_visibility_is_matched_after_parent_enumeration ... ok
+test gpu::inventory::tests::ten_percent_vram_headroom_is_reserved ... ok
+test gpu::inventory::tests::visible_devices_filters_empty_and_disabled_values ... ok
+test gpu::mps::tests::mps_fails_closed_without_safe_peer_termination ... ok
+test overload::tests::escalation_order_is_fixed ... ok
+test psi::tests::missing_some_line_fails_closed ... ok
+test overload::tests::recovery_requires_a_quiet_window ... ok
+test health::tests::status_reports_safe_mode_without_claiming_isolation ... ok
+test psi::tests::parses_kernel_pressure_sample ... ok
+test recovery::tests::cancelled_before_signal_reapplies_retired_effect ... ok
+test recovery::tests::known_empty_starting_cgroup_is_cleaned_after_retry_is_committed ... ok
+test recovery::tests::matching_live_fence_is_adopted ... ok
+test recovery::tests::retry_wait_before_kill_reapplies_retired_effect ... ok
+test recovery::tests::superseded_fence_is_never_adopted ... ok
+test scheduler::tests::fairness::aging_can_break_a_within_class_fairness_tie ... ok
+test scheduler::tests::fairness::dominant_resource_fairness_selects_the_least_served_tenant ... ok
+test scheduler::tests::fairness::interactive_pressure_recommends_backfill_reclamation ... ok
+test scheduler::tests::fairness::live_allocation_caps_bound_near_zero_resource_jobs ... ok
+test scheduler::tests::fairness::priority_classes_are_strict_before_fairness ... ok
+test scheduler::tests::fairness::only_preemptible_work_can_backfill_interactive_headroom ... ok
+test scheduler::tests::fairness::tenant_weights_scale_dominant_share ... ok
+test scheduler::tests::gpu::cpu_ram_headroom_does_not_implicitly_reserve_a_discrete_gpu ... ok
+test scheduler::tests::gpu::exclusive_max_vram_sentinel_reserves_the_selected_device_total ... ok
+test scheduler::tests::gpu::learned_vram_budget_includes_margin ... ok
+test scheduler::tests::gpu::exclusive_request_can_use_an_already_isolated_visible_mig_instance ... ok
+test scheduler::tests::gpu::missing_fingerprint_forces_exclusive_even_if_caller_marks_trusted ... ok
+test scheduler::tests::gpu::new_allowlisted_fingerprint_requires_five_clean_exclusive_runs ... ok
+test scheduler::tests::gpu::mig_preference_uses_an_existing_instance_without_sharing ... ok
+test scheduler::tests::gpu::shared_oom_forces_exclusive_retry ... ok
+test scheduler::tests::gpu::one_request_never_counts_the_same_gpu_twice ... ok
+test scheduler::tests::gpu::unknown_workload_is_always_exclusive ... ok
+test scheduler::tests::gpu::ten_percent_vram_headroom_rejects_conflicting_second_share ... ok
+test server::startup::tests::per_uid_connection_limit_releases_capacity ... ok
+test server::startup::tests::world_writable_parent_is_rejected ... ok
+test server::startup::tests::refuses_to_replace_regular_file ... ok
+test scheduler::tests::fairness::queue_input_order_does_not_change_the_plan ... ok
+test event_log::tests::oversized_event_is_rejected_without_consuming_an_offset ... ok
+test scheduler::tests::fairness::ten_thousand_job_queue_produces_one_stable_capacity_decision ... ok
+test event_log::tests::zero_limit_does_not_advance_subscriber ... ok
+test event_log::tests::corrupt_tail_is_truncated_and_unacknowledged_offset_is_reused ... ok
+test event_log::tests::checksum_failure_drops_only_the_bad_tail ... ok
+test event_log::tests::append_reopen_and_resume_preserve_offsets ... ok
+test store::web_delegates::tests::all_five_delegate_fields_are_fenced ... ok
+test store::tests::typed_metadata_round_trips ... ok
+test store::tests::changed_spec_under_same_idempotency_key_conflicts ... ok
+test store::tests::failed_terminal_validation_never_partially_mutates_a_job ... ok
+test store::tests::node_certificates_are_expiring_unique_and_revocable ... ok
+test store::tests::idempotency_scope_includes_project ... ok
+test artifact_store::tests::encrypted_chunks_round_trip_and_tampering_fails ... ok
+test store::tests::remote_admission_rolls_back_when_lease_insertion_conflicts ... ok
+test store::tests::enrollment_ticket_is_target_bound_single_use_and_expiring ... ok
+test store::tests::fabric_lease_rejects_wrong_node_fence_and_sequence ... ok
+test store::tests::shared_oom_requires_exclusive_retry_and_five_new_clean_runs ... ok
+test store::tests::heartbeat_atomically_renews_running_fabric_and_attempt_leases ... ok
+test store::web_delegates::tests::capability_is_digest_only_and_consumed_once ... ok
+test artifact_store::tests::remote_output_chunks_resume_commit_and_bind_declared_name ... ok
+test event_log::tests::retention_returns_a_resumable_gap ... ok
+test store::tests::superseded_attempt_cannot_complete_a_new_attempt ... ok
+test store::tests::node_heartbeat_sequence_replay_is_rejected_across_reopen ... ok
+test store::tests::submission_is_atomic_and_idempotent_across_reopen ... ok
+test store::tests::attempt_is_fenced_and_starting_is_durable_before_launch ... ok
+test store::tests::remote_admission_attempt_and_lease_commit_together ... ok
+test store::tests::transition_event_outbox_survives_reopen_until_acknowledged ... ok
+test store::web_delegates::tests::slot_epochs_remain_monotonic_after_revoke_and_restart ... ok
+test store::tests::failure_budget_excludes_restart_and_preemption ... ok
+test store::tests::queue_and_deadline_indexes_follow_durable_transitions_and_reopen ... ok
+test store::tests::fabric_ack_survives_reopen_until_its_state_transition_is_applied ... ok
+test store::tests::terminal_fabric_effect_survives_reopen_until_applied ... ok
+test actor::tests::resume_requeues_paused_job_whose_process_is_gone ... ok
+test actor::tests::paused_job_completes_when_pause_races_process_exit ... ok
+test store::tests::crash_point_reopen_after_each_commit_preserves_the_state_machine ... ok
+
+test result: ok. 137 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 6.00s
+
+     Running unittests src/bin/scqd.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/scqd-484422f5341fe90a)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/daemon_e2e.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/daemon_e2e-1b5784f35ec5bb1c)
+
+running 2 tests
+test real_daemon_fails_closed_for_delegation_tenant_and_environment ... ok
+test real_daemon_runs_idempotent_work_and_releases_a_held_queue ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.03s
+
+     Running tests/gpu_host.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/gpu_host-f98cc181fe7a0425)
+
+running 2 tests
+test real_nvml_event_monitor_registers_or_fails_closed ... ignored, requires NVML event registration support
+test real_nvml_inventory_respects_vram_headroom ... ignored, requires an NVIDIA/NVML host lane
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/linux_cgroup.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/linux_cgroup-ad734329980dcec5)
+
+running 2 tests
+test real_delegated_cgroup_controls_are_writable ... ignored, requires a delegated cgroup-v2 host lane
+test real_psi_trigger_registers_when_delegated ... ignored, requires Linux PSI trigger registration permissions
+
+test result: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/performance.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/performance-8eb2b80b35cbe791)
+
+running 1 test
+test ten_thousand_job_decision_meets_release_budget ... ignored, release-only target-host scheduler acceptance lane
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/restart_chaos.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/restart_chaos-96aacb749ee90ec9)
+
+running 1 test
+test held_job_and_event_cursor_survive_abrupt_daemon_restart ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.83s
+
+     Running tests/soak.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/soak-da421e3ea620e748)
+
+running 1 test
+test repeated_event_log_recovery_keeps_monotonic_offsets ... ignored, scheduled crash/reopen soak lane
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/target_host.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/target_host-31ad00c93e7f801f)
+
+running 4 tests
+test durable_submit_ack_p99_meets_budget_at_ten_thousand_queue_depth ... ignored, release-only governed target-host durable submit lane
+test emitted_output_to_attached_client_p99_meets_budget ... ignored, release-only governed target-host attached output lane
+test live_cgroup_restart_adoption_meets_release_budget ... ignored, requires a governed delegated cgroup-v2 target host
+test target_host_output_child ... ignored, helper subprocess for the governed attached-output lane
+
+test result: ok. 0 passed; 0 failed; 4 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/jain_smartcluster_executor-38a927d407838457)
+
+running 4 tests
+test tests::macos_policy_is_public_cpu_only_and_serial ... ok
+test tests::output_collection_rejects_symlink_escape ... ok
+test tests::workspace_rejects_path_traversal_before_execution ... ok
+test tests::signed_manifest_verification_detects_mutation ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running unittests src/main.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/jain_worker-e69af532962db07a)
+
+running 4 tests
+test tests::handler_arguments_are_bounded_and_shell_free ... ok
+test tests::invalid_control_descriptor_fails_closed ... ok
+test tests::inherited_control_frame_uses_bounded_length_prefix ... ok
+test tests::every_production_template_has_a_direct_handler ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/scq-9273af9f414dd5a2)
+
+running 3 tests
+test tests::maps_scq_toml_resources_without_enabling_sharing ... ok
+test tests::maps_tiers_and_deadline ... ok
+test tests::rejects_multinode_shell_and_dependency_probes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/scq-2821bf59647c9e04)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/scq_node-67ba9961edf49ec5)
+
+running 2 tests
+test tests::refuses_plaintext_controller ... ok
+test tests::refuses_unverified_attested_claim ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests jain_smartcluster
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests jain_smartcluster_core
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests jain_smartcluster_daemon
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests jain_smartcluster_executor
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests scq
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling proc-macro2 v1.0.106
+   Compiling quote v1.0.46
+   Compiling serde_core v1.0.228
+   Compiling syn v2.0.118
+    Checking crypto-common v0.1.7
+   Compiling serde v1.0.228
+    Checking digest v0.10.7
+    Checking sha2 v0.10.9
+    Checking serde_json v1.0.150
+   Compiling serde_derive v1.0.228
+    Checking jain-smartcluster-release-control v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/tools/release-control)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 6.31s
+   Compiling serde_core v1.0.228
+   Compiling crypto-common v0.1.7
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling serde_json v1.0.150
+   Compiling serde v1.0.228
+   Compiling jain-smartcluster-release-control v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/tools/release-control)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 3.84s
+     Running unittests src/main.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/smartcluster_release-81758da917ee8397)
+
+running 17 tests
+test target_host::tests::evidence_import_has_a_bounded_freshness_window ... ok
+test target_host::tests::evidence_window_uses_strict_canonical_utc_timestamps ... ok
+test target_host::tests::exact_commit_complete_target_host_evidence_passes ... ok
+test target_host::tests::external_evidence_never_overrides_a_real_local_failure ... ok
+test target_host::tests::stale_commit_and_missing_monitor_fail_closed ... ok
+test target_host::tests::target_hosts_are_locked_to_atomicsoul_and_the_xbabe_fleet ... ok
+test tests::capability_skip_is_blocked_even_when_command_exits_zero ... ok
+test target_host::tests::raw_log_inventory_must_exactly_cover_referenced_digests ... ok
+test target_host::tests::warm_overhead_must_come_from_the_edge ... ok
+test tests::command_display_quotes_environment_without_executing_a_shell ... ok
+test tests::overall_status_preserves_blocked_semantics ... ok
+test tests::metric_parser_rejects_a_budget_overrun ... ok
+test tests::metric_parser_accepts_all_owned_release_metrics ... ok
+test target_host::tests::raw_log_files_are_rehashed_during_verification ... ok
+test tests::timestamp_conversion_is_utc_and_stable ... ok
+test tests::required_metric_cannot_be_omitted ... ok
+test tests::uncovered_documented_budgets_are_release_blocking ... ok
+
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Compiling syn v2.0.118
+   Compiling log v0.4.33
+   Compiling mio v1.2.1
+   Compiling rustix v1.1.4
+   Compiling linux-raw-sys v0.12.1
+   Compiling serde_derive v1.0.228
+   Compiling serde v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling ulid v1.2.1
+   Compiling thiserror v2.0.18
+   Compiling cobs v0.3.0
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling heapless v0.7.17
+   Compiling tokio-macros v2.7.0
+   Compiling derive_more-impl v2.1.1
+   Compiling toml_edit v0.22.27
+   Compiling derive_more v2.1.1
+   Compiling clap_derive v4.6.1
+   Compiling tokio v1.52.3
+   Compiling signal-hook-mio v0.2.5
+   Compiling postcard v1.1.3
+   Compiling jain-smartcluster-core v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster-core)
+   Compiling async-trait v0.1.89
+   Compiling futures-macro v0.3.32
+   Compiling crossterm v0.29.0
+   Compiling futures-util v0.3.32
+   Compiling jain-smartcluster v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster)
+   Compiling toml v0.8.23
+   Compiling clap v4.6.1
+   Compiling once_cell v1.21.4
+   Compiling scq v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/scq)
+   Compiling tempfile v3.27.0
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.45s
+     Running unittests src/lib.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/scq-1eaa947e7980dabe)
+
+running 3 tests
+test tests::maps_tiers_and_deadline ... ok
+test tests::maps_scq_toml_resources_without_enabling_sharing ... ok
+test tests::rejects_multinode_shell_and_dependency_probes ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/scq-673d564195799e48)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+   Doc-tests scq
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+valid examples / compat-cpu-sleep
+compatibility ok
+    Updating crates.io index
+ Downloading crates ...
+  Downloaded arbitrary v1.4.2
+  Downloaded cc v1.2.67
+  Downloaded zmij v1.0.23
+  Downloaded spin v0.9.9
+  Downloaded socket2 v0.6.5
+  Downloaded jobserver v0.1.35
+  Downloaded shlex v2.0.1
+  Downloaded find-msvc-tools v0.1.9
+  Downloaded mio v1.2.2
+  Downloaded libfuzzer-sys v0.4.13
+   Compiling libc v0.2.186
+    Checking mio v1.2.2
+    Checking spin v0.9.9
+   Compiling rustix v1.1.4
+   Compiling zmij v1.0.23
+    Checking heapless v0.7.17
+   Compiling jobserver v0.1.35
+    Checking socket2 v0.6.5
+    Checking zeroize v1.9.0
+    Checking regex-syntax v0.8.11
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+    Checking regex-automata v0.4.15
+   Compiling cc v1.2.67
+    Checking tokio v1.52.3
+    Checking cipher v0.4.4
+    Checking postcard v1.1.3
+    Checking jain-smartcluster-core v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster-core)
+    Checking serde_json v1.0.150
+    Checking jain-smartcluster v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster)
+    Checking signal-hook-mio v0.2.5
+    Checking chacha20 v0.9.1
+   Compiling libfuzzer-sys v0.4.13
+    Checking matchers v0.2.0
+    Checking chacha20poly1305 v0.10.1
+    Checking tracing-subscriber v0.3.23
+    Checking crossterm v0.29.0
+    Checking arbitrary v1.4.2
+    Checking jain-smartcluster-daemon v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster-daemon)
+    Checking scq v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/scq)
+    Checking jain-smartcluster-fuzz v0.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/fuzz)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 23.06s
+fuzz targets compile
+   Compiling rustix v1.1.4
+   Compiling zeroize v1.9.0
+   Compiling cipher v0.4.4
+   Compiling mio v1.2.1
+   Compiling tokio v1.52.3
+   Compiling chacha20 v0.9.1
+   Compiling tempfile v3.27.0
+   Compiling chacha20poly1305 v0.10.1
+   Compiling rusty-fork v0.3.1
+   Compiling proptest v1.11.0
+   Compiling jain-smartcluster v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster)
+   Compiling jain-smartcluster-daemon v8.0.0 (/tmp/split-host-ci.x6TXYR/jain-smartcluster/crates/jain-smartcluster-daemon)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 15.02s
+     Running tests/daemon_e2e.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/daemon_e2e-377398c6d1814f68)
+
+running 2 tests
+test real_daemon_fails_closed_for_delegation_tenant_and_environment ... ok
+test real_daemon_runs_idempotent_work_and_releases_a_held_queue ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+
+     Running tests/restart_chaos.rs (/tmp/split-host-ci.x6TXYR/cargo-target/debug/deps/restart_chaos-08f76f99c154c7cb)
+
+running 1 test
+JAIN_RELEASE_METRIC {"comparison":"lte","limit":2000000000,"metric":"durable_restart_ready","observed":127739637,"sample_count":1,"schema_version":"jain.smartcluster.release-metric/v1","unit":"nanoseconds"}
+test held_job_and_event_cursor_survive_abrupt_daemon_restart ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.66s
+
+required ok: jain-smartcluster

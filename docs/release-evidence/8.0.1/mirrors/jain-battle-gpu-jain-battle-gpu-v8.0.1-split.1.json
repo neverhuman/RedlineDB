@@ -1,0 +1,22 @@
+{
+  "manifest": "repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-battle-gpu.git",
+      "mirror_existed": true,
+      "name": "jain-battle-gpu",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-battle-gpu",
+      "source_head": "d5e4b5051243295f1a5bfdd6d66abe2182e50484"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-battle-gpu"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1784212450
+}

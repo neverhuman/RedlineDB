@@ -1,0 +1,260 @@
+Cloning into '/tmp/split-host-ci.4qxj3H/jain-smartcluster'...
+HEAD is now at bc64f16 docs(scq-node): STATUS.md — record the three defect fixes, e2e lane, honest test state
+lock_blob=02d8cf961db7e352c13f589151b73e025367c9cb
+name=jain-smartcluster
+ref=bc64f163432bff4a260b2fac94e1da34b95bd888
+commit=bc64f163432bff4a260b2fac94e1da34b95bd888
+tree=ec70b821397c17f5900a36f609044fb8ee0d97ff
+release_checksum_sha256=a4675ed5c08671622290dacccb107f99f3aefbf200566e69dd396496e497a9f0
+info: syncing channel updates for 1.96.0-x86_64-unknown-linux-gnu
+info: latest update on 2026-05-28 for version 1.96.0 (ac68faa20 2026-05-25)
+info: downloading 6 components
+check ok: jain-smartcluster
+immutable inventory receipt ok: entries=57 digest=4940d0890131293c0faaac5022fedca5ae31d3383a5ea94464096f2fbc2d68cd
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/src/session.rs:47:
+ /// UDS client; tests implement it with an in-process daemon stub enforcing
+ /// the same strict sequence rules.
+ pub trait FrameForwarder {
+[31m-    fn forward(&self, frame: NodeFrame)
+(B[m[31m-        -> impl Future<Output = Result<NodeFrameReceipt>> + Send;
+(B[m[32m+    fn forward(&self, frame: NodeFrame) -> impl Future<Output = Result<NodeFrameReceipt>> + Send;
+(B[m }
+ 
+ impl FrameForwarder for jain_smartcluster::Client {
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/src/session.rs:99:
+         let guard = tokio::time::timeout(TAKEOVER_TIMEOUT, Arc::clone(&slot.lock).lock_owned())
+             .await
+             .map_err(|_| {
+[31m-                anyhow::anyhow!(
+(B[m[31m-                    "existing node session did not release within the takeover window"
+(B[m[31m-                )
+(B[m[32m+                anyhow::anyhow!("existing node session did not release within the takeover window")
+(B[m             })?;
+         if *receiver.borrow() != generation {
+             bail!("node session was superseded by a newer connection while waiting");
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:108:
+     }
+ 
+     fn lease_sequence(&self) -> u64 {
+[31m-        self.state.lock().unwrap().lease.as_ref().unwrap().scope.sequence
+(B[m[32m+        self.state
+(B[m[32m+            .lock()
+(B[m[32m+            .unwrap()
+(B[m[32m+            .lease
+(B[m[32m+            .as_ref()
+(B[m[32m+            .unwrap()
+(B[m[32m+            .scope
+(B[m[32m+            .sequence
+(B[m     }
+ 
+     fn lease_applies(&self) -> BTreeMap<u64, u64> {
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:184:
+                     receipt.accepted_sequence = Some(presented.sequence);
+                     match &frame {
+                         NodeFrame::LeaseAck(LeaseAck { accepted: true, .. }) => {
+[31m-                            receipt.commands.push(NodeFrame::InputManifest(InputManifest {
+(B[m[31m-                                scope: presented,
+(B[m[31m-                                inputs: vec![lease.input.clone()],
+(B[m[31m-                                logical_chunk_bytes: NODE_ARTIFACT_LOGICAL_CHUNK_BYTES as u32,
+(B[m[31m-                            }));
+(B[m[32m+                            receipt
+(B[m[32m+                                .commands
+(B[m[32m+                                .push(NodeFrame::InputManifest(InputManifest {
+(B[m[32m+                                    scope: presented,
+(B[m[32m+                                    inputs: vec![lease.input.clone()],
+(B[m[32m+                                    logical_chunk_bytes: NODE_ARTIFACT_LOGICAL_CHUNK_BYTES as u32,
+(B[m[32m+                                }));
+(B[m                         }
+                         NodeFrame::InputChunkRequest(InputChunkRequest {
+                             artifact_id,
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:343:
+         );
+         let stream = self.stream.as_mut().expect("attached stream");
+         for envelope in &envelopes {
+[31m-            write_envelope(stream, envelope).await.expect("write envelope");
+(B[m[32m+            write_envelope(stream, envelope)
+(B[m[32m+                .await
+(B[m[32m+                .expect("write envelope");
+(B[m         }
+         envelopes
+     }
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:355:
+         let stream = self.stream.as_mut().expect("attached stream");
+         let envelope = match tokio::time::timeout(window, read_envelope(stream)).await {
+             Err(_) => return None,
+[31m-            Ok(result) => result.expect("read envelope").expect("edge closed the session"),
+(B[m[32m+            Ok(result) => result
+(B[m[32m+                .expect("read envelope")
+(B[m[32m+                .expect("edge closed the session"),
+(B[m         };
+         self.session
+             .record_peer_acknowledgement(envelope.acknowledge_through, Instant::now());
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:396:
+ /// node-side bookkeeping. Returns the edge envelopes observed.
+ async fn exchange(harness: &mut NodeHarness, expect_edge_frames: usize) -> Vec<NodeWireEnvelope> {
+     let written = harness.flush(false).await;
+[31m-    assert!(!written.is_empty(), "expected the node to have data to send");
+(B[m[32m+    assert!(
+(B[m[32m+        !written.is_empty(),
+(B[m[32m+        "expected the node to have data to send"
+(B[m[32m+    );
+(B[m     let mut replies = Vec::new();
+     while replies.len() < expect_edge_frames {
+         let Some(envelope) = harness.recv(Duration::from_secs(2)).await else {
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:433:
+ async fn establish(harness: &mut NodeHarness) {
+     let hello = harness.flush(true).await;
+     assert_eq!(hello.len(), 1, "session start replays exactly the Hello");
+[31m-    let ack = harness.recv(Duration::from_secs(2)).await.expect("hello ack");
+(B[m[32m+    let ack = harness
+(B[m[32m+        .recv(Duration::from_secs(2))
+(B[m[32m+        .await
+(B[m[32m+        .expect("hello ack");
+(B[m     assert!(ack.frame.is_none(), "hello is answered with a pure ack");
+     assert!(
+         harness.flush(false).await.is_empty(),
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:457:
+     let mut edge_frames = 0_usize;
+ 
+     node_frames += harness.flush(true).await.len();
+[31m-    let ack = harness.recv(Duration::from_secs(2)).await.expect("hello ack");
+(B[m[32m+    let ack = harness
+(B[m[32m+        .recv(Duration::from_secs(2))
+(B[m[32m+        .await
+(B[m[32m+        .expect("hello ack");
+(B[m     assert!(ack.frame.is_none());
+     edge_frames += 1;
+     node_frames += harness.flush(false).await.len();
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:469:
+     for _ in 0..60 {
+         harness.queue_heartbeat();
+         node_frames += harness.flush(false).await.len();
+[31m-        let reply = harness.recv(Duration::from_secs(2)).await.expect("heartbeat ack");
+(B[m[32m+        let reply = harness
+(B[m[32m+            .recv(Duration::from_secs(2))
+(B[m[32m+            .await
+(B[m[32m+            .expect("heartbeat ack");
+(B[m         assert!(reply.frame.is_none(), "an idle heartbeat earns a pure ack");
+         edge_frames += 1;
+         assert!(
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:530:
+     fixture.stub.arm_crash_after_apply();
+     harness.queue_heartbeat();
+     assert_eq!(harness.flush(false).await.len(), 1);
+[31m-    let died = task.await.expect("join session").expect_err("session must die at the crash point");
+(B[m[31m-    assert!(died.to_string().contains("forward") || died.root_cause().to_string().contains("simulated"),
+(B[m[31m-        "session failed at the forwarding seam: {died:#}");
+(B[m[31m-    assert_eq!(fixture.stub.heartbeat_applies(), 1, "daemon already applied");
+(B[m[31m-    assert!(harness.journal.has_pending(), "the heartbeat is still owed an ack");
+(B[m[32m+    let died = task
+(B[m[32m+        .await
+(B[m[32m+        .expect("join session")
+(B[m[32m+        .expect_err("session must die at the crash point");
+(B[m[32m+    assert!(
+(B[m[32m+        died.to_string().contains("forward") || died.root_cause().to_string().contains("simulated"),
+(B[m[32m+        "session failed at the forwarding seam: {died:#}"
+(B[m[32m+    );
+(B[m[32m+    assert_eq!(
+(B[m[32m+        fixture.stub.heartbeat_applies(),
+(B[m[32m+        1,
+(B[m[32m+        "daemon already applied"
+(B[m[32m+    );
+(B[m[32m+    assert!(
+(B[m[32m+        harness.journal.has_pending(),
+(B[m[32m+        "the heartbeat is still owed an ack"
+(B[m[32m+    );
+(B[m 
+     // Reconnect: the node replays the identical envelope. Pre-fix, scqd
+     // hard-errored on the replayed heartbeat and the node looped on
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:543:
+     let (stream, task) = fixture.connect();
+     harness.attach(stream);
+     let replayed = harness.flush(true).await;
+[31m-    assert_eq!(replayed.len(), 1, "exactly the unacknowledged heartbeat is replayed");
+(B[m[31m-    let ack = harness.recv(Duration::from_secs(2)).await.expect("replay ack");
+(B[m[32m+    assert_eq!(
+(B[m[32m+        replayed.len(),
+(B[m[32m+        1,
+(B[m[32m+        "exactly the unacknowledged heartbeat is replayed"
+(B[m[32m+    );
+(B[m[32m+    let ack = harness
+(B[m[32m+        .recv(Duration::from_secs(2))
+(B[m[32m+        .await
+(B[m[32m+        .expect("replay ack");
+(B[m     assert!(ack.frame.is_none());
+[31m-    assert!(!harness.journal.has_pending(), "the replayed heartbeat is acknowledged");
+(B[m[32m+    assert!(
+(B[m[32m+        !harness.journal.has_pending(),
+(B[m[32m+        "the replayed heartbeat is acknowledged"
+(B[m[32m+    );
+(B[m     assert_eq!(
+         fixture.stub.heartbeat_applies(),
+         1,
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:555:
+ 
+     harness.queue_heartbeat();
+     exchange(&mut harness, 1).await;
+[31m-    assert_eq!(fixture.stub.heartbeat_applies(), 2, "the node makes progress");
+(B[m[32m+    assert_eq!(
+(B[m[32m+        fixture.stub.heartbeat_applies(),
+(B[m[32m+        2,
+(B[m[32m+        "the node makes progress"
+(B[m[32m+    );
+(B[m     assert!(!task.is_finished());
+ }
+ 
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:626:
+         final_chunk: true,
+     }));
+     assert_eq!(harness.flush(false).await.len(), 1);
+[31m-    assert!(task.await.expect("join session").is_err(), "session dies at the crash");
+(B[m[32m+    assert!(
+(B[m[32m+        task.await.expect("join session").is_err(),
+(B[m[32m+        "session dies at the crash"
+(B[m[32m+    );
+(B[m     harness.queue(NodeFrame::LeaseFinish(LeaseFinish {
+         scope: lease_scope(node_id, 6),
+         success: true,
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:647:
+         );
+         let _ = harness.flush(false).await;
+     }
+[31m-    assert_eq!(fixture.stub.lease_sequence(), 6, "the finish advanced the fence");
+(B[m[32m+    assert_eq!(
+(B[m[32m+        fixture.stub.lease_sequence(),
+(B[m[32m+        6,
+(B[m[32m+        "the finish advanced the fence"
+(B[m[32m+    );
+(B[m     let applies = fixture.stub.lease_applies();
+     assert_eq!(
+         applies.values().copied().collect::<Vec<_>>(),
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-edge/tests/e2e_loop.rs:710:
+     write_envelope(harness.stream.as_mut().unwrap(), &heartbeat_envelope)
+         .await
+         .expect("replay heartbeat over session B");
+[31m-    let reply = harness.recv(Duration::from_secs(2)).await.expect("duplicate ack");
+(B[m[32m+    let reply = harness
+(B[m[32m+        .recv(Duration::from_secs(2))
+(B[m[32m+        .await
+(B[m[32m+        .expect("duplicate ack");
+(B[m     assert!(reply.frame.is_none());
+[31m-    assert_eq!(reply.acknowledge_through, 2, "committed dedup state survived the race");
+(B[m[32m+    assert_eq!(
+(B[m[32m+        reply.acknowledge_through, 2,
+(B[m[32m+        "committed dedup state survived the race"
+(B[m[32m+    );
+(B[m     assert_eq!(
+         fixture.stub.heartbeat_applies(),
+         1,
+Diff in /tmp/split-host-ci.4qxj3H/jain-smartcluster/crates/scq-node/src/session.rs:198:
+             now,
+         );
+         assert_eq!(
+[31m-            first.iter().map(|envelope| envelope.sequence).collect::<Vec<_>>(),
+(B[m[32m+            first
+(B[m[32m+                .iter()
+(B[m[32m+                .map(|envelope| envelope.sequence)
+(B[m[32m+                .collect::<Vec<_>>(),
+(B[m             vec![1, 2]
+         );
+         // The unchanged pending set is not resent on the next poll.

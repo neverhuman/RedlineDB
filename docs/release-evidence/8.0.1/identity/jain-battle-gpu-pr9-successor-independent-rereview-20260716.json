@@ -1,0 +1,187 @@
+{
+  "schema_version": "jain.release-identity-independent-successor-review/v1",
+  "generated_at": "2026-07-16T08:10:06Z",
+  "reviewer_claim": "codex-battle-gpu-pr9-successor-review-20260716T0803Z",
+  "repository": "jeryu/jain-battle-gpu",
+  "pull_request": 9,
+  "independence": {
+    "reviewer_authored_reviewed_commits": false,
+    "source_or_ref_mutation": false,
+    "check_or_pr_mutation": false,
+    "host_ci_started": false,
+    "approval_merge_tag_or_authority_mutation": false,
+    "git_worktree_used": false
+  },
+  "review_boundary": {
+    "base_ref": "main",
+    "base_sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+    "base_tree_sha": "312afbb0a1fcf0c67beb7068ab7373758689a015",
+    "head_ref": "release/v8.0.1/battle-gpu-identity",
+    "head_sha": "d5e4b5051243295f1a5bfdd6d66abe2182e50484",
+    "head_tree_sha": "675a0e24d9494b4add6208fc65ff686047d2811e",
+    "merge_base_sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+    "linear_commits_over_base": 2,
+    "forge_main_equal": true,
+    "forge_branch_equal": true,
+    "pull_request_head_equal": true
+  },
+  "successor_receipt": {
+    "path": "jain-split-ops/docs/release-evidence/8.0.1/identity/battle-gpu-pr9-v801-governed-tool-successor-20260716.json",
+    "expected_sha256": "a9ceaaea5bcaec0f1f5fb95394d3a6272a93f0322513eded5e86dc63a58cdc24",
+    "observed_sha256": "a9ceaaea5bcaec0f1f5fb95394d3a6272a93f0322513eded5e86dc63a58cdc24",
+    "identity_matches_review_boundary": true
+  },
+  "deterministic_diff": {
+    "hash_boundary": "raw /usr/bin/git output, never RTK-rendered output",
+    "command_shape": "/usr/bin/git -c color.ui=false -c core.pager=cat diff --no-ext-diff --full-index --binary --src-prefix=a/ --dst-prefix=b/ <base>..<head> | /usr/bin/sha256sum",
+    "full_index_binary_sha256": "6690a0b89ff9789ba45e5566ce99cdacc25748da3079633c7c010e4d6f215e62",
+    "plain_diff_sha256": "bb7cccc87b4822ddc16a18d58add0dcda945be3944b772ea00a023fb24ec8cc1",
+    "successor_receipt_hashes_reproduce": true,
+    "files_changed": 12,
+    "insertions": 85,
+    "deletions": 18,
+    "diff_check": "pass",
+    "binary_changes": 0,
+    "symlink_changes": 0,
+    "unexpected_mode_changes": 0
+  },
+  "scope_review": {
+    "verdict": "pass",
+    "product_or_gpu_source_changes": 0,
+    "dependency_graph_changes": 0,
+    "lock_drift_beyond_workspace_version": 0,
+    "release_identity": "8.0.0 to 8.0.1 corrective identity only",
+    "preserved_dependency": "jain-math-v8.0.0-split.1#2a1e189d727a7b21c2aa68bf9b8cf5212976efd7",
+    "cargo_lock_sha256": "5d25891eaa12cdeeaba32150f3496d7b53f72a6d6d47a3911524f6cc3870584d",
+    "proof_remediation_files": [
+      "ops/ci/check.sh",
+      "ops/ci/jankurai-governance-test.sh",
+      "ops/ci/lib.sh",
+      "ops/ci/score.sh"
+    ],
+    "proof_remediation_is_bounded": true
+  },
+  "release_identity": {
+    "candidate": "jain-battle-gpu-v8.0.1-split.1",
+    "authority_product_version": "8.0.1",
+    "authority_tag_revision": 1,
+    "authority_release_commit": "PENDING",
+    "authority_release_checksum_sha256": "PENDING",
+    "next_unused": true,
+    "existing_tags": {
+      "jain-battle-gpu-v8.0.1-split.0": "87b2367f576fc97bb13dab345f2871e4ad19e22b"
+    },
+    "split_1_absent": true
+  },
+  "governed_jankurai": {
+    "verdict": "pass",
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "path_type": "executable regular file",
+    "path_and_components_symlink_free": true,
+    "version": "jankurai 1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "ambient_path": "/home/ubuntu/.local/bin/jankurai",
+    "ambient_version": "jankurai 1.6.11",
+    "ambient_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "hostile_path_test": "pass",
+    "permanent_regression_test": "pass",
+    "all_repository_proof_calls_route_through_fixed_function": true,
+    "proof_and_proofbind_stderr_bytes": 0
+  },
+  "isolated_exact_head_validation": {
+    "checkout": "automatically removed standalone physical git clone --no-local from loopback forge",
+    "strict_fsck": "pass",
+    "alternates_absent": true,
+    "internal_registrations": 1,
+    "tracked_symlinks": 0,
+    "tracked_status_lines_after_gates": 0,
+    "cargo_net_offline": true,
+    "jobs": 4,
+    "pinned_rustsec_database": {
+      "commit": "6e3286f4efa8c142fb33e5ea4342c8db6693cf34",
+      "isolated_copy": "verified bundle followed by automatically removed physical clone",
+      "status": "clean"
+    },
+    "bash_syntax": "pass",
+    "shellcheck": "pass",
+    "release_gate": {
+      "status": "pass",
+      "required_cpu_no_default_tests": 24,
+      "dependency_lock": "pass",
+      "security": "pass",
+      "score": 90,
+      "raw_score": 90,
+      "caps": 0,
+      "hard_findings": 0,
+      "contract_drift": "pass",
+      "artifact_support": "pass",
+      "score_report_sha256": "35123a08882269f263a8808ee10fa75044c202377c5b865b96cc8df1d2e672a2",
+      "security_evidence_sha256": "f00d4d544ad33fedff5c04bb791f7c4b24215a7903ef34edd02a6dfd8b254fe6",
+      "cargo_audit_json_sha256": "d7a47786ca90e115c10142f71a8bbfe4a5863d90b8a91500dbe0e2415bc2742b",
+      "contract_receipt_sha256": "fb72267df5bce6f090a9f8ff56c4ab77d4d9517753674af526f95192c3e47ea6",
+      "source_archive_sha256": "126813589ae9d379050161834cd3631067727194d3b4eb0a0a5c5a6670750056",
+      "artifact_metadata_sha256": "35e659d71f01316729bccb6840db22f85c2ce2cca91539420375fa21ec4b36f8"
+    },
+    "tool_adoption": {
+      "status": "pass",
+      "default_feature_gpu_and_property_tests": 30,
+      "proof_plan_sha256": "8033ef5d5f68b2fc4fdd253a0e079bee6f7bc5340aedc5afa9ce8a79e57c1d90",
+      "proofbind_surface_sha256": "4d0fd2a94e9dacbc9475d14836e1e2afab09359653a8a67bf5e4b139f8795876",
+      "proofbind_obligations_sha256": "edec2b4be7e9ffbd93d6ce0ab1db5cf4473be281f33845dda1a2bdaf5ab23f18",
+      "proofmark_receipt_sha256": "b89e4583c980e9c51ce46b1d8d124e3e0621d9fa363127030f8a00e125e76c91",
+      "rust_witness_sha256": "7d2bb7cf64bf858f8f49369da81b563d0ecf6757618fd6a45c96daff5d6803a6",
+      "copy_code_sha256": "3f1d5619a657931cfe152c1d24a08cef9df2cc1194f1e0dc5a0bb3aa01914b66",
+      "coverage": {
+        "status": "pass",
+        "sources_present": "2/2",
+        "audit_sha256": "64ce06b44bbf673a5e0a0d6b57676b8f69513a8bcf7511b78ecbfe0ca3857251",
+        "lcov_sha256": "9d4a3aedc59d419590e9890e21fe950a39c4f9cc402829162547ca0fe4683215"
+      },
+      "credit_limit": "default-feature GPU tests are local review evidence, not a substitute for the manifest-required exact-head native dynamic-loading and dynamic-linking host check"
+    }
+  },
+  "forge_readback": {
+    "pull_request_state": "open",
+    "draft": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "jankurai_proof": {
+      "id": "e04158b5-5d0b-4c3f-8e02-4b9fbd195c7e",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    "jeryu_autonomy": {
+      "id": "63f6ce02-3a11-4102-a8fb-f0d968f41fd4",
+      "status": "completed",
+      "conclusion": "action_required"
+    },
+    "required_check": {
+      "name": "jain-battle-gpu/required",
+      "present": false
+    },
+    "metadata_note": "PR body still summarizes predecessor local evidence against RustSec 9f3e1380; refresh it to the successor head and authoritative 6e3286f4 evidence before approval"
+  },
+  "canonical_checkout": {
+    "head_sha": "d5e4b5051243295f1a5bfdd6d66abe2182e50484",
+    "tree_sha": "675a0e24d9494b4add6208fc65ff686047d2811e",
+    "tracked_clean": true,
+    "forge_equal": true,
+    "registered_worktrees": 1
+  },
+  "verdict": {
+    "source_delta": "PASS",
+    "independent_exact_head_review": "PASS",
+    "release_admission": "BLOCK",
+    "safe_next_action": "run and publish exact-head jain-battle-gpu/required including both manifest native GPU feature sets, then refresh metadata and obtain fresh acceptance before approval",
+    "remaining_blockers": [
+      "jain-battle-gpu/required is absent at the exact head",
+      "manifest-required gpu+gpu-dynamic-loading native host evidence is not credited",
+      "manifest-required gpu-dynamic-linking native host evidence is not credited",
+      "PR body is stale relative to the successor evidence",
+      "independent approval is absent",
+      "protected fast-forward merge is absent",
+      "immutable split.1 tag and forge readback are absent",
+      "protected authority commit/checksum binding is PENDING"
+    ]
+  }
+}

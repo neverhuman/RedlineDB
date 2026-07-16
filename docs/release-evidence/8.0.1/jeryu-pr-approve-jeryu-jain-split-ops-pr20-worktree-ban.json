@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "MECHANICAL worktree ban (punchlist F4/F5; owner standing order: worktrees must never come back). Pre-designed recipe applied exactly from docs/worktree-ban-handoff.md (jain-split root):\n\n1. verify-worktrees enforcement: verify_managed_worktree counts linked worktrees via the existing strict_git_output(worktree list --porcelain) and fails when more than the primary checkout exists. Unit test added: repo with a linked worktree yields status==fail; removal restores pass.\n2. hooks/pre-push (exact handoff body): refuses push when extra worktrees exist. Rollout wired as splitctl jeryu-doctor --install-hooks (sets core.hooksPath per managed repo to the shared hooks dir), added to just jeryu-ready-apply. No repo currently sets core.hooksPath and no repo has active .git/hooks, so the rollout is non-disruptive.\n\nVerification (sandbox clone at 88a673c6 + this diff): cargo build green; cargo test --locked 27/27 green incl. the 2 worktree tests; hook drill: push refused with 1 extra worktree (exit 1, lists worktrees), allowed after removal; just fast green. just required is red at validate-manifest --check-derived on unmodified main too (fleet derived manifests embed canonical sha d726e7b4 which matches no committed manifest; the v8.0.1 manifest-pin lane is actively resyncing, /home/ubuntu/jain-split/jain/repos.manifest.toml last modified 12:36Z) — pre-existing cross-lane skew, not introduced by this diff.\n\nNOT included: registering verify-worktrees as a required protected-main check. splitctl protection-apply PUTs immutable_main_policy(required_check) whose required_status_checks is exactly [required_check] — registering verify-worktrees that way would REPLACE each repo required check instead of adding one. Staged for owner/Codex with a policy change that adds, not replaces.\n\nReview note (honest): this is a mechanical application of the pre-designed handoff recipe; the review below is the same lane confirming exact-recipe conformance, not an independent second design review.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T12:59:36.248876342+00:00",
+      "head_sha": "ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "jeryu",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "88a673c6c0e829721eebf8265036c1b18f2ef139",
+      "checks": {
+        "failing": 1,
+        "passing": 0,
+        "pending": 0,
+        "skipped": 0,
+        "total": 1
+      },
+      "draft": false,
+      "entity": {
+        "id": "f5892098-c835-47f7-9cc0-e739ec82d025#20",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/worktree-ban-20260716",
+      "head_sha": "ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 20,
+      "passport_hash": "passport:ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f5892098-c835-47f7-9cc0-e739ec82d025",
+        "name": "jain-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci(worktree-ban): enforce single-checkout policy mechanically",
+      "updated_at": "2026-07-16T12:59:09.990638840+00:00"
+    }
+  },
+  "repository": "jeryu/jain-split-ops",
+  "request": {
+    "body": {
+      "body_markdown": "Mechanical application of the pre-designed worktree-ban handoff recipe (docs/worktree-ban-handoff.md): verify-worktrees linked-worktree failure + unit test + shared pre-push hook with jeryu-ready-apply rollout. Reviewed for exact-recipe conformance in a sandbox clone at 88a673c6: diff matches the handoff block verbatim, cargo test 27/27 green, hook drill refuses push with an extra worktree and allows after removal, just fast green; just required red only at the pre-existing cross-lane derived-manifest skew (red on unmodified main in the same sandbox). Honest caveat: same-lane conformance review of a pre-designed change, not an independent second design review.",
+      "evidence": null,
+      "expected_head_sha": "ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-split-ops/pulls/20/reviews"
+  },
+  "response": {
+    "description": "MECHANICAL worktree ban (punchlist F4/F5; owner standing order: worktrees must never come back). Pre-designed recipe applied exactly from docs/worktree-ban-handoff.md (jain-split root):\n\n1. verify-worktrees enforcement: verify_managed_worktree counts linked worktrees via the existing strict_git_output(worktree list --porcelain) and fails when more than the primary checkout exists. Unit test added: repo with a linked worktree yields status==fail; removal restores pass.\n2. hooks/pre-push (exact handoff body): refuses push when extra worktrees exist. Rollout wired as splitctl jeryu-doctor --install-hooks (sets core.hooksPath per managed repo to the shared hooks dir), added to just jeryu-ready-apply. No repo currently sets core.hooksPath and no repo has active .git/hooks, so the rollout is non-disruptive.\n\nVerification (sandbox clone at 88a673c6 + this diff): cargo build green; cargo test --locked 27/27 green incl. the 2 worktree tests; hook drill: push refused with 1 extra worktree (exit 1, lists worktrees), allowed after removal; just fast green. just required is red at validate-manifest --check-derived on unmodified main too (fleet derived manifests embed canonical sha d726e7b4 which matches no committed manifest; the v8.0.1 manifest-pin lane is actively resyncing, /home/ubuntu/jain-split/jain/repos.manifest.toml last modified 12:36Z) — pre-existing cross-lane skew, not introduced by this diff.\n\nNOT included: registering verify-worktrees as a required protected-main check. splitctl protection-apply PUTs immutable_main_policy(required_check) whose required_status_checks is exactly [required_check] — registering verify-worktrees that way would REPLACE each repo required check instead of adding one. Staged for owner/Codex with a policy change that adds, not replaces.\n\nReview note (honest): this is a mechanical application of the pre-designed handoff recipe; the review below is the same lane confirming exact-recipe conformance, not an independent second design review.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T12:59:36.239014875+00:00",
+      "head_sha": "ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "jeryu",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "88a673c6c0e829721eebf8265036c1b18f2ef139",
+      "checks": {
+        "failing": 1,
+        "passing": 0,
+        "pending": 0,
+        "skipped": 0,
+        "total": 1
+      },
+      "draft": false,
+      "entity": {
+        "id": "f5892098-c835-47f7-9cc0-e739ec82d025#20",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/worktree-ban-20260716",
+      "head_sha": "ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 20,
+      "passport_hash": "passport:ac1db7c0c04ddcf908e723a0cb4f8a4078d267fa:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f5892098-c835-47f7-9cc0-e739ec82d025",
+        "name": "jain-split-ops",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "ci(worktree-ban): enforce single-checkout policy mechanically",
+      "updated_at": "2026-07-16T12:59:09.990638840+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784206774
+}

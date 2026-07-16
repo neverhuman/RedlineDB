@@ -1,0 +1,279 @@
+check ok: /home/ubuntu/.cache/claude-orch-ci/leaf/jain-math
+[ci] Rust required lane: fmt + targeted clippy/test
+   Compiling version_check v0.9.5
+    Checking cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling proc-macro2 v1.0.106
+   Compiling getrandom v0.3.4
+   Compiling crossbeam-utils v0.8.22
+   Compiling crossbeam-epoch v0.9.20
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.46
+    Checking typenum v1.20.1
+   Compiling serde_core v1.0.228
+   Compiling zerocopy v0.8.53
+   Compiling generic-array v0.14.7
+   Compiling crossbeam-deque v0.8.7
+   Compiling autocfg v1.5.1
+   Compiling rayon-core v1.13.0
+   Compiling zmij v1.0.21
+   Compiling num-traits v0.2.19
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.150
+    Checking crypto-common v0.1.7
+    Checking rand_core v0.9.5
+    Checking block-buffer v0.10.4
+   Compiling anyhow v1.0.103
+    Checking digest v0.10.7
+    Checking cpufeatures v0.2.17
+    Checking either v1.16.0
+   Compiling syn v2.0.118
+    Checking memchr v2.8.2
+    Checking itoa v1.0.18
+    Checking ppv-lite86 v0.2.21
+    Checking sha2 v0.10.9
+    Checking rayon v1.12.0
+    Checking rand v0.9.4
+    Checking rand_xorshift v0.4.0
+   Compiling serde_derive v1.0.228
+    Checking unarray v0.1.4
+    Checking bitflags v2.13.0
+    Checking regex-syntax v0.8.11
+    Checking rand_chacha v0.9.0
+    Checking proptest v1.11.0
+    Checking feat-math v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/leaf/jain-math/crates/feat-math)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 8.43s
+   Compiling cfg-if v1.0.4
+   Compiling libc v0.2.186
+   Compiling typenum v1.20.1
+   Compiling crossbeam-utils v0.8.22
+   Compiling zerocopy v0.8.53
+   Compiling serde_core v1.0.228
+   Compiling zmij v1.0.21
+   Compiling cpufeatures v0.2.17
+   Compiling memchr v2.8.2
+   Compiling itoa v1.0.18
+   Compiling either v1.16.0
+   Compiling crossbeam-epoch v0.9.20
+   Compiling num-traits v0.2.19
+   Compiling generic-array v0.14.7
+   Compiling anyhow v1.0.103
+   Compiling getrandom v0.3.4
+   Compiling crossbeam-deque v0.8.7
+   Compiling crypto-common v0.1.7
+   Compiling rand_core v0.9.5
+   Compiling block-buffer v0.10.4
+   Compiling regex-syntax v0.8.11
+   Compiling rayon-core v1.13.0
+   Compiling ppv-lite86 v0.2.21
+   Compiling unarray v0.1.4
+   Compiling rand_xorshift v0.4.0
+   Compiling digest v0.10.7
+   Compiling rand v0.9.4
+   Compiling rayon v1.12.0
+   Compiling bitflags v2.13.0
+   Compiling sha2 v0.10.9
+   Compiling rand_chacha v0.9.0
+   Compiling proptest v1.11.0
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.150
+   Compiling feat-math v8.0.1 (/home/ubuntu/.cache/claude-orch-ci/leaf/jain-math/crates/feat-math)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 10.66s
+     Running unittests src/lib.rs (target/debug/deps/feat_math-4c888f3c1aafc938)
+
+running 95 tests
+test boost2::tests::histgbm2_small_n_falls_back_to_mean ... ok
+test boost2::tests::histgbm2_param_clamps_hold ... ok
+test dsl::tests::parser_round_trips_canonical_pipeline ... ok
+test dsl::tests::parser_rejects_unsupported_shape ... ok
+test dsl::tests::parser_round_trips_quoted_param_values ... ok
+test engine::tests::binary_metrics_are_deterministic_and_tie_aware ... ok
+test engine::tests::evaluator_rejects_non_finite_inputs ... ok
+test explain::tests::explains_pipeline_stages_and_head ... ok
+test krr::tests::krr_small_n_falls_back_to_mean ... ok
+test folds::tests::folds_are_stable_and_balanced ... ok
+test ksmooth::tests::ksmooth_small_n_falls_back_to_mean ... ok
+test math_expr::tests::evaluates_elementwise_expression ... ok
+test math_expr::tests::evaluates_row_expression ... ok
+test math_expr::tests::step_is_a_hard_indicator ... ok
+test math_expr::tests::rejects_unknown_and_deep_expressions ... ok
+test mathexpr::tests::detects_legacy_hard_step_idiom ... ok
+test mathexpr::tests::mirrors_reference_acceptance ... ok
+test mathexpr::tests::parses_and_prints_both_languages ... ok
+test mathexpr::tests::step_emits_explicit_conditional_not_scale_trick ... ok
+test model::tests::target_stage_must_lead_the_pipeline ... ok
+test model::tests::symbolic_affine_recovers_scaled_expression ... ok
+test ops::tests::sigmoid_norm_row_and_diff_stats_values ... ok
+test ops::tests::fft_mag_and_row_spectral_are_finite ... ok
+test ops::tests::nystrom_landmarks_are_deterministic_train_rows ... ok
+test ops::tests::polar_lag_roll_shapes_and_values ... ok
+test ops::tests::map_and_derive_round_trip_expressions ... ok
+test plan::tests::quarantined_operator_cannot_compile ... ok
+test model::tests::ridge_pipeline_learns_linear_signal ... ok
+test prime::tests::canonical_loader_rejects_oversize_before_deserialization ... ok
+test plan::tests::jope_provenance_fails_closed_on_digest_or_lineage_tampering ... ok
+test registry::tests::count_sketch_remains_quarantined_and_non_generatable ... ok
+test rng::tests::pcg32_reference_vectors ... ok
+test registry::tests::registry_ids_and_names_are_unique ... ok
+test rng::tests::uniform_and_gaussian_are_deterministic ... ok
+test router_policy::tests::rejects_wrong_embedding_shape ... ok
+test router_policy::tests::parses_text_and_json_embeddings ... ok
+test sandbox::tests::sandbox_rejects_non_finite_inputs ... ok
+test model::tests::target_aware_ops_are_oof_in_cv ... ok
+test stack::tests::stack_small_n_falls_back_to_ridge ... ok
+test target_transform::tests::fit_target_rejects_bad_kinds ... ok
+test sandbox::tests::sample_indices_are_deterministic_and_capped ... ok
+test sandbox::tests::sandbox_runs_candidate_against_baseline_on_250_rows ... ok
+test target_transform::tests::log1p_is_exact_inverse_on_unit_scale ... ok
+test target_transform::tests::rank_gauss_constant_target_is_safe ... ok
+test target_transform::tests::winsor_clips_and_inverse_is_identity ... ok
+test tokens::tests::counting_is_deterministic_and_whitespace_immune ... ok
+test tokens::tests::literal_token_costs ... ok
+test target_transform::tests::rank_gauss_round_trips_train_values ... ok
+test model::tests::rank_gauss_target_beats_plain_ridge_on_heavy_tails ... ok
+test prime::tests::search_rejects_duplicate_candidate_ids_and_enforces_deadline ... ok
+test plan::tests::aliases_have_distinct_wire_and_equal_semantic_identity ... ok
+test plan::tests::frozen_generation_31_newmath_proposals_fail_typed_and_bind ... ok
+test engine::tests::artifact_emission_is_stable ... ok
+test prime::tests::fitted_state_binding_includes_resolved_plan_parameters ... ok
+test plan::tests::resources_and_operator_governance_are_bound_to_the_plan ... ok
+test plan::tests::variants_are_bounded_and_deterministic ... ok
+test prime::tests::fitted_ridge_artifact_retains_no_training_rows_or_target_vector ... ok
+test prime::tests::fitted_state_tampering_is_rejected_under_valid_plan_identity ... ok
+test plan::tests::featmath_translation_preserves_executor_clamps_and_ignored_topk ... ok
+test prime::tests::cancellation_after_one_fold_is_typed_and_candidate_is_not_counted ... ok
+test model::tests::gbm_head_fits_deterministically ... ok
+test ops::tests::svd_project_is_deterministic_and_orthonormal ... ok
+test prime::tests::fitted_round_trip_is_byte_and_prediction_identical ... ok
+test prime::tests::fitted_state_rejects_unreachable_shared_and_overdepth_tree_payloads ... ok
+test prime::tests::fitted_state_rejects_parameter_shape_and_target_tampering_even_if_rebound ... ok
+test prime::tests::binary_cv5_returns_probabilities_and_auc_tie_break_data ... ok
+test prime::tests::cv5_counts_only_complete_candidates_and_retains_failure ... ok
+test prime::tests::validation_fit_spy_sees_only_each_training_complement ... ok
+test prime::tests::fit_rows_are_bound_and_nystrom_recompiles_per_fold ... ok
+test ops::tests::svd_pipeline_cv_smoke ... ok
+test credit::tests::ledger_estimates_scale_with_pipeline_size ... ok
+test prime::tests::jope_candidate_enters_cv_and_license_policy_is_fail_closed ... ok
+test plan::tests::frozen_generation_31_featmath_proposals_compile_and_bind ... ok
+test ksmooth::tests::ksmooth_params_flow_through_the_genome ... ok
+test prime::tests::fitted_predictions_are_singleton_chunk_permutation_and_distractor_invariant ... ok
+test model::tests::rff_pipeline_beats_plain_ridge_on_nonlinearity ... ok
+test ksmooth::tests::ksmooth_is_deterministic_and_learns_toy ... ok
+test prime::tests::every_serializable_transform_and_head_validates_after_fit ... ok
+test ops::tests::every_op_survives_near_constant_columns ... ok
+test prime::tests::deadline_is_rechecked_after_fold_evaluator_returns ... ok
+test boost2::tests::histgbm2_deep_config_is_deterministic_and_learns ... ok
+test krr::tests::krr_subset_cap_is_exercised ... ok
+test router_policy::tests::proposal_is_deterministic_and_supported ... ok
+test krr::tests::krr_beats_plain_ridge_on_nonlinearity ... ok
+test boost2::tests::histgbm2_is_deterministic ... ok
+test boost2::tests::histgbm2_explicit_defaults_match_bare_head ... ok
+test krr::tests::krr_is_deterministic_and_learns_toy ... ok
+test boost2::tests::histgbm2_beats_histgbm_on_toy_cv ... ok
+test evolve::tests::evolve_advance_stops_after_current_generation_with_ranked_candidates ... ok
+test evolve::tests::evolve_report_records_unique_fresh_evaluations ... ok
+test evolve::tests::evolve_improves_on_synthetic_regression ... ok
+test evolve::tests::code_stream_is_leader_only ... ok
+test evolve::tests::evolve_without_advance_runs_all_configured_generations ... ok
+test stack::tests::stack_is_deterministic ... ok
+test stack::tests::stack_matches_or_beats_single_heads_on_toy_cv ... ok
+
+test result: ok. 95 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 10.31s
+
+     Running tests/bench.rs (target/debug/deps/bench-30a9f8a29e467e77)
+
+running 1 test
+test emitter_speed ... ignored
+
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/champion_parity.rs (target/debug/deps/champion_parity-92f75e0e8aefdabd)
+
+running 2 tests
+test champion_executes_and_emits_dual_artifacts ... ok
+test emitted_python_matches_interpreter_predictions ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+
+     Running tests/golden.rs (target/debug/deps/golden-72f2e6c92ffbb344)
+
+running 38 tests
+test supports_rejects_unknown_ops ... ok
+test lint_trips_on_poisoned_docs ... ok
+test class_structure_and_no_machine_smell ... ok
+test determinism_and_token_counts ... ok
+test emitted_score_method_runs ... ok
+test artifacts_are_lint_clean_and_standalone ... ok
+test golden_symbolic_raw ... ok
+test golden_step_symbolic ... ok
+test golden_symbolic_affine ... ok
+test golden_ksmooth_default ... ok
+test golden_map_pow_elasticnet ... ok
+test golden_ksmooth_params ... ok
+test golden_rank_qbins_elasticnet ... ok
+test golden_robust_ridge ... ok
+test golden_lag_roll_ridge ... ok
+test golden_step_indicator ... ok
+test golden_step_map_expr ... ok
+test golden_map_derive_ridge ... ok
+test golden_sigmoid_normrow_polar_ridge ... ok
+test golden_default_head_and_aliases ... ok
+test golden_winsor_gbm ... ok
+test golden_svd_ridge ... ok
+test golden_standardize_rff_ridge ... ok
+test golden_poly_rffsin_ridge ... ok
+test golden_fft_spectral_diffstats_ridge ... ok
+test golden_nystrom_gbm ... ok
+test golden_blom_hinge_oblique_ridge ... ok
+test golden_cheb_proj_landmark_rowstats_onehot_ridge ... ok
+test golden_clean_class_multistage ... ok
+test golden_pairprod_tbe_ensemble ... ok
+test golden_histgbm2_huber_mae_stop ... ok
+test golden_histgbm2_deep ... ok
+test golden_histgbm2_params_with_transform ... ok
+test golden_krr_default ... ok
+test golden_histgbm2_default ... ok
+test golden_stack ... ok
+test golden_krr_subset_paths ... ok
+test golden_stack_full_fixture ... ok
+
+test result: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 10 filtered out; finished in 24.15s
+
+     Running tests/prime_runtime.rs (target/debug/deps/prime_runtime-37721d34cca74f9a)
+
+running 1 test
+test public_prime_lime_flow_cv5_save_reload_predict ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+     Running tests/properties.rs (target/debug/deps/properties-1ffbdd050f50942c)
+
+running 6 tests
+test prop_pcg32_stream_is_reproducible ... ok
+test prop_pcg32_next_f64_in_unit_interval ... ok
+test prop_math_expr_element_eval_is_stable ... ok
+test prop_math_expr_row_eval_is_stable ... ok
+test prop_fit_predict_is_deterministic_and_finite ... ok
+test prop_champion_genome_predicts_finite ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.38s
+
+     Running tests/tokens.rs (target/debug/deps/tokens-d753cdf88edcf3b9)
+
+running 4 tests
+test estimator_exact_with_custom_options ... ok
+test estimator_exact_on_golden_fixtures ... ok
+test estimator_exact_on_200_random_genomes ... ok
+test estimator_is_fast_and_reports_cost ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 3.34s
+
+   Doc-tests feat_math
+
+running 1 test
+test crates/feat-math/src/prime.rs - prime::evaluate_candidates_cv5 (line 1175) ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.26s
+
+required ok: jain-math
+CI_EXIT_CODE=0

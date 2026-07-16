@@ -1,0 +1,22 @@
+{
+  "manifest": "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-jable.git",
+      "mirror_existed": true,
+      "name": "jain-jable",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-jable",
+      "source_head": "c606b6298bee69b521b1fc8f3144e23be357cb1f"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-jable"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1784212537
+}

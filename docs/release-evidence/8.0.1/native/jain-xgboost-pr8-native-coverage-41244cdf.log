@@ -1,0 +1,20 @@
+info: cargo-llvm-cov currently setting cfg(coverage); you can opt-out it by passing --no-cfg-coverage
+   Compiling xgboost v8.0.1 (/home/ubuntu/jain-split/jain-xgboost/crates/xgboost)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.10s
+     Running unittests src/lib.rs (jain-xgboost/target/llvm-cov-target/debug/deps/xgboost-80fa8b7d2a3c5817)
+
+running 2 tests
+test tests::row_major_transpose_round_trips ... ok
+test tests::row_major_transpose_maps_every_cell ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.17s
+
+     Running tests/smoke.rs (jain-xgboost/target/llvm-cov-target/debug/deps/smoke-3bace28b866585a8)
+
+running 1 test
+test xgb_train_predict ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+
+    Finished report saved to /home/ubuntu/jain-split/jain-xgboost/target/llvm-cov/lcov.info

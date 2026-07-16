@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>jain — try it live</title>
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0a0e0a;color:#9dfca2;font:16px/1.55 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+  main{max-width:34rem;padding:2rem}
+  h1{font-size:1.1rem;font-weight:600;margin:0 0 .25rem}
+  h1::before{content:"$ ";color:#5c8f5f}
+  p{margin:.5rem 0;color:#7fae83}
+  ul{margin:.5rem 0;padding-left:1.2rem;color:#7fae83}
+  button{margin-top:1rem;padding:.6rem 1.4rem;font:inherit;font-weight:600;color:#0a0e0a;background:#9dfca2;border:0;border-radius:3px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:wait}
+  #out{margin-top:1rem;min-height:1.5rem;white-space:pre-wrap;color:#c9d1c9}
+  .err{color:#ff8a80}
+</style>
+<main>
+  <h1>jain-split — live trial</h1>
+  <p>Grab a free slot and drive a session against remote GPU workers. Nothing runs locally, nothing to install, no account.</p>
+  <ul>
+    <li>10 anonymous slots, first come first served</li>
+    <li>15 min idle / 60 min absolute session limit</li>
+    <li>remote commands: /start /next /stop — nothing else</li>
+  </ul>
+  <button id="go">launch a slot</button>
+  <p id="out" role="status"></p>
+</main>
+<script>
+(() => {
+  const go = document.getElementById('go');
+  const out = document.getElementById('out');
+  const say = (msg, isErr) => {
+    out.textContent = msg;
+    out.className = isErr ? 'err' : '';
+  };
+  const secs = (ms, fallback) => Math.ceil((ms ?? fallback) / 1000);
+  go.addEventListener('click', async () => {
+    go.disabled = true;
+    say('allocating…');
+    try {
+      const r = await fetch('/api/public/allocations', { method: 'POST' });
+      const body = await r.json().catch(() => null);
+      if (r.ok && body && body.launch_path) {
+        say('slot ' + body.slot + ' granted — entering cockpit…');
+        location.assign(body.launch_path);
+        return;
+      }
+      if (r.status === 429) {
+        say('rate limited — retry in ' + secs(body && body.retry_after_ms, 60000) + 's', true);
+      } else if (r.status === 503) {
+        say('all slots busy — retry in ' + secs(body && body.retry_after_ms, 15000) + 's', true);
+      } else {
+        say('allocation failed (HTTP ' + r.status + ')', true);
+      }
+    } catch {
+      say('network error — control plane unreachable', true);
+    }
+    go.disabled = false;
+  });
+})();
+</script>

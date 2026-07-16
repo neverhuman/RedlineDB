@@ -1,0 +1,55 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-close",
+  "repository": "jeryu/jain-deploy",
+  "request": {
+    "body": {
+      "state": "closed"
+    },
+    "method": "PATCH",
+    "path": "/repos/jeryu/jain-deploy/pulls/22"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "jeryu/jain-deploy"
+      },
+      "sha": "dd80c5742fd1b1b7544078e1c1f6fef71e5e1a74"
+    },
+    "body": "Adds the reviewed guestd durable admission authority, GPU-autodetect appliance flow, and CloudReleaseSpecV1 foundation. Exact pushed head: de8ccdd04f388b1ec6d3d7bfcb8b14d3b1fe0928. The committed branch is based on current protected Deploy main and the author handoff reports its full local gates green. Dependency train: Core provider PR #14, then Web control PR #24 and Web T0 PR #25, then this Deploy successor. Post-push untracked appliance staging files in the author checkout are explicitly held for custody classification and are not silently included in this PR. Protected exact-head CI, independent review, and fast-forward merge are required.",
+    "created_at": "2026-07-16T02:00:18.804625109Z",
+    "draft": false,
+    "head": {
+      "label": "claude/guestd-20260715",
+      "ref": "claude/guestd-20260715",
+      "repo": {
+        "full_name": "jeryu/jain-deploy"
+      },
+      "sha": "f8afefce3c0e5c7face360fde3f89205fdac1910"
+    },
+    "html_url": "/jeryu/jain-deploy/pull/22",
+    "id": "32c3edc7-5134-4813-977b-ab3ad67d1231",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "closed",
+    "merged": false,
+    "merged_at": null,
+    "number": 22,
+    "source_repository": "jeryu/jain-deploy",
+    "state": "closed",
+    "title": "deploy: guestd + GPU-autodetect appliance + CloudReleaseSpecV1",
+    "updated_at": "2026-07-16T12:47:14.422454116Z",
+    "url": "/repos/jeryu/jain-deploy/pulls/22",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784206034
+}

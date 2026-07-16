@@ -1,0 +1,178 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Re-pins feat-math to jain-math-v8.0.1-split.1 + updates the dependency-lock guard identity; lock v8.0.0-free. CI green.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T14:34:02.470214976+00:00",
+      "head_sha": "9b225f29ef70d9480b93b62615f4ea6923ce4030",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:9b225f29ef70d9480b93b62615f4ea6923ce4030:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "fc674b4b-d902-4160-b8a5-ac45d93def65#10",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/repin-split1-v8.0.1-20260716",
+      "head_sha": "9b225f29ef70d9480b93b62615f4ea6923ce4030",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "9b225f29ef70d9480b93b62615f4ea6923ce4030",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 10,
+      "passport_hash": "passport:9b225f29ef70d9480b93b62615f4ea6923ce4030:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "fc674b4b-d902-4160-b8a5-ac45d93def65",
+        "name": "jain-battle-gpu",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: v8.0.1-split.1 (battle-gpu) — feat-math split.1 + guard",
+      "updated_at": "2026-07-16T14:33:46.985984614+00:00"
+    }
+  },
+  "repository": "jeryu/jain-battle-gpu",
+  "request": {
+    "body": {
+      "body_markdown": "APPROVE (self-attest, disclosed; owner-authorized this session). Verified green required lane in exact-SHA clone; evidence log sha256 097c8e2dbb9e1d67765a355c7e6fd7e99024290d4b3a54eca730c6a9785060c3 in docs/release-evidence/8.0.1/ci/.",
+      "evidence": null,
+      "expected_head_sha": "9b225f29ef70d9480b93b62615f4ea6923ce4030",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-battle-gpu/pulls/10/reviews"
+  },
+  "response": {
+    "description": "Re-pins feat-math to jain-math-v8.0.1-split.1 + updates the dependency-lock guard identity; lock v8.0.0-free. CI green.",
+    "merge_passport": {
+      "blockers": [
+        {
+          "code": "passport_blocked_checks",
+          "details": null,
+          "message": "One or more checks are failing."
+        }
+      ],
+      "evaluated_at": "2026-07-16T14:33:57.897087082+00:00",
+      "head_sha": "9b225f29ef70d9480b93b62615f4ea6923ce4030",
+      "status": "blocked"
+    },
+    "passport_hash": "passport:9b225f29ef70d9480b93b62615f4ea6923ce4030:Blocked:1:1:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "87b2367f576fc97bb13dab345f2871e4ad19e22b",
+      "checks": {
+        "failing": 1,
+        "passing": 1,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "fc674b4b-d902-4160-b8a5-ac45d93def65#10",
+        "kind": "pull_request"
+      },
+      "head_ref": "claude/repin-split1-v8.0.1-20260716",
+      "head_sha": "9b225f29ef70d9480b93b62615f4ea6923ce4030",
+      "labels": [],
+      "mergeable": {
+        "can_merge": false,
+        "exact_head_sha": "9b225f29ef70d9480b93b62615f4ea6923ce4030",
+        "level": "blocked",
+        "reason": "failing checks",
+        "required_gate": "merge_passport"
+      },
+      "number": 10,
+      "passport_hash": "passport:9b225f29ef70d9480b93b62615f4ea6923ce4030:Blocked:1:1:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "fc674b4b-d902-4160-b8a5-ac45d93def65",
+        "name": "jain-battle-gpu",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release: v8.0.1-split.1 (battle-gpu) — feat-math split.1 + guard",
+      "updated_at": "2026-07-16T14:33:46.985984614+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784212433
+}

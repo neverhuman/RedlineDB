@@ -1,0 +1,209 @@
+{
+  "schema": "jain.identity-independent-review/v1",
+  "operation": "independent review of repaired CatBoost 8.0.1 identity keeper",
+  "status": "pass",
+  "decision": "REVIEW_PASS_PENDING_REQUIRED",
+  "claim_token": "codex-mcp-catboost8-repaired-v801-independent-review-20260716T0615Z",
+  "reviewed_at": "2026-07-16T06:20:08.907Z",
+  "repository": "jeryu/jain-catboost",
+  "pull_request": 8,
+  "branch": "release/v8.0.1/catboost-identity",
+  "forge": "http://127.0.0.1:8787",
+  "exact_base": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+  "exact_base_tree": "0e0cf721a2eac6911c9a4903946cebc2d084ca66",
+  "exact_head": "d24e6a2d80d82cdbed65785a5dbd871cb00750dc",
+  "exact_head_tree": "02ddaedd570c4f47581775f03a34f22fdb563136",
+  "live_ref_readback": {
+    "main": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+    "head": "d24e6a2d80d82cdbed65785a5dbd871cb00750dc",
+    "stable_at_final_readback": true
+  },
+  "pull_request_state": {
+    "state": "open",
+    "draft": false,
+    "merged": false,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "base_sha_matches_live_main": true,
+    "head_sha_matches_reviewed_head": true
+  },
+  "lineage": {
+    "merge_base": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+    "merge_base_equals_live_main": true,
+    "commit_count": 3,
+    "merge_commit_count": 0,
+    "linear": true,
+    "commits_oldest_first": [
+      {
+        "sha": "8ba6b347071dfbd04e2fdc7b6cd3440587404e56",
+        "parent": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+        "subject": "release: align catboost with Jain v8.0.1"
+      },
+      {
+        "sha": "1dd4aed5b7d018b13b500a05603f47eef45abb04",
+        "parent": "8ba6b347071dfbd04e2fdc7b6cd3440587404e56",
+        "subject": "fix(catboost): preserve v8.0.1 lock identity"
+      },
+      {
+        "sha": "d24e6a2d80d82cdbed65785a5dbd871cb00750dc",
+        "parent": "1dd4aed5b7d018b13b500a05603f47eef45abb04",
+        "subject": "docs(catboost): correct 8.0.1 candidate identity"
+      }
+    ]
+  },
+  "complete_diff": {
+    "binary_full_index_sha256": "13cf9236c55062bf032bc3666afa06f2f11fc8e0df4afe553f16741e98d2f362",
+    "changed_file_count": 8,
+    "insertions": 15,
+    "deletions": 9,
+    "changed_files": [
+      "CHANGELOG.md",
+      "Cargo.lock",
+      "Cargo.toml",
+      "README.md",
+      "VERSION",
+      "agent/standard-version.toml",
+      "db/README.md",
+      "docs/release.md"
+    ],
+    "all_changed_files_regular_100644_at_base_and_head": true,
+    "binary_file_count": 0,
+    "mode_change_count": 0,
+    "symlink_count_at_head": 0,
+    "gitlink_count_at_head": 0,
+    "vendor_path_change_count": 0,
+    "product_source_path_change_count": 0,
+    "test_path_change_count": 0,
+    "deployment_or_ci_path_change_count": 0,
+    "diff_check": "pass"
+  },
+  "identity_review": {
+    "workspace_version": "8.0.1",
+    "packages": [
+      {
+        "name": "catboost",
+        "version": "8.0.1",
+        "version_inherited_from_workspace": true
+      },
+      {
+        "name": "catboost-sys",
+        "version": "8.0.1",
+        "version_inherited_from_workspace": true
+      }
+    ],
+    "version_file": "jain-catboost-v8.0.1-split.1",
+    "standard_version": "jain-catboost-v8.0.1-split.1",
+    "changelog_has_corrective_candidate": true,
+    "database_boundary_says_no_migration": true,
+    "release_policy_candidate_only": true,
+    "formal_ga_false_preserved": true,
+    "production_applied_false_preserved": true,
+    "atomicsoul_push_zero_preserved": true,
+    "rollback_target_7_0_6_preserved": true,
+    "readme_candidate_language": {
+      "identity": "jain-catboost-v8.0.1-split.1",
+      "states_not_accepted_release": true,
+      "requires_protected_merge": true,
+      "requires_immutable_tag_creation": true,
+      "requires_authority_manifest_readback": true,
+      "does_not_claim_split_0_is_accepted": true
+    }
+  },
+  "cargo_lock_review": {
+    "head_sha256": "af4aa4ee129de09a6c2f9fee98382c53142bb0c8d0bc691f2028fdec29136e0f",
+    "changed_package_entries": [
+      {
+        "name": "catboost",
+        "from_version": "8.0.0",
+        "to_version": "8.0.1",
+        "source_or_checksum_changed": false
+      },
+      {
+        "name": "catboost-sys",
+        "from_version": "8.0.0",
+        "to_version": "8.0.1",
+        "source_or_checksum_changed": false
+      }
+    ],
+    "other_package_version_change_count": 0,
+    "registry_source_change_count": 0,
+    "registry_checksum_change_count": 0,
+    "dependency_edge_change_count": 0,
+    "unrelated_registry_drift": false
+  },
+  "bounded_removed_standalone_clone_verification": {
+    "clone_kind": "standalone git clone --no-local; never registered as a worktree",
+    "checkout": "detached exact head",
+    "cargo_network_offline": true,
+    "jain_vendor_root_unset": true,
+    "git_diff_check": "pass",
+    "cargo_fmt_all_check": "pass",
+    "cargo_metadata_locked_offline_no_deps": "pass",
+    "cargo_metadata_exact_package_versions": "pass",
+    "just_required_no_vendor_locked_path": "pass",
+    "just_contract_drift": "pass",
+    "native_vendor_build_and_test": "deferred to governed vendor-backed required lane",
+    "tracked_postcheck_clean": true,
+    "temporary_clone_removed": true
+  },
+  "forge_checks": {
+    "exact_head": "d24e6a2d80d82cdbed65785a5dbd871cb00750dc",
+    "jankurai_proof": {
+      "status": "completed",
+      "conclusion": "success",
+      "check_id": "b02b27d0-2c6f-40f1-8302-1b52b1ad89a2"
+    },
+    "jain_catboost_required": {
+      "present": false,
+      "conclusion": null
+    },
+    "jeryu_autonomy": {
+      "status": "completed",
+      "conclusion": "neutral"
+    }
+  },
+  "main_protection": {
+    "readback_status": "pass",
+    "strict_required_contexts": [
+      "jain-catboost/required"
+    ],
+    "required_approval_count": 1,
+    "required_linear_history": true,
+    "enforce_admins": true,
+    "force_pushes_allowed": false,
+    "deletions_allowed": false
+  },
+  "blocking_lifecycle_state": [
+    "The exact-head jain-catboost/required check is absent.",
+    "The vendor-backed native build/test remains required before protected merge.",
+    "Independent approval, protected merge, immutable split.1 tag creation, and authority-manifest binding have not occurred."
+  ],
+  "non_blocking_follow_up": [
+    "PR #8 body still says the candidate is one commit over main; the reviewed repaired head is three linear commits over main. Correct the description before approval so review metadata matches the exact history."
+  ],
+  "review_contract": {
+    "exact_current_main_lineage": true,
+    "complete_binary_diff_reviewed": true,
+    "all_self_identity_surfaces_consistent": true,
+    "lock_diff_only_root_versions": true,
+    "corrected_readme_candidate_language": true,
+    "zero_vendor_source_symlink_mode_or_registry_drift": true,
+    "proof_success": true,
+    "required_present": false,
+    "approval_authorized": false,
+    "merge_authorized": false
+  },
+  "mutations_excluded": [
+    "source",
+    "pull request",
+    "forge refs",
+    "checks",
+    "protection",
+    "approval",
+    "merge",
+    "tag",
+    "authority manifest",
+    "deployment",
+    "git worktree"
+  ]
+}

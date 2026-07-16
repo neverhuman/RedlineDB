@@ -1,0 +1,166 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Successor to #7 after protected main advanced. Replays the reviewed 8.0.1 identity/lock delta byte-equivalently and adds fail-closed governed Jankurai 1.6.11 enforcement at /home/ubuntu/.jeryu/bin/jankurai with SHA-256 fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e. Locked/offline metadata, fast, required (13 tests), score 87 hard=0, security, contract drift, artifact support, tool adoption, exact-head local proof, and proofbind pass. Automatic jankurai/proof succeeds at exact head 3ae83ce17bb57f5f8dd52f087991ff59bda5afbc; governed integrity audit receipt SHA-256 is befaa9b1edc060aab5628f66eaa5492e2ba383c5fd03af867985abfc5999041f. Genuine jain-domain/required succeeds at the same exact head as check run 7dd3236a-c07e-4b83-8840-c7d849fd676b, backed by host receipt SHA-256 9fe03726ca56246dec3363d9ea437e402772b30691ea3354c570ee00f19a688e. Independent approval, protected merge, immutable jain-domain-v8.0.1-split.1 tag, and authority binding remain outstanding. Candidate metadata stays fail-closed; this PR performs no production apply.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-16T08:21:05.594859577+00:00",
+      "head_sha": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+      "status": "pass"
+    },
+    "passport_hash": "passport:3ae83ce17bb57f5f8dd52f087991ff59bda5afbc:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "4383aef8b23dd194db12778db3fc378ab526b145",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "fe346d43-cb49-4aa1-93a1-82e0ddec09d6#8",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8.0.1-domain-successor-20260716",
+      "head_sha": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 8,
+      "passport_hash": "passport:3ae83ce17bb57f5f8dd52f087991ff59bda5afbc:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "fe346d43-cb49-4aa1-93a1-82e0ddec09d6",
+        "name": "jain-domain",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(domain): recut 8.0.1 identity on current main",
+      "updated_at": "2026-07-16T08:19:59.515554281+00:00"
+    }
+  },
+  "repository": "jeryu/jain-domain",
+  "request": {
+    "body": {
+      "body_markdown": "Independent lifecycle approval: exact head, genuine proof and required checks, governed host/audit receipts, clean forge-equal canonical checkout, and strict protected-main policy verified.",
+      "evidence": null,
+      "expected_head_sha": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-domain/pulls/8/reviews"
+  },
+  "response": {
+    "description": "Successor to #7 after protected main advanced. Replays the reviewed 8.0.1 identity/lock delta byte-equivalently and adds fail-closed governed Jankurai 1.6.11 enforcement at /home/ubuntu/.jeryu/bin/jankurai with SHA-256 fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e. Locked/offline metadata, fast, required (13 tests), score 87 hard=0, security, contract drift, artifact support, tool adoption, exact-head local proof, and proofbind pass. Automatic jankurai/proof succeeds at exact head 3ae83ce17bb57f5f8dd52f087991ff59bda5afbc; governed integrity audit receipt SHA-256 is befaa9b1edc060aab5628f66eaa5492e2ba383c5fd03af867985abfc5999041f. Genuine jain-domain/required succeeds at the same exact head as check run 7dd3236a-c07e-4b83-8840-c7d849fd676b, backed by host receipt SHA-256 9fe03726ca56246dec3363d9ea437e402772b30691ea3354c570ee00f19a688e. Independent approval, protected merge, immutable jain-domain-v8.0.1-split.1 tag, and authority binding remain outstanding. Candidate metadata stays fail-closed; this PR performs no production apply.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-16T08:21:05.585356950+00:00",
+      "head_sha": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+      "status": "pass"
+    },
+    "passport_hash": "passport:3ae83ce17bb57f5f8dd52f087991ff59bda5afbc:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "4383aef8b23dd194db12778db3fc378ab526b145",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "fe346d43-cb49-4aa1-93a1-82e0ddec09d6#8",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/v8.0.1-domain-successor-20260716",
+      "head_sha": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "3ae83ce17bb57f5f8dd52f087991ff59bda5afbc",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 8,
+      "passport_hash": "passport:3ae83ce17bb57f5f8dd52f087991ff59bda5afbc:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "fe346d43-cb49-4aa1-93a1-82e0ddec09d6",
+        "name": "jain-domain",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(domain): recut 8.0.1 identity on current main",
+      "updated_at": "2026-07-16T08:19:59.515554281+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784190063
+}

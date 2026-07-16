@@ -1,0 +1,79 @@
+{
+  "label": "bin-robustness",
+  "worker": "Claude worker bin-robustness",
+  "generated_at": "2026-07-16T06:21:30Z",
+  "image": {
+    "ref": "image.neverhuman.org/veox/jain:8.0.1-gpu",
+    "digest": "sha256:ffbbaf48bda7253785b2d32436eb0cbf1d0ff927a41593b907f7307e07075871"
+  },
+  "container": {
+    "name": "e2e-probe-bin-20260716",
+    "port": "127.0.0.1:8894->8888",
+    "env": ["JAIN_WEB_CLUSTER=0", "JAIN_WEB_MAX_DATA_BYTES=2147483648", "JAIN_THREADS=32", "--gpus all"],
+    "instances": [
+      {"id": "e8b8ebb30a62", "started": "2026-07-16T06:02:25Z", "killed": "2026-07-16T06:16:48Z", "reason": "WEB-13 protocol: replaced after rerun-predict 500 (API was still live, session not wedged)"},
+      {"id": "de07fd718166", "started": "2026-07-16T06:16:48Z", "killed": "2026-07-16T06:22:00Z", "reason": "end-of-run cleanup"}
+    ]
+  },
+  "fixture": {
+    "name": "binary-0004ff1bec07b7a0",
+    "train": "1000 rows x 73 cols (72 features + 0/1 target, header)",
+    "scoring": "features.csv = test.csv minus target column (1000 rows x 72 cols)",
+    "floor": {"metric": "auc", "min": 0.62}
+  },
+  "steps": {
+    "A_train_predict_rerun": {
+      "session_S1": "fdf86892-5331-4b1b-95e0-6423e270e235",
+      "upload": {"code": 200, "ts": "2026-07-16T06:03:05Z"},
+      "training": {"terminal": "training.complete", "ts": "2026-07-16T06:03:33.52Z", "duration_s": 27.7},
+      "predict_1": {"code": 200, "duration_s": 9, "artifact": "f497e4b9-b625-4c86-89b4-31d36786d1d1", "rows": 1000, "sha256": "3f165c17fe2d8b484f04dff87ae5261999388d9e2678be19240a364a930c3be0"},
+      "predict_2_rerun": {
+        "code": 500,
+        "duration_s": 1,
+        "error": "1: kernel error: corrupt page: no unpinned frame available for eviction (x3 nested)",
+        "post_failure": {"api_liveness": "200 in 12ms", "session_state": "prediction_ready (NOT wedged, unlike WEB-13 regression repro)"},
+        "verdict": "FAIL — rerun regression class reproduces; WEB-13 pin leak also triggers on second predict of a 72-col session, so it is per-session-rerun scoped, not only capacity(130-col)-proportional"
+      },
+      "verdict": "train+first-predict PASS, rerun FAIL"
+    },
+    "B_concurrent_training": {
+      "session_S2": "654488bd-b84e-4ca8-a143-8ffcfd884bfd",
+      "session_S3": "4753f68c-717f-4a05-9206-0bca06f604a6",
+      "uploads": {"codes": [200, 200], "window": "parallel curls, 06:17:18.507Z-06:17:21.524Z (well within 2s of each other at start)"},
+      "training_S2": {"started": "2026-07-16T06:17:21.286Z", "complete": "2026-07-16T06:18:34.958Z", "duration_s": 73.7},
+      "training_S3": {"started": "2026-07-16T06:17:21.523Z", "complete": "2026-07-16T06:18:34.089Z", "duration_s": 72.6},
+      "note": "genuinely concurrent (starts 0.24s apart, not queued serially); ~73s each vs ~28s solo = GPU contention only",
+      "verdict": "PASS — no stuck-in-training, both terminal complete well under 10 min"
+    },
+    "C_predict_after_concurrency": {
+      "predict_S2": {"code": 200, "duration_s": 7, "artifact": "e935358a-a395-41aa-b768-775855a14d08", "rows": 1000},
+      "predict_S3": {"code": 200, "duration_s": 11, "artifact": "aed01f75-8dfe-4bf6-85c3-a2b3492f0a52", "rows": 1000},
+      "note": "S3 predict was the container's 2nd predict and succeeded -> leak in A is per-session rerun, not per-process cumulative; all 3 prediction artifacts byte-identical (sha256 3f165c17..., deterministic seed 20260616)",
+      "verdict": "PASS"
+    },
+    "D_api_liveness": {
+      "checks": [
+        {"when": "post-boot", "code": 200, "latency_ms": "<1000 (first-try)"},
+        {"when": "pre-predict-S1", "code": 200, "latency_ms": 11},
+        {"when": "immediately after rerun 500", "code": 200, "latency_ms": 12},
+        {"when": "post-training-B", "code": 200, "latency_ms": 11},
+        {"when": "between S2/S3 predicts", "code": 200, "latency_ms": 12},
+        {"when": "after S3 artifact download", "code": 200, "latency_ms": 10}
+      ],
+      "verdict": "PASS — all < 5s, no degradation; unlike the 130-col WEB-13 repro, the 72-col rerun 500 did NOT hang the API"
+    },
+    "E_auc_sanity": {
+      "artifact": "e935358a (S2 predictions)",
+      "method": "awk tie-averaged rank (Mann-Whitney)",
+      "n": 1000, "P": 397, "N": 603,
+      "auc": 0.686567,
+      "floor": 0.62,
+      "note": "matches prior web-path run 0.686567 exactly",
+      "verdict": "PASS"
+    }
+  },
+  "overall": {
+    "status": "PARTIAL-FAIL",
+    "summary": "5/6 legs PASS (train, first predict, concurrent training, post-concurrency predicts, liveness, AUC). Rerun-predict on same session FAILs 500 with the WEB-13 kernel error even at 72 cols — new scoping evidence for WEB-13: session-scoped page-pin leak on repeat predict; API and session survive (no wedge) at this width."
+  }
+}

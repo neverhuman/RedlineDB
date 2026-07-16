@@ -1,0 +1,57 @@
+{
+  "schema_version": "jain.identity-governed-tool-successor/v1",
+  "recorded_at_utc": "2026-07-16T07:56:00Z",
+  "repository": "jeryu/jain-catboost",
+  "pull_request": 8,
+  "branch": "release/v8.0.1/catboost-identity",
+  "protected_main": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+  "prior_head": "d24e6a2d80d82cdbed65785a5dbd871cb00750dc",
+  "head": "182089fb4caad2c752ba9e5a5bd584adceab4e90",
+  "tree": "6a39984d52f32a11c96aef8df3418ad525c9348c",
+  "ancestry": {"ahead": 4, "behind": 0, "linear": true},
+  "complete_diff": {
+    "paths": 11,
+    "insertions": 44,
+    "deletions": 17,
+    "full_index_binary_sha256": "ae5f2c5b7cd8d028df6dd1b1e1886f22efd2c054a2d29b12a5cccafdda14b95a"
+  },
+  "repair_commit": {
+    "paths": ["agent/audit-policy.toml", "ops/ci/lib.sh", "ops/ci/score.sh"],
+    "insertions": 29,
+    "deletions": 8,
+    "product_or_abi_changed": false,
+    "dependency_lock_or_identity_changed": false,
+    "auditor_policy_version": "1.6.11"
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "regular_non_symlink_required": true,
+    "adversarial_path_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c",
+    "adversarial_dispatch": "fixed function to governed bytes",
+    "changed_fast": {"score": 87, "raw_score": 87, "caps": [], "hard_findings": 0, "report_sha256": "d4b94b58ba5763fa27cc451990392b5bb7211d72bad9590a91e88cec9096c2fa"},
+    "full": {"score": 94, "raw_score": 94, "caps": [], "hard_findings": 0},
+    "forge_check": {"conclusion": "success", "id": "38eef35d-9bbb-48b3-80d7-400a16951500"}
+  },
+  "passed": [
+    "git diff --check",
+    "Bash syntax and ShellCheck",
+    "adversarial PATH governed-byte dispatch",
+    "locked offline Cargo metadata",
+    "just check",
+    "just fast with native vendor deferred",
+    "just contract-drift",
+    "just artifact-support bootstrap",
+    "just tool-adoption including security",
+    "governed full score and changed-fast"
+  ],
+  "canonical_checkout_clean_and_forge_equal": true,
+  "worktree_created": false,
+  "decision": "PASS_PENDING_FRESH_INDEPENDENT_REVIEW_AND_NATIVE_REQUIRED",
+  "remaining": [
+    "fresh independent review at this exact head",
+    "vendor-backed native required and published jain-catboost/required",
+    "approval, protected merge, immutable split.1 tag, and authority binding"
+  ]
+}

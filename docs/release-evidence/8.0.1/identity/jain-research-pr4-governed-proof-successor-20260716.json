@@ -1,0 +1,95 @@
+{
+  "schema_version": "jain.identity-remediation/v1",
+  "generated_at": "2026-07-16T08:51:44Z",
+  "status": "pass_pending_required_and_independent_review",
+  "repository": "jeryu/jain-research",
+  "pull_request": 4,
+  "branch": "release/v8.0.1/research-identity",
+  "base": {
+    "branch": "main",
+    "commit": "c61504a7e25ce62c71100865ef52f49a12c59e1b"
+  },
+  "head": {
+    "commit": "ee6566d87bcd524d9f75516c9d95a82b3b88687c",
+    "tree": "7b415ad00081ea95370a9072f784e4c2abd715b9",
+    "source_archive_sha256": "e940d922a9855ef732bf9670cdede5cb12e6cfd89a1e4c9727859f317d3508a7",
+    "full_index_diff_sha256": "4d341e1e6ab7437f4e185ea3d7ab649fc5f62fcc1bf04a26f59f36db91f3293a",
+    "changed_files": 14
+  },
+  "scope": {
+    "product_rust_changed": false,
+    "public_api_changed": false,
+    "dependency_requirements_changed": false,
+    "registry_packages_changed": false,
+    "cargo_lock_delta": "jain-research workspace package 8.0.0 to 8.0.1 only",
+    "identity": "jain-research-v8.0.1-split.1",
+    "candidate_metadata_unchanged": true,
+    "rollback_target": "7.0.6"
+  },
+  "governed_jankurai": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "version": "1.6.11",
+    "sha256": "fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e",
+    "regular_non_symlink": true,
+    "hostile_path_regression": "pass",
+    "ambient_same_version_sha256": "0dddc1d24f0ec8b03d2316fe860bc0a818e18e405c32c885a184de08b77b0e5c"
+  },
+  "verification": {
+    "required": "pass",
+    "security": "pass",
+    "contract_drift": "pass_zero_public_api_drift",
+    "artifact_support": {
+      "status": "pass",
+      "receipt_sha256": "5ceac683a39f142c4ebe521a49d1a903b7f85f427a0b411d069f343b81854cde"
+    },
+    "coverage": {
+      "status": "pass",
+      "sources": "2/2",
+      "lines": "258/298",
+      "line_fraction": 0.8657718120805369,
+      "hard_findings": 0,
+      "receipt_sha256": "b3ed7d5d3f9b18cc2c5620069ccc7fcb6d273e0e19074bf145605d8ff296e8e3"
+    },
+    "security_receipt_sha256": "4f42dc30858ef8aa552c9c132d1b13e85a0bc89ca1441f005b82dc904ad8854c",
+    "full_score": {
+      "score": 88,
+      "raw_score": 88,
+      "caps": 0,
+      "hard_findings": 0,
+      "report_sha256": "4db18ca78de599a73cb9e30e3e46a338891e6d20b21fda0ce3bf2a75fc964bed"
+    },
+    "changed_fast": {
+      "score": 85,
+      "raw_score": 85,
+      "caps": 0,
+      "hard_findings": 0,
+      "report_sha256": "bff509b3746095b2efe1a52addb3167e59e01bad1fc483240fbd7d9ac8226f1e"
+    }
+  },
+  "forge_readback": {
+    "branch_head_matches": true,
+    "pull_request_head_matches": true,
+    "pull_request_base_matches": true,
+    "jankurai_proof": {
+      "status": "completed",
+      "conclusion": "success",
+      "check_id": "3489155f-7d1e-4bc1-8079-99f994235a34"
+    },
+    "jain_research_required": "absent"
+  },
+  "custody": {
+    "canonical_checkout_clean": true,
+    "canonical_branch_forge_equal": true,
+    "registered_worktrees": 1,
+    "auxiliary_worktrees": 0,
+    "source_processes": 0
+  },
+  "remaining": [
+    "independent exact-successor review",
+    "fresh serialized exact-head jain-research/required host CI",
+    "independent approval and protected fast-forward merge",
+    "next-unused immutable split tag and readback",
+    "protected authority commit and checksum binding"
+  ],
+  "prohibited_actions_performed": []
+}

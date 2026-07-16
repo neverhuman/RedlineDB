@@ -1,0 +1,77 @@
+[required:jain-split-ops] shell: bash -n + shellcheck (error level) on all ops shell scripts
+native runtime build/link contract ok
+native materializer authority/evidence contract ok
+host CI exact orchestration contract ok
+host CI privilege-separated publication and adversarial isolation contract ok
+pinned advisory database contract ok
+[required:jain-split-ops] Rust: format, tests, canonical manifest, source coverage, and local-Jeryu policy
+   Compiling serde_core v1.0.228
+   Compiling version_check v0.9.5
+   Compiling serde v1.0.228
+   Compiling typenum v1.20.1
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling zmij v1.0.21
+   Compiling winnow v0.7.15
+   Compiling serde_json v1.0.150
+   Compiling toml_write v0.1.2
+   Compiling itoa v1.0.18
+   Compiling cpufeatures v0.2.17
+   Compiling cfg-if v1.0.4
+   Compiling memchr v2.8.3
+   Compiling generic-array v0.14.7
+   Compiling indexmap v2.14.0
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling serde_spanned v0.6.9
+   Compiling toml_datetime v0.6.11
+   Compiling toml_edit v0.22.27
+   Compiling toml v0.8.23
+   Compiling jain-split-ops v0.1.0 (/home/ubuntu/.cache/enforce-ci/jain-split-ops)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 4.81s
+     Running unittests tools/splitctl/src/main.rs (target/debug/deps/splitctl-10e056db189aa01f)
+
+running 20 tests
+test tests::jeryu_approval_binds_and_reads_back_the_exact_head ... ok
+test tests::jeryu_lifecycle_plans_exact_requests_and_policy ... ok
+test tests::derived_manifest_is_exact_unless_subset_is_declared ... ok
+test tests::jeryu_lifecycle_dry_run_needs_no_token_and_writes_receipt ... ok
+test tests::non_owner_is_forbidden_from_disabling_branch_protection ... ok
+test tests::path_checks_only_require_onboarded_repository_checkouts ... ok
+test tests::managed_repository_view_includes_both_control_planes_and_nested_family ... ok
+test tests::release_feature_matrix_rejects_partial_unsafe_and_non_maximal_policy ... ok
+test tests::canonical_release_feature_matrices_derive_exact_cargo_commands ... ok
+test tests::derived_manifest_sync_is_dry_run_by_default_and_apply_is_explicit ... ok
+test tests::host_ci_request_snapshot_is_bounded_and_rejects_special_inodes ... ok
+test tests::jankurai_evidence_supports_governed_floor_without_a_baseline ... ok
+test tests::jankurai_evidence_binds_valid_exact_sha_policy_and_auditor ... ok
+test tests::jankurai_evidence_preserves_a_historical_baseline_auditor ... ok
+test tests::bootstrap_main_is_dry_run_cas_idempotent_and_refuses_history ... ok
+test tests::immutable_tag_is_dry_run_exact_idempotent_and_never_moves ... ok
+test tests::worktree_verification_fails_when_linked_worktree_present ... ok
+test tests::jankurai_evidence_rejects_dirty_start_finish_and_linked_report ... ok
+test tests::worktree_verification_checks_clean_origin_main_and_remote_tag ... ok
+test tests::jankurai_evidence_rejects_identity_policy_and_score_failures ... ok
+
+test result: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.86s
+
+     Running tests/safety_properties.rs (target/debug/deps/safety_properties-49eadd7865569a86)
+
+running 7 tests
+test dry_run_pr_lifecycle_writes_a_plan_without_credentials ... ok
+test cli_reports_the_pinned_control_plane_version ... ok
+test non_owner_is_forbidden_from_planning_an_admin_bypass ... ok
+test property_rejects_unsafe_repository_slugs ... ok
+test manifest_validation_rejects_a_non_maximal_release_feature_set ... ok
+test release_cargo_commands_exposes_the_canonical_feature_matrix ... ok
+test bare_mirror_refresh_is_dry_run_by_default_and_verifies_applied_refs ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+manifest valid: 26 family repositories, 1 infrastructure repositories, sha256 3617a231622d0e8f96ff113289039f23f45e3d470862daa8e52d9b75e07d29ca
+source coverage pass: 4388 tracked files; 4306 owned, 82 retired, 0 shared
+local Jeryu policy ok: 33 repos
+python boundary ok: 0 declared files (customer SDK, parity, and nested Redline proof only)
+required ok: jain-split-ops

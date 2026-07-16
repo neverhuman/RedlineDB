@@ -6,13 +6,46 @@
 # no canonical checkout is used as a build directory and no sibling path is
 # linked into the sandbox.
 #
-# Usage: split-host-ci.sh <owner> <repo> <sha> <repo_path> [check_name]
+# Usage: split-host-ci.sh <owner> <repo> <sha> <repo_path> [check_name] [--apply]
 set -uo pipefail
 
-OWNER="${1:?owner}"; REPO="${2:?repo}"; SHA="${3:?sha}"; REPO_PATH="${4:?repo_path}"
-CHECK="${5:-$REPO/required}"
 JAIN_BASE="${JAIN_BASE:-http://127.0.0.1:8787}"
 OPS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=ops/ci/host-ci-security.sh
+source "$OPS_ROOT/ops/ci/host-ci-security.sh"
+OWNER="${1:?owner}"
+REPO="${2:?repo}"
+SHA="${3:?sha}"
+REPO_PATH="${4:?repo_path}"
+shift 4
+if [ "${1-}" = "--" ]; then
+  shift
+  CHECK="$REPO/required"
+elif [ -n "${1-}" ] && [ "${1:0:2}" != "--" ]; then
+  CHECK="$1"
+  shift
+else
+  CHECK="$REPO/required"
+fi
+APPLY=0
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --apply)
+      APPLY=1
+      ;;
+    --)
+      ;;
+    --*)
+      printf '[split-host-ci] unknown option: %s\n' "$1" >&2
+      exit 2
+      ;;
+    *)
+      printf '[split-host-ci] unknown positional argument: %s\n' "$1" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
 CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
 SPLIT_ROOT="${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}"
 MIRROR_ROOT="${JAIN_BARE_MIRROR_ROOT:-$SPLIT_ROOT/target/bare-mirrors}"
@@ -31,25 +64,9 @@ EVIDENCE_ROOT="${JAIN_CI_EVIDENCE_ROOT:-$OPS_ROOT/docs/release-evidence/8.0.1/ci
 say() { printf '[split-host-ci] %s\n' "$*" >&2; }
 STATUS_TOKEN=""
 
-jeryu_token() {
-  if [ -n "${JERYU_MERGE_TOKEN:-}" ]; then
-    printf '%s' "$JERYU_MERGE_TOKEN"
-    return
-  fi
-  local f="${JERYU_MERGE_TOKEN_FILE:-$HOME/.jeryu/secrets/merge-token}"
-  [ -r "$f" ] && tr -d '\n' < "$f"
-}
-
 post_check() {
-  local conclusion="$1" token status_state
-  token="${STATUS_TOKEN:-$(jeryu_token)}"
-  if [ -z "$token" ]; then
-    say "no merge token; cannot post required status"
-    return 1
-  fi
-
-  curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/check-runs" \
-    -H "Authorization: Bearer $token" \
+  local conclusion="$1" status_state
+  jeryu_curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/check-runs" \
     -H 'content-type: application/json' \
     -d "{\"name\":\"$CHECK\",\"head_sha\":\"$SHA\",\"status\":\"completed\",\"conclusion\":\"$conclusion\"}" \
     >/dev/null || return 1
@@ -57,12 +74,21 @@ post_check() {
 
   status_state="failure"
   [ "$conclusion" = "success" ] && status_state="success"
-  curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/statuses/$SHA" \
-    -H "Authorization: Bearer $token" \
+  jeryu_curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/statuses/$SHA" \
     -H 'content-type: application/json' \
     -d "{\"state\":\"$status_state\",\"context\":\"$CHECK\",\"description\":\"$CHECK via split-host-ci\"}" \
     >/dev/null || return 1
   say "posted status $CHECK=$status_state on ${SHA:0:8}"
+}
+
+post_check_if_apply() {
+  local conclusion="$1"
+  if [ "$APPLY" -eq 1 ]; then
+    post_check "$conclusion"
+  else
+    say "dry-run mode: skipping check publication ($conclusion) for $CHECK @ ${SHA:0:8}"
+    return 0
+  fi
 }
 
 manifest_value() {
@@ -208,9 +234,13 @@ persist_log() {
 [ -e "$REPO_PATH/.git" ] || { say "not a git repo: $REPO_PATH"; exit 2; }
 [[ "$SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { say "head SHA must be a full 40-character commit: $SHA"; exit 2; }
 curl -fsS "$JAIN_BASE/health" >/dev/null || { say "forge not healthy"; exit 2; }
-merge_token="$(jeryu_token)"
-[ -n "$merge_token" ] || { say "forge status credential is unavailable"; exit 2; }
-STATUS_TOKEN="$merge_token"
+if [ "$APPLY" -eq 1 ]; then
+  unset STATUS_TOKEN
+  STATUS_TOKEN="$(jeryu_token)"
+  [ -n "$STATUS_TOKEN" ] || { say "forge status credential is unavailable"; exit 2; }
+  unset JERYU_MERGE_TOKEN
+  export -n STATUS_TOKEN 2>/dev/null || true
+fi
 
 if command -v jain-ci-governor >/dev/null 2>&1; then
   JOBS="$(jain-ci-governor 2>/dev/null || echo 1)"
@@ -237,6 +267,7 @@ tmp="$(mktemp -d "${TMPDIR:-/tmp}/split-host-ci.XXXXXX")"
 IDENTITY_LOG="$tmp/identity.log"
 log="$tmp/ci.log"
 mkdir -p "$tmp/home" "$tmp/cargo-home" "$tmp/cargo-target"
+advisory_source="${JAIN_ADVISORY_DB:-$HOME/.cargo/advisory-db}"
 touch "$IDENTITY_LOG"
 
 # Use only sandbox-owned Git and Cargo state. The URL rewrites are limited to
@@ -252,6 +283,16 @@ export HOME="$tmp/home" CARGO_HOME="$tmp/cargo-home" CARGO_TARGET_DIR="$tmp/carg
 export GIT_CONFIG_GLOBAL="$gitconfig" GIT_CONFIG_NOSYSTEM=1
 export PATH="$CARGO_HOME/bin:$PATH"
 unset JAIN_API_URL
+if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
+  advisory_commit="$(tr -d '\r\n' < "$OPS_ROOT/ops/ci/rustsec-advisory-db.commit")"
+  sandbox_advisory_db="$HOME/.cargo/advisory-db"
+  seed_pinned_advisory_db "$advisory_source" "$sandbox_advisory_db" "$advisory_commit" || {
+    say "failed to seed the clean pinned RustSec advisory database"
+    exit 2
+  }
+  export JAIN_ADVISORY_DB="$sandbox_advisory_db"
+  printf 'advisory_database_commit=%s\n' "$advisory_commit" >> "$IDENTITY_LOG"
+fi
 
 wt="$tmp/$REPO"
 clone_exact "$REPO" "$source_mirror" "$SHA" "$source_commit" "$wt" || {
@@ -313,7 +354,7 @@ if (cd "$wt" && bash scripts/ci-local.sh required) >> "$log" 2>&1; then
         --receipt "$cargo_receipt") >> "$log" 2>&1 || {
       tail -30 "$log" >&2
       persist_log failure
-      post_check failure || true
+      post_check_if_apply failure || true
       say "FAIL release Cargo policy $OWNER/$REPO @ ${SHA:0:8}"
       exit 1
     }
@@ -324,25 +365,30 @@ if (cd "$wt" && bash scripts/ci-local.sh required) >> "$log" 2>&1; then
       release_lanes+=(container-policy image-resilience invention-export-clean atomicsoul-dry-run-test)
     fi
     for lane in "${release_lanes[@]}"; do
-      if (cd "$wt" && bash scripts/ci-local.sh "$lane") >> "$log" 2>&1; then
+    if (cd "$wt" && bash scripts/ci-local.sh "$lane") >> "$log" 2>&1; then
         continue
       fi
       tail -30 "$log" >&2
       persist_log failure
-      post_check failure || true
+      post_check_if_apply failure || true
       say "FAIL release $lane lane $OWNER/$REPO @ ${SHA:0:8}"
       exit 1
     done
   fi
   persist_log success
-  post_check success || { say "CI passed but required status publication failed"; exit 1; }
+  if ! post_check_if_apply success; then
+    say "CI passed but required status publication failed"
+    exit 1
+  fi
   say "PASS $OWNER/$REPO @ ${SHA:0:8}"
   exit 0
 else
   rc=$?
   tail -30 "$log" >&2
   persist_log failure
-  post_check failure || say "required failure status publication also failed"
+  if ! post_check_if_apply failure; then
+    say "required failure status publication also failed"
+  fi
   say "FAIL ($rc) $OWNER/$REPO @ ${SHA:0:8}"
   exit 1
 fi

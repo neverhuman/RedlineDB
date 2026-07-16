@@ -1,0 +1,22 @@
+{
+  "manifest": "repos.manifest.toml",
+  "mode": "apply",
+  "operation": "refresh-bare-mirrors",
+  "repositories": [
+    {
+      "action": "refreshed",
+      "mirror": "/home/ubuntu/jain-split/target/bare-mirrors/jain-jnoccio.git",
+      "mirror_existed": true,
+      "name": "jain-jnoccio",
+      "refs_verified": true,
+      "source": "/home/ubuntu/jain-split/jain-jnoccio",
+      "source_head": "b67f1ece0b42e1f2d1d36d9d3e7528a6b123f62c"
+    }
+  ],
+  "schema_version": "jain.bare-mirror-refresh/v1",
+  "selected_repositories": [
+    "jain-jnoccio"
+  ],
+  "status": "pass",
+  "timestamp_unix": 1784183284
+}

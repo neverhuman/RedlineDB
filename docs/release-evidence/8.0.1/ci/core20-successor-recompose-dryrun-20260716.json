@@ -1,0 +1,82 @@
+{
+  "schema_version": "jain.guarded-successor-recompose/v1",
+  "generated_at": "2026-07-16T07:13:31Z",
+  "status": "blocked_semantic_conflicts_no_canonical_mutation",
+  "repository": "jeryu/jain-core",
+  "original_pull_request": 20,
+  "protected_main_sha": "09823c4012d228c8d73df625329340afc1bc27f4",
+  "protected_main_forge_readback": true,
+  "canonical_local_main_ref_sha": "68a68a23c705e698d560a0aa31c7df7898b4acd2",
+  "canonical_origin_main_tracking_ref_sha": "fda3a4cbbfb75d581180093f84493a2cbf7223d8",
+  "warning": "The canonical local main and origin/main tracking refs are stale. Any later successor must start from the exact live-forge protected-main SHA, never the local main name.",
+  "preserved_original_branch": "claude/lime-prime-core-v2-20260716",
+  "preserved_original_head_sha": "9fef25f721689390788487f7fa178b2681dcf827",
+  "preserved_original_pr_state": "open_blocked",
+  "gpu_e2e_commit_sha": "fc829a29a7711f57beaa64e89e1ebce1ddc84eaa",
+  "gpu_e2e_parent_sha": "e9cb8745d42a897290195b0c16ddfe3e491576bd",
+  "gpu_e2e_patch_sha256": "03db001af5f07c46f4b6d64f6948133e6dbb00ed5964c27f02ad87cc948cca2c",
+  "compile_repair_commit_sha": "9fef25f721689390788487f7fa178b2681dcf827",
+  "compile_repair_parent_sha": "c2603cea6760e532cb78886323ea41049e9675c8",
+  "compile_repair_patch_sha256": "541aec1e0cc7f7f9cf7f1e2cd5378482f2a207470e8a13d9e383ac5129ca9ddd",
+  "custody": {
+    "canonical_clean": true,
+    "canonical_exact_old_head": true,
+    "canonical_forge_equal_old_head": true,
+    "old_forge_ref_preserved": true,
+    "active_competing_core_owner_found": false,
+    "open_descriptor_or_git_lock_found": false,
+    "registered_canonical_checkouts": 1,
+    "worktree_created": false
+  },
+  "dry_run": {
+    "kind": "automatically removed standalone physical-.git clone",
+    "base": "09823c4012d228c8d73df625329340afc1bc27f4",
+    "operation": "git cherry-pick -x fc829a29...",
+    "result": "conflict",
+    "conflict_count": 3,
+    "conflict_paths": [
+      "crates/feat-core/src/ensemble/selection/regression.rs",
+      "crates/feat-core/src/lime_invention.rs",
+      "crates/feat-core/src/pipeline.rs"
+    ],
+    "combined_conflict_diff_sha256": "36c05eb8e5f72360a870673ad6db2b13ff644724759d1fa04f51b456a7c99d56",
+    "compile_repair_attempted_after_gpu_e2e": false,
+    "cherry_pick_aborted": true,
+    "standalone_clone_removed": true
+  },
+  "semantic_ambiguities": [
+    {
+      "path": "crates/feat-core/src/ensemble/selection/regression.rs",
+      "main_behavior": "best_persistable_member_index implementation and integration-shaped tests",
+      "gpu_e2e_behavior": "serving_pick implementation and focused persistability-mask tests",
+      "risk": "winner and artifact-persistability selection policy"
+    },
+    {
+      "path": "crates/feat-core/src/lime_invention.rs",
+      "main_behavior": "LIME_CANDIDATE_CEILING and unconditional Prime GP finalist fallback",
+      "gpu_e2e_behavior": "algorithm_maker_top_k bounded to 5..=10 and no GP fallback when require_gpu is true",
+      "risk": "bounded search capacity and required-GPU fail-closed semantics"
+    },
+    {
+      "path": "crates/feat-core/src/pipeline.rs",
+      "main_behavior": "Gp default and effort-selected engine semantics",
+      "gpu_e2e_behavior": "Legacy naming/default plus process-environment engine override",
+      "risk": "production algorithm dispatch and default behavior"
+    }
+  ],
+  "decision": "BLOCK_RECOMPOSE_REQUIRES_EXPLICIT_SEMANTIC_OWNER_RESOLUTION",
+  "required_next_action": "A Core semantic owner must specify the intended merged behavior for all three conflicts, then a new directly-main-based branch can implement that reviewed resolution and rerun the exact warning-denied/test gates.",
+  "mutations": {
+    "canonical_source": false,
+    "canonical_index_or_ref": false,
+    "successor_branch": false,
+    "push_or_pull_request": false,
+    "host_ci_or_check": false,
+    "approval_or_merge": false,
+    "tag_or_authority": false,
+    "protection": false,
+    "deployment": false,
+    "git_worktree_lifecycle": false,
+    "receipt_only": true
+  }
+}
