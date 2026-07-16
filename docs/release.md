@@ -2,7 +2,7 @@
 
 ## Launch gate
 
-This repository supports the Jain 8.0.0 candidate and Redline 4.1.0 Jain
+This repository supports the Jain 8.0.1 candidate and Redline 4.1.0 Jain
 cutover. Its version sources are `Cargo.toml`, `Cargo.lock`, and
 `agent/standard-version.toml`; release history is in `CHANGELOG.md`.
 

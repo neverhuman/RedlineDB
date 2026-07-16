@@ -1,5 +1,14 @@
 # Changelog
 
+## 8.0.1-rc.0
+
+- Relocated the Redline family to physical standalone repositories under
+  `jain-redline/` and replaced family-CI linked checkouts with exact-SHA
+  standalone clones.
+- Advanced only the child control-plane Jain identity and fresh evidence root
+  to candidate 8.0.1; native Redline product identities and historical
+  successor proof bindings remain unchanged.
+
 ## 8.0.0-rc.0
 
 - Added a Rust receipt-driven Redline family CI and proof-lock control plane.

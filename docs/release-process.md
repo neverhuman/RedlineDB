@@ -4,7 +4,7 @@ The release version comes from `Cargo.toml`, `Cargo.lock`, and
 `agent/standard-version.toml`; `repos.manifest.toml` is the sole authority for
 the four child repositories and their immutable tags. Release history is in
 `CHANGELOG.md`. This control plane prepares the Redline dependency cutover for
-Jain 8.0.0 but does not itself push images, change routes, or promote production.
+Jain 8.0.1 but does not itself push images, change routes, or promote production.
 
 ## Required sequence
 
@@ -30,7 +30,7 @@ Jain 8.0.0 but does not itself push images, change routes, or promote production
 5. Build and test both Jain and Jeryu against the exact Redline engine. Each
    clean-main producer writes closed-schema evidence, its real test log, and a
    checksum sidecar.
-6. Place those real inputs under `release-evidence/8.0.0/` and run
+6. Place those fresh real inputs under `release-evidence/8.0.1/` and run
    `just proof-refresh <family-ci> <jain-evidence> <jeryu-evidence> <receipt>`.
    No eligibility flag or single-consumer path exists.
 7. Require the authoritative and compatibility lock bytes and checksums to

@@ -20,7 +20,8 @@ const LOCK_SCHEMA: &str = "redline.split.lock/v2";
 const PROOF_REFRESH_SCHEMA: &str = "redline.proof-refresh/v1";
 const PROOF_SUCCESSOR_SCHEMA: &str = "redline.proof-successor/v1";
 const LOCAL_JERYU_BASE: &str = "http://127.0.0.1:8787/git/";
-const RELEASE_VERSION: &str = "8.0.0";
+const RELEASE_VERSION: &str = "8.0.1";
+const RELEASE_EVIDENCE_ROOT: &str = "../../jain-split-ops/docs/release-evidence/8.0.1";
 const RELEASE_PROTECTION_POLICY: &str = "immutable-main-v1";
 const PENDING: &str = "PENDING";
 const MAX_EVIDENCE_HOURS: i64 = 24;
@@ -615,8 +616,17 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         || value.get("sagemaker").and_then(toml::Value::as_str) != Some("N/A")
     {
         return Err(error(
-            "manifest must describe the Jain 8.0.0 candidate with SageMaker N/A",
+            "manifest must describe the Jain 8.0.1 candidate with SageMaker N/A",
         ));
+    }
+    if value
+        .get("release_evidence_root")
+        .and_then(toml::Value::as_str)
+        != Some(RELEASE_EVIDENCE_ROOT)
+    {
+        return Err(error(format!(
+            "manifest release_evidence_root must be {RELEASE_EVIDENCE_ROOT}"
+        )));
     }
     validate_protection_policy(&value)?;
     let successor = value
@@ -5329,6 +5339,65 @@ mod tests {
     fn governed_receipt_schemas_parse() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         validate_receipt_schemas(root).unwrap();
+    }
+
+    #[test]
+    fn manifest_rejects_legacy_control_identity_and_evidence_root() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest_path = source.join("repos.manifest.toml");
+        let manifest_text = fs::read_to_string(&manifest_path).unwrap();
+        let manifest_value: toml::Value = manifest_text.parse().unwrap();
+        let control = manifest_value
+            .get("control_plane")
+            .and_then(toml::Value::as_table)
+            .unwrap();
+        assert_eq!(
+            manifest_value["release_version"].as_str(),
+            Some(RELEASE_VERSION)
+        );
+        assert_eq!(
+            manifest_value["release_evidence_root"].as_str(),
+            Some(RELEASE_EVIDENCE_ROOT)
+        );
+        assert_eq!(control["product_version"].as_str(), Some(RELEASE_VERSION));
+        assert_eq!(
+            control["current_tag"].as_str(),
+            Some("redline-split-ops-v8.0.1-split.0")
+        );
+        let standard: toml::Value = fs::read_to_string(source.join("agent/standard-version.toml"))
+            .unwrap()
+            .parse()
+            .unwrap();
+        assert_eq!(
+            standard.get("version").and_then(toml::Value::as_str),
+            Some("8.0.1-rc.0")
+        );
+        load_manifest(&manifest_path).unwrap();
+
+        let fixture = TestDir::new("legacy-control-identity");
+        for (index, (current, legacy)) in [
+            ("release_version = \"8.0.1\"", "release_version = \"8.0.0\""),
+            (
+                "release_evidence_root = \"../../jain-split-ops/docs/release-evidence/8.0.1\"",
+                "release_evidence_root = \"../../jain-split-ops/docs/release-evidence/8.0.0\"",
+            ),
+            ("product_version = \"8.0.1\"", "product_version = \"8.0.0\""),
+            (
+                "current_tag = \"redline-split-ops-v8.0.1-split.0\"",
+                "current_tag = \"redline-split-ops-v8.0.0-split.0\"",
+            ),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            assert!(manifest_text.contains(current));
+            let path = fixture.path().join(format!("legacy-{index}.toml"));
+            fs::write(&path, manifest_text.replacen(current, legacy, 1)).unwrap();
+            assert!(
+                load_manifest(&path).is_err(),
+                "accepted legacy field {index}"
+            );
+        }
     }
 
     #[test]
