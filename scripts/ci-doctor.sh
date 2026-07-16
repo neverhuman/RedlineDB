@@ -32,6 +32,12 @@ grep -Fq 'JAIN_RUSTSEC_COMMIT="9f3e138091487e69144f536d36976e427a7a3307"' \
   ops/ci/pinned-rustsec.sh
 grep -Fq 'JAIN_RUSTSEC_ARCHIVE_SHA256="08098d56e4349bd8fc08e8be06ba057e481ef547c859194fc538f0acbd0be63c"' \
   ops/ci/pinned-rustsec.sh
+grep -Fq 'cargo metadata --locked --format-version 1 --no-deps' ops/ci/artifact-support.sh
+if grep -Eq 'install .*target/release/(redlinedb-client-smoke|db-shim-parity)' \
+  ops/ci/artifact-support.sh; then
+  printf 'artifact lane must honor the exact Cargo target directory\n' >&2
+  exit 1
+fi
 grep -Fq 'zizmor --offline --format json' ops/ci/security.sh
 if grep -Fq -- '--no-exit-codes' ops/ci/security.sh; then
   printf 'security lane must not suppress Zizmor findings\n' >&2

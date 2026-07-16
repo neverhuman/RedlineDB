@@ -10,12 +10,26 @@ command -v jq >/dev/null 2>&1 || {
 }
 
 cargo build --release --locked --workspace --all-targets
+target_directory="$(cargo metadata --locked --format-version 1 --no-deps \
+  | jq -er '.target_directory | select(type == "string" and length > 0)')"
+[[ -d "$target_directory" && ! -L "$target_directory" ]] || {
+  printf 'Cargo target directory must be a physical directory: %s\n' "$target_directory" >&2
+  exit 1
+}
+for binary in redlinedb-client-smoke db-shim-parity; do
+  [[ -f "$target_directory/release/$binary" \
+    && ! -L "$target_directory/release/$binary" \
+    && -x "$target_directory/release/$binary" ]] || {
+    printf 'missing physical release binary: %s\n' "$target_directory/release/$binary" >&2
+    exit 1
+  }
+done
 version="$(tr -d '\n' < VERSION)"
 [[ "$version" == "4.1.0" ]]
 mkdir -p target/artifact-support/package
-install -m 0755 target/release/redlinedb-client-smoke \
+install -m 0755 "$target_directory/release/redlinedb-client-smoke" \
   target/artifact-support/package/redlinedb-client-smoke
-install -m 0755 target/release/db-shim-parity \
+install -m 0755 "$target_directory/release/db-shim-parity" \
   target/artifact-support/package/db-shim-parity
 install -m 0644 README.md docs/release.md docker/Dockerfile docker/docker-compose.yml \
   target/artifact-support/package/
