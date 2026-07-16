@@ -3,12 +3,31 @@ set -euo pipefail
 
 ops_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 workspace_root="${REDLINE_SPLIT_ROOT:-$(cd "$ops_root/.." && pwd)}"
+command="${1:-doctor}"
+
+if [[ "$command" == "ci-required" ]]; then
+  physical_workspace_root="$(cd "$ops_root/.." && pwd -P)"
+  requested_workspace_root="$physical_workspace_root"
+  if [[ -n "${REDLINE_SPLIT_ROOT:-}" ]]; then
+    requested_workspace_root="$(cd "$REDLINE_SPLIT_ROOT" 2>/dev/null && pwd -P)" || {
+      printf 'redlinectl: ci-required REDLINE_SPLIT_ROOT is not a physical directory: %s\n' \
+        "$REDLINE_SPLIT_ROOT" >&2
+      exit 2
+    }
+  fi
+  if [[ "$requested_workspace_root" != "$physical_workspace_root" ]]; then
+    printf 'redlinectl: ci-required REDLINE_SPLIT_ROOT must resolve to %s, got %s\n' \
+      "$physical_workspace_root" "$requested_workspace_root" >&2
+    exit 2
+  fi
+  workspace_root="$physical_workspace_root"
+fi
 
 export REDLINE_SPLIT_MANIFEST="${REDLINE_SPLIT_MANIFEST:-$ops_root/repos.manifest.toml}"
 export REDLINE_SPLIT_LOCK="${REDLINE_SPLIT_LOCK:-$ops_root/redline.lock.toml}"
 export REDLINE_SPLIT_MIRROR_LOCK="${REDLINE_SPLIT_MIRROR_LOCK:-$ops_root/../redline.lock.toml}"
 
-case "${1:-doctor}" in
+case "$command" in
   clone|update|family-ci|ci|ci-required|proof-refresh)
     exec 9>"$workspace_root/.redline-family.lock"
     flock -x 9

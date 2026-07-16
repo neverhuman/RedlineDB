@@ -5558,9 +5558,20 @@ mod tests {
 
         let fixture = TestDir::new_in_root("ci-required-flock");
         let workspace = fixture.path().join("workspace");
+        let control = workspace.join("redline-split-ops");
+        let different_workspace = fixture.path().join("different-workspace");
         let fake_bin = fixture.path().join("bin");
-        fs::create_dir_all(&workspace).unwrap();
+        fs::create_dir_all(&control).unwrap();
+        fs::create_dir_all(&different_workspace).unwrap();
         fs::create_dir_all(&fake_bin).unwrap();
+
+        let redlinectl = control.join("redlinectl");
+        fs::copy(
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("redlinectl"),
+            &redlinectl,
+        )
+        .unwrap();
+        fs::set_permissions(&redlinectl, fs::Permissions::from_mode(0o755)).unwrap();
 
         let real_flock_output = Command::new("sh")
             .args(["-c", "command -v flock"])
@@ -5592,6 +5603,7 @@ exec "$REDLINE_FLOCK_TEST_REAL_FLOCK" "$@"
 set -euo pipefail
 case "$REDLINE_FLOCK_TEST_ID" in
   first)
+    "$REDLINE_FLOCK_TEST_REAL_FLOCK" -n 9
     : >"$REDLINE_FLOCK_TEST_FIRST_ENTERED"
     for _ in $(seq 1 500); do
       [[ ! -e "$REDLINE_FLOCK_TEST_RELEASE" ]] || exit 23
@@ -5609,6 +5621,15 @@ case "$REDLINE_FLOCK_TEST_ID" in
     [[ -e "$REDLINE_FLOCK_TEST_CLEANED" ]] || exit 32
     : >"$REDLINE_FLOCK_TEST_SECOND_ENTERED"
     ;;
+  different)
+    : >"$REDLINE_FLOCK_TEST_DIFFERENT_ENTERED"
+    if [[ -e "$REDLINE_FLOCK_TEST_MIRROR" ||
+          -e "$REDLINE_FLOCK_TEST_SIDECAR" ||
+          -e "$REDLINE_FLOCK_TEST_MARKER" ]]; then
+      : >"$REDLINE_FLOCK_TEST_OVERLAP"
+    fi
+    exit 34
+    ;;
   *)
     exit 33
     ;;
@@ -5625,24 +5646,26 @@ esac
         let second_attempt = fixture.path().join("second-flock-attempted");
         let first_entered = fixture.path().join("first-entered");
         let second_entered = fixture.path().join("second-entered");
+        let different_attempt = fixture.path().join("different-flock-attempted");
+        let different_entered = fixture.path().join("different-entered");
         let overlap = fixture.path().join("overlap");
         let cleaned = fixture.path().join("cleanup-complete");
         let release = fixture.path().join("release-first");
         let mut test_path = std::ffi::OsString::from(fake_bin.as_os_str());
         test_path.push(":");
         test_path.push(env::var_os("PATH").unwrap_or_default());
-        let redlinectl = Path::new(env!("CARGO_MANIFEST_DIR")).join("redlinectl");
 
-        let spawn_entry = |id: &str, attempt: &Path| {
+        let spawn_entry = |id: &str, attempt: &Path, requested_root: &Path| {
             Command::new(&redlinectl)
                 .arg("ci-required")
                 .env("PATH", &test_path)
-                .env("REDLINE_SPLIT_ROOT", &workspace)
+                .env("REDLINE_SPLIT_ROOT", requested_root)
                 .env("REDLINE_FLOCK_TEST_ID", id)
                 .env("REDLINE_FLOCK_TEST_ATTEMPT", attempt)
                 .env("REDLINE_FLOCK_TEST_REAL_FLOCK", &real_flock)
                 .env("REDLINE_FLOCK_TEST_FIRST_ENTERED", &first_entered)
                 .env("REDLINE_FLOCK_TEST_SECOND_ENTERED", &second_entered)
+                .env("REDLINE_FLOCK_TEST_DIFFERENT_ENTERED", &different_entered)
                 .env("REDLINE_FLOCK_TEST_RELEASE", &release)
                 .env("REDLINE_FLOCK_TEST_CLEANED", &cleaned)
                 .env("REDLINE_FLOCK_TEST_MIRROR", &mirror)
@@ -5662,7 +5685,7 @@ esac
             path.exists()
         };
 
-        let first = spawn_entry("first", &first_attempt);
+        let first = spawn_entry("first", &first_attempt, &workspace);
         let first_attempted = wait_for(&first_attempt);
         let first_has_lock = wait_for(&first_entered);
         if !first_attempted || !first_has_lock {
@@ -5674,9 +5697,18 @@ esac
                 String::from_utf8_lossy(&output.stderr)
             );
         }
+        let family_lock = workspace.join(".redline-family.lock");
+        let inherited_lock_contended = !Command::new(&real_flock)
+            .args(["-x", "-n"])
+            .arg(&family_lock)
+            .args(["-c", "true"])
+            .status()
+            .unwrap()
+            .success();
 
         let mut second = None;
         let mut second_attempted = false;
+        let mut different_output = None;
         let gate_result = with_ci_compatibility_mirror(
             &authoritative,
             &mirror,
@@ -5685,7 +5717,7 @@ esac
                 if !mirror.is_file() || !sidecar.is_file() || !marker.is_file() {
                     return Err(error("first ci-required mirror ownership is incomplete"));
                 }
-                second = Some(spawn_entry("second", &second_attempt));
+                second = Some(spawn_entry("second", &second_attempt, &workspace));
                 second_attempted = wait_for(&second_attempt);
                 if !second_attempted {
                     return Err(error("second ci-required entry did not reach global flock"));
@@ -5693,6 +5725,16 @@ esac
                 if second_entered.exists() || overlap.exists() {
                     return Err(error(
                         "second ci-required entry overlapped active mirror ownership",
+                    ));
+                }
+                different_output = Some(
+                    spawn_entry("different", &different_attempt, &different_workspace)
+                        .wait_with_output()
+                        .unwrap(),
+                );
+                if different_attempt.exists() || different_entered.exists() || overlap.exists() {
+                    return Err(error(
+                        "different-root ci-required entry reached flock or Cargo",
                     ));
                 }
                 Err(error("expected required gate failure"))
@@ -5712,8 +5754,13 @@ esac
             "{failure}"
         );
         assert!(second_attempted);
+        assert!(inherited_lock_contended);
         assert!(cleanup_complete);
         assert_eq!(first_output.status.code(), Some(23));
+        let different_output = different_output.expect("different-root entry was not started");
+        assert_eq!(different_output.status.code(), Some(2));
+        assert!(String::from_utf8_lossy(&different_output.stderr)
+            .contains("REDLINE_SPLIT_ROOT must resolve to"));
         let second_output = second_output.expect("second ci-required entry was not started");
         assert!(
             second_output.status.success(),
@@ -5722,6 +5769,8 @@ esac
             String::from_utf8_lossy(&second_output.stderr)
         );
         assert!(second_entered.exists());
+        assert!(!different_attempt.exists());
+        assert!(!different_entered.exists());
         assert!(!overlap.exists());
     }
 
