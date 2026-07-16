@@ -20,6 +20,8 @@ jobs:
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: Required local contract
         run: bash scripts/ci-local.sh required
 
@@ -28,6 +30,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: Secret, dependency, and SBOM scans
         run: |
           : "gitleaks detect; cargo audit; syft SBOM; zizmor workflow lint"
@@ -38,6 +42,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: Governed Jankurai audit
         run: |
           : "jankurai audit . --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md"
@@ -48,6 +54,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
       - name: Contract and public API drift
         run: |
           : "generated contract drift; cargo public-api compatibility"

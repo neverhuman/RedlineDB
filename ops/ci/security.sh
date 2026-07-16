@@ -18,9 +18,9 @@ cargo audit --version >/dev/null 2>&1 || {
 mkdir -p target/jankurai/security
 gitleaks detect --source . --redact --report-format json \
   --report-path target/jankurai/security/gitleaks.json
-cargo audit --json > target/jankurai/security/cargo-audit.json
+cargo audit --no-fetch --json > target/jankurai/security/cargo-audit.json
 syft . -o spdx-json=target/jankurai/security/sbom.spdx.json
-zizmor --offline --no-exit-codes --format json .github/workflows \
+zizmor --offline --format json .github/workflows \
   > target/jankurai/security/zizmor.json
 printf '{"schema_version":"redline-central.security/v1","status":"pass"}\n' \
   > target/jankurai/security/evidence.json

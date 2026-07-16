@@ -22,4 +22,13 @@ for script in ops/ci/*.sh scripts/ci-local.sh scripts/ci-doctor.sh; do
 done
 [[ -x ops/ci/jankurai.sh && -x ops/ci/required.sh && -x scripts/ci-local.sh ]]
 grep -Fq 'bash ops/ci/jankurai.sh' .github/workflows/jankurai.yml
+[[ "$(grep -Fc 'uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' \
+  .github/workflows/jankurai.yml)" -eq 4 ]]
+[[ "$(grep -Fc 'persist-credentials: false' .github/workflows/jankurai.yml)" -eq 4 ]]
+grep -Fq 'cargo audit --no-fetch --json' ops/ci/security.sh
+grep -Fq 'zizmor --offline --format json' ops/ci/security.sh
+if grep -Fq -- '--no-exit-codes' ops/ci/security.sh; then
+  printf 'security lane must not suppress Zizmor findings\n' >&2
+  exit 1
+fi
 printf 'ci doctor ok: governed Jankurai and local lane dispatch\n'
