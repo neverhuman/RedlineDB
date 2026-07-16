@@ -78,6 +78,10 @@ jain_ci_dir_identity() {
   stat -Lc '%d:%i' -- "${1:?directory is required}"
 }
 
+jain_ci_dir_nlink() {
+  stat -Lc '%h' -- "${1:?directory is required}"
+}
+
 jain_ci_scratch_dir_safe() {
   local path="${1:?directory is required}" policy="${2:?mode policy is required}"
   local mode
@@ -93,26 +97,37 @@ jain_ci_scratch_dir_safe() {
 }
 
 jain_ci_scratch_chain_matches() {
+  local phase="${1:-active}" child_nlink
   jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_ROOT" shared \
     && [[ "$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_ROOT")" == "$JAIN_CI_SCRATCH_ROOT_ID" ]] \
     && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_ROOT_FD}/.")" == "$JAIN_CI_SCRATCH_ROOT_ID" ]] \
+    && [[ "$(jain_ci_dir_nlink "$JAIN_CI_SCRATCH_ROOT")" == "$JAIN_CI_SCRATCH_ROOT_NLINK" ]] \
     && jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_TARGET" shared \
     && [[ "$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_TARGET")" == "$JAIN_CI_SCRATCH_TARGET_ID" ]] \
     && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_TARGET_FD}/.")" == "$JAIN_CI_SCRATCH_TARGET_ID" ]] \
     && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_ROOT_FD}/target")" == "$JAIN_CI_SCRATCH_TARGET_ID" ]] \
+    && [[ "$(jain_ci_dir_nlink "$JAIN_CI_SCRATCH_TARGET")" == "$JAIN_CI_SCRATCH_TARGET_NLINK" ]] \
     && jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_PARENT" private \
     && [[ "$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_PARENT")" == "$JAIN_CI_SCRATCH_PARENT_ID" ]] \
     && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/.")" == "$JAIN_CI_SCRATCH_PARENT_ID" ]] \
     && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_TARGET_FD}/ci-tmp")" == "$JAIN_CI_SCRATCH_PARENT_ID" ]] \
+    && [[ "$(jain_ci_dir_nlink "$JAIN_CI_SCRATCH_PARENT")" == "$JAIN_CI_SCRATCH_PARENT_NLINK" ]] \
     && jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_PATH" private \
     && [[ "$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_PATH")" == "$JAIN_CI_SCRATCH_PATH_ID" ]] \
     && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_PATH_FD}/.")" == "$JAIN_CI_SCRATCH_PATH_ID" ]] \
-    && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/${JAIN_CI_SCRATCH_LEAF}")" == "$JAIN_CI_SCRATCH_PATH_ID" ]]
+    && [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/${JAIN_CI_SCRATCH_LEAF}")" == "$JAIN_CI_SCRATCH_PATH_ID" ]] \
+    || return 1
+  child_nlink="$(jain_ci_dir_nlink "$JAIN_CI_SCRATCH_PATH")"
+  if [[ "$phase" == empty ]]; then
+    [[ "$child_nlink" == "$JAIN_CI_SCRATCH_EMPTY_NLINK" ]]
+  else
+    (( child_nlink >= JAIN_CI_SCRATCH_EMPTY_NLINK ))
+  fi
 }
 
 jain_ci_scratch_create() {
   local root="${1:?repository root is required}" label="${2:?scratch label is required}"
-  local created
+  local created parent_nlink_before
   [[ "$label" =~ ^[A-Za-z0-9._-]+$ ]] || return 1
   JAIN_CI_SCRATCH_ROOT="$root"
   jain_ci_scratch_dir_safe "$JAIN_CI_SCRATCH_ROOT" shared || return 1
@@ -143,6 +158,10 @@ jain_ci_scratch_create() {
   [[ "$(jain_ci_dir_identity "/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/.")" == "$JAIN_CI_SCRATCH_PARENT_ID" ]] \
     || return 1
 
+  JAIN_CI_SCRATCH_ROOT_NLINK="$(jain_ci_dir_nlink "$JAIN_CI_SCRATCH_ROOT")"
+  JAIN_CI_SCRATCH_TARGET_NLINK="$(jain_ci_dir_nlink "$JAIN_CI_SCRATCH_TARGET")"
+  parent_nlink_before="$(jain_ci_dir_nlink "$JAIN_CI_SCRATCH_PARENT")"
+
   created="$(mktemp -d "/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/${label}.XXXXXX")" \
     || return 1
   JAIN_CI_SCRATCH_LEAF="${created##*/}"
@@ -151,7 +170,11 @@ jain_ci_scratch_create() {
   JAIN_CI_SCRATCH_PATH_ID="$(jain_ci_dir_identity "$JAIN_CI_SCRATCH_PATH")"
   exec {JAIN_CI_SCRATCH_PATH_FD}<"/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/${JAIN_CI_SCRATCH_LEAF}" \
     || return 1
-  jain_ci_scratch_chain_matches
+  JAIN_CI_SCRATCH_PARENT_NLINK="$(jain_ci_dir_nlink "$JAIN_CI_SCRATCH_PARENT")"
+  (( JAIN_CI_SCRATCH_PARENT_NLINK == parent_nlink_before + 1 )) || return 1
+  JAIN_CI_SCRATCH_EMPTY_NLINK="$(jain_ci_dir_nlink "$JAIN_CI_SCRATCH_PATH")"
+  [[ "$JAIN_CI_SCRATCH_EMPTY_NLINK" == 2 ]] || return 1
+  jain_ci_scratch_chain_matches empty
 }
 
 jain_ci_scratch_remove() {
@@ -161,11 +184,11 @@ jain_ci_scratch_remove() {
   }
   find -P "/proc/self/fd/${JAIN_CI_SCRATCH_PATH_FD}/." -xdev -depth -mindepth 1 -delete \
     || return 1
-  jain_ci_scratch_chain_matches || {
-    printf 'refusing scratch removal: directory custody changed\n' >&2
+  jain_ci_scratch_chain_matches empty || {
+    printf 'refusing scratch retention: directory custody changed\n' >&2
     return 1
   }
-  rmdir -- "/proc/self/fd/${JAIN_CI_SCRATCH_PARENT_FD}/${JAIN_CI_SCRATCH_LEAF}"
+  [[ -z "$(find -P "/proc/self/fd/${JAIN_CI_SCRATCH_PATH_FD}/." -mindepth 1 -print -quit)" ]]
 }
 
 jain_verify_cargo_deny_clean_log() {

@@ -73,6 +73,58 @@ jain_ci_scratch_hostile_tests() {
     ! jain_ci_scratch_remove
     [[ -f "$sentinel" ]]
   ) || fail "child-swap cleanup did not fail closed"
+
+  local find_mode='' find_calls=0 find_rc
+  find() {
+    command find "$@"
+    find_rc=$?
+    ((find_calls += 1))
+    if (( find_calls == 1 )) && [[ "$find_mode" == replacement ]]; then
+      saved_child="${JAIN_CI_SCRATCH_PATH}.saved"
+      mv -- "$JAIN_CI_SCRATCH_PATH" "$saved_child"
+      mkdir -m 0700 -- "$JAIN_CI_SCRATCH_PATH"
+      sentinel="$JAIN_CI_SCRATCH_PATH/sentinel"
+      printf 'preserve replacement\n' >"$sentinel"
+    elif (( find_calls == 1 )) && [[ "$find_mode" == child-nlink ]]; then
+      mkdir -m 0700 -- "/proc/self/fd/${JAIN_CI_SCRATCH_PATH_FD}/post-clean-drift"
+    fi
+    return "$find_rc"
+  }
+
+  repo="$hostile/former-rmdir-replacement"
+  mkdir -m 0700 -- "$repo"
+  (
+    jain_ci_scratch_create "$repo" hostile
+    printf 'remove through held descriptor\n' >"$JAIN_CI_SCRATCH_PATH/payload"
+    find_mode=replacement
+    find_calls=0
+    ! jain_ci_scratch_remove
+    [[ -f "$sentinel" && -d "$saved_child" ]]
+    [[ -z "$(command find "$saved_child" -mindepth 1 -print -quit)" ]]
+  ) || fail "former-rmdir replacement was deleted or original child was not retained"
+
+  repo="$hostile/parent-nlink-drift"
+  mkdir -m 0700 -- "$repo"
+  (
+    jain_ci_scratch_create "$repo" hostile
+    sentinel="$JAIN_CI_SCRATCH_PATH/sentinel"
+    printf 'preserve on parent nlink drift\n' >"$sentinel"
+    mkdir -m 0700 -- "$JAIN_CI_SCRATCH_PARENT/drift"
+    ! jain_ci_scratch_remove
+    [[ -f "$sentinel" ]]
+  ) || fail "parent link-count drift was not rejected before cleanup"
+
+  repo="$hostile/child-nlink-drift"
+  mkdir -m 0700 -- "$repo"
+  (
+    jain_ci_scratch_create "$repo" hostile
+    printf 'remove before child drift\n' >"$JAIN_CI_SCRATCH_PATH/payload"
+    find_mode=child-nlink
+    find_calls=0
+    ! jain_ci_scratch_remove
+    [[ -d "/proc/self/fd/${JAIN_CI_SCRATCH_PATH_FD}/post-clean-drift" ]]
+  ) || fail "post-clean child link-count drift was not rejected"
+  unset -f find
 }
 
 jain_ci_scratch_hostile_tests
