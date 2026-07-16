@@ -33,10 +33,10 @@ jobs:
       - name: Run canonical thin-hub audit
         run: bash ops/ci/jankurai-audit.sh
       - name: Upload SARIF to code scanning
-        if: always() && hashFiles('.jankurai/jankurai.sarif') != ''
+        if: always() && hashFiles('target/jankurai/jankurai.sarif') != ''
         uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
         with:
-          sarif_file: .jankurai/jankurai.sarif
+          sarif_file: target/jankurai/jankurai.sarif
       - name: Upload exact-head audit evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -45,10 +45,10 @@ jobs:
           retention-days: 14
           if-no-files-found: error
           path: |
-            .jankurai/repo-score.json
-            .jankurai/repo-score.md
-            .jankurai/jankurai.sarif
-            .jankurai/jankurai-install.log
+            target/jankurai/governed-jankurai.log
+            target/jankurai/governed-jankurai-test.log
+            target/jankurai/governed-evidence.json
+            target/jankurai/jankurai.sarif
             target/jankurai/accepted-baseline.json
             target/jankurai/repo-score.json
             target/jankurai/repo-score.md
@@ -58,4 +58,3 @@ jobs:
             target/jankurai/proofbind/obligations.json
             target/jankurai/proofmark/not-applicable.json
             target/jankurai/rust/not-applicable.json
-            target/jankurai/language-bad-behavior.log
