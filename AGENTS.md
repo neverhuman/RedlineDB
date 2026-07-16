@@ -8,19 +8,18 @@
 - Before edits, report `pwd`, `git rev-parse --show-toplevel`, and `git status --short --branch`.
 - Use Jeryu APIs/CLI for local GitLab/MR work; no `glab`, credential scraping, or raw local GitLab API calls.
 
-## Git Worktree Policy — MANDATORY
+## Zero-worktree policy — absolute
 
-**Agents MUST NOT create worktrees in `$HOME` or any persistent directory.**
-
-Rules:
-1. **Only create worktrees under `/tmp/`** — e.g. `git worktree add /tmp/rdb-fix-xyz`.
-2. **Delete the worktree before the session ends** — `git worktree remove --force /tmp/rdb-fix-xyz`.
-3. **Never leave a worktree at `/home/ubuntu/redlineDB-*` or any sibling of the main repo.**
-   This causes directory sprawl that accumulates across agent sessions and is very hard to clean up.
-4. If you find orphaned worktrees at `git worktree list`, **remove them immediately** with
-   `git worktree remove --force <path>` before starting your own work.
-5. Branches can and should outlive the worktree — create branches freely, but the working-directory
-   checkout must live in `/tmp/` and be cleaned up when done.
+- Do not create or move a Git worktree anywhere, including under `/tmp`. Never
+  run `git worktree add` or `git worktree move`.
+- Work only in the existing primary checkout. If it is dirty, busy, or held by
+  another owner, stop and wait for a clean stopped-head handoff.
+- Existing worktrees are cleanup inputs only. Never force-remove or prune one.
+  Removal requires separate authority, proof that no regression or unmerged
+  work would be lost, and a fresh recursive scan proving the path has no
+  symlink.
+- Exact-SHA CI may use only an automatically removed standalone clone/sandbox
+  that is not registered with `git worktree`.
 
 Mission: keep invariants local, edit the smallest lawful surface, and preserve raw evidence.
 
