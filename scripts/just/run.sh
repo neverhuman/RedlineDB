@@ -75,7 +75,7 @@ run_sqlite_jankurai_compare() {
   sqlite_checkout="$(ensure_sqlite_source_checkout "$sqlite_ref")"
   mkdir -p target/sqlite-jankurai benchmark-results/sqlite-parity/latest
   rtk bash scripts/check_audit_policy_mirror.sh
-  jankurai audit "$sqlite_checkout" --mode advisory --json target/sqlite-jankurai/repo-score.json --md target/sqlite-jankurai/repo-score.md --no-score-history --policy "$redlinedb_audit_policy"
+  bash ops/ci/run-jankurai.sh audit "$sqlite_checkout" --mode advisory --json target/sqlite-jankurai/repo-score.json --md target/sqlite-jankurai/repo-score.md --no-score-history --policy "$redlinedb_audit_policy"
   redline_testing_bin="$(ci_install_redline_testing)"
   load_redline_testing_provenance "$redline_testing_bin"
   "$redline_testing_bin" jankurai-compare \
@@ -481,19 +481,19 @@ case "$lane" in
   score)
     rtk bash scripts/check_audit_policy_mirror.sh
     rm -f target/jankurai/audit-state.json
-    jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --score-history .jankurai/score-history.jsonl --score-history-csv .jankurai/score-history.csv --policy "$redlinedb_audit_policy"
+    bash ops/ci/run-jankurai.sh audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --score-history .jankurai/score-history.jsonl --score-history-csv .jankurai/score-history.csv --policy "$redlinedb_audit_policy"
     ;;
   doctor)
-    jankurai doctor --fail-on high
+    bash ops/ci/run-jankurai.sh doctor --fail-on high
     ;;
   rust-map)
-    jankurai rust map .
+    bash ops/ci/run-jankurai.sh rust map .
     ;;
   rust-witness)
-    jankurai rust witness build .
+    bash ops/ci/run-jankurai.sh rust witness build .
     ;;
   rust-diagnose)
-    jankurai rust diagnose .
+    bash ops/ci/run-jankurai.sh rust diagnose .
     ;;
   *)
     printf 'unknown just lane: %s\n' "$lane" >&2

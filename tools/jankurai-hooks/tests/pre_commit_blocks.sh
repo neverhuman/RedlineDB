@@ -11,7 +11,7 @@
 # Usage:
 #   bash tools/jankurai-hooks/tests/pre_commit_blocks.sh
 #
-# Requires `jankurai` 1.5.1+ on PATH (or JANKURAI_BIN env var set).
+# Requires the governed Jankurai 1.6.11 installation and receipt.
 set -euo pipefail
 
 HOOK_SRC="${HOOK_SRC:-$(cd "$(dirname "$0")/.." && pwd)/pre-commit}"
@@ -20,11 +20,10 @@ if [ ! -x "$HOOK_SRC" ]; then
   exit 2
 fi
 
-JANKURAI_CMD="${JANKURAI_BIN:-$(command -v jankurai || true)}"
-if [ -z "$JANKURAI_CMD" ] || [ ! -x "$JANKURAI_CMD" ]; then
-  echo "FAIL: jankurai binary not found on PATH or via JANKURAI_BIN" >&2
-  exit 2
-fi
+repo_root="$(cd "$(dirname "$0")/../../.." && pwd)"
+# shellcheck source=ops/ci/jankurai-identity.sh
+. "$repo_root/ops/ci/jankurai-identity.sh"
+require_governed_jankurai
 
 work="$(mktemp -d "${TMPDIR:-/tmp}/jankurai-hook-test.XXXXXX")"
 trap 'rm -rf "$work"' EXIT
@@ -43,6 +42,8 @@ git remote add origin "$work/origin.git"
 mkdir -p .git/hooks
 cp "$HOOK_SRC" .git/hooks/pre-commit
 chmod +x .git/hooks/pre-commit
+mkdir -p ops/ci
+cp "$repo_root/ops/ci/jankurai-identity.sh" ops/ci/jankurai-identity.sh
 
 # Seed initial commit so HEAD exists and publish it to origin/main.
 echo "init" > README.md

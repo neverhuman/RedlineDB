@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Jankurai audit lane: the canonical CI + local invocation for every
-# tool-adoption-manifest entry rooted in `jankurai audit`.
+# tool-adoption-manifest entry rooted in the governed Jankurai audit.
 #
 # Mirrors `.github/workflows/jankurai.yml`'s `audit` job (steps that used
 # to live inline as "Install jankurai" through "Language bad-behavior
@@ -9,9 +9,8 @@
 # HLT-042 ci-local-parity.lib-missing,
 # HLT-034 ci-bad-behavior.
 #
-# jankurai is a hard dependency for this lane. The install path is the
-# pinned, exact-revision Jeryu source in ops/ci/lib.sh so CI and local proof
-# runs consume the same reviewed code and its matching runtime schemas.
+# Jankurai is a hard dependency for this lane. ops/ci/lib.sh verifies the
+# governed installation and its content-addressed receipt before execution.
 #
 # Usage:
 #   bash ops/ci/jankurai-audit.sh
@@ -26,7 +25,7 @@ TARGET_DIR="target/jankurai"
 AUDIT_POLICY="agent/audit-policy.toml"
 mkdir -p "$LOG_DIR" "$LOG_DIR/security" "$LOG_DIR/proofbind" "$LOG_DIR/proofmark" "$LOG_DIR/rust"
 mkdir -p "$TARGET_DIR/security" "$TARGET_DIR/proofmark" "$TARGET_DIR/rust"
-JANKURAI_INSTALL_LOG="$LOG_DIR/jankurai-install.log"
+JANKURAI_IDENTITY_LOG="$LOG_DIR/jankurai-identity.log"
 
 force_full_smart_scan() {
     # CI jobs start with an empty target directory, but local mirrors often
@@ -47,10 +46,10 @@ trap cleanup_jankurai_upstream_scratch EXIT
 
 # ---- 1) jankurai --version --------------------------------------------------
 step_version() {
-    jankurai --version
+    run_governed_jankurai --version
 }
 
-# ---- 2) jankurai audit (advisory) ------------------------------------------
+# ---- 2) Governed Jankurai audit (advisory) -------------------------------
 # Writes the repo score and the repair queue, exactly the
 # artifacts the tool-adoption manifest names for audit-ci, proof-routing,
 # contract-drift, authz-matrix, input-boundary, agent-tool-supply,
@@ -60,7 +59,7 @@ step_audit_advisory() {
     bash scripts/check_audit_policy_mirror.sh
     cleanup_jankurai_upstream_scratch
     force_full_smart_scan
-    local -a audit_cmd=(jankurai audit . --mode advisory --baseline .jankurai/repo-score.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md --sarif .jankurai/jankurai.sarif --github-step-summary .jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl --policy agent/audit-policy.toml)
+    local -a audit_cmd=(run_governed_jankurai audit . --mode advisory --baseline .jankurai/repo-score.json --json .jankurai/repo-score.json --md .jankurai/repo-score.md --sarif .jankurai/jankurai.sarif --github-step-summary .jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl --policy agent/audit-policy.toml)
     "${audit_cmd[@]}"
 }
 
@@ -80,25 +79,25 @@ step_fetch_baseline() {
     fi
 }
 
-# ---- 4) jankurai security run (strict, pre-audit) --------------------------
+# ---- 4) Governed Jankurai security run (strict, pre-audit) ---------------
 # Canonical CI invocation for the `security` tool-adoption entry. Runs
 # with --strict in the ci profile BEFORE the final ratchet audit so
 # security evidence is binding (HLT-034 ci-bad-behavior).
 step_security_run() {
     cleanup_jankurai_upstream_scratch
-    jankurai security run . \
+    run_governed_jankurai security run . \
         --strict \
         --profile ci \
         --out "$TARGET_DIR/security/evidence.json"
 }
 
-# ---- 5) jankurai audit (ratchet) — tool-adoption CI evidence ---------------
+# ---- 5) Governed Jankurai audit (ratchet) — tool-adoption CI evidence ----
 step_audit_ratchet() {
     local rc=0
     bash scripts/check_audit_policy_mirror.sh
     cleanup_jankurai_upstream_scratch
     force_full_smart_scan
-    local -a ratchet_cmd=(jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml)
+    local -a ratchet_cmd=(run_governed_jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml)
     "${ratchet_cmd[@]}" || rc=$?
 
     if [ "$rc" -eq 0 ]; then
@@ -115,9 +114,9 @@ step_audit_ratchet() {
     return "$rc"
 }
 
-# ---- 6) jankurai doctor ----------------------------------------------------
+# ---- 6) Governed Jankurai doctor -----------------------------------------
 step_doctor() {
-    jankurai doctor --fail-on critical
+    run_governed_jankurai doctor --fail-on critical
 }
 
 # ---- 7) Proofbind verify ---------------------------------------------------
@@ -129,7 +128,7 @@ step_proofbind() {
         changed_paths+=(--changed "$path")
     done < <(git diff --name-only -z --diff-filter=ACMRT origin/main...HEAD --)
 
-    jankurai proofbind verify . "${changed_paths[@]}"
+    run_governed_jankurai proofbind verify . "${changed_paths[@]}"
 }
 
 # ---- 8) Proofmark rust -----------------------------------------------------
@@ -144,7 +143,7 @@ step_proofmark() {
         printf 'incomplete Rust dependency graph: Cargo.toml and Cargo.lock must be present together\n' >&2
         return 1
     fi
-    jankurai proofmark rust . --obligations "$TARGET_DIR/proofbind/obligations.json"
+    run_governed_jankurai proofmark rust . --obligations "$TARGET_DIR/proofbind/obligations.json"
 }
 
 # ---- 9) Rust witness build -------------------------------------------------
@@ -159,12 +158,12 @@ step_rust_witness() {
         printf 'incomplete Rust dependency graph: Cargo.toml and Cargo.lock must be present together\n' >&2
         return 1
     fi
-    jankurai rust witness build .
+    run_governed_jankurai rust witness build .
 }
 
 # ---- 10) Copy-code audit ---------------------------------------------------
 step_copy_code() {
-    jankurai copy-code . --json "$LOG_DIR/copy-code.json" --md "$LOG_DIR/copy-code.md"
+    run_governed_jankurai copy-code . --json "$LOG_DIR/copy-code.json" --md "$LOG_DIR/copy-code.md"
 }
 
 # ---- 11) UX QA smoke -------------------------------------------------------
@@ -175,14 +174,14 @@ step_ux_qa() {
         return 0
     fi
 
-    jankurai ux audit --config .jankurai/ux-qa.toml --out "$LOG_DIR/ux-qa.json"
+    run_governed_jankurai ux audit --config .jankurai/ux-qa.toml --out "$LOG_DIR/ux-qa.json"
 }
 
 # ---- 12) Language bad-behavior tests ---------------------------------------
 # Canonical CI invocation for the ci-bad-behavior, git-bad-behavior, and
 # release-bad-behavior tool-adoption entries:
 #   cargo test -p jankurai --test language_bad_behavior
-# Run against the upstream jankurai source (jankurai is not a workspace
+# Run against the upstream Jankurai source (Jankurai is not a workspace
 # member here) and capture the output as the canonical evidence artifact
 # target/jankurai/language-bad-behavior.log.
 #
@@ -229,7 +228,7 @@ step_language_bad_behavior() {
 }
 
 main() {
-    ci_install_jankurai_logged "$JANKURAI_INSTALL_LOG"
+    ci_require_jankurai_logged "$JANKURAI_IDENTITY_LOG"
     cleanup_jankurai_upstream_scratch
 
     step_version

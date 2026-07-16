@@ -513,6 +513,7 @@ jankurai-audit:
     - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; ci_install_gitleaks'
     - curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz | tar -xz -C /usr/local/bin actionlint
     - curl -sSL https://github.com/anchore/syft/releases/download/v1.10.0/syft_1.10.0_linux_amd64.tar.gz | tar -xz -C /usr/local/bin syft
+    - 'source ops/ci/lib.sh; mkdir -p .jankurai && ci_require_jankurai_logged .jankurai/jankurai-identity.log'
     - |
       set -euo pipefail
       mkdir -p .jankurai target/jankurai
@@ -531,9 +532,8 @@ jankurai-audit:
         echo "missing accepted baseline .jankurai/baselines/main.repo-score.json" >&2; exit 1
       fi
       cp .jankurai/accepted-baseline.json target/jankurai/accepted-baseline.json
-    - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; mkdir -p .jankurai && ci_install_jankurai_logged .jankurai/jankurai-install.log'
     - bash scripts/check_audit_policy_mirror.sh
-    - jankurai --version
+    - bash ops/ci/run-jankurai.sh --version
     - |
       set -euo pipefail
       changed=()
@@ -545,14 +545,14 @@ jankurai-audit:
       # is empty (push-to-main events), and jankurai rejects empty args with
       # "error: unexpected argument '' found". Use the bash-safe pattern
       # `${changed[@]+...}` which expands to nothing when the array is unset.
-      jankurai proofbind verify . ${changed[@]+"${changed[@]}"}
-    - jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json
-    - jankurai rust witness build .
-    - jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
-    - jankurai copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
+      bash ops/ci/run-jankurai.sh proofbind verify . ${changed[@]+"${changed[@]}"}
+    - bash ops/ci/run-jankurai.sh proofmark rust . --obligations target/jankurai/proofbind/obligations.json
+    - bash ops/ci/run-jankurai.sh rust witness build .
+    - bash ops/ci/run-jankurai.sh security run . --strict --profile ci --out target/jankurai/security/evidence.json
+    - bash ops/ci/run-jankurai.sh copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
     - |
       set -euo pipefail
-      [ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh || true
+      source ops/ci/lib.sh
       rm -rf .jankurai/jankurai-src
       if ci_verify_jankurai_source && git clone --depth 1 --branch "$CI_JANKURAI_TAG" "$CI_JANKURAI_GIT" .jankurai/jankurai-src 2>/dev/null; then
         resolved_rev="$(git -C .jankurai/jankurai-src rev-parse HEAD)"
@@ -571,7 +571,7 @@ jankurai-audit:
         BASE_REF="origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" bash ops/ci/jankurai-staged-gate.sh
       fi
     - >
-      jankurai audit . --mode advisory
+      bash ops/ci/run-jankurai.sh audit . --mode advisory
       --json target/jankurai/repo-score.json
       --md target/jankurai/repo-score.md
       --sarif target/jankurai/jankurai.sarif
@@ -667,7 +667,7 @@ dependency-review:
   needs: []
   tags: [default]
   timeout: 30 minutes
-  # The tools:* jobs each run `jankurai audit --mode ratchet --baseline ...`
+  # The tools:* jobs each run `bash ops/ci/run-jankurai.sh audit --mode ratchet --baseline ...`
   # whose `audit_ratchet_acceptable` gate trips on ANY new caps_applied entry
   # vs the baseline. New work-streams introducing phantom-detector caps (e.g.
   # the HLT-013-RENDERED-UX-GAP `missing-web-e2e-lane` cap that fires even

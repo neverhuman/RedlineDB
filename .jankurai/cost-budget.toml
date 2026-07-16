@@ -9,7 +9,7 @@ schema_version = "1.0.0"
 #
 # Schema layout:
 #   [global]          — cross-cutting controls (kill-switch env var name).
-#   [bench]           — aggregate CI bench caps consumed by jankurai audit.
+#   [bench]           — aggregate CI bench caps consumed by the governed Jankurai audit.
 #   [dependencies]    — supply-chain budgets (denied crates, license allow,
 #                       advisory tolerance) cross-checked against deny.toml.
 #   [stop_conditions] — human-readable thresholds for bench halt + kill flow.
@@ -19,7 +19,7 @@ schema_version = "1.0.0"
 kill_switch_env = "REDLINEDB_BENCH_KILL"
 
 [bench]
-# Aggregate caps consumed by the jankurai audit and CI bench gates.
+# Aggregate caps consumed by the governed Jankurai audit and CI bench gates.
 max_wall_clock_seconds = 1800
 max_ci_concurrent_jobs = 4
 

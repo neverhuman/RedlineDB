@@ -4,7 +4,7 @@
 # This file is the jankurai-recognised security-lane marker
 # (`tools/security-lane.sh`). It delegates to the canonical
 # ops/ci/security.sh + ops/ci/dependency-review.sh scripts so the same
-# commands run locally and in CI, and so a jankurai audit can confirm
+# commands run locally and in CI, so the governed Jankurai audit can confirm
 # the security lane covers secret scanning, dependency review, and
 # supply-chain scanning. Audit references:
 # HLT-009-GENERATED-SECURITY (security lane markers),

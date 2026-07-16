@@ -38,6 +38,9 @@
 !.jankurai/tool-adoption.toml
 !.jankurai/unsafe-ledger.toml
 !.jankurai/ux-qa.toml
+!.jankurai/archive/
+!.jankurai/archive/pre-1.6.11/
+!.jankurai/archive/pre-1.6.11/README.md
 agent/*
 !agent/JANKURAI_STANDARD.md
 !agent/audit-policy.toml

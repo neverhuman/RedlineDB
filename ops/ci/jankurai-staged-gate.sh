@@ -3,14 +3,14 @@
 #
 # Mirrors the local pre-commit hook's semantics (see
 # tools/jankurai-hooks/pre-commit): every changed file is fed to
-# `jankurai audit-file --mode save-gate` with a baseline drawn from the
+# `bash ops/ci/run-jankurai.sh audit-file --mode save-gate` with a baseline drawn from the
 # merge-base. Any blocked file fails the lane.
 #
 # Usage:
 #   bash ops/ci/jankurai-staged-gate.sh                # uses origin/main
 #   BASE_REF=origin/main bash ops/ci/jankurai-staged-gate.sh
 #
-# Required: pinned `jankurai` release binary installed by ops/ci/lib.sh.
+# Required: governed Jankurai identity verified by ops/ci/lib.sh.
 
 set -euo pipefail
 
@@ -20,7 +20,7 @@ mkdir -p "$LOG_DIR"
 
 # shellcheck source=ops/ci/lib.sh
 . "$(dirname "$0")/lib.sh"
-ci_install_jankurai_logged "$LOG_DIR/install.log"
+ci_require_jankurai_logged "$LOG_DIR/identity.log"
 
 # Resolve the merge base so we diff against the branch divergence point,
 # not a moving target on the base branch.
@@ -136,7 +136,7 @@ for path in "${changed_files[@]}"; do
 
   set +e
   git show "HEAD:$path" 2>/dev/null \
-    | jankurai audit-file \
+    | run_governed_jankurai audit-file \
         --path "$path" \
         --candidate - \
         --op "$op" \

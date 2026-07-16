@@ -11,7 +11,7 @@ if [ ! -f "$project_policy" ]; then
 fi
 
 if [ ! -f "$compat_policy" ]; then
-    printf 'missing jankurai v1.5.1 compatibility audit policy: %s\n' "$compat_policy" >&2
+    printf 'missing governed Jankurai compatibility audit policy: %s\n' "$compat_policy" >&2
     exit 1
 fi
 

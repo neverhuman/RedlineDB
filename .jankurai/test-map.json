@@ -67,7 +67,7 @@
       "purpose": "verify root routing remains visible to the audit"
     },
     "README-jankurai-scaffold.md": {
-      "command": "jankurai doctor --fail-on critical",
+      "command": "bash ops/ci/run-jankurai.sh doctor --fail-on critical",
       "purpose": "verify scaffold marker does not hide missing control-plane files"
     },
     ".jankurai/": {
@@ -84,7 +84,7 @@
       "proof_lane": "sqlite-parity-report-check"
     },
     ".jankurai/coverage-sources.toml": {
-      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md && just score",
+      "command": "bash ops/ci/run-jankurai.sh coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage evidence source routing and score import"
     },
     ".agents/": {
@@ -93,7 +93,7 @@
     },
     "agent/": {
       "command": "bash scripts/check_audit_policy_mirror.sh",
-      "purpose": "verify jankurai v1.5.1 compatibility policy mirrors the project policy"
+      "purpose": "verify governed Jankurai 1.6.11 policy mirrors the project policy"
     },
     "agent/audit-policy.toml": {
       "command": "bash scripts/check_audit_policy_mirror.sh",
@@ -294,27 +294,27 @@
       "purpose": "verify Rust behavior and audit checks"
     },
     "crates/jankurai/src/audit/coverage.rs": {
-      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md && just score",
+      "command": "bash ops/ci/run-jankurai.sh coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage parsers and evidence normalization"
     },
     "crates/jankurai/src/commands/coverage.rs": {
-      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md && just score",
+      "command": "bash ops/ci/run-jankurai.sh coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md && just score",
       "purpose": "verify coverage audit command behavior"
     },
     "crates/jankurai/tests/fixtures/coverage/": {
-      "command": "jankurai coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md",
+      "command": "bash ops/ci/run-jankurai.sh coverage audit . --config .jankurai/coverage-sources.toml --json .jankurai/coverage/coverage-audit.json --md .jankurai/coverage/coverage-audit.md",
       "purpose": "verify coverage parser fixture contracts"
     },
     "db/": {
-      "command": "jankurai doctor --fail-on critical",
+      "command": "bash ops/ci/run-jankurai.sh doctor --fail-on critical",
       "purpose": "advisory database boundary health check"
     },
     "db/constraints/": {
-      "command": "jankurai doctor --fail-on critical",
+      "command": "bash ops/ci/run-jankurai.sh doctor --fail-on critical",
       "purpose": "advisory constraint-lane health check until DB proof exists"
     },
     "db/migrations/": {
-      "command": "jankurai doctor --fail-on critical",
+      "command": "bash ops/ci/run-jankurai.sh doctor --fail-on critical",
       "purpose": "advisory control-plane health check until migration tests exist"
     },
     "docs/": {
@@ -331,11 +331,11 @@
       "purpose": "verify coverage evidence docs remain routed"
     },
     "docs/architecture/": {
-      "command": "jankurai audit . --policy agent/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
+      "command": "bash ops/ci/run-jankurai.sh audit . --policy agent/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
       "purpose": "verify architecture docs remain visible to the audit"
     },
     "docs/decisions/": {
-      "command": "jankurai audit . --policy agent/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
+      "command": "bash ops/ci/run-jankurai.sh audit . --policy agent/audit-policy.toml --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md",
       "purpose": "verify decision records remain visible to the audit"
     },
     "examples/perfect-web-api-db/backend/src/background_job.rs": {

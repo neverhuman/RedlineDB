@@ -15,6 +15,9 @@
 
 set -euo pipefail
 
+# shellcheck source=ops/ci/jankurai-identity.sh
+. "$(dirname "${BASH_SOURCE[0]}")/jankurai-identity.sh"
+
 # ---- Pinned tool versions ---------------------------------------------------
 # Bump in lockstep with the matching `.github/workflows/*.yml` pin so the
 # local proof lane and the CI proof lane agree on the artifact.
@@ -36,10 +39,9 @@ CI_REDLINE_TESTING_VERSION="${CI_REDLINE_TESTING_VERSION:-latest}"
 CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256="${CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256:-}"
 CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256="${CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256:-}"
 readonly CI_REDLINE_TESTING_ATTESTATION_REPO="${CI_REDLINE_TESTING_ATTESTATION_REPO:-neverhuman/redline-testing}"
-readonly CI_JANKURAI_VERSION="${CI_JANKURAI_VERSION:-1.6.10}"
-readonly CI_JANKURAI_GIT="${CI_JANKURAI_GIT:-http://127.0.0.1:8787/git/jeryu/jankurai.git}"
-readonly CI_JANKURAI_TAG="${CI_JANKURAI_TAG:-v${CI_JANKURAI_VERSION}}"
-readonly CI_JANKURAI_REV="${CI_JANKURAI_REV:-3c804453e6c7a6e0e4028d95cc3bccea467277ef}"
+readonly CI_JANKURAI_GIT="${REDLINE_JANKURAI_REPO}"
+readonly CI_JANKURAI_TAG="${REDLINE_JANKURAI_TAG}"
+readonly CI_JANKURAI_REV="${REDLINE_JANKURAI_REV}"
 
 ci_redline_testing_version_from_tag() {
     local tag="${1:?release tag required}"
@@ -781,82 +783,23 @@ ci_verify_jankurai_source() {
     fi
 }
 
-# Build and install the exact reviewed Jeryu commit. Cargo retains its verified
-# source checkout under CARGO_HOME, which is also where the binary's embedded
-# runtime schema path points.
-ci_install_jankurai() {
-    ci_verify_jankurai_source
-
-    local install_dir
-    local cargo_home
-    install_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
-    cargo_home="${CARGO_HOME:-$HOME/.cargo}"
-    mkdir -p "$install_dir"
-    export PATH="$install_dir:$PATH"
-
-    local tmp_dir
-    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/jankurai-release.XXXXXX")"
-    (
-        trap 'rm -rf "$tmp_dir"' EXIT
-        cargo install \
-            --git "$CI_JANKURAI_GIT" \
-            --rev "$CI_JANKURAI_REV" \
-            --locked \
-            --root "$tmp_dir/install-root" \
-            jankurai
-
-        local built_binary="$tmp_dir/install-root/bin/jankurai"
-        if [ ! -x "$built_binary" ]; then
-            printf 'jankurai source install missing executable: %s\n' "$built_binary" >&2
-            return 1
-        fi
-
-        local source_root=""
-        local candidate
-        while IFS= read -r candidate; do
-            if [ "$(git -C "$candidate" rev-parse HEAD 2>/dev/null || true)" != "$CI_JANKURAI_REV" ]; then
-                continue
-            fi
-            if [ ! -s "$candidate/schemas/proofbind-witness.schema.json" ]; then
-                continue
-            fi
-            if ! LC_ALL=C grep -a -q -F "$candidate/crates/jankurai" "$built_binary"; then
-                continue
-            fi
-            source_root="$candidate"
-            break
-        done < <(find "$cargo_home/git/checkouts" -mindepth 2 -maxdepth 2 -type d 2>/dev/null)
-
-        if [ -z "$source_root" ]; then
-            printf 'jankurai binary has no retained, exact-revision runtime schema root\n' >&2
-            return 1
-        fi
-
-        install -m 0755 "$built_binary" "$install_dir/jankurai"
-        printf 'jankurai runtime schemas verified: %s/schemas\n' "$source_root"
-    )
-    hash -r 2>/dev/null || true
-
-    local version_output
-    version_output="$(jankurai --version)"
-    case "$version_output" in
-        "jankurai ${CI_JANKURAI_VERSION}"*) ;;
-        *)
-            printf 'installed jankurai version mismatch: got %s, expected %s\n' \
-                "$version_output" "$CI_JANKURAI_VERSION" >&2
-            return 1
-            ;;
-    esac
-    printf 'jankurai source verified: %s %s %s\n' \
-        "$CI_JANKURAI_GIT" "$CI_JANKURAI_TAG" "$CI_JANKURAI_REV"
-    printf 'jankurai installed: %s (%s)\n' "$(command -v jankurai)" "$version_output"
+# Require the single governed host installation. Consumer repositories never
+# install, select from PATH, or fall back to a user-local binary.
+ci_require_jankurai() {
+    ci_verify_jankurai_source || return 1
+    require_governed_jankurai || return 1
+    printf 'governed jankurai verified: path=%s version=%s digest=%s receipt=%s receipt_sha256=%s source=%s tag=%s rev=%s\n' \
+        "$REDLINE_JANKURAI_BIN" "$REDLINE_JANKURAI_VERSION" \
+        "$REDLINE_JANKURAI_BINARY_SHA256" "$REDLINE_JANKURAI_RECEIPT" \
+        "$REDLINE_JANKURAI_RECEIPT_SHA256" "$CI_JANKURAI_GIT" \
+        "$CI_JANKURAI_TAG" "$CI_JANKURAI_REV"
 }
 
-ci_install_jankurai_logged() {
+ci_require_jankurai_logged() {
     local log_path="$1"
     mkdir -p "$(dirname "$log_path")"
 
-    if ! ci_install_jankurai >"$log_path" 2>&1; then
+    if ! ci_require_jankurai >"$log_path" 2>&1; then
         cat "$log_path"
         return 1
     fi

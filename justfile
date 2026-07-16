@@ -8,7 +8,7 @@ check:
   bash scripts/ci-local.sh required
 
 score:
-  jankurai audit . --full --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --policy agent/audit-policy.toml
+  bash ops/ci/run-jankurai.sh audit . --full --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --policy agent/audit-policy.toml
 
 security:
   bash tools/security-lane.sh

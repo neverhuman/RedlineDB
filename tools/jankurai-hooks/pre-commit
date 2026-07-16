@@ -2,7 +2,7 @@
 # JANKURAI MANAGED HOOK: pre-commit (staged-files save-gate)
 #
 # Requires the current branch to already contain the latest `origin/main`
-# before the commit proceeds, then runs `jankurai audit-file` against each
+# before the commit proceeds, then runs `bash ops/ci/run-jankurai.sh audit-file` against each
 # staged file's *staged* content (not on-disk content) in save-gate mode.
 # Aborts the commit on any new hard finding. Designed to complete in <2s for
 # a typical 5-file commit.
@@ -62,13 +62,14 @@ if [ -n "${JANKURAI_PRE_COMMIT_CHAIN:-}" ] && [ -x "$JANKURAI_PRE_COMMIT_CHAIN" 
   JANKURAI_CHAINED_HOOK=1 "$JANKURAI_PRE_COMMIT_CHAIN" "$@"
 fi
 
-if [ -n "${JANKURAI_BIN:-}" ] && [ -x "$JANKURAI_BIN" ]; then
-  jankurai_cmd="$JANKURAI_BIN"
-else
-  jankurai_cmd="${JANKURAI_FALLBACK_BIN:-jankurai}"
-fi
-
 cd "$repo_root"
+
+# The hook is fail-closed to the repository's governed identity verifier.
+# Binary overrides, user-local installs, and ambient PATH selection are not
+# accepted.
+# shellcheck source=ops/ci/jankurai-identity.sh
+. "$repo_root/ops/ci/jankurai-identity.sh"
+require_governed_jankurai
 
 report_dir="${JANKURAI_HOOK_REPORT_DIR:-.jankurai/hooks}"
 mkdir -p "$report_dir"
@@ -133,7 +134,7 @@ for path in "${staged[@]}"; do
   # `${baseline_arg[@]+...}` keeps `set -u` happy when the array is empty.
   set +e
   git show ":$path" 2>/dev/null \
-    | "$jankurai_cmd" audit-file \
+    | run_governed_jankurai audit-file \
         --path "$path" \
         --candidate - \
         --op "$op" \
