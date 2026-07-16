@@ -19,6 +19,7 @@ jankurai audit . \
 score="$(jq -r '.score // 0' .jankurai/repo-score.json)"
 base_score="$(jq -r '.score // 0' agent/jankurai-baseline.json)"
 hard_count="$(jq -r '(.decision.hard_findings // .hard_findings // 0) | if type == "array" then length else . end' .jankurai/repo-score.json)"
+caps_count="$(jq -r '(.caps_applied // 0) | if type == "array" then length else . end' .jankurai/repo-score.json)"
 allowed_drop="$(awk -F= '/allowed_score_drop[[:space:]]*=/{gsub(/[ "\t]/,"",$2); print $2; exit}' agent/audit-policy.toml)"
 allowed_drop="${allowed_drop:-0}"
 floor="$(awk -F= '/minimum_score[[:space:]]*=/{gsub(/[ "\t]/,"",$2); print $2; exit}' agent/audit-policy.toml)"
@@ -27,6 +28,7 @@ floor_enforced="$(awk -F= '/floor_enforced[[:space:]]*=/{gsub(/[ "\t]/,"",$2); p
 floor_enforced="${floor_enforced:-true}"
 errors=()
 (( hard_count == 0 )) || errors+=("hard findings present: $hard_count")
+(( caps_count == 0 )) || errors+=("caps applied: $caps_count")
 (( score >= base_score - allowed_drop )) || errors+=("score regression: $score < baseline $base_score (allowed_drop=$allowed_drop)")
 if [[ "$floor_enforced" == "true" ]]; then
   (( score >= floor )) || errors+=("score $score below enforced absolute floor $floor")

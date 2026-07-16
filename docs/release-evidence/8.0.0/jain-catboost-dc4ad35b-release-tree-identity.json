@@ -1,0 +1,11 @@
+{
+  "commit": "dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b",
+  "commit_input": "dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b",
+  "mode": "dry-run",
+  "operation": "release-tree-identity",
+  "release_checksum_sha256": "ca3589a5ce62b2054b0550f9a96fd888aad7d4e02d88821bc51db43fcbd2bb4a",
+  "repository": "/home/ubuntu/jain-split/.worktrees/jain-catboost/split2-version-20260715",
+  "schema_version": "jain.release-tree-identity/v1",
+  "status": "pass",
+  "timestamp_unix": 1784122980
+}

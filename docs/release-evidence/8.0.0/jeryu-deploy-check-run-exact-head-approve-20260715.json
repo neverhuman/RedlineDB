@@ -1,0 +1,166 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Resolve commit-scoped check-run requests through the bare repository, filter to the resolved full SHA, reject unknown or ambiguous references, and prove same-name checks on another head cannot leak into readback or merge-passport evaluation.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-15T15:32:39.135365626+00:00",
+      "head_sha": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "status": "pass"
+    },
+    "passport_hash": "passport:9ff3297f909d7556ffda64233e12ab9ace2d73a0:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "a98f087ad3c9c331f3aba70562f8d65beca5c75b",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "61984a91-3115-47d0-9bed-72282ffc0fce#15",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/check-run-exact-head-20260715",
+      "head_sha": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 15,
+      "passport_hash": "passport:9ff3297f909d7556ffda64233e12ab9ace2d73a0:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "61984a91-3115-47d0-9bed-72282ffc0fce",
+        "name": "jeryu-deploy",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "fix(api): scope check-run readback to requested commit",
+      "updated_at": "2026-07-15T15:21:11.626150429+00:00"
+    }
+  },
+  "repository": "jeryu/jeryu-deploy",
+  "request": {
+    "body": {
+      "body_markdown": "Reviewed exact 9ff3297f: commit-scoped route resolves through bare git, filters full head SHA before pagination, rejects unknown/ambiguous refs, and two-head/latest-per-name regressions pass. Exact host gate plus isolated LFS rerun are green; governed Jankurai 1.6.10 score=85 hard=0 caps=0, receipt sha256 1325b6687ef2dbb6a4c957078d57a788689ad58f6cc9e3dad9d250be297a9764.",
+      "evidence": null,
+      "expected_head_sha": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjeryu-deploy/pulls/15/reviews"
+  },
+  "response": {
+    "description": "Resolve commit-scoped check-run requests through the bare repository, filter to the resolved full SHA, reject unknown or ambiguous references, and prove same-name checks on another head cannot leak into readback or merge-passport evaluation.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-15T15:32:39.124414420+00:00",
+      "head_sha": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "status": "pass"
+    },
+    "passport_hash": "passport:9ff3297f909d7556ffda64233e12ab9ace2d73a0:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "a98f087ad3c9c331f3aba70562f8d65beca5c75b",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 0,
+        "total": 2
+      },
+      "draft": false,
+      "entity": {
+        "id": "61984a91-3115-47d0-9bed-72282ffc0fce#15",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/check-run-exact-head-20260715",
+      "head_sha": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 15,
+      "passport_hash": "passport:9ff3297f909d7556ffda64233e12ab9ace2d73a0:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "61984a91-3115-47d0-9bed-72282ffc0fce",
+        "name": "jeryu-deploy",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "fix(api): scope check-run readback to requested commit",
+      "updated_at": "2026-07-15T15:21:11.626150429+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784129556
+}

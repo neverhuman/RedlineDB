@@ -1,0 +1,166 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Exact-history replication of reviewed veox head dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b. Canonical main 49714a2b is an ancestor; source bytes and commits are unchanged. Requires fresh exact-head canonical checks with governed native inputs and independent approval.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-15T19:19:33.139347252+00:00",
+      "head_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "status": "pass"
+    },
+    "passport_hash": "passport:056a605dc60554ddcf40c6b5b0cb07d71d68eb96:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "49714a2bb375b382e8e6c561a2120ec3f2b1cf4d",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "f113b2b4-6ada-4ab3-b73d-d91887972bce#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/canonical-sync-split2-20260715",
+      "head_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 7,
+      "passport_hash": "passport:056a605dc60554ddcf40c6b5b0cb07d71d68eb96:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f113b2b4-6ada-4ab3-b73d-d91887972bce",
+        "name": "jain-catboost",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(catboost): replicate reviewed split.2 identity to canonical Jeryu",
+      "updated_at": "2026-07-15T16:30:45.196133946+00:00"
+    }
+  },
+  "repository": "jeryu/jain-catboost",
+  "request": {
+    "body": {
+      "body_markdown": "Exact-head jankurai/proof and jain-catboost/required are green; approving protected merge.",
+      "evidence": null,
+      "expected_head_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-catboost/pulls/7/reviews"
+  },
+  "response": {
+    "description": "Exact-history replication of reviewed veox head dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b. Canonical main 49714a2b is an ancestor; source bytes and commits are unchanged. Requires fresh exact-head canonical checks with governed native inputs and independent approval.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-15T19:19:33.129004352+00:00",
+      "head_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "status": "pass"
+    },
+    "passport_hash": "passport:056a605dc60554ddcf40c6b5b0cb07d71d68eb96:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "49714a2bb375b382e8e6c561a2120ec3f2b1cf4d",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "f113b2b4-6ada-4ab3-b73d-d91887972bce#7",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/canonical-sync-split2-20260715",
+      "head_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "056a605dc60554ddcf40c6b5b0cb07d71d68eb96",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 7,
+      "passport_hash": "passport:056a605dc60554ddcf40c6b5b0cb07d71d68eb96:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "f113b2b4-6ada-4ab3-b73d-d91887972bce",
+        "name": "jain-catboost",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(catboost): replicate reviewed split.2 identity to canonical Jeryu",
+      "updated_at": "2026-07-15T16:30:45.196133946+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784143171
+}

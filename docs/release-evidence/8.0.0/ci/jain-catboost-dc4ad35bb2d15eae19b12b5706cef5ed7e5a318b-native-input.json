@@ -1,0 +1,19 @@
+{
+  "schema_version": "jain.native-release-input/v1",
+  "timestamp": "2026-07-15T13:52:31Z",
+  "repository": "jain-catboost",
+  "commit": "dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b",
+  "vendor_root": "/home/ubuntu/jain-split/vendor",
+  "catboost": {
+    "source_commit": "b1bd2a6d77219e82a1acfcedfccb8e6f6c1ee084",
+    "candidate_diff_sha256": "6a87678eda8ef5090174dac36beece64b0817e39cc67470ccf2bfee0c9acb6e8",
+    "candidate_tree_is_pruned": true,
+    "build_dir": "/home/ubuntu/jain-split/vendor/.build/catboost-nopy",
+    "library": "/home/ubuntu/jain-split/vendor/.build/catboost-nopy/catboost/libs/train_interface/libcatboost.so",
+    "library_sha256": "e2cf4607d1c2318a92c01d1d5bf3c78d75b10b0db0f920b1f3ed9377d3e72f33",
+    "required_symbols": ["cb_abi_version", "cb_save", "cb_load"]
+  },
+  "jankurai_evidence": "ci/jain-catboost-dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b-jankurai.json",
+  "required_check": "success",
+  "status": "pass"
+}

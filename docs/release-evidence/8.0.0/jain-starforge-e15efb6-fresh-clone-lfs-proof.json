@@ -1,0 +1,46 @@
+{
+  "schema_version": "jain.starforge-fresh-clone-lfs-proof/v1",
+  "timestamp": "2026-07-15T12:15:20Z",
+  "starforge": {
+    "repository": "veox/jain-starforge",
+    "commit": "e15efb6cacd4417d93f7a129197abaf8965f1698",
+    "tree_checksum_sha256": "f52398f6a3c598c9571ff12cd6509393d3421c1feb041d21837c1d0a4e30f9aa",
+    "clone_path": "/tmp/codex-starforge-e15-fresh-clone-fixed",
+    "branch": "main",
+    "tracked_status": "clean"
+  },
+  "lfs": {
+    "remote": "http://127.0.0.1:8787/git/veox/jain-starforge.git",
+    "push_all": "pass: 11 objects, 1.1 GB",
+    "fresh_clone_smudge": "pass: 10 current-main objects, 935.36 MiB",
+    "fsck": "pass",
+    "guard": "pass: exactly 10 tracked weights; every content SHA256 equals its LFS OID",
+    "pointer_only_rejected": true,
+    "missing_extra_stale_rejected": true,
+    "hash_mismatch_rejected": true
+  },
+  "extended_required_lane": {
+    "status": "pass",
+    "command": "JAIN_CI_EXTENDED=1 ./ops/ci/required.sh",
+    "checks": [
+      "bundle tamper, byte-change, symlink, unsupported-path, duplicate-path, and license-policy rejection",
+      "foundation 2048 real-weight parity",
+      "Prime/Lime runtime-generated differential",
+      "fused target-encoder binary and regression parity",
+      "regression golden fixture",
+      "Chimera regression real-weight CPU smoke",
+      "Chimera classification real-weight CPU smoke"
+    ]
+  },
+  "local_forge_repair": {
+    "repository": "jeryu/jeryu-deploy",
+    "pull_request": 13,
+    "merged_commit": "2acf4384f2bc358677aaf52738a2d1b3c52ae953",
+    "previous_binary_sha256": "cdbc76d322a6053ecf1f3db82ea7b473529c5002b5553926e5e069700843e2fa",
+    "current_binary_sha256": "61dabe0332007b73e7040630fbf908472e68083f3d06ca3ca582d8712a454d0c",
+    "rollback_binary": "/home/ubuntu/.jeryu/bin/jeryu.pre-2acf438-20260715T1205Z",
+    "service": "jeryu-api.service",
+    "service_status": "active"
+  },
+  "status": "pass"
+}

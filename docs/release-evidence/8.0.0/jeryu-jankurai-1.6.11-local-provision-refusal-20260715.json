@@ -1,0 +1,52 @@
+{
+  "schema_version": "jeryu.jankurai-local-provision/v2",
+  "timestamp": "2026-07-15T14:56:21Z",
+  "scope": "auditor-cli",
+  "source": {
+    "forge_remote": "http://127.0.0.1:8787/git/root/jankurai-core.git",
+    "local_bare_repository": "/home/ubuntu/.local/share/jeryu/git/root/jankurai-core.git",
+    "tag": "jankurai-core-v1.7.0-split.1",
+    "commit": "45dfab3322c5bb1928314a6c71672336e0633a32",
+    "archive_sha256": "e68b13f6bbac68f008c7db768c18311b60daa317b8f873252f7d811adbd376b8",
+    "cargo_lock_sha256": "cb6bf3141e326602df953deaf566e388fbcba9dfa21f01c371e9e757abd8fc71"
+  },
+  "local_git_dependencies": [
+    {"repository":"root/jankurai-tools-analyzers","commit":"ffcfc9746aa4b7b35bf44528a88c710adb7435ca"},
+    {"repository":"root/jankurai-tools-dedup","commit":"a06d75392ee39352ea564563dc2058f78af466f0"},
+    {"repository":"root/jankurai-tools-fleet","commit":"0f9790aaa7d244faf041bca2787b875392e534f0"},
+    {"repository":"root/jankurai-tools-guard","commit":"788ece4d5bb3a6ea4851ece56eca9c8ce58c3d5a"},
+    {"repository":"root/jankurai-tools-kernel","commit":"4bde9e00df5e699dd49d089c7644f3b5342d0945"},
+    {"repository":"root/jankurai-tools-proof","commit":"2dec663edc626d0c3f52336449b48313eae752d8"}
+  ],
+  "build": {
+    "cargo_locked": true,
+    "cargo_offline": true,
+    "fresh_cargo_git_db": true,
+    "git_sources_seeded_from_local_jeryu_exact_commits": true,
+    "network_fetches": 0,
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "host": "x86_64-unknown-linux-gnu",
+    "binary_sha256": "dc08d0aeef160b528522a6d8316d8bab9ea2a842cf0f97b2410c337559636879",
+    "version": "jankurai 1.6.11"
+  },
+  "tests": {
+    "cli_library": "pass: 35/35",
+    "preserved_split_packaging_failure": "action_metadata_smoke expects monorepo-root action.yml absent from the immutable jankurai-core split tag",
+    "policy": "the packaging failure is recorded and is not represented as auditor CLI coverage"
+  },
+  "install": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "previous_binary": "/home/ubuntu/.jeryu/bin/jankurai.pre-jankurai-core-v1.7.0-split.1-20260715",
+    "previous_sha256": "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0",
+    "installed_sha256": "dc08d0aeef160b528522a6d8316d8bab9ea2a842cf0f97b2410c337559636879",
+    "runner_selection": "split-host-ci validates exact version and digest before prepending the governed binary directory"
+  },
+  "network_source": "local forge only",
+  "refusal": {
+    "reason": "the 1.6.11 package emitted auditor_version 1.6.10 because its immutable core tag pins the pre-successor audit kernel",
+    "kernel_successor": "jankurai-tools-kernel-v1.7.0-split.1",
+    "kernel_current_jankurai_proof": "failure",
+    "installed_binary_preserved_at": "/home/ubuntu/.jeryu/bin/jankurai.inadmissible-jankurai-core-v1.7.0-split.1-20260715"
+  },
+  "status": "fail"
+}

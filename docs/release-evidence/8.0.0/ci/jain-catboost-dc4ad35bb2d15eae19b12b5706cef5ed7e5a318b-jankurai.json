@@ -1,0 +1,23 @@
+{
+  "auditor": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "sha256": "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0",
+    "version": "jankurai 1.6.10"
+  },
+  "caps_applied": 0,
+  "clean_tracked_tree_at_finish": true,
+  "clean_tracked_tree_at_start": true,
+  "commit": "dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b",
+  "failures": [],
+  "hard_findings": 0,
+  "mode": "evidence",
+  "operation": "jankurai-evidence",
+  "report": "/tmp/split-host-ci.lXqCcY/jain-catboost/target/jankurai/exact-head-repo-score.json",
+  "report_sha256": "37ae5e2f6bb4934001e266993d7cef6827bf436f97e2f937b24bfb7b9d0d4b34",
+  "repository": "jain-catboost",
+  "schema_version": "jain.jankurai-exact-sha-evidence/v1",
+  "score": 94.0,
+  "status": "pass",
+  "timestamp_unix": 1784123500,
+  "worktree": "/tmp/split-host-ci.lXqCcY/jain-catboost"
+}

@@ -10,8 +10,29 @@
 # Usage: split-host-ci.sh <owner> <repo> <sha> <repo_path> [check_name]
 set -uo pipefail
 
+# Exact-head runners must never prompt for credentials or let the auditor
+# mutate/check its own installation while evaluating a review SHA.
+export GIT_TERMINAL_PROMPT=0 JANKURAI_NO_UPDATE_CHECK=1
+export JERYU_JANKURAI_BIN="${JERYU_JANKURAI_BIN:-/home/ubuntu/.jeryu/bin/jankurai}"
+[ -x "$JERYU_JANKURAI_BIN" ] || {
+  printf 'governed Jeryu auditor is unavailable: %s\n' "$JERYU_JANKURAI_BIN" >&2
+  exit 2
+}
+readonly JERYU_JANKURAI_VERSION="jankurai 1.6.10"
+readonly JERYU_JANKURAI_SHA256="ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0"
+[ "$("$JERYU_JANKURAI_BIN" --version)" = "$JERYU_JANKURAI_VERSION" ] || {
+  printf 'governed Jeryu auditor version mismatch\n' >&2
+  exit 2
+}
+[ "$(sha256sum "$JERYU_JANKURAI_BIN" | awk '{print $1}')" = "$JERYU_JANKURAI_SHA256" ] || {
+  printf 'governed Jeryu auditor digest mismatch\n' >&2
+  exit 2
+}
+export PATH="$(dirname "$JERYU_JANKURAI_BIN"):$PATH"
+
 OWNER="${1:?owner}"; REPO="${2:?repo}"; SHA="${3:?sha}"; REPO_PATH="${4:?repo_path}"
 CHECK="${5:-$REPO/required}"
+readonly CI_ATTEMPT_ID="$(date -u +%Y%m%dT%H%M%S%NZ)-$$"
 JAIN_BASE="${JAIN_BASE:-http://127.0.0.1:8787}"
 OPS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
@@ -54,6 +75,79 @@ post_check() {
     -d "{\"state\":\"$status_state\",\"context\":\"$CHECK\",\"description\":\"$CHECK via split-host-ci\"}" \
     >/dev/null || return 1
   say "posted status $CHECK=$status_state on ${SHA:0:8}"
+}
+
+post_jankurai_proof() {
+  local conclusion="$1" receipt="$2" receipt_sha="$3" token payload score hard caps auditor run_id attempt_id
+  token="$(jeryu_token)"
+  if [ -z "$token" ]; then say "no merge token; cannot post Jankurai proof"; return 1; fi
+  score="$(jq -er '.score' "$receipt")" || return 1
+  hard="$(jq -er '.hard_findings' "$receipt")" || return 1
+  caps="$(jq -er '.caps_applied' "$receipt")" || return 1
+  auditor="$(jq -er '.auditor.version + "@sha256:" + .auditor.sha256' "$receipt")" || return 1
+  run_id="$(jq -er '.run_id' "$receipt")" || return 1
+  attempt_id="$(jq -er '.attempt_id' "$receipt")" || return 1
+  payload="$(jq -cn \
+    --arg sha "$SHA" --arg conclusion "$conclusion" \
+    --arg title "exact-SHA Jankurai proof" \
+    --arg summary "score=$score hard=$hard caps=$caps auditor=$auditor run_id=$run_id attempt=$attempt_id receipt_sha256=$receipt_sha receipt=${receipt#"$OPS_ROOT"/}" \
+    '{name:"jankurai/proof",head_sha:$sha,status:"completed",conclusion:$conclusion,output:{title:$title,summary:$summary}}')" \
+    || return 1
+  curl -fsS -X POST "$JAIN_BASE/repos/$OWNER/$REPO/check-runs" \
+    -H "Authorization: Bearer $token" \
+    -H 'content-type: application/json' \
+    -d "$payload" >/dev/null || return 1
+  say "posted jankurai/proof=$conclusion on ${SHA:0:8} (score=$score hard=$hard caps=$caps)"
+}
+
+record_jankurai_evidence() {
+  local conclusion="$1" failure_reason="${2:-}" receipt staging report receipt_sha evidence_rc expected_status
+  local -a failure_args=()
+  staging="$OPS_ROOT/docs/release-evidence/8.0.0/ci/${REPO}-${SHA}-jankurai-${CI_ATTEMPT_ID}.pending.json"
+  [ ! -e "$staging" ] || return 1
+  report="${exact_head_report:-$wt/.jankurai/repo-score.json}"
+  if [ -n "$failure_reason" ]; then
+    failure_args=(--lane-failure-reason "$failure_reason")
+  fi
+  evidence_rc=0
+  cargo run --locked --quiet --manifest-path "$OPS_ROOT/Cargo.toml" -- \
+    jankurai-evidence \
+    --repository "$REPO" \
+    --commit "$SHA" \
+    --worktree "$wt" \
+    --report "$report" \
+    --auditor "$JERYU_JANKURAI_BIN" \
+    --attempt-id "$CI_ATTEMPT_ID" \
+    --lane-conclusion "$conclusion" \
+    "${failure_args[@]}" \
+    --clean-tracked-tree-start "$exact_head_clean_start" \
+    --receipt "$staging" >>"$log" 2>&1 || evidence_rc=$?
+  [ -s "$staging" ] || return 1
+  receipt_sha="$(sha256sum "$staging" | awk '{print $1}')" || return 1
+  receipt="$OPS_ROOT/docs/release-evidence/8.0.0/ci/${REPO}-${SHA}-jankurai-${CI_ATTEMPT_ID}-${receipt_sha}.json"
+  [ ! -e "$receipt" ] || return 1
+  mv "$staging" "$receipt" || return 1
+  expected_status=pass
+  [ "$conclusion" = "failure" ] && expected_status=fail
+  [ "$(jq -er '.status' "$receipt")" = "$expected_status" ] || return 1
+  if [ "$conclusion" = "success" ]; then
+    [ "$evidence_rc" -eq 0 ] || return 1
+  else
+    [ "$evidence_rc" -ne 0 ] || return 1
+  fi
+  post_jankurai_proof "$conclusion" "$receipt" "$receipt_sha"
+}
+
+preserve_score_report_and_restore_tracked_outputs() {
+  local path
+  exact_head_report="$wt/target/jankurai/exact-head-repo-score.json"
+  mkdir -p "$(dirname "$exact_head_report")"
+  cp "$wt/.jankurai/repo-score.json" "$exact_head_report" || return 1
+  for path in .jankurai/repo-score.json .jankurai/repo-score.md; do
+    if git -C "$wt" ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
+      git -C "$wt" restore --source=HEAD --staged --worktree -- "$path" || return 1
+    fi
+  done
 }
 
 run_release_cargo_commands() {
@@ -112,6 +206,11 @@ trap cleanup EXIT
 
 git -C "$REPO_PATH" worktree add -f --detach "$wt" "$SHA" >/dev/null 2>&1 \
   || { post_check failure; echo "worktree checkout failed" >&2; exit 1; }
+exact_head_clean_start=false
+exact_head_clean_finish=false
+if git -C "$wt" diff --quiet HEAD -- && git -C "$wt" diff --cached --quiet; then
+  exact_head_clean_start=true
+fi
 
 # Independence by default: NO sibling repos are linked, so a repo's required lane
 # must resolve cross-repo deps from its committed vendor-crates/ (offline). Only
@@ -196,11 +295,29 @@ if (cd "$wt" && bash scripts/ci-local.sh required) >"$log" 2>&1; then
       if (cd "$wt" && bash scripts/ci-local.sh "$lane") >>"$log" 2>&1; then
         continue
       fi
+      if [ "$lane" = "score" ] && [ -s "$wt/.jankurai/repo-score.json" ]; then
+        record_jankurai_evidence failure "release score lane failed" || say "failed to persist failing Jankurai evidence"
+      fi
       tail -30 "$log" >&2
       post_check failure || true
       say "FAIL release $lane lane $OWNER/$REPO @ ${SHA:0:8}"
       exit 1
     done
+    preserve_score_report_and_restore_tracked_outputs || {
+      post_check failure || true
+      say "FAIL preserve exact-SHA Jankurai report $OWNER/$REPO @ ${SHA:0:8}"
+      exit 1
+    }
+    exact_head_clean_finish=false
+    if git -C "$wt" diff --quiet HEAD -- && git -C "$wt" diff --cached --quiet; then
+      exact_head_clean_finish=true
+    fi
+    record_jankurai_evidence success || {
+      tail -30 "$log" >&2
+      post_check failure || true
+      say "FAIL exact-SHA Jankurai evidence $OWNER/$REPO @ ${SHA:0:8}"
+      exit 1
+    }
   fi
   post_check success || { say "CI passed but required status publication failed"; exit 1; }
   say "PASS $OWNER/$REPO @ ${SHA:0:8}"

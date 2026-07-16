@@ -1,0 +1,11 @@
+{
+  "commit": "e15efb6cacd4417d93f7a129197abaf8965f1698",
+  "commit_input": "e15efb6cacd4417d93f7a129197abaf8965f1698",
+  "mode": "dry-run",
+  "operation": "release-tree-identity",
+  "release_checksum_sha256": "f52398f6a3c598c9571ff12cd6509393d3421c1feb041d21837c1d0a4e30f9aa",
+  "repository": "/home/ubuntu/jain-split/.worktrees/wq14/jain-starforge",
+  "schema_version": "jain.release-tree-identity/v1",
+  "status": "pass",
+  "timestamp_unix": 1784115196
+}

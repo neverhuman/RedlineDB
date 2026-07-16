@@ -1,0 +1,99 @@
+{
+  "action": "opened-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-open",
+  "readback": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-catboost"
+      },
+      "sha": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5"
+    },
+    "body": "One-line VERSION successor required by immutable-tag identity validation. Exact head dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b; no tag is created by this PR.",
+    "created_at": "2026-07-15T13:27:03.156818449Z",
+    "draft": false,
+    "head": {
+      "label": "codex/catboost-split2-version-20260715",
+      "ref": "codex/catboost-split2-version-20260715",
+      "repo": {
+        "full_name": "veox/jain-catboost"
+      },
+      "sha": "dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b"
+    },
+    "html_url": "/veox/jain-catboost/pull/2",
+    "id": "cf1a47f0-92fe-498d-b677-422873a7636c",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 2,
+    "source_repository": "veox/jain-catboost",
+    "state": "open",
+    "title": "release: declare CatBoost split.2 successor",
+    "updated_at": "2026-07-15T13:27:03.156818449Z",
+    "url": "/repos/veox/jain-catboost/pulls/2",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "repository": "veox/jain-catboost",
+  "request": {
+    "body": {
+      "actor": "codex",
+      "base": "main",
+      "body": "One-line VERSION successor required by immutable-tag identity validation. Exact head dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b; no tag is created by this PR.",
+      "draft": false,
+      "head": "codex/catboost-split2-version-20260715",
+      "title": "release: declare CatBoost split.2 successor"
+    },
+    "method": "POST",
+    "path": "/repos/veox/jain-catboost/pulls"
+  },
+  "response": {
+    "base": {
+      "label": "main",
+      "ref": "main",
+      "repo": {
+        "full_name": "veox/jain-catboost"
+      },
+      "sha": "8ffc9bc0d11b8a194089ba3dc140b1849d0870e5"
+    },
+    "body": "One-line VERSION successor required by immutable-tag identity validation. Exact head dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b; no tag is created by this PR.",
+    "created_at": "2026-07-15T13:27:03.156818449Z",
+    "draft": false,
+    "head": {
+      "label": "codex/catboost-split2-version-20260715",
+      "ref": "codex/catboost-split2-version-20260715",
+      "repo": {
+        "full_name": "veox/jain-catboost"
+      },
+      "sha": "dc4ad35bb2d15eae19b12b5706cef5ed7e5a318b"
+    },
+    "html_url": "/veox/jain-catboost/pull/2",
+    "id": "cf1a47f0-92fe-498d-b677-422873a7636c",
+    "merge_commit_sha": null,
+    "mergeable": false,
+    "mergeable_state": "blocked",
+    "merged": false,
+    "merged_at": null,
+    "number": 2,
+    "source_repository": "veox/jain-catboost",
+    "state": "open",
+    "title": "release: declare CatBoost split.2 successor",
+    "updated_at": "2026-07-15T13:27:03.156818449Z",
+    "url": "/repos/veox/jain-catboost/pulls/2",
+    "user": {
+      "login": "codex",
+      "type": "User",
+      "url": "/users/codex"
+    }
+  },
+  "schema_version": "jain.jeryu-pr-open/v1",
+  "status": "pass",
+  "timestamp_unix": 1784122023
+}

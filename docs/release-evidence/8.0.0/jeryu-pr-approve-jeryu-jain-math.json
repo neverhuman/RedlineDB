@@ -1,0 +1,166 @@
+{
+  "action": "applied-and-verified",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "readback": {
+    "description": "Exact-history replication of reviewed veox head 3e21cf6fe3edf5b157b85a643e53bd68f40f3279. Canonical main b0157e51 is an ancestor; source bytes and commits are unchanged. Requires fresh exact-head canonical checks and independent approval.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-15T19:19:08.726004525+00:00",
+      "head_sha": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+      "status": "pass"
+    },
+    "passport_hash": "passport:33fcf35e6a626a3911e5d52f6633b702d1d89369:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "b0157e514b0e5ba53409d7555197e3852bfb1a9b",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "638d348b-21b9-4216-b9f3-2859432729ab#12",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/canonical-sync-split2-20260715",
+      "head_sha": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 12,
+      "passport_hash": "passport:33fcf35e6a626a3911e5d52f6633b702d1d89369:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "638d348b-21b9-4216-b9f3-2859432729ab",
+        "name": "jain-math",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(math): replicate reviewed Prime Lime runtime to canonical Jeryu",
+      "updated_at": "2026-07-15T16:27:19.260888081+00:00"
+    }
+  },
+  "repository": "jeryu/jain-math",
+  "request": {
+    "body": {
+      "body_markdown": "Exact-head jankurai/proof and jain-math/required are green; approving protected merge.",
+      "evidence": null,
+      "expected_head_sha": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-math/pulls/12/reviews"
+  },
+  "response": {
+    "description": "Exact-history replication of reviewed veox head 3e21cf6fe3edf5b157b85a643e53bd68f40f3279. Canonical main b0157e51 is an ancestor; source bytes and commits are unchanged. Requires fresh exact-head canonical checks and independent approval.",
+    "merge_passport": {
+      "blockers": [],
+      "evaluated_at": "2026-07-15T19:19:08.713965702+00:00",
+      "head_sha": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+      "status": "pass"
+    },
+    "passport_hash": "passport:33fcf35e6a626a3911e5d52f6633b702d1d89369:Pass:0:0:0:1",
+    "summary": {
+      "agents": {
+        "active_sessions": 0,
+        "blockers": 0,
+        "evidence_packets": 0,
+        "proposed_patches": 0
+      },
+      "author": "codex",
+      "available_actions": [
+        {
+          "action_id": "pull.approve",
+          "label": "Approve",
+          "risk": null
+        },
+        {
+          "action_id": "pull.merge",
+          "label": "Merge",
+          "risk": "medium"
+        }
+      ],
+      "base_ref": "main",
+      "base_sha": "b0157e514b0e5ba53409d7555197e3852bfb1a9b",
+      "checks": {
+        "failing": 0,
+        "passing": 2,
+        "pending": 0,
+        "skipped": 1,
+        "total": 3
+      },
+      "draft": false,
+      "entity": {
+        "id": "638d348b-21b9-4216-b9f3-2859432729ab#12",
+        "kind": "pull_request"
+      },
+      "head_ref": "codex/canonical-sync-split2-20260715",
+      "head_sha": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+      "labels": [],
+      "mergeable": {
+        "can_merge": true,
+        "exact_head_sha": "33fcf35e6a626a3911e5d52f6633b702d1d89369",
+        "level": "mergeable",
+        "reason": null,
+        "required_gate": null
+      },
+      "number": 12,
+      "passport_hash": "passport:33fcf35e6a626a3911e5d52f6633b702d1d89369:Pass:0:0:0:1",
+      "repo": {
+        "host": "jeryu",
+        "id": "638d348b-21b9-4216-b9f3-2859432729ab",
+        "name": "jain-math",
+        "owner": "jeryu"
+      },
+      "review": {
+        "approvals": 1,
+        "changes_requested": 0,
+        "required_approvals": 1,
+        "unresolved_threads": 0,
+        "user_review_state": null
+      },
+      "state": "open",
+      "title": "release(math): replicate reviewed Prime Lime runtime to canonical Jeryu",
+      "updated_at": "2026-07-15T16:27:19.260888081+00:00"
+    }
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "pass",
+  "timestamp_unix": 1784143146
+}

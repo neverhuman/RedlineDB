@@ -1,0 +1,32 @@
+{
+  "schema_version": "jeryu.jankurai-local-provision/v1",
+  "timestamp": "2026-07-15T13:39:37Z",
+  "source": {
+    "forge_remote": "http://127.0.0.1:8787/git/jeryu/jankurai.git",
+    "local_bare_repository": "/home/ubuntu/.local/share/jeryu/git/jeryu/jankurai.git",
+    "tag": "v1.6.10-deadlang-precision",
+    "commit": "68bd6114373cf407a930011b76669af306cb0cb1",
+    "archive_sha256": "a5201012d7e8084c7d55e58f7ab861b618d856075ce1be4654fd2fb57b8ad96c",
+    "cargo_lock_sha256": "4dbd40adce41da8931636662cc827302bdb6b1f352ccdee3ee2c198b50fb0f1b"
+  },
+  "build": {
+    "cargo_locked": true,
+    "cargo_offline": true,
+    "git_config_global": "/dev/null",
+    "git_config_nosystem": true,
+    "rustc": "rustc 1.96.0 (ac68faa20 2026-05-25)",
+    "host": "x86_64-unknown-linux-gnu",
+    "binary_sha256": "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0",
+    "version": "jankurai 1.6.10"
+  },
+  "install": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "previous_binary": "/home/ubuntu/.jeryu/bin/jankurai.pre-local-reprovision-20260715T1332Z",
+    "previous_sha256": "ac55f4de44df74cc3267da67c9cdab3626ff41026a1a19a9d81e3087825bbf5f",
+    "installed_sha256": "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0",
+    "runner_selection": "split-host-ci prepends the governed binary directory to PATH"
+  },
+  "network_source": "local forge only",
+  "reactivated_after_refusal": "jeryu-jankurai-1.6.11-local-provision-refusal-20260715.json",
+  "status": "pass"
+}

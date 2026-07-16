@@ -1,0 +1,51 @@
+{
+  "attempt_id": "jeryu-deploy-9ff3297-20260715T1525Z",
+  "auditor": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "sha256": "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0",
+    "version": "jankurai 1.6.10"
+  },
+  "caps_applied": 0,
+  "clean_tracked_tree_at_finish": true,
+  "clean_tracked_tree_at_start": true,
+  "commit": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+  "failures": [],
+  "hard_findings": 0,
+  "lane": {
+    "conclusion": "success",
+    "failure_reason": null
+  },
+  "mode": "evidence",
+  "operation": "jankurai-evidence",
+  "report": "/tmp/codex-jeryu-score-9ff3297/jeryu-deploy/.jankurai/repo-score.json",
+  "report_identity": {
+    "allowed_drop": 0.0,
+    "auditor_version": "1.6.10",
+    "baseline_score": 85.0,
+    "commit": "9ff3297f909d7556ffda64233e12ab9ace2d73a0",
+    "computed_policy_fingerprint": "sha256:50cc74c7ef48ff1a4fa330c8fc1d89336c004702727055499953d8e38ae06afa",
+    "conformance_blockers": [],
+    "conformance_decision": "pass",
+    "decision_passed": true,
+    "dirty_worktree": false,
+    "git_dirty_worktree": false,
+    "git_head": "9ff3297",
+    "input_fingerprint": "sha256:1ca175b7d68596d06026cc949b7e9c9be7de80b9ec68a3773e82470ee31481c0",
+    "minimum_score": 85.0,
+    "policy_auditor_version": "1.6.10",
+    "policy_fingerprint": "sha256:50cc74c7ef48ff1a4fa330c8fc1d89336c004702727055499953d8e38ae06afa",
+    "policy_path": "./agent/audit-policy.toml",
+    "ratchet_passed": true,
+    "repo": ".",
+    "required_tool": "jankurai",
+    "required_tool_version": "1.6.10"
+  },
+  "report_sha256": "4cc88c9933bf5407998d9e2bd4dbeadd3cbec5283f8ecbff934e4d9a161c890a",
+  "repository": "jeryu-deploy",
+  "run_id": "1784129134",
+  "schema_version": "jain.jankurai-exact-sha-evidence/v1",
+  "score": 85.0,
+  "status": "pass",
+  "timestamp_unix": 1784129197,
+  "worktree": "/tmp/codex-jeryu-score-9ff3297/jeryu-deploy"
+}

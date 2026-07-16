@@ -2,11 +2,11 @@
   "action": "verified",
   "mode": "read-only",
   "operation": "jeryu-local protection-readback",
-  "repository": "jeryu/jain-starforge",
+  "repository": "veox/jain-smartcluster",
   "request": {
     "body": null,
     "method": "GET",
-    "path": "/repos/jeryu/jain-starforge/branches/main/protection"
+    "path": "/repos/veox/jain-smartcluster/branches/main/protection"
   },
   "response": {
     "allow_deletions": {
@@ -32,14 +32,14 @@
     },
     "required_status_checks": {
       "contexts": [
-        "jain-starforge/required"
+        "jain-smartcluster/required"
       ],
       "strict": true
     },
-    "updated_at": "2026-07-13T11:33:57.342154457Z",
-    "url": "/repos/jeryu/jain-starforge/branches/main/protection"
+    "updated_at": "2026-07-14T02:50:15.252719522Z",
+    "url": "/repos/veox/jain-smartcluster/branches/main/protection"
   },
   "schema_version": "jain.jeryu-lifecycle/v1",
   "status": "pass",
-  "timestamp_unix": 1784135717
+  "timestamp_unix": 1784122521
 }

@@ -12,6 +12,7 @@ const RELEASE_VERSION: &str = "8.0.0";
 const LOCAL_JERYU_BASE: &str = "http://127.0.0.1:8787";
 const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
 const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
+const RELEASE_PROTECTION_POLICY: &str = "immutable-main-v1";
 
 #[derive(Debug, Clone)]
 struct Repo {
@@ -141,6 +142,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("managed-repos") => managed_repos_command(args.collect())?,
         Some("release-cargo-commands") => release_cargo_commands_command(args.collect())?,
         Some("sync-derived-manifests") => sync_derived_manifests_command(args.collect())?,
+        Some("jankurai-evidence") => jankurai_evidence_command(args.collect())?,
+        Some("authority-parity-evidence") => authority_parity_evidence_command(args.collect())?,
         Some("validate-manifest") => validate_manifest_command(args.collect())?,
         Some("validate-family") => preflight(args.collect())?,
         Some("validate-family-lock") => validate_family_lock(args.collect())?,
@@ -154,7 +157,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | authority-parity-evidence --repo PATH --manifest PATH --canonical-slug OWNER/REPO --mirror-slug OWNER/REPO --required-check CONTEXT --canonical-remote URL --mirror-remote URL --canonical-protection PATH --mirror-protection PATH --expected-main SHA --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --manifest PATH --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -631,12 +634,18 @@ fn declared_nested_manifest_path(data: &toml::Value, manifest: &Path) -> Option<
 fn sync_derived_manifests_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let mut manifest = root.join("repos.manifest.toml");
+    let mut output_root = None;
     let mut receipt = None;
     let mut apply = false;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--output-root" => {
+                output_root = Some(PathBuf::from(
+                    iter.next().ok_or("--output-root needs a path")?,
+                ))
+            }
             "--receipt" => {
                 receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
             }
@@ -660,6 +669,13 @@ fn sync_derived_manifests_command(args: Vec<String>) -> Result<(), Box<dyn std::
         let canonical_hash = manifest_sha256(&manifest)?;
         let mut rows = Vec::new();
         for (target, path) in derived_manifest_targets(&data, &manifest)? {
+            let path = output_root.as_ref().map_or(path, |root| {
+                root.join(match target.as_str() {
+                    "portal" => "jain/repos.manifest.toml",
+                    "deploy" => "jain-deploy/repos.manifest.toml",
+                    _ => unreachable!("derived target is validated by derived_manifest_targets"),
+                })
+            });
             let rendered = render_derived_manifest(&data, &manifest, &target, &canonical_hash)?;
             let expected_sha256 = sha256_bytes(rendered.as_bytes());
             let current = fs::read(&path).ok();
@@ -784,6 +800,619 @@ fn sha256_bytes(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
+fn is_full_hex(value: &str, length: usize) -> bool {
+    value.len() == length && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn release_tree_checksum(repo: &Path, commit: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(["archive", "--format=tar", commit])
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "git archive failed for {commit}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+    Ok(sha256_bytes(&output.stdout))
+}
+
+fn jankurai_evidence_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repository = None;
+    let mut commit = None;
+    let mut worktree = None;
+    let mut report = None;
+    let mut auditor = None;
+    let mut attempt_id = None;
+    let mut lane_conclusion = None;
+    let mut lane_failure_reason = None;
+    let mut clean_tracked_tree_start = None;
+    let mut receipt = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repository" => repository = Some(iter.next().ok_or("--repository needs a name")?),
+            "--commit" => commit = Some(iter.next().ok_or("--commit needs a SHA")?),
+            "--worktree" => {
+                worktree = Some(PathBuf::from(iter.next().ok_or("--worktree needs a path")?))
+            }
+            "--report" => report = Some(PathBuf::from(iter.next().ok_or("--report needs a path")?)),
+            "--auditor" => {
+                auditor = Some(PathBuf::from(iter.next().ok_or("--auditor needs a path")?))
+            }
+            "--attempt-id" => attempt_id = Some(iter.next().ok_or("--attempt-id needs a value")?),
+            "--lane-conclusion" => {
+                lane_conclusion = Some(iter.next().ok_or("--lane-conclusion needs a value")?)
+            }
+            "--lane-failure-reason" => {
+                lane_failure_reason =
+                    Some(iter.next().ok_or("--lane-failure-reason needs a value")?)
+            }
+            "--clean-tracked-tree-start" => {
+                clean_tracked_tree_start = Some(
+                    match iter
+                        .next()
+                        .ok_or("--clean-tracked-tree-start needs true or false")?
+                        .as_str()
+                    {
+                        "true" => true,
+                        "false" => false,
+                        _ => return Err("--clean-tracked-tree-start needs true or false".into()),
+                    },
+                )
+            }
+            "--receipt" => {
+                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            value => return Err(format!("unknown jankurai-evidence argument: {value}").into()),
+        }
+    }
+    let repository = repository.ok_or("jankurai-evidence requires --repository")?;
+    if repository.is_empty()
+        || !repository
+            .bytes()
+            .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+    {
+        return Err("--repository must be a lowercase repository name".into());
+    }
+    let commit = commit.ok_or("jankurai-evidence requires --commit")?;
+    if !is_full_hex(&commit, 40) {
+        return Err("--commit must be a full 40-character Git SHA".into());
+    }
+    let worktree = worktree
+        .ok_or("jankurai-evidence requires --worktree")?
+        .canonicalize()?;
+    if worktree.file_name().and_then(|name| name.to_str()) != Some(repository.as_str()) {
+        return Err("exact-SHA worktree basename must match --repository".into());
+    }
+    let report = report
+        .ok_or("jankurai-evidence requires --report")?
+        .canonicalize()?;
+    if !report.starts_with(&worktree) {
+        return Err("Jankurai report must be inside the exact-SHA worktree".into());
+    }
+    let auditor = auditor
+        .ok_or("jankurai-evidence requires --auditor")?
+        .canonicalize()?;
+    let auditor_bytes = fs::read(&auditor)?;
+    let auditor_output = Command::new(&auditor).arg("--version").output()?;
+    if !auditor_output.status.success() {
+        return Err("Jankurai auditor did not report its version".into());
+    }
+    let auditor_version = String::from_utf8(auditor_output.stdout)?;
+    let auditor_version = auditor_version.trim();
+    if auditor_version.is_empty() {
+        return Err("Jankurai auditor reported an empty version".into());
+    }
+    let auditor_release = auditor_version
+        .split_whitespace()
+        .last()
+        .ok_or("Jankurai auditor version is malformed")?;
+    let attempt_id = attempt_id.ok_or("jankurai-evidence requires --attempt-id")?;
+    if attempt_id.is_empty()
+        || !attempt_id
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.'))
+    {
+        return Err("--attempt-id must be a portable non-empty identifier".into());
+    }
+    let lane_conclusion = lane_conclusion.ok_or("jankurai-evidence requires --lane-conclusion")?;
+    if !matches!(lane_conclusion.as_str(), "success" | "failure") {
+        return Err("--lane-conclusion must be success or failure".into());
+    }
+    if lane_conclusion == "failure" && lane_failure_reason.as_deref().is_none_or(str::is_empty) {
+        return Err("failed evidence requires --lane-failure-reason".into());
+    }
+    let clean_tracked_tree_start =
+        clean_tracked_tree_start.ok_or("jankurai-evidence requires --clean-tracked-tree-start")?;
+    let receipt = receipt.ok_or("jankurai-evidence requires --receipt")?;
+    let checkout_commit = git_output(&worktree, &["rev-parse", "--verify", "HEAD^{commit}"])?;
+    if checkout_commit.trim() != commit {
+        return Err(format!(
+            "Jankurai worktree HEAD {} does not match requested commit {commit}",
+            checkout_commit.trim()
+        )
+        .into());
+    }
+
+    let report_bytes = fs::read(&report)?;
+    let score_report: JsonValue = serde_json::from_slice(&report_bytes)?;
+    let report_repository = score_report
+        .get("repo")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing repo identity")?;
+    if report_repository != "." {
+        return Err("score report must identify the exact worktree as repo=.".into());
+    }
+    let report_head = score_report
+        .get("git")
+        .and_then(|git| git.get("head"))
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing git.head")?;
+    let report_commit = resolve_commit(&worktree, report_head)?;
+    if report_commit != commit {
+        return Err(format!(
+            "score report git.head resolves to {report_commit}, expected {commit}"
+        )
+        .into());
+    }
+    let report_run_id = score_report
+        .get("run_id")
+        .and_then(JsonValue::as_str)
+        .filter(|value| !value.is_empty())
+        .ok_or("score report is missing run_id")?;
+    let report_auditor_version = score_report
+        .get("auditor_version")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing auditor_version")?;
+    let input_fingerprint = score_report
+        .get("input_fingerprint")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing input_fingerprint")?;
+    let policy_fingerprint = score_report
+        .get("policy_fingerprint")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing policy_fingerprint")?;
+    if !is_sha256_fingerprint(input_fingerprint) || !is_sha256_fingerprint(policy_fingerprint) {
+        return Err("score report fingerprints must be non-zero sha256 identities".into());
+    }
+    let score = score_report
+        .get("score")
+        .and_then(JsonValue::as_f64)
+        .ok_or("score report is missing numeric score")?;
+    let hard_value = score_report
+        .get("decision")
+        .and_then(|value| value.get("hard_findings"))
+        .or_else(|| score_report.get("hard_findings"));
+    let hard_findings = match hard_value {
+        Some(JsonValue::Array(values)) => values.len() as u64,
+        Some(value) => value
+            .as_u64()
+            .ok_or("hard_findings must be an array or integer")?,
+        None => return Err("score report is missing hard_findings".into()),
+    };
+    let caps_value = score_report
+        .get("caps_applied")
+        .ok_or("score report is missing caps_applied")?;
+    let caps_applied = match caps_value {
+        JsonValue::Array(values) => values.len() as u64,
+        value => value
+            .as_u64()
+            .ok_or("caps_applied must be an array or integer")?,
+    };
+    let decision = score_report
+        .get("decision")
+        .ok_or("score report is missing decision")?;
+    let decision_passed = decision.get("passed").and_then(JsonValue::as_bool) == Some(true);
+    let minimum_score = decision
+        .get("minimum_score")
+        .and_then(JsonValue::as_f64)
+        .ok_or("score report decision is missing minimum_score")?;
+    let ratchet = decision
+        .get("ratchet")
+        .ok_or("score report decision is missing ratchet")?;
+    let ratchet_passed = ratchet.get("passed").and_then(JsonValue::as_bool) == Some(true);
+    let baseline_score = ratchet
+        .get("baseline_score")
+        .and_then(JsonValue::as_f64)
+        .ok_or("score report ratchet is missing baseline_score")?;
+    let allowed_drop = ratchet
+        .get("allowed_drop")
+        .and_then(JsonValue::as_f64)
+        .ok_or("score report ratchet is missing allowed_drop")?;
+    let conformance_decision = score_report
+        .get("conformance_decision")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report is missing conformance_decision")?;
+    let conformance_blockers = score_report
+        .get("conformance_blockers")
+        .and_then(JsonValue::as_array)
+        .ok_or("score report is missing conformance_blockers")?;
+    let report_dirty = score_report
+        .get("dirty_worktree")
+        .and_then(JsonValue::as_bool)
+        .ok_or("score report is missing dirty_worktree")?;
+    let report_git_dirty = score_report
+        .get("git")
+        .and_then(|git| git.get("dirty_worktree"))
+        .and_then(JsonValue::as_bool)
+        .ok_or("score report is missing git.dirty_worktree")?;
+    let report_policy = score_report
+        .get("policy")
+        .ok_or("score report is missing policy identity")?;
+    let report_policy_path = report_policy
+        .get("path")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report policy is missing path")?;
+    let report_policy_auditor = report_policy
+        .get("auditor_version")
+        .and_then(JsonValue::as_str)
+        .ok_or("score report policy is missing auditor_version")?;
+    let policy_path = worktree.join(report_policy_path);
+    let governed_policy_path = worktree.join("agent/audit-policy.toml");
+    if policy_path.canonicalize()? != governed_policy_path.canonicalize()? {
+        return Err("score report policy path is not the governed repository policy".into());
+    }
+    let policy_bytes = fs::read(&governed_policy_path)?;
+    let policy_data: toml::Value = String::from_utf8(policy_bytes.clone())?.parse()?;
+    let computed_policy_fingerprint = format!("sha256:{}", sha256_bytes(&policy_bytes));
+    let required_tool = string(&policy_data, "required_tool")
+        .ok_or("governed audit policy is missing required_tool")?;
+    let required_tool_version = string(&policy_data, "required_tool_version")
+        .ok_or("governed audit policy is missing required_tool_version")?;
+    let clean_tracked_tree_finish = git_tracked_tree_clean(&worktree)?;
+
+    let mut evidence = receipt_header(
+        "jain.jankurai-exact-sha-evidence/v1",
+        "jankurai-evidence",
+        false,
+    );
+    evidence["mode"] = json!("evidence");
+    evidence["attempt_id"] = json!(attempt_id);
+    evidence["run_id"] = json!(report_run_id);
+    evidence["lane"] = json!({
+        "conclusion": lane_conclusion,
+        "failure_reason": lane_failure_reason,
+    });
+    evidence["repository"] = json!(repository);
+    evidence["commit"] = json!(commit);
+    evidence["worktree"] = json!(worktree);
+    evidence["report"] = json!(report);
+    evidence["report_sha256"] = json!(sha256_bytes(&report_bytes));
+    evidence["report_identity"] = json!({
+        "repo": report_repository,
+        "git_head": report_head,
+        "commit": report_commit,
+        "input_fingerprint": input_fingerprint,
+        "policy_fingerprint": policy_fingerprint,
+        "computed_policy_fingerprint": computed_policy_fingerprint,
+        "required_tool": required_tool,
+        "required_tool_version": required_tool_version,
+        "auditor_version": report_auditor_version,
+        "policy_path": report_policy_path,
+        "policy_auditor_version": report_policy_auditor,
+        "dirty_worktree": report_dirty,
+        "git_dirty_worktree": report_git_dirty,
+        "decision_passed": decision_passed,
+        "ratchet_passed": ratchet_passed,
+        "minimum_score": minimum_score,
+        "baseline_score": baseline_score,
+        "allowed_drop": allowed_drop,
+        "conformance_decision": conformance_decision,
+        "conformance_blockers": conformance_blockers,
+    });
+    evidence["score"] = json!(score);
+    evidence["hard_findings"] = json!(hard_findings);
+    evidence["caps_applied"] = json!(caps_applied);
+    evidence["clean_tracked_tree_at_start"] = json!(clean_tracked_tree_start);
+    evidence["clean_tracked_tree_at_finish"] = json!(clean_tracked_tree_finish);
+    evidence["auditor"] = json!({
+        "path": auditor,
+        "version": auditor_version,
+        "sha256": sha256_bytes(&auditor_bytes),
+    });
+    let mut failures = Vec::new();
+    if !clean_tracked_tree_start {
+        failures.push("exact-SHA worktree had tracked changes before CI".to_owned());
+    }
+    if !clean_tracked_tree_finish {
+        failures.push("exact-SHA worktree had tracked changes after CI".to_owned());
+    }
+    if report_dirty || report_git_dirty {
+        failures.push("Jankurai audited a dirty tracked worktree".to_owned());
+    }
+    if report_auditor_version != auditor_release || report_policy_auditor != auditor_release {
+        failures.push(format!(
+            "auditor version mismatch: executable={auditor_release} report={report_auditor_version} policy={report_policy_auditor}"
+        ));
+    }
+    if policy_fingerprint != computed_policy_fingerprint {
+        failures
+            .push("Jankurai policy fingerprint does not match agent/audit-policy.toml".to_owned());
+    }
+    if required_tool != "jankurai" || required_tool_version != auditor_release {
+        failures.push(format!(
+            "governed policy tool mismatch: required={required_tool}@{required_tool_version} executable={auditor_release}"
+        ));
+    }
+    if !decision_passed {
+        failures.push("Jankurai decision.passed is not true".to_owned());
+    }
+    if score < minimum_score {
+        failures.push(format!(
+            "score {score} is below governed floor {minimum_score}"
+        ));
+    }
+    if !ratchet_passed || score < baseline_score - allowed_drop {
+        failures.push(format!(
+            "Jankurai ratchet failed: score={score} baseline={baseline_score} allowed_drop={allowed_drop}"
+        ));
+    }
+    if conformance_decision != "pass" || !conformance_blockers.is_empty() {
+        failures.push("Jankurai conformance did not pass without blockers".to_owned());
+    }
+    if hard_findings != 0 {
+        failures.push(format!("hard findings present: {hard_findings}"));
+    }
+    if caps_applied != 0 {
+        failures.push(format!("caps applied: {caps_applied}"));
+    }
+    if lane_conclusion == "failure" {
+        failures.push(format!(
+            "authoritative lane failed: {}",
+            lane_failure_reason
+                .as_deref()
+                .unwrap_or("unspecified failure")
+        ));
+    }
+    evidence["failures"] = json!(failures);
+    let result = if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(failures.join("; ").into())
+    };
+    finish_receipted_operation(&receipt, &mut evidence, result)
+}
+
+fn is_sha256_fingerprint(value: &str) -> bool {
+    value
+        .strip_prefix("sha256:")
+        .is_some_and(|digest| is_full_hex(digest, 64) && !digest.bytes().all(|byte| byte == b'0'))
+}
+
+fn git_tracked_tree_clean(repo: &Path) -> Result<bool, Box<dyn std::error::Error>> {
+    for args in [
+        ["diff", "--quiet", "HEAD", "--"].as_slice(),
+        ["diff", "--cached", "--quiet"].as_slice(),
+    ] {
+        let status = Command::new("git")
+            .arg("-C")
+            .arg(repo)
+            .args(args)
+            .status()?;
+        if !status.success() {
+            return Ok(false);
+        }
+    }
+    Ok(true)
+}
+
+fn normalized_protection_receipt(
+    path: &Path,
+    expected_repository: &str,
+    required_check: &str,
+) -> Result<(JsonValue, String), Box<dyn std::error::Error>> {
+    let bytes = fs::read(path)?;
+    let receipt: JsonValue = serde_json::from_slice(&bytes)?;
+    if receipt.get("status").and_then(JsonValue::as_str) != Some("pass") {
+        return Err(format!("protection readback did not pass: {}", path.display()).into());
+    }
+    let expected_path = format!("/repos/{expected_repository}/branches/main/protection");
+    if receipt.get("mode").and_then(JsonValue::as_str) != Some("read-only")
+        || receipt.get("repository").and_then(JsonValue::as_str) != Some(expected_repository)
+        || receipt
+            .get("request")
+            .and_then(|request| request.get("method"))
+            .and_then(JsonValue::as_str)
+            != Some("GET")
+        || receipt
+            .get("request")
+            .and_then(|request| request.get("path"))
+            .and_then(JsonValue::as_str)
+            != Some(expected_path.as_str())
+    {
+        return Err(format!(
+            "protection receipt {} is not a read-only readback for {expected_repository}",
+            path.display()
+        )
+        .into());
+    }
+    let mut policy = receipt
+        .get("response")
+        .and_then(JsonValue::as_object)
+        .cloned()
+        .ok_or_else(|| format!("protection readback has no response: {}", path.display()))?;
+    if policy.get("url").and_then(JsonValue::as_str) != Some(expected_path.as_str()) {
+        return Err(format!(
+            "protection response {} is not bound to {expected_repository}",
+            path.display()
+        )
+        .into());
+    }
+    validate_protection_policy(&JsonValue::Object(policy.clone()), required_check)?;
+    policy.remove("updated_at");
+    policy.remove("url");
+    Ok((JsonValue::Object(policy), sha256_bytes(&bytes)))
+}
+
+fn authority_parity_evidence_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repo = None;
+    let mut manifest = None;
+    let mut canonical_slug = None;
+    let mut mirror_slug = None;
+    let mut required_check = None;
+    let mut canonical_remote = None;
+    let mut mirror_remote = None;
+    let mut canonical_protection = None;
+    let mut mirror_protection = None;
+    let mut expected_main = None;
+    let mut receipt = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repo" => repo = Some(PathBuf::from(iter.next().ok_or("--repo needs a path")?)),
+            "--manifest" => {
+                manifest = Some(PathBuf::from(iter.next().ok_or("--manifest needs a path")?))
+            }
+            "--canonical-slug" => {
+                canonical_slug = Some(iter.next().ok_or("--canonical-slug needs owner/name")?)
+            }
+            "--mirror-slug" => {
+                mirror_slug = Some(iter.next().ok_or("--mirror-slug needs owner/name")?)
+            }
+            "--required-check" => {
+                required_check = Some(iter.next().ok_or("--required-check needs a context")?)
+            }
+            "--canonical-remote" => {
+                canonical_remote = Some(iter.next().ok_or("--canonical-remote needs a URL")?)
+            }
+            "--mirror-remote" => {
+                mirror_remote = Some(iter.next().ok_or("--mirror-remote needs a URL")?)
+            }
+            "--canonical-protection" => {
+                canonical_protection = Some(PathBuf::from(
+                    iter.next().ok_or("--canonical-protection needs a path")?,
+                ))
+            }
+            "--mirror-protection" => {
+                mirror_protection = Some(PathBuf::from(
+                    iter.next().ok_or("--mirror-protection needs a path")?,
+                ))
+            }
+            "--expected-main" => {
+                expected_main = Some(iter.next().ok_or("--expected-main needs a SHA")?)
+            }
+            "--receipt" => {
+                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            value => {
+                return Err(format!("unknown authority-parity-evidence argument: {value}").into())
+            }
+        }
+    }
+    let repo = repo
+        .ok_or("authority-parity-evidence requires --repo")?
+        .canonicalize()?;
+    let manifest = manifest
+        .ok_or("authority-parity-evidence requires --manifest")?
+        .canonicalize()?;
+    let canonical_slug =
+        canonical_slug.ok_or("authority-parity-evidence requires --canonical-slug")?;
+    let mirror_slug = mirror_slug.ok_or("authority-parity-evidence requires --mirror-slug")?;
+    validate_jeryu_repo_slug(&canonical_slug)?;
+    validate_jeryu_repo_slug(&mirror_slug)?;
+    if canonical_slug == mirror_slug {
+        return Err("canonical and mirror slugs must be distinct".into());
+    }
+    let required_check =
+        required_check.ok_or("authority-parity-evidence requires --required-check")?;
+    let canonical_remote =
+        canonical_remote.ok_or("authority-parity-evidence requires --canonical-remote")?;
+    let mirror_remote =
+        mirror_remote.ok_or("authority-parity-evidence requires --mirror-remote")?;
+    if canonical_remote == mirror_remote {
+        return Err("canonical and mirror remotes must be distinct".into());
+    }
+    let expected_canonical_remote = format!("{LOCAL_JERYU_BASE}/git/{canonical_slug}.git");
+    let expected_mirror_remote = format!("{LOCAL_JERYU_BASE}/git/{mirror_slug}.git");
+    if canonical_remote != expected_canonical_remote || mirror_remote != expected_mirror_remote {
+        return Err("authority parity remotes do not match their declared slugs".into());
+    }
+    let canonical_protection =
+        canonical_protection.ok_or("authority-parity-evidence requires --canonical-protection")?;
+    let mirror_protection =
+        mirror_protection.ok_or("authority-parity-evidence requires --mirror-protection")?;
+    let expected_main =
+        expected_main.ok_or("authority-parity-evidence requires --expected-main")?;
+    if !is_full_hex(&expected_main, 40) {
+        return Err("--expected-main must be a full 40-character Git SHA".into());
+    }
+    let receipt = receipt.ok_or("authority-parity-evidence requires --receipt")?;
+    let mut evidence = receipt_header(
+        "jain.local-forge-authority-parity/v1",
+        "authority-parity-evidence",
+        false,
+    );
+    evidence["mode"] = json!("evidence");
+    evidence["repository"] = json!(repo);
+    evidence["authority"] = json!({
+        "manifest": manifest,
+        "manifest_sha256": manifest_sha256(&manifest)?,
+        "canonical_slug": canonical_slug,
+        "mirror_slug": mirror_slug,
+        "required_check": required_check,
+    });
+    evidence["canonical_remote"] = json!(&canonical_remote);
+    evidence["mirror_remote"] = json!(&mirror_remote);
+    evidence["expected_main"] = json!(&expected_main);
+    let result = (|| {
+        let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+        validate_manifest_data(&data, &manifest, false)?;
+        let authority_entry = manifest_repos(&data)?
+            .into_iter()
+            .find(|entry| {
+                string(entry, "path")
+                    .and_then(|path| PathBuf::from(path).canonicalize().ok())
+                    .as_deref()
+                    == Some(repo.as_path())
+            })
+            .ok_or("authority manifest does not contain the parity repository")?;
+        if string(authority_entry, "forge_slug")
+            .or_else(|| string(authority_entry, "jeryu_slug"))
+            .as_deref()
+            != Some(canonical_slug.as_str())
+            || declared_remote(authority_entry).as_deref() != Some(canonical_remote.as_str())
+            || string(authority_entry, "required_check").as_deref() != Some(required_check.as_str())
+        {
+            return Err("canonical parity identity differs from the authority manifest".into());
+        }
+        let canonical_main = ls_remote_ref(&repo, &canonical_remote, "refs/heads/main")?;
+        let mirror_main = ls_remote_ref(&repo, &mirror_remote, "refs/heads/main")?;
+        evidence["main"] = json!({
+            "canonical": &canonical_main,
+            "mirror": &mirror_main,
+        });
+        if canonical_main.as_deref() != Some(expected_main.as_str())
+            || mirror_main.as_deref() != Some(expected_main.as_str())
+        {
+            return Err(
+                "canonical and mirror main do not equal the expected protected commit".into(),
+            );
+        }
+
+        let (canonical_policy, canonical_receipt_sha256) =
+            normalized_protection_receipt(&canonical_protection, &canonical_slug, &required_check)?;
+        let (mirror_policy, mirror_receipt_sha256) =
+            normalized_protection_receipt(&mirror_protection, &mirror_slug, &required_check)?;
+        evidence["protection"] = json!({
+            "canonical_receipt": canonical_protection,
+            "canonical_receipt_sha256": canonical_receipt_sha256,
+            "mirror_receipt": mirror_protection,
+            "mirror_receipt_sha256": mirror_receipt_sha256,
+            "normalized_policy": &canonical_policy,
+            "normalized_policy_sha256": sha256_bytes(&serde_json::to_vec(&canonical_policy)?),
+        });
+        if canonical_policy != mirror_policy {
+            return Err("canonical and mirror normalized protection policies differ".into());
+        }
+        Ok(())
+    })();
+    finish_receipted_operation(&receipt, &mut evidence, result)
+}
+
 fn write_atomic_bytes(path: &Path, bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(parent) = path
         .parent()
@@ -840,6 +1469,15 @@ fn validate_manifest_data(
     }
     if string(data, "release_version").as_deref() != Some(RELEASE_VERSION) {
         errors.push(format!("release_version must be {RELEASE_VERSION}"));
+    }
+    if string(data, "status").as_deref() != Some("candidate") {
+        errors.push("status must remain candidate".to_owned());
+    }
+    if data.get("formal_ga").and_then(toml::Value::as_bool) != Some(false) {
+        errors.push("formal_ga must remain false".to_owned());
+    }
+    if string(data, "sagemaker").as_deref() != Some("N/A") {
+        errors.push("sagemaker must remain N/A".to_owned());
     }
     if string(data, "repo_family").as_deref() != Some("jain-split") {
         errors.push("repo_family must be jain-split".to_owned());
@@ -904,11 +1542,13 @@ fn validate_manifest_data(
         if string(raw, "required_check").as_deref() != Some(format!("{name}/required").as_str()) {
             errors.push(format!("{name}: required_check must be {name}/required"));
         }
-        if string(raw, "current_tag").as_deref()
+        if has_release_metadata(raw) {
+            validate_release_metadata(data, raw, &name, "split", Some(&path), &mut errors);
+        } else if string(raw, "current_tag").as_deref()
             != Some(format!("{name}-v{RELEASE_VERSION}-split.0").as_str())
         {
             errors.push(format!(
-                "{name}: current_tag must be {name}-v{RELEASE_VERSION}-split.0"
+                "{name}: current_tag must be {name}-v{RELEASE_VERSION}-split.0 or carry an exact release binding"
             ));
         }
         if raw.get("has_jeryu_std").and_then(toml::Value::as_bool) != Some(true) {
@@ -973,9 +1613,21 @@ fn validate_manifest_data(
         if declared_remote(raw).as_deref() != Some(expected_infra_remote.as_str()) {
             errors.push("jain-smartcluster: remote must use the jain-split namespace".to_owned());
         }
+        if has_release_metadata(raw) {
+            let path = string(raw, "path").map(PathBuf::from);
+            validate_release_metadata(
+                data,
+                raw,
+                "jain-smartcluster",
+                "split",
+                path.as_deref(),
+                &mut errors,
+            );
+        }
         if raw.get("family_registered").and_then(toml::Value::as_bool) != Some(true) {
             errors.push("jain-smartcluster: family_registered must be true".to_owned());
         }
+        validate_smartcluster_source_authority(raw, &mut errors);
     }
     let control = data
         .get("control_plane")
@@ -986,6 +1638,17 @@ fn validate_manifest_data(
     if string(control, "required_check").as_deref() != Some("jain-split-ops/required") {
         errors.push("control_plane.required_check must be jain-split-ops/required".to_owned());
     }
+    if has_release_metadata(control) {
+        let control_path = string(control, "path").map(PathBuf::from);
+        validate_release_metadata(
+            data,
+            control,
+            "jain-split-ops",
+            "split",
+            control_path.as_deref(),
+            &mut errors,
+        );
+    }
     let redline = data
         .get("external_dependencies")
         .and_then(|value| value.get("redline"))
@@ -995,6 +1658,9 @@ fn validate_manifest_data(
             != Some("http://127.0.0.1:8787/git/jeryu/redline-core.git")
     {
         errors.push("redline dependency must use the immutable local-Jeryu v4.1.0 tag".to_owned());
+    }
+    if has_release_metadata(redline) {
+        validate_release_metadata(data, redline, "redline-core", "jain", None, &mut errors);
     }
     let nested = data
         .get("nested_families")
@@ -1031,6 +1697,147 @@ fn validate_manifest_data(
         .into());
     }
     Ok(())
+}
+
+fn has_release_metadata(raw: &toml::Value) -> bool {
+    [
+        "product_version",
+        "tag_revision",
+        "release_commit",
+        "release_checksum_sha256",
+        "protection_policy",
+    ]
+    .iter()
+    .any(|key| raw.get(*key).is_some())
+}
+
+fn validate_release_metadata(
+    manifest: &toml::Value,
+    raw: &toml::Value,
+    name: &str,
+    revision_namespace: &str,
+    checkout: Option<&Path>,
+    errors: &mut Vec<String>,
+) {
+    let product_version = string(raw, "product_version");
+    let revision = raw.get("tag_revision").and_then(toml::Value::as_integer);
+    let tag = string(raw, "immutable_tag").or_else(|| string(raw, "current_tag"));
+    match (&product_version, revision, &tag) {
+        (Some(product_version), Some(revision), Some(tag)) if revision >= 0 => {
+            let expected = format!("{name}-v{product_version}-{revision_namespace}.{revision}");
+            if tag != &expected {
+                errors.push(format!(
+                    "{name}: release tag must be {expected}, found {tag}"
+                ));
+            }
+            if revision_namespace == "split" && product_version != RELEASE_VERSION {
+                errors.push(format!(
+                    "{name}: product_version must be {RELEASE_VERSION}, found {product_version}"
+                ));
+            }
+        }
+        (None, _, _) => errors.push(format!("{name}: product_version is required")),
+        (_, None, _) => errors.push(format!("{name}: tag_revision is required")),
+        (_, Some(revision), _) if revision < 0 => {
+            errors.push(format!("{name}: tag_revision must be non-negative"));
+        }
+        (_, _, None) => errors.push(format!("{name}: exact release tag is required")),
+        _ => {}
+    }
+
+    let policy_name = string(raw, "protection_policy");
+    if policy_name.as_deref() != Some(RELEASE_PROTECTION_POLICY) {
+        errors.push(format!(
+            "{name}: protection_policy must be {RELEASE_PROTECTION_POLICY}"
+        ));
+    } else if let Some(policy) = manifest
+        .get("protection_policies")
+        .and_then(|policies| policies.get(RELEASE_PROTECTION_POLICY))
+    {
+        let bool_field = |key: &str| policy.get(key).and_then(toml::Value::as_bool);
+        if policy
+            .get("required_approvals")
+            .and_then(toml::Value::as_integer)
+            != Some(1)
+            || bool_field("required_status_check") != Some(true)
+            || bool_field("linear_history") != Some(true)
+            || bool_field("enforce_admins") != Some(true)
+            || bool_field("allow_force_push") != Some(false)
+            || bool_field("allow_deletions") != Some(false)
+        {
+            errors.push(format!(
+                "{name}: {RELEASE_PROTECTION_POLICY} is not an immutable reviewed-main policy"
+            ));
+        }
+    } else {
+        errors.push(format!(
+            "{name}: manifest is missing protection_policies.{RELEASE_PROTECTION_POLICY}"
+        ));
+    }
+
+    let release_commit = string(raw, "release_commit");
+    let release_checksum = string(raw, "release_checksum_sha256");
+    match (release_commit.as_deref(), release_checksum.as_deref()) {
+        (Some("PENDING"), Some("PENDING")) => {}
+        (Some(commit), Some(checksum))
+            if is_full_hex(commit, 40) && is_full_hex(checksum, 64) =>
+        {
+            if let (Some(checkout), Some(tag)) = (checkout, tag.as_deref()) {
+                if checkout.is_dir() {
+                    let tag_ref = format!("refs/tags/{tag}^{{}}");
+                    if let Ok(actual) = git_output(checkout, &["rev-parse", &tag_ref]) {
+                        if actual.trim() != commit {
+                            errors.push(format!(
+                                "{name}: release_commit {commit} differs from {tag} at {}",
+                                actual.trim()
+                            ));
+                        }
+                    }
+                    match release_tree_checksum(checkout, commit) {
+                        Ok(actual) if actual == checksum => {}
+                        Ok(actual) => errors.push(format!(
+                            "{name}: release_checksum_sha256 {checksum} differs from {actual}"
+                        )),
+                        Err(error) => errors.push(format!(
+                            "{name}: unable to verify release checksum: {error}"
+                        )),
+                    }
+                }
+            }
+        }
+        (Some("PENDING"), _) | (_, Some("PENDING")) => errors.push(format!(
+            "{name}: release_commit and release_checksum_sha256 must become exact together"
+        )),
+        _ => errors.push(format!(
+            "{name}: release_commit must be a 40-character SHA and release_checksum_sha256 a 64-character digest, or both must be PENDING"
+        )),
+    }
+}
+
+fn validate_smartcluster_source_authority(raw: &toml::Value, errors: &mut Vec<String>) {
+    for (field, required) in [
+        (
+            "cargo_members",
+            ["crates/jain-smartcluster-executor", "crates/scq-node"],
+        ),
+        (
+            "copy_paths",
+            ["crates/jain-smartcluster-executor", "crates/scq-node"],
+        ),
+        (
+            "source_paths",
+            ["crates/jain-smartcluster-executor/**", "crates/scq-node/**"],
+        ),
+    ] {
+        let declared = strings(raw, field);
+        for path in required {
+            if !declared.iter().any(|candidate| candidate == path) {
+                errors.push(format!(
+                    "jain-smartcluster: {field} must include recovered source authority {path}"
+                ));
+            }
+        }
+    }
 }
 
 fn manifest_sha256(path: &Path) -> Result<String, Box<dyn std::error::Error>> {
@@ -1505,6 +2312,7 @@ fn local_jeryu_bare_repo(remote: &str) -> Result<Option<PathBuf>, Box<dyn std::e
 }
 
 fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut manifest = None;
     let mut repo = None;
     let mut remote = None;
     let mut tag = None;
@@ -1514,6 +2322,9 @@ fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
+            "--manifest" => {
+                manifest = Some(PathBuf::from(iter.next().ok_or("--manifest needs a path")?))
+            }
             "--repo" => repo = Some(PathBuf::from(iter.next().ok_or("--repo needs a path")?)),
             "--remote" => remote = Some(iter.next().ok_or("--remote needs a URL")?),
             "--tag" => tag = Some(iter.next().ok_or("--tag needs a name")?),
@@ -1525,6 +2336,7 @@ fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             value => return Err(format!("unknown immutable-tag argument: {value}").into()),
         }
     }
+    let manifest = manifest.ok_or("immutable-tag requires --manifest")?;
     let repo = repo.ok_or("immutable-tag requires --repo")?;
     let remote = remote.ok_or("immutable-tag requires --remote")?;
     let tag = tag.ok_or("immutable-tag requires --tag")?;
@@ -1535,11 +2347,86 @@ fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     };
     let mut report = receipt_header("jain.immutable-tag/v1", "immutable-tag", apply);
     report["repository"] = json!(repo);
+    report["manifest"] = json!(manifest);
     report["remote"] = json!(remote);
     report["tag"] = json!(tag);
     report["commit_input"] = json!(commit);
-    let result = create_or_verify_immutable_tag(&repo, &remote, &tag, &commit, apply, &mut report);
+    let result = (|| {
+        verify_immutable_tag_binding(&manifest, &repo, &remote, &tag, &commit, &mut report)?;
+        create_or_verify_immutable_tag(&repo, &remote, &tag, &commit, apply, &mut report)
+    })();
     finish_receipted_operation(&receipt, &mut report, result)
+}
+
+fn verify_immutable_tag_binding(
+    manifest: &Path,
+    repo: &Path,
+    remote: &str,
+    tag: &str,
+    commit: &str,
+    report: &mut JsonValue,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let data: toml::Value = fs::read_to_string(manifest)?.parse()?;
+    validate_manifest_data(&data, manifest, false)?;
+    let repo_path = repo.canonicalize()?;
+    let raw = family_repos(&data)?
+        .into_iter()
+        .find(|raw| {
+            string(raw, "path")
+                .and_then(|path| PathBuf::from(path).canonicalize().ok())
+                .as_deref()
+                == Some(repo_path.as_path())
+        })
+        .ok_or_else(|| {
+            format!(
+                "{} is not a family repository in {}",
+                repo.display(),
+                manifest.display()
+            )
+        })?;
+    let name = string(raw, "name").ok_or("release binding is missing repository name")?;
+    if declared_remote(raw).as_deref() != Some(remote) {
+        return Err(format!("{name}: tag remote does not match the authority manifest").into());
+    }
+    if string(raw, "current_tag").as_deref() != Some(tag) {
+        return Err(format!("{name}: tag does not match the authority manifest").into());
+    }
+    let reviewed = resolve_commit(repo, commit)?;
+    if string(raw, "release_commit").as_deref() != Some(reviewed.as_str()) {
+        return Err(format!("{name}: commit does not match the authority manifest").into());
+    }
+    let version = verify_release_identity(repo, &reviewed, tag, &name)?;
+    let checksum = release_tree_checksum(repo, &reviewed)?;
+    if string(raw, "release_checksum_sha256").as_deref() != Some(checksum.as_str()) {
+        return Err(
+            format!("{name}: release-tree checksum does not match the authority manifest").into(),
+        );
+    }
+    report["authority_binding"] = json!({
+        "repository": name,
+        "tag": tag,
+        "commit": reviewed,
+        "version_file": version,
+        "release_checksum_sha256": checksum,
+    });
+    Ok(())
+}
+
+fn verify_release_identity(
+    repo: &Path,
+    reviewed: &str,
+    tag: &str,
+    name: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let version_ref = format!("{reviewed}:VERSION");
+    let version = git_output(repo, &["show", &version_ref])?;
+    let version = version.trim().to_owned();
+    if version != tag {
+        return Err(
+            format!("{name}: VERSION at {reviewed} is {version:?}, expected {tag:?}").into(),
+        );
+    }
+    Ok(version)
 }
 
 fn create_or_verify_immutable_tag(
@@ -2011,6 +2898,7 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let base = env::var("JERYU_BASE").unwrap_or_else(|_| LOCAL_JERYU_BASE.to_owned());
     let token = local_jeryu_token()?;
     let json_output = args.iter().any(|arg| arg == "--json");
+    let mut checks_head = None;
     let value = |flag: &str| -> Result<String, Box<dyn std::error::Error>> {
         args.iter()
             .position(|arg| arg == flag)
@@ -2049,9 +2937,14 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         }
         "checks" => {
             let repo = value("--repo")?;
+            let sha = value("--sha")?;
+            if !is_full_hex(&sha, 40) {
+                return Err("jeryu-local checks requires a full 40-character commit SHA".into());
+            }
+            checks_head = Some(sha.clone());
             (
                 "GET",
-                format!("/repos/{repo}/commits/{}/check-runs", value("--sha")?),
+                format!("/repos/{repo}/commits/{sha}/check-runs"),
                 None,
             )
         }
@@ -2090,6 +2983,10 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         .into());
     }
     let raw = String::from_utf8(output.stdout)?;
+    let raw = match checks_head {
+        Some(expected_head) => validate_jeryu_checks_response(&raw, &expected_head)?,
+        None => raw,
+    };
     if json_output {
         println!(
             "{}",
@@ -2101,6 +2998,36 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", raw.trim());
     }
     Ok(())
+}
+
+fn validate_jeryu_checks_response(
+    raw: &str,
+    expected_head: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if !is_full_hex(expected_head, 40) {
+        return Err("Jeryu check readback expected head must be a full 40-character SHA".into());
+    }
+    let mut response: JsonValue = serde_json::from_str(raw)?;
+    let runs = response
+        .get_mut("check_runs")
+        .and_then(JsonValue::as_array_mut)
+        .ok_or("Jeryu check readback is missing check_runs array")?;
+    for run in runs.iter() {
+        let actual = run
+            .get("head_sha")
+            .and_then(JsonValue::as_str)
+            .ok_or("Jeryu check readback contains a run without head_sha")?;
+        if !is_full_hex(actual, 40) || actual != expected_head {
+            return Err(format!(
+                "Jeryu check readback returned head_sha {actual:?}, expected exact {expected_head}"
+            )
+            .into());
+        }
+    }
+    runs.retain(|run| run.get("head_sha").and_then(JsonValue::as_str) == Some(expected_head));
+    let total_count = runs.len();
+    response["total_count"] = json!(total_count);
+    Ok(serde_json::to_string(&response)?)
 }
 
 fn local_jeryu_token() -> Result<String, Box<dyn std::error::Error>> {
@@ -4337,6 +5264,50 @@ mod tests {
 
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
 
+    #[test]
+    fn jeryu_check_readback_keeps_only_the_requested_full_head() {
+        let head = "1111111111111111111111111111111111111111";
+        let rendered = validate_jeryu_checks_response(
+            &json!({
+                "total_count": 2,
+                "check_runs": [
+                    {"name": "repo/required", "head_sha": head, "conclusion": "failure"},
+                    {"name": "repo/required", "head_sha": head, "conclusion": "success"},
+                ],
+            })
+            .to_string(),
+            head,
+        )
+        .unwrap();
+        let parsed: JsonValue = serde_json::from_str(&rendered).unwrap();
+        assert_eq!(parsed["total_count"], 2);
+        assert!(parsed["check_runs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|run| run["head_sha"] == head));
+    }
+
+    #[test]
+    fn jeryu_check_readback_rejects_any_mismatched_head() {
+        let head = "1111111111111111111111111111111111111111";
+        let other = "2222222222222222222222222222222222222222";
+        let error = validate_jeryu_checks_response(
+            &json!({
+                "total_count": 2,
+                "check_runs": [
+                    {"name": "repo/required", "head_sha": head, "conclusion": "failure"},
+                    {"name": "repo/required", "head_sha": other, "conclusion": "success"},
+                ],
+            })
+            .to_string(),
+            head,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains(other));
+        assert!(error.to_string().contains(head));
+    }
+
     struct TestDir(PathBuf);
 
     impl TestDir {
@@ -4401,6 +5372,244 @@ mod tests {
 
     fn read_json(path: &Path) -> JsonValue {
         serde_json::from_slice(&fs::read(path).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn jankurai_evidence_binds_metrics_to_exact_worktree_commit() {
+        let root = TestDir::new("jankurai-evidence");
+        let (repo, commit) = init_source(root.path());
+        let report = repo.join("repo-score.json");
+        let receipt = root.path().join("receipt.json");
+        let policy = repo.join("agent/audit-policy.toml");
+        fs::create_dir_all(policy.parent().unwrap()).unwrap();
+        fs::write(
+            &policy,
+            "minimum_score = 85\nrequired_tool = \"jankurai\"\nrequired_tool_version = \"1.6.10\"\n",
+        )
+        .unwrap();
+        let auditor = root.path().join("jankurai");
+        fs::write(&auditor, "#!/bin/sh\necho 'jankurai 1.6.10'\n").unwrap();
+        let mut permissions = fs::metadata(&auditor).unwrap().permissions();
+        std::os::unix::fs::PermissionsExt::set_mode(&mut permissions, 0o755);
+        fs::set_permissions(&auditor, permissions).unwrap();
+        let write_report = |caps: JsonValue, decision_passed: bool| {
+            fs::write(
+                &report,
+                serde_json::to_vec(&json!({
+                    "score": 92,
+                    "repo": ".",
+                    "auditor_version": "1.6.10",
+                    "input_fingerprint": format!("sha256:{}", "1".repeat(64)),
+                    "policy_fingerprint": format!(
+                        "sha256:{}",
+                        sha256_bytes(&fs::read(&policy).unwrap())
+                    ),
+                    "dirty_worktree": false,
+                    "git": {
+                        "head": &commit[..7],
+                        "dirty_worktree": false,
+                    },
+                    "decision": {
+                        "passed": decision_passed,
+                        "minimum_score": 85,
+                        "hard_findings": [],
+                        "ratchet": {
+                            "passed": true,
+                            "baseline_score": 92,
+                            "allowed_drop": 0,
+                        },
+                    },
+                    "caps_applied": caps,
+                    "conformance_decision": "pass",
+                    "conformance_blockers": [],
+                    "run_id": "auditor-run-1",
+                    "policy": {
+                        "path": "./agent/audit-policy.toml",
+                        "auditor_version": "1.6.10",
+                    },
+                }))
+                .unwrap(),
+            )
+            .unwrap();
+        };
+        write_report(json!([]), true);
+        let args = || {
+            vec![
+                "--repository".to_owned(),
+                "source".to_owned(),
+                "--commit".to_owned(),
+                commit.clone(),
+                "--worktree".to_owned(),
+                repo.display().to_string(),
+                "--report".to_owned(),
+                report.display().to_string(),
+                "--auditor".to_owned(),
+                auditor.display().to_string(),
+                "--attempt-id".to_owned(),
+                "attempt-1".to_owned(),
+                "--lane-conclusion".to_owned(),
+                "success".to_owned(),
+                "--clean-tracked-tree-start".to_owned(),
+                "true".to_owned(),
+                "--receipt".to_owned(),
+                receipt.display().to_string(),
+            ]
+        };
+
+        jankurai_evidence_command(args()).unwrap();
+        let evidence = read_json(&receipt);
+        assert_eq!(evidence["status"], "pass");
+        assert_eq!(evidence["repository"], "source");
+        assert_eq!(evidence["commit"], commit);
+        assert_eq!(evidence["report_identity"]["commit"], commit);
+        assert_eq!(evidence["run_id"], "auditor-run-1");
+        assert_eq!(evidence["attempt_id"], "attempt-1");
+        assert_eq!(evidence["score"], 92.0);
+        assert_eq!(evidence["hard_findings"], 0);
+        assert_eq!(evidence["caps_applied"], 0);
+        assert_eq!(evidence["mode"], "evidence");
+        assert_eq!(evidence["clean_tracked_tree_at_start"], true);
+        assert_eq!(evidence["clean_tracked_tree_at_finish"], true);
+        assert!(is_full_hex(
+            evidence["auditor"]["sha256"].as_str().unwrap(),
+            64
+        ));
+        assert!(evidence["auditor"]["version"]
+            .as_str()
+            .is_some_and(|version| !version.is_empty()));
+        assert!(is_full_hex(evidence["report_sha256"].as_str().unwrap(), 64));
+
+        fs::write(
+            &policy,
+            "minimum_score = 84\nrequired_tool = \"jankurai\"\nrequired_tool_version = \"1.6.10\"\n",
+        )
+        .unwrap();
+        assert!(jankurai_evidence_command(args()).is_err());
+        let rejected = read_json(&receipt);
+        assert!(rejected["failures"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|failure| failure.as_str().unwrap().contains("policy fingerprint")));
+
+        fs::write(
+            &policy,
+            "minimum_score = 85\nrequired_tool = \"jankurai\"\nrequired_tool_version = \"1.6.11\"\n",
+        )
+        .unwrap();
+        write_report(json!([]), true);
+        assert!(jankurai_evidence_command(args()).is_err());
+        let rejected = read_json(&receipt);
+        assert!(rejected["failures"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|failure| failure.as_str().unwrap().contains("policy tool mismatch")));
+
+        fs::write(
+            &policy,
+            "minimum_score = 85\nrequired_tool = \"jankurai\"\nrequired_tool_version = \"1.6.10\"\n",
+        )
+        .unwrap();
+
+        write_report(json!(["cap"]), true);
+        assert!(jankurai_evidence_command(args()).is_err());
+        let rejected = read_json(&receipt);
+        assert_eq!(rejected["status"], "fail");
+        assert_eq!(rejected["caps_applied"], 1);
+
+        write_report(json!([]), true);
+        fs::write(repo.join("payload.txt"), "dirty after audit\n").unwrap();
+        assert!(jankurai_evidence_command(args()).is_err());
+        let rejected = read_json(&receipt);
+        assert_eq!(rejected["clean_tracked_tree_at_finish"], false);
+        assert!(rejected["failures"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|failure| failure.as_str().unwrap().contains("after CI")));
+
+        run_git_strict(&repo, &["restore", "payload.txt"]).unwrap();
+        write_report(json!([]), false);
+        assert!(jankurai_evidence_command(args()).is_err());
+        let rejected = read_json(&receipt);
+        assert!(rejected["failures"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|failure| failure.as_str().unwrap().contains("decision.passed")));
+    }
+
+    #[test]
+    fn smartcluster_source_authority_requires_recovered_crates() {
+        let missing: toml::Value = r#"
+cargo_members = []
+copy_paths = []
+source_paths = []
+"#
+        .parse()
+        .unwrap();
+        let mut errors = Vec::new();
+        validate_smartcluster_source_authority(&missing, &mut errors);
+        assert_eq!(errors.len(), 6);
+        assert!(errors.iter().any(|error| error.contains("scq-node")));
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("jain-smartcluster-executor")));
+
+        let complete: toml::Value = r#"
+cargo_members = ["crates/jain-smartcluster-executor", "crates/scq-node"]
+copy_paths = ["crates/jain-smartcluster-executor", "crates/scq-node"]
+source_paths = ["crates/jain-smartcluster-executor/**", "crates/scq-node/**"]
+"#
+        .parse()
+        .unwrap();
+        let mut errors = Vec::new();
+        validate_smartcluster_source_authority(&complete, &mut errors);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn authority_parity_normalizes_only_readback_metadata() {
+        let root = TestDir::new("authority-parity");
+        let canonical = root.path().join("canonical.json");
+        let mirror = root.path().join("mirror.json");
+        let receipt = |repository: &str, updated_at: &str| {
+            let path = format!("/repos/{repository}/branches/main/protection");
+            let mut policy = immutable_main_policy("example/required");
+            policy["updated_at"] = json!(updated_at);
+            policy["url"] = json!(path);
+            json!({
+                "status": "pass",
+                "mode": "read-only",
+                "repository": repository,
+                "request": {"method": "GET", "path": path},
+                "response": policy,
+            })
+        };
+        fs::write(
+            &canonical,
+            serde_json::to_vec(&receipt("jain-split/example", "one")).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            &mirror,
+            serde_json::to_vec(&receipt("veox/example", "two")).unwrap(),
+        )
+        .unwrap();
+
+        let (canonical_policy, canonical_sha) =
+            normalized_protection_receipt(&canonical, "jain-split/example", "example/required")
+                .unwrap();
+        let (mirror_policy, mirror_sha) =
+            normalized_protection_receipt(&mirror, "veox/example", "example/required").unwrap();
+        assert_eq!(canonical_policy, mirror_policy);
+        assert_ne!(canonical_sha, mirror_sha);
+        assert!(canonical_policy.get("updated_at").is_none());
+        assert!(canonical_policy.get("url").is_none());
+        assert!(
+            normalized_protection_receipt(&canonical, "veox/example", "example/required").is_err()
+        );
     }
 
     #[test]
@@ -4636,38 +5845,51 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let remote = init_bare(root.path());
         let main_refspec = format!("{reviewed}:refs/heads/main");
         run_git_strict(&repo, &["push", remote.to_str().unwrap(), &main_refspec]).unwrap();
-        let receipt = root.path().join("tag.json");
-        let args = || {
-            vec![
-                "--repo".to_owned(),
-                repo.display().to_string(),
-                "--remote".to_owned(),
-                remote.display().to_string(),
-                "--tag".to_owned(),
-                "example-v8.0.0-split.0".to_owned(),
-                "--commit".to_owned(),
-                reviewed.clone(),
-                "--receipt".to_owned(),
-                receipt.display().to_string(),
-            ]
-        };
-        immutable_tag_command(args()).unwrap();
+        let tag = "example-v8.0.0-split.0";
+        let mut report = json!({});
+        create_or_verify_immutable_tag(
+            &repo,
+            remote.to_str().unwrap(),
+            tag,
+            &reviewed,
+            false,
+            &mut report,
+        )
+        .unwrap();
         assert_eq!(
-            local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
+            local_ref_commit(&repo, &format!("refs/tags/{tag}")).unwrap(),
             None
         );
-        let mut apply = args();
-        apply.push("--apply".to_owned());
-        immutable_tag_command(apply.clone()).unwrap();
-        immutable_tag_command(apply).unwrap();
-        assert_eq!(read_json(&receipt)["action"], "verified-existing");
+        create_or_verify_immutable_tag(
+            &repo,
+            remote.to_str().unwrap(),
+            tag,
+            &reviewed,
+            true,
+            &mut report,
+        )
+        .unwrap();
+        create_or_verify_immutable_tag(
+            &repo,
+            remote.to_str().unwrap(),
+            tag,
+            &reviewed,
+            true,
+            &mut report,
+        )
+        .unwrap();
+        assert_eq!(report["action"], "verified-existing");
 
         let different = commit_next(&repo);
-        let mut refuse = args();
-        let index = refuse.iter().position(|value| value == "--commit").unwrap();
-        refuse[index + 1] = different;
-        refuse.push("--apply".to_owned());
-        assert!(immutable_tag_command(refuse).is_err());
+        assert!(create_or_verify_immutable_tag(
+            &repo,
+            remote.to_str().unwrap(),
+            tag,
+            &different,
+            true,
+            &mut report,
+        )
+        .is_err());
         assert_eq!(
             local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
             Some(reviewed.clone())
@@ -4680,6 +5902,27 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             )
             .unwrap(),
             Some(reviewed)
+        );
+    }
+
+    #[test]
+    fn immutable_release_identity_matches_the_tracked_version_exactly() {
+        let root = TestDir::new("immutable-release-identity");
+        let (repo, _) = init_source(root.path());
+        fs::write(repo.join("VERSION"), "example-v8.0.0-split.1\n").unwrap();
+        run_git_strict(&repo, &["add", "VERSION"]).unwrap();
+        run_git_strict(&repo, &["commit", "-m", "declare release identity"]).unwrap();
+        let reviewed = resolve_commit(&repo, "HEAD").unwrap();
+
+        let error = verify_release_identity(&repo, &reviewed, "example-v8.0.0-split.2", "example")
+            .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("expected \"example-v8.0.0-split.2\""));
+        assert_eq!(
+            verify_release_identity(&repo, &reviewed, "example-v8.0.0-split.1", "example",)
+                .unwrap(),
+            "example-v8.0.0-split.1"
         );
     }
 
@@ -5010,5 +6253,21 @@ name = "two"
             string(&portal_data, "canonical_manifest_sha256"),
             Some(manifest_sha256(&manifest).unwrap())
         );
+
+        let output_root = root.path().join("isolated-worktrees");
+        sync_derived_manifests_command(vec![
+            "--manifest".to_owned(),
+            manifest.display().to_string(),
+            "--output-root".to_owned(),
+            output_root.display().to_string(),
+            "--receipt".to_owned(),
+            root.path().join("isolated.json").display().to_string(),
+            "--apply".to_owned(),
+        ])
+        .unwrap();
+        assert!(output_root.join("jain/repos.manifest.toml").is_file());
+        assert!(output_root
+            .join("jain-deploy/repos.manifest.toml")
+            .is_file());
     }
 }

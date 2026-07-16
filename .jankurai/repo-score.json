@@ -1,7 +1,7 @@
 {
-  "report_fingerprint": "sha256:85cacf0bdd66d5df4e51f0b412b11f27d4ea6899e560c6be28f6a6f6a1de0c47",
-  "input_fingerprint": "sha256:df64ba8167c64921c71f1bb3cbd098c61ce15ab0457a68faa221777f3415226e",
-  "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
+  "report_fingerprint": "sha256:3b85d20b4e068b2ae221e9c8a1eade7ea239a8ce2c0e333a8379b16c62bd46e6",
+  "input_fingerprint": "sha256:1cd9338e9326c5c2f72c52c657feb7d14ec32946b9b2c612d79e7c01eab700b7",
+  "policy_fingerprint": "sha256:491244ce4a775e8963dc39988b05aa1522555ed5116599ee5137c62104e071e5",
   "manifest_fingerprints": {
     "owner_map": "sha256:d58fbea9590434205dd7aeb7dbc2064799cbafefa866e33041dbab5e03d8f7b5",
     "test_map": "sha256:d5721972d5dec803ef9a7feb227ca34be90069896bf58780c1411aa78ac3999a",
@@ -11,11 +11,11 @@
     "standard_version": "sha256:dfd17ef1c0a836d1eef0c604e7e676e2d6895540d5d0dd7cf38b4b9f1f46373f"
   },
   "dirty_worktree": true,
-  "generated_at": "1783850204",
+  "generated_at": "1784166855",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
-  "auditor_version": "1.6.10",
+  "auditor_version": "1.6.11",
   "schema_version": "jain-split-ops-v8.0.0-split.0",
   "paper_edition": "2026.05-ed8",
   "target_stack_id": "rust-ts-vite-react-postgres-bounded-python",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1783850204",
-  "started_at": "1783850204",
-  "elapsed_ms": 1800,
+  "run_id": "1784166855",
+  "started_at": "1784166855",
+  "elapsed_ms": 2882,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "2c14a6f",
+    "head": "beb0c19",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -67,7 +67,7 @@
     "advisory_on": [],
     "mode": "advisory",
     "standard_version": "0.9.0",
-    "auditor_version": "1.6.10",
+    "auditor_version": "1.6.11",
     "schema_version": "1.9.0",
     "paper_edition": "2026.05-ed8",
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
@@ -1003,9 +1003,9 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-12T09:56:42.493795211+00:00",
+    "generated_at": "2026-07-16T01:54:13.581700191+00:00",
     "repo": ".",
-    "auditor_version": "1.6.10",
+    "auditor_version": "1.6.11",
     "status": "review",
     "policy": {
       "active_source_only": true,
@@ -1041,20 +1041,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 234,
+      "files_scanned": 271,
       "files_considered": 1,
       "active_files": 1,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 6,
+      "warning_classes": 5,
       "hard_instances": 0,
-      "warning_instances": 20,
-      "duplicate_lines": 6,
-      "duplicate_tokens": 31,
-      "duplicate_bytes": 236,
-      "total_redundant_lines": 14,
-      "total_redundant_tokens": 79,
-      "total_redundant_bytes": 692
+      "warning_instances": 15,
+      "duplicate_lines": 5,
+      "duplicate_tokens": 21,
+      "duplicate_bytes": 156,
+      "total_redundant_lines": 10,
+      "total_redundant_tokens": 51,
+      "total_redundant_bytes": 441
     },
     "classes": [
       {
@@ -1066,120 +1066,64 @@
         "duplicate_lines": 1,
         "duplicate_tokens": 6,
         "duplicate_bytes": 57,
-        "instance_count": 10,
-        "total_redundant_lines": 9,
-        "total_redundant_tokens": 54,
-        "total_redundant_bytes": 513,
+        "instance_count": 7,
+        "total_redundant_lines": 6,
+        "total_redundant_tokens": 36,
+        "total_redundant_bytes": 342,
         "effective_severity": "warning",
         "hard_fail": false,
-        "fingerprint": "a85f09a25799aed9",
+        "fingerprint": "a07082294560f1a6",
         "reason": "same body appears under different names across files",
         "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
         "instances": [
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 631,
-            "end_line": 632,
+            "start_line": 634,
+            "end_line": 635,
             "unit_name": "sync_derived_manifests_command"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1077,
-            "end_line": 1078,
+            "start_line": 1884,
+            "end_line": 1885,
             "unit_name": "validate_family_lock"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1160,
-            "end_line": 1161,
+            "start_line": 1967,
+            "end_line": 1968,
             "unit_name": "regenerate_lock"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1232,
-            "end_line": 1233,
+            "start_line": 2039,
+            "end_line": 2040,
             "unit_name": "release_snapshot"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1281,
-            "end_line": 1282,
+            "start_line": 2088,
+            "end_line": 2089,
             "unit_name": "release_status"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1631,
-            "end_line": 1632,
+            "start_line": 2518,
+            "end_line": 2519,
             "unit_name": "verify_worktrees_command"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1950,
-            "end_line": 1951,
+            "start_line": 2837,
+            "end_line": 2838,
             "unit_name": "fix_local_remotes"
-          },
-          {
-            "path": "tools/splitctl/src/main.rs",
-            "language": "rust",
-            "start_line": 2502,
-            "end_line": 2503,
-            "unit_name": "reconcile"
-          },
-          {
-            "path": "tools/splitctl/src/main.rs",
-            "language": "rust",
-            "start_line": 2643,
-            "end_line": 2644,
-            "unit_name": "bump_version"
-          },
-          {
-            "path": "tools/splitctl/src/main.rs",
-            "language": "rust",
-            "start_line": 2916,
-            "end_line": 2917,
-            "unit_name": "preflight"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-5ef6588a23781013",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 8,
-        "duplicate_bytes": 67,
-        "instance_count": 2,
-        "total_redundant_lines": 1,
-        "total_redundant_tokens": 8,
-        "total_redundant_bytes": 67,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "4627a998d2d4c3f6",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "tools/splitctl/src/main.rs",
-            "language": "rust",
-            "start_line": 2746,
-            "end_line": 2747,
-            "unit_name": "update_lock_shas"
-          },
-          {
-            "path": "tools/splitctl/src/main.rs",
-            "language": "rust",
-            "start_line": 2785,
-            "end_line": 2786,
-            "unit_name": "source_coverage"
           }
         ]
       },
@@ -1205,16 +1149,16 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1905,
-            "end_line": 1906,
-            "unit_name": "strict_git_output"
+            "start_line": 807,
+            "end_line": 808,
+            "unit_name": "release_tree_checksum"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2595,
-            "end_line": 2596,
-            "unit_name": "git_output"
+            "start_line": 2792,
+            "end_line": 2793,
+            "unit_name": "strict_git_output"
           }
         ]
       },
@@ -1240,15 +1184,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 787,
-            "end_line": 788,
+            "start_line": 1416,
+            "end_line": 1417,
             "unit_name": "write_atomic_bytes"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1832,
-            "end_line": 1833,
+            "start_line": 2719,
+            "end_line": 2720,
             "unit_name": "write_json_receipt"
           }
         ]
@@ -1275,32 +1219,32 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1357,
-            "end_line": 1358,
-            "unit_name": "bootstrap_main_command"
+            "start_line": 1251,
+            "end_line": 1252,
+            "unit_name": "authority_parity_evidence_command"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1507,
-            "end_line": 1508,
-            "unit_name": "immutable_tag_command"
+            "start_line": 2164,
+            "end_line": 2165,
+            "unit_name": "bootstrap_main_command"
           }
         ]
       },
       {
-        "id": "copy-code-body-rust-996c1169acb51424",
+        "id": "copy-code-body-rust-ab80b0029566ed53",
         "kind": "exact_unit_different_name",
         "severity": "warning",
         "confidence": "medium",
         "language": "rust",
         "duplicate_lines": 1,
-        "duplicate_tokens": 3,
-        "duplicate_bytes": 22,
+        "duplicate_tokens": 1,
+        "duplicate_bytes": 9,
         "instance_count": 2,
         "total_redundant_lines": 1,
-        "total_redundant_tokens": 3,
-        "total_redundant_bytes": 22,
+        "total_redundant_tokens": 1,
+        "total_redundant_bytes": 9,
         "effective_severity": "warning",
         "hard_fail": false,
         "fingerprint": "4627a998d2d4c3f6",
@@ -1310,16 +1254,16 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1995,
-            "end_line": 1996,
-            "unit_name": "jeryu_local"
+            "start_line": 1180,
+            "end_line": 1181,
+            "unit_name": "is_sha256_fingerprint"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2125,
-            "end_line": 2126,
-            "unit_name": "jeryu_lifecycle"
+            "start_line": 2689,
+            "end_line": 2690,
+            "unit_name": "receipt_component"
           }
         ]
       }

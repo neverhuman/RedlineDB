@@ -1,0 +1,73 @@
+{
+  "attempt_id": "20260715T155843589903200Z-1072837",
+  "auditor": {
+    "path": "/home/ubuntu/.jeryu/bin/jankurai",
+    "sha256": "ec253008293141efe819305e7b5d5d97cf09fe20c3337fc7db9bd3acd71eefe0",
+    "version": "jankurai 1.6.10"
+  },
+  "caps_applied": 0,
+  "clean_tracked_tree_at_finish": true,
+  "clean_tracked_tree_at_start": true,
+  "commit": "51657925d4e0bfcd0080fa4bdda350acac28f0cd",
+  "error": "Jankurai conformance did not pass without blockers",
+  "failures": [
+    "Jankurai conformance did not pass without blockers"
+  ],
+  "hard_findings": 0,
+  "lane": {
+    "conclusion": "success",
+    "failure_reason": null
+  },
+  "mode": "evidence",
+  "operation": "jankurai-evidence",
+  "report": "/tmp/split-host-ci.kTeBHK/jain-starforge/target/jankurai/exact-head-repo-score.json",
+  "report_identity": {
+    "allowed_drop": 0.0,
+    "auditor_version": "1.6.10",
+    "baseline_score": 87.0,
+    "commit": "51657925d4e0bfcd0080fa4bdda350acac28f0cd",
+    "computed_policy_fingerprint": "sha256:7ece527ba746a31044284bbb8eb42d4085713829a86da3874f0efac48bba88df",
+    "conformance_blockers": [
+      "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
+      "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
+      "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
+      "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
+      "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
+      "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
+      "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
+      "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
+      "HLT-003-OWNERLESS-PATH on agent/owner-map.json",
+      "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
+      "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
+      "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
+      "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
+      "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
+      "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
+      "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
+      "HLT-004-UNMAPPED-PROOF on agent/test-map.json",
+      "HLT-004-UNMAPPED-PROOF on agent/test-map.json"
+    ],
+    "conformance_decision": "pass",
+    "decision_passed": true,
+    "dirty_worktree": false,
+    "git_dirty_worktree": false,
+    "git_head": "5165792",
+    "input_fingerprint": "sha256:3c3bfbe283704eaa2f65c6aea06b127a2673617000068cb5f7be3eec4152ac2d",
+    "minimum_score": 85.0,
+    "policy_auditor_version": "1.6.10",
+    "policy_fingerprint": "sha256:7ece527ba746a31044284bbb8eb42d4085713829a86da3874f0efac48bba88df",
+    "policy_path": "./agent/audit-policy.toml",
+    "ratchet_passed": true,
+    "repo": ".",
+    "required_tool": "jankurai",
+    "required_tool_version": "1.6.10"
+  },
+  "report_sha256": "ad5e03647287a8a426954edb7d1f2c5e85b522306246d19be951adaddf6f8459",
+  "repository": "jain-starforge",
+  "run_id": "1784132518",
+  "schema_version": "jain.jankurai-exact-sha-evidence/v1",
+  "score": 87.0,
+  "status": "fail",
+  "timestamp_unix": 1784132555,
+  "worktree": "/tmp/split-host-ci.kTeBHK/jain-starforge"
+}

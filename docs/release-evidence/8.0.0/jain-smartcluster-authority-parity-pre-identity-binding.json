@@ -1,0 +1,51 @@
+{
+  "canonical_remote": "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git",
+  "expected_main": "ec9f7e959a6999eee45a92936c0dc8ce5a2a0014",
+  "main": {
+    "canonical": "ec9f7e959a6999eee45a92936c0dc8ce5a2a0014",
+    "mirror": "ec9f7e959a6999eee45a92936c0dc8ce5a2a0014"
+  },
+  "mirror_remote": "http://127.0.0.1:8787/git/veox/jain-smartcluster.git",
+  "mode": "superseded-dry-run",
+  "operation": "authority-parity-evidence",
+  "protection": {
+    "canonical_receipt": "docs/release-evidence/8.0.0/jain-smartcluster-canonical-protection-readback.json",
+    "canonical_receipt_sha256": "7a2ddcf400c0c7caf2aea5f55e126b8a22604362b6c6dd5517e3ef28ade82eec",
+    "mirror_receipt": "docs/release-evidence/8.0.0/jain-smartcluster-veox-protection-readback.json",
+    "mirror_receipt_sha256": "58895d6a7fbefad8014bfe5982600298d91beededdd8176c6c8f86b6a838afea",
+    "normalized_policy": {
+      "allow_deletions": {
+        "enabled": false
+      },
+      "allow_force_pushes": {
+        "enabled": false
+      },
+      "enforce_admins": {
+        "enabled": true
+      },
+      "required_jankurai_proof": {
+        "enabled": false
+      },
+      "required_linear_history": {
+        "enabled": true
+      },
+      "required_pull_request_reviews": {
+        "required_approving_review_count": 1
+      },
+      "required_signatures": {
+        "enabled": false
+      },
+      "required_status_checks": {
+        "contexts": [
+          "jain-smartcluster/required"
+        ],
+        "strict": true
+      }
+    },
+    "normalized_policy_sha256": "dcc7ad977f63b11e84c5d2c519b9a82f90af07d274e2d9f1f112b61b628f6e67"
+  },
+  "repository": "/home/ubuntu/jain-split/jain-smartcluster",
+  "schema_version": "jain.local-forge-authority-parity/v1",
+  "status": "pass",
+  "timestamp_unix": 1784122647
+}

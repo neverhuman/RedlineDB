@@ -1,0 +1,20 @@
+{
+  "error": "local Jeryu request failed: curl: (28) Operation timed out after 15002 milliseconds with 0 bytes received",
+  "mode": "apply",
+  "operation": "jeryu-local pr-approve",
+  "repository": "jeryu/jain-starforge",
+  "request": {
+    "body": {
+      "body_markdown": "Exact-head jankurai/proof and jain-starforge/required are green; approving protected merge.",
+      "evidence": null,
+      "expected_head_sha": "3034e5c5a1422a1cf80ce65ad23d1815aea8a071",
+      "thread_comments": [],
+      "verdict": "approve"
+    },
+    "method": "POST",
+    "path": "/api/v1/repos/jeryu%2Fjain-starforge/pulls/8/reviews"
+  },
+  "schema_version": "jain.jeryu-lifecycle/v1",
+  "status": "fail",
+  "timestamp_unix": 1784143092
+}

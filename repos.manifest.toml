@@ -1,5 +1,8 @@
 schema_version = "1"
 release_version = "8.0.0"
+status = "candidate"
+formal_ga = false
+sagemaker = "N/A"
 generator_version = "splitctl 0.1.0"
 workers = 40
 source_root = "/home/ubuntu/jain_small"
@@ -150,9 +153,9 @@ immutable_tag = "jain-smartcluster-v8.0.0-split.0"
 required_check = "jain-smartcluster/required"
 note = "Durable local scheduler, daemon, client, worker protocol, and scq CLI."
 dependency_edges = ["jain-web", "jain-cli", "jain-deploy"]
-cargo_members = ["crates/jain-smartcluster-core", "crates/jain-smartcluster", "crates/jain-smartcluster-daemon", "crates/scq", "crates/jain-worker"]
-copy_paths = ["crates/jain-smartcluster-core", "crates/jain-smartcluster", "crates/jain-smartcluster-daemon", "crates/scq", "crates/jain-worker", "handlers", "fuzz", "smartcluster.example.toml"]
-source_paths = ["crates/jain-smartcluster-core/**", "crates/jain-smartcluster/**", "crates/jain-smartcluster-daemon/**", "crates/scq/**", "crates/jain-worker/**", "handlers/**", "fuzz/**", "smartcluster.example.toml"]
+cargo_members = ["crates/jain-smartcluster-core", "crates/jain-smartcluster", "crates/jain-smartcluster-daemon", "crates/jain-smartcluster-executor", "crates/scq", "crates/scq-node", "crates/jain-worker"]
+copy_paths = ["crates/jain-smartcluster-core", "crates/jain-smartcluster", "crates/jain-smartcluster-daemon", "crates/jain-smartcluster-executor", "crates/scq", "crates/scq-node", "crates/jain-worker", "handlers", "fuzz", "smartcluster.example.toml"]
+source_paths = ["crates/jain-smartcluster-core/**", "crates/jain-smartcluster/**", "crates/jain-smartcluster-daemon/**", "crates/jain-smartcluster-executor/**", "crates/scq/**", "crates/scq-node/**", "crates/jain-worker/**", "handlers/**", "fuzz/**", "smartcluster.example.toml"]
 cross_repo_deps = []
 
 [infrastructure_repo.deployment]

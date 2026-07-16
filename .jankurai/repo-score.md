@@ -1,15 +1,15 @@
 # jankurai Repo Score
 
 - Standard: `jankurai`
-- Auditor: `1.6.10`
+- Auditor: `1.6.11`
 - Schema: `jain-split-ops-v8.0.0-split.0`
 - Paper edition: `2026.05-ed8`
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1783850204`
-- Started at: `1783850204`
-- Elapsed: `1800` ms
+- Run ID: `1784166855`
+- Started at: `1784166855`
+- Elapsed: `2882` ms
 - Scope: `full`
 - Raw score: `92`
 - Final score: `92`
@@ -70,9 +70,9 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`6` files=`1`
+- Status: `review` hard=`0` warning=`5` files=`1`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`6` tokens=`31` bytes=`236`
+- Duplicate volume: lines=`5` tokens=`21` bytes=`156`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
@@ -81,12 +81,11 @@
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `tools/splitctl/src/main.rs:631-632, tools/splitctl/src/main.rs:1077-1078, tools/splitctl/src/main.rs:1160-1161, tools/splitctl/src/main.rs:1232-1233, tools/splitctl/src/main.rs:1281-1282, tools/splitctl/src/main.rs:1631-1632, tools/splitctl/src/main.rs:1950-1951, tools/splitctl/src/main.rs:2502-2503, tools/splitctl/src/main.rs:2643-2644, tools/splitctl/src/main.rs:2916-2917` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 8 | `tools/splitctl/src/main.rs:2746-2747, tools/splitctl/src/main.rs:2785-2786` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/splitctl/src/main.rs:1905-1906, tools/splitctl/src/main.rs:2595-2596` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/splitctl/src/main.rs:787-788, tools/splitctl/src/main.rs:1832-1833` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/splitctl/src/main.rs:1357-1358, tools/splitctl/src/main.rs:1507-1508` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/main.rs:1995-1996, tools/splitctl/src/main.rs:2125-2126` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `tools/splitctl/src/main.rs:634-635, tools/splitctl/src/main.rs:1884-1885, tools/splitctl/src/main.rs:1967-1968, tools/splitctl/src/main.rs:2039-2040, tools/splitctl/src/main.rs:2088-2089, tools/splitctl/src/main.rs:2518-2519, tools/splitctl/src/main.rs:2837-2838` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/splitctl/src/main.rs:807-808, tools/splitctl/src/main.rs:2792-2793` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/splitctl/src/main.rs:1416-1417, tools/splitctl/src/main.rs:2719-2720` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/splitctl/src/main.rs:1251-1252, tools/splitctl/src/main.rs:2164-2165` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `tools/splitctl/src/main.rs:1180-1181, tools/splitctl/src/main.rs:2689-2690` | `same body appears under different names across files` |
 
 ## Dimensions
 

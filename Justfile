@@ -34,10 +34,10 @@ bootstrap-main-apply repo remote reviewed_commit:
   cargo run --locked --quiet -- bootstrap-main --repo "{{repo}}" --remote "{{remote}}" --reviewed-commit "{{reviewed_commit}}" --apply
 
 immutable-tag repo remote tag commit:
-  cargo run --locked --quiet -- immutable-tag --repo "{{repo}}" --remote "{{remote}}" --tag "{{tag}}" --commit "{{commit}}"
+  cargo run --locked --quiet -- immutable-tag --manifest repos.manifest.toml --repo "{{repo}}" --remote "{{remote}}" --tag "{{tag}}" --commit "{{commit}}"
 
 immutable-tag-apply repo remote tag commit:
-  cargo run --locked --quiet -- immutable-tag --repo "{{repo}}" --remote "{{remote}}" --tag "{{tag}}" --commit "{{commit}}" --apply
+  cargo run --locked --quiet -- immutable-tag --manifest repos.manifest.toml --repo "{{repo}}" --remote "{{remote}}" --tag "{{tag}}" --commit "{{commit}}" --apply
 
 jeryu-pr-ready repo number:
   cargo run --locked --quiet -- jeryu-local pr-ready --repo "{{repo}}" --number "{{number}}"

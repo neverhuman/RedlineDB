@@ -3,7 +3,7 @@ workspace = "jain-split-ops"
 minimum_score = 85
 hard_findings_allowed = 0
 required_tool = "jankurai"
-required_tool_version = "1.6.11"
+required_tool_version = "1.6.10"
 # Documented infra exemption: operator/infra control-plane repo (materializer +
 # host-CI + manifest), per its baseline note. The committed-baseline ratchet
 # still applies; only the absolute minimum_score floor is waived.
