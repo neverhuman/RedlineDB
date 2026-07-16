@@ -74,6 +74,574 @@ jain_sha256() {
   sha256sum -- "${1:?file is required}" | awk '{print $1}'
 }
 
+jain_locked_package_checksum() {
+  local lock_file="${1:?lock file is required}"
+  local wanted_name="${2:?package name is required}"
+  local wanted_version="${3:?package version is required}"
+  awk -v wanted_name="$wanted_name" -v wanted_version="$wanted_version" '
+    function emit_match() {
+      if (in_package && package_name == wanted_name && package_version == wanted_version \
+          && package_source == "registry+https://github.com/rust-lang/crates.io-index") {
+        print package_checksum
+      }
+    }
+    $0 == "[[package]]" {
+      emit_match()
+      in_package = 1
+      package_name = ""
+      package_version = ""
+      package_source = ""
+      package_checksum = ""
+      next
+    }
+    in_package && /^name = "/ {
+      package_name = $0
+      sub(/^name = "/, "", package_name)
+      sub(/"$/, "", package_name)
+      next
+    }
+    in_package && /^version = "/ {
+      package_version = $0
+      sub(/^version = "/, "", package_version)
+      sub(/"$/, "", package_version)
+      next
+    }
+    in_package && /^checksum = "/ {
+      package_checksum = $0
+      sub(/^checksum = "/, "", package_checksum)
+      sub(/"$/, "", package_checksum)
+      next
+    }
+    in_package && /^source = "/ {
+      package_source = $0
+      sub(/^source = "/, "", package_source)
+      sub(/"$/, "", package_source)
+      next
+    }
+    END { emit_match() }
+  ' "$lock_file"
+}
+
+jain_locked_registry_package_records() {
+  local lock_file="${1:?lock file is required}"
+  local records
+
+  [[ -f "$lock_file" && ! -L "$lock_file" \
+    && "$(realpath -e -- "$lock_file")" == "$lock_file" ]] || {
+    printf 'Cargo.lock must be a physical regular non-symlink: %s\n' "$lock_file" >&2
+    return 1
+  }
+  records="$({
+    awk '
+      function reject(message) {
+        print message > "/dev/stderr"
+        invalid = 1
+      }
+      function emit_package( key) {
+        if (!in_package || package_source !~ /^registry\+/) {
+          return
+        }
+        if (package_source != "registry+https://github.com/rust-lang/crates.io-index") {
+          reject("Cargo.lock contains an unsupported registry source: " package_source)
+          return
+        }
+        if (package_name !~ /^[A-Za-z0-9_-]+$/ \
+            || package_version !~ /^[A-Za-z0-9.+_-]+$/ \
+            || length(package_checksum) != 64 \
+            || package_checksum !~ /^[0-9a-f]+$/) {
+          reject("Cargo.lock registry package identity/checksum is invalid: " \
+            package_name " " package_version)
+          return
+        }
+        key = package_name SUBSEP package_version
+        if (seen[key]++) {
+          reject("Cargo.lock contains a duplicate registry package identity: " \
+            package_name " " package_version)
+          return
+        }
+        print package_name "\t" package_version "\t" package_checksum
+        emitted++
+      }
+      $0 == "[[package]]" {
+        emit_package()
+        in_package = 1
+        package_name = ""
+        package_version = ""
+        package_source = ""
+        package_checksum = ""
+        next
+      }
+      in_package && /^name = "/ {
+        package_name = $0
+        sub(/^name = "/, "", package_name)
+        sub(/"$/, "", package_name)
+        next
+      }
+      in_package && /^version = "/ {
+        package_version = $0
+        sub(/^version = "/, "", package_version)
+        sub(/"$/, "", package_version)
+        next
+      }
+      in_package && /^source = "/ {
+        package_source = $0
+        sub(/^source = "/, "", package_source)
+        sub(/"$/, "", package_source)
+        next
+      }
+      in_package && /^checksum = "/ {
+        package_checksum = $0
+        sub(/^checksum = "/, "", package_checksum)
+        sub(/"$/, "", package_checksum)
+        next
+      }
+      END {
+        emit_package()
+        if (!emitted) {
+          reject("Cargo.lock contains no registry package closure")
+        }
+        if (invalid) {
+          exit 1
+        }
+      }
+    ' "$lock_file"
+  } | LC_ALL=C sort -t $'\t' -k1,1 -k2,2 -k3,3)" || return 1
+  printf '%s\n' "$records"
+}
+
+jain_seed_locked_cargo_archives() {
+  local lock_file="${1:?lock file is required}"
+  local cache_parent="${2:?cache parent is required}"
+  local fixed_cache="${3:?fixed cache is required}"
+  local cargo_home="${4:?Cargo home is required}"
+  shift 4
+
+  (( "$#" >= 2 && "$#" % 2 == 0 )) || {
+    printf 'locked crate seed requires package/version pairs\n' >&2
+    return 1
+  }
+  [[ -f "$lock_file" && ! -L "$lock_file" \
+    && "$(realpath -e -- "$lock_file")" == "$lock_file" ]] || {
+    printf 'Cargo.lock must be a physical regular non-symlink: %s\n' "$lock_file" >&2
+    return 1
+  }
+  [[ -d "$cache_parent" && ! -L "$cache_parent" \
+    && "$(realpath -e -- "$cache_parent")" == "$cache_parent" ]] || {
+    printf 'host Cargo cache parent must be a physical non-symlink: %s\n' "$cache_parent" >&2
+    return 1
+  }
+  [[ -d "$fixed_cache" && ! -L "$fixed_cache" \
+    && "$(realpath -e -- "$fixed_cache")" == "$fixed_cache" \
+    && "$(dirname -- "$fixed_cache")" == "$cache_parent" ]] || {
+    printf 'fixed host Cargo cache must be one physical direct child: %s\n' "$fixed_cache" >&2
+    return 1
+  }
+  [[ -z "$(find "$fixed_cache" -mindepth 1 ! -type f -print -quit)" ]] || {
+    printf 'fixed host Cargo cache must be a flat physical file set: %s\n' \
+      "$fixed_cache" >&2
+    return 1
+  }
+  [[ -d "$cargo_home" && ! -L "$cargo_home" \
+    && "$(realpath -e -- "$cargo_home")" == "$cargo_home" ]] || {
+    printf 'isolated Cargo home must be a physical non-symlink: %s\n' "$cargo_home" >&2
+    return 1
+  }
+
+  local source_archive archive_name package version checksum actual
+  local destination_root destination_archive temporary_archive
+  local -a checksums=()
+
+  mkdir -p -- "$cargo_home/registry"
+  [[ -d "$cargo_home/registry" && ! -L "$cargo_home/registry" ]] || {
+    printf 'Cargo registry destination must be a physical directory\n' >&2
+    return 1
+  }
+  mkdir -p -- "$cargo_home/registry/cache"
+  [[ -d "$cargo_home/registry/cache" && ! -L "$cargo_home/registry/cache" ]] || {
+    printf 'Cargo cache destination must be a physical directory\n' >&2
+    return 1
+  }
+  destination_root="$cargo_home/registry/cache/$(basename -- "$fixed_cache")"
+  mkdir -p -- "$destination_root"
+  [[ -d "$destination_root" && ! -L "$destination_root" \
+    && "$(realpath -e -- "$destination_root")" == "$destination_root" ]] || {
+    printf 'Cargo archive destination must be a physical non-symlink: %s\n' \
+      "$destination_root" >&2
+    return 1
+  }
+
+  while (( "$#" > 0 )); do
+    package="$1"
+    version="$2"
+    shift 2
+    [[ "$package" =~ ^[A-Za-z0-9_-]+$ && "$version" =~ ^[A-Za-z0-9.+_-]+$ ]] || {
+      printf 'invalid locked package identity: %s %s\n' "$package" "$version" >&2
+      return 1
+    }
+    archive_name="$package-$version.crate"
+    mapfile -t checksums < <(jain_locked_package_checksum "$lock_file" "$package" "$version")
+    ((${#checksums[@]} == 1)) || {
+      printf 'Cargo.lock must contain exactly one checksum for %s %s\n' \
+        "$package" "$version" >&2
+      return 1
+    }
+    checksum="${checksums[0]}"
+    [[ "$checksum" =~ ^[0-9a-f]{64}$ ]] || {
+      printf 'Cargo.lock checksum is invalid for %s %s\n' "$package" "$version" >&2
+      return 1
+    }
+
+    source_archive="$fixed_cache/$archive_name"
+    [[ -e "$source_archive" || -L "$source_archive" ]] || {
+      printf 'locked crate archive is missing: %s\n' "$archive_name" >&2
+      return 1
+    }
+    [[ -f "$source_archive" && ! -L "$source_archive" \
+      && "$(realpath -e -- "$source_archive")" == "$source_archive" ]] || {
+      printf 'locked crate archive must be a regular non-symlink: %s\n' \
+        "$source_archive" >&2
+      return 1
+    }
+    actual="$(jain_sha256 "$source_archive")"
+    [[ "$actual" == "$checksum" ]] || {
+      printf 'locked crate archive digest does not match Cargo.lock: %s\n' \
+        "$archive_name" >&2
+      return 1
+    }
+
+    destination_archive="$destination_root/$archive_name"
+    if [[ -e "$destination_archive" || -L "$destination_archive" ]]; then
+      [[ -f "$destination_archive" && ! -L "$destination_archive" \
+        && "$(realpath -e -- "$destination_archive")" == "$destination_archive" \
+        && "$(jain_sha256 "$destination_archive")" == "$checksum" ]] || {
+        printf 'existing Cargo archive destination is not the locked artifact: %s\n' \
+          "$destination_archive" >&2
+        return 1
+      }
+      log "security: verified locked Cargo archive $archive_name sha256=$checksum"
+      continue
+    fi
+
+    temporary_archive="$destination_archive.partial.$$"
+    cp -- "$source_archive" "$temporary_archive"
+    if [[ -L "$temporary_archive" \
+      || "$(jain_sha256 "$temporary_archive")" != "$checksum" ]]; then
+      rm -f -- "$temporary_archive"
+      printf 'copied Cargo archive failed locked digest verification: %s\n' \
+        "$archive_name" >&2
+      return 1
+    fi
+    chmod 0644 "$temporary_archive"
+    mv -- "$temporary_archive" "$destination_archive"
+    [[ "$(jain_sha256 "$destination_archive")" == "$checksum" ]] || {
+      printf 'seeded Cargo archive failed final verification: %s\n' "$archive_name" >&2
+      return 1
+    }
+    log "security: seeded locked Cargo archive $archive_name sha256=$checksum"
+  done
+}
+
+jain_seed_locked_cargo_registry_closure() {
+  local lock_file="${1:?lock file is required}"
+  local cache_parent="${2:?cache parent is required}"
+  local fixed_cache="${3:?fixed cache is required}"
+  local cargo_home="${4:?Cargo home is required}"
+  local records destination_root package version checksum
+  local -a pairs=()
+
+  records="$(jain_locked_registry_package_records "$lock_file")" || return 1
+  while IFS=$'\t' read -r package version checksum; do
+    [[ -n "$package" && -n "$version" && "$checksum" =~ ^[0-9a-f]{64}$ ]] || {
+      printf 'locked registry closure record is malformed\n' >&2
+      return 1
+    }
+    pairs+=("$package" "$version")
+    expected_archives+=("$package-$version.crate")
+  done <<<"$records"
+  ((${#pairs[@]} > 0)) || {
+    printf 'locked registry closure is empty\n' >&2
+    return 1
+  }
+
+  destination_root="$cargo_home/registry/cache/$(basename -- "$fixed_cache")"
+  [[ ! -e "$destination_root" && ! -L "$destination_root" ]] || {
+    printf 'locked registry closure destination must not preexist: %s\n' \
+      "$destination_root" >&2
+    return 1
+  }
+  jain_seed_locked_cargo_archives \
+    "$lock_file" "$cache_parent" "$fixed_cache" "$cargo_home" "${pairs[@]}" \
+    || return 1
+
+  jain_verify_locked_cargo_registry_closure \
+    "$lock_file" "$fixed_cache" "$cargo_home" || return 1
+}
+
+jain_verify_locked_cargo_registry_closure() {
+  local lock_file="${1:?lock file is required}"
+  local fixed_cache="${2:?fixed cache is required}"
+  local cargo_home="${3:?Cargo home is required}"
+  local records destination_root package version checksum archive
+  local expected_manifest actual_manifest
+  local -a expected_archives=() actual_archives=()
+
+  records="$(jain_locked_registry_package_records "$lock_file")" || return 1
+  [[ -d "$fixed_cache" && ! -L "$fixed_cache" \
+    && "$(realpath -e -- "$fixed_cache")" == "$fixed_cache" \
+    && -d "$cargo_home" && ! -L "$cargo_home" \
+    && "$(realpath -e -- "$cargo_home")" == "$cargo_home" ]] || {
+    printf 'Cargo registry closure verifier requires physical cache/home roots\n' >&2
+    return 1
+  }
+  while IFS=$'\t' read -r package version checksum; do
+    expected_archives+=("$package-$version.crate")
+  done <<<"$records"
+
+  destination_root="$cargo_home/registry/cache/$(basename -- "$fixed_cache")"
+  [[ -d "$destination_root" && ! -L "$destination_root" ]] || {
+    printf 'isolated Cargo archive closure is missing or nonphysical: %s\n' \
+      "$destination_root" >&2
+    return 1
+  }
+  mapfile -t actual_archives < <(
+    find "$destination_root" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort
+  )
+  mapfile -t expected_archives < <(printf '%s\n' "${expected_archives[@]}" | LC_ALL=C sort)
+  [[ "${actual_archives[*]}" == "${expected_archives[*]}" ]] || {
+    printf 'isolated Cargo archive destination contains missing or unlocked entries\n' >&2
+    return 1
+  }
+  while IFS=$'\t' read -r package version checksum; do
+    archive="$destination_root/$package-$version.crate"
+    [[ -f "$archive" && ! -L "$archive" \
+      && "$(realpath -e -- "$archive")" == "$archive" \
+      && "$(jain_sha256 "$archive")" == "$checksum" ]] || {
+      printf 'isolated Cargo archive closure digest mismatch: %s\n' "$archive" >&2
+      return 1
+    }
+  done <<<"$records"
+  expected_manifest="$(printf '%s\n' "$records" | sha256sum | awk '{print $1}')"
+  actual_manifest="$(
+    while IFS=$'\t' read -r package version checksum; do
+      printf '%s\t%s\t%s\n' "$package" "$version" \
+        "$(jain_sha256 "$destination_root/$package-$version.crate")"
+    done <<<"$records" | sha256sum | awk '{print $1}'
+  )"
+  [[ "$actual_manifest" == "$expected_manifest" ]] || {
+    printf 'isolated Cargo archive closure manifest mismatch\n' >&2
+    return 1
+  }
+  log "security: verified exact Cargo.lock registry closure packages=${#expected_archives[@]} manifest=$actual_manifest"
+}
+
+jain_directory_manifest_sha256() {
+  local root="${1:?directory is required}"
+  (
+    cd "$root"
+    find . -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum
+  ) | sha256sum | awk '{print $1}'
+}
+
+jain_seed_cargo_registry_index() {
+  local source_index="${1:?source registry index is required}"
+  local cargo_home="${2:?isolated Cargo home is required}"
+  local expected_manifest="${3:?registry index manifest is required}"
+  local destination
+
+  [[ "$expected_manifest" =~ ^[0-9a-f]{64}$ ]] || {
+    printf 'registry index manifest must be a full SHA-256\n' >&2
+    return 1
+  }
+  [[ -d "$source_index" && ! -L "$source_index" \
+    && "$(realpath -e -- "$source_index")" == "$source_index" \
+    && -z "$(find "$source_index" -type l -print -quit)" \
+    && "$(jain_directory_manifest_sha256 "$source_index")" == "$expected_manifest" ]] || {
+    printf 'fixed crates.io registry index physical identity mismatch: %s\n' \
+      "$source_index" >&2
+    return 1
+  }
+  [[ -d "$cargo_home" && ! -L "$cargo_home" \
+    && "$(realpath -e -- "$cargo_home")" == "$cargo_home" \
+    && -z "$(find "$cargo_home" -mindepth 1 -print -quit)" ]] || {
+    printf 'registry index destination home must be new, empty, and physical: %s\n' \
+      "$cargo_home" >&2
+    return 1
+  }
+
+  mkdir -p "$cargo_home/registry/index"
+  destination="$cargo_home/registry/index/$(basename -- "$source_index")"
+  cp -a --reflink=auto -- "$source_index" "$destination"
+  [[ -d "$destination" && ! -L "$destination" \
+    && -z "$(find "$destination" -type l -print -quit)" \
+    && "$(jain_directory_manifest_sha256 "$destination")" == "$expected_manifest" ]] || {
+    printf 'isolated crates.io registry index copy identity mismatch\n' >&2
+    return 1
+  }
+  log "security: materialized isolated crates.io index manifest=$expected_manifest"
+}
+
+jain_verify_isolated_cargo_deny_db() {
+  local repository="${1:?repository is required}"
+  local expected_commit="${2:?commit is required}"
+  local expected_tree="${3:?tree is required}"
+  local expected_config actual_config
+  local -a fetch_lines=()
+
+  [[ "$expected_commit" =~ ^[0-9a-f]{40}$ && "$expected_tree" =~ ^[0-9a-f]{40}$ ]] || {
+    printf 'cargo-deny advisory identity must use full commit and tree hashes\n' >&2
+    return 1
+  }
+  [[ -d "$repository" && ! -L "$repository" \
+    && "$(realpath -e -- "$repository")" == "$repository" \
+    && -d "$repository/.git" && ! -L "$repository/.git" ]] || {
+    printf 'isolated cargo-deny advisory DB must be a physical checkout: %s\n' \
+      "$repository" >&2
+    return 1
+  }
+  [[ -z "$(find "$repository" -type l -print -quit)" ]] || {
+    printf 'isolated cargo-deny advisory DB contains a symlink: %s\n' "$repository" >&2
+    return 1
+  }
+  [[ ! -e "$repository/.git/objects/info/alternates" \
+    && -z "$(find "$repository/.git/hooks" -mindepth 1 -print -quit)" \
+    && -z "$(git -C "$repository" config --get core.hooksPath || true)" ]] || {
+    printf 'isolated cargo-deny advisory DB contains alternates or hooks\n' >&2
+    return 1
+  }
+  git -C "$repository" symbolic-ref -q HEAD >/dev/null 2>&1 && {
+    printf 'isolated cargo-deny advisory DB HEAD must be detached\n' >&2
+    return 1
+  }
+  [[ "$(git -C "$repository" rev-parse HEAD)" == "$expected_commit" \
+    && "$(git -C "$repository" rev-parse 'HEAD^{tree}')" == "$expected_tree" \
+    && -z "$(git -C "$repository" status --porcelain=v1)" ]] || {
+    printf 'isolated cargo-deny advisory DB HEAD/tree/clean identity mismatch\n' >&2
+    return 1
+  }
+  [[ -f "$repository/.git/FETCH_HEAD" && ! -L "$repository/.git/FETCH_HEAD" ]] || {
+    printf 'isolated cargo-deny advisory DB lacks physical FETCH_HEAD\n' >&2
+    return 1
+  }
+  mapfile -t fetch_lines <"$repository/.git/FETCH_HEAD"
+  [[ "${#fetch_lines[@]}" -eq 1 \
+    && "${fetch_lines[0]%%$'\t'*}" == "$expected_commit" ]] || {
+    printf 'isolated cargo-deny advisory DB FETCH_HEAD identity mismatch\n' >&2
+    return 1
+  }
+  [[ -z "$(git -C "$repository" remote)" \
+    && -z "$(git -C "$repository" for-each-ref --format='%(refname)')" ]] || {
+    printf 'isolated cargo-deny advisory DB contains unexpected refs or remotes\n' >&2
+    return 1
+  }
+  expected_config=$'core.bare=false\ncore.filemode=true\ncore.logallrefupdates=true\ncore.repositoryformatversion=0'
+  actual_config="$(git -C "$repository" config --local --list | LC_ALL=C sort)"
+  [[ "$actual_config" == "$expected_config" ]] || {
+    printf 'isolated cargo-deny advisory DB contains unexpected local config\n' >&2
+    return 1
+  }
+  git -C "$repository" fsck --full --no-reflogs >/dev/null 2>&1 || {
+    printf 'isolated cargo-deny advisory DB failed full fsck\n' >&2
+    return 1
+  }
+}
+
+jain_seed_cargo_deny_advisory_db() {
+  local source_db="${1:?source advisory DB is required}"
+  local cargo_home="${2:?isolated Cargo home is required}"
+  local expected_commit="${3:?commit is required}"
+  local expected_tree="${4:?tree is required}"
+  local advisory_parent destination entry hook source_origin_main
+  local -a advisory_entries=() hook_entries=() source_fetch_lines=()
+
+  [[ -d "$source_db" && ! -L "$source_db" \
+    && "$(realpath -e -- "$source_db")" == "$source_db" \
+    && -d "$source_db/.git" && ! -L "$source_db/.git" ]] || {
+    printf 'fixed cargo-deny advisory DB must be a physical checkout: %s\n' \
+      "$source_db" >&2
+    return 1
+  }
+  [[ -z "$(find "$source_db" -type l -print -quit)" \
+    && ! -e "$source_db/.git/objects/info/alternates" \
+    && -z "$(find "$source_db/.git/hooks" -type f ! -name '*.sample' -print -quit)" \
+    && -z "$(git -C "$source_db" config --get core.hooksPath || true)" ]] || {
+    printf 'fixed cargo-deny advisory DB contains symlinks, alternates, or active hooks\n' >&2
+    return 1
+  }
+  source_origin_main="$(git -C "$source_db" rev-parse refs/remotes/origin/main 2>/dev/null)" \
+    || return 1
+  [[ -f "$source_db/.git/FETCH_HEAD" && ! -L "$source_db/.git/FETCH_HEAD" ]] || {
+    printf 'fixed cargo-deny advisory DB lacks physical FETCH_HEAD\n' >&2
+    return 1
+  }
+  mapfile -t source_fetch_lines <"$source_db/.git/FETCH_HEAD"
+  [[ "$(git -C "$source_db" symbolic-ref --short HEAD)" == "main" \
+    && "$(git -C "$source_db" rev-parse HEAD)" == "$expected_commit" \
+    && "$source_origin_main" == "$expected_commit" \
+    && "$(git -C "$source_db" rev-parse 'HEAD^{tree}')" == "$expected_tree" \
+    && -z "$(git -C "$source_db" status --porcelain=v1)" \
+    && "${#source_fetch_lines[@]}" -ge 1 \
+    && "${source_fetch_lines[0]%%$'\t'*}" == "$expected_commit" \
+    && "${source_fetch_lines[0]}" == "$expected_commit"$'\t\t'* ]] || {
+    printf 'fixed cargo-deny advisory DB HEAD/tree/FETCH_HEAD/clean identity mismatch\n' >&2
+    return 1
+  }
+  git -C "$source_db" fsck --full --no-reflogs >/dev/null 2>&1 || {
+    printf 'fixed cargo-deny advisory DB failed full fsck\n' >&2
+    return 1
+  }
+  [[ -d "$cargo_home" && ! -L "$cargo_home" \
+    && "$(realpath -e -- "$cargo_home")" == "$cargo_home" ]] || {
+    printf 'cargo-deny advisory destination home must be physical: %s\n' \
+      "$cargo_home" >&2
+    return 1
+  }
+
+  advisory_parent="$cargo_home/advisory-dbs"
+  if [[ -e "$advisory_parent" || -L "$advisory_parent" ]]; then
+    [[ -d "$advisory_parent" && ! -L "$advisory_parent" ]] || {
+      printf 'cargo-deny advisory parent must be a physical directory\n' >&2
+      return 1
+    }
+    mapfile -t advisory_entries < <(find "$advisory_parent" -mindepth 1 -maxdepth 1 -print)
+    for entry in "${advisory_entries[@]}"; do
+      [[ "$entry" == "$advisory_parent/db.lock" && -f "$entry" && ! -L "$entry" ]] || {
+        printf 'cargo-deny advisory parent contains an unexpected entry: %s\n' "$entry" >&2
+        return 1
+      }
+    done
+  else
+    mkdir "$advisory_parent"
+  fi
+  destination="$advisory_parent/advisory-db-3157b0e258782691"
+  [[ ! -e "$destination" && ! -L "$destination" ]] || {
+    printf 'cargo-deny advisory destination already exists: %s\n' "$destination" >&2
+    return 1
+  }
+  git -c core.hooksPath=/dev/null clone \
+    --no-local --no-checkout --no-tags --single-branch --branch main \
+    "$source_db" "$destination" >/dev/null
+  git -C "$destination" fetch --no-tags "$source_db" refs/heads/main >/dev/null
+  git -c core.hooksPath=/dev/null -C "$destination" \
+    checkout --detach "$expected_commit" >/dev/null
+  git -C "$destination" remote remove origin
+  git -C "$destination" symbolic-ref -d refs/remotes/origin/HEAD >/dev/null 2>&1 || true
+  git -C "$destination" update-ref -d refs/heads/main
+
+  mapfile -t hook_entries < <(find "$destination/.git/hooks" -mindepth 1 -maxdepth 1 -print)
+  for hook in "${hook_entries[@]}"; do
+    [[ -f "$hook" && ! -L "$hook" && "$hook" == *.sample ]] || {
+      printf 'isolated cargo-deny advisory clone created an unexpected hook: %s\n' \
+        "$hook" >&2
+      return 1
+    }
+    rm -- "$hook"
+  done
+
+  jain_verify_isolated_cargo_deny_db \
+    "$destination" "$expected_commit" "$expected_tree" || return 1
+  log "security: materialized isolated cargo-deny advisory DB commit=$expected_commit tree=$expected_tree"
+}
+
 jain_verify_exact_executable() {
   local label="${1:?label is required}" path="${2:?path is required}"
   local expected_digest="${3:?digest is required}" resolved

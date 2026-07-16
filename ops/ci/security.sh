@@ -17,7 +17,27 @@ readonly SYFT_SHA256="eb9714fb8e4b8f2a647e7bb312f1e0b9f83a7aa30418658bf46583cfa8
 readonly SYFT_CONFIG="${ROOT_DIR}/ops/ci/syft.yaml"
 readonly RUSTSEC_DB="/home/ubuntu/.cargo/advisory-db"
 readonly RUSTSEC_DB_COMMIT="9f3e138091487e69144f536d36976e427a7a3307"
+readonly RUSTSEC_DB_TREE="c33f1047906505cabcec7e21f2d99db5c6de8852"
+readonly CARGO_DENY_DB="/home/ubuntu/.cargo/advisory-dbs/advisory-db-3157b0e258782691"
+readonly HOST_CARGO_CACHE_PARENT="/home/ubuntu/.cargo/registry/cache"
+readonly HOST_CARGO_CACHE="${HOST_CARGO_CACHE_PARENT}/index.crates.io-1949cf8c6b5b557f"
+readonly HOST_CARGO_INDEX="/home/ubuntu/.cargo/registry/index/index.crates.io-1949cf8c6b5b557f"
+readonly HOST_CARGO_INDEX_MANIFEST_SHA256="8008bd5c203bae7ed4721b5977f51b87118d46686f30e6019a2f025347831e00"
 readonly EXPECTED_SECURITY_COMMANDS="gitleaks detect; cargo audit; cargo deny; npm audit; zizmor; syft"
+
+cargo_deny_home=""
+cleanup_cargo_deny_home() {
+  local rc=$?
+  if [[ -n "$cargo_deny_home" && -d "$cargo_deny_home" ]]; then
+    if [[ -n "$(find "$cargo_deny_home" -type l -print -quit)" ]]; then
+      warn "preserving isolated cargo-deny home containing a symlink: $cargo_deny_home"
+      return "$rc"
+    fi
+    rm -rf -- "$cargo_deny_home"
+  fi
+  return "$rc"
+}
+trap cleanup_cargo_deny_home EXIT
 
 [[ "${REDLINE_SECURITY_COMMANDS:-$EXPECTED_SECURITY_COMMANDS}" == "$EXPECTED_SECURITY_COMMANDS" ]] \
   || fail "security command manifest does not match the governed release lane"
@@ -56,6 +76,8 @@ tar -xf "$rustsec_archive" -C "$rustsec_snapshot"
 [[ -z "$(find "$rustsec_snapshot" -type l -print -quit)" ]] \
   || fail "pinned RustSec snapshot contains a symlink"
 rustsec_tree="$(git -C "$RUSTSEC_DB" rev-parse "${RUSTSEC_DB_COMMIT}^{tree}")"
+[[ "$rustsec_tree" == "$RUSTSEC_DB_TREE" ]] \
+  || fail "pinned RustSec tree identity mismatch"
 
 log "security: pinned local gitleaks"
 "$GITLEAKS_BIN" detect --source . --config gitleaks.toml --no-banner --redact \
@@ -69,8 +91,50 @@ jq -e '.vulnerabilities.found == false and (.vulnerabilities.list | length) == 0
   and ((.warnings // {}) | length == 0)' "$artifact_root/cargo-audit.json" >/dev/null
 
 log "security: pinned local cargo-deny"
-"$CARGO_DENY_BIN" check --disable-fetch --deny warnings \
-  >"$artifact_root/cargo-deny.log" 2>&1
+cargo_cache_home="${CARGO_HOME:-${HOME}/.cargo}"
+jain_seed_locked_cargo_archives \
+  "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_CACHE_PARENT" "$HOST_CARGO_CACHE" \
+  "$cargo_cache_home" valuable 0.1.1 anstyle-wincon 3.0.11 \
+  || fail "security: exact locked cargo-deny cache seed failed"
+cargo_metadata="$artifact_root/cargo-metadata.json"
+CARGO_HOME="$cargo_cache_home" cargo metadata --locked --offline --format-version 1 \
+  >"$cargo_metadata"
+cargo_deny_home="$(mktemp -d "$artifact_root/cargo-deny-home.XXXXXX")"
+jain_seed_cargo_registry_index \
+  "$HOST_CARGO_INDEX" "$cargo_deny_home" "$HOST_CARGO_INDEX_MANIFEST_SHA256" \
+  || fail "security: exact isolated crates.io index seed failed"
+jain_seed_locked_cargo_registry_closure \
+  "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_CACHE_PARENT" "$HOST_CARGO_CACHE" \
+  "$cargo_deny_home" \
+  || fail "security: exact Cargo.lock registry closure seed failed"
+jain_seed_cargo_deny_advisory_db \
+  "$CARGO_DENY_DB" "$cargo_deny_home" "$RUSTSEC_DB_COMMIT" "$RUSTSEC_DB_TREE" \
+  || fail "security: exact isolated cargo-deny advisory DB seed failed"
+cargo_deny_log="$artifact_root/cargo-deny.log"
+if ! CARGO_HOME="$cargo_deny_home" "$CARGO_DENY_BIN" check \
+  --metadata-path "$cargo_metadata" --disable-fetch --deny warnings \
+  >"$cargo_deny_log" 2>&1; then
+  cat "$cargo_deny_log" >&2
+  fail "security: cargo-deny failed; log preserved at $cargo_deny_log"
+fi
+if grep -Eiq '\[error\]|failed to fetch|(^|[^[:alpha:]])warnings?([^[:alpha:]]|$)' \
+  "$cargo_deny_log"; then
+  cat "$cargo_deny_log" >&2
+  fail "security: cargo-deny emitted an error/fetch/warning diagnostic; log preserved at $cargo_deny_log"
+fi
+grep -F 'advisories ok, bans ok, licenses ok, sources ok' "$cargo_deny_log" >/dev/null \
+  || fail "security: cargo-deny did not emit its complete passing summary"
+jain_verify_locked_cargo_registry_closure \
+  "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_CACHE" "$cargo_deny_home" \
+  || fail "security: cargo-deny mutated its exact Cargo.lock archive closure"
+jain_verify_isolated_cargo_deny_db \
+  "$cargo_deny_home/advisory-dbs/advisory-db-3157b0e258782691" \
+  "$RUSTSEC_DB_COMMIT" "$RUSTSEC_DB_TREE" \
+  || fail "security: cargo-deny mutated its isolated advisory DB"
+[[ -z "$(find "$cargo_deny_home" -type l -print -quit)" ]] \
+  || fail "security: isolated cargo-deny home contains a symlink"
+rm -rf -- "$cargo_deny_home"
+cargo_deny_home=""
 
 log "security: offline npm advisory cache"
 (cd "$WEB_DIR" && npm audit --offline --audit-level=high --json) \
