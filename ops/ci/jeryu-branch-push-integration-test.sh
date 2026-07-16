@@ -87,7 +87,7 @@ install -m 0755 "$source_forge" "$fake_forge"
 
 umask 077
 token="synthetic-$RANDOM-$RANDOM-$RANDOM-no-authority"
-printf '%s' "$token" >"$token_file"
+printf '%s\n' "$token" >"$token_file"
 chmod 0600 "$token_file"
 
 /usr/bin/git init --bare --quiet "$project_root/jeryu/example.git"

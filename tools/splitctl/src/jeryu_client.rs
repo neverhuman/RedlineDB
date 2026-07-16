@@ -820,6 +820,9 @@ where
     if reopened.identity != opened.identity || reopened.component_ids != opened.component_ids {
         return Err(JeryuError::new("Jeryu token path changed while reading"));
     }
+    if bytes.0.last() == Some(&b'\n') {
+        bytes.0.pop();
+    }
     validate_token_bytes(bytes.as_slice())?;
     Ok(bytes)
 }
@@ -1404,6 +1407,20 @@ mod tests {
     }
 
     #[test]
+    fn token_accepts_exactly_one_terminal_lf_as_file_framing() {
+        let temp = TempDir::new();
+        let mut framed = token_value().to_vec();
+        framed.push(b'\n');
+        let path = temp.token(&framed);
+        assert_eq!(
+            read_token(&path, unsafe { libc::geteuid() })
+                .unwrap()
+                .as_slice(),
+            token_value()
+        );
+    }
+
+    #[test]
     fn token_requires_absolute_path_current_owner_and_exact_mode() {
         let temp = TempDir::new();
         let path = temp.token(token_value());
@@ -1454,12 +1471,23 @@ mod tests {
     }
 
     #[test]
-    fn token_rejects_control_bytes_and_path_replacement() {
-        let temp = TempDir::new();
-        let control = temp.token(b"fixture-token-with-newline\n");
-        assert!(read_token(&control, unsafe { libc::geteuid() }).is_err());
+    fn token_rejects_noncanonical_whitespace_and_control_bytes() {
+        for value in [
+            b"\nfixture-token-0123456789".as_slice(),
+            b"fixture-token-0123456789\nextra".as_slice(),
+            b"fixture-token-0123456789\r\n".as_slice(),
+            b"fixture-token-0123456789\n\n".as_slice(),
+            b"fixture-token-0123456789\t".as_slice(),
+        ] {
+            let temp = TempDir::new();
+            let control = temp.token(value);
+            assert!(read_token(&control, unsafe { libc::geteuid() }).is_err());
+        }
+    }
 
-        fs::remove_file(&control).unwrap();
+    #[test]
+    fn token_rejects_path_replacement() {
+        let temp = TempDir::new();
         let path = temp.token(token_value());
         let replacement = temp.0.join("replacement");
         fs::write(&replacement, b"replacement-token-012345").unwrap();
