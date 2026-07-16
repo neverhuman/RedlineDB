@@ -17,6 +17,37 @@ export ALL_PROXY=http://127.0.0.1:9 NO_PROXY=
 export http_proxy="$HTTP_PROXY" https_proxy="$HTTPS_PROXY"
 export all_proxy="$ALL_PROXY" no_proxy=
 
+log_root="$tmp/log"
+mkdir "$log_root"
+passing_summary='advisories ok, bans ok, licenses ok, sources ok'
+clean_log="$log_root/clean.log"
+printf '%s\n' "$passing_summary" >"$clean_log"
+jain_verify_cargo_deny_clean_log "$clean_log"
+
+expect_log_rejected() {
+  local label="$1" contents="$2"
+  local log_file="$log_root/$label.log"
+  printf '%s' "$contents" >"$log_file"
+  if jain_verify_cargo_deny_clean_log "$log_file" \
+    >"$log_root/$label.stdout" 2>"$log_root/$label.stderr"; then
+    printf '%s cargo-deny log fixture was accepted\n' "$label" >&2
+    exit 1
+  fi
+  grep -F 'cargo-deny log must be the exact LF-terminated passing summary' \
+    "$log_root/$label.stderr" >/dev/null
+}
+
+expect_log_rejected missing-lf "$passing_summary"
+expect_log_rejected prefix $'unexpected prefix\nadvisories ok, bans ok, licenses ok, sources ok\n'
+expect_log_rejected suffix $'advisories ok, bans ok, licenses ok, sources ok\nunexpected suffix\n'
+expect_log_rejected error $'[ERROR] cargo-deny diagnostic\nadvisories ok, bans ok, licenses ok, sources ok\n'
+expect_log_rejected fetch $'failed to fetch crates\nadvisories ok, bans ok, licenses ok, sources ok\n'
+expect_log_rejected download $'failed to download crate\nadvisories ok, bans ok, licenses ok, sources ok\n'
+expect_log_rejected offline $'offline request attempted\nadvisories ok, bans ok, licenses ok, sources ok\n'
+expect_log_rejected network $'network access attempted\nadvisories ok, bans ok, licenses ok, sources ok\n'
+expect_log_rejected url $'https://crates.io/index\nadvisories ok, bans ok, licenses ok, sources ok\n'
+expect_log_rejected warn $'warning: advisory fetch skipped\nadvisories ok, bans ok, licenses ok, sources ok\n'
+
 case_root="$tmp/case"
 cache_parent="$case_root/cache"
 fixed_cache="$cache_parent/index.crates.io-1949cf8c6b5b557f"

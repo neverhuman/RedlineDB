@@ -74,6 +74,19 @@ jain_sha256() {
   sha256sum -- "${1:?file is required}" | awk '{print $1}'
 }
 
+jain_verify_cargo_deny_clean_log() {
+  local log_file="${1:?cargo-deny log is required}"
+  local expected_sha256="f1a0fca39d4280363937aabd77783990ea6480bd9ca257816de3b68fc8efa845"
+
+  [[ -f "$log_file" && ! -L "$log_file" \
+    && "$(realpath -e -- "$log_file")" == "$log_file" \
+    && "$(wc -c <"$log_file")" -eq 48 \
+    && "$(jain_sha256 "$log_file")" == "$expected_sha256" ]] || {
+    printf 'cargo-deny log must be the exact LF-terminated passing summary\n' >&2
+    return 1
+  }
+}
+
 jain_locked_package_checksum() {
   local lock_file="${1:?lock file is required}"
   local wanted_name="${2:?package name is required}"

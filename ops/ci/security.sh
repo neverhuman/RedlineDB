@@ -117,13 +117,10 @@ if ! CARGO_HOME="$cargo_deny_home" "$CARGO_DENY_BIN" check \
   cat "$cargo_deny_log" >&2
   fail "security: cargo-deny failed; log preserved at $cargo_deny_log"
 fi
-if grep -Eiq '\[error\]|failed to fetch|(^|[^[:alpha:]])warnings?([^[:alpha:]]|$)' \
-  "$cargo_deny_log"; then
+jain_verify_cargo_deny_clean_log "$cargo_deny_log" || {
   cat "$cargo_deny_log" >&2
-  fail "security: cargo-deny emitted an error/fetch/warning diagnostic; log preserved at $cargo_deny_log"
-fi
-grep -F 'advisories ok, bans ok, licenses ok, sources ok' "$cargo_deny_log" >/dev/null \
-  || fail "security: cargo-deny did not emit its complete passing summary"
+  fail "security: cargo-deny output was not the exact passing summary; log preserved at $cargo_deny_log"
+}
 jain_verify_locked_cargo_registry_closure \
   "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_CACHE" "$cargo_deny_home" \
   || fail "security: cargo-deny mutated its exact Cargo.lock archive closure"
