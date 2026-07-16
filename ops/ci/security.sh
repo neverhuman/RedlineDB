@@ -25,6 +25,18 @@ set -euo pipefail
 mkdir -p .jankurai/security
 control_manifest="tools/evidence-processor/Cargo.toml"
 control_lock="tools/evidence-processor/Cargo.lock"
+cargo_audit_args=()
+if [ -n "${CI_CARGO_AUDIT_DB:-}" ]; then
+    if [ ! -d "$CI_CARGO_AUDIT_DB" ] || [ -L "$CI_CARGO_AUDIT_DB" ]; then
+        printf 'CI_CARGO_AUDIT_DB must be a non-symlink directory: %s\n' \
+            "$CI_CARGO_AUDIT_DB" >&2
+        exit 1
+    fi
+    cargo_audit_args+=(--db "$CI_CARGO_AUDIT_DB")
+fi
+if [ "${CI_CARGO_AUDIT_NO_FETCH:-0}" = "1" ]; then
+    cargo_audit_args+=(--no-fetch)
+fi
 
 if ! command -v gitleaks >/dev/null 2>&1 \
     || [ "$(gitleaks version 2>/dev/null || true)" != "$CI_GITLEAKS_VERSION" ]; then
@@ -33,7 +45,7 @@ fi
 
 if [ -f Cargo.toml ] && [ -f Cargo.lock ]; then
     # Hard gate: cargo-audit must succeed for an applicable Rust graph.
-    cargo audit
+    cargo audit "${cargo_audit_args[@]}"
 
     # Soft gate: cargo-deny `cargo metadata` JSON parser drift against
     # rust 1.95.0 on the current workspace. See ledger for unblock.
@@ -50,7 +62,7 @@ elif [ -e Cargo.toml ] || [ -e Cargo.lock ]; then
     printf 'incomplete Rust dependency graph: Cargo.toml and Cargo.lock must be present together\n' >&2
     exit 1
 elif [ -f "$control_manifest" ] && [ -f "$control_lock" ]; then
-    cargo audit --file "$control_lock"
+    cargo audit "${cargo_audit_args[@]}" --file "$control_lock"
     ci_soft_gate \
         cargo-deny-check \
         .jankurai/security/cargo-deny.log \
