@@ -10,31 +10,32 @@
 #   bash ops/ci/jankurai-staged-gate.sh                # uses origin/main
 #   BASE_REF=origin/main bash ops/ci/jankurai-staged-gate.sh
 #
-# Required: pinned `jankurai` release binary installed by ops/ci/lib.sh.
+# Required: fixed-path/version/digest Jankurai bound by ops/ci/lib.sh.
 
 set -euo pipefail
 
 BASE_REF="${BASE_REF:-origin/main}"
-LOG_DIR="${LOG_DIR:-.jankurai/staged-gate}"
+LOG_DIR="${LOG_DIR:-target/jankurai/staged-gate}"
 mkdir -p "$LOG_DIR"
 
 # shellcheck source=ops/ci/lib.sh
 . "$(dirname "$0")/lib.sh"
-ci_install_jankurai_logged "$LOG_DIR/install.log"
+ci_require_clean_head
+ci_require_governed_jankurai_logged "$LOG_DIR/governed-jankurai.log"
 
 # Resolve the merge base so we diff against the branch divergence point,
 # not a moving target on the base branch.
 if ! git rev-parse --verify "$BASE_REF" >/dev/null 2>&1; then
-  echo "BASE_REF=$BASE_REF not resolvable; skipping staged-gate" >&2
-  exit 0
+  echo "BASE_REF=$BASE_REF not resolvable; staged-gate cannot prove the candidate" >&2
+  exit 1
 fi
 # NOTE: on shallow clones git merge-base exits non-zero and set -e would kill
 # the script before the guard below runs. The || true absorbs the non-zero
 # exit so $base_sha is empty and the guard below handles it gracefully.
 base_sha="$(git merge-base "$BASE_REF" HEAD 2>/dev/null)" || true
 if [ -z "$base_sha" ]; then
-  echo "no merge base with $BASE_REF (shallow clone or unrelated history); skipping staged-gate" >&2
-  exit 0
+  echo "no merge base with $BASE_REF (shallow clone or unrelated history)" >&2
+  exit 1
 fi
 
 tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/jankurai-staged-gate.XXXXXX")"
@@ -181,4 +182,5 @@ if [ "$skipped_same_pr_scripts" -ne 0 ]; then
   printf 'jankurai staged-gate: %d same-PR workflow script reference(s) verified in HEAD\n' \
     "$skipped_same_pr_scripts"
 fi
+ci_require_clean_head
 exit 0

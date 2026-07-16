@@ -75,11 +75,12 @@ run_sqlite_jankurai_compare() {
   sqlite_checkout="$(ensure_sqlite_source_checkout "$sqlite_ref")"
   mkdir -p target/sqlite-jankurai benchmark-results/sqlite-parity/latest
   rtk bash scripts/check_audit_policy_mirror.sh
+  ci_require_governed_jankurai
   jankurai audit "$sqlite_checkout" --mode advisory --json target/sqlite-jankurai/repo-score.json --md target/sqlite-jankurai/repo-score.md --no-score-history --policy "$redlinedb_audit_policy"
   redline_testing_bin="$(ci_install_redline_testing)"
   load_redline_testing_provenance "$redline_testing_bin"
   "$redline_testing_bin" jankurai-compare \
-    --redlinedb-score .jankurai/repo-score.json \
+    --redlinedb-score target/jankurai/repo-score.json \
     --sqlite-score target/sqlite-jankurai/repo-score.json \
     --sqlite-ref "$sqlite_ref" \
     --updated-date "$updated_date" \
@@ -100,7 +101,7 @@ sqlite_parity_report_args() {
     --ksloc-plot assets/sqlite-parity-ksloc.svg
     --performance-histogram-plot assets/sqlite-parity-performance-histogram.svg
     --median-test-performance-plot assets/sqlite-median-test-performance.svg
-    --jankurai-score .jankurai/repo-score.json
+    --jankurai-score target/jankurai/repo-score.json
     --updated-date "$updated_date"
     --expected-repetitions "$sqlite_parity_repetitions"
     --expected-warmup "$sqlite_parity_warmup"
@@ -480,19 +481,27 @@ case "$lane" in
     ;;
   score)
     rtk bash scripts/check_audit_policy_mirror.sh
+    ci_require_clean_head
+    ci_require_governed_jankurai
+    mkdir -p target/jankurai
     rm -f target/jankurai/audit-state.json
-    jankurai audit . --mode advisory --json .jankurai/repo-score.json --md .jankurai/repo-score.md --score-history .jankurai/score-history.jsonl --score-history-csv .jankurai/score-history.csv --policy "$redlinedb_audit_policy"
+    jankurai audit . --mode advisory --baseline .jankurai/baselines/main.repo-score.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --score-history target/jankurai/score-history.jsonl --score-history-csv target/jankurai/score-history.csv --policy "$redlinedb_audit_policy"
+    ci_verify_jankurai_report target/jankurai/repo-score.json target/jankurai/governed-evidence.json
     ;;
   doctor)
+    ci_require_governed_jankurai
     jankurai doctor --fail-on high
     ;;
   rust-map)
+    ci_require_governed_jankurai
     jankurai rust map .
     ;;
   rust-witness)
+    ci_require_governed_jankurai
     jankurai rust witness build .
     ;;
   rust-diagnose)
+    ci_require_governed_jankurai
     jankurai rust diagnose .
     ;;
   *)
