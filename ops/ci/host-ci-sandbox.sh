@@ -63,6 +63,32 @@ validate_cargo_registry_cache() {
     || fail 'Cargo registry cache has unsafe nodes or incomplete roots'
 }
 
+validate_grype_db() {
+  local root="$1" expected="$2" relative path inventory_digest actual_nodes
+  case "$root" in
+    /tmp | /tmp/*) fail 'Grype database cannot use /tmp' ;;
+  esac
+  [[ -d "$root" && ! -L "$root" \
+    && "$(stat -c '%u:%g:%a' -- "$root" 2>/dev/null)" == '0:0:555' \
+    && "$(stat -c '%u:%g:%a' -- "$root/6" 2>/dev/null)" == '0:0:555' ]] \
+    || fail 'Grype database directories are not immutable root authority'
+  actual_nodes="$(find "$root" -mindepth 1 -printf '%P\n' | sort)"
+  [[ "$actual_nodes" == $'6\n6/import.json\n6/vulnerability.db' \
+    && -z "$(find "$root" -mindepth 1 ! -type d ! -type f -print -quit)" ]] \
+    || fail 'Grype database inventory is not closed'
+  inventory_digest="$({
+    for relative in 6/import.json 6/vulnerability.db; do
+      path="$root/$relative"
+      [[ "$(stat -c '%u:%g:%a:%h' -- "$path" 2>/dev/null)" == '0:0:444:1' ]] \
+        || fail "unsafe Grype database file: $relative"
+      printf '%s\t%s\t%s\n' "$relative" "$(stat -c %s -- "$path")" \
+        "$(sha256sum -- "$path" | cut -d' ' -f1)"
+    done
+  } | sha256sum | cut -d' ' -f1)"
+  [[ "$inventory_digest" == "$expected" ]] \
+    || fail 'Grype database inventory digest mismatch'
+}
+
 [[ "$(id -u)" == 0 ]] || fail 'must run as root'
 [[ "$#" == 1 ]] || fail 'expected one sandbox request path'
 request="$1"
@@ -109,6 +135,8 @@ jq -e '
   | select(.family_root | type == "string" and startswith("/"))
   | select(.worker_cache | type == "string" and startswith("/"))
   | select(.cargo_registry_cache | type == "string" and startswith("/"))
+  | select(.grype_db_root | type == "string" and startswith("/"))
+  | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.cargo_bin | type == "string" and startswith("/"))
   | select(.rustup_home | type == "string" and startswith("/"))
   | select(.control_remote | type == "string" and length > 0)
@@ -176,6 +204,13 @@ cargo_registry_cache="$(realpath -e -- "$cargo_registry_cache_config")" \
 [[ "$cargo_registry_cache" == "$cargo_registry_cache_config" ]] \
   || fail 'Cargo registry cache path contains a symlink or alias'
 validate_cargo_registry_cache "$cargo_registry_cache"
+grype_db_config="$(jq -er '.grype_db_root' "$config")"
+grype_db_root="$(realpath -e -- "$grype_db_config")" \
+  || fail 'Grype database root unavailable'
+[[ "$grype_db_root" == "$grype_db_config" ]] \
+  || fail 'Grype database path contains a symlink or alias'
+grype_db_inventory_sha256="$(jq -er '.grype_db_inventory_sha256' "$config")"
+validate_grype_db "$grype_db_root" "$grype_db_inventory_sha256"
 cargo_bin="$(realpath -e -- "$(jq -er '.cargo_bin' "$config")")" \
   || fail 'Cargo bin directory unavailable'
 rustup_home="$(realpath -e -- "$(jq -er '.rustup_home' "$config")")" \
@@ -307,6 +342,8 @@ for name in "${environment_names[@]}"; do
     && "$name" != JAIN_PROOF_EVIDENCE_ROOT \
     && "$name" != JAIN_PROOF_EVIDENCE_STAGING_ROOT \
     && "$name" != JAIN_RUSTSEC_ADVISORY_SOURCE \
+    && "$name" != JAIN_GRYPE_DB_ROOT \
+    && "$name" != JAIN_GRYPE_DB_INVENTORY_SHA256 \
     && "$name" != JAIN_SPLIT_OPS_ROOT \
     && "$name" != JAIN_HOST_CI_REEXEC_STATE \
     && "$name" != JAIN_HOST_CI_NETWORK_ISOLATED \
@@ -478,6 +515,8 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --arg splitctl_sha "$splitctl_sha" \
   --arg jankurai_sha "$jankurai_sha" \
   --argjson security_tool_sha256 "$security_tool_sha256" \
+  --arg grype_db_root "$grype_db_root" \
+  --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
   --argjson created_at "$created_at" \
@@ -488,6 +527,8 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
     publisher_sha256:$publisher_sha,sandbox_sha256:$sandbox_sha,
     splitctl_sha256:$splitctl_sha,jankurai_sha256:$jankurai_sha,
     security_tool_sha256:$security_tool_sha256,
+    grype_db_root:$grype_db_root,
+    grype_db_inventory_sha256:$grype_db_inventory_sha256,
     native_evidence_root:$native_evidence_root,
     proof_evidence_root:$proof_evidence_root}' >"$root_state"
 chmod 0600 "$root_state"
@@ -559,6 +600,7 @@ systemd_args=(
   --property="BindPaths=$bootstrap_root"
   --property="BindPaths=$worker_cache:/opt/jain-ci/cargo-home"
   --property="BindReadOnlyPaths=$cargo_registry_cache:/opt/jain-ci/cargo-registry"
+  --property="BindReadOnlyPaths=$grype_db_root:/opt/jain-ci/grype-db"
   --property="BindReadOnlyPaths=$worker_authority:/opt/jain-ci/authority"
   --property="BindReadOnlyPaths=$family_root"
   --property="BindReadOnlyPaths=$cargo_bin:/opt/jain-ci/cargo-bin"
@@ -584,6 +626,9 @@ systemd_args=(
   --setenv="JAIN_HOST_CI_HOST_USER_NAMESPACE=$host_user_namespace"
   --setenv=JAIN_HOST_CI_NETWORK_ISOLATED=1
   --setenv=JAIN_RUSTSEC_ADVISORY_SOURCE=/opt/jain-ci/authority/advisory-db
+  --setenv=JAIN_GRYPE_DB_ROOT=/opt/jain-ci/grype-db
+  --setenv="JAIN_GRYPE_DB_INVENTORY_SHA256=$grype_db_inventory_sha256"
+  --setenv=GRYPE_DB_CACHE_DIR=/opt/jain-ci/grype-db
   --setenv="JAIN_NATIVE_EVIDENCE_STAGING_ROOT=$evidence_staging_root"
 )
 while IFS=$'\t' read -r name value; do

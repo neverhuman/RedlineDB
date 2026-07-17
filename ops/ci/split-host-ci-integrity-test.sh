@@ -18,6 +18,7 @@ publisher_root="$tmp/root-publisher"
 request_root="$tmp/root-requests"
 worker_cache="$tmp/worker-cache"
 cargo_registry_cache=""
+grype_db_root=""
 noexec_request_root=""
 product_forge_root="$tmp/product-forge"
 cleanup() {
@@ -53,6 +54,14 @@ cleanup() {
     '') ;;
     *) printf 'refusing unsafe Cargo registry fixture cleanup: %s\n' \
          "$cargo_registry_cache" >&2 ;;
+  esac
+  case "$grype_db_root" in
+    /var/lib/jain-host-ci/integrity-grype-db.??????)
+      sudo -n rm -rf -- "$grype_db_root" 2>/dev/null || true
+      ;;
+    '') ;;
+    *) printf 'refusing unsafe Grype database fixture cleanup: %s\n' \
+         "$grype_db_root" >&2 ;;
   esac
   if [[ -n "$noexec_request_root" ]]; then
     sudo -n /usr/bin/umount -- "$noexec_request_root" 2>/dev/null || true
@@ -329,6 +338,23 @@ sudo -n install -d -o root -g root -m 0555 \
   "$cargo_registry_cache/index/index.crates.io-6f17d22bba15001f/.cache"
 sudo -n install -o root -g root -m 0444 /dev/null \
   "$cargo_registry_cache/index/index.crates.io-6f17d22bba15001f/config.json"
+grype_db_root="$(
+  sudo -n mktemp -d /var/lib/jain-host-ci/integrity-grype-db.XXXXXX
+)"
+[[ "$grype_db_root" == /var/lib/jain-host-ci/integrity-grype-db.?????? ]]
+sudo -n install -d -o root -g root -m 0555 "$grype_db_root/6"
+sudo -n install -o root -g root -m 0444 \
+  /usr/bin/true "$grype_db_root/6/import.json"
+sudo -n install -o root -g root -m 0444 \
+  /usr/bin/true "$grype_db_root/6/vulnerability.db"
+sudo -n chmod 0555 "$grype_db_root"
+grype_db_inventory_sha256="$({
+  for relative in 6/import.json 6/vulnerability.db; do
+    printf '%s\t%s\t%s\n' "$relative" \
+      "$(sudo -n stat -c %s -- "$grype_db_root/$relative")" \
+      "$(sudo -n sha256sum -- "$grype_db_root/$relative" | cut -d' ' -f1)"
+  done
+} | sha256sum | cut -d' ' -f1)"
 sudo -n chown root:root "$native_evidence_root"
 sudo -n chmod 0700 "$native_evidence_root"
 sudo -n chown root:root "$proof_evidence_root"
@@ -361,11 +387,15 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d
   --arg bootstrap_expires_at "$bootstrap_expires_at" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
+  --arg grype_db_root "$grype_db_root" \
+  --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
   '{schema_version:"jain.host-ci-publisher-config/v5",
     publisher_sha256:$digest,sandbox_sha256:$sandbox_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
     security_tool_sha256:{actionlint:$security_tool_digest,
       grype:$security_tool_digest,syft:$security_tool_digest},
+    grype_db_root:$grype_db_root,
+    grype_db_inventory_sha256:$grype_db_inventory_sha256,
     forge_git_base:$git_base,
     control_remote:$remote,control_ref:$control_ref,
     bootstrap_commit:$bootstrap_commit,
@@ -391,12 +421,16 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   --arg bootstrap_expires_at "$bootstrap_expires_at" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
+  --arg grype_db_root "$grype_db_root" \
+  --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
   --argjson parent_uid "$(id -u)" --argjson parent_gid "$(id -g)" \
   '{schema_version:"jain.host-ci-sandbox-config/v5",
     sandbox_sha256:$digest,publisher_sha256:$publisher_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
     security_tool_sha256:{actionlint:$security_tool_digest,
       grype:$security_tool_digest,syft:$security_tool_digest},
+    grype_db_root:$grype_db_root,
+    grype_db_inventory_sha256:$grype_db_inventory_sha256,
     parent_uid:$parent_uid,parent_gid:$parent_gid,
     worker_user:"xbwork",worker_group:"xbwork",family_root:$family,
     worker_cache:$cache,cargo_registry_cache:$cargo_registry_cache,
@@ -425,6 +459,28 @@ grep -Fq 'installed security tool digest/metadata mismatch: actionlint' \
   "$tmp/security-tool-tamper.log"
 sudo -n install -o root -g root -m 0555 \
   /usr/bin/true "$publisher_root/security-actionlint"
+
+sudo -n install -o root -g root -m 0444 \
+  /usr/bin/false "$grype_db_root/6/vulnerability.db"
+if sudo -n "$sandbox" "$tmp/nonexistent-grype-db-request" \
+  >"$tmp/grype-db-tamper.log" 2>&1; then
+  printf 'sandbox accepted a mutated Grype database\n' >&2
+  exit 1
+fi
+grep -Fq 'Grype database inventory digest mismatch' \
+  "$tmp/grype-db-tamper.log"
+sudo -n install -o root -g root -m 0444 \
+  /usr/bin/true "$grype_db_root/6/vulnerability.db"
+
+sudo -n install -d -o root -g root -m 0555 "$grype_db_root/extra"
+if sudo -n "$sandbox" "$tmp/nonexistent-grype-db-request" \
+  >"$tmp/grype-db-extra-node.log" 2>&1; then
+  printf 'sandbox accepted an extra Grype database node\n' >&2
+  exit 1
+fi
+grep -Fq 'Grype database inventory is not closed' \
+  "$tmp/grype-db-extra-node.log"
+sudo -n rmdir -- "$grype_db_root/extra"
 
 # The live host may mount /run with noexec. Root authority copied beneath such
 # a request root cannot execute in the worker, so reject the mount before any

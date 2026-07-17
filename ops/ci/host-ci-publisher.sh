@@ -67,6 +67,8 @@ jq -e '
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
   | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
+  | select(.grype_db_root | type == "string" and startswith("/"))
+  | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.forge_git_base | type == "string" and length > 0)
   | select(.control_remote | type == "string" and length > 0)
   | select(.request_root | type == "string" and startswith("/"))
@@ -179,6 +181,8 @@ jq -e --arg request_id "$request_id" \
    | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
    | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
    | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
+   | select(.grype_db_root | type == "string" and startswith("/"))
+   | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
    | select(.native_evidence_root | type == "string")
    | select(.proof_evidence_root | type == "string")' "$state" >/dev/null \
   || fail 'root request is not sealed for one-shot publication'
@@ -205,6 +209,10 @@ expected_seal="$({
   && "$(jq -er '.splitctl_sha256' "$state")" == "$splitctl_sha" \
   && "$(jq -er '.jankurai_sha256' "$state")" == "$jankurai_sha" \
   && "$(jq -c '.security_tool_sha256' "$state")" == "$security_tool_sha256" \
+  && "$(jq -er '.grype_db_root' "$state")" \
+    == "$(jq -er '.grype_db_root' "$config")" \
+  && "$(jq -er '.grype_db_inventory_sha256' "$state")" \
+    == "$(jq -er '.grype_db_inventory_sha256' "$config")" \
   && "$(jq -er '.native_evidence_root' "$state")" \
     == "$native_evidence_root" \
   && "$(jq -er '.proof_evidence_root' "$state")" \

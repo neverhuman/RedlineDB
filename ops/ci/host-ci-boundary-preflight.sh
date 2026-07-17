@@ -56,6 +56,32 @@ validate_cargo_registry_cache() {
     || fail 'Cargo registry cache has unsafe nodes or incomplete roots'
 }
 
+validate_grype_db() {
+  local root="$1" expected="$2" relative path inventory_digest actual_nodes
+  case "$root" in
+    /tmp | /tmp/*) fail 'Grype database cannot use /tmp' ;;
+  esac
+  [[ -d "$root" && ! -L "$root" \
+    && "$(stat -c '%u:%g:%a' -- "$root" 2>/dev/null)" == '0:0:555' \
+    && "$(stat -c '%u:%g:%a' -- "$root/6" 2>/dev/null)" == '0:0:555' ]] \
+    || fail 'Grype database directories are not immutable root authority'
+  actual_nodes="$(find "$root" -mindepth 1 -printf '%P\n' | sort)"
+  [[ "$actual_nodes" == $'6\n6/import.json\n6/vulnerability.db' \
+    && -z "$(find "$root" -mindepth 1 ! -type d ! -type f -print -quit)" ]] \
+    || fail 'Grype database inventory is not closed'
+  inventory_digest="$({
+    for relative in 6/import.json 6/vulnerability.db; do
+      path="$root/$relative"
+      [[ "$(stat -c '%u:%g:%a:%h' -- "$path" 2>/dev/null)" == '0:0:444:1' ]] \
+        || fail "unsafe Grype database file: $relative"
+      printf '%s\t%s\t%s\n' "$relative" "$(stat -c %s -- "$path")" \
+        "$(sha256sum -- "$path" | cut -d' ' -f1)"
+    done
+  } | sha256sum | cut -d' ' -f1)"
+  [[ "$inventory_digest" == "$expected" ]] \
+    || fail 'Grype database inventory digest mismatch'
+}
+
 [[ "$(id -u)" == 0 ]] || fail 'must run as root'
 install_dir="${1:-/usr/local/libexec/jain}"
 install_dir="$(realpath -e -- "$install_dir")" || fail 'install directory missing'
@@ -86,6 +112,8 @@ jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v5")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
   | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
+  | select(.grype_db_root | type == "string" and startswith("/"))
+  | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.token_file | type == "string" and startswith("/"))
   | select((.control_ref // "refs/heads/main") | type == "string")
@@ -103,6 +131,8 @@ jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v5")
   | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
   | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
   | select(.cargo_registry_cache | type == "string" and startswith("/"))
+  | select(.grype_db_root | type == "string" and startswith("/"))
+  | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.token_file | type == "string" and startswith("/"))
   | select((.control_ref // "refs/heads/main") | type == "string")
@@ -148,7 +178,7 @@ done
 for field in \
   publisher_sha256 sandbox_sha256 splitctl_sha256 jankurai_sha256 \
   control_remote forge_git_base request_root native_evidence_root \
-  proof_evidence_root token_file; do
+  proof_evidence_root token_file grype_db_root grype_db_inventory_sha256; do
   [[ "$(jq -er ".$field" "$publisher_config")" \
     == "$(jq -er ".$field" "$sandbox_config")" ]] \
     || fail "broker configs disagree on $field"
@@ -205,6 +235,13 @@ cargo_registry_cache="$(realpath -e -- "$cargo_registry_cache_config")" \
 [[ "$cargo_registry_cache" == "$cargo_registry_cache_config" ]] \
   || fail 'Cargo registry cache path contains a symlink or alias'
 validate_cargo_registry_cache "$cargo_registry_cache"
+grype_db_config="$(jq -er '.grype_db_root' "$sandbox_config")"
+grype_db_root="$(realpath -e -- "$grype_db_config")" \
+  || fail 'Grype database root missing'
+[[ "$grype_db_root" == "$grype_db_config" ]] \
+  || fail 'Grype database path contains a symlink or alias'
+validate_grype_db "$grype_db_root" \
+  "$(jq -er '.grype_db_inventory_sha256' "$sandbox_config")"
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$sandbox_config")")" \
   || fail 'root request directory missing'
 [[ "$(stat -c '%u:%g:%a' -- "$request_root")" == '0:0:700' ]] \
