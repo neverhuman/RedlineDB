@@ -36,6 +36,7 @@ jain_materialize_pinned_advisory_db "$source_db" "$advisory_db" "$expected"
 # A caller-controlled partial clone can name an upload-pack command in local
 # Git config. Root staging must neither execute it nor lazily fetch a missing
 # object: source Git runs as the non-root owner with all transports disabled.
+if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" != 1 ]]; then
 promisor_source="$tmp/promisor-source"
 promisor_remote="$tmp/promisor-remote.git"
 promisor_destination="$tmp/promisor-destination"
@@ -80,6 +81,9 @@ fi
   exit 1
 }
 sudo -n rm -rf -- "$promisor_destination"
+else
+  printf 'pinned advisory root staging covered by isolated broker boundary\n'
+fi
 
 tool_dir="$tmp/tools"
 jain_install_pinned_rustsec_tools "$tool_dir" "$advisory_db" \
