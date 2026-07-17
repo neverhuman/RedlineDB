@@ -232,6 +232,9 @@ for name in "${environment_names[@]}"; do
     && "$name" != JAIN_PROOF_EVIDENCE_ROOT \
     && "$name" != JAIN_PROOF_EVIDENCE_STAGING_ROOT \
     && "$name" != JAIN_RUSTSEC_ADVISORY_SOURCE \
+    && "$name" != JAIN_SPLIT_OPS_ROOT \
+    && "$name" != JAIN_HOST_CI_REEXEC_STATE \
+    && "$name" != JAIN_HOST_CI_NETWORK_ISOLATED \
     && "$name" != JAIN_HOST_CI_HOST_PID_NAMESPACE \
     && "$name" != JAIN_HOST_CI_HOST_USER_NAMESPACE ]] \
     || fail "forbidden sandbox environment key: $name"

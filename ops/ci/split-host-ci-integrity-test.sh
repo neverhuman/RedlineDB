@@ -1236,6 +1236,35 @@ jq '.schema_version="jain.host-ci-sandbox-request/v4"' \
   "$fd_attack_request" >"$tmp/v4-sandbox-request.json"
 mv "$tmp/v4-sandbox-request.json" "$fd_attack_request"
 chmod 0600 "$fd_attack_request"
+
+# Root-owned worker bindings cannot be replaced through a crafted parent
+# request. Each key is rejected before systemd starts a worker or any request
+# reaches the forge.
+cp -- "$fd_attack_request" "$tmp/fixed-worker-environment-base.json"
+for fixed_key in JAIN_SPLIT_OPS_ROOT JAIN_HOST_CI_REEXEC_STATE \
+  JAIN_HOST_CI_NETWORK_ISOLATED; do
+  fixed_log="$tmp/fixed-worker-environment-$fixed_key.log"
+  fixed_forge_offset="$(stat -c '%s' "$forge_log")"
+  jq --arg key "$fixed_key" \
+    '.environment[$key]="/caller/forbidden-root-authority"' \
+    "$tmp/fixed-worker-environment-base.json" >"$fd_attack_request"
+  chmod 0600 "$fd_attack_request"
+  if sudo -n "$sandbox" "$fd_attack_request" >"$fixed_log" 2>&1; then
+    printf 'sandbox accepted caller override of %s\n' "$fixed_key" >&2
+    exit 1
+  fi
+  grep -Fq "forbidden sandbox environment key: $fixed_key" "$fixed_log"
+  if grep -Fq 'nested PID/user namespaces established' "$fixed_log"; then
+    printf 'sandbox started a worker for forbidden key %s\n' "$fixed_key" >&2
+    exit 1
+  fi
+  [[ "$(stat -c '%s' "$forge_log")" == "$fixed_forge_offset" ]] || {
+    printf 'forbidden worker key reached the forge: %s\n' "$fixed_key" >&2
+    exit 1
+  }
+done
+cp -- "$tmp/fixed-worker-environment-base.json" "$fd_attack_request"
+chmod 0600 "$fd_attack_request"
 malicious_request="$(jq -c \
   '.environment.JAIN_TEST_FORCE_FAILURE="1"' "$fd_attack_request")"
 attack_complete="$tmp/retained-fd-mutated"
