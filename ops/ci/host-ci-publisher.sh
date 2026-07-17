@@ -282,34 +282,17 @@ safe_git=(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
 
 manifest="$control_root/repos.manifest.toml"
 repo="$(jq -er '.repository' "$result")"
-repo_authority="$({
-  awk -v wanted="$repo" '
-    function val(line, value) {
-      value=line; sub(/^[^=]*=[[:space:]]*"/,"",value)
-      sub(/"[[:space:]]*$/,"",value); return value
-    }
-    function finish() {
-      if (!active || name != wanted) return
-      count++; final_check=check; final_owner=(forge_owner==""?"jeryu":forge_owner)
-    }
-    $0 == "[control_plane]" {
-      finish(); active=(wanted=="jain-split-ops"); name="jain-split-ops"
-      check=""; forge_owner="jeryu"; next
-    }
-    $0 == "[[repo]]" || $0 == "[[infrastructure_repo]]" {
-      finish(); active=1; name=""; check=""; forge_owner=""; next
-    }
-    /^\[\[/ { finish(); active=0; next }
-    /^\[/ { finish(); active=0; next }
-    active && /^[[:space:]]*name[[:space:]]*=/ { name=val($0); next }
-    active && /^[[:space:]]*required_check[[:space:]]*=/ { check=val($0); next }
-    active && /^[[:space:]]*forge_owner[[:space:]]*=/ { forge_owner=val($0); next }
-    END {
-      finish(); if (count != 1 || final_check == "") exit 1
-      printf "%s\t%s\n", final_owner, final_check
-    }
-  ' "$manifest"
-} 2>/dev/null)" || fail 'repository authority is absent or ambiguous'
+repo_authority_json="$("$splitctl_path" host-ci-authority \
+  --manifest "$manifest" --repo "$repo")" \
+  || fail 'repository authority is absent or ambiguous'
+repo_authority="$(jq -er --arg repo "$repo" '
+  select(.schema_version == "jain.host-ci-repository-authority/v1")
+  | select(.repository == $repo)
+  | select(.forge_owner | test("^[A-Za-z0-9._-]+$"))
+  | select(.required_check == ($repo + "/required"))
+  | select(.remote | type == "string")
+  | [.forge_owner, .required_check] | @tsv
+' <<<"$repo_authority_json")" || fail 'invalid repository authority result'
 IFS=$'\t' read -r protected_owner protected_check <<<"$repo_authority"
 owner="$(jq -er '.owner' "$result")"
 required_check="$(jq -er '.required_check' "$result")"

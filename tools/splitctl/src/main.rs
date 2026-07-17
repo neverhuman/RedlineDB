@@ -220,6 +220,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some("manifest") => manifest_command(args.collect())?,
         Some("managed-repos") => managed_repos_command(args.collect())?,
+        Some("host-ci-authority") => host_ci_authority_command(args.collect())?,
         Some("release-cargo-commands") => release_cargo_commands_command(args.collect())?,
         Some("sync-derived-manifests") => sync_derived_manifests_command(args.collect())?,
         Some("jankurai-evidence") => jankurai_evidence_command(args.collect())?,
@@ -236,7 +237,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -1125,6 +1126,128 @@ fn managed_repo_json(repo: &ManagedRepo) -> JsonValue {
     })
 }
 
+fn host_ci_authority_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let root = control_plane_root();
+    let mut manifest = root.join("repos.manifest.toml");
+    let mut repo_name = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--repo" => repo_name = Some(iter.next().ok_or("--repo needs a name")?),
+            value => return Err(format!("unknown host-ci-authority argument: {value}").into()),
+        }
+    }
+    let repo_name = repo_name.ok_or("host-ci-authority requires --repo")?;
+    let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&host_ci_authority(&data, &repo_name)?)?
+    );
+    Ok(())
+}
+
+fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, String> {
+    let mut matches = Vec::new();
+    let mut add = |raw: &toml::Value,
+                   name_key: &str,
+                   check_key: &str,
+                   remote_key: &str,
+                   owner_key: &str|
+     -> Result<(), String> {
+        let Some(name) = string(raw, name_key) else {
+            return Ok(());
+        };
+        if name != repo_name {
+            return Ok(());
+        }
+        let owner = string(raw, owner_key).unwrap_or_else(|| "jeryu".to_owned());
+        let slug = format!("{owner}/{name}");
+        validate_jeryu_repo_slug(&slug).map_err(|error| error.to_string())?;
+        if string(raw, "jeryu_slug").is_some_and(|declared| declared != slug) {
+            return Err(format!(
+                "host CI authority for {name} has non-canonical Jeryu slug"
+            ));
+        }
+        let required_check = string(raw, check_key)
+            .ok_or_else(|| format!("host CI authority for {name} is missing {check_key}"))?;
+        if required_check != format!("{name}/required") {
+            return Err(format!(
+                "host CI authority for {name} must require exact {name}/required"
+            ));
+        }
+        let remote = string(raw, remote_key)
+            .or_else(|| {
+                string(raw, "jeryu_slug")
+                    .map(|declared| format!("{LOCAL_JERYU_ORIGIN}/git/{declared}.git"))
+            })
+            .ok_or_else(|| format!("host CI authority for {name} is missing {remote_key}"))?;
+        let expected_remote = format!("{LOCAL_JERYU_ORIGIN}/git/{owner}/{name}.git");
+        if remote != expected_remote {
+            return Err(format!(
+                "host CI authority for {name} has non-canonical remote: {remote}"
+            ));
+        }
+        matches.push((owner, required_check, remote));
+        Ok(())
+    };
+
+    if let Some(control) = data.get("control_plane") {
+        add(control, "name", "required_check", "remote", "forge_owner")?;
+    }
+    for key in ["repo", "infrastructure_repo"] {
+        for raw in data
+            .get(key)
+            .and_then(toml::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            add(raw, "name", "required_check", "remote", "forge_owner")?;
+        }
+    }
+    if let Some(external) = data
+        .get("external_dependencies")
+        .and_then(toml::Value::as_table)
+    {
+        for raw in external.values() {
+            add(raw, "repository", "required_check", "remote", "owner")?;
+        }
+    }
+    if let Some(nested) = data.get("nested_families").and_then(toml::Value::as_table) {
+        for raw in nested.values() {
+            add(
+                raw,
+                "control_plane_name",
+                "control_plane_required_check",
+                "control_plane_remote",
+                "forge_owner",
+            )?;
+            for pending in raw
+                .get("pending_repository")
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                add(pending, "name", "required_check", "remote", "forge_owner")?;
+            }
+        }
+    }
+
+    if matches.len() != 1 {
+        return Err(format!(
+            "host CI repository authority for {repo_name} is absent or ambiguous"
+        ));
+    }
+    let (forge_owner, required_check, remote) = matches.pop().unwrap();
+    Ok(json!({
+        "schema_version": "jain.host-ci-repository-authority/v1",
+        "repository": repo_name,
+        "forge_owner": forge_owner,
+        "required_check": required_check,
+        "remote": remote,
+    }))
+}
+
 fn release_cargo_commands_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
@@ -1166,6 +1289,33 @@ fn release_repo_entry<'a>(
     if let Some(control) = data.get("control_plane") {
         if string(control, "name").as_deref() == Some(repo_name) {
             return Ok(control);
+        }
+    }
+    if let Some(external) = data
+        .get("external_dependencies")
+        .and_then(toml::Value::as_table)
+        .and_then(|dependencies| {
+            dependencies
+                .values()
+                .find(|raw| string(raw, "repository").as_deref() == Some(repo_name))
+        })
+    {
+        return Ok(external);
+    }
+    if let Some(nested) = data.get("nested_families").and_then(toml::Value::as_table) {
+        for raw in nested.values() {
+            if string(raw, "control_plane_name").as_deref() == Some(repo_name) {
+                return Ok(raw);
+            }
+            if let Some(pending) = raw
+                .get("pending_repository")
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+                .find(|pending| string(pending, "name").as_deref() == Some(repo_name))
+            {
+                return Ok(pending);
+            }
         }
     }
     Err(format!(
@@ -1948,6 +2098,7 @@ fn nested_engine_topology(data: &toml::Value) -> Result<NestedEngineTopology, St
         if required_check != format!("{name}/required") {
             return Err(format!("{row_key}.required_check must be {name}/required"));
         }
+        release_feature_matrix(raw).map_err(|error| format!("{row_key}: {error}"))?;
         pending_repositories.push(PendingNestedRepository {
             name,
             remote,
@@ -9477,6 +9628,41 @@ engine_release_tree = "{engine_tree}"
             ])
         );
 
+        let central = release_cargo_policy(
+            "redline-central",
+            release_repo_entry(&manifest, "redline-central").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(central["mode"], "feature-matrix");
+        assert_eq!(central["commands"].as_array().unwrap().len(), 6);
+        for (index, feature) in ["backend-redline", "oracle-sqlite", "oracle-postgres"]
+            .iter()
+            .enumerate()
+        {
+            assert_eq!(
+                central["commands"][index * 2]["args"][6],
+                format!("db-shim/{feature}")
+            );
+            assert_eq!(
+                central["commands"][index * 2 + 1]["args"][5],
+                format!("db-shim/{feature}")
+            );
+        }
+
+        let nested_control = release_cargo_policy(
+            "redline-split-ops",
+            release_repo_entry(&manifest, "redline-split-ops").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(nested_control["mode"], "all-features");
+
+        let external = release_cargo_policy(
+            "redline-core",
+            release_repo_entry(&manifest, "redline-core").unwrap(),
+        )
+        .unwrap();
+        assert_eq!(external["mode"], "all-features");
+
         let generic: toml::Value = "name = \"example\"".parse().unwrap();
         let generic = release_cargo_policy("example", &generic).unwrap();
         assert_eq!(generic["mode"], "all-features");
@@ -9494,6 +9680,78 @@ engine_release_tree = "{engine_tree}"
             generic["commands"][1]["args"],
             json!(["test", "--locked", "--all-features", "--all-targets"])
         );
+    }
+
+    #[test]
+    fn host_ci_authority_covers_root_nested_external_and_infrastructure_rows() {
+        let manifest: toml::Value = fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml"),
+        )
+        .unwrap()
+        .parse()
+        .unwrap();
+
+        for (repo, owner) in [
+            ("jain-split-ops", "jeryu"),
+            ("jain-report", "jeryu"),
+            ("jain-smartcluster", "jain-split"),
+            ("redline-core", "jeryu"),
+            ("redline-split-ops", "jeryu"),
+            ("redline-central", "jeryu"),
+        ] {
+            let authority = host_ci_authority(&manifest, repo).unwrap();
+            assert_eq!(authority["repository"], repo);
+            assert_eq!(authority["forge_owner"], owner);
+            assert_eq!(authority["required_check"], format!("{repo}/required"));
+            assert_eq!(
+                authority["remote"],
+                format!("http://127.0.0.1:8787/git/{owner}/{repo}.git")
+            );
+        }
+    }
+
+    #[test]
+    fn host_ci_authority_rejects_missing_duplicate_and_noncanonical_rows() {
+        let manifest: toml::Value = r#"
+[control_plane]
+name = "jain-split-ops"
+remote = "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git"
+required_check = "jain-split-ops/required"
+[nested_families.redline]
+control_plane_name = "redline-split-ops"
+control_plane_remote = "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
+control_plane_required_check = "redline-split-ops/required"
+[[nested_families.redline.pending_repository]]
+name = "redline-central"
+remote = "http://127.0.0.1:8787/git/jeryu/redline-central.git"
+required_check = "redline-central/required"
+"#
+        .parse()
+        .unwrap();
+        assert!(host_ci_authority(&manifest, "absent").is_err());
+
+        let mut duplicate = manifest.clone();
+        let pending = duplicate["nested_families"]["redline"]["pending_repository"]
+            .as_array_mut()
+            .unwrap();
+        pending.push(pending[0].clone());
+        assert!(host_ci_authority(&duplicate, "redline-central")
+            .unwrap_err()
+            .contains("absent or ambiguous"));
+
+        let mut wrong_remote = manifest.clone();
+        wrong_remote["nested_families"]["redline"]["control_plane_remote"] =
+            toml::Value::String("http://127.0.0.1:8787/git/jeryu/other.git".to_owned());
+        assert!(host_ci_authority(&wrong_remote, "redline-split-ops")
+            .unwrap_err()
+            .contains("non-canonical remote"));
+
+        let mut wrong_check = manifest;
+        wrong_check["nested_families"]["redline"]["control_plane_required_check"] =
+            toml::Value::String("redline-split-ops/wrong".to_owned());
+        assert!(host_ci_authority(&wrong_check, "redline-split-ops")
+            .unwrap_err()
+            .contains("must require exact"));
     }
 
     #[test]

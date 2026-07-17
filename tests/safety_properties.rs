@@ -193,6 +193,57 @@ fn release_cargo_commands_exposes_the_canonical_feature_matrix() {
 }
 
 #[test]
+fn host_ci_authority_exposes_nested_control_and_pending_repositories() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+    for repo in ["redline-split-ops", "redline-central"] {
+        let output = splitctl(&[
+            "host-ci-authority",
+            "--manifest",
+            manifest.to_str().expect("UTF-8 manifest path"),
+            "--repo",
+            repo,
+        ]);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let authority: Value =
+            serde_json::from_slice(&output.stdout).expect("parse host CI authority");
+        assert_eq!(authority["repository"], repo);
+        assert_eq!(authority["forge_owner"], "jeryu");
+        assert_eq!(authority["required_check"], format!("{repo}/required"));
+        assert_eq!(
+            authority["remote"],
+            format!("http://127.0.0.1:8787/git/jeryu/{repo}.git")
+        );
+    }
+}
+
+#[test]
+fn release_cargo_commands_exposes_redline_central_backend_matrix() {
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+    let output = splitctl(&[
+        "release-cargo-commands",
+        "--manifest",
+        manifest.to_str().expect("UTF-8 manifest path"),
+        "--repo",
+        "redline-central",
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let policy: Value = serde_json::from_slice(&output.stdout).expect("parse release policy");
+    assert_eq!(policy["mode"], "feature-matrix");
+    assert_eq!(policy["commands"].as_array().unwrap().len(), 6);
+    assert_eq!(policy["commands"][0]["args"][6], "db-shim/backend-redline");
+    assert_eq!(policy["commands"][2]["args"][6], "db-shim/oracle-sqlite");
+    assert_eq!(policy["commands"][4]["args"][6], "db-shim/oracle-postgres");
+}
+
+#[test]
 fn manifest_validation_rejects_a_non_maximal_release_feature_set() {
     let scratch = Scratch::new();
     let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");

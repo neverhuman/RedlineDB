@@ -173,6 +173,9 @@ family = "redline-split"
 manifest_path = "/home/ubuntu/jain-split/jain-redline/redline-split-ops/repos.manifest.toml"
 container_path = "/home/ubuntu/jain-split/jain-redline"
 control_plane = "/home/ubuntu/jain-split/jain-redline/redline-split-ops"
+control_plane_name = "redline-split-ops"
+control_plane_remote = "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
+control_plane_required_check = "redline-split-ops/required"
 required = true
 engine_repository = "redline-core"
 engine_remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
@@ -183,6 +186,12 @@ name = "redline-central"
 remote = "http://127.0.0.1:8787/git/jeryu/redline-central.git"
 required_check = "redline-central/required"
 identity_status = "pending"
+release_package = "db-shim"
+release_feature_sets = [
+  ["backend-redline"],
+  ["oracle-sqlite"],
+  ["oracle-postgres"],
+]
 
 [[infrastructure_repo]]
 path = "/home/ubuntu/jain-split/jain-smartcluster"

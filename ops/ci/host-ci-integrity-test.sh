@@ -23,6 +23,17 @@ for path in \
   printf 'fixture %s\n' "$path" >"$fixture/$path"
 done
 chmod +x "$fixture/ops/ci/host-ci-integrity.sh"
+for boundary in host-ci-sandbox.sh host-ci-publisher.sh; do
+  grep -F '"$splitctl_path" host-ci-authority' "$repo_root/ops/ci/$boundary" >/dev/null \
+    || {
+      printf '%s does not derive repository authority through splitctl\n' "$boundary" >&2
+      exit 1
+    }
+  if grep -F 'awk -v wanted="$repo"' "$repo_root/ops/ci/$boundary" >/dev/null; then
+    printf '%s still contains a second repository-authority parser\n' "$boundary" >&2
+    exit 1
+  fi
+done
 git init --quiet "$fixture"
 git -C "$fixture" config user.name 'Host CI Fixture'
 git -C "$fixture" config user.email host-ci-fixture@example.invalid
