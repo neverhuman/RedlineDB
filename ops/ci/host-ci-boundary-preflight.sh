@@ -84,6 +84,8 @@ for config in "$publisher_config" "$sandbox_config"; do
 done
 jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v5")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
+  | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
+  | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.token_file | type == "string" and startswith("/"))
   | select((.control_ref // "refs/heads/main") | type == "string")
@@ -98,6 +100,8 @@ token_file="$(jq -er '.token_file' "$publisher_config")"
   || fail 'publisher token file must be canonical root:root mode 0600 single-link'
 jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v5")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
+  | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
+  | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
   | select(.cargo_registry_cache | type == "string" and startswith("/"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.token_file | type == "string" and startswith("/"))
@@ -130,6 +134,17 @@ validate_control_authority \
   == "$(jq -er '.jankurai_sha256' "$sandbox_config")" \
   && "$("$jankurai" --version)" == 'jankurai 1.6.11' ]] \
   || fail 'governed Jankurai binary/version mismatch'
+for tool in actionlint grype syft; do
+  tool_path="$install_dir/security-$tool"
+  [[ ! -L "$tool_path" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$tool_path" 2>/dev/null)" == '0:0:555:1' \
+    && "$(sha256sum -- "$tool_path" | cut -d' ' -f1)" \
+      == "$(jq -er --arg tool "$tool" '.security_tool_sha256[$tool]' "$sandbox_config")" ]] \
+    || fail "installed security tool digest/metadata mismatch: $tool"
+done
+[[ "$(jq -c '.security_tool_sha256' "$publisher_config")" \
+  == "$(jq -c '.security_tool_sha256' "$sandbox_config")" ]] \
+  || fail 'broker configs disagree on security tool authority'
 for field in \
   publisher_sha256 sandbox_sha256 splitctl_sha256 jankurai_sha256 \
   control_remote forge_git_base request_root native_evidence_root \

@@ -305,6 +305,7 @@ sandbox="$publisher_root/host-ci-sandbox"
 sandbox_config="$publisher_root/host-ci-sandbox.config.json"
 splitctl="$publisher_root/splitctl"
 jankurai="$publisher_root/jankurai"
+security_tool_digest="$(sha256sum /usr/bin/true | cut -d' ' -f1)"
 sudo -n install -d -o root -g root -m 0711 "$publisher_root"
 sudo -n install -d -o root -g root -m 0700 "$request_root"
 mkdir -p "$(dirname "$product_remote")"
@@ -339,6 +340,10 @@ splitctl_digest="$(sha256sum "$tmp/direct-control-target/debug/splitctl" \
 sudo -n install -o root -g root -m 0500 \
   "$tmp/direct-control-target/debug/splitctl" "$splitctl"
 sudo -n install -o root -g root -m 0555 "$fake_jankurai" "$jankurai"
+for tool in actionlint grype syft; do
+  sudo -n install -o root -g root -m 0555 \
+    /usr/bin/true "$publisher_root/security-$tool"
+done
 publisher_token="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
 publisher_token_file="$publisher_root/jeryu-merge-token"
 printf '%s' "$publisher_token" | sudo -n tee "$publisher_token_file" >/dev/null
@@ -347,6 +352,7 @@ sudo -n chmod 0600 "$publisher_token_file"
 jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d' ' -f1)" \
   --arg sandbox_digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
   --arg splitctl_digest "$splitctl_digest" --arg jankurai_digest "$fake_jankurai_digest" \
+  --arg security_tool_digest "$security_tool_digest" \
   --arg token_file "$publisher_token_file" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
@@ -358,6 +364,8 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d
   '{schema_version:"jain.host-ci-publisher-config/v5",
     publisher_sha256:$digest,sandbox_sha256:$sandbox_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
+    security_tool_sha256:{actionlint:$security_tool_digest,
+      grype:$security_tool_digest,syft:$security_tool_digest},
     forge_git_base:$git_base,
     control_remote:$remote,control_ref:$control_ref,
     bootstrap_commit:$bootstrap_commit,
@@ -371,6 +379,7 @@ sudo -n chmod 0600 "$publisher_config"
 jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
   --arg publisher_digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d' ' -f1)" \
   --arg splitctl_digest "$splitctl_digest" --arg jankurai_digest "$fake_jankurai_digest" \
+  --arg security_tool_digest "$security_tool_digest" \
   --arg family "$sandbox_family_root" --arg cache "$worker_cache" \
   --arg cargo_registry_cache "$cargo_registry_cache" \
   --arg cargo_bin "$HOME/.cargo/bin" --arg rustup "$HOME/.rustup" \
@@ -386,6 +395,8 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   '{schema_version:"jain.host-ci-sandbox-config/v5",
     sandbox_sha256:$digest,publisher_sha256:$publisher_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
+    security_tool_sha256:{actionlint:$security_tool_digest,
+      grype:$security_tool_digest,syft:$security_tool_digest},
     parent_uid:$parent_uid,parent_gid:$parent_gid,
     worker_user:"xbwork",worker_group:"xbwork",family_root:$family,
     worker_cache:$cache,cargo_registry_cache:$cargo_registry_cache,
@@ -400,6 +411,20 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
     device_allow:[]}' | sudo -n tee "$sandbox_config" >/dev/null
 sudo -n chown root:root "$sandbox_config"
 sudo -n chmod 0600 "$sandbox_config"
+
+# Root-installed security tools are part of the sealed broker authority. A
+# replaced binary must fail before the caller request or forge can be touched.
+sudo -n install -o root -g root -m 0555 \
+  /usr/bin/false "$publisher_root/security-actionlint"
+if sudo -n "$sandbox" "$tmp/nonexistent-security-tool-request" \
+  >"$tmp/security-tool-tamper.log" 2>&1; then
+  printf 'sandbox accepted a replaced security tool\n' >&2
+  exit 1
+fi
+grep -Fq 'installed security tool digest/metadata mismatch: actionlint' \
+  "$tmp/security-tool-tamper.log"
+sudo -n install -o root -g root -m 0555 \
+  /usr/bin/true "$publisher_root/security-actionlint"
 
 # The live host may mount /run with noexec. Root authority copied beneath such
 # a request root cannot execute in the worker, so reject the mount before any

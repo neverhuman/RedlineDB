@@ -42,6 +42,7 @@ install_dir="$(dirname "$publisher_path")"
 config="$install_dir/host-ci-publisher.config.json"
 splitctl_path="$install_dir/splitctl"
 jankurai_path="$install_dir/jankurai"
+security_tool_names=(actionlint grype syft)
 [[ ! -L "$publisher_path" \
   && "$(stat -c '%u:%a:%h' -- "$publisher_path" 2>/dev/null)" == '0:500:1' ]] \
   || fail 'publisher must be root-owned mode 0500'
@@ -64,6 +65,8 @@ jq -e '
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
+  | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
+  | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
   | select(.forge_git_base | type == "string" and length > 0)
   | select(.control_remote | type == "string" and length > 0)
   | select(.request_root | type == "string" and startswith("/"))
@@ -100,6 +103,15 @@ jankurai_sha="$(sha256sum -- "$jankurai_path" | cut -d' ' -f1)"
 [[ "$jankurai_sha" == "$(jq -er '.jankurai_sha256' "$config")" \
   && "$("$jankurai_path" --version)" == 'jankurai 1.6.11' ]] \
   || fail 'governed Jankurai digest/version mismatch'
+security_tool_sha256="$(jq -c '.security_tool_sha256' "$config")"
+for tool in "${security_tool_names[@]}"; do
+  tool_path="$install_dir/security-$tool"
+  [[ ! -L "$tool_path" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$tool_path" 2>/dev/null)" == '0:0:555:1' \
+    && "$(sha256sum -- "$tool_path" | cut -d' ' -f1)" \
+      == "$(jq -er --arg tool "$tool" '.security_tool_sha256[$tool]' "$config")" ]] \
+    || fail "installed security tool digest/metadata mismatch: $tool"
+done
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$config")")" \
   || fail 'request root is unavailable'
 [[ ! -L "$request_root" \
@@ -165,6 +177,8 @@ jq -e --arg request_id "$request_id" \
    | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
    | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
    | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
+   | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
+   | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
    | select(.native_evidence_root | type == "string")
    | select(.proof_evidence_root | type == "string")' "$state" >/dev/null \
   || fail 'root request is not sealed for one-shot publication'
@@ -190,6 +204,7 @@ expected_seal="$({
     == "$(jq -er '.sandbox_sha256' "$config")" \
   && "$(jq -er '.splitctl_sha256' "$state")" == "$splitctl_sha" \
   && "$(jq -er '.jankurai_sha256' "$state")" == "$jankurai_sha" \
+  && "$(jq -c '.security_tool_sha256' "$state")" == "$security_tool_sha256" \
   && "$(jq -er '.native_evidence_root' "$state")" \
     == "$native_evidence_root" \
   && "$(jq -er '.proof_evidence_root' "$state")" \

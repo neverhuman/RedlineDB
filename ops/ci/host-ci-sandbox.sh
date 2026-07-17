@@ -74,6 +74,7 @@ config="$install_dir/host-ci-sandbox.config.json"
 publisher_path="$install_dir/host-ci-publisher"
 splitctl_path="$install_dir/splitctl"
 jankurai_path="$install_dir/jankurai"
+security_tool_names=(actionlint grype syft)
 [[ ! -L "$sandbox_path" \
   && "$(stat -c '%u:%a:%h' -- "$sandbox_path" 2>/dev/null)" == '0:500:1' ]] \
   || fail 'sandbox must be root-owned mode 0500'
@@ -99,6 +100,8 @@ jq -e '
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
+  | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
+  | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
   | select(.parent_uid | type == "number")
   | select(.parent_gid | type == "number")
   | select(.worker_user | type == "string" and length > 0)
@@ -131,6 +134,15 @@ jankurai_sha="$(sha256sum -- "$jankurai_path" | cut -d' ' -f1)"
   && "$jankurai_sha" == "$(jq -er '.jankurai_sha256' "$config")" \
   && "$("$jankurai_path" --version)" == 'jankurai 1.6.11' ]] \
   || fail 'installed broker digest/config mismatch'
+security_tool_sha256="$(jq -c '.security_tool_sha256' "$config")"
+for tool in "${security_tool_names[@]}"; do
+  tool_path="$install_dir/security-$tool"
+  [[ ! -L "$tool_path" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$tool_path" 2>/dev/null)" == '0:0:555:1' \
+    && "$(sha256sum -- "$tool_path" | cut -d' ' -f1)" \
+      == "$(jq -er --arg tool "$tool" '.security_tool_sha256[$tool]' "$config")" ]] \
+    || fail "installed security tool digest/metadata mismatch: $tool"
+done
 
 parent_uid="$(jq -er '.parent_uid' "$config")"
 parent_gid="$(jq -er '.parent_gid' "$config")"
@@ -432,6 +444,11 @@ chmod -R go-w "$audit_source_root"
 chown -R root:root "$audit_source_root"
 
 install -o root -g root -m 0555 "$splitctl_path" "$worker_authority/splitctl"
+install -d -o root -g root -m 0555 "$worker_authority/security-bin"
+for tool in "${security_tool_names[@]}"; do
+  install -o root -g root -m 0555 \
+    "$install_dir/security-$tool" "$worker_authority/security-bin/$tool"
+done
 install -o root -g root -m 0555 \
   "$control_root/ops/ci/split-host-ci.sh" \
   "$worker_authority/.split-host-ci-reviewed"
@@ -460,6 +477,7 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --arg publisher_sha "$publisher_sha" --arg sandbox_sha "$sandbox_sha" \
   --arg splitctl_sha "$splitctl_sha" \
   --arg jankurai_sha "$jankurai_sha" \
+  --argjson security_tool_sha256 "$security_tool_sha256" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
   --argjson created_at "$created_at" \
@@ -469,6 +487,7 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
     bootstrap_expires_at:$bootstrap_expires_at,
     publisher_sha256:$publisher_sha,sandbox_sha256:$sandbox_sha,
     splitctl_sha256:$splitctl_sha,jankurai_sha256:$jankurai_sha,
+    security_tool_sha256:$security_tool_sha256,
     native_evidence_root:$native_evidence_root,
     proof_evidence_root:$proof_evidence_root}' >"$root_state"
 chmod 0600 "$root_state"
@@ -549,7 +568,7 @@ systemd_args=(
   --setenv="HOME=$bootstrap_root/child-home"
   --setenv="USER=$worker_user" --setenv="LOGNAME=$worker_user"
   --setenv=SHELL=/bin/bash
-  --setenv=PATH=/opt/jain-ci/cargo-bin:/usr/bin:/bin
+  --setenv=PATH=/opt/jain-ci/authority/security-bin:/opt/jain-ci/cargo-bin:/usr/bin:/bin
   --setenv=CARGO_HOME=/opt/jain-ci/cargo-home
   --setenv=RUSTUP_HOME=/opt/jain-ci/rustup
   --setenv=JAIN_HOST_CI_REEXEC_STATE=/opt/jain-ci/authority/reexec-state.json
