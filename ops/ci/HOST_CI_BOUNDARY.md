@@ -99,6 +99,13 @@ install -d -o root -g root -m 0700 \
   /var/lib/jain-host-ci/native-evidence
 install -d -o root -g root -m 0700 \
   /var/lib/jain-host-ci/proof-evidence
+test ! -L /run/lock/jain-global-host-ci-producer.lock
+if test ! -e /run/lock/jain-global-host-ci-producer.lock; then
+  install -o root -g root -m 0600 /dev/null \
+    /run/lock/jain-global-host-ci-producer.lock
+fi
+test "$(stat -Lc '%F:%u:%g:%a:%h' \
+  /run/lock/jain-global-host-ci-producer.lock)" = 'regular file:0:0:600:1'
 ```
 
 Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
@@ -106,7 +113,7 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
 
 ```json
 {
-  "schema_version": "jain.host-ci-sandbox-config/v5",
+  "schema_version": "jain.host-ci-sandbox-config/v6",
   "sandbox_sha256": "<64 lowercase hex>",
   "publisher_sha256": "<64 lowercase hex>",
   "splitctl_sha256": "<64 lowercase hex>",
@@ -126,6 +133,7 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
   "native_evidence_root": "/var/lib/jain-host-ci/native-evidence",
   "proof_evidence_root": "/var/lib/jain-host-ci/proof-evidence",
   "token_file": "/usr/local/libexec/jain/jeryu-merge-token",
+  "global_producer_lock": "/run/lock/jain-global-host-ci-producer.lock",
   "retain_requests": false,
   "device_allow": []
 }
@@ -151,7 +159,7 @@ variable, or inside broker configuration. Both configs name only its path. Then 
 
 ```json
 {
-  "schema_version": "jain.host-ci-publisher-config/v5",
+  "schema_version": "jain.host-ci-publisher-config/v6",
   "publisher_sha256": "<64 lowercase hex>",
   "sandbox_sha256": "<64 lowercase hex>",
   "splitctl_sha256": "<64 lowercase hex>",
@@ -162,9 +170,19 @@ variable, or inside broker configuration. Both configs name only its path. Then 
   "native_evidence_root": "/var/lib/jain-host-ci/native-evidence",
   "proof_evidence_root": "/var/lib/jain-host-ci/proof-evidence",
   "max_seal_age_seconds": 300,
-  "token_file": "/usr/local/libexec/jain/jeryu-merge-token"
+  "token_file": "/usr/local/libexec/jain/jeryu-merge-token",
+  "global_producer_lock": "/run/lock/jain-global-host-ci-producer.lock"
 }
 ```
+
+The v6 Jain, Jekko, and Redline broker configs all name the one fixed global
+producer lock above. The privileged sandbox asks installed `splitctl` to open
+it nonblocking with `O_NOFOLLOW`, validates root ownership, mode `0600`, one
+link, regular-file type, and stable device/inode identity, then holds the
+kernel lock through request snapshot, materialization, worker/auditor launch,
+proof publication, and cleanup. Contention exits 75 before root request or
+credential access; normal exit or crash releases the lock for a safe retry.
+Lock identity is sealed into root state and result.
 
 The installed `splitctl` opens every token path component with no-follow
 directory descriptors, opens the final file nonblocking/no-follow/close-on-exec,
@@ -214,7 +232,7 @@ namespace/seccomp probe cannot run. GPU release validation is dispatched by SCQ
 to registered GPU workers; do not add nonexistent AtomicSoul GPU devices to this
 host boundary. Re-run installation and
 preflight for every immutable broker revision; never update a digest without
-installing and reviewing the matching bytes. The two v5 configs must bind the
+installing and reviewing the matching bytes. The two v6 configs must bind the
 same freshly provisioned digest from the protected jeryu-tool manifest/install
 receipt; an environment-specific review build digest is not portable authority.
 

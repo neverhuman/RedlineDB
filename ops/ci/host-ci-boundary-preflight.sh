@@ -108,7 +108,7 @@ for config in "$publisher_config" "$sandbox_config"; do
     && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
     || fail "unsafe installed config: $config"
 done
-jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v5")
+jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v6")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
   | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
@@ -116,6 +116,7 @@ jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v5")
   | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.token_file | type == "string" and startswith("/"))
+  | select(.global_producer_lock == "/run/lock/jain-global-host-ci-producer.lock")
   | select((.control_ref // "refs/heads/main") | type == "string")
   | select((.bootstrap_commit // "") | type == "string")
   | select((.bootstrap_expires_at // "") | type == "string")
@@ -126,7 +127,7 @@ token_file="$(jq -er '.token_file' "$publisher_config")"
   && "$(realpath -e -- "$token_file" 2>/dev/null)" == "$token_file" \
   && "$(stat -c '%u:%g:%a:%h' -- "$token_file" 2>/dev/null)" == '0:0:600:1' ]] \
   || fail 'publisher token file must be canonical root:root mode 0600 single-link'
-jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v5")
+jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v6")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
   | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
@@ -135,6 +136,7 @@ jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v5")
   | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.token_file | type == "string" and startswith("/"))
+  | select(.global_producer_lock == "/run/lock/jain-global-host-ci-producer.lock")
   | select((.control_ref // "refs/heads/main") | type == "string")
   | select((.bootstrap_commit // "") | type == "string")
   | select((.bootstrap_expires_at // "") | type == "string")
@@ -183,6 +185,13 @@ for field in \
     == "$(jq -er ".$field" "$sandbox_config")" ]] \
     || fail "broker configs disagree on $field"
 done
+global_producer_lock="$(jq -er '.global_producer_lock' "$sandbox_config")"
+[[ "$(jq -er '.global_producer_lock' "$publisher_config")" \
+    == "$global_producer_lock" \
+  && ! -L "$global_producer_lock" \
+  && "$(stat -Lc '%F:%u:%g:%a:%h' -- "$global_producer_lock" 2>/dev/null)" \
+    == 'regular file:0:0:600:1' ]] \
+  || fail 'global producer lock configuration or metadata mismatch'
 
 parent_uid="$(jq -er '.parent_uid' "$sandbox_config")"
 parent_gid="$(jq -er '.parent_gid' "$sandbox_config")"

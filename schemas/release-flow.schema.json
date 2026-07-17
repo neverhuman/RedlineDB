@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.invalid/schemas/release-flow.schema.json",
+  "title": "Jain read-only release flow status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release",
+    "mode",
+    "manifest",
+    "control_plane",
+    "previous_receipt",
+    "gates",
+    "overall_status",
+    "next_action",
+    "external_state_changed",
+    "receipt_integrity_sha256"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.release-flow/v1" },
+    "release": { "const": "8.0.1" },
+    "mode": { "const": "read-only" },
+    "manifest": { "$ref": "#/$defs/manifest" },
+    "control_plane": { "$ref": "#/$defs/controlPlane" },
+    "previous_receipt": { "$ref": "#/$defs/optionalReceiptRef" },
+    "gates": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/gate" }
+    },
+    "overall_status": { "enum": ["ready", "blocked", "waiting"] },
+    "next_action": { "$ref": "#/$defs/nextAction" },
+    "external_state_changed": { "const": false },
+    "receipt_integrity_sha256": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "controlPlane": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["head", "tree", "branch", "status_sha256", "clean"],
+      "properties": {
+        "head": { "$ref": "#/$defs/sha1" },
+        "tree": { "$ref": "#/$defs/sha1" },
+        "branch": { "type": "string" },
+        "status_sha256": { "$ref": "#/$defs/sha256" },
+        "clean": { "type": "boolean" }
+      }
+    },
+    "receiptRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^/" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "optionalReceiptRef": {
+      "oneOf": [
+        { "$ref": "#/$defs/receiptRef" },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": { "type": "null" },
+            "sha256": { "type": "null" }
+          }
+        }
+      ]
+    },
+    "gate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "status", "inputs", "receipt_refs", "failures"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9_]*$" },
+        "status": {
+          "enum": ["pass", "blocked", "waiting_for_credential", "waiting_for_human"]
+        },
+        "inputs": { "type": "object" },
+        "receipt_refs": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/receiptRef" }
+        },
+        "failures": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "nextAction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "argv_without_secrets", "required_role"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "argv_without_secrets": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "required_role": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

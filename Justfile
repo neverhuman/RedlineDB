@@ -134,20 +134,23 @@ release-ci:
 release:
   just release-ci
 
-release-artifacts version="8.0.1":
-  ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="{{version}}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- build-local --version "{{version}}" --gate-dir "target/release-evidence/{{version}}"
+cloud-stage spec:
+  ATOMICSOUL_PUSH=0 cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- cloud stage --spec "{{spec}}"
 
-release-canary-dry-run version="8.0.1":
-  ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="{{version}}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- canary-e2e --version "{{version}}" --slot jain-a --dry-run --gate-dir "target/release-evidence/{{version}}"
+cloud-qualify spec:
+  ATOMICSOUL_PUSH=0 cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- cloud qualify --spec "{{spec}}"
 
-release-promote-dry-run digest version="8.0.1":
-  ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="{{version}}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- promote-prod --version "{{version}}" --digest "{{digest}}" --dry-run --gate-dir "target/release-evidence/{{version}}"
+cloud-promote spec action_envelope:
+  ATOMICSOUL_PUSH=0 cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- cloud promote --spec "{{spec}}" --action-envelope "{{action_envelope}}"
 
-release-rollback-dry-run to="7.0.6":
-  version="$(awk -F'\"' '/^release_version = / {print $2; exit}' repos.manifest.toml)"; ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="${version}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- rollback --to "{{to}}" --dry-run
+cloud-rollback spec action_envelope:
+  ATOMICSOUL_PUSH=0 cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- cloud rollback --spec "{{spec}}" --action-envelope "{{action_envelope}}"
 
 release-status:
   version="$(awk -F'\"' '/^release_version = / {print $2; exit}' repos.manifest.toml)"; cargo run --locked --quiet -- release-status --manifest repos.manifest.toml --json "docs/release-evidence/${version}/release-status.json"
+
+release-flow:
+  ATOMICSOUL_PUSH=0 cargo run --locked --quiet -- release-flow --manifest "$(pwd)/repos.manifest.toml" --evidence-root "$(pwd)/docs/release-evidence/8.0.1"
 
 refresh-authored:
   cargo run --locked --quiet -- refresh-ci-contract --authored

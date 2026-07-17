@@ -60,7 +60,7 @@ security_tool_names=(actionlint grype syft)
   && "$(stat -c '%u:%a:%h' -- "$jankurai_path" 2>/dev/null)" == '0:555:1' ]] \
   || fail 'Jankurai must be root-owned mode 0555'
 jq -e '
-  select(.schema_version == "jain.host-ci-publisher-config/v5")
+  select(.schema_version == "jain.host-ci-publisher-config/v6")
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
@@ -76,6 +76,7 @@ jq -e '
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.max_seal_age_seconds | type == "number" and . >= 1 and . <= 300)
   | select(.token_file | type == "string" and startswith("/"))
+  | select(.global_producer_lock == "/run/lock/jain-global-host-ci-producer.lock")
   | select((.control_ref // "refs/heads/main") | type == "string")
   | select((.bootstrap_commit // "") | type == "string")
   | select((.bootstrap_expires_at // "") | type == "string")
@@ -88,6 +89,11 @@ bootstrap_expires_at="$(jq -er '.bootstrap_expires_at // ""' "$config")"
 validate_control_authority \
   "$control_ref" "$bootstrap_commit" "$bootstrap_expires_at"
 
+global_producer_lock="$(jq -er '.global_producer_lock' "$config")"
+[[ ! -L "$global_producer_lock" \
+  && "$(stat -Lc '%F:%u:%g:%a:%h' -- "$global_producer_lock" 2>/dev/null)" \
+    == 'regular file:0:0:600:1' ]] \
+  || fail 'global producer lock metadata mismatch'
 token_file="$(jq -er '.token_file' "$config")"
 [[ ! -L "$token_file" \
   && "$(realpath -e -- "$token_file" 2>/dev/null)" == "$token_file" \
@@ -165,8 +171,8 @@ done
 mkdir -m 0700 "$request_dir/publish.lock" 2>/dev/null \
   || fail 'request was already used or is being published'
 
-jq -e --arg request_id "$request_id" \
-  'select(.schema_version == "jain.host-ci-root-state/v4")
+jq -e --arg request_id "$request_id" --arg producer_lock "$global_producer_lock" \
+  'select(.schema_version == "jain.host-ci-root-state/v5")
    | select(.request_id == $request_id and .status == "sealed")
    | select(.nonce | test("^[0-9a-f]{64}$"))
    | select(.result_sha256 | test("^[0-9a-f]{64}$"))
@@ -184,7 +190,10 @@ jq -e --arg request_id "$request_id" \
    | select(.grype_db_root | type == "string" and startswith("/"))
    | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
    | select(.native_evidence_root | type == "string")
-   | select(.proof_evidence_root | type == "string")' "$state" >/dev/null \
+   | select(.proof_evidence_root | type == "string")
+   | select(.producer_lock_path == $producer_lock)
+   | select(.producer_lock_dev | type == "number" and . >= 1)
+   | select(.producer_lock_inode | type == "number" and . >= 1)' "$state" >/dev/null \
   || fail 'root request is not sealed for one-shot publication'
 nonce="$(jq -er '.nonce' "$state")"
 result_sha="$(sha256sum -- "$result" | cut -d' ' -f1)"
@@ -216,11 +225,14 @@ expected_seal="$({
   && "$(jq -er '.native_evidence_root' "$state")" \
     == "$native_evidence_root" \
   && "$(jq -er '.proof_evidence_root' "$state")" \
-    == "$proof_evidence_root" ]] \
+    == "$proof_evidence_root" \
+  && "$(jq -er '.producer_lock_path' "$state")" == "$global_producer_lock" \
+  && "$(jq -er '[.producer_lock_dev,.producer_lock_inode]|join(":")' "$state")" \
+    == "$(stat -Lc '%d:%i' -- "$global_producer_lock")" ]] \
   || fail 'root request broker binding mismatch'
 
-jq -e --arg request_id "$request_id" \
-  'select(.schema_version == "jain.host-ci-root-result/v4")
+jq -e --arg request_id "$request_id" --arg producer_lock "$global_producer_lock" \
+  'select(.schema_version == "jain.host-ci-root-result/v5")
    | select(.request_id == $request_id)
    | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
    | select(.owner | test("^[a-z0-9][a-z0-9-]*$"))
@@ -241,8 +253,16 @@ jq -e --arg request_id "$request_id" \
    | select(.proof_status == "pass" or .proof_status == "fail")
    | select(.proof_attempt_id | test("^[A-Za-z0-9_.-]+$"))
    | select(.proof_auditor_exit_code | type == "number")
-   | select(.proof_validator_exit_code | type == "number")' "$result" >/dev/null \
+   | select(.proof_validator_exit_code | type == "number")
+   | select(.producer_lock_path == $producer_lock)
+   | select(.producer_lock_dev | type == "number" and . >= 1)
+   | select(.producer_lock_inode | type == "number" and . >= 1)' "$result" >/dev/null \
   || fail 'invalid root result schema'
+[[ "$(jq -er '[.producer_lock_path,.producer_lock_dev,.producer_lock_inode]|join(":")' \
+      "$result")" \
+  == "$(jq -er '[.producer_lock_path,.producer_lock_dev,.producer_lock_inode]|join(":")' \
+      "$state")" ]] \
+  || fail 'global producer lock identity differs across root artifacts'
 
 control_root="$request_dir/worker-authority/control-plane"
 [[ -d "$control_root/.git" && ! -L "$control_root" \

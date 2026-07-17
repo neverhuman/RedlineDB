@@ -90,8 +90,19 @@ validate_grype_db() {
 }
 
 [[ "$(id -u)" == 0 ]] || fail 'must run as root'
-[[ "$#" == 1 ]] || fail 'expected one sandbox request path'
-request="$1"
+producer_lock_held=false
+producer_lock_fd=''
+producer_lock_identity=''
+if [[ "$#" == 1 ]]; then
+  request="$1"
+elif [[ "$#" == 4 && "$1" == --producer-lock-held ]]; then
+  producer_lock_held=true
+  producer_lock_fd="$2"
+  producer_lock_identity="$3"
+  request="$4"
+else
+  fail 'expected one sandbox request path'
+fi
 
 sandbox_path="$(realpath -e -- "${BASH_SOURCE[0]}")" \
   || fail 'cannot resolve sandbox path'
@@ -121,7 +132,7 @@ security_tool_names=(actionlint grype syft)
   && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
   || fail 'unsafe root sandbox config'
 jq -e '
-  select(.schema_version == "jain.host-ci-sandbox-config/v5")
+  select(.schema_version == "jain.host-ci-sandbox-config/v6")
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
@@ -145,6 +156,7 @@ jq -e '
   | select(.native_evidence_root | type == "string" and startswith("/"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.token_file | type == "string" and startswith("/"))
+  | select(.global_producer_lock == "/run/lock/jain-global-host-ci-producer.lock")
   | select(.retain_requests | type == "boolean")
   | select((.control_ref // "refs/heads/main") | type == "string")
   | select((.bootstrap_commit // "") | type == "string")
@@ -180,6 +192,29 @@ parent_gid="$(jq -er '.parent_gid' "$config")"
   || fail 'parent must be a non-root identity'
 [[ "${SUDO_UID:-}" == "$parent_uid" && "${SUDO_GID:-}" == "$parent_gid" ]] \
   || fail 'sandbox caller does not match configured parent identity'
+global_producer_lock="$(jq -er '.global_producer_lock' "$config")"
+if [[ "$producer_lock_held" != true ]]; then
+  exec "$splitctl_path" host-ci-producer-lock \
+    --lock "$global_producer_lock" --broker "$sandbox_path" --request "$request"
+fi
+[[ "$producer_lock_fd" =~ ^[0-9]+$ \
+  && "$producer_lock_identity" =~ ^[0-9]+:[0-9]+$ ]] \
+  || fail 'invalid inherited global producer lock identity'
+producer_lock_metadata="$(stat -Lc '%F:%u:%g:%a:%h:%d:%i' \
+  -- "/proc/$$/fd/$producer_lock_fd" 2>/dev/null)" \
+  || fail 'inherited global producer lock descriptor is unavailable'
+producer_lock_path_metadata="$(stat -Lc '%F:%u:%g:%a:%h:%d:%i' \
+  -- "$global_producer_lock" 2>/dev/null)" \
+  || fail 'global producer lock path is unavailable'
+[[ ! -L "$global_producer_lock" \
+  && "$producer_lock_metadata" \
+    == "regular file:0:0:600:1:$producer_lock_identity" \
+  && "$producer_lock_path_metadata" == "$producer_lock_metadata" ]] \
+  || fail 'global producer lock metadata or stable identity mismatch'
+/usr/bin/flock -n "$producer_lock_fd" \
+  || fail 'inherited global producer lock is not held'
+producer_lock_dev="${producer_lock_identity%%:*}"
+producer_lock_inode="${producer_lock_identity##*:}"
 worker_user="$(jq -er '.worker_user' "$config")"
 worker_group="$(jq -er '.worker_group' "$config")"
 worker_record="$(getent passwd "$worker_user")" \
@@ -506,8 +541,11 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
+  --arg producer_lock_path "$global_producer_lock" \
+  --argjson producer_lock_dev "$producer_lock_dev" \
+  --argjson producer_lock_inode "$producer_lock_inode" \
   --argjson created_at "$created_at" \
-  '{schema_version:"jain.host-ci-root-state/v4",status:"running",
+  '{schema_version:"jain.host-ci-root-state/v5",status:"running",
     request_id:$request_id,nonce:$nonce,created_at:$created_at,
     control_plane_commit:$commit,control_remote:$remote,control_ref:$control_ref,
     bootstrap_expires_at:$bootstrap_expires_at,
@@ -517,7 +555,10 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
     grype_db_root:$grype_db_root,
     grype_db_inventory_sha256:$grype_db_inventory_sha256,
     native_evidence_root:$native_evidence_root,
-    proof_evidence_root:$proof_evidence_root}' >"$root_state"
+    proof_evidence_root:$proof_evidence_root,
+    producer_lock_path:$producer_lock_path,
+    producer_lock_dev:$producer_lock_dev,
+    producer_lock_inode:$producer_lock_inode}' >"$root_state"
 chmod 0600 "$root_state"
 chown root:root "$root_state"
 
@@ -854,7 +895,10 @@ jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
   --argjson audit_rc "$audit_rc" \
   --argjson proof_validator_rc "$proof_validator_rc" \
   --argjson evidence_required "$derived_required" \
-  '{schema_version:"jain.host-ci-root-result/v4",request_id:$request_id,
+  --arg producer_lock_path "$global_producer_lock" \
+  --argjson producer_lock_dev "$producer_lock_dev" \
+  --argjson producer_lock_inode "$producer_lock_inode" \
+  '{schema_version:"jain.host-ci-root-result/v5",request_id:$request_id,
     control_plane_commit:$commit,owner:$owner,repository:$repo,head_sha:$head,
     required_check:$check,conclusion:$conclusion,runner_exit_code:$rc,
     native_evidence_required:$evidence_required,
@@ -865,7 +909,10 @@ jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
     proof_report_path:$proof_report,proof_report_sha256:$proof_report_sha,
     proof_status:$proof_status,proof_attempt_id:$proof_attempt,
     proof_auditor_exit_code:$audit_rc,
-    proof_validator_exit_code:$proof_validator_rc}' \
+    proof_validator_exit_code:$proof_validator_rc,
+    producer_lock_path:$producer_lock_path,
+    producer_lock_dev:$producer_lock_dev,
+    producer_lock_inode:$producer_lock_inode}' \
   >"$root_result"
 chmod 0600 "$root_result"
 chown root:root "$root_result"
