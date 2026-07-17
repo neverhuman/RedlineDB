@@ -279,7 +279,13 @@ if jain_extract_native_materializer "$control" "$tmp/rejected" \
 fi
 git -C "$control" restore ops/ci/native-materializer.sh
 
-evidence_root="$durable_root/persistent-evidence"
+isolated_worker_staging=false
+if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 ]]; then
+  evidence_root="${JAIN_NATIVE_EVIDENCE_STAGING_ROOT:?isolated worker evidence staging is required}"
+  isolated_worker_staging=true
+else
+  evidence_root="$durable_root/persistent-evidence"
+fi
 head_sha="0123456789abcdef0123456789abcdef01234567"
 control_commit="$(git -C "$control" rev-parse HEAD)"
 outside_durable_root="$run_root/rejected-evidence"
@@ -527,5 +533,18 @@ grep -Fq 'post_check failure' "$repo_root/ops/ci/split-host-ci.sh" || {
   printf 'host CI native setup failures do not publish failure status\n' >&2
   exit 1
 }
+
+if [[ "$isolated_worker_staging" == true ]]; then
+  [[ -z "$(find "$evidence_root" -xdev -type l -print -quit)" \
+    && -z "$(find "$evidence_root" -xdev ! -type d ! -type f -print -quit)" ]] || {
+    printf 'isolated native evidence fixture left an unsafe inode\n' >&2
+    exit 1
+  }
+  rm -rf -- "$evidence_root/veox"
+  [[ -z "$(find "$evidence_root" -xdev -mindepth 1 -print -quit)" ]] || {
+    printf 'isolated native evidence fixture did not clean its staging root\n' >&2
+    exit 1
+  }
+fi
 
 printf 'native materializer authority/evidence contract ok\n'
