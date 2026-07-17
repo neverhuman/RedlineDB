@@ -460,6 +460,16 @@ grep -Fq 'installed security tool digest/metadata mismatch: actionlint' \
 sudo -n install -o root -g root -m 0555 \
   /usr/bin/true "$publisher_root/security-actionlint"
 
+sudo -n install -o root -g root -m 0555 /usr/bin/false "$jankurai"
+if sudo -n "$sandbox" "$tmp/nonexistent-jankurai-request" \
+  >"$tmp/jankurai-tamper.log" 2>&1; then
+  printf 'sandbox accepted a replaced Jankurai binary\n' >&2
+  exit 1
+fi
+grep -Fq 'installed Jankurai digest/version mismatch' \
+  "$tmp/jankurai-tamper.log"
+sudo -n install -o root -g root -m 0555 "$fake_jankurai" "$jankurai"
+
 sudo -n install -o root -g root -m 0444 \
   /usr/bin/false "$grype_db_root/6/vulnerability.db"
 if sudo -n "$sandbox" "$tmp/nonexistent-grype-db-request" \
@@ -550,6 +560,11 @@ printf 'valid\n' >"$product/agent/test-auditor-mode"
 cat >"$product/scripts/ci-local.sh" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ "${JAIN_RELEASE_CI:-0}" == 1 ]]; then
+  [[ "$(command -v jankurai)" \
+    == /opt/jain-ci/authority/release-bin/jankurai ]]
+  [[ "$(jankurai --version)" == 'jankurai 1.6.11' ]]
+fi
 if [[ "${JAIN_TEST_REQUIRE_ISOLATION:-0}" == 1 ]]; then
   : "${JAIN_TEST_ATTACK_URL:?}" "${JAIN_TEST_ROOT_CONFIG_PATH:?}"
   : "${JAIN_TEST_ROOT_REQUEST_PATH:?}"

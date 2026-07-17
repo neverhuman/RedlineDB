@@ -158,10 +158,11 @@ splitctl_sha="$(sha256sum -- "$splitctl_path" | cut -d' ' -f1)"
 jankurai_sha="$(sha256sum -- "$jankurai_path" | cut -d' ' -f1)"
 [[ "$sandbox_sha" == "$(jq -er '.sandbox_sha256' "$config")" \
   && "$publisher_sha" == "$(jq -er '.publisher_sha256' "$config")" \
-  && "$splitctl_sha" == "$(jq -er '.splitctl_sha256' "$config")" \
-  && "$jankurai_sha" == "$(jq -er '.jankurai_sha256' "$config")" \
-  && "$("$jankurai_path" --version)" == 'jankurai 1.6.11' ]] \
+  && "$splitctl_sha" == "$(jq -er '.splitctl_sha256' "$config")" ]] \
   || fail 'installed broker digest/config mismatch'
+[[ "$jankurai_sha" == "$(jq -er '.jankurai_sha256' "$config")" \
+  && "$("$jankurai_path" --version)" == 'jankurai 1.6.11' ]] \
+  || fail 'installed Jankurai digest/version mismatch'
 security_tool_sha256="$(jq -c '.security_tool_sha256' "$config")"
 for tool in "${security_tool_names[@]}"; do
   tool_path="$install_dir/security-$tool"
@@ -486,6 +487,9 @@ for tool in "${security_tool_names[@]}"; do
   install -o root -g root -m 0555 \
     "$install_dir/security-$tool" "$worker_authority/security-bin/$tool"
 done
+install -d -o root -g root -m 0555 "$worker_authority/release-bin"
+install -o root -g root -m 0555 \
+  "$jankurai_path" "$worker_authority/release-bin/jankurai"
 install -o root -g root -m 0555 \
   "$control_root/ops/ci/split-host-ci.sh" \
   "$worker_authority/.split-host-ci-reviewed"
@@ -610,7 +614,7 @@ systemd_args=(
   --setenv="HOME=$bootstrap_root/child-home"
   --setenv="USER=$worker_user" --setenv="LOGNAME=$worker_user"
   --setenv=SHELL=/bin/bash
-  --setenv=PATH=/opt/jain-ci/authority/security-bin:/opt/jain-ci/cargo-bin:/usr/bin:/bin
+  --setenv=PATH=/opt/jain-ci/authority/security-bin:/opt/jain-ci/authority/release-bin:/opt/jain-ci/cargo-bin:/usr/bin:/bin
   --setenv=CARGO_HOME=/opt/jain-ci/cargo-home
   --setenv=RUSTUP_HOME=/opt/jain-ci/rustup
   --setenv=JAIN_HOST_CI_REEXEC_STATE=/opt/jain-ci/authority/reexec-state.json
