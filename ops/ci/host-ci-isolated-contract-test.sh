@@ -29,8 +29,14 @@ done
 if /usr/bin/sudo -n /usr/bin/true >/dev/null 2>&1; then
   fail 'worker reached sudo'
 fi
-if [[ -e /usr/local/libexec/jain ]]; then
-  fail 'root broker directory is visible'
+# systemd masks InaccessiblePaths with a mode-000 placeholder inode. Its name
+# can still be statted, but the worker must not be able to list or traverse it,
+# and no broker child may resolve through it.
+if [[ -r /usr/local/libexec/jain || -x /usr/local/libexec/jain ]]; then
+  fail 'root broker directory is accessible'
+fi
+if [[ -e /usr/local/libexec/jain/jeryu-merge-token ]]; then
+  fail 'root publisher credential is visible'
 fi
 if touch /opt/jain-ci/authority/.worker-write-probe 2>/dev/null; then
   fail 'worker mutated root authority'
