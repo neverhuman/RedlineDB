@@ -34,12 +34,12 @@
       "entries": 1
     },
     {
-      "id": "prior-release-proof",
-      "kind": "file",
+      "id": "prior-release-evidence",
+      "kind": "tree_inventory",
       "release": "8.0.0",
-      "path": "docs/release-evidence/8.0.0/smartcluster/release-proof.json",
-      "sha256": "fd125f07530d2b47e988fca3c1c7812d541d44424446b03be3a2206ea47a00a2",
-      "entries": 1
+      "path": "docs/release-evidence/8.0.0",
+      "sha256": "fb44575e144aaeaf302fa8f3b686c9fd557b4cf1565cceb5bf597ecdc60c41c2",
+      "entries": 148
     },
     {
       "id": "current-release-evidence",

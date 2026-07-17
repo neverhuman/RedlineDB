@@ -1,7 +1,7 @@
 {
   "format": "jain.program-release-evidence-index",
   "release": "9.0.0-alpha.6",
-  "authority_sha256": "3525cd9bb8d4d89b30dec3d5bb9f761b48e8d8b34b2ea46709475f4f55a589ab",
+  "authority_sha256": "a626a321789ebbae0129f2edadc3d309848de590428b018cb3077fcc7355c3d9",
   "spec_sha256": "368c2f2fc04e166233b5fc2f92a1cdf6f02f26c28ac5d7976819d62dd1ff5231",
   "groups": [
     {

@@ -37,7 +37,7 @@ local_jeryu_args=(validate-local-jeryu --manifest repos.manifest.toml)
 if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 ]]; then
   # Exact-head CI is source authority, not a mutable host-checkout census. The
   # host preflight/convergence lane verifies canonical checkout remotes.
-  local_jeryu_args+=(--skip-remotes)
+  local_jeryu_args+=(--skip-remotes --skip-program-checkouts)
 fi
 cargo run --locked --quiet -- "${local_jeryu_args[@]}"
 cargo run --locked --quiet -- python-boundary

@@ -5,7 +5,9 @@
   "required": [
     "format",
     "release",
-    "claim",
+    "target_claim",
+    "target_status",
+    "target_durability",
     "decision",
     "eligible",
     "formal_ga",
@@ -29,7 +31,11 @@
   "properties": {
     "format": { "const": "jain.program-release-status" },
     "release": { "type": "string", "minLength": 1, "maxLength": 128 },
-    "claim": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "target_claim": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "target_status": {
+      "enum": ["development", "production-canary", "general-availability"]
+    },
+    "target_durability": { "enum": ["ephemeral", "durable", "critical"] },
     "decision": { "enum": ["blocked", "eligible"] },
     "eligible": { "type": "boolean" },
     "formal_ga": { "type": "boolean" },

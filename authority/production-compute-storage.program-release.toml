@@ -3,8 +3,8 @@ format = "jain.program-release-authority"
 [program]
 name = "jain"
 release = "9.0.0-alpha.6"
-claim = "production_compute_storage_canary"
-status = "production-canary"
+target_claim = "production_compute_storage_canary"
+target_status = "production-canary"
 formal_ga = false
 activation_enabled = false
 
@@ -14,6 +14,7 @@ spec = "docs/design-inputs/9.0.0-alpha.6/SPEC.md"
 custody = "docs/design-inputs/9.0.0-alpha.6/custody.json"
 evidence_root = "docs/release-evidence/9.0.0-alpha.6"
 evidence_index = "docs/release-evidence/9.0.0-alpha.6/evidence-index.json"
+status_record = "docs/release-evidence/9.0.0-alpha.6/status/m0.json"
 
 [firewall]
 release_namespace = "9.0.0-alpha.6"
@@ -28,10 +29,10 @@ release = "8.0.1"
 path = "repos.manifest.toml"
 
 [[firewall.protected_surface]]
-id = "prior-release-proof"
-kind = "file"
+id = "prior-release-evidence"
+kind = "tree_inventory"
 release = "8.0.0"
-path = "docs/release-evidence/8.0.0/smartcluster/release-proof.json"
+path = "docs/release-evidence/8.0.0"
 
 [[firewall.protected_surface]]
 id = "current-release-evidence"
@@ -44,7 +45,7 @@ hub = "AtomicSoul"
 nodes = ["xbabe1", "xbabe2", "xbabe3"]
 witnesses = ["xbabe1", "xbabe2", "xbabe3"]
 witness_quorum = 2
-durability_claim = "durable"
+target_durability = "durable"
 critical_available = false
 
 [deployment_inputs]
@@ -73,6 +74,7 @@ checkout = "../jain-shard"
 remote = "http://127.0.0.1:8787/git/jain-split/jain-shard.git"
 required_check = "jain-shard/required"
 lifecycle = "local-prototype"
+branch = "main"
 head_commit = "ce57c9d2f75ff1e957a2643b74b6b3a550938318"
 
 [[repository]]

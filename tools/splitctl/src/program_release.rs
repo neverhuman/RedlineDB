@@ -9,7 +9,7 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use rustix::fs::{openat2, AtFlags, Mode, OFlags, ResolveFlags};
+use rustix::fs::{openat2, renameat_with, Mode, OFlags, RenameFlags, ResolveFlags};
 
 const AUTHORITY_FORMAT: &str = "jain.program-release-authority";
 const EVIDENCE_FORMAT: &str = "jain.program-release-evidence-index";
@@ -19,6 +19,9 @@ const MAX_AUTHORITY_BYTES: u64 = 1024 * 1024;
 const MAX_INDEX_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_RECEIPT_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_BASELINE_FILES: usize = 4096;
+const MAX_BASELINE_DIRECTORIES: usize = 4096;
+const MAX_BASELINE_DEPTH: usize = 64;
+const MAX_BASELINE_TOTAL_BYTES: u64 = 1024 * 1024 * 1024;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -39,10 +42,18 @@ struct ProgramAuthority {
 struct Program {
     name: String,
     release: String,
-    claim: String,
-    status: String,
+    target_claim: String,
+    target_status: ProgramStatus,
     formal_ga: bool,
     activation_enabled: bool,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "kebab-case")]
+enum ProgramStatus {
+    Development,
+    ProductionCanary,
+    GeneralAvailability,
 }
 
 #[derive(Debug, Deserialize)]
@@ -53,6 +64,7 @@ struct ProgramPaths {
     custody: String,
     evidence_root: String,
     evidence_index: String,
+    status_record: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -81,8 +93,16 @@ struct Canary {
     nodes: Vec<String>,
     witnesses: Vec<String>,
     witness_quorum: usize,
-    durability_claim: String,
+    target_durability: DurabilityClaim,
     critical_available: bool,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum DurabilityClaim {
+    Ephemeral,
+    Durable,
+    Critical,
 }
 
 #[derive(Debug, Deserialize)]
@@ -115,6 +135,7 @@ struct ProgramRepository {
     remote: String,
     required_check: String,
     lifecycle: RepositoryLifecycle,
+    branch: Option<String>,
     head_commit: Option<String>,
     proof_receipt: Option<String>,
     proof_sha256: Option<String>,
@@ -232,7 +253,9 @@ enum BaselineKind {
 struct ReleaseStatus {
     format: &'static str,
     release: String,
-    claim: String,
+    target_claim: String,
+    target_status: ProgramStatus,
+    target_durability: DurabilityClaim,
     decision: &'static str,
     eligible: bool,
     formal_ga: bool,
@@ -256,6 +279,7 @@ struct ReleaseStatus {
 
 struct ValidatedProgram {
     root: PathBuf,
+    control: ConfinedDir,
     authority: ProgramAuthority,
     index: EvidenceIndex,
     authority_sha256: String,
@@ -269,8 +293,10 @@ struct ValidatedProgram {
 }
 
 pub(crate) struct DeclaredCheckout {
+    pub(crate) name: String,
     pub(crate) remote: Option<String>,
     pub(crate) must_be_absent: bool,
+    pub(crate) expected_branch: Option<String>,
     pub(crate) expected_head: Option<String>,
 }
 
@@ -284,9 +310,7 @@ pub(crate) fn declared_checkouts(
             .and_then(|name| name.to_str())
             .is_some_and(|name| name.ends_with(".program-release.toml"))
     }) {
-        let (canonical, bytes) = read_regular(&authority_path, MAX_AUTHORITY_BYTES)?;
-        let authority: ProgramAuthority = toml::from_str(std::str::from_utf8(&bytes)?)?;
-        validate_authority(control_root, &canonical, &authority)?;
+        let authority = validate_program(&authority_path)?.authority;
         let family_root = control_root
             .parent()
             .ok_or("control-plane root has no family root")?;
@@ -294,19 +318,25 @@ pub(crate) fn declared_checkouts(
             let path = family_root.join(&repository.name);
             let declared = match repository.lifecycle {
                 RepositoryLifecycle::NotCreated => DeclaredCheckout {
+                    name: repository.name,
                     remote: None,
                     must_be_absent: true,
+                    expected_branch: None,
                     expected_head: None,
                 },
                 RepositoryLifecycle::LocalPrototype => DeclaredCheckout {
+                    name: repository.name,
                     remote: None,
                     must_be_absent: false,
+                    expected_branch: repository.branch,
                     expected_head: repository.head_commit,
                 },
                 RepositoryLifecycle::ReviewPending | RepositoryLifecycle::ProtectedMerged => {
                     DeclaredCheckout {
+                        name: repository.name,
                         remote: Some(repository.remote),
                         must_be_absent: false,
+                        expected_branch: repository.branch,
                         expected_head: repository.release_commit.or(repository.head_commit),
                     }
                 }
@@ -431,17 +461,21 @@ fn authority_paths(directory: &Path) -> Result<Vec<PathBuf>, Box<dyn std::error:
 fn validate_all(directory: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let paths = authority_paths(directory)?;
     let mut releases = BTreeSet::new();
-    let mut governed_roots = BTreeSet::new();
-    let mut evidence_roots = BTreeSet::new();
+    let mut governed_roots = Vec::new();
     let mut checkouts = BTreeSet::new();
     for path in &paths {
         let program = validate_program(path)?;
-        if !releases.insert(program.authority.program.release.clone())
-            || !governed_roots.insert(program.authority.paths.design_input_root.clone())
-            || !evidence_roots.insert(program.authority.paths.evidence_root.clone())
-        {
-            return Err("program authorities overlap a release or governed root".into());
+        if !releases.insert(program.authority.program.release.clone()) {
+            return Err("program authorities overlap a release identity".into());
         }
+        insert_disjoint_root(
+            &mut governed_roots,
+            PathBuf::from(&program.authority.paths.design_input_root),
+        )?;
+        insert_disjoint_root(
+            &mut governed_roots,
+            PathBuf::from(&program.authority.paths.evidence_root),
+        )?;
         for repository in &program.authority.repository {
             if !checkouts.insert(repository.checkout.clone()) {
                 return Err("program authorities declare the same checkout more than once".into());
@@ -452,8 +486,23 @@ fn validate_all(directory: &Path) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn insert_disjoint_root(
+    roots: &mut Vec<PathBuf>,
+    candidate: PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if roots
+        .iter()
+        .any(|existing| candidate.starts_with(existing) || existing.starts_with(&candidate))
+    {
+        return Err("program authorities contain overlapping governed roots".into());
+    }
+    roots.push(candidate);
+    Ok(())
+}
+
 fn validate_program(authority_path: &Path) -> Result<ValidatedProgram, Box<dyn std::error::Error>> {
-    let (authority_path, authority_bytes) = read_regular(authority_path, MAX_AUTHORITY_BYTES)?;
+    let (authority_path, initial_authority_bytes) =
+        read_regular(authority_path, MAX_AUTHORITY_BYTES)?;
     let authority_parent = authority_path
         .parent()
         .ok_or("program authority has no parent")?;
@@ -468,42 +517,53 @@ fn validate_program(authority_path: &Path) -> Result<ValidatedProgram, Box<dyn s
         .parent()
         .ok_or("program authority is not beneath a control-plane root")?
         .to_path_buf();
+    let control = ConfinedDir::open(&root)?;
+    let authority_relative = authority_path.strip_prefix(&root)?;
+    let authority_bytes =
+        read_confined_regular_from(&control, authority_relative, MAX_AUTHORITY_BYTES)?;
+    if authority_bytes != initial_authority_bytes {
+        return Err("program authority changed while its control root was bound".into());
+    }
     let authority: ProgramAuthority = toml::from_str(std::str::from_utf8(&authority_bytes)?)?;
     validate_authority(&root, &authority_path, &authority)?;
 
-    let expected_index = rooted_existing_file(
+    rooted_existing_file(
         &root,
         &authority.paths.evidence_index,
         &authority.program.release,
         &authority.firewall.protected_releases,
     )?;
-    let (_, index_bytes) = read_regular(&expected_index, MAX_INDEX_BYTES)?;
+    let index_bytes = read_confined_regular_from(
+        &control,
+        Path::new(&authority.paths.evidence_index),
+        MAX_INDEX_BYTES,
+    )?;
     let index: EvidenceIndex = serde_json::from_slice(&index_bytes)?;
-    let spec_path = rooted_existing_file(
+    rooted_existing_file(
         &root,
         &authority.paths.spec,
         &authority.program.release,
         &authority.firewall.protected_releases,
     )?;
-    let (_, spec_bytes) = read_regular(&spec_path, MAX_RECEIPT_BYTES)?;
+    let spec_bytes = read_confined_regular_from(
+        &control,
+        Path::new(&authority.paths.spec),
+        MAX_RECEIPT_BYTES,
+    )?;
     validate_spec_requirements(&authority, &spec_bytes)?;
     let authority_sha256 = sha256(&authority_bytes);
     let spec_sha256 = sha256(&spec_bytes);
     validate_index(&root, &authority, &index, &authority_sha256, &spec_sha256)?;
-    let custody = validate_custody(&root, &authority)?;
-    let custody_path = rooted_existing_file(
-        &root,
-        &authority.paths.custody,
-        &authority.program.release,
-        &authority.firewall.protected_releases,
-    )?;
-    let (_, custody_bytes) = read_regular(&custody_path, MAX_INDEX_BYTES)?;
-    let custody_sha256 = sha256(&custody_bytes);
+    let (custody, custody_sha256) = validate_custody(&control, &root, &authority)?;
+    if !control.still_bound(&root) {
+        return Err("program control root changed during validation".into());
+    }
     let evidence_index_sha256 = sha256(&index_bytes);
     let receipt_set_sha256 = receipt_set_sha256(&index);
     let repository_set_sha256 = repository_set_sha256(&authority.repository);
     Ok(ValidatedProgram {
         root,
+        control,
         authority,
         index,
         authority_sha256,
@@ -527,11 +587,12 @@ fn validate_authority(
     }
     validate_identifier("program.name", &authority.program.name)?;
     validate_release(&authority.program.release)?;
-    validate_identifier("program.claim", &authority.program.claim)?;
-    validate_identifier("program.status", &authority.program.status)?;
+    validate_identifier("program.target_claim", &authority.program.target_claim)?;
     if authority.program.formal_ga
         || authority.program.activation_enabled
         || authority.canary.critical_available
+        || authority.program.target_status == ProgramStatus::GeneralAvailability
+        || authority.canary.target_durability == DurabilityClaim::Critical
     {
         return Err(
             "GA, activation, and Critical claims require typed signed validators that are not yet available"
@@ -584,6 +645,7 @@ fn validate_authority(
         &authority.paths.custody,
         &authority.paths.evidence_root,
         &authority.paths.evidence_index,
+        &authority.paths.status_record,
     ] {
         validate_governed_path(
             Path::new(path),
@@ -595,6 +657,8 @@ fn validate_authority(
     if !Path::new(&authority.paths.spec).starts_with(design_root)
         || !Path::new(&authority.paths.custody).starts_with(design_root)
         || !Path::new(&authority.paths.evidence_index)
+            .starts_with(Path::new(&authority.paths.evidence_root))
+        || !Path::new(&authority.paths.status_record)
             .starts_with(Path::new(&authority.paths.evidence_root))
     {
         return Err("program spec, custody, or index escapes its declared governed root".into());
@@ -633,7 +697,6 @@ fn validate_authority(
 
 fn validate_canary(canary: &Canary) -> Result<(), Box<dyn std::error::Error>> {
     validate_identifier("canary.hub", &canary.hub)?;
-    validate_identifier("canary.durability_claim", &canary.durability_claim)?;
     validate_unique_strings("canary.nodes", &canary.nodes)?;
     validate_unique_strings("canary.witnesses", &canary.witnesses)?;
     let nodes = canary
@@ -758,7 +821,9 @@ fn validate_repositories(authority: &ProgramAuthority) -> Result<(), Box<dyn std
     for repository in &authority.repository {
         validate_identifier("repository.owner", &repository.owner)?;
         validate_identifier("repository.name", &repository.name)?;
-        if !identities.insert((repository.owner.as_str(), repository.name.as_str()))
+        if matches!(repository.owner.as_str(), "." | "..")
+            || matches!(repository.name.as_str(), "." | "..")
+            || !identities.insert((repository.owner.as_str(), repository.name.as_str()))
             || repository.required_check != format!("{}/required", repository.name)
             || repository.remote
                 != format!(
@@ -775,11 +840,14 @@ fn validate_repositories(authority: &ProgramAuthority) -> Result<(), Box<dyn std
         {
             return Err("repository identity, remote, check, or checkout is invalid".into());
         }
+        if let Some(branch) = &repository.branch {
+            validate_branch(branch)?;
+        }
         if let Some(commit) = &repository.head_commit {
-            validate_hex("repository.head_commit", commit, 40)?;
+            validate_nonzero_hex("repository.head_commit", commit, 40)?;
         }
         if let Some(commit) = &repository.release_commit {
-            validate_hex("repository.release_commit", commit, 40)?;
+            validate_nonzero_hex("repository.release_commit", commit, 40)?;
         }
         if let Some(path) = &repository.proof_receipt {
             validate_governed_path(
@@ -789,9 +857,10 @@ fn validate_repositories(authority: &ProgramAuthority) -> Result<(), Box<dyn std
             )?;
         }
         if let Some(digest) = &repository.proof_sha256 {
-            validate_hex("repository.proof_sha256", digest, 64)?;
+            validate_nonzero_hex("repository.proof_sha256", digest, 64)?;
         }
         if let Some(tag) = &repository.release_tag {
+            validate_identifier("repository.release_tag", tag)?;
             let prefix = format!("{}-v{}-", repository.name, authority.program.release);
             if !tag.starts_with(&prefix)
                 || repository.release_commit.is_none()
@@ -817,6 +886,7 @@ fn validate_repositories(authority: &ProgramAuthority) -> Result<(), Box<dyn std
         match repository.lifecycle {
             RepositoryLifecycle::NotCreated => {
                 if repository.head_commit.is_some()
+                    || repository.branch.is_some()
                     || has_proof
                     || repository.release_commit.is_some()
                     || repository.release_tag.is_some()
@@ -828,6 +898,7 @@ fn validate_repositories(authority: &ProgramAuthority) -> Result<(), Box<dyn std
             }
             RepositoryLifecycle::LocalPrototype => {
                 if repository.head_commit.is_none()
+                    || repository.branch.is_none()
                     || has_proof
                     || repository.release_commit.is_some()
                     || repository.release_tag.is_some()
@@ -836,27 +907,16 @@ fn validate_repositories(authority: &ProgramAuthority) -> Result<(), Box<dyn std
                 }
             }
             RepositoryLifecycle::ReviewPending => {
-                if repository.head_commit.is_none()
-                    || !has_proof
-                    || repository.release_commit.is_some()
-                    || repository.release_tag.is_some()
-                {
-                    return Err(
-                        "review-pending repository needs an exact head and proof only".into(),
-                    );
-                }
+                return Err(
+                    "review-pending lifecycle is unavailable until its typed signed proof validator exists"
+                        .into(),
+                );
             }
             RepositoryLifecycle::ProtectedMerged => {
-                if !has_proof
-                    || repository.release_commit.is_none()
-                    || repository.release_tag.is_none()
-                    || repository.head_commit.as_ref() != repository.release_commit.as_ref()
-                {
-                    return Err(
-                        "protected-merged repository needs one exact head, proof, commit, and tag"
-                            .into(),
-                    );
-                }
+                return Err(
+                    "protected-merged lifecycle is unavailable until its typed signed proof and forge validators exist"
+                        .into(),
+                );
             }
         }
     }
@@ -996,16 +1056,22 @@ fn validate_index(
 }
 
 fn validate_custody(
+    control: &ConfinedDir,
     root: &Path,
     authority: &ProgramAuthority,
-) -> Result<CustodyReceipt, Box<dyn std::error::Error>> {
-    let custody_path = rooted_existing_file(
+) -> Result<(CustodyReceipt, String), Box<dyn std::error::Error>> {
+    rooted_existing_file(
         root,
         &authority.paths.custody,
         &authority.program.release,
         &authority.firewall.protected_releases,
     )?;
-    let (_, bytes) = read_regular(&custody_path, MAX_INDEX_BYTES)?;
+    let bytes = read_confined_regular_from(
+        control,
+        Path::new(&authority.paths.custody),
+        MAX_INDEX_BYTES,
+    )?;
+    let custody_sha256 = sha256(&bytes);
     let receipt: CustodyReceipt = serde_json::from_slice(&bytes)?;
     if receipt.format != CUSTODY_FORMAT
         || receipt.release != authority.program.release
@@ -1037,13 +1103,14 @@ fn validate_custody(
         if Path::new(&input.copy) != expected_copy {
             return Err("custody copy path differs from the authority design-input root".into());
         }
-        let copy_path = rooted_existing_file(
+        rooted_existing_file(
             root,
             &input.copy,
             &authority.program.release,
             &authority.firewall.protected_releases,
         )?;
-        let (_, copy_bytes) = read_regular(&copy_path, MAX_RECEIPT_BYTES)?;
+        let copy_bytes =
+            read_confined_regular_from(control, Path::new(&input.copy), MAX_RECEIPT_BYTES)?;
         if input.bytes != copy_bytes.len() as u64 || input.sha256 != sha256(&copy_bytes) {
             return Err(
                 "custodied design input differs from its recorded external observation".into(),
@@ -1083,16 +1150,20 @@ fn validate_custody(
         )) {
             return Err("custody baseline contains a duplicate identity".into());
         }
-        let baseline_path = rooted_protected_path(root, authority, baseline)?;
+        rooted_protected_path(root, control, authority, baseline)?;
         match baseline.kind {
             BaselineKind::File => {
-                let (_, baseline_bytes) = read_regular(&baseline_path, MAX_RECEIPT_BYTES)?;
+                let baseline_bytes = read_confined_regular_from(
+                    control,
+                    Path::new(&baseline.path),
+                    MAX_RECEIPT_BYTES,
+                )?;
                 if baseline.entries != 1 || sha256(&baseline_bytes) != baseline.sha256 {
                     return Err("protected file baseline digest is invalid".into());
                 }
             }
             BaselineKind::TreeInventory => {
-                let (digest, entries) = tree_inventory(&baseline_path)?;
+                let (digest, entries) = tree_inventory(control, Path::new(&baseline.path))?;
                 if digest != baseline.sha256 || entries != baseline.entries {
                     return Err("protected tree baseline inventory is invalid".into());
                 }
@@ -1102,7 +1173,7 @@ fn validate_custody(
     if actual_baselines != expected_baselines {
         return Err("custody baselines differ from the exact protected-surface set".into());
     }
-    Ok(receipt)
+    Ok((receipt, custody_sha256))
 }
 
 fn reduce(program: &ValidatedProgram) -> ReleaseStatus {
@@ -1146,7 +1217,9 @@ fn reduce(program: &ValidatedProgram) -> ReleaseStatus {
     ReleaseStatus {
         format: STATUS_FORMAT,
         release: program.authority.program.release.clone(),
-        claim: program.authority.program.claim.clone(),
+        target_claim: program.authority.program.target_claim.clone(),
+        target_status: program.authority.program.target_status,
+        target_durability: program.authority.canary.target_durability,
         decision: if eligible { "eligible" } else { "blocked" },
         eligible,
         formal_ga: program.authority.program.formal_ga,
@@ -1171,6 +1244,8 @@ fn reduce(program: &ValidatedProgram) -> ReleaseStatus {
 
 struct ConfinedDir {
     file: File,
+    dev: u64,
+    ino: u64,
 }
 
 impl ConfinedDir {
@@ -1180,6 +1255,10 @@ impl ConfinedDir {
         } else {
             std::env::current_dir()?.join(path)
         };
+        let before = fs::symlink_metadata(&lexical)?;
+        if !before.is_dir() || before.file_type().is_symlink() {
+            return Err("confined root must be a physical directory".into());
+        }
         let canonical = fs::canonicalize(&lexical)?;
         if canonical != lexical {
             return Err("confined root must be canonical and symlink-free".into());
@@ -1188,13 +1267,39 @@ impl ConfinedDir {
             .read(true)
             .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
             .open(&lexical)?;
-        if !file.metadata()?.is_dir() {
-            return Err("confined root is not a directory".into());
+        let opened = file.metadata()?;
+        if !opened.is_dir()
+            || opened.dev() != before.dev()
+            || opened.ino() != before.ino()
+            || opened.uid() != unsafe { libc::geteuid() }
+            || opened.gid() != before.gid()
+            || opened.permissions().mode() & 0o002 != 0
+        {
+            return Err("confined root identity, owner, or permissions are unsafe".into());
         }
-        Ok(Self { file })
+        Ok(Self {
+            file,
+            dev: opened.dev(),
+            ino: opened.ino(),
+        })
     }
 
-    fn open_relative(
+    fn from_file(file: File) -> Result<Self, Box<dyn std::error::Error>> {
+        let metadata = file.metadata()?;
+        if !metadata.is_dir()
+            || metadata.uid() != unsafe { libc::geteuid() }
+            || metadata.permissions().mode() & 0o002 != 0
+        {
+            return Err("confined descriptor owner or permissions are unsafe".into());
+        }
+        Ok(Self {
+            file,
+            dev: metadata.dev(),
+            ino: metadata.ino(),
+        })
+    }
+
+    fn open_raw(
         &self,
         relative: &Path,
         flags: OFlags,
@@ -1213,9 +1318,61 @@ impl ConfinedDir {
             relative,
             flags | OFlags::CLOEXEC | OFlags::NOFOLLOW,
             mode,
-            ResolveFlags::BENEATH | ResolveFlags::NO_SYMLINKS | ResolveFlags::NO_MAGICLINKS,
+            ResolveFlags::BENEATH
+                | ResolveFlags::NO_SYMLINKS
+                | ResolveFlags::NO_MAGICLINKS
+                | ResolveFlags::NO_XDEV,
         )?;
         Ok(File::from(fd))
+    }
+
+    fn open_path(&self, relative: &Path) -> Result<File, Box<dyn std::error::Error>> {
+        self.open_raw(relative, OFlags::PATH, Mode::empty())
+    }
+
+    fn open_regular(&self, relative: &Path) -> Result<File, Box<dyn std::error::Error>> {
+        let inspected = self.open_path(relative)?;
+        let expected = inspected.metadata()?;
+        if !expected.is_file() {
+            return Err("confined input is not a regular file".into());
+        }
+        let opened = self.open_raw(relative, OFlags::RDONLY | OFlags::NONBLOCK, Mode::empty())?;
+        let actual = opened.metadata()?;
+        if actual.dev() != expected.dev() || actual.ino() != expected.ino() || !actual.is_file() {
+            return Err("confined input changed between inspection and open".into());
+        }
+        Ok(opened)
+    }
+
+    fn open_directory(&self, relative: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        let inspected = self.open_path(relative)?;
+        let expected = inspected.metadata()?;
+        if !expected.is_dir() {
+            return Err("confined input is not a directory".into());
+        }
+        let opened = self.open_raw(
+            relative,
+            OFlags::RDONLY | OFlags::DIRECTORY | OFlags::NONBLOCK,
+            Mode::empty(),
+        )?;
+        let actual = opened.metadata()?;
+        if actual.dev() != expected.dev() || actual.ino() != expected.ino() || !actual.is_dir() {
+            return Err("confined directory changed between inspection and open".into());
+        }
+        Self::from_file(opened)
+    }
+
+    fn still_bound(&self, path: &Path) -> bool {
+        fs::symlink_metadata(path).is_ok_and(|metadata| {
+            metadata.is_dir()
+                && !metadata.file_type().is_symlink()
+                && metadata.dev() == self.dev
+                && metadata.ino() == self.ino
+        })
+    }
+
+    fn same_directory(&self, other: &Self) -> bool {
+        self.dev == other.dev && self.ino == other.ino
     }
 }
 
@@ -1232,12 +1389,16 @@ fn write_record(
     {
         return Err("release status output path is unsafe or targets a protected release".into());
     }
-    let evidence_root = rooted_existing_directory(
-        &program.root,
-        &program.authority.paths.evidence_root,
-        &program.authority.program.release,
-        &program.authority.firewall.protected_releases,
-    )?;
+    if bytes.len().saturating_add(1) as u64 > MAX_INDEX_BYTES
+        || !program.control.still_bound(&program.root)
+    {
+        return Err("release status input or retained control root is unsafe".into());
+    }
+    let declared_record = program.root.join(&program.authority.paths.status_record);
+    if record != declared_record {
+        return Err("release status output differs from the authority-declared record".into());
+    }
+    let evidence_root = program.root.join(&program.authority.paths.evidence_root);
     let relative = record
         .strip_prefix(&evidence_root)
         .map_err(|_| "release status output must be beneath the governed evidence root")?;
@@ -1254,44 +1415,74 @@ fn write_record(
     let name = relative
         .file_name()
         .ok_or("release status output has no file name")?;
-    let evidence = ConfinedDir::open(&evidence_root)?;
-    let parent = evidence.open_relative(
-        parent_relative,
-        OFlags::RDONLY | OFlags::DIRECTORY,
-        Mode::empty(),
-    )?;
-    let parent_dir = ConfinedDir { file: parent };
-    let mut file = parent_dir.open_relative(
-        Path::new(name),
+    let name_text = name
+        .to_str()
+        .ok_or("release status output file name is not UTF-8")?;
+    let temp_name = format!(
+        ".{name_text}.partial-{}-{}",
+        std::process::id(),
+        &sha256(bytes)[..16]
+    );
+    let control = &program.control;
+    let evidence_relative = Path::new(&program.authority.paths.evidence_root);
+    let evidence = control.open_directory(evidence_relative)?;
+    let parent_dir = evidence.open_directory(parent_relative)?;
+    if parent_dir.open_path(Path::new(name)).is_ok() {
+        return Err("release status output already exists".into());
+    }
+    let mut file = parent_dir.open_raw(
+        Path::new(&temp_name),
         OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL,
         Mode::from_raw_mode(0o600),
     )?;
     let opened = file.metadata()?;
     if !opened.is_file() || opened.nlink() != 1 || opened.permissions().mode() & 0o777 != 0o600 {
-        let _ = rustix::fs::unlinkat(&parent_dir.file, Path::new(name), AtFlags::empty());
         return Err("release status output identity or permissions are unsafe".into());
     }
-    file.write_all(bytes)?;
-    file.write_all(b"\n")?;
+    let mut expected = Vec::with_capacity(bytes.len() + 1);
+    expected.extend_from_slice(bytes);
+    expected.push(b'\n');
+    file.write_all(&expected)?;
     file.sync_all()?;
+    let reopened = parent_dir.open_regular(Path::new(&temp_name))?;
+    let metadata = reopened.metadata()?;
+    if metadata.dev() != opened.dev()
+        || metadata.ino() != opened.ino()
+        || metadata.nlink() != 1
+        || metadata.permissions().mode() & 0o777 != 0o600
+        || read_opened_regular(reopened, MAX_INDEX_BYTES)? != expected
+    {
+        return Err("release status temporary output failed exact read-back".into());
+    }
+    let rebound_evidence = control.open_directory(evidence_relative)?;
+    if !control.still_bound(&program.root) || !evidence.same_directory(&rebound_evidence) {
+        return Err("governed roots changed during status creation".into());
+    }
+    renameat_with(
+        &parent_dir.file,
+        temp_name.as_str(),
+        &parent_dir.file,
+        name,
+        RenameFlags::NOREPLACE,
+    )?;
     parent_dir.file.sync_all()?;
-    let reopened = evidence.open_relative(relative, OFlags::RDONLY, Mode::empty());
-    let identity_matches = reopened.as_ref().is_ok_and(|reopened| {
-        reopened.metadata().is_ok_and(|metadata| {
-            metadata.dev() == opened.dev()
-                && metadata.ino() == opened.ino()
-                && metadata.nlink() == 1
-        })
-    });
-    if !identity_matches {
-        let _ = rustix::fs::unlinkat(&parent_dir.file, Path::new(name), AtFlags::empty());
-        return Err("release status output parent changed during creation".into());
+    let published = parent_dir.open_regular(Path::new(name))?;
+    let published_metadata = published.metadata()?;
+    if published_metadata.dev() != opened.dev()
+        || published_metadata.ino() != opened.ino()
+        || published_metadata.nlink() != 1
+        || published_metadata.permissions().mode() & 0o777 != 0o600
+        || read_opened_regular(published, MAX_INDEX_BYTES)? != expected
+        || !control.still_bound(&program.root)
+    {
+        return Err("release status publication failed exact read-back".into());
     }
     Ok(())
 }
 
 fn rooted_protected_path(
     root: &Path,
+    control: &ConfinedDir,
     authority: &ProgramAuthority,
     baseline: &ProtectedBaseline,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -1322,8 +1513,7 @@ fn rooted_protected_path(
     }
     let lexical = root.join(relative);
     ensure_no_symlink_components(root, &lexical)?;
-    let confined = ConfinedDir::open(root)?;
-    let opened = confined.open_relative(relative, OFlags::RDONLY, Mode::empty())?;
+    let opened = control.open_path(relative)?;
     let canonical = fs::canonicalize(&lexical)?;
     if canonical != lexical {
         return Err("protected baseline uses a symlink or non-canonical alias".into());
@@ -1374,7 +1564,7 @@ fn rooted_existing(
     let lexical = root.join(relative);
     ensure_no_symlink_components(root, &lexical)?;
     let confined = ConfinedDir::open(root)?;
-    let opened = confined.open_relative(relative, OFlags::RDONLY, Mode::empty())?;
+    let opened = confined.open_path(relative)?;
     let canonical = fs::canonicalize(&lexical)?;
     if canonical != lexical {
         return Err("governed path uses a symlink or non-canonical alias".into());
@@ -1446,62 +1636,121 @@ fn read_regular(
     {
         return Err("input paths must be lexically normalized".into());
     }
-    let metadata = fs::symlink_metadata(&lexical)?;
-    if !metadata.file_type().is_file()
-        || metadata.file_type().is_symlink()
-        || metadata.len() > max_bytes
-    {
-        return Err("input is not a bounded regular non-symlink file".into());
-    }
     let canonical = fs::canonicalize(&lexical)?;
     if canonical != lexical {
         return Err("input path uses a symlink or non-canonical alias".into());
     }
-    let mut file = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_NOFOLLOW)
-        .open(&canonical)?;
+    let parent = canonical.parent().ok_or("input file has no parent")?;
+    let name = canonical.file_name().ok_or("input file has no name")?;
+    let directory = ConfinedDir::open(parent)?;
+    let file = directory.open_regular(Path::new(name))?;
+    let bytes = read_opened_regular(file, max_bytes)?;
+    Ok((canonical, bytes))
+}
+
+fn read_confined_regular_from(
+    directory: &ConfinedDir,
+    relative: &Path,
+    max_bytes: u64,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let file = directory.open_regular(relative)?;
+    read_opened_regular(file, max_bytes)
+}
+
+fn read_opened_regular(
+    mut file: File,
+    max_bytes: u64,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let opened = file.metadata()?;
     if !opened.is_file()
-        || opened.len() != metadata.len()
-        || opened.dev() != metadata.dev()
-        || opened.ino() != metadata.ino()
+        || opened.len() > max_bytes
         || opened.nlink() != 1
         || opened.permissions().mode() & 0o002 != 0
     {
         return Err("input identity or permissions are unsafe".into());
     }
     let mut bytes = Vec::with_capacity(opened.len() as usize);
-    file.read_to_end(&mut bytes)?;
+    (&mut file).take(max_bytes + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err("input grew beyond its read bound".into());
+    }
     let after = file.metadata()?;
     if after.len() != opened.len()
         || after.dev() != opened.dev()
         || after.ino() != opened.ino()
+        || after.mtime() != opened.mtime()
+        || after.mtime_nsec() != opened.mtime_nsec()
+        || after.ctime() != opened.ctime()
+        || after.ctime_nsec() != opened.ctime_nsec()
+        || after.permissions().mode() != opened.permissions().mode()
+        || after.nlink() != opened.nlink()
         || bytes.len() as u64 != opened.len()
     {
         return Err("input changed while it was read".into());
     }
-    Ok((canonical, bytes))
+    Ok(bytes)
 }
 
-fn tree_inventory(path: &Path) -> Result<(String, usize), Box<dyn std::error::Error>> {
-    let root = ConfinedDir::open(path)?;
-    let mut records = Vec::new();
-    collect_tree_records(&root.file, Path::new(""), &mut records)?;
-    records.sort();
-    let references = records.iter().map(String::as_str).collect::<Vec<_>>();
+fn tree_inventory(
+    control: &ConfinedDir,
+    relative: &Path,
+) -> Result<(String, usize), Box<dyn std::error::Error>> {
+    let directory = control.open_directory(relative)?;
+    let first = collect_tree_inventory(&directory)?;
+    let second = collect_tree_inventory(&directory)?;
+    if first != second {
+        return Err("tree baseline changed between complete descriptor-relative passes".into());
+    }
+    let references = first.iter().map(String::as_str).collect::<Vec<_>>();
     Ok((
         digest_fields(b"jain.program-protected-tree\0", &references),
-        records.len(),
+        first.len(),
     ))
 }
 
+fn collect_tree_inventory(
+    directory: &ConfinedDir,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let before = directory.file.metadata()?;
+    let mut records = Vec::new();
+    let mut bounds = TreeInventoryBounds {
+        directories: 1,
+        files: 0,
+        bytes: 0,
+    };
+    collect_tree_records(directory, Path::new(""), 0, &mut bounds, &mut records)?;
+    records.sort();
+    let after = directory.file.metadata()?;
+    if before.dev() != after.dev()
+        || before.ino() != after.ino()
+        || before.mtime() != after.mtime()
+        || before.mtime_nsec() != after.mtime_nsec()
+        || before.ctime() != after.ctime()
+        || before.ctime_nsec() != after.ctime_nsec()
+    {
+        return Err("tree baseline directory changed during enumeration".into());
+    }
+    Ok(records)
+}
+
+struct TreeInventoryBounds {
+    directories: usize,
+    files: usize,
+    bytes: u64,
+}
+
 fn collect_tree_records(
-    directory: &File,
+    directory: &ConfinedDir,
     prefix: &Path,
+    depth: usize,
+    bounds: &mut TreeInventoryBounds,
     records: &mut Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut entries = rustix::fs::Dir::read_from(directory)?;
+    if depth > MAX_BASELINE_DEPTH {
+        return Err("tree baseline exceeds its recursion-depth bound".into());
+    }
+    let before = directory.file.metadata()?;
+    let mut entries = rustix::fs::Dir::read_from(&directory.file)?;
     for entry in &mut entries {
         let entry = entry?;
         let name = entry
@@ -1512,47 +1761,61 @@ fn collect_tree_records(
             continue;
         }
         let relative = prefix.join(name);
-        let child_fd: OwnedFd = openat2(
-            directory,
-            Path::new(name),
-            OFlags::RDONLY | OFlags::CLOEXEC | OFlags::NOFOLLOW,
-            Mode::empty(),
-            ResolveFlags::BENEATH | ResolveFlags::NO_SYMLINKS | ResolveFlags::NO_MAGICLINKS,
-        )?;
-        let mut child = File::from(child_fd);
-        let metadata = child.metadata()?;
+        let inspected = directory.open_path(Path::new(name))?;
+        let metadata = inspected.metadata()?;
         if metadata.is_dir() {
-            collect_tree_records(&child, &relative, records)?;
+            bounds.directories += 1;
+            if bounds.directories > MAX_BASELINE_DIRECTORIES {
+                return Err("tree baseline exceeds its directory-count bound".into());
+            }
+            let child = directory.open_directory(Path::new(name))?;
+            if child.dev != metadata.dev() || child.ino != metadata.ino() {
+                return Err("tree baseline directory changed after inspection".into());
+            }
+            collect_tree_records(&child, &relative, depth + 1, bounds, records)?;
         } else if metadata.is_file() {
-            if records.len() >= MAX_BASELINE_FILES {
+            bounds.files += 1;
+            if bounds.files > MAX_BASELINE_FILES {
                 return Err("tree baseline exceeds its file-count bound".into());
             }
-            if metadata.len() > MAX_RECEIPT_BYTES
-                || metadata.nlink() != 1
-                || metadata.permissions().mode() & 0o002 != 0
-            {
-                return Err("tree baseline contains an unsafe file".into());
+            let child = directory.open_regular(Path::new(name))?;
+            let actual = child.metadata()?;
+            if actual.dev() != metadata.dev() || actual.ino() != metadata.ino() {
+                return Err("tree baseline file changed after inspection".into());
             }
-            let mut bytes = Vec::with_capacity(metadata.len() as usize);
-            child.read_to_end(&mut bytes)?;
-            let after = child.metadata()?;
-            if after.dev() != metadata.dev()
-                || after.ino() != metadata.ino()
-                || after.len() != metadata.len()
-                || bytes.len() as u64 != metadata.len()
-            {
-                return Err("tree baseline file changed while it was read".into());
+            bounds.bytes = bounds
+                .bytes
+                .checked_add(actual.len())
+                .ok_or("tree baseline aggregate byte count overflowed")?;
+            if bounds.bytes > MAX_BASELINE_TOTAL_BYTES {
+                return Err("tree baseline exceeds its aggregate-byte bound".into());
             }
+            let bytes = read_opened_regular(child, MAX_RECEIPT_BYTES)?;
+            let git_mode = if actual.permissions().mode() & 0o111 == 0 {
+                "100644"
+            } else {
+                "100755"
+            };
             records.push(format!(
-                "{}\0{:o}\0{}\0{}",
+                "{}\0{}\0{}\0{}",
                 relative.display(),
-                metadata.permissions().mode() & 0o7777,
-                metadata.len(),
+                git_mode,
+                actual.len(),
                 sha256(&bytes)
             ));
         } else {
             return Err("tree baseline contains a non-file entry".into());
         }
+    }
+    let after = directory.file.metadata()?;
+    if before.dev() != after.dev()
+        || before.ino() != after.ino()
+        || before.mtime() != after.mtime()
+        || before.mtime_nsec() != after.mtime_nsec()
+        || before.ctime() != after.ctime()
+        || before.ctime_nsec() != after.ctime_nsec()
+    {
+        return Err("tree baseline directory changed during traversal".into());
     }
     Ok(())
 }
@@ -1590,6 +1853,33 @@ fn validate_identifier(field: &str, value: &str) -> Result<(), Box<dyn std::erro
     Ok(())
 }
 
+fn validate_branch(value: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if value.is_empty()
+        || value.len() > 128
+        || value == "@"
+        || value.starts_with('-')
+        || value.ends_with(['.', '/'])
+        || value.contains("..")
+        || value.contains("@{")
+        || value.contains("//")
+        || value.contains('\\')
+        || value.split('/').any(|part| {
+            part.is_empty()
+                || matches!(part, "." | "..")
+                || part.starts_with('.')
+                || part.ends_with(".lock")
+                || part.bytes().any(|byte| {
+                    byte.is_ascii_control()
+                        || byte.is_ascii_whitespace()
+                        || matches!(byte, b'~' | b'^' | b':' | b'?' | b'*' | b'[')
+                })
+        })
+    {
+        return Err("repository.branch is not a safe bounded branch name".into());
+    }
+    Ok(())
+}
+
 fn validate_release(value: &str) -> Result<(), Box<dyn std::error::Error>> {
     validate_identifier("release", value)?;
     if !value.bytes().any(|byte| byte.is_ascii_digit()) {
@@ -1605,6 +1895,18 @@ fn validate_hex(field: &str, value: &str, length: usize) -> Result<(), Box<dyn s
             .any(|byte| !byte.is_ascii_digit() && !(b'a'..=b'f').contains(&byte))
     {
         return Err(format!("{field} must be lowercase hexadecimal with length {length}").into());
+    }
+    Ok(())
+}
+
+fn validate_nonzero_hex(
+    field: &str,
+    value: &str,
+    length: usize,
+) -> Result<(), Box<dyn std::error::Error>> {
+    validate_hex(field, value, length)?;
+    if value.bytes().all(|byte| byte == b'0') {
+        return Err(format!("{field} cannot be the zero digest").into());
     }
     Ok(())
 }
@@ -1630,10 +1932,11 @@ fn repository_set_sha256(repositories: &[ProgramRepository]) -> String {
         .iter()
         .map(|repository| {
             format!(
-                "{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
+                "{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}\0{}",
                 repository.owner,
                 repository.name,
                 lifecycle_name(repository.lifecycle),
+                repository.branch.as_deref().unwrap_or("-"),
                 repository.head_commit.as_deref().unwrap_or("-"),
                 repository.proof_receipt.as_deref().unwrap_or("-"),
                 repository.proof_sha256.as_deref().unwrap_or("-"),
@@ -1800,6 +2103,16 @@ mod tests {
     }
 
     #[test]
+    fn authority_roots_must_be_pairwise_disjoint() {
+        let mut roots = Vec::new();
+        insert_disjoint_root(&mut roots, PathBuf::from("evidence/candidate-a")).unwrap();
+        insert_disjoint_root(&mut roots, PathBuf::from("evidence/candidate-b")).unwrap();
+        assert!(
+            insert_disjoint_root(&mut roots, PathBuf::from("evidence/candidate-a/nested")).is_err()
+        );
+    }
+
+    #[test]
     fn governed_paths_reject_lexical_directory_symlinks() {
         use std::os::unix::fs::symlink;
 
@@ -1819,9 +2132,31 @@ mod tests {
     }
 
     #[test]
+    fn confined_regular_inspection_rejects_a_fifo_without_opening_it_for_read() {
+        let directory = std::env::temp_dir().join(format!(
+            "jain-program-release-fifo-test-{}",
+            std::process::id()
+        ));
+        fs::create_dir(&directory).unwrap();
+        assert!(std::process::Command::new("mkfifo")
+            .arg(directory.join("receipt"))
+            .status()
+            .unwrap()
+            .success());
+        let confined = ConfinedDir::open(&directory).unwrap();
+        assert!(confined.open_regular(Path::new("receipt")).is_err());
+        fs::remove_file(directory.join("receipt")).unwrap();
+        fs::remove_dir(directory).unwrap();
+    }
+
+    #[test]
     fn unproved_release_claims_are_rejected() {
         let (root, path, mut authority) = parsed_tracked_authority();
         authority.program.formal_ga = true;
+        assert!(validate_authority(&root, &path, &authority).is_err());
+
+        let (root, path, mut authority) = parsed_tracked_authority();
+        authority.program.target_status = ProgramStatus::GeneralAvailability;
         assert!(validate_authority(&root, &path, &authority).is_err());
 
         let (root, path, mut authority) = parsed_tracked_authority();
@@ -1833,8 +2168,26 @@ mod tests {
         assert!(validate_authority(&root, &path, &authority).is_err());
 
         let (root, path, mut authority) = parsed_tracked_authority();
+        authority.canary.target_durability = DurabilityClaim::Critical;
+        assert!(validate_authority(&root, &path, &authority).is_err());
+
+        let (root, path, mut authority) = parsed_tracked_authority();
         authority.deployment_inputs.status = BindingStatus::Bound;
         assert!(validate_authority(&root, &path, &authority).is_err());
+
+        let (root, path, mut authority) = parsed_tracked_authority();
+        authority.repository[0].lifecycle = RepositoryLifecycle::ReviewPending;
+        authority.repository[0].proof_receipt = Some(authority.paths.custody.clone());
+        authority.repository[0].proof_sha256 = Some("1".repeat(64));
+        assert!(validate_authority(&root, &path, &authority).is_err());
+    }
+
+    #[test]
+    fn branch_and_digest_identifiers_reject_ambiguous_values() {
+        for branch in ["@", ".hidden", "topic/.hidden", "topic.lock", "topic//next"] {
+            assert!(validate_branch(branch).is_err());
+        }
+        assert!(validate_nonzero_hex("digest", &"0".repeat(64), 64).is_err());
     }
 
     #[test]
@@ -1852,6 +2205,15 @@ mod tests {
     }
 
     #[test]
+    fn tracked_status_matches_the_fresh_reduction() {
+        let program = validate_program(&tracked_authority()).unwrap();
+        let mut expected = serde_json::to_vec_pretty(&reduce(&program)).unwrap();
+        expected.push(b'\n');
+        let actual = fs::read(program.root.join(&program.authority.paths.status_record)).unwrap();
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
     fn witness_quorum_requires_a_strict_majority() {
         let valid = Canary {
             hub: "hub-a".to_owned(),
@@ -1866,7 +2228,7 @@ mod tests {
                 "node-c".to_owned(),
             ],
             witness_quorum: 2,
-            durability_claim: "durable".to_owned(),
+            target_durability: DurabilityClaim::Durable,
             critical_available: false,
         };
         assert!(validate_canary(&valid).is_ok());
