@@ -92,6 +92,8 @@ useradd --system --user-group --home-dir /var/lib/jain-host-ci \
   --shell /usr/sbin/nologin jain-host-ci
 install -d -o jain-host-ci -g jain-host-ci -m 0700 \
   /var/cache/jain-host-ci/cargo
+install -d -o root -g root -m 0555 \
+  /var/lib/jain-host-ci/cargo-registry
 install -d -o root -g root -m 0700 /run/jain-host-ci
 install -d -o root -g root -m 0700 \
   /var/lib/jain-host-ci/native-evidence
@@ -115,6 +117,7 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
   "worker_group": "jain-host-ci",
   "family_root": "/home/ubuntu/jain-split",
   "worker_cache": "/var/cache/jain-host-ci/cargo",
+  "cargo_registry_cache": "/var/lib/jain-host-ci/cargo-registry",
   "cargo_bin": "/home/ubuntu/.cargo/bin",
   "rustup_home": "/home/ubuntu/.rustup",
   "control_remote": "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
@@ -157,6 +160,13 @@ requires root ownership, exact mode `0600`, one link and stable inode identity,
 and talks only to numeric `127.0.0.1:8787` with an exact Host header. After the
 protected successor is installed, rotate the credential and prove the former
 credential no longer authenticates before using this publisher for release CI.
+
+The Cargo registry cache contains only root-owned mode `0444` crate archives,
+sparse-index records, and `config.json` beneath root-owned mode `0555`
+directories. The sandbox binds it read-only. For each release run, `splitctl`
+parses the exact `Cargo.lock`, checksum-verifies every selected `.crate`, and
+copies only those archives and their sparse-index records into a fresh private
+Cargo home before Cargo runs with networking forced offline.
 
 Remove/revoke any legacy user-readable merge token. Replace broad passwordless
 sudo for the parent account with only the argument-validating sandbox:

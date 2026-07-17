@@ -17,6 +17,35 @@ fail() {
   exit 1
 }
 
+validate_cargo_registry_cache() {
+  local root="${1:?Cargo registry cache is required}" path metadata
+  case "$root" in
+    /tmp | /tmp/*) fail 'Cargo registry cache cannot use /tmp' ;;
+  esac
+  [[ -d "$root" && ! -L "$root" \
+    && "$(stat -c '%u:%g:%a' -- "$root" 2>/dev/null)" == '0:0:555' \
+    && -d "$root/cache" && -d "$root/index" ]] \
+    || fail 'Cargo registry cache root is not immutable root authority'
+  find "$root" -xdev -print >/dev/null \
+    || fail 'Cargo registry cache cannot be traversed'
+  while IFS= read -r -d '' path; do
+    metadata="$(stat -c '%u:%g:%a' -- "$path" 2>/dev/null)" \
+      || fail "cannot inspect Cargo registry cache directory: $path"
+    [[ "$metadata" == '0:0:555' ]] \
+      || fail "unsafe Cargo registry cache directory: $path"
+  done < <(find "$root" -xdev -type d -print0)
+  while IFS= read -r -d '' path; do
+    metadata="$(stat -c '%u:%g:%a:%h' -- "$path" 2>/dev/null)" \
+      || fail "cannot inspect Cargo registry cache file: $path"
+    [[ "$metadata" == '0:0:444:1' ]] \
+      || fail "unsafe Cargo registry cache file: $path"
+  done < <(find "$root" -xdev -type f -print0)
+  [[ -z "$(find "$root" -xdev ! -type d ! -type f -print -quit)" \
+    && -n "$(find "$root/cache" -mindepth 1 -maxdepth 1 -type d -print -quit)" \
+    && -n "$(find "$root/index" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]] \
+    || fail 'Cargo registry cache has unsafe nodes or incomplete roots'
+}
+
 [[ "$(id -u)" == 0 ]] || fail 'must run as root'
 [[ "$#" == 1 ]] || fail 'expected one sandbox request path'
 request="$1"
@@ -59,6 +88,7 @@ jq -e '
   | select(.worker_group | type == "string" and length > 0)
   | select(.family_root | type == "string" and startswith("/"))
   | select(.worker_cache | type == "string" and startswith("/"))
+  | select(.cargo_registry_cache | type == "string" and startswith("/"))
   | select(.cargo_bin | type == "string" and startswith("/"))
   | select(.rustup_home | type == "string" and startswith("/"))
   | select(.control_remote | type == "string" and length > 0)
@@ -108,6 +138,12 @@ family_root="$(realpath -e -- "$(jq -er '.family_root' "$config")")" \
   || fail 'family root unavailable'
 worker_cache="$(realpath -e -- "$(jq -er '.worker_cache' "$config")")" \
   || fail 'worker cache unavailable'
+cargo_registry_cache_config="$(jq -er '.cargo_registry_cache' "$config")"
+cargo_registry_cache="$(realpath -e -- "$cargo_registry_cache_config")" \
+  || fail 'Cargo registry cache unavailable'
+[[ "$cargo_registry_cache" == "$cargo_registry_cache_config" ]] \
+  || fail 'Cargo registry cache path contains a symlink or alias'
+validate_cargo_registry_cache "$cargo_registry_cache"
 cargo_bin="$(realpath -e -- "$(jq -er '.cargo_bin' "$config")")" \
   || fail 'Cargo bin directory unavailable'
 rustup_home="$(realpath -e -- "$(jq -er '.rustup_home' "$config")")" \
@@ -463,6 +499,7 @@ systemd_args=(
   --property=TimeoutStopSec=5s
   --property="BindPaths=$bootstrap_root"
   --property="BindPaths=$worker_cache:/opt/jain-ci/cargo-home"
+  --property="BindReadOnlyPaths=$cargo_registry_cache:/opt/jain-ci/cargo-registry"
   --property="BindReadOnlyPaths=$worker_authority:/opt/jain-ci/authority"
   --property="BindReadOnlyPaths=$family_root"
   --property="BindReadOnlyPaths=$cargo_bin:/opt/jain-ci/cargo-bin"

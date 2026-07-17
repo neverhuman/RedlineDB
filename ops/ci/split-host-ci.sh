@@ -368,12 +368,32 @@ if [ "${JAIN_NEEDS_ARTIFACTS:-0}" = "1" ] && [ -d "$SPLIT_ROOT/jain-starforge/ar
     || native_setup_failure "artifact staging contains symlink or special nodes" 1
 fi
 
-# Release CI deliberately uses clean Cargo/target caches. Merge CI may retain
-# its governed per-repository cache for latency.
+# Release CI uses a fresh Cargo home and target. The root broker exposes only a
+# read-only registry archive/index cache; splitctl stages the exact crates.io
+# inputs named by Cargo.lock after verifying every archive checksum.
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
+  [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 \
+    && -d /opt/jain-ci/cargo-registry \
+    && ! -L /opt/jain-ci/cargo-registry ]] \
+    || native_setup_failure "release Cargo cache is not inside the isolated worker" 1
   export CARGO_HOME="$tmp/cargo-home"
   export CARGO_TARGET_DIR="$tmp/cargo-target"
-  mkdir -p "$CARGO_HOME" "$CARGO_TARGET_DIR"
+  mkdir -m 0700 "$CARGO_HOME" "$CARGO_TARGET_DIR" \
+    || native_setup_failure "cannot create fresh release Cargo directories" 1
+  if [ -f "$wt/Cargo.toml" ] && [ ! -f "$wt/Cargo.lock" ]; then
+    native_setup_failure "release Rust repository has no Cargo.lock" 1
+  fi
+  if [ -f "$wt/Cargo.lock" ]; then
+    "$SPLITCTL_BIN" cargo-cache-stage \
+      --lock "$wt/Cargo.lock" \
+      --source /opt/jain-ci/cargo-registry \
+      --destination "$CARGO_HOME/registry" \
+      --receipt "$CARGO_HOME/registry/stage-receipt.json" \
+      --expected-source-uid 0 --expected-source-gid 0 \
+      || native_setup_failure "locked Cargo registry cache staging failed" 1
+  fi
+  export CARGO_NET_OFFLINE=true
+  export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
 elif [ -z "${CARGO_TARGET_DIR:-}" ]; then
   export CARGO_TARGET_DIR="${JAIN_CI_CACHE:-$HOME/.cache/jain-ci}/${OWNER}__${REPO}/target"
   mkdir -p "$CARGO_TARGET_DIR"

@@ -18,6 +18,33 @@ writable_root="$(realpath -e -- "${JAIN_HOST_CI_WRITABLE_ROOT:?}")" \
 [[ -d "$writable_root" && ! -L "$writable_root" \
   && "$(stat -c '%u:%g' -- "$writable_root")" == "$(id -u):$(id -g)" ]] \
   || fail 'bounded writable root has the wrong identity'
+cargo_home="$(realpath -e -- "${CARGO_HOME:?}")" \
+  || fail 'fresh Cargo home is unavailable'
+case "$cargo_home" in
+  "$writable_root"/physical-checkouts/split-host-ci.??????/cargo-home) ;;
+  *) fail 'Cargo home escaped the bounded physical checkout' ;;
+esac
+[[ -d "$cargo_home" && ! -L "$cargo_home" \
+  && "$(stat -c '%u:%g:%a' -- "$cargo_home")" == "$(id -u):$(id -g):700" \
+  && "${CARGO_NET_OFFLINE:-}" == true \
+  && "${CARGO_REGISTRIES_CRATES_IO_PROTOCOL:-}" == sparse \
+  && -d /opt/jain-ci/cargo-registry \
+  && ! -L /opt/jain-ci/cargo-registry \
+  && -f "$cargo_home/registry/stage-receipt.json" \
+  && ! -L "$cargo_home/registry/stage-receipt.json" ]] \
+  || fail 'isolated Cargo cache is not the governed locked offline cache'
+jq -e --arg lock_sha "$(sha256sum Cargo.lock | cut -d' ' -f1)" '
+  select(.schema_version == "jain.locked-cargo-cache/v1")
+  | select(.lock_sha256 == $lock_sha)
+  | select(.package_count > 0)' \
+  "$cargo_home/registry/stage-receipt.json" >/dev/null \
+  || fail 'Cargo cache receipt is not bound to the exact lock'
+[[ -z "$(find "$cargo_home/registry" -xdev -type l -print -quit)" \
+  && -z "$(find "$cargo_home/registry" -xdev ! -type d ! -type f -print -quit)" ]] \
+  || fail 'staged Cargo registry contains a symlink or special node'
+if touch /opt/jain-ci/cargo-registry/.worker-write-probe 2>/dev/null; then
+  fail 'worker mutated the root Cargo registry cache'
+fi
 
 no_new_privs="$(awk '/^NoNewPrivs:/ {print $2}' /proc/self/status)"
 [[ "$no_new_privs" == 1 ]] || fail 'NoNewPrivs is not enforced'

@@ -10,6 +10,35 @@ fail() {
   exit 1
 }
 
+validate_cargo_registry_cache() {
+  local root="${1:?Cargo registry cache is required}" path metadata
+  case "$root" in
+    /tmp | /tmp/*) fail 'Cargo registry cache cannot use /tmp' ;;
+  esac
+  [[ -d "$root" && ! -L "$root" \
+    && "$(stat -c '%u:%g:%a' -- "$root" 2>/dev/null)" == '0:0:555' \
+    && -d "$root/cache" && -d "$root/index" ]] \
+    || fail 'Cargo registry cache root is not immutable root authority'
+  find "$root" -xdev -print >/dev/null \
+    || fail 'Cargo registry cache cannot be traversed'
+  while IFS= read -r -d '' path; do
+    metadata="$(stat -c '%u:%g:%a' -- "$path" 2>/dev/null)" \
+      || fail "cannot inspect Cargo registry cache directory: $path"
+    [[ "$metadata" == '0:0:555' ]] \
+      || fail "unsafe Cargo registry cache directory: $path"
+  done < <(find "$root" -xdev -type d -print0)
+  while IFS= read -r -d '' path; do
+    metadata="$(stat -c '%u:%g:%a:%h' -- "$path" 2>/dev/null)" \
+      || fail "cannot inspect Cargo registry cache file: $path"
+    [[ "$metadata" == '0:0:444:1' ]] \
+      || fail "unsafe Cargo registry cache file: $path"
+  done < <(find "$root" -xdev -type f -print0)
+  [[ -z "$(find "$root" -xdev ! -type d ! -type f -print -quit)" \
+    && -n "$(find "$root/cache" -mindepth 1 -maxdepth 1 -type d -print -quit)" \
+    && -n "$(find "$root/index" -mindepth 1 -maxdepth 1 -type d -print -quit)" ]] \
+    || fail 'Cargo registry cache has unsafe nodes or incomplete roots'
+}
+
 [[ "$(id -u)" == 0 ]] || fail 'must run as root'
 install_dir="${1:-/usr/local/libexec/jain}"
 install_dir="$(realpath -e -- "$install_dir")" || fail 'install directory missing'
@@ -49,6 +78,7 @@ token_file="$(jq -er '.token_file' "$publisher_config")"
   || fail 'publisher token file must be canonical root:root mode 0600 single-link'
 jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v5")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
+  | select(.cargo_registry_cache | type == "string" and startswith("/"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.token_file | type == "string" and startswith("/"))
   | select(has("token") | not)
@@ -121,6 +151,12 @@ worker_cache="$(realpath -e -- "$(jq -er '.worker_cache' "$sandbox_config")")" \
 [[ "$(stat -c '%u:%g:%a' -- "$worker_cache")" \
   == "$worker_uid:$worker_gid:700" ]] \
   || fail 'worker cache ownership/mode mismatch'
+cargo_registry_cache_config="$(jq -er '.cargo_registry_cache' "$sandbox_config")"
+cargo_registry_cache="$(realpath -e -- "$cargo_registry_cache_config")" \
+  || fail 'Cargo registry cache missing'
+[[ "$cargo_registry_cache" == "$cargo_registry_cache_config" ]] \
+  || fail 'Cargo registry cache path contains a symlink or alias'
+validate_cargo_registry_cache "$cargo_registry_cache"
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$sandbox_config")")" \
   || fail 'root request directory missing'
 [[ "$(stat -c '%u:%g:%a' -- "$request_root")" == '0:0:700' ]] \

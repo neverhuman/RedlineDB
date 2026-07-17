@@ -121,6 +121,12 @@ owner = "workspace-ops"
 reason = "pending tooling-repository authority extension; not a managed product row"
 
 [[excluded_path]]
+path = "/home/ubuntu/jain-split/jain-router"
+name = "jain-router"
+owner = "router"
+reason = "clean stopped repository pending protected Router onboarding after the host-CI broker repair"
+
+[[excluded_path]]
 path = "/home/ubuntu/jain-split/redline-split-ops"
 name = "redline-split-ops"
 owner = "release-engineering"

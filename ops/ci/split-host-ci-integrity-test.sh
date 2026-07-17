@@ -17,6 +17,7 @@ attack_pid=""
 publisher_root="$tmp/root-publisher"
 request_root="$tmp/root-requests"
 worker_cache="$tmp/worker-cache"
+cargo_registry_cache=""
 product_forge_root="$tmp/product-forge"
 cleanup() {
   cleanup_rc=$?
@@ -44,6 +45,14 @@ cleanup() {
   sudo -n rm -rf -- "$publisher_root" 2>/dev/null || true
   sudo -n rm -rf -- "$request_root" 2>/dev/null || true
   sudo -n rm -rf -- "$worker_cache" 2>/dev/null || true
+  case "$cargo_registry_cache" in
+    /var/lib/jain-host-ci/integrity-cargo-registry.??????)
+      sudo -n rm -rf -- "$cargo_registry_cache" 2>/dev/null || true
+      ;;
+    '') ;;
+    *) printf 'refusing unsafe Cargo registry fixture cleanup: %s\n' \
+         "$cargo_registry_cache" >&2 ;;
+  esac
   sudo -n rm -rf -- "$native_evidence_root" 2>/dev/null || true
   sudo -n rm -rf -- "$proof_evidence_root" 2>/dev/null || true
   sudo -n rm -rf -- "$control_remote" 2>/dev/null || true
@@ -295,6 +304,21 @@ sudo -n install -o root -g root -m 0500 \
 sudo -n install -o root -g root -m 0500 \
   "$control/ops/ci/host-ci-sandbox.sh" "$sandbox"
 sudo -n install -d -o xbwork -g xbwork -m 0700 "$worker_cache"
+sudo -n install -d -o root -g root -m 0755 /var/lib/jain-host-ci
+cargo_registry_cache="$(
+  sudo -n mktemp -d /var/lib/jain-host-ci/integrity-cargo-registry.XXXXXX
+)"
+[[ "$cargo_registry_cache" \
+  == /var/lib/jain-host-ci/integrity-cargo-registry.?????? ]]
+sudo -n install -d -o root -g root -m 0555 \
+  "$cargo_registry_cache" \
+  "$cargo_registry_cache/cache" \
+  "$cargo_registry_cache/cache/index.crates.io-1949cf8c6b5b557f" \
+  "$cargo_registry_cache/index" \
+  "$cargo_registry_cache/index/index.crates.io-6f17d22bba15001f" \
+  "$cargo_registry_cache/index/index.crates.io-6f17d22bba15001f/.cache"
+sudo -n install -o root -g root -m 0444 /dev/null \
+  "$cargo_registry_cache/index/index.crates.io-6f17d22bba15001f/config.json"
 sudo -n chown root:root "$native_evidence_root"
 sudo -n chmod 0700 "$native_evidence_root"
 sudo -n chown root:root "$proof_evidence_root"
@@ -334,6 +358,7 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   --arg publisher_digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d' ' -f1)" \
   --arg splitctl_digest "$splitctl_digest" --arg jankurai_digest "$fake_jankurai_digest" \
   --arg family "$sandbox_family_root" --arg cache "$worker_cache" \
+  --arg cargo_registry_cache "$cargo_registry_cache" \
   --arg cargo_bin "$HOME/.cargo/bin" --arg rustup "$HOME/.rustup" \
   --arg token_file "$publisher_token_file" \
   --arg git_base "$product_forge_root" \
@@ -346,7 +371,8 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
     parent_uid:$parent_uid,parent_gid:$parent_gid,
     worker_user:"xbwork",worker_group:"xbwork",family_root:$family,
-    worker_cache:$cache,cargo_bin:$cargo_bin,rustup_home:$rustup,
+    worker_cache:$cache,cargo_registry_cache:$cargo_registry_cache,
+    cargo_bin:$cargo_bin,rustup_home:$rustup,
     control_remote:$remote,forge_git_base:$git_base,
     token_file:$token_file,
     request_root:$requests,retain_requests:true,

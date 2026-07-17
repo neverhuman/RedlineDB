@@ -13,7 +13,7 @@ use std::{
         fd::AsRawFd,
         unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
     },
-    path::{Path, PathBuf},
+    path::{Component, Path, PathBuf},
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
 };
@@ -156,6 +156,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some("refresh-bare-mirrors") => refresh_bare_mirrors(args.collect())?,
         Some("host-ci-snapshot-request") => host_ci_snapshot_request_command(args.collect())?,
+        Some("cargo-cache-stage") => cargo_cache_stage_command(args.collect())?,
         Some("validate-local-jeryu") => {
             let mut manifest = None;
             let mut skip_remotes = false;
@@ -235,8 +236,652 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
+    Ok(())
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct LockedRegistryPackage {
+    name: String,
+    version: String,
+    checksum: String,
+}
+
+fn cargo_cache_stage_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut lock = None;
+    let mut source = None;
+    let mut destination = None;
+    let mut receipt = None;
+    let mut expected_source_uid = None;
+    let mut expected_source_gid = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--lock" => lock = Some(PathBuf::from(iter.next().ok_or("--lock needs a path")?)),
+            "--source" => source = Some(PathBuf::from(iter.next().ok_or("--source needs a path")?)),
+            "--destination" => {
+                destination = Some(PathBuf::from(
+                    iter.next().ok_or("--destination needs a path")?,
+                ))
+            }
+            "--receipt" => {
+                receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            "--expected-source-uid" => {
+                expected_source_uid = Some(
+                    iter.next()
+                        .ok_or("--expected-source-uid needs a value")?
+                        .parse::<u32>()?,
+                )
+            }
+            "--expected-source-gid" => {
+                expected_source_gid = Some(
+                    iter.next()
+                        .ok_or("--expected-source-gid needs a value")?
+                        .parse::<u32>()?,
+                )
+            }
+            value => return Err(format!("unknown cargo-cache-stage argument: {value}").into()),
+        }
+    }
+    stage_locked_cargo_cache(
+        &lock.ok_or("--lock is required")?,
+        &source.ok_or("--source is required")?,
+        &destination.ok_or("--destination is required")?,
+        &receipt.ok_or("--receipt is required")?,
+        expected_source_uid.ok_or("--expected-source-uid is required")?,
+        expected_source_gid.ok_or("--expected-source-gid is required")?,
+    )
+}
+
+fn locked_registry_packages(
+    lock_path: &Path,
+) -> Result<Vec<LockedRegistryPackage>, Box<dyn std::error::Error>> {
+    physical_regular_file(lock_path, "Cargo lock")?;
+    let lock: toml::Value = fs::read_to_string(lock_path)?.parse()?;
+    let packages = lock
+        .get("package")
+        .and_then(toml::Value::as_array)
+        .ok_or("Cargo lock has no package array")?;
+    let mut locked = Vec::new();
+    for package in packages {
+        let Some(table) = package.as_table() else {
+            return Err("Cargo lock package is not a table".into());
+        };
+        let Some(source) = table.get("source").and_then(toml::Value::as_str) else {
+            continue;
+        };
+        if source != "registry+https://github.com/rust-lang/crates.io-index" {
+            return Err(format!("unsupported locked registry source: {source}").into());
+        }
+        let name = table
+            .get("name")
+            .and_then(toml::Value::as_str)
+            .ok_or("registry package has no name")?;
+        let version = table
+            .get("version")
+            .and_then(toml::Value::as_str)
+            .ok_or("registry package has no version")?;
+        let checksum = table
+            .get("checksum")
+            .and_then(toml::Value::as_str)
+            .ok_or("registry package has no checksum")?;
+        if !valid_cargo_cache_component(name)
+            || !valid_cargo_cache_component(version)
+            || !is_full_hex(checksum, 64)
+        {
+            return Err(format!("unsafe locked registry package: {name} {version}").into());
+        }
+        locked.push(LockedRegistryPackage {
+            name: name.to_owned(),
+            version: version.to_owned(),
+            checksum: checksum.to_owned(),
+        });
+    }
+    locked.sort_by(|left, right| {
+        (&left.name, &left.version, &left.checksum).cmp(&(
+            &right.name,
+            &right.version,
+            &right.checksum,
+        ))
+    });
+    locked.dedup();
+    for pair in locked.windows(2) {
+        if pair[0].name == pair[1].name && pair[0].version == pair[1].version {
+            return Err(format!(
+                "conflicting locked checksums for {} {}",
+                pair[0].name, pair[0].version
+            )
+            .into());
+        }
+    }
+    if locked.is_empty() {
+        return Err("Cargo lock has no crates.io registry packages".into());
+    }
+    Ok(locked)
+}
+
+fn valid_cargo_cache_component(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= 128
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_' | b'.' | b'+'))
+}
+
+fn sparse_index_relative_path(name: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let name = name.to_ascii_lowercase();
+    if !valid_cargo_cache_component(&name) {
+        return Err(format!("unsafe crates.io package name: {name}").into());
+    }
+    let relative = match name.len() {
+        1 => PathBuf::from("1").join(&name),
+        2 => PathBuf::from("2").join(&name),
+        3 => PathBuf::from("3").join(&name[0..1]).join(&name),
+        _ => PathBuf::from(&name[0..2]).join(&name[2..4]).join(&name),
+    };
+    Ok(relative)
+}
+
+fn sha256_regular_file(path: &Path, kind: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let metadata = physical_regular_file(path, kind)?;
+    if metadata.nlink() != 1 || metadata.len() > 512 * 1024 * 1024 {
+        return Err(format!("unsafe {kind} inode: {}", path.display()).into());
+    }
+    let mut input = fs::File::open(path)?;
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    loop {
+        let count = input.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        digest.update(&buffer[..count]);
+    }
+    Ok(format!("{:x}", digest.finalize()))
+}
+
+fn governed_cache_directory(
+    path: &Path,
+    kind: &str,
+    expected_uid: u32,
+    expected_gid: u32,
+) -> Result<fs::Metadata, Box<dyn std::error::Error>> {
+    let metadata = physical_directory(path, kind)?;
+    if metadata.uid() != expected_uid
+        || metadata.gid() != expected_gid
+        || metadata.mode() & 0o022 != 0
+    {
+        return Err(format!("unsafe {kind} ownership or mode: {}", path.display()).into());
+    }
+    Ok(metadata)
+}
+
+fn governed_cache_file_digest(
+    path: &Path,
+    kind: &str,
+    expected_uid: u32,
+    expected_gid: u32,
+    max_bytes: u64,
+) -> Result<(u64, String), Box<dyn std::error::Error>> {
+    const O_NONBLOCK: i32 = 0o4000;
+    const O_NOFOLLOW: i32 = 0o400000;
+    let mut input = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(O_NONBLOCK | O_NOFOLLOW)
+        .open(path)?;
+    let metadata = input.metadata()?;
+    if !metadata.file_type().is_file()
+        || metadata.nlink() != 1
+        || metadata.uid() != expected_uid
+        || metadata.gid() != expected_gid
+        || metadata.mode() & 0o022 != 0
+        || metadata.len() > max_bytes
+    {
+        return Err(format!("unsafe {kind} inode: {}", path.display()).into());
+    }
+    let mut digest = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut total = 0_u64;
+    loop {
+        let count = input.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        total += count as u64;
+        if total > max_bytes {
+            return Err(format!("{kind} exceeded its byte limit: {}", path.display()).into());
+        }
+        digest.update(&buffer[..count]);
+    }
+    if total != metadata.len() {
+        return Err(format!("{kind} size changed while reading: {}", path.display()).into());
+    }
+    Ok((total, format!("{:x}", digest.finalize())))
+}
+
+fn direct_physical_directories(
+    root: &Path,
+    kind: &str,
+    expected_uid: u32,
+    expected_gid: u32,
+) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
+    governed_cache_directory(root, kind, expected_uid, expected_gid)?;
+    let mut directories = Vec::new();
+    for entry in fs::read_dir(root)? {
+        let entry = entry?;
+        let name = entry.file_name();
+        let name = name.to_str().ok_or("cache directory name is not UTF-8")?;
+        if !valid_cargo_cache_component(name) {
+            return Err(format!("unsafe cache directory name: {name}").into());
+        }
+        let path = entry.path();
+        governed_cache_directory(&path, kind, expected_uid, expected_gid)?;
+        directories.push(path);
+    }
+    directories.sort();
+    Ok(directories)
+}
+
+fn unique_existing_file(
+    candidates: impl IntoIterator<Item = PathBuf>,
+    kind: &str,
+    expected_uid: u32,
+    expected_gid: u32,
+    max_bytes: u64,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let mut matches = Vec::new();
+    for candidate in candidates {
+        match fs::symlink_metadata(&candidate) {
+            Ok(_) => {
+                governed_cache_file_digest(
+                    &candidate,
+                    kind,
+                    expected_uid,
+                    expected_gid,
+                    max_bytes,
+                )?;
+                matches.push(candidate);
+            }
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    if matches.len() != 1 {
+        return Err(format!(
+            "{kind} must have exactly one source, found {}",
+            matches.len()
+        )
+        .into());
+    }
+    Ok(matches.remove(0))
+}
+
+fn copy_verified_file(
+    source: &Path,
+    destination: &Path,
+    kind: &str,
+    expected_uid: u32,
+    expected_gid: u32,
+    max_bytes: u64,
+) -> Result<(u64, String), Box<dyn std::error::Error>> {
+    let (source_size, source_digest) =
+        governed_cache_file_digest(source, kind, expected_uid, expected_gid, max_bytes)?;
+    if let Some(parent) = destination.parent() {
+        fs::create_dir_all(parent)?;
+        fs::set_permissions(parent, fs::Permissions::from_mode(0o700))?;
+    }
+    let mut input = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(0o4000 | 0o400000)
+        .open(source)?;
+    let mut output = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .open(destination)?;
+    let copied = io::copy(&mut input, &mut output)?;
+    output.sync_all()?;
+    if copied != source_size {
+        return Err(format!("short copy for {kind}: {}", source.display()).into());
+    }
+    let (_, source_after) =
+        governed_cache_file_digest(source, kind, expected_uid, expected_gid, max_bytes)?;
+    let destination_metadata = output.metadata()?;
+    if !destination_metadata.file_type().is_file()
+        || destination_metadata.nlink() != 1
+        || destination_metadata.len() != source_size
+        || source_after != source_digest
+        || sha256_regular_file(destination, kind)? != source_digest
+    {
+        return Err(format!("{kind} changed during copy: {}", source.display()).into());
+    }
+    Ok((source_size, source_digest))
+}
+
+fn trusted_registry_directory(
+    root: &Path,
+    path: &Path,
+    expected_uid: u32,
+    expected_gid: u32,
+    kind: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let relative = path
+        .strip_prefix(root)
+        .map_err(|_| format!("{kind} escaped the registry root"))?;
+    if !relative
+        .components()
+        .all(|component| matches!(component, Component::Normal(_)))
+        && !relative.as_os_str().is_empty()
+    {
+        return Err(format!("unsafe {kind} path: {}", path.display()).into());
+    }
+    let mut current = root.to_path_buf();
+    for component in std::iter::once(None).chain(relative.components().map(Some)) {
+        if let Some(Component::Normal(name)) = component {
+            current.push(name);
+        }
+        let metadata = physical_directory(&current, kind)?;
+        if metadata.uid() != expected_uid
+            || metadata.gid() != expected_gid
+            || metadata.mode() & 0o7777 != 0o555
+        {
+            return Err(format!("unsafe {kind} identity or mode: {}", current.display()).into());
+        }
+    }
+    Ok(())
+}
+
+fn trusted_registry_file(
+    root: &Path,
+    path: &Path,
+    expected_uid: u32,
+    expected_gid: u32,
+    kind: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parent = path
+        .parent()
+        .ok_or_else(|| format!("{kind} has no parent"))?;
+    trusted_registry_directory(root, parent, expected_uid, expected_gid, kind)?;
+    let metadata = physical_regular_file(path, kind)?;
+    if metadata.uid() != expected_uid
+        || metadata.gid() != expected_gid
+        || metadata.mode() & 0o7777 != 0o444
+        || metadata.nlink() != 1
+    {
+        return Err(format!("unsafe {kind} identity or mode: {}", path.display()).into());
+    }
+    Ok(())
+}
+
+struct CargoCacheStageGuard {
+    path: Option<PathBuf>,
+}
+
+impl CargoCacheStageGuard {
+    fn create(parent: &Path, destination_name: &str) -> Result<Self, Box<dyn std::error::Error>> {
+        let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+        for attempt in 0..16_u8 {
+            let path = parent.join(format!(
+                ".{destination_name}.stage-{}-{nonce}-{attempt}",
+                std::process::id()
+            ));
+            match fs::create_dir(&path) {
+                Ok(()) => {
+                    fs::set_permissions(&path, fs::Permissions::from_mode(0o700))?;
+                    return Ok(Self { path: Some(path) });
+                }
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
+                Err(error) => return Err(error.into()),
+            }
+        }
+        Err("cannot create unique Cargo cache staging directory".into())
+    }
+
+    fn path(&self) -> &Path {
+        self.path.as_deref().expect("staging path is present")
+    }
+
+    fn commit(mut self, destination: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        let path = self.path.take().expect("staging path is present");
+        if let Err(error) = fs::rename(&path, destination) {
+            self.path = Some(path);
+            return Err(error.into());
+        }
+        Ok(())
+    }
+}
+
+impl Drop for CargoCacheStageGuard {
+    fn drop(&mut self) {
+        if let Some(path) = self.path.take() {
+            let _ = fs::remove_dir_all(path);
+        }
+    }
+}
+
+fn stage_locked_cargo_cache(
+    lock_path: &Path,
+    source: &Path,
+    destination: &Path,
+    receipt: &Path,
+    expected_source_uid: u32,
+    expected_source_gid: u32,
+) -> Result<(), Box<dyn std::error::Error>> {
+    const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
+    const MAX_ARCHIVE_BYTES: u64 = 512 * 1024 * 1024;
+    const MAX_INDEX_RECORD_BYTES: u64 = 16 * 1024 * 1024;
+    if !source.is_absolute() || !destination.is_absolute() || destination.exists() {
+        return Err("Cargo cache destination must be a new absolute path".into());
+    }
+    trusted_registry_directory(
+        source,
+        source,
+        expected_source_uid,
+        expected_source_gid,
+        "root Cargo registry cache",
+    )?;
+    let receipt_relative = receipt
+        .strip_prefix(destination)
+        .map_err(|_| "Cargo cache receipt must be beneath the destination")?;
+    if !receipt.is_absolute()
+        || receipt_relative.as_os_str().is_empty()
+        || !receipt_relative
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+    {
+        return Err("Cargo cache receipt must be beneath the destination".into());
+    }
+    let destination_parent = destination
+        .parent()
+        .ok_or("Cargo cache destination has no parent")?;
+    physical_directory(destination_parent, "Cargo cache destination parent")?;
+    let destination_name = destination
+        .file_name()
+        .and_then(OsStr::to_str)
+        .filter(|name| valid_cargo_cache_component(name))
+        .ok_or("Cargo cache destination name is unsafe")?;
+    let packages = locked_registry_packages(lock_path)?;
+    let archive_parent = source.join("cache");
+    let index_parent = source.join("index");
+    trusted_registry_directory(
+        source,
+        &archive_parent,
+        expected_source_uid,
+        expected_source_gid,
+        "archive cache root",
+    )?;
+    trusted_registry_directory(
+        source,
+        &index_parent,
+        expected_source_uid,
+        expected_source_gid,
+        "sparse index cache root",
+    )?;
+    let archive_roots = direct_physical_directories(
+        &archive_parent,
+        "archive cache",
+        expected_source_uid,
+        expected_source_gid,
+    )?;
+    let index_roots = direct_physical_directories(
+        &index_parent,
+        "sparse index cache",
+        expected_source_uid,
+        expected_source_gid,
+    )?;
+    for root in archive_roots.iter().chain(index_roots.iter()) {
+        trusted_registry_directory(
+            source,
+            root,
+            expected_source_uid,
+            expected_source_gid,
+            "registry cache directory",
+        )?;
+    }
+    let sparse_roots = index_roots
+        .iter()
+        .filter(|root| root.join(".cache").is_dir())
+        .cloned()
+        .collect::<Vec<_>>();
+    if sparse_roots.len() != 1 {
+        return Err(format!(
+            "expected one sparse index cache, found {}",
+            sparse_roots.len()
+        )
+        .into());
+    }
+    let sparse_root = &sparse_roots[0];
+    let sparse_name = sparse_root
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or("sparse index cache name is unavailable")?;
+    let config_source = sparse_root.join("config.json");
+    trusted_registry_file(
+        source,
+        &config_source,
+        expected_source_uid,
+        expected_source_gid,
+        "sparse index config",
+    )?;
+    let staging = CargoCacheStageGuard::create(destination_parent, destination_name)?;
+    let staging_root = staging.path();
+    copy_verified_file(
+        &config_source,
+        &staging_root
+            .join("index")
+            .join(sparse_name)
+            .join("config.json"),
+        "sparse index config",
+        expected_source_uid,
+        expected_source_gid,
+        MAX_CONFIG_BYTES,
+    )?;
+
+    let mut staged = Vec::new();
+    for package in &packages {
+        let archive_name = format!("{}-{}.crate", package.name, package.version);
+        let archive_source = unique_existing_file(
+            archive_roots.iter().map(|root| root.join(&archive_name)),
+            "locked crate archive",
+            expected_source_uid,
+            expected_source_gid,
+            MAX_ARCHIVE_BYTES,
+        )?;
+        trusted_registry_file(
+            source,
+            &archive_source,
+            expected_source_uid,
+            expected_source_gid,
+            "locked crate archive",
+        )?;
+        let (_, actual_checksum) = governed_cache_file_digest(
+            &archive_source,
+            "locked crate archive",
+            expected_source_uid,
+            expected_source_gid,
+            MAX_ARCHIVE_BYTES,
+        )?;
+        if actual_checksum != package.checksum {
+            return Err(format!(
+                "locked crate checksum mismatch for {} {}",
+                package.name, package.version
+            )
+            .into());
+        }
+        let archive_root_name = archive_source
+            .parent()
+            .and_then(Path::file_name)
+            .and_then(OsStr::to_str)
+            .ok_or("archive cache name is unavailable")?;
+        let archive_destination = staging_root
+            .join("cache")
+            .join(archive_root_name)
+            .join(&archive_name);
+        copy_verified_file(
+            &archive_source,
+            &archive_destination,
+            "locked crate archive",
+            expected_source_uid,
+            expected_source_gid,
+            MAX_ARCHIVE_BYTES,
+        )?;
+        if sha256_regular_file(&archive_destination, "staged crate archive")? != package.checksum {
+            return Err(format!("staged crate checksum changed for {archive_name}").into());
+        }
+
+        let index_relative = sparse_index_relative_path(&package.name)?;
+        let index_source = unique_existing_file(
+            std::iter::once(sparse_root.join(".cache").join(&index_relative)),
+            "sparse index record",
+            expected_source_uid,
+            expected_source_gid,
+            MAX_INDEX_RECORD_BYTES,
+        )
+        .map_err(|error| {
+            format!(
+                "sparse index record unavailable for {} {}: {error}",
+                package.name, package.version
+            )
+        })?;
+        trusted_registry_file(
+            source,
+            &index_source,
+            expected_source_uid,
+            expected_source_gid,
+            "sparse index record",
+        )?;
+        copy_verified_file(
+            &index_source,
+            &staging_root
+                .join("index")
+                .join(sparse_name)
+                .join(".cache")
+                .join(&index_relative),
+            "sparse index record",
+            expected_source_uid,
+            expected_source_gid,
+            MAX_INDEX_RECORD_BYTES,
+        )?;
+        staged.push(json!({
+            "name": package.name,
+            "version": package.version,
+            "checksum": package.checksum,
+        }));
+    }
+    let receipt_value = json!({
+        "schema_version": "jain.locked-cargo-cache/v1",
+        "lock_sha256": sha256_regular_file(lock_path, "Cargo lock")?,
+        "package_count": staged.len(),
+        "packages": staged,
+    });
+    let receipt_bytes = serde_json::to_vec_pretty(&receipt_value)?;
+    let staged_receipt = staging_root.join(receipt_relative);
+    write_atomic_bytes(&staged_receipt, &receipt_bytes)?;
+    fs::set_permissions(&staged_receipt, fs::Permissions::from_mode(0o600))?;
+    staging.commit(destination)?;
+    println!("staged {} checksum-verified crates", packages.len());
     Ok(())
 }
 
@@ -6120,6 +6765,16 @@ fn source_coverage(manifest: &Path, json_output: bool) -> Result<(), Box<dyn std
     }
 }
 
+fn python_boundary_exception(relative: &str) -> Option<&'static str> {
+    match relative {
+        "jain-router/tools/refit_export_c08.py" => Some("frozen-offline-parity-oracle"),
+        "jain-smartcluster/jope/ten_guest_activation_receipt.py" => {
+            Some("temporary-protected-rust-port-cycle")
+        }
+        _ => None,
+    }
+}
+
 fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
     let root = control_plane_root()
         .parent()
@@ -6144,7 +6799,8 @@ fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
             || rel.starts_with("jain-deploy/ops/ci/testdata/")
             || rel.starts_with("jain-python/python/ai-service/examples/")
             || rel.starts_with("jain-python/python/ai-service/src/")
-            || rel.starts_with("jain-python/python/ai-service/tests/");
+            || rel.starts_with("jain-python/python/ai-service/tests/")
+            || python_boundary_exception(&rel).is_some();
         if allowed {
             declared.push(rel);
         } else {
@@ -7672,7 +8328,318 @@ mod tests {
 
     impl Drop for TestDir {
         fn drop(&mut self) {
+            fn make_removable(path: &Path) {
+                let Ok(metadata) = fs::symlink_metadata(path) else {
+                    return;
+                };
+                if !metadata.file_type().is_dir() {
+                    return;
+                }
+                let _ = fs::set_permissions(path, fs::Permissions::from_mode(0o700));
+                if let Ok(entries) = fs::read_dir(path) {
+                    for entry in entries.flatten() {
+                        make_removable(&entry.path());
+                    }
+                }
+            }
+            make_removable(&self.0);
             let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    struct CargoCacheFixture {
+        lock: PathBuf,
+        source: PathBuf,
+        destination: PathBuf,
+        receipt: PathBuf,
+        archive: PathBuf,
+        index_record: PathBuf,
+        source_uid: u32,
+        source_gid: u32,
+    }
+
+    fn cargo_cache_fixture(root: &Path, archive_bytes: &[u8]) -> CargoCacheFixture {
+        let source = root.join("registry-source");
+        let archive_root = source.join("cache/index.crates.io-1949cf8c6b5b557f");
+        let sparse_root = source.join("index/index.crates.io-6f17d22bba15001f");
+        let archive = archive_root.join("demo-1.2.3.crate");
+        let index_record = sparse_root.join(".cache/de/mo/demo");
+        fs::create_dir_all(&archive_root).unwrap();
+        fs::create_dir_all(index_record.parent().unwrap()).unwrap();
+        fs::write(&archive, archive_bytes).unwrap();
+        fs::write(
+            sparse_root.join("config.json"),
+            br#"{"dl":"https://static.crates.io/crates","api":"https://crates.io"}"#,
+        )
+        .unwrap();
+        fs::write(&index_record, b"fixture sparse index record\n").unwrap();
+        for path in [&archive, &sparse_root.join("config.json"), &index_record] {
+            fs::set_permissions(path, fs::Permissions::from_mode(0o444)).unwrap();
+        }
+        for path in [
+            source.join("cache"),
+            archive_root.clone(),
+            source.join("index"),
+            sparse_root.clone(),
+            sparse_root.join(".cache"),
+            sparse_root.join(".cache/de"),
+            sparse_root.join(".cache/de/mo"),
+            source.clone(),
+        ] {
+            fs::set_permissions(path, fs::Permissions::from_mode(0o555)).unwrap();
+        }
+        let lock = root.join("Cargo.lock");
+        fs::write(
+            &lock,
+            format!(
+                "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"1.2.3\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"{}\"\n",
+                sha256_bytes(archive_bytes)
+            ),
+        )
+        .unwrap();
+        let destination = root.join("staged-registry");
+        let receipt = destination.join("stage-receipt.json");
+        let source_metadata = fs::metadata(&source).unwrap();
+        CargoCacheFixture {
+            lock,
+            source,
+            destination,
+            receipt,
+            archive,
+            index_record,
+            source_uid: source_metadata.uid(),
+            source_gid: source_metadata.gid(),
+        }
+    }
+
+    #[test]
+    fn locked_cargo_cache_stages_only_checksum_verified_inputs() {
+        let temp = TestDir::new("cargo-cache-stage-success");
+        let fixture = cargo_cache_fixture(temp.path(), b"deterministic crate archive");
+        stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap();
+
+        assert_eq!(
+            fs::read(
+                fixture
+                    .destination
+                    .join("cache/index.crates.io-1949cf8c6b5b557f/demo-1.2.3.crate")
+            )
+            .unwrap(),
+            b"deterministic crate archive"
+        );
+        assert_eq!(
+            fs::read(
+                fixture
+                    .destination
+                    .join("index/index.crates.io-6f17d22bba15001f/.cache/de/mo/demo")
+            )
+            .unwrap(),
+            b"fixture sparse index record\n"
+        );
+        let receipt: JsonValue =
+            serde_json::from_slice(&fs::read(&fixture.receipt).unwrap()).unwrap();
+        assert_eq!(receipt["schema_version"], "jain.locked-cargo-cache/v1");
+        assert_eq!(receipt["package_count"], 1);
+        assert_eq!(
+            receipt["lock_sha256"],
+            sha256_regular_file(&fixture.lock, "test Cargo lock").unwrap()
+        );
+        assert!(!fs::read_dir(temp.path())
+            .unwrap()
+            .flatten()
+            .any(|entry| entry
+                .file_name()
+                .to_string_lossy()
+                .starts_with(".staged-registry.stage-")));
+    }
+
+    #[test]
+    fn locked_cargo_cache_rejects_tampered_archive() {
+        let temp = TestDir::new("cargo-cache-stage-tamper");
+        let fixture = cargo_cache_fixture(temp.path(), b"expected archive");
+        fs::set_permissions(&fixture.archive, fs::Permissions::from_mode(0o644)).unwrap();
+        fs::write(&fixture.archive, b"tampered archive").unwrap();
+        fs::set_permissions(&fixture.archive, fs::Permissions::from_mode(0o444)).unwrap();
+        let error = stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("checksum mismatch"));
+        assert!(!fixture.destination.exists());
+    }
+
+    #[test]
+    fn locked_cargo_cache_rejects_symlinked_archive() {
+        let temp = TestDir::new("cargo-cache-stage-symlink");
+        let fixture = cargo_cache_fixture(temp.path(), b"expected archive");
+        let archive_parent = fixture.archive.parent().unwrap();
+        fs::set_permissions(archive_parent, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::remove_file(&fixture.archive).unwrap();
+        symlink("/etc/passwd", &fixture.archive).unwrap();
+        fs::set_permissions(archive_parent, fs::Permissions::from_mode(0o555)).unwrap();
+        let error = stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap_err();
+        let message = error.to_string().to_ascii_lowercase();
+        assert!(message.contains("symbolic") || message.contains("symlink"));
+        assert!(!fixture.destination.exists());
+    }
+
+    #[test]
+    fn locked_cargo_cache_rejects_missing_sparse_index_record() {
+        let temp = TestDir::new("cargo-cache-stage-index");
+        let fixture = cargo_cache_fixture(temp.path(), b"expected archive");
+        let index_parent = fixture.index_record.parent().unwrap();
+        fs::set_permissions(index_parent, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::remove_file(&fixture.index_record).unwrap();
+        fs::set_permissions(index_parent, fs::Permissions::from_mode(0o555)).unwrap();
+        let error = stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("sparse index record must have exactly one source"));
+        assert!(!fixture.destination.exists());
+    }
+
+    #[test]
+    fn locked_cargo_cache_rejects_hardlinked_archive() {
+        let temp = TestDir::new("cargo-cache-stage-hardlink");
+        let fixture = cargo_cache_fixture(temp.path(), b"expected archive");
+        let cache_parent = fixture.source.join("cache");
+        let second_root = cache_parent.join("duplicate-cache");
+        fs::set_permissions(&cache_parent, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::create_dir(&second_root).unwrap();
+        fs::hard_link(&fixture.archive, second_root.join("demo-1.2.3.crate")).unwrap();
+        fs::set_permissions(&second_root, fs::Permissions::from_mode(0o555)).unwrap();
+        fs::set_permissions(&cache_parent, fs::Permissions::from_mode(0o555)).unwrap();
+
+        let error = stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("unsafe locked crate archive inode"));
+        assert!(!fixture.destination.exists());
+    }
+
+    #[test]
+    fn locked_cargo_cache_rejects_duplicate_archive_roots() {
+        let temp = TestDir::new("cargo-cache-stage-duplicate");
+        let fixture = cargo_cache_fixture(temp.path(), b"expected archive");
+        let cache_parent = fixture.source.join("cache");
+        let second_root = cache_parent.join("duplicate-cache");
+        let duplicate = second_root.join("demo-1.2.3.crate");
+        fs::set_permissions(&cache_parent, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::create_dir(&second_root).unwrap();
+        fs::copy(&fixture.archive, &duplicate).unwrap();
+        fs::set_permissions(&duplicate, fs::Permissions::from_mode(0o444)).unwrap();
+        fs::set_permissions(&second_root, fs::Permissions::from_mode(0o555)).unwrap();
+        fs::set_permissions(&cache_parent, fs::Permissions::from_mode(0o555)).unwrap();
+
+        let error = stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("locked crate archive must have exactly one source, found 2"));
+        assert!(!fixture.destination.exists());
+    }
+
+    #[test]
+    fn locked_cargo_cache_rejects_existing_destination() {
+        let temp = TestDir::new("cargo-cache-stage-destination");
+        let fixture = cargo_cache_fixture(temp.path(), b"expected archive");
+        fs::create_dir(&fixture.destination).unwrap();
+        let sentinel = fixture.destination.join("sentinel");
+        fs::write(&sentinel, b"preserve").unwrap();
+
+        let error = stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("new absolute path"));
+        assert_eq!(fs::read(&sentinel).unwrap(), b"preserve");
+    }
+
+    #[test]
+    fn locked_cargo_cache_rejects_receipt_path_escape() {
+        let temp = TestDir::new("cargo-cache-stage-receipt-escape");
+        let fixture = cargo_cache_fixture(temp.path(), b"expected archive");
+        let escaped_receipt = fixture.destination.join("../escaped-receipt.json");
+        let error = stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &escaped_receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("receipt must be beneath the destination"));
+    }
+
+    #[test]
+    fn python_boundary_exceptions_are_exact_and_classified() {
+        assert_eq!(
+            python_boundary_exception("jain-router/tools/refit_export_c08.py"),
+            Some("frozen-offline-parity-oracle")
+        );
+        assert_eq!(
+            python_boundary_exception("jain-smartcluster/jope/ten_guest_activation_receipt.py"),
+            Some("temporary-protected-rust-port-cycle")
+        );
+        for near_miss in [
+            "jain-router/tools/refit_export_c08.py.bak",
+            "jain-router/tools/another_export.py",
+            "jain-smartcluster/jope/ten_guest_activation_receipt.py.bak",
+            "jain-smartcluster/jope/another.py",
+        ] {
+            assert_eq!(python_boundary_exception(near_miss), None, "{near_miss}");
         }
     }
 
