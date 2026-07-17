@@ -11,8 +11,7 @@ done
 mkdir -p target/jankurai/contract-drift
 cargo run --locked --quiet -- validate-local-jeryu --manifest repos.manifest.toml --skip-remotes
 cargo run --locked --quiet -- validate-manifest --manifest repos.manifest.toml --check-derived
-cargo run --locked --quiet -- program-release validate \
-  --authority authority/production-compute-storage.program-release.toml
+cargo run --locked --quiet -- program-release validate-all --authority-dir authority
 cargo run --locked --quiet -- managed-repos --manifest repos.manifest.toml --json \
   > target/jankurai/contract-drift/managed-repositories.json
 jq -e '

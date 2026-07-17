@@ -11,6 +11,15 @@
     "formal_ga",
     "activation_enabled",
     "critical_available",
+    "authority_sha256",
+    "spec_sha256",
+    "custody_sha256",
+    "evidence_index_sha256",
+    "receipt_set_sha256",
+    "repository_set_sha256",
+    "decision_input_sha256",
+    "custody_live_source_checked",
+    "custody_intake_attested",
     "passed",
     "pending",
     "failed",
@@ -26,6 +35,15 @@
     "formal_ga": { "type": "boolean" },
     "activation_enabled": { "type": "boolean" },
     "critical_available": { "type": "boolean" },
+    "authority_sha256": { "$ref": "#/$defs/sha256" },
+    "spec_sha256": { "$ref": "#/$defs/sha256" },
+    "custody_sha256": { "$ref": "#/$defs/sha256" },
+    "evidence_index_sha256": { "$ref": "#/$defs/sha256" },
+    "receipt_set_sha256": { "$ref": "#/$defs/sha256" },
+    "repository_set_sha256": { "$ref": "#/$defs/sha256" },
+    "decision_input_sha256": { "$ref": "#/$defs/sha256" },
+    "custody_live_source_checked": { "type": "boolean" },
+    "custody_intake_attested": { "type": "boolean" },
     "passed": { "$ref": "#/$defs/group_ids" },
     "pending": { "$ref": "#/$defs/group_ids" },
     "failed": { "$ref": "#/$defs/group_ids" },
@@ -37,6 +55,10 @@
     }
   },
   "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
     "group_ids": {
       "type": "array",
       "items": { "type": "string", "minLength": 1, "maxLength": 128 },

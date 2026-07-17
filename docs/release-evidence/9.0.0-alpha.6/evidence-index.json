@@ -1,18 +1,13 @@
 {
   "format": "jain.program-release-evidence-index",
   "release": "9.0.0-alpha.6",
-  "authority_sha256": "2ead2d90041f644cb8cdf355b9960d85c1e7bdf34221313ea7019bd6fe6575ab",
+  "authority_sha256": "3525cd9bb8d4d89b30dec3d5bb9f761b48e8d8b34b2ea46709475f4f55a589ab",
   "spec_sha256": "368c2f2fc04e166233b5fc2f92a1cdf6f02f26c28ac5d7976819d62dd1ff5231",
   "groups": [
     {
       "id": "custody",
-      "disposition": "passed",
-      "receipts": [
-        {
-          "path": "docs/design-inputs/9.0.0-alpha.6/custody.json",
-          "sha256": "5ec59b770a79d3a2a855ce859c1ff0a96b84f67cfaa03b79aa8232655497e3b9"
-        }
-      ]
+      "disposition": "pending",
+      "receipts": []
     },
     { "id": "contracts", "disposition": "pending", "receipts": [] },
     { "id": "images", "disposition": "pending", "receipts": [] },

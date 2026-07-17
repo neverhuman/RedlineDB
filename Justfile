@@ -152,6 +152,9 @@ release-status:
 program-release-validate authority:
   cargo run --locked --quiet -- program-release validate --authority "{{authority}}"
 
+program-release-validate-all authority_dir="authority":
+  cargo run --locked --quiet -- program-release validate-all --authority-dir "{{authority_dir}}"
+
 program-release-status authority:
   cargo run --locked --quiet -- program-release status --authority "{{authority}}"
 

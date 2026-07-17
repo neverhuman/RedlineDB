@@ -239,7 +239,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | program-release validate --authority PATH | program-release validate-all --authority-dir PATH | program-release status --authority PATH [--record ABSOLUTE_PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -7695,9 +7695,20 @@ fn validate_local_jeryu(
             .unwrap_or_else(|| root.parent().unwrap_or(&root).to_path_buf());
         let managed = managed_repositories(&data, &manifest_path)?;
         let program_checkouts = program_release::declared_checkouts(&root)?;
+        for (path, declared) in &program_checkouts {
+            validate_program_checkout(path, declared, &mut errors)?;
+        }
         for entry in fs::read_dir(&split_root)? {
             let path = entry?.path();
             if !path.is_dir() || !path.join(".git").exists() {
+                continue;
+            }
+            let git_metadata = fs::symlink_metadata(path.join(".git"))?;
+            if !git_metadata.is_dir() || git_metadata.file_type().is_symlink() {
+                errors.push(format!(
+                    "{}: .git must be a physical directory, never a linked worktree marker",
+                    path.display()
+                ));
                 continue;
             }
             let remotes = git_remotes(&path)?;
@@ -7778,6 +7789,91 @@ fn validate_local_jeryu(
     } else {
         Err(errors.join("\n").into())
     }
+}
+
+fn validate_program_checkout(
+    path: &Path,
+    declared: &program_release::DeclaredCheckout,
+    errors: &mut Vec<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if declared.must_be_absent {
+        if path.exists() {
+            errors.push(format!(
+                "{}: checkout exists while its program lifecycle is not-created",
+                path.display()
+            ));
+        }
+        return Ok(());
+    }
+    if !path.exists() {
+        errors.push(format!(
+            "{}: declared program checkout is missing",
+            path.display()
+        ));
+        return Ok(());
+    }
+    let checkout_metadata = fs::symlink_metadata(path)?;
+    let git_path = path.join(".git");
+    let git_metadata = fs::symlink_metadata(&git_path)?;
+    if !checkout_metadata.is_dir()
+        || checkout_metadata.file_type().is_symlink()
+        || !git_metadata.is_dir()
+        || git_metadata.file_type().is_symlink()
+        || git_path.join("worktrees").exists()
+        || git_path.join("commondir").exists()
+        || git_path.join("gitdir").exists()
+    {
+        errors.push(format!(
+            "{}: program checkout must be one physical primary checkout with private Git metadata",
+            path.display()
+        ));
+        return Ok(());
+    }
+    let worktrees = Command::new("git")
+        .args(["-C"])
+        .arg(path)
+        .args(["worktree", "list", "--porcelain"])
+        .output()?;
+    let worktrees = String::from_utf8(worktrees.stdout)?;
+    let registrations = worktrees
+        .lines()
+        .filter_map(|line| line.strip_prefix("worktree "))
+        .collect::<Vec<_>>();
+    let canonical = fs::canonicalize(path)?;
+    if registrations.len() != 1 || Path::new(registrations[0]) != canonical {
+        errors.push(format!(
+            "{}: program checkout has an auxiliary or mismatched worktree registration",
+            path.display()
+        ));
+    }
+    let status = Command::new("git")
+        .args(["-C"])
+        .arg(path)
+        .args(["status", "--porcelain=v1", "-z"])
+        .output()?;
+    if !status.status.success() || !status.stdout.is_empty() {
+        errors.push(format!(
+            "{}: program checkout must be clean, including untracked files",
+            path.display()
+        ));
+    }
+    if let Some(expected) = &declared.expected_head {
+        let head = Command::new("git")
+            .args(["-C"])
+            .arg(path)
+            .args(["rev-parse", "HEAD"])
+            .output()?;
+        let head = String::from_utf8(head.stdout)?.trim().to_owned();
+        if head != *expected {
+            errors.push(format!(
+                "{}: program checkout HEAD {} differs from authority {}",
+                path.display(),
+                head,
+                expected
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn git_remotes(

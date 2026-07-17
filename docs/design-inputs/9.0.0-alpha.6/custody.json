@@ -2,6 +2,8 @@
   "format": "jain.program-design-input-custody",
   "release": "9.0.0-alpha.6",
   "source_root": "..",
+  "live_source_checked": false,
+  "intake_attested": false,
   "inputs": [
     {
       "source": "SUPER_MERGER_CODEX.md",
@@ -24,6 +26,7 @@
   ],
   "protected_baselines": [
     {
+      "id": "current-manifest",
       "kind": "file",
       "release": "8.0.1",
       "path": "repos.manifest.toml",
@@ -31,10 +34,19 @@
       "entries": 1
     },
     {
+      "id": "prior-release-proof",
+      "kind": "file",
+      "release": "8.0.0",
+      "path": "docs/release-evidence/8.0.0/smartcluster/release-proof.json",
+      "sha256": "fd125f07530d2b47e988fca3c1c7812d541d44424446b03be3a2206ea47a00a2",
+      "entries": 1
+    },
+    {
+      "id": "current-release-evidence",
       "kind": "tree_inventory",
       "release": "8.0.1",
       "path": "docs/release-evidence/8.0.1",
-      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sha256": "6f3ed58b5c54859fb718e85f0091d1081af173626a6f70b45f7da18993b5968f",
       "entries": 0
     }
   ]
