@@ -12,7 +12,7 @@ Current allowed Python surfaces:
 - `jain-deploy/ops/ci/testdata/**` when the file is test input/model data
 - `jain-python/python/ai-service/**` for the customer-facing Python SDK,
   SageMaker/customer examples, and Python parity tests only
-- `redline-split-ops/scripts/redline_proof.py` and its focused test module;
+- `jain-redline/redline-split-ops/scripts/redline_proof.py` and its focused test module;
   this belongs to the independent nested Redline control plane, is not Jain
   product/deploy code, and is bounded to receipt verification and lock derivation
 
@@ -22,7 +22,7 @@ The portal and deploy control planes use native Rust commands for source
 coverage, fleet execution, version consistency, deployment staging, lock
 validation, and release receipts. New CI, deployment, release, or control-plane
 work must not add Python. The nested Redline exception above remains owned and
-tested in `redline-split-ops`; other exceptions must be a customer example or
+tested in `jain-redline/redline-split-ops`; other exceptions must be a customer example or
 an explicit parity/oracle test with a declared owner and exit criteria.
 
 E2E promotion rule: do not expand mocked or live E2E coverage until every

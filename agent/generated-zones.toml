@@ -18,3 +18,10 @@ source = "jankurai audit"
 command = "just score"
 read_only = true
 write_policy = "auditor_output"
+
+[[zone]]
+path = "authority/source-paths.txt"
+source = "immutable source commit cc27936eb45006bda0cae85b0f578f4d5985991d"
+command = "cargo run --locked --quiet -- seal-source-inventory --manifest repos.manifest.toml --source-root SOURCE_ROOT --apply"
+read_only = false
+write_policy = "reviewed_manual"

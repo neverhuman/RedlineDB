@@ -1,17 +1,18 @@
-# Jain 8.0.0 release-candidate runbook
+# Jain 8.0.1 release-candidate runbook
 
-This runbook produces the Jain `8.0.0` release candidate. It does not authorize production
+This runbook produces the Jain `8.0.1` release candidate. It does not authorize production
 promotion. The final status remains `candidate` with `formal_ga = false` until a separately
 authorized production change is applied.
 
 The sole Jain manifest authority is [`../repos.manifest.toml`](../repos.manifest.toml). The portal
-and deploy copies are generated views and must carry the canonical manifest SHA-256. SmartCluster,
-the four Redline repositories, and `redline-split-ops` are managed repositories inside
-`/home/ubuntu/jain-split`; they are not external source drops. Redline's independent canonical
-manifest remains `../redline-split-ops/repos.manifest.toml`.
+and deploy copies are generated views and must carry the canonical manifest SHA-256. SmartCluster
+and the complete Redline family are managed repositories inside `/home/ubuntu/jain-split`; they
+are not external source drops. Redline's independent canonical manifest is
+`../jain-redline/redline-split-ops/repos.manifest.toml`. Top-level legacy Redline paths are
+preservation inputs only and must never supply authority, builds, release evidence, or writes.
 
-All receipts belong under `docs/release-evidence/8.0.0/`. Product, package, CLI, deploy, and image
-metadata use `8.0.0`; immutable repository tags retain the separate `*-v8.0.0-split.0` form.
+All receipts belong under `docs/release-evidence/8.0.1/`. Product, package, CLI, deploy, and image
+metadata use `8.0.1`; immutable repository tags retain the separate `*-v8.0.1-split.0` form.
 
 ## Non-negotiable safety rules
 
@@ -44,8 +45,8 @@ cargo run --locked --quiet -- validate-local-jeryu --manifest repos.manifest.tom
 just verify-worktrees
 ```
 
-The managed inventory must contain all Jain repositories, SmartCluster, `jain-split-ops`, Redline,
-Redline core/testing/web, and `redline-split-ops`. Generated views are changed only with
+The managed inventory must contain all Jain repositories, SmartCluster, `jain-split-ops`, and the
+complete Redline family rooted at `jain-redline/`. Generated views are changed only with
 `just sync-derived-apply`; validate them again immediately afterward.
 
 For a repository whose forge has no `main`, first run the dry plan, inspect it, and then apply the
@@ -84,7 +85,8 @@ JAIN_SPLIT_ROOT=/home/ubuntu/jain-split JAIN_RELEASE_CI=1 \
 The protected required context refuses to run unless `JAIN_RELEASE_CI=1`; a lighter run must use a
 distinct, non-protected context. The runner requires a completely clean control-plane checkout,
 derives the control-plane remote and required context from the authority manifest, and requires
-exact `origin/main` identity. Native inputs, where required, are clean detached worktrees created
+exact `origin/main` identity. Native inputs, where required, are automatically removed standalone
+checkouts created
 from the authority-bound commit, Git-tree, SHA-256 tree-manifest, submodule, and content identities.
 It never executes a canonical product checkout's vendor script.
 
@@ -128,15 +130,15 @@ feature PRs. After merge, fetch and refresh a clean `main` without destructive r
 
 ## 3. Redline cutover gate
 
-Merge the reviewed Redline database, core, testing, web, and control-plane PRs. Testing has a
+Merge the reviewed Redline database, core, testing, web, Central, and control-plane PRs. Testing has a
 diverged history and must be deliberately reconciled through review, never overwritten. Refresh
-all five checkouts to clean forge-equal `main`, then run from `redline-split-ops`:
+all six checkouts to clean forge-equal `main`, then run from `jain-redline/redline-split-ops`:
 
 ```bash
 just test
-./redlinectl family-ci --receipt ../jain-split-ops/docs/release-evidence/8.0.0/redline-family-ci.json
+./redlinectl family-ci --receipt ../../jain-split-ops/docs/release-evidence/8.0.1/redline-family-ci.json
 ./redlinectl proof-refresh \
-  --family-ci ../jain-split-ops/docs/release-evidence/8.0.0/redline-family-ci.json \
+  --family-ci ../../jain-split-ops/docs/release-evidence/8.0.1/redline-family-ci.json \
   --jain-evidence JAIN_CONSUMER.json \
   --jeryu-evidence JERYU_CONSUMER.json
 ./redlinectl cutover-verify
@@ -144,9 +146,9 @@ just test
 
 `proof-refresh` accepts only fresh, checksummed successful family CI plus accepted consumer
 evidence and must leave both lock mirrors byte-identical. Create
-`redline-core-v4.1.0-jain.1` only when the local and remote tag are absent and the reviewed core
-`main` is the exact eligible commit. If an existing local tag points elsewhere, stop for reviewed
-resolution; never delete or move it manually.
+the next unused `redline-core-v4.1.0-jain.N` successor only when the local and remote tag are absent
+and the reviewed core `main` is the exact eligible commit. If an existing local tag points
+elsewhere, stop for reviewed resolution; never delete or move it manually.
 
 ## 4. Jain dependency waves
 
@@ -171,8 +173,8 @@ v8 metadata/tag through separate release PRs.
 Create a repository tag with an inspectable dry run followed by the explicit apply operation:
 
 ```bash
-just immutable-tag /absolute/checkout REMOTE_URL REPO-v8.0.0-split.0 REVIEWED_MAIN_SHA
-just immutable-tag-apply /absolute/checkout REMOTE_URL REPO-v8.0.0-split.0 REVIEWED_MAIN_SHA
+just immutable-tag /absolute/checkout REMOTE_URL REPO-v8.0.1-split.0 REVIEWED_MAIN_SHA
+just immutable-tag-apply /absolute/checkout REMOTE_URL REPO-v8.0.1-split.0 REVIEWED_MAIN_SHA
 ```
 
 The operation refuses a local or remote tag that resolves to another commit. Refresh local bare
@@ -205,7 +207,7 @@ set.
 Family CI uses detached locked snapshots without sibling source checkouts. `jain-deploy` is the
 single explicit integration exception because its reviewed workspace patches are part of the
 tested deployment graph. A tag that advertises package version `7.x` while a v8 lock requires
-`8.0.0` is a hard dependency-wave blocker, not a reason to edit the lock.
+`8.0.1` is a hard dependency-wave blocker, not a reason to edit the lock.
 
 Required specialized evidence includes real native training paths, Jable CUDA when the governed
 GPU is available, Starforge LFS object/checksum and golden parity, Web Playwright flows,
@@ -221,7 +223,7 @@ inspection, CI receipt, release inventory, and rollback receipt. Verify CLI vers
 flows, SmartCluster daemon/client/worker health, Redline persistence and crash recovery,
 interrupted-session reconciliation, upload/storage limits, and bounded cleanup.
 
-All product metadata must agree on `8.0.0`: Cargo/package manifests, CLI output, deploy stage
+All product metadata must agree on `8.0.1`: Cargo/package manifests, CLI output, deploy stage
 manifests, OCI labels, image tags, receipts, and release inventory. Split repository tag names are
 not product version strings.
 
@@ -231,7 +233,7 @@ Run the audited wrapper from `jain-deploy` after the dependency graph resolves:
 
 ```bash
 cd /home/ubuntu/jain-split/jain-deploy
-JAIN_RELEASE_VERSION=8.0.0 ATOMICSOUL_PUSH=0 ./scripts/atomicsoul-v8-dry-run.sh
+JAIN_RELEASE_VERSION=8.0.1 ATOMICSOUL_PUSH=0 ./scripts/atomicsoul-v8-dry-run.sh
 ```
 
 It performs the local `BuildLocal` gate and plans image publish, canary, public-route, promotion,

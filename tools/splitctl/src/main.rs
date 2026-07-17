@@ -18,7 +18,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const RELEASE_VERSION: &str = "8.0.0";
+const RELEASE_VERSION: &str = "8.0.1";
+const RELEASE_STATUS: &str = "candidate";
+const ROLLBACK_TARGET: &str = "7.0.6";
 const LOCAL_JERYU_ORIGIN: &str = "http://127.0.0.1:8787";
 const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
 const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
@@ -61,7 +63,15 @@ struct NestedEngineTopology {
     engine_repository: String,
     engine_remote: String,
     engine_required_check: String,
+    pending_repositories: Vec<PendingNestedRepository>,
     bound_identity: Option<BoundEngineIdentity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct PendingNestedRepository {
+    name: String,
+    remote: String,
+    required_check: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -136,6 +146,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
             source_coverage(&manifest, json_output)?;
         }
+        Some("seal-source-inventory") => seal_source_inventory_command(args.collect())?,
         Some("python-boundary") => python_boundary()?,
         Some("jeryu-doctor") => {
             let mut manifest = None;
@@ -189,7 +200,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -336,7 +347,6 @@ fn manifest_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
             "jeryu_slug",
             "profile",
             "default_branch",
-            "current_tag",
             "required_check",
         ] {
             if string(repo, field).is_none() {
@@ -668,7 +678,6 @@ fn managed_repositories(
         .get("control_plane")
         .ok_or("manifest is missing its control_plane")?;
     let control_name = string(control, "name").ok_or("control plane is missing its name")?;
-    let release = string(data, "release_version").unwrap_or_else(|| RELEASE_VERSION.to_owned());
     managed.push(ManagedRepo {
         name: control_name.clone(),
         path: PathBuf::from(string(control, "path").ok_or("control plane is missing its path")?),
@@ -676,8 +685,7 @@ fn managed_repositories(
         required_check: string(control, "required_check")
             .ok_or("control plane is missing its required check")?,
         branch: string(control, "branch").unwrap_or_else(|| "main".to_owned()),
-        tag: declared_release_tag(control)
-            .or_else(|| Some(format!("{control_name}-v{release}-split.0"))),
+        tag: declared_release_tag(control),
         kind: "control-plane".to_owned(),
         family: family.clone(),
         family_registered: true,
@@ -710,6 +718,25 @@ fn managed_repositories(
                     .ok_or("nested repository is missing its required check")?,
                 branch: string(raw, "default_branch").unwrap_or_else(|| "main".to_owned()),
                 tag: declared_release_tag(raw),
+                kind: "nested-family".to_owned(),
+                family: nested_family.clone(),
+                family_registered: true,
+            });
+        }
+        for pending in &topology.pending_repositories {
+            let path = nested_paths.get(&pending.name).cloned().ok_or_else(|| {
+                format!(
+                    "pending nested repository {} has no validated path",
+                    pending.name
+                )
+            })?;
+            managed.push(ManagedRepo {
+                name: pending.name.clone(),
+                path,
+                remote: pending.remote.clone(),
+                required_check: pending.required_check.clone(),
+                branch: "main".to_owned(),
+                tag: None,
                 kind: "nested-family".to_owned(),
                 family: nested_family.clone(),
                 family_registered: true,
@@ -822,6 +849,126 @@ fn valid_bound_engine_tag(
             .bytes()
             .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
         && revision == tag_revision.to_string()
+}
+
+fn validate_managed_release_identity(
+    value: &toml::Value,
+    qualified_key: &str,
+    repository: &str,
+    tag_key: &str,
+) -> Result<(), String> {
+    let status = optional_typed_string(
+        value,
+        "identity_status",
+        &format!("{qualified_key}.identity_status"),
+    )?;
+    let tag = optional_typed_string(value, tag_key, &format!("{qualified_key}.{tag_key}"))?;
+    let product_version = optional_typed_string(
+        value,
+        "product_version",
+        &format!("{qualified_key}.product_version"),
+    )?;
+    let tag_revision = optional_typed_integer(
+        value,
+        "tag_revision",
+        &format!("{qualified_key}.tag_revision"),
+    )?;
+    let release_commit = optional_typed_string(
+        value,
+        "release_commit",
+        &format!("{qualified_key}.release_commit"),
+    )?;
+    let release_tree = optional_typed_string(
+        value,
+        "release_tree",
+        &format!("{qualified_key}.release_tree"),
+    )?;
+    let release_checksum = optional_typed_string(
+        value,
+        "release_checksum_sha256",
+        &format!("{qualified_key}.release_checksum_sha256"),
+    )?;
+    match status.as_deref() {
+        Some("pending") => {
+            if tag.is_some()
+                || product_version.is_some()
+                || tag_revision.is_some()
+                || release_commit.is_some()
+                || release_tree.is_some()
+                || release_checksum.is_some()
+            {
+                return Err(format!(
+                    "pending {qualified_key} identity must omit every bound-only identity field"
+                ));
+            }
+        }
+        None | Some("bound") => {
+            let tag = tag.ok_or_else(|| format!("bound {qualified_key} must declare {tag_key}"))?;
+            let product_version = product_version
+                .ok_or_else(|| format!("bound {qualified_key} must declare product_version"))?;
+            if product_version != RELEASE_VERSION {
+                return Err(format!(
+                    "bound {qualified_key}.product_version must be {RELEASE_VERSION}"
+                ));
+            }
+            let tag_revision = tag_revision
+                .filter(|revision| *revision >= 0)
+                .ok_or_else(|| format!("bound {qualified_key}.tag_revision must be nonnegative"))?;
+            let expected_tag = format!("{repository}-v{RELEASE_VERSION}-split.{tag_revision}");
+            if tag != expected_tag {
+                return Err(format!(
+                    "bound {qualified_key}.{tag_key} must be {expected_tag}"
+                ));
+            }
+            for (field, candidate, length) in [
+                ("release_commit", release_commit, 40),
+                ("release_tree", release_tree, 40),
+                ("release_checksum_sha256", release_checksum, 64),
+            ] {
+                if !candidate
+                    .as_deref()
+                    .is_some_and(|candidate| is_full_hex(candidate, length))
+                {
+                    return Err(format!(
+                        "bound {qualified_key}.{field} must be {length} lowercase hex"
+                    ));
+                }
+            }
+        }
+        Some(other) => {
+            return Err(format!(
+                "{qualified_key}.identity_status must be pending or bound, found {other}"
+            ))
+        }
+    }
+    Ok(())
+}
+
+fn derived_manifest_identity_status(
+    data: &toml::Value,
+    target: &str,
+) -> Result<Option<String>, String> {
+    match data
+        .get("derived_manifests")
+        .and_then(|value| value.get(target))
+    {
+        Some(value) => optional_typed_string(
+            value,
+            "identity_status",
+            &format!("derived_manifests.{target}.identity_status"),
+        ),
+        None => Ok(None),
+    }
+}
+
+fn derived_manifest_is_pending(data: &toml::Value, target: &str) -> Result<bool, String> {
+    match derived_manifest_identity_status(data, target)?.as_deref() {
+        Some("pending") => Ok(true),
+        None | Some("bound") => Ok(false),
+        Some(other) => Err(format!(
+            "derived_manifests.{target}.identity_status must be pending or bound, found {other}"
+        )),
+    }
 }
 
 fn nested_engine_topology(data: &toml::Value) -> Result<NestedEngineTopology, String> {
@@ -1058,6 +1205,72 @@ fn nested_engine_topology(data: &toml::Value) -> Result<NestedEngineTopology, St
             ))
         }
     }
+    let mut pending_repositories = Vec::new();
+    let mut pending_names = std::collections::BTreeSet::new();
+    for (index, raw) in nested
+        .get("pending_repository")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .enumerate()
+    {
+        let row_key = format!("{nested_key}.pending_repository[{index}]");
+        let name = optional_typed_string(raw, "name", &format!("{row_key}.name"))?
+            .filter(|name| valid_cargo_token(name))
+            .ok_or_else(|| format!("{row_key}.name must be one unaliased repository token"))?;
+        if !pending_names.insert(name.clone()) {
+            return Err(format!("duplicate pending nested repository: {name}"));
+        }
+        if name == engine_repository {
+            return Err(format!(
+                "{row_key}.name duplicates the separately governed engine repository"
+            ));
+        }
+        if optional_typed_string(
+            raw,
+            "identity_status",
+            &format!("{row_key}.identity_status"),
+        )?
+        .as_deref()
+            != Some("pending")
+        {
+            return Err(format!("{row_key}.identity_status must be pending"));
+        }
+        if [
+            "path",
+            "immutable_tag",
+            "current_tag",
+            "product_version",
+            "tag_revision",
+            "release_commit",
+            "release_tree",
+            "release_checksum_sha256",
+        ]
+        .iter()
+        .any(|field| raw.get(*field).is_some())
+        {
+            return Err(format!(
+                "{row_key} must omit path and every bound-only identity field"
+            ));
+        }
+        let remote = optional_typed_string(raw, "remote", &format!("{row_key}.remote"))?
+            .ok_or_else(|| format!("{row_key}.remote is required"))?;
+        let expected_remote = format!("{FAMILY_REMOTE_PREFIX}{name}.git");
+        if remote != expected_remote {
+            return Err(format!("{row_key}.remote must be {expected_remote}"));
+        }
+        let required_check =
+            optional_typed_string(raw, "required_check", &format!("{row_key}.required_check"))?
+                .ok_or_else(|| format!("{row_key}.required_check is required"))?;
+        if required_check != format!("{name}/required") {
+            return Err(format!("{row_key}.required_check must be {name}/required"));
+        }
+        pending_repositories.push(PendingNestedRepository {
+            name,
+            remote,
+            required_check,
+        });
+    }
     Ok(NestedEngineTopology {
         dependency_name: dependency_name.to_owned(),
         family,
@@ -1068,6 +1281,7 @@ fn nested_engine_topology(data: &toml::Value) -> Result<NestedEngineTopology, St
         engine_repository,
         engine_remote,
         engine_required_check,
+        pending_repositories,
         bound_identity,
     })
 }
@@ -1309,6 +1523,50 @@ fn validated_nested_repository_paths(
         }
     }
 
+    for pending in &topology.pending_repositories {
+        let name = &pending.name;
+        let resolved = topology.container_path.join(name);
+        let metadata = physical_directory(&resolved, "pending nested family repository")?;
+        let parent = resolved
+            .parent()
+            .ok_or_else(|| format!("{name}: pending nested repository has no parent"))?;
+        let parent = physical_directory(parent, "pending nested family repository parent")?;
+        if physical_identity(&parent) != container_identity {
+            return Err(format!(
+                "{name}: pending path {} is not a direct physical child of {}",
+                resolved.display(),
+                topology.container_path.display()
+            ));
+        }
+        let identity = physical_identity(&metadata);
+        if let Some(existing) = identities.insert(identity, name.clone()) {
+            return Err(format!(
+                "nested family repositories {existing} and {name} share one physical path"
+            ));
+        }
+        physical_directory(
+            &resolved.join(".git"),
+            "pending nested family repository Git directory",
+        )?;
+        let canonical = fs::canonicalize(&resolved).map_err(|error| {
+            format!(
+                "cannot canonicalize pending {name} at {}: {error}",
+                resolved.display()
+            )
+        })?;
+        let canonical_metadata =
+            physical_directory(&canonical, "canonical pending nested family repository")?;
+        if physical_identity(&canonical_metadata) != identity {
+            return Err(format!(
+                "{name}: pending repository changed while validating {}",
+                resolved.display()
+            ));
+        }
+        if paths.insert(name.clone(), canonical).is_some() {
+            return Err(format!("duplicate nested repository name: {name}"));
+        }
+    }
+
     Ok(paths)
 }
 
@@ -1523,6 +1781,41 @@ fn validate_nested_family_local(
         }
         check_cargo_sources(&repo, errors)?;
     }
+    for pending in &topology.pending_repositories {
+        let path = nested_paths
+            .get(&pending.name)
+            .cloned()
+            .ok_or_else(|| format!("{} has no validated pending nested path", pending.name))?;
+        let metadata = physical_directory(&path, "pending nested family repository")?;
+        if let Some(existing) = declared.insert(physical_identity(&metadata), pending.name.clone())
+        {
+            errors.push(format!(
+                "nested family repositories {existing} and {} share one physical path",
+                pending.name
+            ));
+        }
+        if !skip_remotes {
+            let remotes = git_remotes(&path)?;
+            if remotes.len() != 1 || remotes.get("origin") != Some(&vec![pending.remote.clone()]) {
+                errors.push(format!(
+                    "{}: pending nested remotes must contain exactly origin -> {}",
+                    pending.name, pending.remote
+                ));
+            }
+        }
+        check_cargo_sources(
+            &Repo {
+                name: pending.name.clone(),
+                path,
+                profile: String::new(),
+                authored: false,
+                cargo_members: Vec::new(),
+                copy_paths: Vec::new(),
+                source_paths: Vec::new(),
+            },
+            errors,
+        )?;
+    }
 
     for entry in fs::read_dir(&topology.container_path)? {
         let path = entry?.path();
@@ -1586,22 +1879,35 @@ fn sync_derived_manifests_command(args: Vec<String>) -> Result<(), Box<dyn std::
         validate_manifest_data(&data, &manifest, false)?;
         let canonical_hash = manifest_sha256(&manifest)?;
         let mut rows = Vec::new();
-        for (target, path) in derived_manifest_targets(&data, &manifest)? {
+        let targets = derived_manifest_targets(&data, &manifest)?;
+        if apply {
+            for (target, _) in &targets {
+                if derived_manifest_is_pending(&data, target)? {
+                    return Err(
+                        "cannot apply derived manifests while a consumer identity is pending"
+                            .into(),
+                    );
+                }
+            }
+        }
+        for (target, path) in targets {
+            let pending = derived_manifest_is_pending(&data, &target)?;
             let rendered = render_derived_manifest(&data, &manifest, &target, &canonical_hash)?;
             let expected_sha256 = sha256_bytes(rendered.as_bytes());
             let current = fs::read(&path).ok();
             let current_sha256 = current.as_deref().map(sha256_bytes);
             let changed = current.as_deref() != Some(rendered.as_bytes());
-            if apply && changed {
+            if apply && changed && !pending {
                 write_atomic_bytes(&path, rendered.as_bytes())?;
             }
             rows.push(json!({
                 "target": target,
                 "path": path,
+                "identity_status": if pending {"pending"} else {"bound"},
                 "changed": changed,
                 "current_sha256": current_sha256,
                 "expected_sha256": expected_sha256,
-                "action": if apply && changed {"updated"} else if changed {"would-update"} else {"verified"},
+                "action": if pending {"pending"} else if apply && changed {"updated"} else if changed {"would-update"} else {"verified"},
             }));
         }
         report["canonical_manifest_sha256"] = json!(canonical_hash);
@@ -2344,6 +2650,21 @@ fn validate_manifest_data(
     if string(data, "release_version").as_deref() != Some(RELEASE_VERSION) {
         errors.push(format!("release_version must be {RELEASE_VERSION}"));
     }
+    if string(data, "status").as_deref() != Some(RELEASE_STATUS) {
+        errors.push(format!("status must be {RELEASE_STATUS}"));
+    }
+    if data.get("formal_ga").and_then(toml::Value::as_bool) != Some(false) {
+        errors.push("formal_ga must be false".to_owned());
+    }
+    if string(data, "sagemaker").as_deref() != Some("N/A") {
+        errors.push("sagemaker must be N/A".to_owned());
+    }
+    if string(data, "rollback_target").as_deref() != Some(ROLLBACK_TARGET) {
+        errors.push(format!("rollback_target must be {ROLLBACK_TARGET}"));
+    }
+    if let Err(error) = validate_source_inventory_declaration(data, manifest, check_paths) {
+        errors.push(error);
+    }
     if string(data, "repo_family").as_deref() != Some("jain-split") {
         errors.push("repo_family must be jain-split".to_owned());
     }
@@ -2360,6 +2681,27 @@ fn validate_manifest_data(
         }
     } else {
         errors.push("split_root is required".to_owned());
+    }
+    if let Some(split_root) = &split_root {
+        for target in ["portal", "deploy"] {
+            if let Some(declaration) = data
+                .get("derived_manifests")
+                .and_then(|value| value.get(target))
+            {
+                let key = format!("derived_manifests.{target}.path");
+                match string(declaration, "path")
+                    .ok_or_else(|| format!("{key} is required"))
+                    .and_then(|raw| exact_absolute_path(&raw, &key))
+                {
+                    Ok(path) if path.starts_with(split_root) && path != *split_root => {}
+                    Ok(_) => errors.push(format!("{key} must be beneath split_root")),
+                    Err(error) => errors.push(error),
+                }
+                if let Err(error) = derived_manifest_is_pending(data, target) {
+                    errors.push(error);
+                }
+            }
+        }
     }
     let repos = family_repos(data)?;
     let mut names = std::collections::BTreeSet::new();
@@ -2394,7 +2736,6 @@ fn validate_manifest_data(
             "profile",
             "role",
             "default_branch",
-            "current_tag",
             "required_check",
         ] {
             if string(raw, field).is_none() {
@@ -2407,12 +2748,10 @@ fn validate_manifest_data(
         if string(raw, "required_check").as_deref() != Some(format!("{name}/required").as_str()) {
             errors.push(format!("{name}: required_check must be {name}/required"));
         }
-        if string(raw, "current_tag").as_deref()
-            != Some(format!("{name}-v{RELEASE_VERSION}-split.0").as_str())
+        if let Err(error) =
+            validate_managed_release_identity(raw, &format!("repo[{name}]"), &name, "current_tag")
         {
-            errors.push(format!(
-                "{name}: current_tag must be {name}-v{RELEASE_VERSION}-split.0"
-            ));
+            errors.push(error);
         }
         if raw.get("has_jeryu_std").and_then(toml::Value::as_bool) != Some(true) {
             errors.push(format!("{name}: has_jeryu_std must be true"));
@@ -2466,7 +2805,6 @@ fn validate_manifest_data(
             ("forge_slug", "jain-split/jain-smartcluster"),
             ("required_check", "jain-smartcluster/required"),
             ("default_branch", "main"),
-            ("immutable_tag", "jain-smartcluster-v8.0.0-split.0"),
         ] {
             if string(raw, key).as_deref() != Some(expected) {
                 errors.push(format!("jain-smartcluster: {key} must be {expected}"));
@@ -2479,6 +2817,14 @@ fn validate_manifest_data(
         if raw.get("family_registered").and_then(toml::Value::as_bool) != Some(true) {
             errors.push("jain-smartcluster: family_registered must be true".to_owned());
         }
+        if let Err(error) = validate_managed_release_identity(
+            raw,
+            "infrastructure_repo[jain-smartcluster]",
+            "jain-smartcluster",
+            "immutable_tag",
+        ) {
+            errors.push(error);
+        }
     }
     let control = data
         .get("control_plane")
@@ -2488,6 +2834,11 @@ fn validate_manifest_data(
     }
     if string(control, "required_check").as_deref() != Some("jain-split-ops/required") {
         errors.push("control_plane.required_check must be jain-split-ops/required".to_owned());
+    }
+    if let Err(error) =
+        validate_managed_release_identity(control, "control_plane", "jain-split-ops", "current_tag")
+    {
+        errors.push(error);
     }
     if check_paths {
         if let Err(error) = validate_nested_family_local(data, true, &mut errors) {
@@ -2520,6 +2871,9 @@ fn validate_derived_manifest(
     canonical_path: &Path,
     target: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if derived_manifest_is_pending(canonical, target)? {
+        return Ok(());
+    }
     if !path.is_file() {
         return Err(format!("required derived manifest is missing: {}", path.display()).into());
     }
@@ -2571,7 +2925,7 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
     if string(&lock_data, "release").as_deref()
         != Some(format!("{RELEASE_VERSION}-split.0").as_str())
     {
-        errors.push("lock release is not 8.0.0-split.0".to_owned());
+        errors.push(format!("lock release is not {RELEASE_VERSION}-split.0"));
     }
     let family = family_repos(&data)?;
     let lock_repos = lock_data
@@ -2744,6 +3098,10 @@ fn release_snapshot(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
     let report = json!({
         "schema_version": "jain.release.snapshot/v1",
         "release": RELEASE_VERSION,
+        "release_status": RELEASE_STATUS,
+        "formal_ga": false,
+        "sagemaker": "N/A",
+        "rollback_target": ROLLBACK_TARGET,
         "manifest": manifest,
         "manifest_sha256": manifest_sha256(&manifest)?,
         "repositories": rows,
@@ -2781,11 +3139,14 @@ fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+    validate_manifest_data(&data, &manifest, false)?;
     let report = json!({
         "schema_version": "jain.release.status/v1",
         "release": RELEASE_VERSION,
-        "status": "candidate",
+        "status": RELEASE_STATUS,
         "formal_ga": false,
+        "sagemaker": "N/A",
+        "rollback_target": ROLLBACK_TARGET,
         "manifest_sha256": manifest_sha256(&manifest)?,
         "family_repo_count": family_repos(&data)?.len(),
         "infrastructure_repo_count": data.get("infrastructure_repo").and_then(toml::Value::as_array).map_or(0, Vec::len),
@@ -3395,7 +3756,8 @@ fn receipt_header(schema: &str, operation: &str, apply: bool) -> JsonValue {
 
 fn release_evidence_path(filename: &str) -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("docs/release-evidence/8.0.0")
+        .join("docs/release-evidence")
+        .join(RELEASE_VERSION)
         .join(filename)
 }
 
@@ -5411,12 +5773,237 @@ fn update_lock_shas(manifest: &Path) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
+fn source_inventory_path(
+    data: &toml::Value,
+    manifest: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let relative = string(data, "source_inventory").ok_or("manifest missing source_inventory")?;
+    if relative != "authority/source-paths.txt" {
+        return Err("source_inventory must be authority/source-paths.txt".into());
+    }
+    let absolute_manifest = if manifest.is_absolute() {
+        manifest.to_path_buf()
+    } else {
+        env::current_dir()?.join(manifest)
+    };
+    Ok(absolute_manifest
+        .parent()
+        .ok_or("manifest has no parent directory")?
+        .join(relative))
+}
+
+fn declared_source_inventory_identity(
+    data: &toml::Value,
+) -> Result<(usize, String), Box<dyn std::error::Error>> {
+    let count = data
+        .get("source_inventory_count")
+        .and_then(toml::Value::as_integer)
+        .ok_or("source_inventory_count must be an integer")?;
+    let count = usize::try_from(count)
+        .ok()
+        .filter(|count| *count > 0)
+        .ok_or("source_inventory_count must be positive")?;
+    let sha256 = string(data, "source_inventory_sha256")
+        .ok_or("manifest missing source_inventory_sha256")?;
+    if !is_full_hex(&sha256, 64) {
+        return Err("source_inventory_sha256 must be 64 lowercase hex characters".into());
+    }
+    Ok((count, sha256))
+}
+
+fn validate_source_inventory_declaration(
+    data: &toml::Value,
+    manifest: &Path,
+    check_file: bool,
+) -> Result<(), String> {
+    let source_sha = string(data, "source_sha").ok_or("source_sha is required")?;
+    if !is_full_hex(&source_sha, 40) {
+        return Err("source_sha must be 40 lowercase hex characters".to_owned());
+    }
+    source_inventory_path(data, manifest).map_err(|error| error.to_string())?;
+    declared_source_inventory_identity(data).map_err(|error| error.to_string())?;
+    if check_file {
+        read_source_inventory(data, manifest).map_err(|error| error.to_string())?;
+    }
+    Ok(())
+}
+
+fn parse_source_inventory(
+    bytes: &[u8],
+    source_sha: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    if bytes.is_empty() || !bytes.ends_with(b"\n") {
+        return Err("source inventory must be non-empty and end with one newline".into());
+    }
+    let text = std::str::from_utf8(bytes)?;
+    let expected_header = format!(
+        "# Generated by: splitctl seal-source-inventory\n\
+# DO NOT EDIT BY HAND\n\
+# Source: immutable Git tree {source_sha}\n\
+# Regenerate: cargo run --locked --quiet -- seal-source-inventory --manifest repos.manifest.toml --source-root SOURCE_ROOT --apply\n"
+    );
+    let paths = text
+        .strip_prefix(&expected_header)
+        .ok_or("source inventory is missing its exact generated provenance header")?;
+    let mut files = Vec::new();
+    let mut previous: Option<&str> = None;
+    for path in paths.strip_suffix('\n').unwrap_or(paths).split('\n') {
+        let normalized = Path::new(path);
+        if path.is_empty()
+            || path.contains('\r')
+            || path.contains('\\')
+            || normalized.is_absolute()
+            || normalized
+                .components()
+                .any(|component| !matches!(component, std::path::Component::Normal(_)))
+            || normalized.components().collect::<PathBuf>().as_os_str() != OsStr::new(path)
+        {
+            return Err(format!("source inventory path is not normalized: {path:?}").into());
+        }
+        if previous.is_some_and(|prior| prior >= path) {
+            return Err(format!(
+                "source inventory paths must be strictly sorted and unique: {path}"
+            )
+            .into());
+        }
+        previous = Some(path);
+        files.push(path.to_owned());
+    }
+    Ok(files)
+}
+
+fn read_source_inventory(
+    data: &toml::Value,
+    manifest: &Path,
+) -> Result<(PathBuf, Vec<String>, String), Box<dyn std::error::Error>> {
+    let path = source_inventory_path(data, manifest)?;
+    let metadata = physical_regular_file(&path, "source inventory")?;
+    if metadata.nlink() != 1 {
+        return Err("source inventory must have exactly one filesystem link".into());
+    }
+    let bytes = fs::read(&path)?;
+    let source_sha = string(data, "source_sha").ok_or("manifest missing source_sha")?;
+    let files = parse_source_inventory(&bytes, &source_sha)?;
+    let actual_sha256 = sha256_bytes(&bytes);
+    let (expected_count, expected_sha256) = declared_source_inventory_identity(data)?;
+    if files.len() != expected_count || actual_sha256 != expected_sha256 {
+        return Err(format!(
+            "source inventory identity mismatch: expected count {expected_count} sha256 {expected_sha256}, got count {} sha256 {actual_sha256}",
+            files.len()
+        )
+        .into());
+    }
+    Ok((path, files, actual_sha256))
+}
+
+fn render_source_inventory(
+    files: &[String],
+    source_sha: &str,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let mut normalized = files.to_vec();
+    normalized.sort();
+    normalized.dedup();
+    let mut bytes = format!(
+        "# Generated by: splitctl seal-source-inventory\n\
+# DO NOT EDIT BY HAND\n\
+# Source: immutable Git tree {source_sha}\n\
+# Regenerate: cargo run --locked --quiet -- seal-source-inventory --manifest repos.manifest.toml --source-root SOURCE_ROOT --apply\n"
+    )
+    .into_bytes();
+    bytes.extend_from_slice(normalized.join("\n").as_bytes());
+    bytes.push(b'\n');
+    parse_source_inventory(&bytes, source_sha)?;
+    Ok(bytes)
+}
+
+fn seal_source_inventory_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let mut manifest = root.join("repos.manifest.toml");
+    let mut source_root = None;
+    let mut apply = false;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--source-root" => {
+                source_root = Some(PathBuf::from(
+                    iter.next().ok_or("--source-root needs a path")?,
+                ))
+            }
+            "--apply" => apply = true,
+            value => return Err(format!("unknown seal-source-inventory argument: {value}").into()),
+        }
+    }
+    let source_root = source_root.ok_or("--source-root is required")?;
+    physical_directory(&source_root, "source inventory Git input")?;
+    let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
+    validate_source_inventory_declaration(&data, &manifest, false)?;
+    let source_sha = string(&data, "source_sha").ok_or("manifest missing source_sha")?;
+    let files = git_files(&source_root, &source_sha)?;
+    let bytes = render_source_inventory(&files, &source_sha)?;
+    let actual_count = files.len();
+    let actual_sha256 = sha256_bytes(&bytes);
+    let (expected_count, expected_sha256) = declared_source_inventory_identity(&data)?;
+    if actual_count != expected_count || actual_sha256 != expected_sha256 {
+        return Err(format!(
+            "immutable source tree does not match the declared inventory identity: actual count {actual_count}, actual sha256 {actual_sha256}"
+        )
+        .into());
+    }
+    let output = source_inventory_path(&data, &manifest)?;
+    let action = if fs::read(&output).ok().as_deref() == Some(bytes.as_slice()) {
+        "verified"
+    } else if apply {
+        if output.exists() {
+            physical_regular_file(&output, "existing source inventory")?;
+        } else {
+            let parent = output
+                .parent()
+                .ok_or("source inventory output has no parent")?;
+            if parent.exists() {
+                physical_directory(parent, "source inventory output directory")?;
+            } else {
+                physical_directory(
+                    parent
+                        .parent()
+                        .ok_or("source inventory output has no control-plane parent")?,
+                    "source inventory control plane",
+                )?;
+                fs::create_dir(parent)?;
+                physical_directory(parent, "source inventory output directory")?;
+            }
+        }
+        write_atomic_bytes(&output, &bytes)?;
+        "written"
+    } else {
+        "would-write"
+    };
+    if apply {
+        read_source_inventory(&data, &manifest)?;
+    }
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({
+            "schema_version": "jain.split.source-inventory/v1",
+            "source_sha": source_sha,
+            "source_root": source_root,
+            "output": output,
+            "count": actual_count,
+            "sha256": actual_sha256,
+            "apply": apply,
+            "action": action,
+        }))?
+    );
+    Ok(())
+}
+
 fn source_coverage(manifest: &Path, json_output: bool) -> Result<(), Box<dyn std::error::Error>> {
     let data: toml::Value = fs::read_to_string(manifest)?.parse()?;
     let source_root =
         PathBuf::from(string(&data, "source_root").ok_or("manifest missing source_root")?);
     let source_sha = string(&data, "source_sha").ok_or("manifest missing source_sha")?;
-    let files = git_files(&source_root, &source_sha)?;
+    let (source_inventory, files, source_inventory_sha256) =
+        read_source_inventory(&data, manifest)?;
     let retired = strings(&data, "retired_paths");
     let shared = strings(&data, "shared_source_paths");
     let repos = manifest_repos(&data)?;
@@ -5463,6 +6050,8 @@ fn source_coverage(manifest: &Path, json_output: bool) -> Result<(), Box<dyn std
         "schema_version": "jain.split.source-coverage/v1",
         "source_root": source_root,
         "source_sha": source_sha,
+        "source_inventory": source_inventory,
+        "source_inventory_sha256": source_inventory_sha256,
         "tracked_files": files.len(),
         "owned_count": owned,
         "retired_count": retired_count,
@@ -5707,8 +6296,8 @@ fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     let mut manifest_failures = Vec::new();
-    if string(&data, "release_version").as_deref() != Some("8.0.0") {
-        manifest_failures.push("release_version must be 8.0.0".to_owned());
+    if string(&data, "release_version").as_deref() != Some(RELEASE_VERSION) {
+        manifest_failures.push(format!("release_version must be {RELEASE_VERSION}"));
     }
     let family_names = family_repos(&data)?
         .iter()
@@ -6048,24 +6637,42 @@ fn collect_python(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
 }
 
 fn git_files(root: &Path, sha: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    if !is_full_hex(sha, 40) {
+        return Err("source commit must be 40 lowercase hex characters".into());
+    }
+    physical_directory(root, "source inventory Git input")?;
+    let commit_ref = format!("{sha}^{{commit}}");
+    let resolved = git_query(root, &["rev-parse", "--verify", &commit_ref])
+        .ok_or_else(|| format!("source commit is unavailable: {sha}"))?;
+    if resolved != sha {
+        return Err(format!("source commit resolved to {resolved}, expected {sha}").into());
+    }
     let output = Command::new("git")
-        .args([
-            "-C",
-            root.to_str().ok_or("source root is not UTF-8")?,
-            "ls-tree",
-            "-r",
-            "--name-only",
-            sha,
-        ])
+        .args(["-c", "core.hooksPath=/dev/null", "-c", "diff.external="])
+        .arg("-C")
+        .arg(root)
+        .args(["ls-tree", "-r", "-z", "--name-only", sha])
         .output()?;
     if !output.status.success() {
         return Err(format!("git ls-tree failed for {sha}").into());
     }
-    Ok(String::from_utf8(output.stdout)?
-        .lines()
-        .filter(|line| !line.is_empty())
-        .map(ToOwned::to_owned)
-        .collect())
+    if !output.stdout.ends_with(&[0]) {
+        return Err("git ls-tree returned a malformed non-NUL-terminated inventory".into());
+    }
+    let mut files = output
+        .stdout
+        .split(|byte| *byte == 0)
+        .filter(|path| !path.is_empty())
+        .map(|path| String::from_utf8(path.to_vec()))
+        .collect::<Result<Vec<_>, _>>()?;
+    files.sort();
+    let before = files.len();
+    files.dedup();
+    if files.len() != before {
+        return Err("git tree contains duplicate source paths".into());
+    }
+    render_source_inventory(&files, sha)?;
+    Ok(files)
 }
 
 fn path_matches(path: &str, pattern: &str) -> bool {
@@ -8490,6 +9097,160 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     }
 
     #[test]
+    fn managed_release_identity_is_closed_pending_or_exact_bound() {
+        let pending: toml::Value = r#"identity_status = "pending""#.parse().unwrap();
+        validate_managed_release_identity(&pending, "repo[example]", "example", "current_tag")
+            .unwrap();
+
+        let mut stale_pending = pending.clone();
+        stale_pending.as_table_mut().unwrap().insert(
+            "release_commit".to_owned(),
+            toml::Value::String("0".repeat(40)),
+        );
+        assert!(validate_managed_release_identity(
+            &stale_pending,
+            "repo[example]",
+            "example",
+            "current_tag"
+        )
+        .unwrap_err()
+        .contains("must omit every bound-only identity field"));
+
+        let bound: toml::Value = format!(
+            r#"
+identity_status = "bound"
+product_version = "{RELEASE_VERSION}"
+tag_revision = 3
+current_tag = "example-v{RELEASE_VERSION}-split.3"
+release_commit = "{}"
+release_tree = "{}"
+release_checksum_sha256 = "{}"
+"#,
+            "1".repeat(40),
+            "2".repeat(40),
+            "3".repeat(64),
+        )
+        .parse()
+        .unwrap();
+        validate_managed_release_identity(&bound, "repo[example]", "example", "current_tag")
+            .unwrap();
+
+        let mut wrong_tag = bound;
+        wrong_tag["current_tag"] =
+            toml::Value::String(format!("example-v{RELEASE_VERSION}-split.2"));
+        assert!(validate_managed_release_identity(
+            &wrong_tag,
+            "repo[example]",
+            "example",
+            "current_tag"
+        )
+        .unwrap_err()
+        .contains("split.3"));
+    }
+
+    #[test]
+    fn source_inventory_is_exact_and_ignores_dirty_worktree_bytes() {
+        let root = TestDir::new("source-inventory");
+        let (source, source_sha) = init_source(root.path());
+        fs::write(source.join("payload.txt"), "dirty working tree\n").unwrap();
+        fs::write(source.join("untracked.txt"), "must not enter authority\n").unwrap();
+        let files = git_files(&source, &source_sha).unwrap();
+        assert_eq!(files, vec!["payload.txt"]);
+        let bytes = render_source_inventory(&files, &source_sha).unwrap();
+        let manifest = root.path().join("repos.manifest.toml");
+        fs::write(
+            &manifest,
+            format!(
+                r#"source_sha = "{source_sha}"
+source_inventory = "authority/source-paths.txt"
+source_inventory_count = 1
+source_inventory_sha256 = "{}"
+"#,
+                sha256_bytes(&bytes)
+            ),
+        )
+        .unwrap();
+        seal_source_inventory_command(vec![
+            "--manifest".to_owned(),
+            manifest.display().to_string(),
+            "--source-root".to_owned(),
+            source.display().to_string(),
+            "--apply".to_owned(),
+        ])
+        .unwrap();
+        let data: toml::Value = fs::read_to_string(&manifest).unwrap().parse().unwrap();
+        let (_, sealed, digest) = read_source_inventory(&data, &manifest).unwrap();
+        assert_eq!(sealed, vec!["payload.txt"]);
+        assert_eq!(digest, sha256_bytes(&bytes));
+    }
+
+    #[test]
+    fn source_inventory_rejects_non_normalized_duplicate_or_unsealed_paths() {
+        let source_sha = "1".repeat(40);
+        let header = format!(
+            "# Generated by: splitctl seal-source-inventory\n\
+# DO NOT EDIT BY HAND\n\
+# Source: immutable Git tree {source_sha}\n\
+# Regenerate: cargo run --locked --quiet -- seal-source-inventory --manifest repos.manifest.toml --source-root SOURCE_ROOT --apply\n"
+        );
+        for body in ["a/../b\n", "a//b\n", "a\\b\n", "a\na\n", "b\na\n", "a"] {
+            let invalid = format!("{header}{body}");
+            assert!(parse_source_inventory(invalid.as_bytes(), &source_sha).is_err());
+        }
+        assert!(parse_source_inventory(b"payload.txt\n", &source_sha).is_err());
+    }
+
+    #[test]
+    fn canonical_manifest_is_candidate_only_and_pending_projections_are_non_writable() {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let canonical: toml::Value = fs::read_to_string(&path).unwrap().parse().unwrap();
+        validate_manifest_data(&canonical, &path, false).unwrap();
+        assert!(derived_manifest_is_pending(&canonical, "portal").unwrap());
+        assert!(derived_manifest_is_pending(&canonical, "deploy").unwrap());
+        validate_derived_manifest(
+            Path::new("/definitely/missing/held-projection.toml"),
+            "not-used-while-pending",
+            &canonical,
+            &path,
+            "portal",
+        )
+        .unwrap();
+
+        for (field, invalid, expected) in [
+            (
+                "status",
+                toml::Value::String("ga".to_owned()),
+                "status must be candidate",
+            ),
+            (
+                "formal_ga",
+                toml::Value::Boolean(true),
+                "formal_ga must be false",
+            ),
+            (
+                "sagemaker",
+                toml::Value::String("ready".to_owned()),
+                "sagemaker must be N/A",
+            ),
+            (
+                "rollback_target",
+                toml::Value::String("8.0.0".to_owned()),
+                "rollback_target must be 7.0.6",
+            ),
+        ] {
+            let mut invalid_manifest = canonical.clone();
+            invalid_manifest
+                .as_table_mut()
+                .unwrap()
+                .insert(field.to_owned(), invalid);
+            assert!(validate_manifest_data(&invalid_manifest, &path, false)
+                .unwrap_err()
+                .to_string()
+                .contains(expected));
+        }
+    }
+
+    #[test]
     fn nested_engine_topology_accepts_exact_legacy_and_child_physical_families() {
         for release in ["8.0.0", "8.0.1"] {
             let root = TestDir::new(&format!("redline-topology-{release}"));
@@ -8507,6 +9268,54 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             validate_nested_family_local(&data, true, &mut errors).unwrap();
             assert!(errors.is_empty(), "{release}: {errors:?}");
         }
+    }
+
+    #[test]
+    fn nested_topology_accounts_for_closed_pending_repositories_in_the_canonical_container() {
+        let root = TestDir::new("redline-topology-pending-repository");
+        let (mut data, topology) = synthetic_nested_engine_topology(root.path(), "8.0.1");
+        let central = topology.container_path.join("redline-central");
+        standalone_physical_clone(root.path(), "pending-central-source", &central);
+        let pending: toml::Value = r#"
+name = "redline-central"
+remote = "http://127.0.0.1:8787/git/jeryu/redline-central.git"
+required_check = "redline-central/required"
+identity_status = "pending"
+"#
+        .parse()
+        .unwrap();
+        data["nested_families"]["redline"]
+            .as_table_mut()
+            .unwrap()
+            .insert(
+                "pending_repository".to_owned(),
+                toml::Value::Array(vec![pending]),
+            );
+
+        let topology = nested_engine_topology(&data).unwrap();
+        assert_eq!(topology.pending_repositories.len(), 1);
+        let nested: toml::Value = fs::read_to_string(&topology.manifest_path)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let paths = validated_nested_repository_paths(&topology, &nested).unwrap();
+        assert_eq!(paths.get("redline-central"), Some(&central));
+        let mut errors = Vec::new();
+        validate_nested_family_local(&data, true, &mut errors).unwrap();
+        assert!(errors.is_empty(), "{errors:?}");
+
+        data["nested_families"]["redline"]["pending_repository"]
+            .as_array_mut()
+            .unwrap()[0]
+            .as_table_mut()
+            .unwrap()
+            .insert(
+                "path".to_owned(),
+                toml::Value::String("../redline-central".to_owned()),
+            );
+        assert!(nested_engine_topology(&data)
+            .unwrap_err()
+            .contains("must omit path and every bound-only identity field"));
     }
 
     #[test]
@@ -9174,7 +9983,7 @@ name = "two"
     #[test]
     fn derived_manifest_sync_is_dry_run_by_default_and_apply_is_explicit() {
         assert!(release_evidence_path("receipt.json")
-            .ends_with("docs/release-evidence/8.0.0/receipt.json"));
+            .ends_with("docs/release-evidence/8.0.1/receipt.json"));
         let root = TestDir::new("derived-sync");
         let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
         let mut canonical: toml::Value = fs::read_to_string(source).unwrap().parse().unwrap();

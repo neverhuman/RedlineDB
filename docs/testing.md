@@ -18,7 +18,7 @@ For family-level proof, run each changed member repo's `just required` and
 
 ## Release-candidate launch gates
 
-The 8.0.0 result remains a release candidate until a separately authorized
+The 8.0.1 result remains a release candidate until a separately authorized
 production promotion. A formal launch gate must fail closed unless its raw
 receipts prove all of the following:
 

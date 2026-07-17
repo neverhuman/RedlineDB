@@ -1,5 +1,5 @@
-schema_version = "jain-split-ops-v8.0.0-split.0"
+schema_version = "jain-split-ops-v8.0.1-split.0"
 workspace = "jain-split-ops"
-version = "jain-split-ops-v8.0.0-split.0"
+version = "jain-split-ops-v8.0.1-split.0"
 release_authority = "jain-deploy"
 version_source = "VERSION"

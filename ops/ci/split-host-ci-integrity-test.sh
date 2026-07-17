@@ -62,7 +62,7 @@ pinned_advisory_commit="$(sed -n \
   "$repo_root/ops/ci/pinned-advisory.sh")"
 [[ "$pinned_advisory_commit" =~ ^[0-9a-f]{40}$ ]]
 mkdir -p "$sandbox_family_root/target" "$sandbox_family_root/jain-core" \
-  "$sandbox_family_root/redline-split"
+  "$sandbox_family_root/jain-redline"
 redline_fixture_sources="$tmp/redline-fixture-sources"
 mkdir -p "$redline_fixture_sources"
 git init --quiet --initial-branch=main "$redline_fixture_sources/control"
@@ -79,7 +79,7 @@ remote = "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
 required_check = "redline-split-ops/required"
 [[repo]]
 name = "redline-core"
-path = "../redline-split/redline-core"
+path = "../redline-core"
 remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
 required_check = "redline-core/required"
 default_branch = "main"
@@ -88,20 +88,23 @@ EOF
 printf '[proof]\ncutover_eligible = true\n' \
   >"$redline_fixture_sources/control/redline.lock.toml"
 git -C "$redline_fixture_sources/control" add repos.manifest.toml redline.lock.toml
-git -C "$redline_fixture_sources/control" commit --quiet -m 'synthetic legacy control'
+git -C "$redline_fixture_sources/control" commit --quiet -m 'synthetic canonical control'
 git clone --quiet --no-local "$redline_fixture_sources/control" \
-  "$sandbox_family_root/redline-split-ops"
-git -C "$sandbox_family_root/redline-split-ops" remote remove origin
+  "$sandbox_family_root/jain-redline/redline-split-ops"
+git -C "$sandbox_family_root/jain-redline/redline-split-ops" remote remove origin
 git init --quiet --initial-branch=main "$redline_fixture_sources/core"
 git -C "$redline_fixture_sources/core" config user.name 'Redline Fixture'
 git -C "$redline_fixture_sources/core" config user.email \
   redline-fixture@example.invalid
 printf 'synthetic core\n' >"$redline_fixture_sources/core/payload.txt"
 git -C "$redline_fixture_sources/core" add payload.txt
-git -C "$redline_fixture_sources/core" commit --quiet -m 'synthetic legacy core'
+git -C "$redline_fixture_sources/core" commit --quiet -m 'synthetic canonical core'
 git clone --quiet --no-local "$redline_fixture_sources/core" \
-  "$sandbox_family_root/redline-split/redline-core"
-git -C "$sandbox_family_root/redline-split/redline-core" remote remove origin
+  "$sandbox_family_root/jain-redline/redline-core"
+git -C "$sandbox_family_root/jain-redline/redline-core" remote remove origin
+git clone --quiet --no-local "$redline_fixture_sources/core" \
+  "$sandbox_family_root/jain-redline/redline-central"
+git -C "$sandbox_family_root/jain-redline/redline-central" remote remove origin
 git clone --quiet --no-local --no-checkout "$HOME/.cargo/advisory-db" \
   "$sandbox_family_root/target/advisory-db"
 git -C "$sandbox_family_root/target/advisory-db" checkout --quiet --detach \
@@ -227,6 +230,9 @@ fake_jankurai_digest="$(sha256sum "$fake_jankurai" | cut -d' ' -f1)"
 git clone --quiet --no-local "$repo_root" "$control"
 git -C "$control" config user.name 'Host CI Integration Fixture'
 git -C "$control" config user.email host-ci-integration@example.invalid
+install -m 0644 "$repo_root/repos.manifest.toml" "$control/repos.manifest.toml"
+install -D -m 0644 "$repo_root/authority/source-paths.txt" \
+  "$control/authority/source-paths.txt"
 for boundary_file in \
   ops/ci/host-ci-integrity.sh ops/ci/host-ci-publisher.sh \
   ops/ci/host-ci-sandbox.sh ops/ci/host-ci-boundary-preflight.sh \
@@ -260,20 +266,11 @@ sed -i \
   "s#http://127.0.0.1:8787#$forge_base#g" \
   "$control/repos.manifest.toml" \
   "$control/tools/splitctl/src/main.rs" \
-  "$sandbox_family_root/redline-split-ops/repos.manifest.toml"
-# This broker fixture needs a schema-complete identity, not a real release
-# dependency. Its synthetic immutable values are deliberately confined to the
-# standalone control clone and are never used as product or tag authority.
-sed -i \
-  '/^immutable_tag = "redline-core-v4.1.0-jain.1"$/a\product_version = "4.1.0"\ntag_revision = 1\nrelease_commit = "0000000000000000000000000000000000000000"\nrelease_tree = "1111111111111111111111111111111111111111"\nrelease_checksum_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' \
-  "$control/repos.manifest.toml"
-sed -i \
-  '/^engine_tag = "redline-core-v4.1.0-jain.1"$/a\engine_release_tree = "1111111111111111111111111111111111111111"' \
-  "$control/repos.manifest.toml"
+  "$sandbox_family_root/jain-redline/redline-split-ops/repos.manifest.toml"
 sed -i \
   "s#8787#$forge_port#g" \
   "$control/tools/splitctl/src/jeryu_client.rs"
-git -C "$control" add repos.manifest.toml ops/ci tools/splitctl/src
+git -C "$control" add authority/source-paths.txt repos.manifest.toml ops/ci tools/splitctl/src
 git -C "$control" commit --quiet -m 'fixture reviewed host-CI boundary'
 git -C "$control" switch -C main --quiet
 git -C "$control" remote set-url origin "$control_remote"

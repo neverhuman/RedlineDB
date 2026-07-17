@@ -1,5 +1,15 @@
 {
   "tests": {
+    ".bundles/": {
+      "command": "cd .bundles && sha256sum --check *.bundle.sha256 && git bundle verify *.bundle",
+      "lane": "release",
+      "purpose": "verify preserved all-ref custody bundles and their checksums"
+    },
+    ".bundles/**": {
+      "command": "cd .bundles && sha256sum --check *.bundle.sha256 && git bundle verify *.bundle",
+      "lane": "release",
+      "purpose": "verify preserved all-ref custody bundles and their checksums"
+    },
     ".cargo/": {
       "command": "just check",
       "lane": "check",
@@ -130,6 +140,16 @@
       "lane": "score",
       "purpose": "verify agent metadata parses and routes proof lanes"
     },
+    "authority/": {
+      "command": "cargo run --locked --quiet -- source-coverage --manifest repos.manifest.toml",
+      "lane": "required",
+      "purpose": "verify the immutable source inventory remains normalized, count-bound, and digest-bound"
+    },
+    "authority/**": {
+      "command": "cargo run --locked --quiet -- source-coverage --manifest repos.manifest.toml",
+      "lane": "required",
+      "purpose": "verify the immutable source inventory remains normalized, count-bound, and digest-bound"
+    },
     "deny.toml": {
       "command": "just security",
       "lane": "security",
@@ -159,6 +179,16 @@
       "command": "just required",
       "lane": "required",
       "purpose": "verify family lock parses and records split pins"
+    },
+    "hooks/": {
+      "command": "bash -n hooks/pre-push",
+      "lane": "check",
+      "purpose": "verify repository-local Git hooks remain valid shell"
+    },
+    "hooks/**": {
+      "command": "bash -n hooks/pre-push",
+      "lane": "check",
+      "purpose": "verify repository-local Git hooks remain valid shell"
     },
     "infrastructure.lock.toml": {
       "command": "just required",

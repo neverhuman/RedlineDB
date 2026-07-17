@@ -42,13 +42,14 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
   and publication contract.
 - `docs/local-jeryu-forge-agent-workflow.md`: PR and status workflow.
 - `docs/release.md`: control-plane version, integrity, installation, and rollback policy.
-- `docs/release-runbook.md`: canonical v8.0.0 release, SmartCluster, Redline,
+- `docs/release-runbook.md`: canonical v8.0.1 candidate, SmartCluster, Redline,
   artifact, canary, promotion, and rollback workflow.
 
 SmartCluster is managed as required infrastructure under the declared
-`jain-split/jain-smartcluster` namespace. Redline source remains in the local
-`redline-split/` nested family and is validated as an immutable release
-dependency; neither is copied from an external workspace.
+`jain-split/jain-smartcluster` namespace. Redline ground truth lives only in the
+local `jain-redline/` nested family and is validated as an immutable release
+dependency. The top-level legacy Redline paths are preservation inputs, not
+authority or release sources; a future copy-out is a separately authorized export.
 
 ## Protected host-CI authority
 

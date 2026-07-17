@@ -21,15 +21,16 @@ gitleaks detect --source . --no-git --redact --exit-code 1 \
   --report-format json --report-path target/security/gitleaks.json
 jq -e 'type == "array" and length == 0' target/security/gitleaks.json >/dev/null
 
-cargo audit --deny warnings 2>&1 | tee target/security/cargo-audit.log
+cargo audit --no-fetch --deny warnings 2>&1 | tee target/security/cargo-audit.log
 cargo deny check --config deny.toml 2>&1 | tee target/security/cargo-deny.log
 
-syft scan dir:. --exclude './target/**' \
+SYFT_CHECK_FOR_APP_UPDATE=false syft scan dir:. --exclude './target/**' \
   --output spdx-json=target/security/sbom.spdx.json
 jq -e '.spdxVersion and (.packages | type == "array")' \
   target/security/sbom.spdx.json >/dev/null
 
-grype sbom:target/security/sbom.spdx.json \
+GRYPE_CHECK_FOR_APP_UPDATE=false GRYPE_DB_AUTO_UPDATE=false \
+  grype sbom:target/security/sbom.spdx.json \
   --output json --file target/security/grype.json --fail-on high
 jq -e '(.matches | type == "array") and (.source | type == "object")' \
   target/security/grype.json >/dev/null
