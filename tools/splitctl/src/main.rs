@@ -780,6 +780,7 @@ fn stage_locked_cargo_cache(
     )?;
 
     let mut staged = Vec::new();
+    let mut staged_index_records = std::collections::BTreeSet::new();
     for package in &packages {
         let archive_name = format!("{}-{}.crate", package.name, package.version);
         let archive_source = unique_existing_file(
@@ -832,38 +833,40 @@ fn stage_locked_cargo_cache(
         }
 
         let index_relative = sparse_index_relative_path(&package.name)?;
-        let index_source = unique_existing_file(
-            std::iter::once(sparse_root.join(".cache").join(&index_relative)),
-            "sparse index record",
-            expected_source_uid,
-            expected_source_gid,
-            MAX_INDEX_RECORD_BYTES,
-        )
-        .map_err(|error| {
-            format!(
-                "sparse index record unavailable for {} {}: {error}",
-                package.name, package.version
+        if staged_index_records.insert(index_relative.clone()) {
+            let index_source = unique_existing_file(
+                std::iter::once(sparse_root.join(".cache").join(&index_relative)),
+                "sparse index record",
+                expected_source_uid,
+                expected_source_gid,
+                MAX_INDEX_RECORD_BYTES,
             )
-        })?;
-        trusted_registry_file(
-            source,
-            &index_source,
-            expected_source_uid,
-            expected_source_gid,
-            "sparse index record",
-        )?;
-        copy_verified_file(
-            &index_source,
-            &staging_root
-                .join("index")
-                .join(sparse_name)
-                .join(".cache")
-                .join(&index_relative),
-            "sparse index record",
-            expected_source_uid,
-            expected_source_gid,
-            MAX_INDEX_RECORD_BYTES,
-        )?;
+            .map_err(|error| {
+                format!(
+                    "sparse index record unavailable for {} {}: {error}",
+                    package.name, package.version
+                )
+            })?;
+            trusted_registry_file(
+                source,
+                &index_source,
+                expected_source_uid,
+                expected_source_gid,
+                "sparse index record",
+            )?;
+            copy_verified_file(
+                &index_source,
+                &staging_root
+                    .join("index")
+                    .join(sparse_name)
+                    .join(".cache")
+                    .join(&index_relative),
+                "sparse index record",
+                expected_source_uid,
+                expected_source_gid,
+                MAX_INDEX_RECORD_BYTES,
+            )?;
+        }
         staged.push(json!({
             "name": package.name,
             "version": package.version,
@@ -8485,6 +8488,64 @@ mod tests {
                 .file_name()
                 .to_string_lossy()
                 .starts_with(".staged-registry.stage-")));
+    }
+
+    #[test]
+    fn locked_cargo_cache_stages_shared_index_once_for_multiple_versions() {
+        let temp = TestDir::new("cargo-cache-stage-multiple-versions");
+        let fixture = cargo_cache_fixture(temp.path(), b"first archive version");
+        let archive_parent = fixture.archive.parent().unwrap();
+        let second_archive = archive_parent.join("demo-2.0.0.crate");
+        let second_bytes = b"second archive version";
+        fs::set_permissions(archive_parent, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::write(&second_archive, second_bytes).unwrap();
+        fs::set_permissions(&second_archive, fs::Permissions::from_mode(0o444)).unwrap();
+        fs::set_permissions(archive_parent, fs::Permissions::from_mode(0o555)).unwrap();
+        fs::write(
+            &fixture.lock,
+            format!(
+                "version = 4\n\n[[package]]\nname = \"demo\"\nversion = \"1.2.3\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"{}\"\n\n[[package]]\nname = \"demo\"\nversion = \"2.0.0\"\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\nchecksum = \"{}\"\n",
+                sha256_regular_file(&fixture.archive, "first test archive").unwrap(),
+                sha256_bytes(second_bytes),
+            ),
+        )
+        .unwrap();
+
+        stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap();
+
+        let cache_root = fixture
+            .destination
+            .join("cache/index.crates.io-1949cf8c6b5b557f");
+        assert_eq!(
+            fs::read(cache_root.join("demo-1.2.3.crate")).unwrap(),
+            b"first archive version"
+        );
+        assert_eq!(
+            fs::read(cache_root.join("demo-2.0.0.crate")).unwrap(),
+            second_bytes
+        );
+        assert_eq!(
+            fs::read(
+                fixture
+                    .destination
+                    .join("index/index.crates.io-6f17d22bba15001f/.cache/de/mo/demo")
+            )
+            .unwrap(),
+            b"fixture sparse index record\n"
+        );
+        let receipt: JsonValue =
+            serde_json::from_slice(&fs::read(&fixture.receipt).unwrap()).unwrap();
+        assert_eq!(receipt["package_count"], 2);
+        assert_eq!(receipt["packages"][0]["version"], "1.2.3");
+        assert_eq!(receipt["packages"][1]["version"], "2.0.0");
     }
 
     #[test]
