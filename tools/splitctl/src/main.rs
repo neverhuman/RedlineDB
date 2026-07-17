@@ -28,6 +28,32 @@ const JERYU_ASKPASS_MODE: &str = "JAIN_SPLITCTL_JERYU_ASKPASS";
 const JERYU_ASKPASS_TOKEN_FILE: &str = "JAIN_SPLITCTL_JERYU_TOKEN_FILE";
 const JERYU_GIT_USERNAME: &str = "x-access-token";
 
+/// Resolve the control-plane checkout at runtime so release binaries do not
+/// embed the physical path of the checkout that compiled them. Commands are
+/// normally run from that checkout; installed binaries can also discover it
+/// from their `target/*` location before falling back to the working tree.
+fn control_plane_root() -> PathBuf {
+    fn containing_root(start: &Path) -> Option<PathBuf> {
+        start.ancestors().find_map(|candidate| {
+            (candidate.join("Cargo.toml").is_file()
+                && candidate.join("repos.manifest.toml").is_file())
+            .then(|| candidate.to_path_buf())
+        })
+    }
+
+    if let Ok(current) = env::current_dir() {
+        if let Some(root) = containing_root(&current) {
+            return root;
+        }
+    }
+    if let Ok(executable) = env::current_exe() {
+        if let Some(root) = containing_root(&executable) {
+            return root;
+        }
+    }
+    panic!("splitctl must run from, or beneath, a jain-split-ops checkout");
+}
+
 #[derive(Debug, Clone)]
 struct Repo {
     name: String,
@@ -400,7 +426,7 @@ fn manifest_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
 }
 
 fn managed_repos_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut json_output = false;
     let mut iter = args.into_iter();
@@ -443,7 +469,7 @@ fn managed_repo_json(repo: &ManagedRepo) -> JsonValue {
 }
 
 fn release_cargo_commands_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut repo_name = None;
     let mut iter = args.into_iter();
@@ -1849,7 +1875,7 @@ fn validate_nested_family_local(
 }
 
 fn sync_derived_manifests_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut receipt = None;
     let mut apply = false;
@@ -2903,7 +2929,7 @@ fn validate_derived_manifest(
 }
 
 fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut lock = root.parent().unwrap_or(&root).join("jain/family.lock");
     let mut iter = args.into_iter();
@@ -2986,7 +3012,7 @@ fn validate_family_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
 }
 
 fn regenerate_lock(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut output = root.parent().unwrap_or(&root).join("jain/family.lock");
     let mut apply = false;
@@ -3074,7 +3100,7 @@ fn release_preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
 }
 
 fn release_snapshot(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut output = None;
     let mut apply = false;
@@ -3127,7 +3153,7 @@ fn release_snapshot(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
 }
 
 fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut output = None;
     let mut iter = args.into_iter();
@@ -3478,7 +3504,7 @@ fn create_or_verify_immutable_tag(
 }
 
 fn verify_worktrees_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut receipt = None;
     let mut iter = args.into_iter();
@@ -3755,7 +3781,7 @@ fn receipt_header(schema: &str, operation: &str, apply: bool) -> JsonValue {
 }
 
 fn release_evidence_path(filename: &str) -> PathBuf {
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    control_plane_root()
         .join("docs/release-evidence")
         .join(RELEASE_VERSION)
         .join(filename)
@@ -3922,7 +3948,7 @@ fn run_git_strict(repo: &Path, args: &[&str]) -> Result<(), Box<dyn std::error::
 }
 
 fn fix_local_remotes(manifest: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let path = manifest.unwrap_or_else(|| root.join("repos.manifest.toml"));
     let data: toml::Value = fs::read_to_string(&path)?.parse()?;
     for repo in managed_repositories(&data, &path)? {
@@ -3934,7 +3960,7 @@ fn fix_local_remotes(manifest: Option<PathBuf>) -> Result<(), Box<dyn std::error
 }
 
 fn install_worktree_ban_hooks(manifest: Option<PathBuf>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let hooks_dir = root.join("hooks");
     if !hooks_dir.join("pre-push").is_file() {
         return Err(format!(
@@ -4762,9 +4788,8 @@ fn validate_physical_git_checkout(path: &Path) -> Result<PathBuf, Box<dyn std::e
     if canonical != path {
         return Err("--repo-path must already be canonical".into());
     }
-    let split_root = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .parent()
-        .ok_or("splitctl root has no parent")?;
+    let control_root = control_plane_root();
+    let split_root = control_root.parent().ok_or("splitctl root has no parent")?;
     if !canonical.starts_with(split_root) {
         return Err("--repo-path must remain beneath the split root".into());
     }
@@ -5491,7 +5516,7 @@ fn validate_protection_policy(
 }
 
 fn reconcile(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut base_ref = None;
     let mut apply = false;
@@ -5632,7 +5657,7 @@ fn copy_dir(source: &Path, destination: &Path) -> io::Result<()> {
 }
 
 fn bump_version(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut from_version = None;
     let mut new = None;
@@ -5917,7 +5942,7 @@ fn render_source_inventory(
 }
 
 fn seal_source_inventory_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut source_root = None;
     let mut apply = false;
@@ -6087,7 +6112,7 @@ fn source_coverage(manifest: &Path, json_output: bool) -> Result<(), Box<dyn std
 }
 
 fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+    let root = control_plane_root()
         .parent()
         .ok_or("split root unavailable")?
         .to_path_buf();
@@ -6132,7 +6157,7 @@ fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut output = root.join("target/preflight-report.json");
     let mut iter = args.into_iter();
@@ -6696,7 +6721,7 @@ fn validate_local_jeryu(
     manifest: Option<PathBuf>,
     skip_remotes: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let manifest_path = manifest.unwrap_or_else(|| root.join("repos.manifest.toml"));
     let data: toml::Value = fs::read_to_string(&manifest_path)?.parse()?;
     let repos = manifest_repos(&data)?;
@@ -6917,7 +6942,7 @@ fn collect_named_files(root: &Path, out: &mut Vec<PathBuf>, names: &[&str]) -> i
 }
 
 fn refresh(selected: &[String], authored_only: bool) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let manifest_path = env::var_os("JAIN_SPLIT_MANIFEST")
         .map(PathBuf::from)
         .unwrap_or_else(|| root.join("repos.manifest.toml"));
@@ -6943,7 +6968,7 @@ fn refresh(selected: &[String], authored_only: bool) -> Result<(), Box<dyn std::
 }
 
 fn refresh_bare_mirrors(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut selected = Vec::new();
     let mut receipt = None;
