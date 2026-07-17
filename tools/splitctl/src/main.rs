@@ -3318,11 +3318,44 @@ fn jankurai_evidence_command(args: Vec<String>) -> Result<(), Box<dyn std::error
                     .get("score")
                     .and_then(JsonValue::as_f64)
                     .ok_or("governed Jankurai baseline is missing numeric score")?;
-                let auditor = baseline
+                let legacy_auditor = baseline
                     .get("auditor")
-                    .and_then(JsonValue::as_str)
-                    .ok_or("governed Jankurai baseline is missing auditor")?
-                    .to_owned();
+                    .map(|value| {
+                        value
+                            .as_str()
+                            .ok_or("governed Jankurai baseline auditor must be a string")
+                    })
+                    .transpose()?;
+                let typed_auditor = baseline
+                    .get("auditor_version")
+                    .map(|value| {
+                        let version = value
+                            .as_str()
+                            .ok_or("governed Jankurai baseline auditor_version must be a string")?;
+                        if version.is_empty()
+                            || version.len() > 128
+                            || !version.bytes().all(|byte| {
+                                byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-' | b'+')
+                            })
+                        {
+                            return Err("governed Jankurai baseline auditor_version is malformed");
+                        }
+                        Ok(format!("jankurai {version}"))
+                    })
+                    .transpose()?;
+                let auditor = match (legacy_auditor, typed_auditor.as_deref()) {
+                    (Some(legacy), Some(typed)) if legacy != typed => {
+                        return Err("governed Jankurai baseline auditor fields disagree".into());
+                    }
+                    (Some(legacy), _) => legacy.to_owned(),
+                    (None, Some(typed)) => typed.to_owned(),
+                    (None, None) => {
+                        return Err(
+                            "governed Jankurai baseline is missing auditor or auditor_version"
+                                .into(),
+                        );
+                    }
+                };
                 (Some(bytes), Some(score), Some(auditor))
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => (None, None, None),
@@ -9702,6 +9735,40 @@ engine_release_tree = "{engine_tree}"
         assert_eq!(evidence["status"], "pass");
         assert_eq!(evidence["baseline"]["auditor"], "jankurai 1.6.10");
         assert_eq!(evidence["auditor"]["version"], "jankurai 1.6.11");
+    }
+
+    #[test]
+    fn jankurai_evidence_accepts_a_typed_baseline_auditor_version() {
+        let mut fixture = JankuraiFixture::new("jankurai-typed-baseline-auditor");
+        let mut baseline = read_json(&fixture.baseline);
+        baseline.as_object_mut().unwrap().remove("auditor");
+        baseline["auditor_version"] = json!("1.6.10");
+        fs::write(&fixture.baseline, serde_json::to_vec(&baseline).unwrap()).unwrap();
+        run_git_strict(&fixture.repo, &["add", "agent/jankurai-baseline.json"]).unwrap();
+        run_git_strict(
+            &fixture.repo,
+            &["commit", "-m", "typed historical baseline auditor"],
+        )
+        .unwrap();
+        fixture.commit = resolve_commit(&fixture.repo, "HEAD").unwrap();
+        fixture.validate(&fixture.valid_report(), true).unwrap();
+        let evidence = read_json(&fixture.receipt);
+        assert_eq!(evidence["status"], "pass");
+        assert_eq!(evidence["baseline"]["auditor"], "jankurai 1.6.10");
+        assert_eq!(evidence["auditor"]["version"], "jankurai 1.6.11");
+    }
+
+    #[test]
+    fn jankurai_evidence_rejects_conflicting_baseline_auditor_fields() {
+        let fixture = JankuraiFixture::new("jankurai-conflicting-baseline-auditor");
+        let mut baseline = read_json(&fixture.baseline);
+        baseline["auditor_version"] = json!("1.6.10");
+        fs::write(&fixture.baseline, serde_json::to_vec(&baseline).unwrap()).unwrap();
+        let error = fixture
+            .validate(&fixture.valid_report(), true)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("auditor fields disagree"), "{error}");
     }
 
     #[test]
