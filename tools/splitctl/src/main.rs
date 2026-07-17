@@ -1207,18 +1207,20 @@ fn managed_repo_json(repo: &ManagedRepo) -> JsonValue {
 }
 
 fn host_ci_authority_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = control_plane_root();
-    let mut manifest = root.join("repos.manifest.toml");
+    let mut manifest = None;
     let mut repo_name = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--manifest" => {
+                manifest = Some(PathBuf::from(iter.next().ok_or("--manifest needs a path")?))
+            }
             "--repo" => repo_name = Some(iter.next().ok_or("--repo needs a name")?),
             value => return Err(format!("unknown host-ci-authority argument: {value}").into()),
         }
     }
     let repo_name = repo_name.ok_or("host-ci-authority requires --repo")?;
+    let manifest = manifest.unwrap_or_else(|| control_plane_root().join("repos.manifest.toml"));
     let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
     println!(
         "{}",
@@ -1329,18 +1331,20 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
 }
 
 fn release_cargo_commands_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
-    let root = control_plane_root();
-    let mut manifest = root.join("repos.manifest.toml");
+    let mut manifest = None;
     let mut repo_name = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
-            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--manifest" => {
+                manifest = Some(PathBuf::from(iter.next().ok_or("--manifest needs a path")?))
+            }
             "--repo" => repo_name = Some(iter.next().ok_or("--repo needs a name")?),
             value => return Err(format!("unknown release-cargo-commands argument: {value}").into()),
         }
     }
     let repo_name = repo_name.ok_or("release-cargo-commands requires --repo")?;
+    let manifest = manifest.unwrap_or_else(|| control_plane_root().join("repos.manifest.toml"));
     let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
     validate_manifest_data(&data, &manifest, false)?;
     let raw = release_repo_entry(&data, &repo_name)?;

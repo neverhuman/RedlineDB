@@ -26,6 +26,16 @@ impl Scratch {
     fn path(&self) -> &Path {
         &self.0
     }
+
+    fn outside_checkout() -> Self {
+        let path = std::env::temp_dir().join(format!(
+            "jain-split-ops-outside-checkout-{}-{}",
+            std::process::id(),
+            NEXT_CASE.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir(&path).expect("create outside-checkout scratch directory");
+        Self(path)
+    }
 }
 
 impl Drop for Scratch {
@@ -42,6 +52,17 @@ fn splitctl(args: &[&str]) -> Output {
         .args(args)
         .output()
         .expect("run splitctl")
+}
+
+fn splitctl_from(current_dir: &Path, args: &[&str]) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_splitctl"))
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("LC_ALL", "C")
+        .current_dir(current_dir)
+        .args(args)
+        .output()
+        .expect("run installed-context splitctl")
 }
 
 fn git(root: &Path, args: &[&str]) -> Output {
@@ -241,6 +262,43 @@ fn release_cargo_commands_exposes_redline_central_backend_matrix() {
     assert_eq!(policy["commands"][0]["args"][6], "db-shim/backend-redline");
     assert_eq!(policy["commands"][2]["args"][6], "db-shim/oracle-sqlite");
     assert_eq!(policy["commands"][4]["args"][6], "db-shim/oracle-postgres");
+}
+
+#[test]
+fn explicit_manifest_commands_run_outside_a_control_plane_checkout() {
+    let outside = Scratch::outside_checkout();
+    let manifest = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+    let manifest = manifest.to_str().expect("UTF-8 manifest path");
+    for args in [
+        vec![
+            "host-ci-authority",
+            "--manifest",
+            manifest,
+            "--repo",
+            "redline-central",
+        ],
+        vec![
+            "release-cargo-commands",
+            "--manifest",
+            manifest,
+            "--repo",
+            "redline-central",
+        ],
+    ] {
+        let output = splitctl_from(outside.path(), &args);
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let result: Value = serde_json::from_slice(&output.stdout).expect("parse command result");
+        assert_eq!(
+            result["repository"]
+                .as_str()
+                .or_else(|| result["repo"].as_str()),
+            Some("redline-central")
+        );
+    }
 }
 
 #[test]
