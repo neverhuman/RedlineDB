@@ -33,7 +33,13 @@ cargo fmt -- --check
 cargo test --locked
 cargo run --locked --quiet -- validate-manifest --manifest repos.manifest.toml --check-paths --check-derived
 cargo run --locked --quiet -- source-coverage --manifest repos.manifest.toml
-cargo run --locked --quiet -- validate-local-jeryu --manifest repos.manifest.toml
+local_jeryu_args=(validate-local-jeryu --manifest repos.manifest.toml)
+if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 ]]; then
+  # Exact-head CI is source authority, not a mutable host-checkout census. The
+  # host preflight/convergence lane verifies canonical checkout remotes.
+  local_jeryu_args+=(--skip-remotes)
+fi
+cargo run --locked --quiet -- "${local_jeryu_args[@]}"
 cargo run --locked --quiet -- python-boundary
 
 printf 'required ok: jain-split-ops\n'
