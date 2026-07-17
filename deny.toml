@@ -2,10 +2,11 @@
 ignore = []
 unmaintained = "workspace"
 
-# This control plane's locked graph uses only Apache-2.0 and MIT-compatible
-# choices. Keep the allowlist intentionally smaller than the family template.
+# Keep the allowlist intentionally smaller than the family template. Unicode-3.0
+# is required by the locked serde derive parser used for closed authority and
+# evidence envelopes.
 [licenses]
-allow = ["Apache-2.0", "MIT"]
+allow = ["Apache-2.0", "MIT", "Unicode-3.0"]
 
 [bans]
 multiple-versions = "warn"

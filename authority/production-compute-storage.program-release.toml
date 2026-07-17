@@ -1,0 +1,144 @@
+format = "jain.program-release-authority"
+
+[program]
+name = "jain"
+release = "9.0.0-alpha.6"
+claim = "production_compute_storage_canary"
+status = "production-canary"
+formal_ga = false
+activation_enabled = false
+
+[paths]
+design_input_root = "docs/design-inputs/9.0.0-alpha.6"
+spec = "docs/design-inputs/9.0.0-alpha.6/SPEC.md"
+custody = "docs/design-inputs/9.0.0-alpha.6/custody.json"
+evidence_root = "docs/release-evidence/9.0.0-alpha.6"
+evidence_index = "docs/release-evidence/9.0.0-alpha.6/evidence-index.json"
+
+[firewall]
+release_namespace = "9.0.0-alpha.6"
+protected_releases = ["8.0.0", "8.0.1"]
+protected_manifests = ["repos.manifest.toml"]
+protected_tag_fragments = ["-v8."]
+
+[canary]
+hub = "AtomicSoul"
+nodes = ["xbabe1", "xbabe2", "xbabe3"]
+witnesses = ["xbabe1", "xbabe2", "xbabe3"]
+witness_quorum = 2
+durability_claim = "durable"
+critical_available = false
+
+[deployment_inputs]
+status = "unbound"
+required = [
+  "cidrs",
+  "filesystem_uuids",
+  "volume_roots",
+  "recovery_key_custody",
+  "legacy_ownership_map",
+  "shadow_witness_topology",
+]
+
+[design_inputs]
+source_root = ".."
+names = [
+  "SUPER_MERGER_CODEX.md",
+  "SUPER_MERGER_CLAUDE.md",
+  "SUPER_MERGER_STORAGE_CLAUDE.md",
+]
+
+[[repository]]
+owner = "jain-split"
+name = "jain-shard"
+checkout = "../jain-shard"
+remote = "http://127.0.0.1:8787/git/jain-split/jain-shard.git"
+required_check = "jain-shard/required"
+lifecycle = "local-prototype"
+
+[[repository]]
+owner = "jeryu"
+name = "jain-fabric"
+checkout = "../jain-fabric"
+remote = "http://127.0.0.1:8787/git/jeryu/jain-fabric.git"
+required_check = "jain-fabric/required"
+lifecycle = "not-created"
+
+[[repository]]
+owner = "jeryu"
+name = "jain-platform"
+checkout = "../jain-platform"
+remote = "http://127.0.0.1:8787/git/jeryu/jain-platform.git"
+required_check = "jain-platform/required"
+lifecycle = "not-created"
+
+[[evidence_group]]
+id = "custody"
+policy = "required"
+receipt_roots = ["docs/design-inputs/9.0.0-alpha.6"]
+
+[[evidence_group]]
+id = "contracts"
+policy = "required"
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "images"
+policy = "required"
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "authorization"
+policy = "required"
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "runs"
+policy = "required"
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "git"
+policy = "required"
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "storage"
+policy = "required"
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "shadow"
+policy = "required"
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "operations"
+policy = "required"
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "research"
+policy = "required"
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "ui"
+policy = "deferred"
+receipt_roots = []
+
+[[evidence_group]]
+id = "jarvis"
+policy = "deferred"
+receipt_roots = []
+
+[[evidence_group]]
+id = "migration"
+policy = "deferred"
+receipt_roots = []
+
+[[evidence_group]]
+id = "final_ga_owners"
+policy = "deferred"
+receipt_roots = []
+

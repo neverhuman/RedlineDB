@@ -1,0 +1,31 @@
+{
+  "format": "jain.program-release-evidence-index",
+  "release": "9.0.0-alpha.6",
+  "authority_sha256": "2ead2d90041f644cb8cdf355b9960d85c1e7bdf34221313ea7019bd6fe6575ab",
+  "spec_sha256": "368c2f2fc04e166233b5fc2f92a1cdf6f02f26c28ac5d7976819d62dd1ff5231",
+  "groups": [
+    {
+      "id": "custody",
+      "disposition": "passed",
+      "receipts": [
+        {
+          "path": "docs/design-inputs/9.0.0-alpha.6/custody.json",
+          "sha256": "5ec59b770a79d3a2a855ce859c1ff0a96b84f67cfaa03b79aa8232655497e3b9"
+        }
+      ]
+    },
+    { "id": "contracts", "disposition": "pending", "receipts": [] },
+    { "id": "images", "disposition": "pending", "receipts": [] },
+    { "id": "authorization", "disposition": "pending", "receipts": [] },
+    { "id": "runs", "disposition": "pending", "receipts": [] },
+    { "id": "git", "disposition": "pending", "receipts": [] },
+    { "id": "storage", "disposition": "pending", "receipts": [] },
+    { "id": "shadow", "disposition": "pending", "receipts": [] },
+    { "id": "operations", "disposition": "pending", "receipts": [] },
+    { "id": "research", "disposition": "pending", "receipts": [] },
+    { "id": "ui", "disposition": "deferred", "receipts": [] },
+    { "id": "jarvis", "disposition": "deferred", "receipts": [] },
+    { "id": "migration", "disposition": "deferred", "receipts": [] },
+    { "id": "final_ga_owners", "disposition": "deferred", "receipts": [] }
+  ]
+}

@@ -1,0 +1,43 @@
+{
+  "format": "jain.program-release-status",
+  "release": "9.0.0-alpha.6",
+  "claim": "production_compute_storage_canary",
+  "decision": "blocked",
+  "eligible": false,
+  "formal_ga": false,
+  "activation_enabled": false,
+  "critical_available": false,
+  "passed": [
+    "custody"
+  ],
+  "pending": [
+    "authorization",
+    "contracts",
+    "git",
+    "images",
+    "operations",
+    "research",
+    "runs",
+    "shadow",
+    "storage"
+  ],
+  "failed": [],
+  "deferred": [
+    "final_ga_owners",
+    "jarvis",
+    "migration",
+    "ui"
+  ],
+  "blockers": [
+    "deployment_inputs:unbound",
+    "pending:authorization",
+    "pending:contracts",
+    "pending:git",
+    "pending:images",
+    "pending:operations",
+    "pending:research",
+    "pending:runs",
+    "pending:shadow",
+    "pending:storage"
+  ]
+}

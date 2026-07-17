@@ -1,5 +1,6 @@
 // Repository-local release and Jeryu control-plane CLI.
 mod jeryu_client;
+mod program_release;
 
 use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, JeryuRequest};
 use serde_json::{json, Map, Value as JsonValue};
@@ -231,6 +232,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("release-preflight") => release_preflight(args.collect())?,
         Some("release-snapshot") => release_snapshot(args.collect())?,
         Some("release-status") => release_status(args.collect())?,
+        Some("program-release") => program_release::command(args.collect())?,
         Some("bootstrap-main") => bootstrap_main_command(args.collect())?,
         Some("immutable-tag") => immutable_tag_command(args.collect())?,
         Some("verify-worktrees") => verify_worktrees_command(args.collect())?,
@@ -7691,6 +7693,8 @@ fn validate_local_jeryu(
             .map(PathBuf::from)
             .and_then(|p| p.parent().map(Path::to_path_buf))
             .unwrap_or_else(|| root.parent().unwrap_or(&root).to_path_buf());
+        let managed = managed_repositories(&data, &manifest_path)?;
+        let program_checkouts = program_release::declared_checkouts(&root)?;
         for entry in fs::read_dir(&split_root)? {
             let path = entry?.path();
             if !path.is_dir() || !path.join(".git").exists() {
@@ -7700,10 +7704,10 @@ fn validate_local_jeryu(
             if remotes.keys().any(|name| name != "origin") {
                 errors.push(format!("{}: expected only origin remote", path.display()));
             }
-            let expected = managed_repositories(&data, &manifest_path)?
-                .into_iter()
+            let expected = managed
+                .iter()
                 .find(|repo| repo.path == path)
-                .map(|repo| repo.remote);
+                .map(|repo| repo.remote.clone());
             let excluded = data
                 .get("excluded_path")
                 .and_then(toml::Value::as_array)
@@ -7713,6 +7717,38 @@ fn validate_local_jeryu(
                 .map(PathBuf::from)
                 .any(|excluded_path| excluded_path == path);
             if expected.is_none() && excluded {
+                continue;
+            }
+            let program = program_checkouts.get(&path);
+            if expected.is_some() && program.is_some() {
+                errors.push(format!(
+                    "{}: declared by both current and program release authorities",
+                    path.display()
+                ));
+                continue;
+            }
+            if let Some(program) = program {
+                if program.must_be_absent {
+                    errors.push(format!(
+                        "{}: checkout exists while its program lifecycle is not-created",
+                        path.display()
+                    ));
+                } else if let Some(expected_remote) = &program.remote {
+                    if remotes.len() != 1
+                        || remotes.get("origin") != Some(&vec![expected_remote.clone()])
+                    {
+                        errors.push(format!(
+                            "{}: program checkout must contain exactly origin -> {}",
+                            path.display(),
+                            expected_remote
+                        ));
+                    }
+                } else if !remotes.is_empty() {
+                    errors.push(format!(
+                        "{}: local prototype must remain remote-free until reviewed onboarding",
+                        path.display()
+                    ));
+                }
                 continue;
             }
             if expected.is_none() {

@@ -33,6 +33,8 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
 
 - `repos.manifest.toml`: live split-family repo map and tags.
 - `src/main.rs` (`splitctl`): Rust control-plane contract refresh, authored-repo refresh, local-Jeryu validation, source coverage, version consistency, and bare-mirror refresh.
+- `splitctl program-release`: manifest-driven future-release custody, evidence, namespace-firewall,
+  and status reduction without release-specific Rust constants.
 - `cargo run --locked -- materialize`: Rust contract materializer for the family.
 - `cargo run --locked -- jeryu-doctor`: local forge/remotes health check.
 - `cargo run --locked -- jeryu-local`: local PR/check REST wrapper for agents.
@@ -44,6 +46,7 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
 - `docs/release.md`: control-plane version, integrity, installation, and rollback policy.
 - `docs/release-runbook.md`: canonical v8.0.1 candidate, SmartCluster, Redline,
   artifact, canary, promotion, and rollback workflow.
+- `docs/program-release.md`: side-by-side future-release authority and evidence contract.
 
 SmartCluster is managed as required infrastructure under the declared
 `jain-split/jain-smartcluster` namespace. Redline ground truth lives only in the

@@ -1,0 +1,46 @@
+{
+  "title": "Jain program release reduced status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "release",
+    "claim",
+    "decision",
+    "eligible",
+    "formal_ga",
+    "activation_enabled",
+    "critical_available",
+    "passed",
+    "pending",
+    "failed",
+    "deferred",
+    "blockers"
+  ],
+  "properties": {
+    "format": { "const": "jain.program-release-status" },
+    "release": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "claim": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "decision": { "enum": ["blocked", "eligible"] },
+    "eligible": { "type": "boolean" },
+    "formal_ga": { "type": "boolean" },
+    "activation_enabled": { "type": "boolean" },
+    "critical_available": { "type": "boolean" },
+    "passed": { "$ref": "#/$defs/group_ids" },
+    "pending": { "$ref": "#/$defs/group_ids" },
+    "failed": { "$ref": "#/$defs/group_ids" },
+    "deferred": { "$ref": "#/$defs/group_ids" },
+    "blockers": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "group_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+      "uniqueItems": true
+    }
+  }
+}
