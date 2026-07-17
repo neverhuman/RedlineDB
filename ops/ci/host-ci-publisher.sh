@@ -160,6 +160,7 @@ jq -e --arg request_id "$request_id" \
    | select(.sealed_at | type == "number")
    | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
    | select(.control_ref | type == "string")
+   | select(.bootstrap_expires_at | type == "string")
    | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
    | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
    | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
@@ -241,6 +242,8 @@ control_commit="$(jq -er '.control_plane_commit' "$result")"
   || fail 'control commit differs across root artifacts'
 [[ "$(jq -er '.control_ref' "$state")" == "$control_ref" ]] \
   || fail 'control ref differs across root artifacts'
+[[ "$(jq -er '.bootstrap_expires_at' "$state")" == "$bootstrap_expires_at" ]] \
+  || fail 'bootstrap expiry differs across root artifacts'
 if [[ "$control_ref" != refs/heads/main && "$bootstrap_commit" != "$control_commit" ]]; then
   fail 'bootstrap control commit differs from the sealed result'
 fi

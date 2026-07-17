@@ -869,6 +869,10 @@ mapfile -t retained_states < <(
 success_request="$(dirname "${retained_states[0]}")"
 sudo -n jq -e 'select(.status == "consumed")' \
   "$success_request/root-state.json" >/dev/null
+sudo -n jq -e --arg ref "$bootstrap_control_ref" \
+  --arg expires "$bootstrap_expires_at" '
+    select(.control_ref == $ref and .bootstrap_expires_at == $expires)' \
+  "$success_request/root-state.json" >/dev/null
 success_proof_dir="$(sudo -n jq -er '.proof_evidence_dir' \
   "$success_request/root-result.json")"
 case "$success_proof_dir" in
@@ -980,6 +984,30 @@ if sudo -n "$publisher" "$request_root/$stale_id" >/dev/null 2>&1; then
   printf 'publisher replayed a stale rejected nonce\n' >&2
   exit 1
 fi
+
+# Publisher authority must equal the expiry that the sandbox normalized and
+# sealed into root state; changing only that state field fails before a POST.
+expiry_mismatch_id="$(printf '8%.0s' {1..64})"
+make_sealed_variant "$expiry_mismatch_id" '.request_id=$request_id' \
+  "$(date +%s)"
+sudo -n jq '.bootstrap_expires_at = "1"' \
+  "$request_root/$expiry_mismatch_id/root-state.json" \
+  >"$tmp/expiry-mismatch.state.json"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/expiry-mismatch.state.json" \
+  "$request_root/$expiry_mismatch_id/root-state.json"
+expiry_mismatch_offset="$(stat -c '%s' "$forge_log")"
+if sudo -n "$publisher" "$request_root/$expiry_mismatch_id" \
+  >"$tmp/expiry-mismatch.log" 2>&1; then
+  printf 'publisher accepted a mismatched bootstrap expiry\n' >&2
+  exit 1
+fi
+grep -Fq 'bootstrap expiry differs across root artifacts' \
+  "$tmp/expiry-mismatch.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$expiry_mismatch_offset" ]] || {
+  printf 'bootstrap expiry mismatch reached the forge\n' >&2
+  exit 1
+}
 
 old_result_id="$(printf 'c%.0s' {1..64})"
 make_sealed_variant "$old_result_id" \
@@ -1506,5 +1534,33 @@ for proof_mutation in missing symlink hardlink tamper; do
     exit 1
   }
 done
+
+# Production uses retain_requests=false. Exercise a complete successful broker
+# path with that exact value and prove the consumed root request is removed.
+retained_request_count_before="$(
+  sudo -n find "$request_root" -mindepth 1 -maxdepth 1 -type d | wc -l
+)"
+jq '.retain_requests = false' "$valid_sandbox_config" \
+  >"$tmp/nonretaining-sandbox-config.json"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/nonretaining-sandbox-config.json" "$sandbox_config"
+# Earlier publication state-machine cases intentionally leave hostile fake-
+# forge readback state behind; this independent success starts from clean OK.
+printf '' >"$forge_state"
+printf '%s\n' ok >"$forge_behavior"
+if ! run_fixture_lane "$tmp/nonretaining-success.log"; then
+  cat "$tmp/nonretaining-success.log" >&2
+  printf 'production false-retention broker run failed\n' >&2
+  exit 1
+fi
+retained_request_count_after="$(
+  sudo -n find "$request_root" -mindepth 1 -maxdepth 1 -type d | wc -l
+)"
+[[ "$retained_request_count_after" == "$retained_request_count_before" ]] || {
+  printf 'false-retention broker left a root request behind\n' >&2
+  exit 1
+}
+sudo -n install -o root -g root -m 0600 \
+  "$valid_sandbox_config" "$sandbox_config"
 
 printf 'host CI privilege-separated publication and adversarial isolation contract ok\n'

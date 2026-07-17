@@ -238,7 +238,9 @@ nonce="$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
   || fail 'root randomness unavailable'
 root_request="$request_root/$request_id"
 mkdir -m 0700 "$root_request" || fail 'cannot create root request'
-retain_requests="$(jq -er '.retain_requests' "$config")"
+retain_requests="$(jq -r '.retain_requests' "$config")"
+[[ "$retain_requests" == true || "$retain_requests" == false ]] \
+  || fail 'retain_requests is not a validated boolean'
 cleanup_root_request() {
   if [[ "$retain_requests" != true ]]; then
     rm -rf -- "$root_request"
@@ -449,6 +451,7 @@ root_state="$root_request/root-state.json"
 jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --arg commit "$control_commit" --arg remote "$control_remote" \
   --arg control_ref "$control_ref" \
+  --arg bootstrap_expires_at "$bootstrap_expires_at" \
   --arg publisher_sha "$publisher_sha" --arg sandbox_sha "$sandbox_sha" \
   --arg splitctl_sha "$splitctl_sha" \
   --arg jankurai_sha "$jankurai_sha" \
@@ -458,6 +461,7 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   '{schema_version:"jain.host-ci-root-state/v4",status:"running",
     request_id:$request_id,nonce:$nonce,created_at:$created_at,
     control_plane_commit:$commit,control_remote:$remote,control_ref:$control_ref,
+    bootstrap_expires_at:$bootstrap_expires_at,
     publisher_sha256:$publisher_sha,sandbox_sha256:$sandbox_sha,
     splitctl_sha256:$splitctl_sha,jankurai_sha256:$jankurai_sha,
     native_evidence_root:$native_evidence_root,
