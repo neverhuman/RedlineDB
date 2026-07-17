@@ -7642,9 +7642,19 @@ mod tests {
 
     struct TestDir(PathBuf);
 
+    fn test_temp_parent(cargo_target: Option<PathBuf>, control_root: &Path) -> PathBuf {
+        cargo_target
+            .filter(|path| path.is_absolute())
+            .unwrap_or_else(|| control_root.join("target"))
+            .join("test-tmp")
+    }
+
     impl TestDir {
         fn new(label: &str) -> Self {
-            let parent = control_plane_root().join("target/test-tmp");
+            let parent = test_temp_parent(
+                env::var_os("CARGO_TARGET_DIR").map(PathBuf::from),
+                &control_plane_root(),
+            );
             fs::create_dir_all(&parent).unwrap();
             let path = parent.join(format!(
                 "jain-split-ops-{label}-{}-{}",
@@ -7664,6 +7674,26 @@ mod tests {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn test_scratch_prefers_absolute_cargo_target_over_control_authority() {
+        let control_root = Path::new("/opt/jain-ci/authority/control-plane");
+        assert_eq!(
+            test_temp_parent(
+                Some(PathBuf::from("/bounded/bootstrap/cargo-target")),
+                control_root,
+            ),
+            PathBuf::from("/bounded/bootstrap/cargo-target/test-tmp")
+        );
+        assert_eq!(
+            test_temp_parent(Some(PathBuf::from("relative-target")), control_root),
+            control_root.join("target/test-tmp")
+        );
+        assert_eq!(
+            test_temp_parent(None, control_root),
+            control_root.join("target/test-tmp")
+        );
     }
 
     fn command(mut command: Command) {
