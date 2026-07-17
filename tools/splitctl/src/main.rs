@@ -8051,11 +8051,7 @@ fn validate_cargo_source_value(
 }
 
 fn looks_like_git_source(value: &str) -> bool {
-    value.starts_with("git+")
-        || value.starts_with("http://")
-        || value.starts_with("https://")
-        || value.starts_with("ssh://")
-        || value.starts_with("git@")
+    value.starts_with("git+") || value.contains("://") || value.starts_with("git@")
 }
 
 fn is_local_jeryu_git_source(value: &str, lock_source: bool) -> bool {
@@ -12078,6 +12074,7 @@ name = "two"
             "[workspace.dependencies]\nbad = { git = \"https://example.invalid/bad.git\" } # http://127.0.0.1:8787/git/jeryu/\n",
             "[[package]]\nname='bad'\nsource='git+https://example.invalid/bad.git#deadbeef'\n",
             "[patch.\"https://example.invalid/index\"]\nbad = { path = \"bad\" }\n",
+            "[patch.\"git://example.invalid/repo.git\"]\nbad = { path = \"bad\" }\n",
         ] {
             let value: toml::Value = document.parse().unwrap();
             let mut errors = Vec::new();
