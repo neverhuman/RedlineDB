@@ -5521,7 +5521,11 @@ fn secure_git_command(repo: Option<&Path>) -> Command {
             "protocol.http.allow=always",
         ]);
     if let Some(repo) = repo {
-        command.arg("-C").arg(repo);
+        command
+            .arg("-c")
+            .arg(format!("safe.directory={}", repo.display()))
+            .arg("-C")
+            .arg(repo);
     }
     command
 }
@@ -10446,6 +10450,23 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         }
         assert!(!forbidden_jeryu_environment_name("PATH"));
         assert!(!forbidden_jeryu_environment_name("LC_ALL"));
+    }
+
+    #[test]
+    fn scrubbed_git_trusts_only_the_explicit_checkout() {
+        let repo = Path::new("/home/example/canonical-repo");
+        let command = secure_git_command(Some(repo));
+        let args = command
+            .get_args()
+            .map(|arg| arg.to_string_lossy().into_owned())
+            .collect::<Vec<_>>();
+        assert!(args
+            .windows(2)
+            .any(|args| { args == ["-c", "safe.directory=/home/example/canonical-repo"] }));
+        assert!(args
+            .windows(2)
+            .any(|args| args == ["-C", repo.to_str().unwrap()]));
+        assert!(!args.iter().any(|arg| arg == "safe.directory=*"));
     }
 
     #[test]
