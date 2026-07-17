@@ -47,9 +47,11 @@ token_file="$(jq -er '.token_file' "$publisher_config")"
   && "$(realpath -e -- "$token_file" 2>/dev/null)" == "$token_file" \
   && "$(stat -c '%u:%g:%a:%h' -- "$token_file" 2>/dev/null)" == '0:0:600:1' ]] \
   || fail 'publisher token file must be canonical root:root mode 0600 single-link'
-jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v4")
+jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v5")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
+  | select(.token_file | type == "string" and startswith("/"))
+  | select(has("token") | not)
   | select(.retain_requests == false)' "$sandbox_config" >/dev/null \
   || fail 'invalid or test-only sandbox config'
 [[ "$(sha256sum -- "$publisher" | cut -d' ' -f1)" \
@@ -68,7 +70,7 @@ jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v4")
 for field in \
   publisher_sha256 sandbox_sha256 splitctl_sha256 jankurai_sha256 \
   control_remote forge_git_base request_root native_evidence_root \
-  proof_evidence_root; do
+  proof_evidence_root token_file; do
   [[ "$(jq -er ".$field" "$publisher_config")" \
     == "$(jq -er ".$field" "$sandbox_config")" ]] \
     || fail "broker configs disagree on $field"

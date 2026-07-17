@@ -48,7 +48,7 @@ jankurai_path="$install_dir/jankurai"
   && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
   || fail 'unsafe root sandbox config'
 jq -e '
-  select(.schema_version == "jain.host-ci-sandbox-config/v4")
+  select(.schema_version == "jain.host-ci-sandbox-config/v5")
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
@@ -66,6 +66,7 @@ jq -e '
   | select(.request_root | type == "string" and startswith("/"))
   | select(.native_evidence_root | type == "string" and startswith("/"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
+  | select(.token_file | type == "string" and startswith("/"))
   | select(.retain_requests | type == "boolean")
   | select(.device_allow | type == "array")' "$config" >/dev/null \
   || fail 'invalid sandbox config schema'
@@ -119,6 +120,11 @@ native_evidence_root="$(realpath -e -- \
 proof_evidence_root="$(realpath -e -- \
   "$(jq -er '.proof_evidence_root' "$config")")" \
   || fail 'durable proof evidence directory unavailable'
+token_file="$(jq -er '.token_file' "$config")"
+[[ ! -L "$token_file" \
+  && "$(realpath -e -- "$token_file" 2>/dev/null)" == "$token_file" \
+  && "$(stat -c '%u:%g:%a:%h' -- "$token_file" 2>/dev/null)" == '0:0:600:1' ]] \
+  || fail 'sandbox token file must be canonical root:root mode 0600 single-link'
 [[ "$(stat -c '%u:%a' -- "$worker_cache")" == "$worker_uid:700" \
   && "$(stat -c '%u:%a' -- "$request_root")" == '0:700' \
   && ! -L "$native_evidence_root" \
@@ -245,16 +251,12 @@ mkdir -m 0755 "$worker_authority"
 safe_git=(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
   -c core.untrackedCache=false -c diff.external=)
 control_remote="$(jq -er '.control_remote' "$config")"
-reviewed_commit="$("${safe_git[@]}" ls-remote --exit-code \
-  "$control_remote" refs/heads/main 2>/dev/null | cut -f1)" \
-  || fail 'cannot read configured control-plane main'
-[[ "$reviewed_commit" == "$control_commit" ]] \
-  || fail 'requested control commit is not reviewed main'
-"${safe_git[@]}" init --quiet "$control_root"
-"${safe_git[@]}" -C "$control_root" remote add origin "$control_remote"
-"${safe_git[@]}" -C "$control_root" fetch --quiet --no-tags \
-  "$control_remote" refs/heads/main
-"${safe_git[@]}" -C "$control_root" checkout --quiet --detach FETCH_HEAD
+"$splitctl_path" jeryu-local git-materialize \
+  --repo jeryu/jain-split-ops --remote "$control_remote" \
+  --ref refs/heads/main --expected-head "$control_commit" \
+  --destination "$control_root" --token-file "$token_file" \
+  --retain-origin >/dev/null \
+  || fail 'cannot materialize authenticated configured control-plane main'
 [[ "$("${safe_git[@]}" -C "$control_root" rev-parse 'HEAD^{commit}')" \
   == "$control_commit" ]] || fail 'root immutable checkout mismatch'
 [[ "$(sha256sum -- "$control_root/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
@@ -323,21 +325,12 @@ IFS=$'\t' read -r protected_owner protected_check <<<"$repo_authority"
 # independent detached clone for the worker before changing bootstrap ownership.
 forge_git_base="$(jq -er '.forge_git_base' "$config")"
 product_remote="${forge_git_base%/}/$protected_owner/$repo.git"
-product_refs="$("${safe_git[@]}" ls-remote --exit-code \
-  "$product_remote" 2>/dev/null)" \
-  || fail 'cannot read authoritative product refs'
-product_ref="$(awk -v head="${arguments[2]}" '
-    $1 == head && !found { ref=$2; sub(/\^\{\}$/,"",ref); found=1 }
-    END { if (!found) exit 1; print ref }
-  ' <<<"$product_refs")" \
-  || fail 'requested head is not an advertised product ref'
-[[ "$product_ref" == HEAD || "$product_ref" == refs/* ]] \
-  || fail 'requested head is not an advertised product ref'
 product_authority="$root_request/product-authority"
-"${safe_git[@]}" init --quiet "$product_authority"
-"${safe_git[@]}" -C "$product_authority" fetch --quiet --no-tags \
-  "$product_remote" "$product_ref"
-"${safe_git[@]}" -C "$product_authority" checkout --quiet --detach FETCH_HEAD
+"$splitctl_path" jeryu-local git-materialize \
+  --repo "$protected_owner/$repo" --remote "$product_remote" \
+  --expected-head "${arguments[2]}" --destination "$product_authority" \
+  --token-file "$token_file" >/dev/null \
+  || fail 'cannot materialize authenticated product authority'
 [[ "$("${safe_git[@]}" -C "$product_authority" rev-parse 'HEAD^{commit}')" \
   == "${arguments[2]}" ]] || fail 'root product checkout commit mismatch'
 git clone --quiet --no-local --no-checkout \
@@ -378,7 +371,10 @@ jq -n --arg commit "$control_commit" --arg result "$worker_result" \
   >"$worker_authority/reexec-state.json"
 chmod 0444 "$worker_authority/reexec-state.json"
 chown root:root "$worker_authority/reexec-state.json"
-chmod -R go-w "$control_root"
+# The root materializer deliberately creates a 0700 staging root. After every
+# identity check is complete, expose the reviewed control checkout read-only to
+# the worker with the same 0755/0644-or-executable shape as the former clone.
+chmod -R a+rX,go-w "$control_root"
 chown -R root:root "$worker_authority"
 
 created_at="$(date +%s)"

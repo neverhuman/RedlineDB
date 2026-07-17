@@ -27,6 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let ready_file = args.next().ok_or("missing ready file")?;
     let auth_wait_file = args.next().ok_or("missing auth-wait file")?;
     let continue_file = args.next().ok_or("missing continue file")?;
+    let behavior_file = args.next();
     if args.next().is_some() {
         return Err("unexpected argument".into());
     }
@@ -90,6 +91,41 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     return Err("timed out waiting for process-boundary probe".into());
                 }
                 thread::sleep(Duration::from_millis(10));
+            }
+        }
+        if let Some(behavior_file) = behavior_file.as_deref() {
+            let behavior_path = Path::new(behavior_file);
+            let behavior = fs::read_to_string(behavior_path).unwrap_or_default();
+            if request.method == "POST" && request.target.ends_with("/git-upload-pack") {
+                if behavior.trim() == "fail-upload-pack" {
+                    respond_internal_error(&mut stream)?;
+                    continue;
+                }
+                if let Some(rest) = behavior.trim().strip_prefix("move-ref ") {
+                    let mut fields = rest.split(' ');
+                    let reference = fields.next().ok_or("move-ref is missing a reference")?;
+                    let new_head = fields.next().ok_or("move-ref is missing a new head")?;
+                    let old_head = fields.next().ok_or("move-ref is missing an old head")?;
+                    if fields.next().is_some()
+                        || !reference.starts_with("refs/heads/")
+                        || !valid_sha(new_head)
+                        || !valid_sha(old_head)
+                    {
+                        return Err("invalid move-ref behavior".into());
+                    }
+                    let repository = Path::new(&project_root).join("jeryu/example.git");
+                    let status = Command::new("/usr/bin/git")
+                        .env_clear()
+                        .env("PATH", "/usr/bin:/bin")
+                        .env("LC_ALL", "C")
+                        .arg(format!("--git-dir={}", repository.display()))
+                        .args(["update-ref", reference, new_head, old_head])
+                        .status()?;
+                    if !status.success() {
+                        return Err("fixture could not move the advertised ref".into());
+                    }
+                    fs::remove_file(behavior_path)?;
+                }
             }
         }
         respond_from_git_backend(&mut stream, Path::new(&project_root), &request)?;
@@ -198,6 +234,21 @@ fn respond_unauthorized(stream: &mut TcpStream) -> Result<(), Box<dyn std::error
         "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"jeryu\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
     )?;
     Ok(())
+}
+
+fn respond_internal_error(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+    write!(
+        stream,
+        "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+    )?;
+    Ok(())
+}
+
+fn valid_sha(value: &str) -> bool {
+    value.len() == 40
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
 }
 
 fn respond_from_git_backend(

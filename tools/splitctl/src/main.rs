@@ -11,7 +11,7 @@ use std::{
     io::{self, Read, Write},
     os::{
         fd::AsRawFd,
-        unix::fs::{MetadataExt, OpenOptionsExt},
+        unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
     },
     path::{Path, PathBuf},
     process::Command,
@@ -3639,6 +3639,9 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     if command == "branch-push" {
         return jeryu_branch_push(args);
     }
+    if command == "git-materialize" {
+        return jeryu_git_materialize(args);
+    }
     let json_output = args.iter().any(|arg| arg == "--json");
     let apply = args.iter().any(|arg| arg == "--apply");
     let value = |flag: &str| -> Result<String, Box<dyn std::error::Error>> {
@@ -3845,6 +3848,318 @@ fn write_jeryu_askpass_response(
 fn fixed_jeryu_git_remote(repo: &str) -> Result<String, Box<dyn std::error::Error>> {
     validate_jeryu_repo_slug(repo)?;
     Ok(format!("{LOCAL_JERYU_ORIGIN}/git/{repo}.git"))
+}
+
+fn validate_materialization_remote(
+    repo: &str,
+    remote: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if remote == fixed_jeryu_git_remote(repo)? {
+        return Ok(());
+    }
+    #[cfg(debug_assertions)]
+    {
+        let path = Path::new(remote);
+        if path.is_absolute()
+            && fs::canonicalize(path).is_ok_and(|resolved| resolved == path)
+            && fs::symlink_metadata(path).is_ok_and(|metadata| metadata.file_type().is_dir())
+        {
+            return Ok(());
+        }
+    }
+    Err("Git materialization remote is not the fixed local Jeryu repository".into())
+}
+
+fn validate_heads_ref(reference: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let branch = reference
+        .strip_prefix("refs/heads/")
+        .ok_or("Git materialization requires an exact heads ref")?;
+    validate_release_branch(branch)
+}
+
+fn parse_advertised_heads(
+    output: &str,
+    expected_head: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    if output.len() > 1024 * 1024 {
+        return Err("Git materialization ref advertisement is oversized".into());
+    }
+    let mut matches = Vec::new();
+    for line in output.lines() {
+        let mut fields = line.split('\t');
+        let sha = fields.next().unwrap_or_default();
+        let reference = fields.next().unwrap_or_default();
+        if fields.next().is_some()
+            || !is_full_sha(sha)
+            || sha.chars().any(|ch| ch.is_ascii_uppercase())
+        {
+            return Err("Git materialization ref advertisement is malformed".into());
+        }
+        validate_heads_ref(reference)?;
+        if sha == expected_head {
+            matches.push(reference.to_owned());
+        }
+    }
+    matches.sort_unstable();
+    matches.dedup();
+    if matches.is_empty() {
+        return Err("requested head is not an advertised product ref".into());
+    }
+    Ok(matches)
+}
+
+fn secure_ls_remote_at(
+    remote: &str,
+    reference: &str,
+    token_file: &Path,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    validate_heads_ref(reference)?;
+    let output = secure_materialization_git_output(
+        remote,
+        token_file,
+        &["ls-remote", "--refs", remote, reference],
+    )?;
+    if output.is_empty() {
+        return Ok(None);
+    }
+    let mut lines = output.lines();
+    let line = lines.next().ok_or("missing ls-remote result")?;
+    if lines.next().is_some() {
+        return Err("fixed-origin readback returned duplicate refs".into());
+    }
+    let mut fields = line.split('\t');
+    let sha = fields.next().unwrap_or_default();
+    let found_ref = fields.next().unwrap_or_default();
+    if fields.next().is_some()
+        || found_ref != reference
+        || !is_full_sha(sha)
+        || sha.chars().any(|ch| ch.is_ascii_uppercase())
+    {
+        return Err("fixed-origin readback was malformed".into());
+    }
+    Ok(Some(sha.to_owned()))
+}
+
+fn secure_materialization_git_output(
+    remote: &str,
+    token_file: &Path,
+    args: &[&str],
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut command = secure_git_authenticated_command(None, token_file)?;
+    #[cfg(debug_assertions)]
+    if Path::new(remote).is_absolute() {
+        command.command.args(["-c", "protocol.file.allow=always"]);
+    }
+    let output = command.command.args(args).output()?;
+    if !output.status.success() {
+        return Err(format!("authenticated Git materialization {} failed", args[0]).into());
+    }
+    let stdout = std::str::from_utf8(&output.stdout)
+        .map_err(|_| "authenticated Git materialization output was not UTF-8")?;
+    Ok(stdout.trim().to_owned())
+}
+
+fn secure_materialization_git_status(
+    repo: &Path,
+    remote: &str,
+    token_file: &Path,
+    args: &[&str],
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut command = secure_git_authenticated_command(Some(repo), token_file)?;
+    #[cfg(debug_assertions)]
+    if Path::new(remote).is_absolute() {
+        command.command.args(["-c", "protocol.file.allow=always"]);
+    }
+    let output = command.command.args(args).output()?;
+    if !output.status.success() {
+        return Err(format!("authenticated Git materialization {} failed", args[0]).into());
+    }
+    Ok(())
+}
+
+struct MaterializationDirectory {
+    path: PathBuf,
+    device: u64,
+    inode: u64,
+    keep: bool,
+}
+
+impl MaterializationDirectory {
+    fn create(path: PathBuf) -> Result<Self, Box<dyn std::error::Error>> {
+        if !path.is_absolute() || path.file_name().is_none() {
+            return Err("Git materialization destination must be an absolute child path".into());
+        }
+        let parent = path
+            .parent()
+            .ok_or("Git materialization destination has no parent")?;
+        if !fs::canonicalize(parent).is_ok_and(|resolved| resolved == parent)
+            || fs::symlink_metadata(&path).is_ok()
+        {
+            return Err(
+                "Git materialization destination must be new under a canonical parent".into(),
+            );
+        }
+        fs::create_dir(&path)?;
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o700))?;
+        let metadata = fs::symlink_metadata(&path)?;
+        if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
+            return Err("Git materialization destination is not a physical directory".into());
+        }
+        Ok(Self {
+            path,
+            device: metadata.dev(),
+            inode: metadata.ino(),
+            keep: false,
+        })
+    }
+
+    fn commit(mut self) {
+        self.keep = true;
+    }
+}
+
+impl Drop for MaterializationDirectory {
+    fn drop(&mut self) {
+        if self.keep {
+            return;
+        }
+        let safe_to_remove = fs::symlink_metadata(&self.path).is_ok_and(|metadata| {
+            metadata.file_type().is_dir()
+                && !metadata.file_type().is_symlink()
+                && metadata.dev() == self.device
+                && metadata.ino() == self.inode
+        });
+        if safe_to_remove {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+}
+
+fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repo = None;
+    let mut remote = None;
+    let mut reference = None;
+    let mut expected_head = None;
+    let mut destination = None;
+    let mut token_file = None;
+    let mut retain_origin = false;
+    let mut iter = args.into_iter().skip(1);
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repo" => repo = Some(iter.next().ok_or("--repo needs owner/name")?),
+            "--remote" => remote = Some(iter.next().ok_or("--remote needs a value")?),
+            "--ref" => reference = Some(iter.next().ok_or("--ref needs a value")?),
+            "--expected-head" => {
+                expected_head = Some(iter.next().ok_or("--expected-head needs a SHA")?)
+            }
+            "--destination" => {
+                destination = Some(PathBuf::from(
+                    iter.next().ok_or("--destination needs a path")?,
+                ))
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
+            }
+            "--retain-origin" => retain_origin = true,
+            value => return Err(format!("unknown git-materialize argument: {value}").into()),
+        }
+    }
+    let repo = repo.ok_or("git-materialize requires --repo")?;
+    let remote = remote.ok_or("git-materialize requires --remote")?;
+    let expected_head = expected_head.ok_or("git-materialize requires --expected-head")?;
+    let destination = destination.ok_or("git-materialize requires --destination")?;
+    let token_file = token_file.ok_or("git-materialize requires --token-file")?;
+    validate_jeryu_repo_slug(&repo)?;
+    validate_materialization_remote(&repo, &remote)?;
+    drop(JeryuClient::from_token_file(&token_file)?);
+    if !is_full_sha(&expected_head) || expected_head.chars().any(|ch| ch.is_ascii_uppercase()) {
+        return Err("--expected-head must be a lowercase full 40-character commit SHA".into());
+    }
+    let reference = if let Some(reference) = reference {
+        validate_heads_ref(&reference)?;
+        reference
+    } else {
+        let advertised = secure_materialization_git_output(
+            &remote,
+            &token_file,
+            &["ls-remote", "--refs", &remote, "refs/heads/*"],
+        )?;
+        parse_advertised_heads(&advertised, &expected_head)?
+            .into_iter()
+            .next()
+            .ok_or("requested head is not an advertised product ref")?
+    };
+    if secure_ls_remote_at(&remote, &reference, &token_file)?.as_deref()
+        != Some(expected_head.as_str())
+    {
+        return Err("Git materialization ref does not equal the expected head".into());
+    }
+
+    let destination_text = destination
+        .to_str()
+        .ok_or("Git materialization destination is not UTF-8")?;
+    let created = MaterializationDirectory::create(destination.clone())?;
+    if !secure_git_status(None, &["init", "--quiet", destination_text])? {
+        return Err("Git materialization init failed".into());
+    }
+    secure_materialization_git_status(
+        &destination,
+        &remote,
+        &token_file,
+        &["fetch", "--quiet", "--no-tags", &remote, &reference],
+    )?;
+    if !secure_git_status(
+        Some(&destination),
+        &["checkout", "--quiet", "--detach", "FETCH_HEAD"],
+    )? {
+        return Err("Git materialization checkout failed".into());
+    }
+    if secure_git_output(
+        Some(&destination),
+        &["rev-parse", "--verify", "HEAD^{commit}"],
+    )? != expected_head
+    {
+        return Err("Git materialization fetched a different commit".into());
+    }
+    if secure_ls_remote_at(&remote, &reference, &token_file)?.as_deref()
+        != Some(expected_head.as_str())
+    {
+        return Err("Git materialization ref moved during fetch".into());
+    }
+    if !secure_git_output(
+        Some(&destination),
+        &["status", "--porcelain=v1", "--untracked-files=all"],
+    )?
+    .is_empty()
+    {
+        return Err("Git materialization checkout is not clean standalone authority".into());
+    }
+    if retain_origin {
+        if !secure_git_status(Some(&destination), &["remote", "add", "origin", &remote])?
+            || secure_git_output(Some(&destination), &["remote", "get-url", "origin"])? != remote
+        {
+            return Err("Git materialization could not retain the reviewed origin".into());
+        }
+    } else if !secure_git_output(Some(&destination), &["remote"])?.is_empty() {
+        return Err("Git materialization retained an unexpected remote".into());
+    }
+    created.commit();
+    println!(
+        "{}",
+        serde_json::to_string(&json!({
+            "schema_version": "jain.jeryu-git-materialization/v1",
+            "repository": repo,
+            "remote": remote,
+            "reference": reference,
+            "commit": expected_head,
+            "destination": destination,
+            "origin_retained": retain_origin,
+            "status": "pass"
+        }))?
+    );
+    Ok(())
 }
 
 fn secure_git_command(repo: Option<&Path>) -> Command {
@@ -7888,6 +8203,76 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             unsafe { libc::fcntl(command._askpass_executable.as_raw_fd(), libc::F_GETFD) };
         assert!(descriptor_flags >= 0);
         assert_eq!(descriptor_flags & libc::FD_CLOEXEC, 0);
+    }
+
+    #[test]
+    fn advertised_head_selection_is_strict_and_deterministic() {
+        let head = "a".repeat(40);
+        let output = format!(
+            "{head}\trefs/heads/zeta\n{}\trefs/heads/other\n{head}\trefs/heads/alpha\n",
+            "b".repeat(40)
+        );
+        assert_eq!(
+            parse_advertised_heads(&output, &head).unwrap(),
+            vec!["refs/heads/alpha", "refs/heads/zeta"]
+        );
+        assert!(parse_advertised_heads("malformed", &head).is_err());
+        assert!(parse_advertised_heads(&format!("{head}\trefs/tags/not-a-head\n"), &head).is_err());
+        assert!(
+            parse_advertised_heads(&format!("{}\trefs/heads/other\n", "b".repeat(40)), &head)
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn git_materialization_is_exact_standalone_and_credential_gated() {
+        let root = TestDir::new("git-materialization");
+        let (source, head) = init_source(root.path());
+        let remote = init_bare(root.path());
+        let refspec = format!("{head}:refs/heads/main");
+        run_git_strict(&source, &["push", remote.to_str().unwrap(), &refspec]).unwrap();
+        let token_file = root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let destination = root.path().join("materialized");
+        let args = |token: &Path, destination: &Path| {
+            vec![
+                "git-materialize".to_owned(),
+                "--repo".to_owned(),
+                "jeryu/example".to_owned(),
+                "--remote".to_owned(),
+                remote.display().to_string(),
+                "--ref".to_owned(),
+                "refs/heads/main".to_owned(),
+                "--expected-head".to_owned(),
+                head.clone(),
+                "--destination".to_owned(),
+                destination.display().to_string(),
+                "--token-file".to_owned(),
+                token.display().to_string(),
+            ]
+        };
+        let rejected = root.path().join("rejected");
+        assert!(
+            jeryu_git_materialize(args(&root.path().join("missing-token"), &rejected)).is_err()
+        );
+        assert!(!rejected.exists());
+
+        jeryu_git_materialize(args(&token_file, &destination)).unwrap();
+        assert_eq!(resolve_commit(&destination, "HEAD").unwrap(), head);
+        assert!(strict_git_output(&destination, &["remote"])
+            .unwrap()
+            .trim()
+            .is_empty());
+        assert!(
+            strict_git_output(&destination, &["status", "--porcelain=v1"])
+                .unwrap()
+                .trim()
+                .is_empty()
+        );
+        let second = root.path().join("second");
+        fs::create_dir(&second).unwrap();
+        assert!(jeryu_git_materialize(args(&token_file, &second)).is_err());
     }
 
     #[test]

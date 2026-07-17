@@ -46,6 +46,8 @@ cleanup() {
   sudo -n rm -rf -- "$worker_cache" 2>/dev/null || true
   sudo -n rm -rf -- "$native_evidence_root" 2>/dev/null || true
   sudo -n rm -rf -- "$proof_evidence_root" 2>/dev/null || true
+  sudo -n rm -rf -- "$control_remote" 2>/dev/null || true
+  sudo -n rm -rf -- "$product_forge_root" 2>/dev/null || true
   rm -rf -- "$tmp"
   return "$cleanup_rc"
 }
@@ -277,6 +279,7 @@ git -C "$control" switch -C main --quiet
 git -C "$control" remote set-url origin "$control_remote"
 git -C "$control" push --quiet -u origin main
 control_commit="$(git -C "$control" rev-parse HEAD)"
+sudo -n chown -R root:root "$control_remote"
 
 # Install the reviewed broker and its credential exactly as production does:
 # executable root-only broker, adjacent root-only config. The server itself
@@ -335,18 +338,20 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   --arg splitctl_digest "$splitctl_digest" --arg jankurai_digest "$fake_jankurai_digest" \
   --arg family "$sandbox_family_root" --arg cache "$worker_cache" \
   --arg cargo_bin "$HOME/.cargo/bin" --arg rustup "$HOME/.rustup" \
+  --arg token_file "$publisher_token_file" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
   --argjson parent_uid "$(id -u)" --argjson parent_gid "$(id -g)" \
-  '{schema_version:"jain.host-ci-sandbox-config/v4",
+  '{schema_version:"jain.host-ci-sandbox-config/v5",
     sandbox_sha256:$digest,publisher_sha256:$publisher_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
     parent_uid:$parent_uid,parent_gid:$parent_gid,
     worker_user:"xbwork",worker_group:"xbwork",family_root:$family,
     worker_cache:$cache,cargo_bin:$cargo_bin,rustup_home:$rustup,
     control_remote:$remote,forge_git_base:$git_base,
+    token_file:$token_file,
     request_root:$requests,retain_requests:true,
     native_evidence_root:$native_evidence_root,
     proof_evidence_root:$proof_evidence_root,
@@ -529,6 +534,7 @@ product_sha="$(git -C "$product" rev-parse HEAD)"
 git init --quiet --bare "$product_remote"
 git -C "$product" push --quiet "$product_remote" \
   "$product_sha:refs/heads/test-head"
+sudo -n chown -R root:root "$product_forge_root"
 
 # A caller-local commit is not product authority. Keeping it as the caller's
 # HEAD also proves the successful run below is staged from the forge ref.
@@ -716,6 +722,10 @@ grep -Fq 'root-seal=' "$forge_log" || {
 }
 sudo -n jq -e 'has("token") | not' "$publisher_config" >/dev/null || {
   printf 'publisher configuration retained an embedded credential\n' >&2
+  exit 1
+}
+sudo -n jq -e 'has("token") | not' "$sandbox_config" >/dev/null || {
+  printf 'sandbox configuration retained an embedded credential\n' >&2
   exit 1
 }
 if printf '%s\n' "$publisher_token" \
@@ -1068,7 +1078,7 @@ printf 'score-failure\n' >"$product/agent/test-auditor-mode"
 git -C "$product" add agent/test-auditor-mode
 git -C "$product" commit --quiet -m 'fixture governed score failure'
 score_failure_sha="$(git -C "$product" rev-parse HEAD)"
-git -C "$product" push --quiet "$product_remote" \
+sudo -n /usr/bin/git -C "$product" push --quiet "$product_remote" \
   "$score_failure_sha:refs/heads/score-failure"
 score_failure_offset="$(stat -c '%s' "$forge_log")"
 if env \
@@ -1114,7 +1124,7 @@ git -C "$product" rm --quiet agent/test-auditor-mode \
   agent/jankurai-baseline.json
 git -C "$product" commit --quiet -m 'fixture governed floor only'
 floor_only_sha="$(git -C "$product" rev-parse HEAD)"
-git -C "$product" push --quiet "$product_remote" \
+sudo -n /usr/bin/git -C "$product" push --quiet "$product_remote" \
   "$floor_only_sha:refs/heads/floor-only"
 floor_only_offset="$(stat -c '%s' "$forge_log")"
 env \
@@ -1141,7 +1151,7 @@ printf 'wrong-head\n' >"$product/agent/test-auditor-mode"
 git -C "$product" add agent/test-auditor-mode
 git -C "$product" commit --quiet -m 'fixture forged auditor report'
 forged_report_sha="$(git -C "$product" rev-parse HEAD)"
-git -C "$product" push --quiet "$product_remote" \
+sudo -n /usr/bin/git -C "$product" push --quiet "$product_remote" \
   "$forged_report_sha:refs/heads/forged-report"
 forged_report_offset="$(stat -c '%s' "$forge_log")"
 if env \

@@ -45,11 +45,19 @@ server_log="$inner/server.log"
 server_stderr="$inner/server.stderr"
 command_stdout="$inner/command.stdout"
 command_stderr="$inner/command.stderr"
+materialize_stdout="$inner/materialize.stdout"
+materialize_stderr="$inner/materialize.stderr"
+materialized="$inner/materialized"
+fetch_failure_stdout="$inner/fetch-failure.stdout"
+fetch_failure_stderr="$inner/fetch-failure.stderr"
+ref_move_stdout="$inner/ref-move.stdout"
+ref_move_stderr="$inner/ref-move.stderr"
 proc_snapshot="$inner/proc-snapshot.txt"
 trace_prefix="$inner/exec-trace"
 ready_file="$inner/server-ready"
 auth_wait_file="$inner/auth-wait"
 continue_file="$inner/continue"
+behavior_file="$inner/server-behavior"
 splitctl="$inner/splitctl"
 fake_forge="$inner/fake-git-http"
 server_pid=''
@@ -101,7 +109,8 @@ printf 'fixture\n' >"$source_repo/fixture.txt"
 head_sha="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
 
 "$fake_forge" "$project_root" "$token_file" "$server_log" "$ready_file" \
-  "$auth_wait_file" "$continue_file" >"$inner/server.stdout" 2>"$server_stderr" &
+  "$auth_wait_file" "$continue_file" "$behavior_file" \
+  >"$inner/server.stdout" 2>"$server_stderr" &
 server_pid=$!
 for _ in $(seq 1 500); do
   [[ -s "$ready_file" ]] && break
@@ -184,6 +193,63 @@ fi
 stage='branch publication completion'
 wait "$trace_pid"
 trace_pid=''
+
+stage='authenticated exact-head materialization'
+"$splitctl" jeryu-local git-materialize \
+  --repo jeryu/example \
+  --remote http://127.0.0.1:8787/git/jeryu/example.git \
+  --ref refs/heads/codex/jeryu-smart-http-integration \
+  --expected-head "$head_sha" \
+  --destination "$materialized" \
+  --token-file "$token_file" >"$materialize_stdout" 2>"$materialize_stderr"
+[[ "$(/usr/bin/git -C "$materialized" rev-parse 'HEAD^{commit}')" == "$head_sha" ]]
+[[ -z "$(/usr/bin/git -C "$materialized" remote)" ]]
+[[ -z "$(/usr/bin/git -C "$materialized" status --porcelain=v1 \
+  --untracked-files=all)" ]]
+
+stage='authenticated fetch failure cleanup'
+printf 'fail-upload-pack\n' >"$behavior_file"
+fetch_failure_destination="$inner/fetch-failure-materialized"
+if "$splitctl" jeryu-local git-materialize \
+  --repo jeryu/example \
+  --remote http://127.0.0.1:8787/git/jeryu/example.git \
+  --ref refs/heads/codex/jeryu-smart-http-integration \
+  --expected-head "$head_sha" \
+  --destination "$fetch_failure_destination" \
+  --token-file "$token_file" \
+  >"$fetch_failure_stdout" 2>"$fetch_failure_stderr"; then
+  printf 'materializer accepted an authenticated upload-pack failure\n' >&2
+  exit 1
+fi
+[[ ! -e "$fetch_failure_destination" && ! -L "$fetch_failure_destination" ]]
+
+stage='advertised ref move rejection'
+printf 'moved fixture\n' >"$source_repo/fixture.txt"
+/usr/bin/git -C "$source_repo" add fixture.txt
+/usr/bin/git -C "$source_repo" commit --quiet -m 'moved fixture ref'
+moved_sha="$(/usr/bin/git -C "$source_repo" rev-parse HEAD)"
+/usr/bin/git -C "$source_repo" push --quiet \
+  "$project_root/jeryu/example.git" "$moved_sha:refs/heads/moved-target"
+printf 'move-ref %s %s %s\n' \
+  refs/heads/codex/jeryu-smart-http-integration \
+  "$moved_sha" "$head_sha" >"$behavior_file"
+ref_move_destination="$inner/ref-move-materialized"
+if "$splitctl" jeryu-local git-materialize \
+  --repo jeryu/example \
+  --remote http://127.0.0.1:8787/git/jeryu/example.git \
+  --ref refs/heads/codex/jeryu-smart-http-integration \
+  --expected-head "$head_sha" \
+  --destination "$ref_move_destination" \
+  --token-file "$token_file" >"$ref_move_stdout" 2>"$ref_move_stderr"; then
+  printf 'materializer accepted a ref move during fetch\n' >&2
+  exit 1
+fi
+[[ ! -e "$ref_move_destination" && ! -L "$ref_move_destination" ]]
+[[ "$(/usr/bin/git --git-dir="$project_root/jeryu/example.git" \
+  rev-parse refs/heads/codex/jeryu-smart-http-integration)" == "$moved_sha" ]]
+/usr/bin/git --git-dir="$project_root/jeryu/example.git" update-ref \
+  refs/heads/codex/jeryu-smart-http-integration "$head_sha" "$moved_sha"
+
 kill "$server_pid"
 wait "$server_pid" 2>/dev/null || true
 server_pid=''
@@ -215,6 +281,9 @@ grep -F 'auth=absent' "$server_log" >/dev/null
 grep -F 'auth=valid' "$server_log" >/dev/null
 
 for output in "$command_stdout" "$command_stderr" "$server_log" "$server_stderr" \
+  "$materialize_stdout" "$materialize_stderr" \
+  "$fetch_failure_stdout" "$fetch_failure_stderr" \
+  "$ref_move_stdout" "$ref_move_stderr" \
   "$receipt" "$receipt.sha256" "$proc_snapshot" "$trace_prefix".*; do
   if printf '%s\n' "$token" | grep -F -f - "$output" >/dev/null; then
     printf 'synthetic token leaked to fixture output: %s\n' "$output" >&2

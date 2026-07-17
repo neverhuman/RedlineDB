@@ -6,8 +6,9 @@ The checkout runner never reads a Jeryu credential. The worker cannot reach the
 forge, see ancestor processes, see home directories or the installed brokers,
 or acquire privilege. A fixed root-owned launcher creates nested PID and user
 namespaces, then irreversibly drops all capabilities before reviewed or
-candidate-controlled bytes execute. The sandbox fetches a root-owned immutable
-control checkout from the configured reviewed remote, derives native-evidence
+candidate-controlled bytes execute. The sandbox uses the root-only credential
+to fetch a root-owned immutable control checkout from the configured reviewed
+remote, derives native-evidence
 policy from it, and kills the worker cgroup. It then starts the separately
 installed, digest-pinned Jankurai 1.6.11 auditor in a second network-isolated
 unit. Jankurai sees a separate clean, read-only checkout at the requested full
@@ -103,7 +104,7 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
 
 ```json
 {
-  "schema_version": "jain.host-ci-sandbox-config/v4",
+  "schema_version": "jain.host-ci-sandbox-config/v5",
   "sandbox_sha256": "<64 lowercase hex>",
   "publisher_sha256": "<64 lowercase hex>",
   "splitctl_sha256": "<64 lowercase hex>",
@@ -121,6 +122,7 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
   "request_root": "/run/jain-host-ci",
   "native_evidence_root": "/var/lib/jain-host-ci/native-evidence",
   "proof_evidence_root": "/var/lib/jain-host-ci/proof-evidence",
+  "token_file": "/usr/local/libexec/jain/jeryu-merge-token",
   "retain_requests": false,
   "device_allow": []
 }
@@ -129,7 +131,7 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
 Create `/usr/local/libexec/jain/jeryu-merge-token` as a canonical root-owned,
 single-link regular file at exact mode `0600`. Supply the token through a
 root-only editor or stdin; never place it on a command line, in an environment
-variable, or inside publisher configuration. Then create
+variable, or inside broker configuration. Both configs name only its path. Then create
 `/usr/local/libexec/jain/host-ci-publisher.config.json` as root mode `0600`:
 
 ```json
@@ -183,7 +185,7 @@ namespace/seccomp probe cannot run. GPU release validation is dispatched by SCQ
 to registered GPU workers; do not add nonexistent AtomicSoul GPU devices to this
 host boundary. Re-run installation and
 preflight for every immutable broker revision; never update a digest without
-installing and reviewing the matching bytes. The two v4 configs must bind the
+installing and reviewing the matching bytes. The two v5 configs must bind the
 same freshly provisioned digest from the protected jeryu-tool manifest/install
 receipt; an environment-specific review build digest is not portable authority.
 
