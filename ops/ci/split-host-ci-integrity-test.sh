@@ -285,6 +285,10 @@ git -C "$control" switch -C main --quiet
 git -C "$control" remote set-url origin "$control_remote"
 git -C "$control" push --quiet -u origin main
 control_commit="$(git -C "$control" rev-parse HEAD)"
+bootstrap_control_ref=refs/heads/codex/host-ci-bootstrap-test
+git -C "$control" push --quiet origin \
+  "$control_commit:$bootstrap_control_ref"
+bootstrap_expires_at="$(( $(date +%s) + 3600 ))"
 sudo -n chown -R root:root "$control_remote"
 
 # Install the reviewed broker and its credential exactly as production does:
@@ -341,13 +345,18 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d
   --arg token_file "$publisher_token_file" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
+  --arg control_ref "$bootstrap_control_ref" \
+  --arg bootstrap_commit "$control_commit" \
+  --arg bootstrap_expires_at "$bootstrap_expires_at" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
   '{schema_version:"jain.host-ci-publisher-config/v5",
     publisher_sha256:$digest,sandbox_sha256:$sandbox_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
     forge_git_base:$git_base,
-    control_remote:$remote,request_root:$requests,
+    control_remote:$remote,control_ref:$control_ref,
+    bootstrap_commit:$bootstrap_commit,
+    bootstrap_expires_at:$bootstrap_expires_at,request_root:$requests,
     native_evidence_root:$native_evidence_root,
     proof_evidence_root:$proof_evidence_root,
     max_seal_age_seconds:300,token_file:$token_file}' \
@@ -363,6 +372,9 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   --arg token_file "$publisher_token_file" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
+  --arg control_ref "$bootstrap_control_ref" \
+  --arg bootstrap_commit "$control_commit" \
+  --arg bootstrap_expires_at "$bootstrap_expires_at" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
   --argjson parent_uid "$(id -u)" --argjson parent_gid "$(id -g)" \
@@ -373,7 +385,9 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
     worker_user:"xbwork",worker_group:"xbwork",family_root:$family,
     worker_cache:$cache,cargo_registry_cache:$cargo_registry_cache,
     cargo_bin:$cargo_bin,rustup_home:$rustup,
-    control_remote:$remote,forge_git_base:$git_base,
+    control_remote:$remote,control_ref:$control_ref,
+    bootstrap_commit:$bootstrap_commit,
+    bootstrap_expires_at:$bootstrap_expires_at,forge_git_base:$git_base,
     token_file:$token_file,
     request_root:$requests,retain_requests:true,
     native_evidence_root:$native_evidence_root,
@@ -558,6 +572,56 @@ git init --quiet --bare "$product_remote"
 git -C "$product" push --quiet "$product_remote" \
   "$product_sha:refs/heads/test-head"
 sudo -n chown -R root:root "$product_forge_root"
+
+# The root-only bootstrap authority is closed and short-lived. Missing,
+# mismatched, expired, or overlong fields fail before control materialization,
+# worker startup, or publication.
+valid_sandbox_config="$tmp/valid-sandbox-config.json"
+sudo -n cat "$sandbox_config" >"$valid_sandbox_config"
+for bootstrap_case in missing-commit wrong-commit expired overlong; do
+  case "$bootstrap_case" in
+    missing-commit)
+      sudo -n jq 'del(.bootstrap_commit)' "$sandbox_config" \
+        >"$tmp/bootstrap-reject.json"
+      expected_bootstrap_failure='invalid bootstrap control authority'
+      ;;
+    wrong-commit)
+      sudo -n jq '.bootstrap_commit = "0000000000000000000000000000000000000000"' \
+        "$sandbox_config" >"$tmp/bootstrap-reject.json"
+      expected_bootstrap_failure='bootstrap control commit differs from the exact request'
+      ;;
+    expired)
+      sudo -n jq '.bootstrap_expires_at = "1"' "$sandbox_config" \
+        >"$tmp/bootstrap-reject.json"
+      expected_bootstrap_failure='bootstrap control authority is expired or exceeds two hours'
+      ;;
+    overlong)
+      jq --arg expires "$(( $(date +%s) + 10800 ))" \
+        '.bootstrap_expires_at = $expires' "$valid_sandbox_config" \
+        >"$tmp/bootstrap-reject.json"
+      expected_bootstrap_failure='bootstrap control authority is expired or exceeds two hours'
+      ;;
+  esac
+  sudo -n install -o root -g root -m 0600 \
+    "$tmp/bootstrap-reject.json" "$sandbox_config"
+  bootstrap_reject_log="$tmp/bootstrap-$bootstrap_case.log"
+  if JAIN_HOST_CI_SANDBOX="$sandbox" \
+    JAIN_SPLIT_ROOT="$sandbox_family_root" \
+      "$control/ops/ci/split-host-ci.sh" \
+        jeryu jain-report "$product_sha" "$product" \
+        jain-report/required >"$bootstrap_reject_log" 2>&1; then
+    printf 'sandbox accepted %s bootstrap authority\n' "$bootstrap_case" >&2
+    exit 1
+  fi
+  grep -Fq "$expected_bootstrap_failure" "$bootstrap_reject_log" || {
+    cat "$bootstrap_reject_log" >&2
+    printf 'sandbox did not reject %s bootstrap authority at its root gate\n' \
+      "$bootstrap_case" >&2
+    exit 1
+  }
+  sudo -n install -o root -g root -m 0600 \
+    "$valid_sandbox_config" "$sandbox_config"
+done
 
 # A caller-local commit is not product authority. Keeping it as the caller's
 # HEAD also proves the successful run below is staged from the forge ref.

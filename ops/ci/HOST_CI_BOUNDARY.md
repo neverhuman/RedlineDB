@@ -131,6 +131,18 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
 }
 ```
 
+Ordinary installed configs omit `control_ref`, `bootstrap_commit`, and
+`bootstrap_expires_at`; omission is exactly `refs/heads/main`. The sole
+cycle-breaking exception is an owner-authorized exact-head bootstrap. In that
+case both configs must carry the same safe `refs/heads/...` value, the exact
+lowercase 40-hex commit advertised by that ref, and a decimal-string Unix
+expiry no more than two hours ahead. Sandbox, root state, preflight, and
+publisher bind all three values; missing, partial, mismatched, expired,
+overlong, or moved authority fails closed. Immediately after the protected
+fast-forward merge, reinstall the identical merged bytes with all three fields
+removed and prove production `main` authority through preflight and a live
+readback.
+
 Create `/usr/local/libexec/jain/jeryu-merge-token` as a canonical root-owned,
 single-link regular file at exact mode `0600`. Supply the token through a
 root-only editor or stdin; never place it on a command line, in an environment

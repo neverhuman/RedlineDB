@@ -17,6 +17,23 @@ fail() {
   exit 1
 }
 
+validate_control_authority() {
+  local ref="$1" commit="$2" expires="$3" now
+  if [[ "$ref" == refs/heads/main ]]; then
+    [[ -z "$commit" && -z "$expires" ]] \
+      || fail 'production control authority cannot carry bootstrap fields'
+    return
+  fi
+  [[ "$ref" =~ ^refs/heads/[a-z0-9][a-z0-9._/-]*[a-z0-9]$ \
+    && "$ref" != *..* && "$ref" != *//* && "$ref" != *@\{* \
+    && "$ref" != *.lock && "$commit" =~ ^[0-9a-f]{40}$ \
+    && "$expires" =~ ^[0-9]+$ ]] \
+    || fail 'invalid bootstrap control authority'
+  now="$(date +%s)"
+  (( expires >= now && expires - now <= 7200 )) \
+    || fail 'bootstrap control authority is expired or exceeds two hours'
+}
+
 validate_cargo_registry_cache() {
   local root="${1:?Cargo registry cache is required}" path metadata
   case "$root" in
@@ -98,6 +115,9 @@ jq -e '
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.token_file | type == "string" and startswith("/"))
   | select(.retain_requests | type == "boolean")
+  | select((.control_ref // "refs/heads/main") | type == "string")
+  | select((.bootstrap_commit // "") | type == "string")
+  | select((.bootstrap_expires_at // "") | type == "string")
   | select(.device_allow | type == "array")' "$config" >/dev/null \
   || fail 'invalid sandbox config schema'
 
@@ -290,12 +310,20 @@ mkdir -m 0755 "$worker_authority"
 safe_git=(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
   -c core.untrackedCache=false -c diff.external=)
 control_remote="$(jq -er '.control_remote' "$config")"
+control_ref="$(jq -er '.control_ref // "refs/heads/main"' "$config")"
+bootstrap_commit="$(jq -er '.bootstrap_commit // ""' "$config")"
+bootstrap_expires_at="$(jq -er '.bootstrap_expires_at // ""' "$config")"
+validate_control_authority \
+  "$control_ref" "$bootstrap_commit" "$bootstrap_expires_at"
+if [[ "$control_ref" != refs/heads/main && "$bootstrap_commit" != "$control_commit" ]]; then
+  fail 'bootstrap control commit differs from the exact request'
+fi
 "$splitctl_path" jeryu-local git-materialize \
   --repo jeryu/jain-split-ops --remote "$control_remote" \
-  --ref refs/heads/main --expected-head "$control_commit" \
+  --ref "$control_ref" --expected-head "$control_commit" \
   --destination "$control_root" --token-file "$token_file" \
   --retain-origin >/dev/null \
-  || fail 'cannot materialize authenticated configured control-plane main'
+  || fail 'cannot materialize authenticated configured control authority'
 [[ "$("${safe_git[@]}" -C "$control_root" rev-parse 'HEAD^{commit}')" \
   == "$control_commit" ]] || fail 'root immutable checkout mismatch'
 [[ "$(sha256sum -- "$control_root/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
@@ -420,6 +448,7 @@ created_at="$(date +%s)"
 root_state="$root_request/root-state.json"
 jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --arg commit "$control_commit" --arg remote "$control_remote" \
+  --arg control_ref "$control_ref" \
   --arg publisher_sha "$publisher_sha" --arg sandbox_sha "$sandbox_sha" \
   --arg splitctl_sha "$splitctl_sha" \
   --arg jankurai_sha "$jankurai_sha" \
@@ -428,7 +457,7 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --argjson created_at "$created_at" \
   '{schema_version:"jain.host-ci-root-state/v4",status:"running",
     request_id:$request_id,nonce:$nonce,created_at:$created_at,
-    control_plane_commit:$commit,control_remote:$remote,
+    control_plane_commit:$commit,control_remote:$remote,control_ref:$control_ref,
     publisher_sha256:$publisher_sha,sandbox_sha256:$sandbox_sha,
     splitctl_sha256:$splitctl_sha,jankurai_sha256:$jankurai_sha,
     native_evidence_root:$native_evidence_root,

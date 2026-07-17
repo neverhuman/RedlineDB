@@ -10,6 +10,23 @@ fail() {
   exit 1
 }
 
+validate_control_authority() {
+  local ref="$1" commit="$2" expires="$3" now
+  if [[ "$ref" == refs/heads/main ]]; then
+    [[ -z "$commit" && -z "$expires" ]] \
+      || fail 'production control authority cannot carry bootstrap fields'
+    return
+  fi
+  [[ "$ref" =~ ^refs/heads/[a-z0-9][a-z0-9._/-]*[a-z0-9]$ \
+    && "$ref" != *..* && "$ref" != *//* && "$ref" != *@\{* \
+    && "$ref" != *.lock && "$commit" =~ ^[0-9a-f]{40}$ \
+    && "$expires" =~ ^[0-9]+$ ]] \
+    || fail 'invalid bootstrap control authority'
+  now="$(date +%s)"
+  (( expires >= now && expires - now <= 7200 )) \
+    || fail 'bootstrap control authority is expired or exceeds two hours'
+}
+
 validate_cargo_registry_cache() {
   local root="${1:?Cargo registry cache is required}" path metadata
   case "$root" in
@@ -69,6 +86,9 @@ jq -e 'select(.schema_version == "jain.host-ci-publisher-config/v5")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.token_file | type == "string" and startswith("/"))
+  | select((.control_ref // "refs/heads/main") | type == "string")
+  | select((.bootstrap_commit // "") | type == "string")
+  | select((.bootstrap_expires_at // "") | type == "string")
   | select(has("token") | not)' \
   "$publisher_config" >/dev/null || fail 'invalid publisher config version'
 token_file="$(jq -er '.token_file' "$publisher_config")"
@@ -81,9 +101,22 @@ jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v5")
   | select(.cargo_registry_cache | type == "string" and startswith("/"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.token_file | type == "string" and startswith("/"))
+  | select((.control_ref // "refs/heads/main") | type == "string")
+  | select((.bootstrap_commit // "") | type == "string")
+  | select((.bootstrap_expires_at // "") | type == "string")
   | select(has("token") | not)
   | select(.retain_requests == false)' "$sandbox_config" >/dev/null \
   || fail 'invalid or test-only sandbox config'
+control_ref="$(jq -er '.control_ref // "refs/heads/main"' "$sandbox_config")"
+bootstrap_commit="$(jq -er '.bootstrap_commit // ""' "$sandbox_config")"
+bootstrap_expires_at="$(jq -er '.bootstrap_expires_at // ""' "$sandbox_config")"
+validate_control_authority \
+  "$control_ref" "$bootstrap_commit" "$bootstrap_expires_at"
+[[ "$(jq -er '.control_ref // "refs/heads/main"' "$publisher_config")" == "$control_ref" \
+  && "$(jq -er '.bootstrap_commit // ""' "$publisher_config")" == "$bootstrap_commit" \
+  && "$(jq -er '.bootstrap_expires_at // ""' "$publisher_config")" \
+    == "$bootstrap_expires_at" ]] \
+  || fail 'broker configs disagree on control bootstrap authority'
 [[ "$(sha256sum -- "$publisher" | cut -d' ' -f1)" \
   == "$(jq -er '.publisher_sha256' "$publisher_config")" ]] \
   || fail 'publisher digest/config mismatch'

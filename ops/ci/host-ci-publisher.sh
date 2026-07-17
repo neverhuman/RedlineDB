@@ -16,6 +16,23 @@ fail() {
   exit 1
 }
 
+validate_control_authority() {
+  local ref="$1" commit="$2" expires="$3" now
+  if [[ "$ref" == refs/heads/main ]]; then
+    [[ -z "$commit" && -z "$expires" ]] \
+      || fail 'production control authority cannot carry bootstrap fields'
+    return
+  fi
+  [[ "$ref" =~ ^refs/heads/[a-z0-9][a-z0-9._/-]*[a-z0-9]$ \
+    && "$ref" != *..* && "$ref" != *//* && "$ref" != *@\{* \
+    && "$ref" != *.lock && "$commit" =~ ^[0-9a-f]{40}$ \
+    && "$expires" =~ ^[0-9]+$ ]] \
+    || fail 'invalid bootstrap control authority'
+  now="$(date +%s)"
+  (( expires >= now && expires - now <= 7200 )) \
+    || fail 'bootstrap control authority is expired or exceeds two hours'
+}
+
 [[ "$(id -u)" == 0 ]] || fail 'must run as root'
 [[ "$#" == 1 ]] || fail 'expected one root request directory'
 
@@ -54,8 +71,17 @@ jq -e '
   | select(.proof_evidence_root | type == "string" and startswith("/"))
   | select(.max_seal_age_seconds | type == "number" and . >= 1 and . <= 300)
   | select(.token_file | type == "string" and startswith("/"))
+  | select((.control_ref // "refs/heads/main") | type == "string")
+  | select((.bootstrap_commit // "") | type == "string")
+  | select((.bootstrap_expires_at // "") | type == "string")
   | select(has("token") | not)' "$config" >/dev/null \
   || fail 'invalid publisher config schema'
+
+control_ref="$(jq -er '.control_ref // "refs/heads/main"' "$config")"
+bootstrap_commit="$(jq -er '.bootstrap_commit // ""' "$config")"
+bootstrap_expires_at="$(jq -er '.bootstrap_expires_at // ""' "$config")"
+validate_control_authority \
+  "$control_ref" "$bootstrap_commit" "$bootstrap_expires_at"
 
 token_file="$(jq -er '.token_file' "$config")"
 [[ ! -L "$token_file" \
@@ -133,6 +159,7 @@ jq -e --arg request_id "$request_id" \
    | select(.root_seal | test("^[0-9a-f]{64}$"))
    | select(.sealed_at | type == "number")
    | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
+   | select(.control_ref | type == "string")
    | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
    | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
    | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
@@ -212,6 +239,11 @@ done
 control_commit="$(jq -er '.control_plane_commit' "$result")"
 [[ "$control_commit" == "$(jq -er '.control_plane_commit' "$state")" ]] \
   || fail 'control commit differs across root artifacts'
+[[ "$(jq -er '.control_ref' "$state")" == "$control_ref" ]] \
+  || fail 'control ref differs across root artifacts'
+if [[ "$control_ref" != refs/heads/main && "$bootstrap_commit" != "$control_commit" ]]; then
+  fail 'bootstrap control commit differs from the sealed result'
+fi
 safe_git=(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
   -c core.untrackedCache=false -c diff.external=)
 [[ "$("${safe_git[@]}" -C "$control_root" rev-parse --verify 'HEAD^{commit}')" \
@@ -330,10 +362,10 @@ control_remote="$(jq -er '.control_remote' "$config")"
   || fail 'root request control remote binding mismatch'
 if [[ "$conclusion" == success ]]; then
   reviewed_commit="$("${safe_git[@]}" ls-remote --exit-code \
-    "$control_remote" refs/heads/main 2>/dev/null | cut -f1)" \
-    || fail 'cannot read reviewed control-plane main'
+    "$control_remote" "$control_ref" 2>/dev/null | cut -f1)" \
+    || fail 'cannot read configured control-plane authority'
   [[ "$reviewed_commit" == "$control_commit" ]] \
-    || fail 'success authority is no longer reviewed main'
+    || fail 'success authority no longer equals the sealed control commit'
 fi
 forge_git_base="$(jq -er '.forge_git_base' "$config")"
 product_remote="${forge_git_base%/}/$owner/$repo.git"
