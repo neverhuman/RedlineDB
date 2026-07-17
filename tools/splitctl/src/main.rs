@@ -7811,20 +7811,38 @@ fn validate_program_checkout(
     errors: &mut Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if declared.must_be_absent {
-        if fs::symlink_metadata(path).is_ok() {
-            errors.push(format!(
+        match fs::symlink_metadata(path) {
+            Ok(_) => errors.push(format!(
                 "{}: checkout exists while its program lifecycle is not-created",
                 path.display()
-            ));
+            )),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "cannot establish absence of program checkout {}: {error}",
+                    path.display()
+                )
+                .into())
+            }
         }
         return Ok(());
     }
-    if fs::symlink_metadata(path).is_err() {
-        errors.push(format!(
-            "{}: declared program checkout is missing",
-            path.display()
-        ));
-        return Ok(());
+    match fs::symlink_metadata(path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            errors.push(format!(
+                "{}: declared program checkout is missing",
+                path.display()
+            ));
+            return Ok(());
+        }
+        Err(error) => {
+            return Err(format!(
+                "cannot inspect declared program checkout {}: {error}",
+                path.display()
+            )
+            .into())
+        }
     }
     let split_root = path.parent().ok_or("program checkout has no family root")?;
     let canonical = match validate_physical_git_checkout_beneath(path, split_root) {
@@ -7953,44 +7971,113 @@ fn check_cargo_sources_at(
             .into());
         }
         let text = fs::read_to_string(&path)?;
-        for (line_no, line) in text.lines().enumerate() {
-            let internal_source = line.contains("git =")
-                || line.starts_with("source = \"git+")
-                || line.starts_with("[patch.");
-            if internal_source
-                && [
-                    "github.com/neverhuman",
-                    "git@github.com:neverhuman",
-                    "jain-portal-preview",
-                    "bare-mirrors",
-                ]
-                .iter()
-                .any(|marker| line.contains(marker))
-            {
-                errors.push(format!(
-                    "{}:{}:{}: Cargo source contains forbidden remote",
-                    repo_name,
-                    path.strip_prefix(repo_path).unwrap_or(&path).display(),
-                    line_no + 1
-                ));
-            }
-            if !line.contains("git") {
-                continue;
-            }
-            if line.contains(FAMILY_REMOTE_PREFIX) || line.contains(INFRA_REMOTE_PREFIX) {
-                continue;
-            }
-            if line.contains("git =") || line.starts_with("source = \"git+") {
-                errors.push(format!(
-                    "{}:{}:{}: internal git source is not local Jeryu",
-                    repo_name,
-                    path.strip_prefix(repo_path).unwrap_or(&path).display(),
-                    line_no + 1
-                ));
-            }
-        }
+        let document: toml::Value = text.parse().map_err(|error| {
+            format!(
+                "{}:{}: Cargo source input is not valid TOML: {error}",
+                repo_name,
+                path.strip_prefix(repo_path).unwrap_or(&path).display()
+            )
+        })?;
+        validate_cargo_source_value(
+            repo_name,
+            path.strip_prefix(repo_path).unwrap_or(&path),
+            &document,
+            &mut Vec::new(),
+            errors,
+        );
     }
     Ok(())
+}
+
+fn validate_cargo_source_value(
+    repo_name: &str,
+    path: &Path,
+    value: &toml::Value,
+    key_path: &mut Vec<String>,
+    errors: &mut Vec<String>,
+) {
+    match value {
+        toml::Value::Table(table) => {
+            for (key, child) in table {
+                let field_path = if key_path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{}.{}", key_path.join("."), key)
+                };
+                if key == "git" {
+                    match child.as_str() {
+                        Some(source) if is_local_jeryu_git_source(source, false) => {}
+                        _ => errors.push(format!(
+                            "{}:{}:{}: Cargo git source is not local Jeryu",
+                            repo_name,
+                            path.display(),
+                            field_path
+                        )),
+                    }
+                } else if key == "source" {
+                    if let Some(source) = child.as_str() {
+                        if source.starts_with("git+") && !is_local_jeryu_git_source(source, true) {
+                            errors.push(format!(
+                                "{}:{}:{}: Cargo lock git source is not local Jeryu",
+                                repo_name,
+                                path.display(),
+                                field_path
+                            ));
+                        }
+                    }
+                } else if key_path.last().is_some_and(|parent| parent == "patch")
+                    && looks_like_git_source(key)
+                    && !is_local_jeryu_git_source(key, key.starts_with("git+"))
+                {
+                    errors.push(format!(
+                        "{}:{}:{}: Cargo patch source is not local Jeryu",
+                        repo_name,
+                        path.display(),
+                        field_path
+                    ));
+                }
+                key_path.push(key.clone());
+                validate_cargo_source_value(repo_name, path, child, key_path, errors);
+                key_path.pop();
+            }
+        }
+        toml::Value::Array(values) => {
+            for child in values {
+                validate_cargo_source_value(repo_name, path, child, key_path, errors);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn looks_like_git_source(value: &str) -> bool {
+    value.starts_with("git+")
+        || value.starts_with("http://")
+        || value.starts_with("https://")
+        || value.starts_with("ssh://")
+        || value.starts_with("git@")
+}
+
+fn is_local_jeryu_git_source(value: &str, lock_source: bool) -> bool {
+    let source = if lock_source {
+        let Some(source) = value.strip_prefix("git+") else {
+            return false;
+        };
+        source
+    } else {
+        value
+    };
+    let Some((repository, suffix)) = source.split_once(".git") else {
+        return false;
+    };
+    (repository.starts_with(FAMILY_REMOTE_PREFIX) || repository.starts_with(INFRA_REMOTE_PREFIX))
+        && !repository.contains("..")
+        && !repository.contains('\\')
+        && !repository
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+        && (suffix.is_empty()
+            || (lock_source && (suffix.starts_with('?') || suffix.starts_with('#'))))
 }
 
 fn collect_named_files(root: &Path, out: &mut Vec<PathBuf>, names: &[&str]) -> io::Result<()> {
@@ -11939,7 +12026,7 @@ name = "two"
         validate_program_checkout(&checkout, &declared, &mut errors).unwrap();
         assert!(errors
             .iter()
-            .any(|error| error.contains("internal git source is not local Jeryu")));
+            .any(|error| error.contains("Cargo git source is not local Jeryu")));
     }
 
     #[test]
@@ -11982,6 +12069,42 @@ name = "two"
             .unwrap_err()
             .to_string()
             .contains("different fetch and push URLs"));
+    }
+
+    #[test]
+    fn cargo_source_policy_is_structural_and_comment_independent() {
+        for document in [
+            "[workspace.dependencies]\nbad={git=\"https://example.invalid/bad.git\"}\n",
+            "[workspace.dependencies]\nbad = { git = \"https://example.invalid/bad.git\" } # http://127.0.0.1:8787/git/jeryu/\n",
+            "[[package]]\nname='bad'\nsource='git+https://example.invalid/bad.git#deadbeef'\n",
+            "[patch.\"https://example.invalid/index\"]\nbad = { path = \"bad\" }\n",
+        ] {
+            let value: toml::Value = document.parse().unwrap();
+            let mut errors = Vec::new();
+            validate_cargo_source_value(
+                "product",
+                Path::new("Cargo.toml"),
+                &value,
+                &mut Vec::new(),
+                &mut errors,
+            );
+            assert!(!errors.is_empty(), "policy bypassed by {document:?}");
+        }
+
+        let allowed: toml::Value = format!(
+            "[workspace.dependencies]\ngood = {{ git = \"{FAMILY_REMOTE_PREFIX}good.git\" }}\n"
+        )
+        .parse()
+        .unwrap();
+        let mut errors = Vec::new();
+        validate_cargo_source_value(
+            "product",
+            Path::new("Cargo.toml"),
+            &allowed,
+            &mut Vec::new(),
+            &mut errors,
+        );
+        assert!(errors.is_empty());
     }
 
     #[test]
