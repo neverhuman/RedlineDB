@@ -15,7 +15,9 @@ their application schemas and migrations; Redline Central owns only the
 namespace and connection contract documented under `db/`.
 
 Errors remain typed at both boundaries. Protocol errors never become successful empty results.
-The governed operation claim is `db-shim.used-operations/v1`, not arbitrary SQL parity. Local
-required proves the isolated Cargo graphs and genuine in-memory SQLite behavior. Armed release CI
-also requires explicit live Redline and Postgres DSNs and fails closed rather than substituting a
-fake service.
+Portable nulls explicitly retain their integer, real, text, or blob type; query projections declare
+their portable result types so adapters never guess from an untyped null. Neutral execution reports
+success only because every provider cannot prove an affected-row count. The governed operation
+claim is `db-shim.used-operations/v2`, not arbitrary SQL parity. Local required proves the isolated
+Cargo graphs and genuine in-memory SQLite behavior. Armed release CI also requires explicit live
+Redline and Postgres DSNs and fails closed rather than substituting a fake service.

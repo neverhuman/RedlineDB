@@ -8,4 +8,5 @@
   artifact, and coverage lanes.
 - Pin the governed Jankurai 1.6.11 path and digest.
 - Replace named production dispatch with an owned backend-neutral contract, isolated compile-time
-  Redline/SQLite/Postgres adapters, and the governed `db-shim.used-operations/v1` corpus.
+  Redline/SQLite/Postgres adapters, and the governed `db-shim.used-operations/v2` corpus with
+  explicit portable null types and truthful success-only execution.

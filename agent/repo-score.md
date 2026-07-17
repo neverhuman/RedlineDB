@@ -7,9 +7,9 @@
 - Target stack ID: `rust`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1784245366`
-- Started at: `1784245366`
-- Elapsed: `252` ms
+- Run ID: `1784247068`
+- Started at: `1784247068`
+- Elapsed: `275` ms
 - Scope: `full`
 - Raw score: `87`
 - Final score: `87`
@@ -177,7 +177,18 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:49dd87b3bb47929ee7676db7afb108c2861b56edf9a1ebe40d26535a1b8717f8`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present
-3. `medium` `observability` `docs/testing.md`
+3. `medium` `copy-code` `crates/db-shim/src/contract.rs:3`
+   Rule: `HLT-046-UNNECESSARY-VARIETY`
+   Check: `HLT-046-UNNECESSARY-VARIETY:copy-code` `soft` confidence `0.88`
+   Route: TLR `Maintainability entropy`, lane `copy-code`, owner `adapter`
+   Docs: `agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape`
+   Matched term: `unnecessary-variety`
+   Reason: enum `Value` has 2 divergent definitions across modules where one consistent definition is expected
+   Fix: define `Value` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+   Rerun: `cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md`
+   Fingerprint: `sha256:ad6fdff306849ce0dcbfdff9977cb1ce31b349ddcf12ef6b0367f4262f3b754e`
+   Evidence: enum `Value` is defined with diverging shapes in 2 modules (crates/db-shim/src/contract.rs:3, crates/redlinedb-client/src/lib.rs:24)
+4. `medium` `observability` `docs/testing.md`
    Rule: `HLT-017-OPAQUE-OBSERVABILITY`
    Check: `HLT-017-OPAQUE-OBSERVABILITY:observability` `soft` confidence `0.76`
    Route: TLR `Repair`, lane `observability`, owner `docs`
@@ -202,3 +213,5 @@ No audited runtime boundary reclassifications declared.
    Route: `Repair`/`observability`
 3. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
    Route: `Security, secrets, agency`/`security`
+4. `medium` `HLT-046-UNNECESSARY-VARIETY` `crates/db-shim/src/contract.rs` - define `Value` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart
+   Route: `Maintainability entropy`/`copy-code`

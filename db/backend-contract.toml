@@ -1,7 +1,10 @@
 schema_version = "redline-central.backend-contract/v1"
 production_feature = "backend-redline"
 oracle_features = ["oracle-sqlite", "oracle-postgres"]
-operation_corpus = "db-shim.used-operations/v1"
+operation_corpus = "db-shim.used-operations/v2"
 selection = "exactly-one-compile-time-feature"
 configuration = ["DB_DSN", "DB_NAMESPACE"]
+portable_null_types = ["integer", "real", "text", "blob"]
+null_contract = "explicit-portable-type"
+execute_result = "success-only"
 arbitrary_sql_parity = false

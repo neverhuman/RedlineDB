@@ -32,4 +32,6 @@ fn sqlite_runs_the_governed_corpus() {
     assert_eq!(report.schema_version, db_shim::corpus::VERSION);
     assert_eq!(report.rows, 3);
     assert!(report.rollback_preserved_rows);
+    assert!(report.typed_null_round_trip);
+    assert!(report.execute_success_only);
 }

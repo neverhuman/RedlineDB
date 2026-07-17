@@ -1,11 +1,32 @@
 /// Backend-neutral values supported by the governed operation corpus.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Value {
-    Null,
+    Null(ValueType),
     Integer(i64),
     Real(f64),
     Text(String),
     Blob(Vec<u8>),
+}
+
+/// Portable value types used to preserve null semantics across adapters.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ValueType {
+    Integer,
+    Real,
+    Text,
+    Blob,
+}
+
+impl Value {
+    pub fn value_type(&self) -> ValueType {
+        match self {
+            Value::Null(value_type) => *value_type,
+            Value::Integer(_) => ValueType::Integer,
+            Value::Real(_) => ValueType::Real,
+            Value::Text(_) => ValueType::Text,
+            Value::Blob(_) => ValueType::Blob,
+        }
+    }
 }
 
 /// Stable error categories. Backend-specific error types never cross the application boundary.
@@ -86,6 +107,7 @@ pub enum SqlPart {
 pub struct Statement {
     fragments: Vec<String>,
     params: Vec<Value>,
+    result_types: Vec<ValueType>,
 }
 
 impl Statement {
@@ -93,6 +115,7 @@ impl Statement {
         Self {
             fragments: vec![sql.to_owned()],
             params: Vec::new(),
+            result_types: Vec::new(),
         }
     }
 
@@ -119,7 +142,11 @@ impl Statement {
                 "statement must contain at least one part".to_owned(),
             ));
         }
-        Ok(Self { fragments, params })
+        Ok(Self {
+            fragments,
+            params,
+            result_types: Vec::new(),
+        })
     }
 
     pub fn fragments(&self) -> &[String] {
@@ -128,6 +155,33 @@ impl Statement {
 
     pub fn params(&self) -> &[Value] {
         &self.params
+    }
+
+    /// Bind the exact portable types expected from a query projection.
+    pub fn returning(mut self, result_types: impl IntoIterator<Item = ValueType>) -> Result<Self> {
+        self.result_types = result_types.into_iter().collect();
+        if self.result_types.is_empty() {
+            return Err(Error::Contract(
+                "query result types must not be empty".to_owned(),
+            ));
+        }
+        Ok(self)
+    }
+
+    pub(crate) fn result_types_for_columns(
+        &self,
+        column_count: usize,
+    ) -> Result<Option<&[ValueType]>> {
+        if self.result_types.is_empty() {
+            return Ok(None);
+        }
+        if self.result_types.len() != column_count {
+            return Err(Error::Contract(format!(
+                "query declares {} result types for {column_count} columns",
+                self.result_types.len()
+            )));
+        }
+        Ok(Some(&self.result_types))
     }
 
     pub(crate) fn render(&self, style: PlaceholderStyle) -> String {
@@ -161,7 +215,7 @@ pub(crate) enum PlaceholderStyle {
 /// Provider contract implemented independently by every adapter.
 pub trait Backend {
     fn capabilities(&self) -> Capabilities;
-    fn execute(&mut self, statement: &Statement) -> Result<u64>;
+    fn execute(&mut self, statement: &Statement) -> Result<()>;
     fn query(&mut self, statement: &Statement) -> Result<Vec<Vec<Value>>>;
     fn begin(&mut self, mode: TransactionMode) -> Result<()>;
     fn commit(&mut self) -> Result<()>;
@@ -220,5 +274,29 @@ mod tests {
             statement.render(PlaceholderStyle::DollarNumbered),
             "SELECT * FROM items WHERE id = $1 AND name = $2"
         );
+    }
+
+    #[test]
+    fn typed_nulls_and_query_result_types_are_explicit() {
+        for value_type in [
+            ValueType::Integer,
+            ValueType::Real,
+            ValueType::Text,
+            ValueType::Blob,
+        ] {
+            assert_eq!(Value::Null(value_type).value_type(), value_type);
+        }
+
+        let statement = Statement::plain("SELECT value")
+            .returning([ValueType::Blob])
+            .unwrap();
+        assert_eq!(
+            statement.result_types_for_columns(1).unwrap(),
+            Some([ValueType::Blob].as_slice())
+        );
+        assert!(statement.result_types_for_columns(2).is_err());
+        assert!(Statement::plain("SELECT value")
+            .returning(Vec::<ValueType>::new())
+            .is_err());
     }
 }

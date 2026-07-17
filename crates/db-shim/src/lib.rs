@@ -20,7 +20,7 @@ pub mod corpus;
 pub(crate) use contract::{validate_identifier, PlaceholderStyle};
 pub use contract::{
     Backend, Capabilities, DbError, Error, Identifier, Result, SqlPart, Statement, TransactionMode,
-    Value, GOVERNED_CAPABILITIES,
+    Value, ValueType, GOVERNED_CAPABILITIES,
 };
 
 #[cfg(not(any(
@@ -76,7 +76,7 @@ impl Db {
         Identifier::new(identifier)
     }
 
-    pub fn execute(&mut self, statement: &Statement) -> Result<u64> {
+    pub fn execute(&mut self, statement: &Statement) -> Result<()> {
         self.backend.execute(statement)
     }
 

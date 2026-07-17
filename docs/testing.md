@@ -13,8 +13,9 @@
 Protocol integration tests run a loopback-only deterministic server to validate the Redline
 magic/version handshake and invalid-magic rejection. The dependency guard separately proves the
 default Redline, explicit Redline, SQLite, and Postgres Cargo closures. The
-`db-shim.used-operations/v1` corpus is table-driven and backend-neutral; ordinary required runs it
-against real in-memory SQLite. `JAIN_RELEASE_CI=1` additionally requires explicit Redline and
+`db-shim.used-operations/v2` corpus is table-driven and backend-neutral; it asserts identical
+integer, real, text, and blob null round trips plus success-only execution. Ordinary required runs
+it against real in-memory SQLite. `JAIN_RELEASE_CI=1` additionally requires explicit Redline and
 Postgres DSNs and runs the identical corpus against both real services. Missing DSNs fail closed.
 No result is described as arbitrary or full SQL parity.
 

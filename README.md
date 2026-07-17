@@ -41,9 +41,10 @@ redlinedb-server --database ./central.redline --listen 127.0.0.1:6033   # from r
   Verify: start the server, then
   `cargo run -p redlinedb-client --bin redlinedb-client-smoke -- 127.0.0.1:6033`.
 - ✅ `db-shim` has exact isolated Redline, SQLite, and Postgres dependency graphs. The same governed
-  `db-shim.used-operations/v1` corpus covers values, validated namespacing, parameter binding,
-  query ordering, and rollback. Host-local required runs genuine SQLite. Armed release CI requires
-  genuine Redline and Postgres services and fails closed when their DSNs are absent.
+  `db-shim.used-operations/v2` corpus covers values, typed nulls, success-only execution, validated
+  namespacing, parameter binding, query ordering, and rollback. Host-local required runs genuine
+  SQLite. Armed release CI requires genuine Redline and Postgres services and fails closed when
+  their DSNs are absent.
 - ⚠️ The corpus is the compatibility claim. Arbitrary SQL-dialect equivalence is not claimed.
 
 ## Validate

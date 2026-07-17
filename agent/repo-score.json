@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:d58d8058765df944fc354e3becb7d98a08149b1544ee2bc5a1db4ed701c30b0c",
-  "input_fingerprint": "sha256:abe503382b146ddea8ba6d645780685fc8a7545632bd4c95bac7b5d7d646803e",
+  "report_fingerprint": "sha256:bb7d69b6ac56c9ee4b8b7b59b1893f545e66953b0e908f801a564c71d66ce44e",
+  "input_fingerprint": "sha256:23d7a2b1e23a03f748faf6e7aaeee0f8efea2bcacd3e6724e6229090acb320b9",
   "policy_fingerprint": "sha256:92dfb8d9e771009cec6723aa24f8d981bdfe9004dea60545d0a40371f4a43c2e",
   "manifest_fingerprints": {
     "owner_map": "sha256:90f2bf51161bc3dc6efb1f25fd7cb18686087d30b2d9dd5abdf9858a70db2f13",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:3479d9d94209d198314f0fac07e16bd4015128b4ed8dacb4bddba90b2f381bd7"
   },
   "dirty_worktree": true,
-  "generated_at": "1784245366",
+  "generated_at": "1784247068",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784245366",
-  "started_at": "1784245366",
-  "elapsed_ms": 252,
+  "run_id": "1784247068",
+  "started_at": "1784247068",
+  "elapsed_ms": 275,
   "scope": {
     "mode": "full",
     "paths": []
@@ -39,7 +39,7 @@
     "minimum_score": 85,
     "passed": true,
     "hard_findings": 0,
-    "soft_findings": 3,
+    "soft_findings": 4,
     "ratchet": {
       "baseline_score": 87,
       "allowed_drop": 0,
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "11ae49b",
+    "head": "9b21555",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -325,7 +325,7 @@
         "workflow linting tooling found",
         "security lane present",
         "agent-readiness audit gate found in CI",
-        "rust bad-behavior advisory signals: 21",
+        "rust bad-behavior advisory signals: 25",
         "docker bad-behavior advisory signals: 1",
         "secret scanning command is operational"
       ],
@@ -340,7 +340,7 @@
         "largest authored code file: crates/redlinedb-client/src/lib.rs (328 LOC)",
         "most code files stay under 300 LOC",
         "authored code stays below hard LOC limits with no shape markers",
-        "rust bad-behavior advisory signals: 21",
+        "rust bad-behavior advisory signals: 25",
         "docker bad-behavior advisory signals: 1",
         "no hard bad-behavior findings across detector-backed language families"
       ],
@@ -980,7 +980,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-16T23:42:46.462231549+00:00",
+    "generated_at": "2026-07-17T00:11:08.142693692+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "pass",
@@ -1299,6 +1299,29 @@
     },
     {
       "severity": "medium",
+      "category": "copy-code",
+      "path": "crates/db-shim/src/contract.rs",
+      "problem": "enum `Value` has 2 divergent definitions across modules where one consistent definition is expected",
+      "agent_fix": "define `Value` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "evidence": [
+        "enum `Value` is defined with diverging shapes in 2 modules (crates/db-shim/src/contract.rs:3, crates/redlinedb-client/src/lib.rs:24)"
+      ],
+      "check_id": "HLT-046-UNNECESSARY-VARIETY:copy-code",
+      "hardness": "soft",
+      "confidence": 0.88,
+      "evidence_kind": "repository-scan",
+      "rerun_command": "cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md",
+      "fingerprint": "sha256:ad6fdff306849ce0dcbfdff9977cb1ce31b349ddcf12ef6b0367f4262f3b754e",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "docs_url": "agent/JANKURAI_STANDARD.md#jankurai-pillar-variety-and-canonical-shape",
+      "owner": "adapter",
+      "line": 3,
+      "matched_term": "unnecessary-variety"
+    },
+    {
+      "severity": "medium",
       "category": "observability",
       "path": "docs/testing.md",
       "problem": "`Observability and repair evidence` scored 73 below the standard floor of 85",
@@ -1352,6 +1375,16 @@
       "owner": "ops",
       "task": "wire secret, dependency, provenance, and workflow scans into an operational CI lane",
       "why": "`Security and supply-chain posture` scored 80 below the standard floor of 85"
+    },
+    {
+      "path": "crates/db-shim/src/contract.rs",
+      "priority": "medium",
+      "rule_id": "HLT-046-UNNECESSARY-VARIETY",
+      "tlr": "Maintainability entropy",
+      "lane": "copy-code",
+      "owner": "adapter",
+      "task": "define `Value` once in a shared module and import it everywhere, or reconcile the diverging definitions so one canonical shape is used; redundant variety lets the copies drift apart",
+      "why": "enum `Value` has 2 divergent definitions across modules where one consistent definition is expected"
     }
   ]
 }
