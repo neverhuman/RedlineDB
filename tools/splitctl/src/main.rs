@@ -7644,7 +7644,7 @@ mod tests {
 
     impl TestDir {
         fn new(label: &str) -> Self {
-            let parent = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/test-tmp");
+            let parent = control_plane_root().join("target/test-tmp");
             fs::create_dir_all(&parent).unwrap();
             let path = parent.join(format!(
                 "jain-split-ops-{label}-{}-{}",
