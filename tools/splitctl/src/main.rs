@@ -5434,7 +5434,10 @@ fn validate_release_branch(value: &str) -> Result<(), Box<dyn std::error::Error>
     Ok(())
 }
 
-fn validate_physical_git_checkout(path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+fn validate_physical_git_checkout_beneath(
+    path: &Path,
+    split_root: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
     if !path.is_absolute() {
         return Err("--repo-path must be absolute".into());
     }
@@ -5442,8 +5445,6 @@ fn validate_physical_git_checkout(path: &Path) -> Result<PathBuf, Box<dyn std::e
     if canonical != path {
         return Err("--repo-path must already be canonical".into());
     }
-    let control_root = control_plane_root();
-    let split_root = control_root.parent().ok_or("splitctl root has no parent")?;
     if !canonical.starts_with(split_root) {
         return Err("--repo-path must remain beneath the split root".into());
     }
@@ -5573,6 +5574,18 @@ fn reject_local_git_injection(repo: &Path) -> Result<(), Box<dyn std::error::Err
 }
 
 fn jeryu_branch_push(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let control_root = control_plane_root();
+    let split_root = control_root
+        .parent()
+        .ok_or("splitctl root has no parent")?
+        .to_path_buf();
+    jeryu_branch_push_beneath(args, &split_root)
+}
+
+fn jeryu_branch_push_beneath(
+    args: Vec<String>,
+    split_root: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut repo = None;
     let mut repo_path = None;
     let mut branch = None;
@@ -5608,8 +5621,10 @@ fn jeryu_branch_push(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
         }
     }
     let repo = repo.ok_or("branch-push requires --repo")?;
-    let path =
-        validate_physical_git_checkout(&repo_path.ok_or("branch-push requires --repo-path")?)?;
+    let path = validate_physical_git_checkout_beneath(
+        &repo_path.ok_or("branch-push requires --repo-path")?,
+        split_root,
+    )?;
     let branch = branch.ok_or("branch-push requires --branch")?;
     let expected_head = expected_head.ok_or("branch-push requires --expected-head")?;
     validate_jeryu_repo_slug(&repo)?;
@@ -8324,6 +8339,17 @@ mod tests {
         fn path(&self) -> &Path {
             &self.0
         }
+
+        fn new_private_temp(label: &str) -> Self {
+            let path = env::temp_dir().join(format!(
+                "jain-split-ops-{label}-{}-{}",
+                std::process::id(),
+                NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::create_dir(&path).unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
+            Self(path)
+        }
     }
 
     impl Drop for TestDir {
@@ -9783,7 +9809,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
 
     #[test]
     fn controlled_jeryu_askpass_is_prompt_exact_and_token_file_bound() {
-        let root = TestDir::new("jeryu-askpass");
+        let root = TestDir::new_private_temp("jeryu-askpass");
         let token_file = root.path().join("token");
         fs::write(&token_file, b"fixture-token-0123456789").unwrap();
         fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
@@ -9869,7 +9895,8 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let remote = init_bare(root.path());
         let refspec = format!("{head}:refs/heads/main");
         run_git_strict(&source, &["push", remote.to_str().unwrap(), &refspec]).unwrap();
-        let token_file = root.path().join("token");
+        let token_root = TestDir::new_private_temp("git-materialization-token");
+        let token_file = token_root.path().join("token");
         fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
         fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
         let destination = root.path().join("materialized");
@@ -9917,18 +9944,21 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     fn branch_push_apply_requires_an_explicit_token_before_remote_access() {
         let root = TestDir::new("branch-push-token-required");
         let (repo, head) = init_source(root.path());
-        let error = jeryu_branch_push(vec![
-            "branch-push".to_owned(),
-            "--repo".to_owned(),
-            "jeryu/example".to_owned(),
-            "--repo-path".to_owned(),
-            repo.display().to_string(),
-            "--branch".to_owned(),
-            "main".to_owned(),
-            "--expected-head".to_owned(),
-            head,
-            "--apply".to_owned(),
-        ])
+        let error = jeryu_branch_push_beneath(
+            vec![
+                "branch-push".to_owned(),
+                "--repo".to_owned(),
+                "jeryu/example".to_owned(),
+                "--repo-path".to_owned(),
+                repo.display().to_string(),
+                "--branch".to_owned(),
+                "main".to_owned(),
+                "--expected-head".to_owned(),
+                head,
+                "--apply".to_owned(),
+            ],
+            root.path(),
+        )
         .unwrap_err();
         assert!(error.to_string().contains("requires --token-file"));
     }
@@ -9938,17 +9968,20 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let root = TestDir::new("branch-push-dry-run");
         let (repo, head) = init_source(root.path());
         let before = strict_git_output(&repo, &["status", "--porcelain=v1"]).unwrap();
-        jeryu_branch_push(vec![
-            "branch-push".to_owned(),
-            "--repo".to_owned(),
-            "jeryu/example".to_owned(),
-            "--repo-path".to_owned(),
-            repo.display().to_string(),
-            "--branch".to_owned(),
-            "main".to_owned(),
-            "--expected-head".to_owned(),
-            head.clone(),
-        ])
+        jeryu_branch_push_beneath(
+            vec![
+                "branch-push".to_owned(),
+                "--repo".to_owned(),
+                "jeryu/example".to_owned(),
+                "--repo-path".to_owned(),
+                repo.display().to_string(),
+                "--branch".to_owned(),
+                "main".to_owned(),
+                "--expected-head".to_owned(),
+                head.clone(),
+            ],
+            root.path(),
+        )
         .unwrap();
         assert_eq!(
             strict_git_output(&repo, &["status", "--porcelain=v1"]).unwrap(),
@@ -9969,17 +10002,20 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             &["config", "core.fsmonitor", monitor.to_str().unwrap()],
         )
         .unwrap();
-        assert!(jeryu_branch_push(vec![
-            "branch-push".to_owned(),
-            "--repo".to_owned(),
-            "jeryu/example".to_owned(),
-            "--repo-path".to_owned(),
-            repo.display().to_string(),
-            "--branch".to_owned(),
-            "main".to_owned(),
-            "--expected-head".to_owned(),
-            head.clone(),
-        ])
+        assert!(jeryu_branch_push_beneath(
+            vec![
+                "branch-push".to_owned(),
+                "--repo".to_owned(),
+                "jeryu/example".to_owned(),
+                "--repo-path".to_owned(),
+                repo.display().to_string(),
+                "--branch".to_owned(),
+                "main".to_owned(),
+                "--expected-head".to_owned(),
+                head.clone(),
+            ],
+            root.path()
+        )
         .is_err());
         assert!(
             !marker.exists(),

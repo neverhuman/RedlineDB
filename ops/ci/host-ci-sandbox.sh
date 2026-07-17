@@ -531,7 +531,9 @@ systemd_args=(
   --property='SystemCallFilter=@system-service unshare mount umount2'
   --property='SystemCallFilter=~@resources @reboot @swap @module @raw-io @obsolete @keyring'
   --property=SystemCallErrorNumber=EPERM
-  --property=RestrictAddressFamilies=AF_UNIX
+  # PrivateNetwork keeps the worker disconnected from the host and forge while
+  # AF_INET/AF_INET6 allow real loopback HTTP fixtures inside that namespace.
+  --property='RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6'
   --property=DevicePolicy=closed --property=PrivateDevices=no
   --property=KillMode=control-group --property=SendSIGKILL=yes
   --property=TimeoutStopSec=5s

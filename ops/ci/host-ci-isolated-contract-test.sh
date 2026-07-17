@@ -77,6 +77,32 @@ if /usr/bin/timeout 2 /usr/bin/curl -fsS \
   fail 'worker reached the host forge network'
 fi
 
+# Mock-heavy tests need a real TCP loopback inside the private namespace. This
+# probe uses only Rust's standard library and never opens a host-facing socket.
+loopback_source="$writable_root/loopback-probe.rs"
+loopback_binary="$writable_root/loopback-probe"
+printf '%s\n' \
+  'use std::{io::{Read, Write}, net::{TcpListener, TcpStream}, thread};' \
+  'fn main() {' \
+  '  let listener = TcpListener::bind("127.0.0.1:0").unwrap();' \
+  '  let address = listener.local_addr().unwrap();' \
+  '  let server = thread::spawn(move || {' \
+  '    let (mut stream, _) = listener.accept().unwrap();' \
+  '    let mut byte = [0_u8; 1];' \
+  '    stream.read_exact(&mut byte).unwrap();' \
+  '    stream.write_all(&byte).unwrap();' \
+  '  });' \
+  '  let mut client = TcpStream::connect(address).unwrap();' \
+  '  client.write_all(b"x").unwrap();' \
+  '  let mut echoed = [0_u8; 1];' \
+  '  client.read_exact(&mut echoed).unwrap();' \
+  '  assert_eq!(&echoed, b"x");' \
+  '  server.join().unwrap();' \
+  '}' >"$loopback_source"
+rustc --edition=2021 "$loopback_source" -o "$loopback_binary"
+"$loopback_binary" || fail 'private loopback TCP mocks are unavailable'
+rm -f -- "$loopback_source" "$loopback_binary"
+
 head="$(git -C "$repo_root" rev-parse --verify 'HEAD^{commit}')"
 [[ "$head" =~ ^[0-9a-f]{40}$ \
   && -z "$(git -C "$repo_root" status --porcelain=v1 --untracked-files=all)" ]] \
@@ -88,6 +114,7 @@ printf 'boundary_capabilities=empty\n' >>"$probe"
 printf 'boundary_root_authority=read-only\n' >>"$probe"
 printf 'boundary_sudo=blocked\n' >>"$probe"
 printf 'boundary_forge_network=blocked\n' >>"$probe"
+printf 'boundary_private_loopback=available\n' >>"$probe"
 printf 'boundary_exact_head=%s\n' "$head" >>"$probe"
 chmod 0600 "$probe"
 

@@ -1352,11 +1352,10 @@ mod tests {
     impl TempDir {
         fn new() -> Self {
             let id = NEXT_TEMP.fetch_add(1, AtomicOrdering::Relaxed);
-            let path = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("target/test-tmp")
+            let path = std::env::temp_dir()
                 .join(format!("splitctl-jeryu-client-{}-{id}", std::process::id()));
-            fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::create_dir(&path).unwrap();
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o700)).unwrap();
             Self(path)
         }
 
