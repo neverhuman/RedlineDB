@@ -3941,13 +3941,13 @@ fn secure_ls_remote_at(
 }
 
 fn secure_materialization_git_output(
-    remote: &str,
+    _remote: &str,
     token_file: &Path,
     args: &[&str],
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut command = secure_git_authenticated_command(None, token_file)?;
     #[cfg(debug_assertions)]
-    if Path::new(remote).is_absolute() {
+    if Path::new(_remote).is_absolute() {
         command.command.args(["-c", "protocol.file.allow=always"]);
     }
     let output = command.command.args(args).output()?;
@@ -3961,13 +3961,13 @@ fn secure_materialization_git_output(
 
 fn secure_materialization_git_status(
     repo: &Path,
-    remote: &str,
+    _remote: &str,
     token_file: &Path,
     args: &[&str],
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut command = secure_git_authenticated_command(Some(repo), token_file)?;
     #[cfg(debug_assertions)]
-    if Path::new(remote).is_absolute() {
+    if Path::new(_remote).is_absolute() {
         command.command.args(["-c", "protocol.file.allow=always"]);
     }
     let output = command.command.args(args).output()?;
