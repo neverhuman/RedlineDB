@@ -473,6 +473,7 @@ systemd_args=(
   --setenv=CARGO_HOME=/opt/jain-ci/cargo-home
   --setenv=RUSTUP_HOME=/opt/jain-ci/rustup
   --setenv=JAIN_HOST_CI_REEXEC_STATE=/opt/jain-ci/authority/reexec-state.json
+  --setenv=JAIN_SPLIT_OPS_ROOT=/opt/jain-ci/authority/control-plane
   --setenv=GIT_CONFIG_COUNT=3
   --setenv=GIT_CONFIG_KEY_0=safe.directory
   --setenv=GIT_CONFIG_VALUE_0=/opt/jain-ci/authority/control-plane

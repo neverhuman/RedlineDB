@@ -323,8 +323,10 @@ jain_verify_native_check_evidence success 1 "$evidence_dir" "$receipt_sha" \
   "$head_sha" jain-core/required "$control" "$control_commit"
 
 # Exercise the root-only post-cgroup promotion boundary with a real, valid
-# evidence ledger. The worker can write only to a small per-request tmpfs; the
-# root broker copies verified bytes into a non-worker-writable durable store.
+# evidence ledger. The production worker deliberately has neither sudo nor
+# mount authority, so this privileged integration block runs in ordinary
+# exact-head review and is replaced there by the real broker boundary probes.
+if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" != 1 ]]; then
 promotion_staging="$tmp/native-evidence-staging"
 promotion_store="$durable_root/root-evidence-store"
 promotion_small_store="$durable_root/root-evidence-small-store"
@@ -464,6 +466,9 @@ sudo -n /usr/bin/umount -- "$promotion_small_store"
 promotion_small_store_mounted=0
 sudo -n /usr/bin/umount -- "$promotion_staging"
 promotion_staging_mounted=0
+else
+  printf 'native materializer privileged promotion covered by isolated broker boundary\n'
+fi
 rm -rf -- "$run_root"
 jain_verify_native_evidence "$evidence_dir" "$head_sha" jain-core/required \
   "$control" "$control_commit" || {

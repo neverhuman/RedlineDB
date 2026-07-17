@@ -41,6 +41,15 @@ fn control_plane_root() -> PathBuf {
         })
     }
 
+    if let Some(explicit) = env::var_os("JAIN_SPLIT_OPS_ROOT") {
+        let explicit = PathBuf::from(explicit);
+        if explicit.is_absolute() {
+            if let Some(root) = containing_root(&explicit) {
+                return root;
+            }
+        }
+        panic!("JAIN_SPLIT_OPS_ROOT must name a jain-split-ops checkout");
+    }
     if let Ok(current) = env::current_dir() {
         if let Some(root) = containing_root(&current) {
             return root;

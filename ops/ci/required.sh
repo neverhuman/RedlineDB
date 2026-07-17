@@ -21,7 +21,11 @@ shellcheck -S error "${sh_files[@]}"
 bash ops/ci/native-runtime-test.sh
 bash ops/ci/native-materializer-test.sh
 bash ops/ci/host-ci-integrity-test.sh
-bash ops/ci/split-host-ci-integrity-test.sh
+if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 ]]; then
+  bash ops/ci/host-ci-isolated-contract-test.sh
+else
+  bash ops/ci/split-host-ci-integrity-test.sh
+fi
 bash ops/ci/pinned-advisory-test.sh
 
 say 'Rust: format, tests, canonical manifest, source coverage, and local-Jeryu policy'
