@@ -194,6 +194,11 @@ request_root="$(realpath -e -- "$(jq -er '.request_root' "$sandbox_config")")" \
   || fail 'root request directory missing'
 [[ "$(stat -c '%u:%g:%a' -- "$request_root")" == '0:0:700' ]] \
   || fail 'root request directory ownership/mode mismatch'
+request_root_options="$(/usr/bin/findmnt -rn -o OPTIONS --target "$request_root")" \
+  || fail 'cannot inspect root request filesystem'
+case ",$request_root_options," in
+  *,noexec,*) fail 'root request filesystem forbids worker execution' ;;
+esac
 native_evidence_root="$(realpath -e -- \
   "$(jq -er '.native_evidence_root' "$sandbox_config")")" \
   || fail 'durable native evidence directory missing'

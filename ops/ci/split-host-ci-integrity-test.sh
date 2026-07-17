@@ -18,6 +18,7 @@ publisher_root="$tmp/root-publisher"
 request_root="$tmp/root-requests"
 worker_cache="$tmp/worker-cache"
 cargo_registry_cache=""
+noexec_request_root=""
 product_forge_root="$tmp/product-forge"
 cleanup() {
   cleanup_rc=$?
@@ -53,6 +54,10 @@ cleanup() {
     *) printf 'refusing unsafe Cargo registry fixture cleanup: %s\n' \
          "$cargo_registry_cache" >&2 ;;
   esac
+  if [[ -n "$noexec_request_root" ]]; then
+    sudo -n /usr/bin/umount -- "$noexec_request_root" 2>/dev/null || true
+    sudo -n rmdir -- "$noexec_request_root" 2>/dev/null || true
+  fi
   sudo -n rm -rf -- "$native_evidence_root" 2>/dev/null || true
   sudo -n rm -rf -- "$proof_evidence_root" 2>/dev/null || true
   sudo -n rm -rf -- "$control_remote" 2>/dev/null || true
@@ -395,6 +400,35 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
     device_allow:[]}' | sudo -n tee "$sandbox_config" >/dev/null
 sudo -n chown root:root "$sandbox_config"
 sudo -n chmod 0600 "$sandbox_config"
+
+# The live host may mount /run with noexec. Root authority copied beneath such
+# a request root cannot execute in the worker, so reject the mount before any
+# request directory, service, proof, or forge publication exists.
+noexec_request_root="$tmp/noexec-request-root"
+sudo -n install -d -o root -g root -m 0700 "$noexec_request_root"
+sudo -n /usr/bin/mount -t tmpfs \
+  -o 'nodev,nosuid,noexec,size=1048576,nr_inodes=32,mode=0700' \
+  jain-host-ci-noexec-test "$noexec_request_root"
+sudo -n cat "$sandbox_config" >"$tmp/executable-sandbox-config.json"
+sudo -n jq --arg request_root "$noexec_request_root" \
+  '.request_root = $request_root' "$sandbox_config" \
+  >"$tmp/noexec-sandbox-config.json"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/noexec-sandbox-config.json" "$sandbox_config"
+noexec_log="$tmp/noexec-request-root.log"
+if JAIN_HOST_CI_SANDBOX="$sandbox" JAIN_SPLIT_ROOT="$sandbox_family_root" \
+  "$control/ops/ci/split-host-ci.sh" \
+    jeryu jain-report "$control_commit" "$control" \
+    jain-report/required >"$noexec_log" 2>&1; then
+  printf 'sandbox accepted a noexec root request filesystem\n' >&2
+  exit 1
+fi
+grep -Fq 'root request filesystem forbids worker execution' "$noexec_log"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/executable-sandbox-config.json" "$sandbox_config"
+sudo -n /usr/bin/umount -- "$noexec_request_root"
+sudo -n rmdir -- "$noexec_request_root"
+noexec_request_root=""
 
 # The installed root snapshotter must reject special or over-limit request
 # inodes promptly. In particular, a FIFO cannot stall the sudo boundary.

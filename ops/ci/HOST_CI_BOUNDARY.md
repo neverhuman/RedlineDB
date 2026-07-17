@@ -94,7 +94,7 @@ install -d -o jain-host-ci -g jain-host-ci -m 0700 \
   /var/cache/jain-host-ci/cargo
 install -d -o root -g root -m 0555 \
   /var/lib/jain-host-ci/cargo-registry
-install -d -o root -g root -m 0700 /run/jain-host-ci
+install -d -o root -g root -m 0700 /var/lib/jain-host-ci/requests
 install -d -o root -g root -m 0700 \
   /var/lib/jain-host-ci/native-evidence
 install -d -o root -g root -m 0700 \
@@ -122,7 +122,7 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
   "rustup_home": "/home/ubuntu/.rustup",
   "control_remote": "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
   "forge_git_base": "http://127.0.0.1:8787/git",
-  "request_root": "/run/jain-host-ci",
+  "request_root": "/var/lib/jain-host-ci/requests",
   "native_evidence_root": "/var/lib/jain-host-ci/native-evidence",
   "proof_evidence_root": "/var/lib/jain-host-ci/proof-evidence",
   "token_file": "/usr/local/libexec/jain/jeryu-merge-token",
@@ -158,7 +158,7 @@ variable, or inside broker configuration. Both configs name only its path. Then 
   "jankurai_sha256": "<64 lowercase hex from governed install receipt>",
   "forge_git_base": "http://127.0.0.1:8787/git",
   "control_remote": "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
-  "request_root": "/run/jain-host-ci",
+  "request_root": "/var/lib/jain-host-ci/requests",
   "native_evidence_root": "/var/lib/jain-host-ci/native-evidence",
   "proof_evidence_root": "/var/lib/jain-host-ci/proof-evidence",
   "max_seal_age_seconds": 300,
@@ -179,6 +179,13 @@ directories. The sandbox binds it read-only. For each release run, `splitctl`
 parses the exact `Cargo.lock`, checksum-verifies every selected `.crate`, and
 copies only those archives and their sparse-index records into a fresh private
 Cargo home before Cargo runs with networking forced offline.
+
+The request root must be on an executable filesystem because the sandbox copies
+the digest-pinned controller and reviewed runner beneath it before binding that
+authority read-only into the worker. Both preflight and sandbox reject a
+`noexec` mount. On hosts where `/run` is mounted `noexec`, use the documented
+root-only `/var/lib/jain-host-ci/requests`; the request is still one-shot and is
+removed after success or controlled failure when `retain_requests=false`.
 
 Remove/revoke any legacy user-readable merge token. Replace broad passwordless
 sudo for the parent account with only the argument-validating sandbox:

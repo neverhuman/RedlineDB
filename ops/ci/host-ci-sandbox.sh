@@ -170,6 +170,11 @@ rustup_home="$(realpath -e -- "$(jq -er '.rustup_home' "$config")")" \
   || fail 'rustup home unavailable'
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$config")")" \
   || fail 'root request directory unavailable'
+request_root_options="$(/usr/bin/findmnt -rn -o OPTIONS --target "$request_root")" \
+  || fail 'cannot inspect root request filesystem'
+case ",$request_root_options," in
+  *,noexec,*) fail 'root request filesystem forbids worker execution' ;;
+esac
 native_evidence_root="$(realpath -e -- \
   "$(jq -er '.native_evidence_root' "$config")")" \
   || fail 'durable native evidence directory unavailable'
