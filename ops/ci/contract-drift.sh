@@ -12,9 +12,10 @@ cargo run --locked --quiet -- managed-repos --manifest repos.manifest.toml --jso
   > target/jankurai/contract-drift/managed-repositories.json
 jq -e '
   .schema_version == "jain.managed-repositories/v1" and
-  .repository_count == 33 and
+  .repository_count == 34 and
   ([.repositories[].name] | index("jain-split-ops") != null) and
   ([.repositories[].name] | index("jain-smartcluster") != null) and
+  ([.repositories[].name] | index("redline-central") != null) and
   ([.repositories[].name] | index("redline-split-ops") != null)
 ' target/jankurai/contract-drift/managed-repositories.json >/dev/null
 repo_count="$(jq '.repository_count' target/jankurai/contract-drift/managed-repositories.json)"
