@@ -380,12 +380,21 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
   export CARGO_TARGET_DIR="$tmp/cargo-target"
   mkdir -m 0700 "$CARGO_HOME" "$CARGO_TARGET_DIR" \
     || native_setup_failure "cannot create fresh release Cargo directories" 1
-  if [ -f "$wt/Cargo.toml" ] && [ ! -f "$wt/Cargo.lock" ]; then
-    native_setup_failure "release Rust repository has no Cargo.lock" 1
+  mapfile -d '' -t cargo_lock_paths < <(
+    git -C "$wt" ls-files -z -- Cargo.lock ':(glob)**/Cargo.lock' | LC_ALL=C sort -z
+  )
+  root_lock_tracked=false
+  cargo_lock_args=()
+  for cargo_lock_path in "${cargo_lock_paths[@]}"; do
+    [[ "$cargo_lock_path" == Cargo.lock ]] && root_lock_tracked=true
+    cargo_lock_args+=(--lock "$wt/$cargo_lock_path")
+  done
+  if [ -f "$wt/Cargo.toml" ] && [ "$root_lock_tracked" != true ]; then
+    native_setup_failure "release Rust repository has no tracked root Cargo.lock" 1
   fi
-  if [ -f "$wt/Cargo.lock" ]; then
+  if [ "${#cargo_lock_paths[@]}" -gt 0 ]; then
     "$SPLITCTL_BIN" cargo-cache-stage \
-      --lock "$wt/Cargo.lock" \
+      "${cargo_lock_args[@]}" \
       --source /opt/jain-ci/cargo-registry \
       --destination "$CARGO_HOME/registry" \
       --receipt "$CARGO_HOME/registry/stage-receipt.json" \

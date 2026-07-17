@@ -33,9 +33,19 @@ esac
   && -f "$cargo_home/registry/stage-receipt.json" \
   && ! -L "$cargo_home/registry/stage-receipt.json" ]] \
   || fail 'isolated Cargo cache is not the governed locked offline cache'
-jq -e --arg lock_sha "$(sha256sum Cargo.lock | cut -d' ' -f1)" '
-  select(.schema_version == "jain.locked-cargo-cache/v1")
-  | select(.lock_sha256 == $lock_sha)
+mapfile -d '' -t tracked_cargo_locks < <(
+  git -C "$repo_root" ls-files -z -- Cargo.lock ':(glob)**/Cargo.lock' | LC_ALL=C sort -z
+)
+lock_sha256s="$({
+  for cargo_lock in "${tracked_cargo_locks[@]}"; do
+    sha256sum -- "$repo_root/$cargo_lock" | cut -d' ' -f1
+  done
+} | jq -Rsc 'split("\n")[:-1] | sort')"
+jq -e --argjson lock_sha256s "$lock_sha256s" \
+  --argjson lock_count "${#tracked_cargo_locks[@]}" '
+  select(.schema_version == "jain.locked-cargo-cache/v2")
+  | select(.lock_count == $lock_count)
+  | select(.lock_sha256s == $lock_sha256s)
   | select(.package_count > 0)' \
   "$cargo_home/registry/stage-receipt.json" >/dev/null \
   || fail 'Cargo cache receipt is not bound to the exact lock'
