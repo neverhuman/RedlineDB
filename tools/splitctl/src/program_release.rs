@@ -9,7 +9,9 @@ use std::{
     path::{Component, Path, PathBuf},
 };
 
-use rustix::fs::{openat2, renameat_with, Mode, OFlags, RenameFlags, ResolveFlags};
+use rustix::fs::{
+    openat2, renameat_with, unlinkat, AtFlags, Mode, OFlags, RenameFlags, ResolveFlags,
+};
 
 const AUTHORITY_FORMAT: &str = "jain.program-release-authority";
 const EVIDENCE_FORMAT: &str = "jain.program-release-evidence-index";
@@ -1150,7 +1152,21 @@ fn validate_custody(
         )) {
             return Err("custody baseline contains a duplicate identity".into());
         }
-        rooted_protected_path(root, control, authority, baseline)?;
+        // A tree-inventory baseline that declares exactly zero entries with the
+        // canonical empty-tree digest describes a protected surface with no tracked
+        // files. Git cannot track an empty directory, so that surface is legitimately
+        // absent from a fresh exact-SHA checkout; accept the missing directory rather
+        // than failing custody validation on it. Any non-empty or differently declared
+        // baseline, or any failure other than the directory being absent (unsafe path,
+        // symlink, wrong identity), still fails closed.
+        let declares_empty_tree = baseline.kind == BaselineKind::TreeInventory
+            && baseline.entries == 0
+            && baseline.sha256 == digest_fields(b"jain.program-protected-tree\0", &[]);
+        match rooted_protected_path(root, control, authority, baseline) {
+            Ok(_) => {}
+            Err(error) if declares_empty_tree && is_missing_directory(error.as_ref()) => continue,
+            Err(error) => return Err(error),
+        }
         match baseline.kind {
             BaselineKind::File => {
                 let baseline_bytes = read_confined_regular_from(
@@ -1376,6 +1392,30 @@ impl ConfinedDir {
     }
 }
 
+/// Unlinks a partially written temporary status file if the writer returns before
+/// the atomic rename consumes it, so a failed `write_record` never leaves a
+/// `.<name>.partial-*` orphan in the governed evidence directory (which the
+/// program-checkout census requires to stay clean including untracked files).
+struct PartialFileGuard<'a> {
+    dir: &'a ConfinedDir,
+    name: String,
+    armed: bool,
+}
+
+impl PartialFileGuard<'_> {
+    fn disarm(&mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for PartialFileGuard<'_> {
+    fn drop(&mut self) {
+        if self.armed {
+            let _ = unlinkat(&self.dir.file, self.name.as_str(), AtFlags::empty());
+        }
+    }
+}
+
 fn write_record(
     program: &ValidatedProgram,
     record: &Path,
@@ -1435,6 +1475,11 @@ fn write_record(
         OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL,
         Mode::from_raw_mode(0o600),
     )?;
+    let mut partial_guard = PartialFileGuard {
+        dir: &parent_dir,
+        name: temp_name.clone(),
+        armed: true,
+    };
     let opened = file.metadata()?;
     if !opened.is_file() || opened.nlink() != 1 || opened.permissions().mode() & 0o777 != 0o600 {
         return Err("release status output identity or permissions are unsafe".into());
@@ -1465,6 +1510,8 @@ fn write_record(
         name,
         RenameFlags::NOREPLACE,
     )?;
+    // The rename consumed the temporary file; there is no longer a partial to clean up.
+    partial_guard.disarm();
     parent_dir.file.sync_all()?;
     let published = parent_dir.open_regular(Path::new(name))?;
     let published_metadata = published.metadata()?;
@@ -1689,6 +1736,15 @@ fn read_opened_regular(
         return Err("input changed while it was read".into());
     }
     Ok(bytes)
+}
+
+fn is_missing_directory(error: &(dyn std::error::Error + 'static)) -> bool {
+    if let Some(io_error) = error.downcast_ref::<std::io::Error>() {
+        return io_error.kind() == std::io::ErrorKind::NotFound;
+    }
+    error
+        .downcast_ref::<rustix::io::Errno>()
+        .is_some_and(|errno| *errno == rustix::io::Errno::NOENT)
 }
 
 fn tree_inventory(
