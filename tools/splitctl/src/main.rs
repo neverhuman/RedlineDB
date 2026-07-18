@@ -1,6 +1,7 @@
 // Repository-local release and Jeryu control-plane CLI.
 mod jeryu_client;
 mod program_release;
+mod release_flow;
 
 use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, JeryuRequest};
 use serde_json::{json, Map, Value as JsonValue};
@@ -12,7 +13,10 @@ use std::{
     io::{self, Read, Write},
     os::{
         fd::AsRawFd,
-        unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
+        unix::{
+            fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
+            process::CommandExt,
+        },
     },
     path::{Component, Path, PathBuf},
     process::Command,
@@ -28,6 +32,7 @@ const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
 const JERYU_ASKPASS_MODE: &str = "JAIN_SPLITCTL_JERYU_ASKPASS";
 const JERYU_ASKPASS_TOKEN_FILE: &str = "JAIN_SPLITCTL_JERYU_TOKEN_FILE";
 const JERYU_GIT_USERNAME: &str = "x-access-token";
+const GLOBAL_PRODUCER_LOCK: &str = "/run/lock/jain-global-host-ci-producer.lock";
 
 /// Resolve the control-plane checkout at runtime so release binaries do not
 /// embed the physical path of the checkout that compiled them. Commands are
@@ -157,6 +162,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Some("refresh-bare-mirrors") => refresh_bare_mirrors(args.collect())?,
         Some("host-ci-snapshot-request") => host_ci_snapshot_request_command(args.collect())?,
+        Some("host-ci-producer-lock") => host_ci_producer_lock_command(args.collect())?,
         Some("cargo-cache-stage") => cargo_cache_stage_command(args.collect())?,
         Some("validate-local-jeryu") => {
             let mut manifest = None;
@@ -237,15 +243,137 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("release-snapshot") => release_snapshot(args.collect())?,
         Some("release-status") => release_status(args.collect())?,
         Some("program-release") => program_release::command(args.collect())?,
+        Some("release-flow") => release_flow::command(args.collect())?,
         Some("bootstrap-main") => bootstrap_main_command(args.collect())?,
         Some("immutable-tag") => immutable_tag_command(args.collect())?,
         Some("verify-worktrees") => verify_worktrees_command(args.collect())?,
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--skip-program-checkouts] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | program-release validate --authority PATH | program-release validate-all --authority-dir PATH | program-release status --authority PATH [--record ABSOLUTE_PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] [--skip-remotes] [--skip-program-checkouts] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | host-ci-producer-lock --lock PATH --broker PATH --request PATH | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--skip-program-checkouts] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | program-release validate --authority PATH | program-release validate-all --authority-dir PATH | program-release status --authority PATH [--record ABSOLUTE_PATH] | release-flow --manifest PATH --evidence-root PATH [--cloud-spec PATH] [--token-file PATH] [--resume PATH] [--record PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] [--skip-remotes] [--skip-program-checkouts] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
+}
+
+fn host_ci_producer_lock_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut lock = None;
+    let mut broker = None;
+    let mut request = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--lock" => lock = Some(PathBuf::from(iter.next().ok_or("--lock needs a path")?)),
+            "--broker" => broker = Some(PathBuf::from(iter.next().ok_or("--broker needs a path")?)),
+            "--request" => {
+                request = Some(PathBuf::from(iter.next().ok_or("--request needs a path")?))
+            }
+            value => return Err(format!("unknown host-ci-producer-lock argument: {value}").into()),
+        }
+    }
+    let lock = lock.ok_or("--lock is required")?;
+    let broker = broker.ok_or("--broker is required")?;
+    let request = request.ok_or("--request is required")?;
+    if lock != Path::new(GLOBAL_PRODUCER_LOCK) {
+        return Err("global producer lock path differs from fixed authority".into());
+    }
+    if !broker.is_absolute() || !request.is_absolute() {
+        return Err("broker and request paths must be absolute".into());
+    }
+    let broker_metadata = fs::symlink_metadata(&broker)?;
+    if !broker_metadata.is_file()
+        || broker_metadata.file_type().is_symlink()
+        || broker_metadata.uid() != 0
+        || broker_metadata.gid() != 0
+        || broker_metadata.mode() & 0o777 != 0o500
+        || broker_metadata.nlink() != 1
+        || fs::canonicalize(&broker)? != broker
+    {
+        return Err("producer lock broker is not canonical root-owned mode 0500".into());
+    }
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .write(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+        .open(&lock)?;
+    let metadata = validate_open_producer_lock(&file, &lock, 0, 0)?;
+    if !try_lock_producer(&file)? {
+        eprintln!("splitctl: global host-CI producer is busy");
+        std::process::exit(75);
+    }
+    let after = file.metadata()?;
+    let path_after = fs::symlink_metadata(&lock)?;
+    if (metadata.dev(), metadata.ino()) != (after.dev(), after.ino())
+        || (after.dev(), after.ino()) != (path_after.dev(), path_after.ino())
+        || path_after.file_type().is_symlink()
+        || after.nlink() != 1
+    {
+        return Err("global producer lock identity changed during acquisition".into());
+    }
+    let descriptor_flags = unsafe { libc::fcntl(file.as_raw_fd(), libc::F_GETFD) };
+    if descriptor_flags < 0
+        || unsafe {
+            libc::fcntl(
+                file.as_raw_fd(),
+                libc::F_SETFD,
+                descriptor_flags & !libc::FD_CLOEXEC,
+            )
+        } < 0
+    {
+        return Err(io::Error::last_os_error().into());
+    }
+    let identity = format!("{}:{}", after.dev(), after.ino());
+    let descriptor = file.as_raw_fd().to_string();
+    let sudo_uid = env::var("SUDO_UID").map_err(|_| "SUDO_UID is required")?;
+    let sudo_gid = env::var("SUDO_GID").map_err(|_| "SUDO_GID is required")?;
+    let error = Command::new(&broker)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("LC_ALL", "C")
+        .env("JAIN_HOST_CI_CLEAN_ENV", "1")
+        .env("SUDO_UID", sudo_uid)
+        .env("SUDO_GID", sudo_gid)
+        .arg("--producer-lock-held")
+        .arg(&descriptor)
+        .arg(&identity)
+        .arg(&request)
+        .exec();
+    Err(error.into())
+}
+
+fn validate_open_producer_lock(
+    file: &fs::File,
+    lock: &Path,
+    expected_uid: u32,
+    expected_gid: u32,
+) -> Result<fs::Metadata, Box<dyn std::error::Error>> {
+    let metadata = file.metadata()?;
+    let path_metadata = fs::symlink_metadata(lock)?;
+    if !metadata.is_file()
+        || path_metadata.file_type().is_symlink()
+        || metadata.uid() != expected_uid
+        || metadata.gid() != expected_gid
+        || metadata.mode() & 0o777 != 0o600
+        || metadata.nlink() != 1
+        || (metadata.dev(), metadata.ino()) != (path_metadata.dev(), path_metadata.ino())
+    {
+        return Err("global producer lock is not a stable root-owned 0600 single-link file".into());
+    }
+    Ok(metadata)
+}
+
+fn try_lock_producer(file: &fs::File) -> io::Result<bool> {
+    if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+        return Ok(true);
+    }
+    let error = io::Error::last_os_error();
+    if error
+        .raw_os_error()
+        .is_some_and(|code| code == libc::EAGAIN || code == libc::EWOULDBLOCK)
+    {
+        Ok(false)
+    } else {
+        Err(error)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -12172,5 +12300,100 @@ name = "two"
             65_536,
         )
         .is_err());
+    }
+
+    #[test]
+    fn producer_lock_rejects_hostile_metadata_and_replacement() {
+        let root = TestDir::new("producer-lock");
+        let lock = root.path().join("producer.lock");
+        fs::write(&lock, b"").unwrap();
+        fs::set_permissions(&lock, fs::Permissions::from_mode(0o600)).unwrap();
+        let file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(&lock)
+            .unwrap();
+        let metadata = file.metadata().unwrap();
+        validate_open_producer_lock(&file, &lock, metadata.uid(), metadata.gid()).unwrap();
+
+        fs::set_permissions(&lock, fs::Permissions::from_mode(0o640)).unwrap();
+        assert!(validate_open_producer_lock(&file, &lock, metadata.uid(), metadata.gid()).is_err());
+        fs::set_permissions(&lock, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(validate_open_producer_lock(
+            &file,
+            &lock,
+            metadata.uid().saturating_add(1),
+            metadata.gid()
+        )
+        .is_err());
+
+        let hardlink = root.path().join("producer.hardlink");
+        fs::hard_link(&lock, &hardlink).unwrap();
+        assert!(validate_open_producer_lock(&file, &lock, metadata.uid(), metadata.gid()).is_err());
+        fs::remove_file(hardlink).unwrap();
+
+        let original = root.path().join("producer.original");
+        fs::rename(&lock, &original).unwrap();
+        fs::write(&lock, b"").unwrap();
+        fs::set_permissions(&lock, fs::Permissions::from_mode(0o600)).unwrap();
+        assert!(validate_open_producer_lock(&file, &lock, metadata.uid(), metadata.gid()).is_err());
+
+        let symlink = root.path().join("producer.symlink");
+        std::os::unix::fs::symlink(&lock, &symlink).unwrap();
+        assert!(fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(&symlink)
+            .is_err());
+
+        let directory = root.path().join("producer.directory");
+        fs::create_dir(&directory).unwrap();
+        assert!(fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(&directory)
+            .is_err());
+
+        let fifo = root.path().join("producer.fifo");
+        assert!(Command::new("mkfifo")
+            .args(["-m", "0600"])
+            .arg(&fifo)
+            .status()
+            .unwrap()
+            .success());
+        let fifo_file = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(&fifo)
+            .unwrap();
+        assert!(
+            validate_open_producer_lock(&fifo_file, &fifo, metadata.uid(), metadata.gid()).is_err()
+        );
+    }
+
+    #[test]
+    fn producer_lock_contention_is_nonblocking_and_drop_releases_it() {
+        let root = TestDir::new("producer-lock-contention");
+        let lock = root.path().join("producer.lock");
+        fs::write(&lock, b"").unwrap();
+        fs::set_permissions(&lock, fs::Permissions::from_mode(0o600)).unwrap();
+        let open = || {
+            fs::OpenOptions::new()
+                .read(true)
+                .write(true)
+                .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+                .open(&lock)
+                .unwrap()
+        };
+        let first = open();
+        let second = open();
+        assert!(try_lock_producer(&first).unwrap());
+        assert!(!try_lock_producer(&second).unwrap());
+        drop(first);
+        assert!(try_lock_producer(&second).unwrap());
     }
 }

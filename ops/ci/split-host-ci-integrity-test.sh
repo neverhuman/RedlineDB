@@ -12,6 +12,7 @@ proof_evidence_root="$(mktemp -d "$repo_root/target/test-tmp/jain-proof-evidence
 forged_root=""
 fd_attack_root=""
 runner_pid=""
+lock_holder_pid=""
 forge_pid=""
 attack_pid=""
 publisher_root="$tmp/root-publisher"
@@ -20,6 +21,9 @@ worker_cache="$tmp/worker-cache"
 cargo_registry_cache=""
 grype_db_root=""
 noexec_request_root=""
+global_producer_lock=/run/lock/jain-global-host-ci-producer.lock
+global_producer_lock_created=false
+global_producer_lock_identity=""
 product_forge_root="$tmp/product-forge"
 cleanup() {
   cleanup_rc=$?
@@ -33,6 +37,11 @@ cleanup() {
   if [[ -n "$runner_pid" ]] && kill -0 "$runner_pid" 2>/dev/null; then
     kill "$runner_pid" 2>/dev/null || true
     wait "$runner_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$lock_holder_pid" ]] \
+    && sudo -n /bin/kill -0 "$lock_holder_pid" 2>/dev/null; then
+    sudo -n /bin/kill "$lock_holder_pid" 2>/dev/null || true
+    wait "$lock_holder_pid" 2>/dev/null || true
   fi
   if [[ -n "$forge_pid" ]] && kill -0 "$forge_pid" 2>/dev/null; then
     kill "$forge_pid" 2>/dev/null || true
@@ -66,6 +75,12 @@ cleanup() {
   if [[ -n "$noexec_request_root" ]]; then
     sudo -n /usr/bin/umount -- "$noexec_request_root" 2>/dev/null || true
     sudo -n rmdir -- "$noexec_request_root" 2>/dev/null || true
+  fi
+  if [[ "$global_producer_lock_created" == true \
+    && ! -L "$global_producer_lock" \
+    && "$(sudo -n stat -Lc '%d:%i' -- "$global_producer_lock" 2>/dev/null)" \
+      == "$global_producer_lock_identity" ]]; then
+    sudo -n rm -f -- "$global_producer_lock"
   fi
   sudo -n rm -rf -- "$native_evidence_root" 2>/dev/null || true
   sudo -n rm -rf -- "$proof_evidence_root" 2>/dev/null || true
@@ -317,6 +332,14 @@ jankurai="$publisher_root/jankurai"
 security_tool_digest="$(sha256sum /usr/bin/true | cut -d' ' -f1)"
 sudo -n install -d -o root -g root -m 0711 "$publisher_root"
 sudo -n install -d -o root -g root -m 0700 "$request_root"
+if [[ ! -e "$global_producer_lock" && ! -L "$global_producer_lock" ]]; then
+  sudo -n install -o root -g root -m 0600 /dev/null "$global_producer_lock"
+  global_producer_lock_created=true
+fi
+[[ ! -L "$global_producer_lock" \
+  && "$(sudo -n stat -Lc '%F:%u:%g:%a:%h' -- "$global_producer_lock")" \
+    == 'regular file:0:0:600:1' ]]
+global_producer_lock_identity="$(sudo -n stat -Lc '%d:%i' -- "$global_producer_lock")"
 mkdir -p "$(dirname "$product_remote")"
 sudo -n install -o root -g root -m 0500 \
   "$control/ops/ci/host-ci-publisher.sh" "$publisher"
@@ -380,6 +403,7 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d
   --arg splitctl_digest "$splitctl_digest" --arg jankurai_digest "$fake_jankurai_digest" \
   --arg security_tool_digest "$security_tool_digest" \
   --arg token_file "$publisher_token_file" \
+  --arg global_producer_lock "$global_producer_lock" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
   --arg control_ref "$bootstrap_control_ref" \
@@ -389,7 +413,7 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d
   --arg proof_evidence_root "$proof_evidence_root" \
   --arg grype_db_root "$grype_db_root" \
   --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
-  '{schema_version:"jain.host-ci-publisher-config/v5",
+  '{schema_version:"jain.host-ci-publisher-config/v6",
     publisher_sha256:$digest,sandbox_sha256:$sandbox_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
     security_tool_sha256:{actionlint:$security_tool_digest,
@@ -402,7 +426,8 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d
     bootstrap_expires_at:$bootstrap_expires_at,request_root:$requests,
     native_evidence_root:$native_evidence_root,
     proof_evidence_root:$proof_evidence_root,
-    max_seal_age_seconds:300,token_file:$token_file}' \
+    max_seal_age_seconds:300,token_file:$token_file,
+    global_producer_lock:$global_producer_lock}' \
   | sudo -n tee "$publisher_config" >/dev/null
 sudo -n chown root:root "$publisher_config"
 sudo -n chmod 0600 "$publisher_config"
@@ -414,6 +439,7 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   --arg cargo_registry_cache "$cargo_registry_cache" \
   --arg cargo_bin "$HOME/.cargo/bin" --arg rustup "$HOME/.rustup" \
   --arg token_file "$publisher_token_file" \
+  --arg global_producer_lock "$global_producer_lock" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
   --arg control_ref "$bootstrap_control_ref" \
@@ -424,7 +450,7 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   --arg grype_db_root "$grype_db_root" \
   --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
   --argjson parent_uid "$(id -u)" --argjson parent_gid "$(id -g)" \
-  '{schema_version:"jain.host-ci-sandbox-config/v5",
+  '{schema_version:"jain.host-ci-sandbox-config/v6",
     sandbox_sha256:$digest,publisher_sha256:$publisher_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
     security_tool_sha256:{actionlint:$security_tool_digest,
@@ -442,6 +468,7 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
     request_root:$requests,retain_requests:true,
     native_evidence_root:$native_evidence_root,
     proof_evidence_root:$proof_evidence_root,
+    global_producer_lock:$global_producer_lock,
     device_allow:[]}' | sudo -n tee "$sandbox_config" >/dev/null
 sudo -n chown root:root "$sandbox_config"
 sudo -n chmod 0600 "$sandbox_config"
@@ -863,6 +890,43 @@ grep -Fq 'requested head is not an advertised product ref' \
   exit 1
 }
 
+# The fixed root producer lock is acquired before request snapshot, root request
+# creation, credential access, service launch, or publication. Contention is a
+# retryable exit 75 and normal kernel release lets the subsequent full run win.
+producer_held="$tmp/producer-lock-held"
+sudo -n /bin/bash -c '
+  exec 9<>"$1"
+  /usr/bin/flock -x 9
+  printf held >"$2"
+  exec /usr/bin/sleep 20
+' -- "$global_producer_lock" "$producer_held" &
+lock_holder_pid=$!
+for _ in {1..100}; do
+  [[ -f "$producer_held" ]] && break
+  sleep 0.05
+done
+[[ -f "$producer_held" ]]
+contended_requests_before="$(sudo -n find "$request_root" -mindepth 1 -maxdepth 1 \
+  -type d | wc -l)"
+contended_forge_before="$(stat -c '%s' "$forge_log")"
+contention_rc=0
+JAIN_HOST_CI_SANDBOX="$sandbox" JAIN_SPLIT_ROOT="$sandbox_family_root" \
+  "$control/ops/ci/split-host-ci.sh" \
+    jeryu jain-report "$product_sha" "$product" jain-report/required \
+    >"$tmp/producer-contention.log" 2>&1 || contention_rc=$?
+[[ "$contention_rc" == 75 ]] || {
+  cat "$tmp/producer-contention.log" >&2
+  printf 'contended producer returned %s, want 75\n' "$contention_rc" >&2
+  exit 1
+}
+grep -Fq 'global host-CI producer is busy' "$tmp/producer-contention.log"
+[[ "$(sudo -n find "$request_root" -mindepth 1 -maxdepth 1 -type d | wc -l)" \
+    == "$contended_requests_before" \
+  && "$(stat -c '%s' "$forge_log")" == "$contended_forge_before" ]]
+sudo -n /bin/kill "$lock_holder_pid"
+wait "$lock_holder_pid" 2>/dev/null || true
+lock_holder_pid=""
+
 # Full parent -> reviewed runner -> candidate path. The candidate scans every
 # visible proc entry and the root config path, then makes a real forged-status
 # request. It must recover nothing and the request must not reach the server.
@@ -999,6 +1063,18 @@ mapfile -t retained_states < <(
 success_request="$(dirname "${retained_states[0]}")"
 sudo -n jq -e 'select(.status == "consumed")' \
   "$success_request/root-state.json" >/dev/null
+sudo -n jq -e --arg path "$global_producer_lock" \
+  --arg identity "$global_producer_lock_identity" '
+    select(.schema_version == "jain.host-ci-root-state/v5")
+    | select(.producer_lock_path == $path)
+    | select(([.producer_lock_dev,.producer_lock_inode] | join(":")) == $identity)' \
+  "$success_request/root-state.json" >/dev/null
+sudo -n jq -e --arg path "$global_producer_lock" \
+  --arg identity "$global_producer_lock_identity" '
+    select(.schema_version == "jain.host-ci-root-result/v5")
+    | select(.producer_lock_path == $path)
+    | select(([.producer_lock_dev,.producer_lock_inode] | join(":")) == $identity)' \
+  "$success_request/root-result.json" >/dev/null
 sudo -n jq -e --arg ref "$bootstrap_control_ref" \
   --arg expires "$bootstrap_expires_at" '
     select(.control_ref == $ref and .bootstrap_expires_at == $expires)' \
@@ -1030,21 +1106,21 @@ sudo -n jq -e '
     and .fixture.network_isolated == true)' \
   "$success_proof_dir/report.json" >/dev/null
 # Installed protocol versions are mandatory trust inputs, not advisory parser
-# hints. A v4 publisher config is rejected even for an otherwise sealed v4
-# request, and restoring the exact v5 bytes does not make that request replayable.
-sudo -n cp -- "$publisher_config" "$tmp/publisher-config.v5"
-sudo -n jq '.schema_version="jain.host-ci-publisher-config/v4"' \
-  "$publisher_config" >"$tmp/publisher-config.v4"
+# hints. A v5 publisher config is rejected even for an otherwise sealed v5
+# request, and restoring the exact v6 bytes does not make that request replayable.
+sudo -n cp -- "$publisher_config" "$tmp/publisher-config.v6"
+sudo -n jq '.schema_version="jain.host-ci-publisher-config/v5"' \
+  "$publisher_config" >"$tmp/publisher-config.v5"
 sudo -n install -o root -g root -m 0600 \
-  "$tmp/publisher-config.v4" "$publisher_config"
+  "$tmp/publisher-config.v5" "$publisher_config"
 if sudo -n "$publisher" "$success_request" \
   >"$tmp/old-publisher-config.log" 2>&1; then
-  printf 'publisher accepted a v4 config protocol\n' >&2
+  printf 'publisher accepted a v5 config protocol\n' >&2
   exit 1
 fi
 grep -Fq 'invalid publisher config schema' "$tmp/old-publisher-config.log"
 sudo -n install -o root -g root -m 0600 \
-  "$tmp/publisher-config.v5" "$publisher_config"
+  "$tmp/publisher-config.v6" "$publisher_config"
 if "$publisher" "$success_request" >/dev/null 2>&1; then
   printf 'unprivileged parent directly executed the root-only publisher\n' >&2
   exit 1
@@ -1142,10 +1218,10 @@ grep -Fq 'bootstrap expiry differs across root artifacts' \
 old_result_id="$(printf 'c%.0s' {1..64})"
 make_sealed_variant "$old_result_id" \
   '.request_id=$request_id
-   | .schema_version="jain.host-ci-root-result/v3"' "$(date +%s)"
+   | .schema_version="jain.host-ci-root-result/v4"' "$(date +%s)"
 if sudo -n "$publisher" "$request_root/$old_result_id" \
   >"$tmp/old-root-result.log" 2>&1; then
-  printf 'v4 publisher accepted a v3 root result protocol\n' >&2
+  printf 'v6 publisher accepted a v4 root result protocol\n' >&2
   exit 1
 fi
 grep -Fq 'invalid root result schema' "$tmp/old-root-result.log"
@@ -1450,20 +1526,20 @@ jq -cn --arg commit "$control_commit" --arg split_root "$sandbox_family_root" \
   >"$fd_attack_request"
 chmod 0600 "$fd_attack_request"
 # The other installed broker config is independently strict as well.
-sudo -n cp -- "$sandbox_config" "$tmp/sandbox-config.v4"
-sudo -n jq '.schema_version="jain.host-ci-sandbox-config/v3"' \
-  "$sandbox_config" >"$tmp/sandbox-config.v3"
+sudo -n cp -- "$sandbox_config" "$tmp/sandbox-config.v6"
+sudo -n jq '.schema_version="jain.host-ci-sandbox-config/v5"' \
+  "$sandbox_config" >"$tmp/sandbox-config.v5"
 sudo -n install -o root -g root -m 0600 \
-  "$tmp/sandbox-config.v3" "$sandbox_config"
+  "$tmp/sandbox-config.v5" "$sandbox_config"
 if sudo -n "$sandbox" "$fd_attack_request" \
   >"$tmp/old-sandbox-config.log" 2>&1; then
-  printf 'sandbox accepted a v3 config protocol\n' >&2
+  printf 'sandbox accepted a v5 config protocol\n' >&2
   exit 1
 fi
 grep -Fq 'invalid sandbox config schema' "$tmp/old-sandbox-config.log"
 sudo -n install -o root -g root -m 0600 \
-  "$tmp/sandbox-config.v4" "$sandbox_config"
-# The installed v4 broker rejects a structurally valid request carrying the
+  "$tmp/sandbox-config.v6" "$sandbox_config"
+# The installed v6 broker rejects a structurally valid request carrying the
 # previous protocol before it creates a worker or reaches the forge.
 jq '.schema_version="jain.host-ci-sandbox-request/v3"' \
   "$fd_attack_request" >"$tmp/old-sandbox-request.json"
@@ -1472,7 +1548,7 @@ chmod 0600 "$fd_attack_request"
 old_request_offset="$(stat -c '%s' "$forge_log")"
 if sudo -n "$sandbox" "$fd_attack_request" \
   >"$tmp/old-sandbox-request.log" 2>&1; then
-  printf 'v4 sandbox accepted a v3 request protocol\n' >&2
+  printf 'v6 sandbox accepted a v3 request protocol\n' >&2
   exit 1
 fi
 grep -Fq 'invalid sandbox request schema' "$tmp/old-sandbox-request.log"
