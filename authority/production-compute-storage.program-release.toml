@@ -75,7 +75,7 @@ remote = "http://127.0.0.1:8787/git/jain-split/jain-shard.git"
 required_check = "jain-shard/required"
 lifecycle = "local-prototype"
 branch = "main"
-head_commit = "ce57c9d2f75ff1e957a2643b74b6b3a550938318"
+head_commit = "3585246bcc94e805846e8620870a91d0d78c3ed6"
 
 [[repository]]
 owner = "jeryu"
