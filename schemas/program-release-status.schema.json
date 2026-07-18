@@ -1,0 +1,74 @@
+{
+  "title": "Jain program release reduced status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "release",
+    "target_claim",
+    "target_status",
+    "target_durability",
+    "decision",
+    "eligible",
+    "formal_ga",
+    "activation_enabled",
+    "critical_available",
+    "authority_sha256",
+    "spec_sha256",
+    "custody_sha256",
+    "evidence_index_sha256",
+    "receipt_set_sha256",
+    "repository_set_sha256",
+    "decision_input_sha256",
+    "custody_live_source_checked",
+    "custody_intake_attested",
+    "passed",
+    "pending",
+    "failed",
+    "deferred",
+    "blockers"
+  ],
+  "properties": {
+    "format": { "const": "jain.program-release-status" },
+    "release": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "target_claim": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "target_status": {
+      "enum": ["development", "production-canary", "general-availability"]
+    },
+    "target_durability": { "enum": ["ephemeral", "durable", "critical"] },
+    "decision": { "enum": ["blocked", "eligible"] },
+    "eligible": { "type": "boolean" },
+    "formal_ga": { "type": "boolean" },
+    "activation_enabled": { "type": "boolean" },
+    "critical_available": { "type": "boolean" },
+    "authority_sha256": { "$ref": "#/$defs/sha256" },
+    "spec_sha256": { "$ref": "#/$defs/sha256" },
+    "custody_sha256": { "$ref": "#/$defs/sha256" },
+    "evidence_index_sha256": { "$ref": "#/$defs/sha256" },
+    "receipt_set_sha256": { "$ref": "#/$defs/sha256" },
+    "repository_set_sha256": { "$ref": "#/$defs/sha256" },
+    "decision_input_sha256": { "$ref": "#/$defs/sha256" },
+    "custody_live_source_checked": { "type": "boolean" },
+    "custody_intake_attested": { "type": "boolean" },
+    "passed": { "$ref": "#/$defs/group_ids" },
+    "pending": { "$ref": "#/$defs/group_ids" },
+    "failed": { "$ref": "#/$defs/group_ids" },
+    "deferred": { "$ref": "#/$defs/group_ids" },
+    "blockers": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 },
+      "uniqueItems": true
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "group_ids": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1, "maxLength": 128 },
+      "uniqueItems": true
+    }
+  }
+}

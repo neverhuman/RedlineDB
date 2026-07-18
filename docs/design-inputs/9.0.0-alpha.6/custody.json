@@ -1,0 +1,53 @@
+{
+  "format": "jain.program-design-input-custody",
+  "release": "9.0.0-alpha.6",
+  "source_root": "..",
+  "live_source_checked": false,
+  "intake_attested": false,
+  "inputs": [
+    {
+      "source": "SUPER_MERGER_CODEX.md",
+      "copy": "docs/design-inputs/9.0.0-alpha.6/SUPER_MERGER_CODEX.md",
+      "sha256": "81fbaab3d52cace84284d087d65b2b5b41693d34a3520e844b2f2669abb347df",
+      "bytes": 88984
+    },
+    {
+      "source": "SUPER_MERGER_CLAUDE.md",
+      "copy": "docs/design-inputs/9.0.0-alpha.6/SUPER_MERGER_CLAUDE.md",
+      "sha256": "e46f167eccc46d45a05ab31732bd4c05a2774d7063c341837f81ec5cdde74d7e",
+      "bytes": 99476
+    },
+    {
+      "source": "SUPER_MERGER_STORAGE_CLAUDE.md",
+      "copy": "docs/design-inputs/9.0.0-alpha.6/SUPER_MERGER_STORAGE_CLAUDE.md",
+      "sha256": "db08f52c14ae05f2ef26a1efe8fc3fa53778e13233397fbb2f9b9ef9238f92d7",
+      "bytes": 65996
+    }
+  ],
+  "protected_baselines": [
+    {
+      "id": "current-manifest",
+      "kind": "file",
+      "release": "8.0.1",
+      "path": "repos.manifest.toml",
+      "sha256": "e94a0e0564611b958586325bd53239a9ce7b29995e5086f215c1986d4b5841f7",
+      "entries": 1
+    },
+    {
+      "id": "prior-release-evidence",
+      "kind": "tree_inventory",
+      "release": "8.0.0",
+      "path": "docs/release-evidence/8.0.0",
+      "sha256": "fb44575e144aaeaf302fa8f3b686c9fd557b4cf1565cceb5bf597ecdc60c41c2",
+      "entries": 148
+    },
+    {
+      "id": "current-release-evidence",
+      "kind": "tree_inventory",
+      "release": "8.0.1",
+      "path": "docs/release-evidence/8.0.1",
+      "sha256": "6f3ed58b5c54859fb718e85f0091d1081af173626a6f70b45f7da18993b5968f",
+      "entries": 0
+    }
+  ]
+}

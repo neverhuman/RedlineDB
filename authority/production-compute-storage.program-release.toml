@@ -1,0 +1,240 @@
+format = "jain.program-release-authority"
+
+[program]
+name = "jain"
+release = "9.0.0-alpha.6"
+target_claim = "production_compute_storage_canary"
+target_status = "production-canary"
+formal_ga = false
+activation_enabled = false
+
+[paths]
+design_input_root = "docs/design-inputs/9.0.0-alpha.6"
+spec = "docs/design-inputs/9.0.0-alpha.6/SPEC.md"
+custody = "docs/design-inputs/9.0.0-alpha.6/custody.json"
+evidence_root = "docs/release-evidence/9.0.0-alpha.6"
+evidence_index = "docs/release-evidence/9.0.0-alpha.6/evidence-index.json"
+status_record = "docs/release-evidence/9.0.0-alpha.6/status/m0.json"
+
+[firewall]
+release_namespace = "9.0.0-alpha.6"
+protected_releases = ["8.0.0", "8.0.1"]
+protected_manifests = ["repos.manifest.toml"]
+protected_tag_fragments = ["-v8."]
+
+[[firewall.protected_surface]]
+id = "current-manifest"
+kind = "file"
+release = "8.0.1"
+path = "repos.manifest.toml"
+
+[[firewall.protected_surface]]
+id = "prior-release-evidence"
+kind = "tree_inventory"
+release = "8.0.0"
+path = "docs/release-evidence/8.0.0"
+
+[[firewall.protected_surface]]
+id = "current-release-evidence"
+kind = "tree_inventory"
+release = "8.0.1"
+path = "docs/release-evidence/8.0.1"
+
+[canary]
+hub = "AtomicSoul"
+nodes = ["xbabe1", "xbabe2", "xbabe3"]
+witnesses = ["xbabe1", "xbabe2", "xbabe3"]
+witness_quorum = 2
+target_durability = "durable"
+critical_available = false
+
+[deployment_inputs]
+status = "unbound"
+required = [
+  "cidrs",
+  "filesystem_uuids",
+  "volume_roots",
+  "recovery_key_custody",
+  "legacy_ownership_map",
+  "shadow_witness_topology",
+]
+
+[design_inputs]
+source_root = ".."
+names = [
+  "SUPER_MERGER_CODEX.md",
+  "SUPER_MERGER_CLAUDE.md",
+  "SUPER_MERGER_STORAGE_CLAUDE.md",
+]
+
+[[repository]]
+owner = "jain-split"
+name = "jain-shard"
+checkout = "../jain-shard"
+remote = "http://127.0.0.1:8787/git/jain-split/jain-shard.git"
+required_check = "jain-shard/required"
+lifecycle = "local-prototype"
+branch = "main"
+head_commit = "ce57c9d2f75ff1e957a2643b74b6b3a550938318"
+
+[[repository]]
+owner = "jeryu"
+name = "jain-fabric"
+checkout = "../jain-fabric"
+remote = "http://127.0.0.1:8787/git/jeryu/jain-fabric.git"
+required_check = "jain-fabric/required"
+lifecycle = "not-created"
+
+[[repository]]
+owner = "jeryu"
+name = "jain-platform"
+checkout = "../jain-platform"
+remote = "http://127.0.0.1:8787/git/jeryu/jain-platform.git"
+required_check = "jain-platform/required"
+lifecycle = "not-created"
+
+[[evidence_group]]
+id = "custody"
+policy = "required"
+validator = "portable_custody"
+requirements = ["A6-GOV-001", "A6-GOV-002", "A6-GOV-003", "A6-GOV-004"]
+receipt_roots = ["docs/design-inputs/9.0.0-alpha.6"]
+
+[[evidence_group]]
+id = "contracts"
+policy = "required"
+validator = "unavailable"
+requirements = [
+  "A6-GOV-008",
+  "A6-EXE-002",
+  "A6-EXE-003",
+  "A6-EXE-004",
+  "A6-EXE-010",
+  "A6-ACC-001",
+]
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "images"
+policy = "required"
+validator = "unavailable"
+requirements = ["A6-REL-003", "A6-REL-007"]
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "authorization"
+policy = "required"
+validator = "unavailable"
+requirements = [
+  "A6-EXE-001",
+  "A6-EXE-006",
+  "A6-EXE-007",
+  "A6-EXE-008",
+  "A6-ADP-003",
+  "A6-STO-005",
+  "A6-STO-010",
+  "A6-REL-001",
+  "A6-REL-002",
+]
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "runs"
+policy = "required"
+validator = "unavailable"
+requirements = [
+  "A6-EXE-005",
+  "A6-EXE-009",
+  "A6-EXE-011",
+  "A6-EXE-012",
+  "A6-ADP-001",
+  "A6-ADP-002",
+  "A6-ADP-007",
+  "A6-ACC-002",
+  "A6-ACC-004",
+]
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "git"
+policy = "required"
+validator = "unavailable"
+requirements = [
+  "A6-GOV-005",
+  "A6-GOV-006",
+  "A6-GOV-007",
+  "A6-ADP-005",
+  "A6-ADP-006",
+  "A6-REL-008",
+]
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "storage"
+policy = "required"
+validator = "unavailable"
+requirements = [
+  "A6-STO-001",
+  "A6-STO-002",
+  "A6-STO-003",
+  "A6-STO-007",
+  "A6-STO-008",
+  "A6-STO-009",
+  "A6-ACC-003",
+]
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "shadow"
+policy = "required"
+validator = "unavailable"
+requirements = [
+  "A6-STO-004",
+  "A6-STO-006",
+  "A6-REL-004",
+  "A6-REL-006",
+  "A6-ACC-005",
+]
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "operations"
+policy = "required"
+validator = "unavailable"
+requirements = ["A6-REL-005"]
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "research"
+policy = "required"
+validator = "unavailable"
+requirements = ["A6-ADP-004"]
+receipt_roots = ["docs/release-evidence/9.0.0-alpha.6/receipts"]
+
+[[evidence_group]]
+id = "ui"
+policy = "deferred"
+validator = "unavailable"
+requirements = ["A6-DEF-001"]
+receipt_roots = []
+
+[[evidence_group]]
+id = "jarvis"
+policy = "deferred"
+validator = "unavailable"
+requirements = ["A6-DEF-002"]
+receipt_roots = []
+
+[[evidence_group]]
+id = "migration"
+policy = "deferred"
+validator = "unavailable"
+requirements = ["A6-DEF-003"]
+receipt_roots = []
+
+[[evidence_group]]
+id = "final_ga_owners"
+policy = "deferred"
+validator = "unavailable"
+requirements = ["A6-DEF-004"]
+receipt_roots = []

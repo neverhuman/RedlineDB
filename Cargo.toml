@@ -7,7 +7,9 @@ publish = false
 
 [dependencies]
 libc = "0.2"
+rustix = { version = "1.1.4", features = ["fs"] }
 sha2 = "0.10"
+serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 toml = "0.8"
 

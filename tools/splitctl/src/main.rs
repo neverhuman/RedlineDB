@@ -1,5 +1,6 @@
 // Repository-local release and Jeryu control-plane CLI.
 mod jeryu_client;
+mod program_release;
 
 use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, JeryuRequest};
 use serde_json::{json, Map, Value as JsonValue};
@@ -160,14 +161,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("validate-local-jeryu") => {
             let mut manifest = None;
             let mut skip_remotes = false;
+            let mut skip_program_checkouts = false;
             while let Some(arg) = args.next() {
                 match arg.as_str() {
                     "--manifest" => manifest = Some(PathBuf::from(args.next().ok_or("--manifest needs a path")?)),
                     "--skip-remotes" => skip_remotes = true,
+                    "--skip-program-checkouts" => skip_program_checkouts = true,
                     value => return Err(format!("unknown argument: {value}").into()),
                 }
             }
-            validate_local_jeryu(manifest, skip_remotes)?;
+            validate_local_jeryu(manifest, skip_remotes, skip_program_checkouts)?;
         }
         Some("preflight") => preflight(args.collect())?,
         Some("source-coverage") => {
@@ -187,6 +190,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("jeryu-doctor") => {
             let mut manifest = None;
             let mut skip_remotes = false;
+            let mut skip_program_checkouts = false;
             let mut fix_remotes = false;
             let mut register_family = false;
             let mut install_hooks = false;
@@ -194,6 +198,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 match arg.as_str() {
                     "--manifest" => manifest = Some(PathBuf::from(args.next().ok_or("--manifest needs a path")?)),
                     "--skip-remotes" => skip_remotes = true,
+                    "--skip-program-checkouts" => skip_program_checkouts = true,
                     "--fix-remotes" => fix_remotes = true,
                     "--register-family" => register_family = true,
                     "--install-hooks" => install_hooks = true,
@@ -209,7 +214,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if install_hooks {
                 install_worktree_ban_hooks(manifest.clone())?;
             }
-            validate_local_jeryu(manifest, skip_remotes)?;
+            validate_local_jeryu(manifest, skip_remotes, skip_program_checkouts)?;
         }
         Some("jeryu-local") => jeryu_local(args.collect())?,
         Some("jeryu-publish-host-ci") => {
@@ -231,13 +236,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("release-preflight") => release_preflight(args.collect())?,
         Some("release-snapshot") => release_snapshot(args.collect())?,
         Some("release-status") => release_status(args.collect())?,
+        Some("program-release") => program_release::command(args.collect())?,
         Some("bootstrap-main") => bootstrap_main_command(args.collect())?,
         Some("immutable-tag") => immutable_tag_command(args.collect())?,
         Some("verify-worktrees") => verify_worktrees_command(args.collect())?,
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--skip-program-checkouts] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | program-release validate --authority PATH | program-release validate-all --authority-dir PATH | program-release status --authority PATH [--record ABSOLUTE_PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] [--skip-remotes] [--skip-program-checkouts] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -7638,7 +7644,11 @@ fn path_matches(path: &str, pattern: &str) -> bool {
 fn validate_local_jeryu(
     manifest: Option<PathBuf>,
     skip_remotes: bool,
+    skip_program_checkouts: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if skip_program_checkouts && !skip_remotes {
+        return Err("--skip-program-checkouts is allowed only with --skip-remotes in a standalone exact-SHA control-plane checkout".into());
+    }
     let root = control_plane_root();
     let manifest_path = manifest.unwrap_or_else(|| root.join("repos.manifest.toml"));
     let data: toml::Value = fs::read_to_string(&manifest_path)?.parse()?;
@@ -7684,6 +7694,12 @@ fn validate_local_jeryu(
         check_cargo_sources(&repo, &mut errors)?;
     }
     validate_nested_family_local(&data, skip_remotes, &mut errors)?;
+    let program_checkouts = program_release::declared_checkouts(&root)?;
+    if !skip_program_checkouts {
+        for (path, declared) in &program_checkouts {
+            validate_program_checkout(path, declared, &mut errors)?;
+        }
+    }
     if !skip_remotes {
         let split_root = repos
             .first()
@@ -7691,19 +7707,28 @@ fn validate_local_jeryu(
             .map(PathBuf::from)
             .and_then(|p| p.parent().map(Path::to_path_buf))
             .unwrap_or_else(|| root.parent().unwrap_or(&root).to_path_buf());
+        let managed = managed_repositories(&data, &manifest_path)?;
         for entry in fs::read_dir(&split_root)? {
             let path = entry?.path();
             if !path.is_dir() || !path.join(".git").exists() {
+                continue;
+            }
+            let git_metadata = fs::symlink_metadata(path.join(".git"))?;
+            if !git_metadata.is_dir() || git_metadata.file_type().is_symlink() {
+                errors.push(format!(
+                    "{}: .git must be a physical directory, never a linked worktree marker",
+                    path.display()
+                ));
                 continue;
             }
             let remotes = git_remotes(&path)?;
             if remotes.keys().any(|name| name != "origin") {
                 errors.push(format!("{}: expected only origin remote", path.display()));
             }
-            let expected = managed_repositories(&data, &manifest_path)?
-                .into_iter()
+            let expected = managed
+                .iter()
                 .find(|repo| repo.path == path)
-                .map(|repo| repo.remote);
+                .map(|repo| repo.remote.clone());
             let excluded = data
                 .get("excluded_path")
                 .and_then(toml::Value::as_array)
@@ -7713,6 +7738,38 @@ fn validate_local_jeryu(
                 .map(PathBuf::from)
                 .any(|excluded_path| excluded_path == path);
             if expected.is_none() && excluded {
+                continue;
+            }
+            let program = program_checkouts.get(&path);
+            if expected.is_some() && program.is_some() {
+                errors.push(format!(
+                    "{}: declared by both current and program release authorities",
+                    path.display()
+                ));
+                continue;
+            }
+            if let Some(program) = program {
+                if program.must_be_absent {
+                    errors.push(format!(
+                        "{}: checkout exists while its program lifecycle is not-created",
+                        path.display()
+                    ));
+                } else if let Some(expected_remote) = &program.remote {
+                    if remotes.len() != 1
+                        || remotes.get("origin") != Some(&vec![expected_remote.clone()])
+                    {
+                        errors.push(format!(
+                            "{}: program checkout must contain exactly origin -> {}",
+                            path.display(),
+                            expected_remote
+                        ));
+                    }
+                } else if !remotes.is_empty() {
+                    errors.push(format!(
+                        "{}: local prototype must remain remote-free until reviewed onboarding",
+                        path.display()
+                    ));
+                }
                 continue;
             }
             if expected.is_none() {
@@ -7734,48 +7791,155 @@ fn validate_local_jeryu(
         }
     }
     if errors.is_empty() {
-        println!(
-            "local Jeryu policy ok: {} repos",
-            managed_repositories(&data, &manifest_path)?.len()
-        );
+        let repo_count = managed_repositories(&data, &manifest_path)?.len();
+        if skip_program_checkouts {
+            println!(
+                "local Jeryu policy reduced-scope ok: {repo_count} repos; program checkout census explicitly omitted"
+            );
+        } else {
+            println!("local Jeryu policy ok: {repo_count} repos");
+        }
         Ok(())
     } else {
         Err(errors.join("\n").into())
     }
 }
 
+fn validate_program_checkout(
+    path: &Path,
+    declared: &program_release::DeclaredCheckout,
+    errors: &mut Vec<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if declared.must_be_absent {
+        match fs::symlink_metadata(path) {
+            Ok(_) => errors.push(format!(
+                "{}: checkout exists while its program lifecycle is not-created",
+                path.display()
+            )),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => {
+                return Err(format!(
+                    "cannot establish absence of program checkout {}: {error}",
+                    path.display()
+                )
+                .into())
+            }
+        }
+        return Ok(());
+    }
+    match fs::symlink_metadata(path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            errors.push(format!(
+                "{}: declared program checkout is missing",
+                path.display()
+            ));
+            return Ok(());
+        }
+        Err(error) => {
+            return Err(format!(
+                "cannot inspect declared program checkout {}: {error}",
+                path.display()
+            )
+            .into())
+        }
+    }
+    let split_root = path.parent().ok_or("program checkout has no family root")?;
+    let canonical = match validate_physical_git_checkout_beneath(path, split_root) {
+        Ok(canonical) => canonical,
+        Err(error) => {
+            errors.push(format!("{}: {error}", path.display()));
+            return Ok(());
+        }
+    };
+    let worktrees = secure_git_output(Some(&canonical), &["worktree", "list", "--porcelain"])?;
+    let registrations = worktrees
+        .lines()
+        .filter_map(|line| line.strip_prefix("worktree "))
+        .collect::<Vec<_>>();
+    if registrations.len() != 1 || Path::new(registrations[0]) != canonical {
+        errors.push(format!(
+            "{}: program checkout has an auxiliary or mismatched worktree registration",
+            path.display()
+        ));
+    }
+    let status = secure_git_output(
+        Some(&canonical),
+        &["status", "--porcelain=v1", "--untracked-files=all"],
+    )?;
+    if !status.is_empty() {
+        errors.push(format!(
+            "{}: program checkout must be clean, including untracked files",
+            path.display()
+        ));
+    }
+    let remotes = git_remotes(&canonical)?;
+    if let Some(expected_remote) = &declared.remote {
+        if remotes.len() != 1 || remotes.get("origin") != Some(&vec![expected_remote.clone()]) {
+            errors.push(format!(
+                "{}: program checkout must contain exactly origin -> {}",
+                path.display(),
+                expected_remote
+            ));
+        }
+    } else if !remotes.is_empty() {
+        errors.push(format!(
+            "{}: local prototype must remain remote-free until reviewed onboarding",
+            path.display()
+        ));
+    }
+    if let Some(expected) = &declared.expected_branch {
+        let branch = secure_git_output(Some(&canonical), &["branch", "--show-current"])?;
+        if branch != *expected {
+            errors.push(format!(
+                "{}: program checkout branch {} differs from authority {}",
+                path.display(),
+                if branch.is_empty() {
+                    "<detached>"
+                } else {
+                    &branch
+                },
+                expected
+            ));
+        }
+    }
+    if let Some(expected) = &declared.expected_head {
+        let head = secure_git_output(Some(&canonical), &["rev-parse", "HEAD"])?;
+        if head != *expected {
+            errors.push(format!(
+                "{}: program checkout HEAD {} differs from authority {}",
+                path.display(),
+                head,
+                expected
+            ));
+        }
+    }
+    check_cargo_sources_at(&declared.name, &canonical, errors)?;
+    Ok(())
+}
+
 fn git_remotes(
     root: &Path,
 ) -> Result<std::collections::BTreeMap<String, Vec<String>>, Box<dyn std::error::Error>> {
-    let output = Command::new("git")
-        .args(["-C", root.to_str().ok_or("non-UTF8 repo path")?, "remote"])
-        .output()?;
-    if !output.status.success() {
-        return Err(format!("cannot read remotes for {}", root.display()).into());
-    }
-    let names = String::from_utf8(output.stdout)?;
+    let names = secure_git_output(Some(root), &["remote"])?;
     let mut remotes = std::collections::BTreeMap::new();
     for name in names.lines().filter(|name| !name.is_empty()) {
-        let output = Command::new("git")
-            .args([
-                "-C",
-                root.to_str().ok_or("non-UTF8 repo path")?,
-                "remote",
-                "get-url",
-                "--all",
-                name,
-            ])
-            .output()?;
-        if !output.status.success() {
-            return Err(format!("cannot read remote {name} for {}", root.display()).into());
+        let fetch = secure_git_output(Some(root), &["remote", "get-url", "--all", name])?
+            .lines()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        let push = secure_git_output(Some(root), &["remote", "get-url", "--push", "--all", name])?
+            .lines()
+            .map(str::to_owned)
+            .collect::<Vec<_>>();
+        if fetch != push {
+            return Err(format!(
+                "remote {name} has different fetch and push URLs in {}",
+                root.display()
+            )
+            .into());
         }
-        remotes.insert(
-            name.to_owned(),
-            String::from_utf8(output.stdout)?
-                .lines()
-                .map(str::to_owned)
-                .collect(),
-        );
+        remotes.insert(name.to_owned(), fetch);
     }
     Ok(remotes)
 }
@@ -7784,56 +7948,154 @@ fn check_cargo_sources(
     repo: &Repo,
     errors: &mut Vec<String>,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    check_cargo_sources_at(&repo.name, &repo.path, errors)
+}
+
+fn check_cargo_sources_at(
+    repo_name: &str,
+    repo_path: &Path,
+    errors: &mut Vec<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut files = Vec::new();
-    collect_named_files(&repo.path, &mut files, &["Cargo.toml", "Cargo.lock"])?;
+    collect_named_files(repo_path, &mut files, &["Cargo.toml", "Cargo.lock"])?;
     for path in files {
-        let text = fs::read_to_string(&path).unwrap_or_default();
-        for (line_no, line) in text.lines().enumerate() {
-            let internal_source = line.contains("git =")
-                || line.starts_with("source = \"git+")
-                || line.starts_with("[patch.");
-            if internal_source
-                && [
-                    "github.com/neverhuman",
-                    "git@github.com:neverhuman",
-                    "jain-portal-preview",
-                    "bare-mirrors",
-                ]
-                .iter()
-                .any(|marker| line.contains(marker))
-            {
-                errors.push(format!(
-                    "{}:{}:{}: Cargo source contains forbidden remote",
-                    repo.name,
-                    path.strip_prefix(&repo.path).unwrap_or(&path).display(),
-                    line_no + 1
-                ));
-            }
-            if !line.contains("git") {
-                continue;
-            }
-            if line.contains(FAMILY_REMOTE_PREFIX) || line.contains(INFRA_REMOTE_PREFIX) {
-                continue;
-            }
-            if line.contains("git =") || line.starts_with("source = \"git+") {
-                errors.push(format!(
-                    "{}:{}:{}: internal git source is not local Jeryu",
-                    repo.name,
-                    path.strip_prefix(&repo.path).unwrap_or(&path).display(),
-                    line_no + 1
-                ));
-            }
+        let metadata = fs::symlink_metadata(&path)?;
+        if !metadata.is_file()
+            || metadata.file_type().is_symlink()
+            || metadata.len() > 16 * 1024 * 1024
+        {
+            return Err(format!(
+                "Cargo source input is not a bounded physical regular file: {}",
+                path.display()
+            )
+            .into());
         }
+        let text = fs::read_to_string(&path)?;
+        let document: toml::Value = text.parse().map_err(|error| {
+            format!(
+                "{}:{}: Cargo source input is not valid TOML: {error}",
+                repo_name,
+                path.strip_prefix(repo_path).unwrap_or(&path).display()
+            )
+        })?;
+        validate_cargo_source_value(
+            repo_name,
+            path.strip_prefix(repo_path).unwrap_or(&path),
+            &document,
+            &mut Vec::new(),
+            errors,
+        );
     }
     Ok(())
 }
 
+fn validate_cargo_source_value(
+    repo_name: &str,
+    path: &Path,
+    value: &toml::Value,
+    key_path: &mut Vec<String>,
+    errors: &mut Vec<String>,
+) {
+    match value {
+        toml::Value::Table(table) => {
+            for (key, child) in table {
+                let field_path = if key_path.is_empty() {
+                    key.clone()
+                } else {
+                    format!("{}.{}", key_path.join("."), key)
+                };
+                if key == "git" {
+                    match child.as_str() {
+                        Some(source) if is_local_jeryu_git_source(source, false) => {}
+                        _ => errors.push(format!(
+                            "{}:{}:{}: Cargo git source is not local Jeryu",
+                            repo_name,
+                            path.display(),
+                            field_path
+                        )),
+                    }
+                } else if key == "source" {
+                    if let Some(source) = child.as_str() {
+                        if source.starts_with("git+") && !is_local_jeryu_git_source(source, true) {
+                            errors.push(format!(
+                                "{}:{}:{}: Cargo lock git source is not local Jeryu",
+                                repo_name,
+                                path.display(),
+                                field_path
+                            ));
+                        }
+                    }
+                } else if key_path.last().is_some_and(|parent| parent == "patch")
+                    && looks_like_git_source(key)
+                    && !is_local_jeryu_git_source(key, key.starts_with("git+"))
+                {
+                    errors.push(format!(
+                        "{}:{}:{}: Cargo patch source is not local Jeryu",
+                        repo_name,
+                        path.display(),
+                        field_path
+                    ));
+                }
+                key_path.push(key.clone());
+                validate_cargo_source_value(repo_name, path, child, key_path, errors);
+                key_path.pop();
+            }
+        }
+        toml::Value::Array(values) => {
+            for child in values {
+                validate_cargo_source_value(repo_name, path, child, key_path, errors);
+            }
+        }
+        _ => {}
+    }
+}
+
+fn looks_like_git_source(value: &str) -> bool {
+    value.starts_with("git+") || value.contains("://") || value.starts_with("git@")
+}
+
+fn is_local_jeryu_git_source(value: &str, lock_source: bool) -> bool {
+    let source = if lock_source {
+        let Some(source) = value.strip_prefix("git+") else {
+            return false;
+        };
+        source
+    } else {
+        value
+    };
+    let Some((repository, suffix)) = source.split_once(".git") else {
+        return false;
+    };
+    (repository.starts_with(FAMILY_REMOTE_PREFIX) || repository.starts_with(INFRA_REMOTE_PREFIX))
+        && !repository.contains("..")
+        && !repository.contains('\\')
+        && !repository
+            .bytes()
+            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+        && (suffix.is_empty()
+            || (lock_source && (suffix.starts_with('?') || suffix.starts_with('#'))))
+}
+
 fn collect_named_files(root: &Path, out: &mut Vec<PathBuf>, names: &[&str]) -> io::Result<()> {
-    if !root.is_dir() {
+    let root_metadata = fs::symlink_metadata(root)?;
+    if root_metadata.file_type().is_symlink() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Cargo source scan refuses symlink: {}", root.display()),
+        ));
+    }
+    if !root_metadata.is_dir() {
         return Ok(());
     }
     for entry in fs::read_dir(root)? {
         let path = entry?.path();
+        let metadata = fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Cargo source scan refuses symlink: {}", path.display()),
+            ));
+        }
         if path
             .file_name()
             .and_then(|name| name.to_str())
@@ -7846,12 +8108,13 @@ fn collect_named_files(root: &Path, out: &mut Vec<PathBuf>, names: &[&str]) -> i
         {
             continue;
         }
-        if path.is_dir() {
+        if metadata.is_dir() {
             collect_named_files(&path, out, names)?;
-        } else if path
-            .file_name()
-            .and_then(|name| name.to_str())
-            .is_some_and(|name| names.contains(&name))
+        } else if metadata.is_file()
+            && path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .is_some_and(|name| names.contains(&name))
         {
             out.push(path);
         }
@@ -11697,6 +11960,148 @@ name = "two"
         let excluded_repo: toml::Value = "name = \"python\"\nonboarded = false".parse().unwrap();
         assert!(repo_is_onboarded(&default_repo));
         assert!(!repo_is_onboarded(&excluded_repo));
+    }
+
+    fn program_checkout_fixture(label: &str) -> (TestDir, PathBuf, String) {
+        let root = TestDir::new(label);
+        let checkout = root.path().join("product");
+        let checkout_text = checkout.to_str().unwrap();
+        secure_git_output(
+            None,
+            &["init", "--quiet", "--initial-branch=main", checkout_text],
+        )
+        .unwrap();
+        fs::write(
+            checkout.join("Cargo.toml"),
+            "[workspace]\nresolver = \"2\"\nmembers = []\n",
+        )
+        .unwrap();
+        secure_git_output(Some(&checkout), &["add", "Cargo.toml"]).unwrap();
+        secure_git_output(
+            Some(&checkout),
+            &[
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "--quiet",
+                "-m",
+                "fixture",
+            ],
+        )
+        .unwrap();
+        let head = secure_git_output(Some(&checkout), &["rev-parse", "HEAD"]).unwrap();
+        (root, checkout, head)
+    }
+
+    #[test]
+    fn program_checkout_requires_exact_named_branch_and_cargo_sources() {
+        let (_root, checkout, head) = program_checkout_fixture("program-checkout");
+        let declared = program_release::DeclaredCheckout {
+            name: "product".to_owned(),
+            remote: None,
+            must_be_absent: false,
+            expected_branch: Some("main".to_owned()),
+            expected_head: Some(head.clone()),
+        };
+        let mut errors = Vec::new();
+        validate_program_checkout(&checkout, &declared, &mut errors).unwrap();
+        assert!(errors.is_empty());
+
+        secure_git_output(Some(&checkout), &["checkout", "--quiet", "--detach", &head]).unwrap();
+        validate_program_checkout(&checkout, &declared, &mut errors).unwrap();
+        assert!(errors.iter().any(|error| error.contains("<detached>")));
+
+        secure_git_output(Some(&checkout), &["checkout", "--quiet", "main"]).unwrap();
+        fs::write(
+            checkout.join("Cargo.toml"),
+            "[workspace]\nresolver = \"2\"\nmembers = []\n[workspace.dependencies]\nbad = { git = \"https://example.invalid/bad.git\" }\n",
+        )
+        .unwrap();
+        validate_program_checkout(&checkout, &declared, &mut errors).unwrap();
+        assert!(errors
+            .iter()
+            .any(|error| error.contains("Cargo git source is not local Jeryu")));
+    }
+
+    #[test]
+    fn program_checkout_rejects_dangling_presence_and_distinct_push_urls() {
+        let root = TestDir::new("program-checkout-dangling");
+        let dangling = root.path().join("not-created");
+        symlink(root.path().join("absent"), &dangling).unwrap();
+        let declared = program_release::DeclaredCheckout {
+            name: "not-created".to_owned(),
+            remote: None,
+            must_be_absent: true,
+            expected_branch: None,
+            expected_head: None,
+        };
+        let mut errors = Vec::new();
+        validate_program_checkout(&dangling, &declared, &mut errors).unwrap();
+        assert!(errors.iter().any(|error| error.contains("checkout exists")));
+
+        let (_checkout_root, checkout, _) = program_checkout_fixture("program-push-url");
+        secure_git_output(
+            Some(&checkout),
+            &[
+                "remote",
+                "add",
+                "origin",
+                "http://127.0.0.1:8787/git/owner/product.git",
+            ],
+        )
+        .unwrap();
+        secure_git_output(
+            Some(&checkout),
+            &[
+                "config",
+                "remote.origin.pushurl",
+                "http://127.0.0.1:8787/git/owner/other.git",
+            ],
+        )
+        .unwrap();
+        assert!(git_remotes(&checkout)
+            .unwrap_err()
+            .to_string()
+            .contains("different fetch and push URLs"));
+    }
+
+    #[test]
+    fn cargo_source_policy_is_structural_and_comment_independent() {
+        for document in [
+            "[workspace.dependencies]\nbad={git=\"https://example.invalid/bad.git\"}\n",
+            "[workspace.dependencies]\nbad = { git = \"https://example.invalid/bad.git\" } # http://127.0.0.1:8787/git/jeryu/\n",
+            "[[package]]\nname='bad'\nsource='git+https://example.invalid/bad.git#deadbeef'\n",
+            "[patch.\"https://example.invalid/index\"]\nbad = { path = \"bad\" }\n",
+            "[patch.\"git://example.invalid/repo.git\"]\nbad = { path = \"bad\" }\n",
+        ] {
+            let value: toml::Value = document.parse().unwrap();
+            let mut errors = Vec::new();
+            validate_cargo_source_value(
+                "product",
+                Path::new("Cargo.toml"),
+                &value,
+                &mut Vec::new(),
+                &mut errors,
+            );
+            assert!(!errors.is_empty(), "policy bypassed by {document:?}");
+        }
+
+        let allowed: toml::Value = format!(
+            "[workspace.dependencies]\ngood = {{ git = \"{FAMILY_REMOTE_PREFIX}good.git\" }}\n"
+        )
+        .parse()
+        .unwrap();
+        let mut errors = Vec::new();
+        validate_cargo_source_value(
+            "product",
+            Path::new("Cargo.toml"),
+            &allowed,
+            &mut Vec::new(),
+            &mut errors,
+        );
+        assert!(errors.is_empty());
     }
 
     #[test]

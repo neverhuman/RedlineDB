@@ -1,0 +1,39 @@
+{
+  "title": "Jain program release evidence index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["format", "release", "authority_sha256", "spec_sha256", "groups"],
+  "properties": {
+    "format": { "const": "jain.program-release-evidence-index" },
+    "release": { "type": "string", "minLength": 1, "maxLength": 128 },
+    "authority_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "spec_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "groups": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "disposition", "receipts"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1, "maxLength": 128 },
+          "disposition": {
+            "enum": ["pending", "passed", "failed", "deferred"]
+          },
+          "receipts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["path", "sha256"],
+              "properties": {
+                "path": { "type": "string", "minLength": 1 },
+                "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -149,6 +149,15 @@ release-rollback-dry-run to="7.0.6":
 release-status:
   version="$(awk -F'\"' '/^release_version = / {print $2; exit}' repos.manifest.toml)"; cargo run --locked --quiet -- release-status --manifest repos.manifest.toml --json "docs/release-evidence/${version}/release-status.json"
 
+program-release-validate authority:
+  cargo run --locked --quiet -- program-release validate --authority "{{authority}}"
+
+program-release-validate-all authority_dir="authority":
+  cargo run --locked --quiet -- program-release validate-all --authority-dir "{{authority_dir}}"
+
+program-release-status authority:
+  cargo run --locked --quiet -- program-release status --authority "{{authority}}"
+
 refresh-authored:
   cargo run --locked --quiet -- refresh-ci-contract --authored
 

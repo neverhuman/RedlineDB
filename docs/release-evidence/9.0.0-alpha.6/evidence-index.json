@@ -1,0 +1,26 @@
+{
+  "format": "jain.program-release-evidence-index",
+  "release": "9.0.0-alpha.6",
+  "authority_sha256": "a626a321789ebbae0129f2edadc3d309848de590428b018cb3077fcc7355c3d9",
+  "spec_sha256": "368c2f2fc04e166233b5fc2f92a1cdf6f02f26c28ac5d7976819d62dd1ff5231",
+  "groups": [
+    {
+      "id": "custody",
+      "disposition": "pending",
+      "receipts": []
+    },
+    { "id": "contracts", "disposition": "pending", "receipts": [] },
+    { "id": "images", "disposition": "pending", "receipts": [] },
+    { "id": "authorization", "disposition": "pending", "receipts": [] },
+    { "id": "runs", "disposition": "pending", "receipts": [] },
+    { "id": "git", "disposition": "pending", "receipts": [] },
+    { "id": "storage", "disposition": "pending", "receipts": [] },
+    { "id": "shadow", "disposition": "pending", "receipts": [] },
+    { "id": "operations", "disposition": "pending", "receipts": [] },
+    { "id": "research", "disposition": "pending", "receipts": [] },
+    { "id": "ui", "disposition": "deferred", "receipts": [] },
+    { "id": "jarvis", "disposition": "deferred", "receipts": [] },
+    { "id": "migration", "disposition": "deferred", "receipts": [] },
+    { "id": "final_ga_owners", "disposition": "deferred", "receipts": [] }
+  ]
+}
