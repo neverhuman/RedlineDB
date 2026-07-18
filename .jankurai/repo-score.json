@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:2730a5c566702efe906237281773d7073ce8d8854b18e84c7efd332d462968b2",
-  "input_fingerprint": "sha256:63ec176d41728f074d1954fc250fa58e96362f8560341188f3f37067dd5c8c00",
+  "report_fingerprint": "sha256:fff455b564f454a10846f583eef8a235e5b1a2d3c65f2eb302a048f20b0a1da1",
+  "input_fingerprint": "sha256:4ee2b4d0ded38379a77119e43a6dcf589d09d11c5790ff38d9cfe6a400069343",
   "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
   "manifest_fingerprints": {
     "owner_map": "sha256:4d4f78e32cf6f78fc77cb03ed13d3ec781d4d35da4db1ffc56bbb48f403dcfed",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:f33b9715b6109208b44f6931c43f37e8da642dd67ff6faaad77be486954243a4"
   },
   "dirty_worktree": true,
-  "generated_at": "1784289223",
+  "generated_at": "1784418053",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784289223",
-  "started_at": "1784289223",
-  "elapsed_ms": 3209,
+  "run_id": "1784418053",
+  "started_at": "1784418053",
+  "elapsed_ms": 4310,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "498c054",
+    "head": "b73a1ec",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1006,7 +1006,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-17T11:53:40.492795618+00:00",
+    "generated_at": "2026-07-18T23:40:48.832340870+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1044,22 +1044,64 @@
       ]
     },
     "summary": {
-      "files_scanned": 268,
-      "files_considered": 5,
-      "active_files": 5,
+      "files_scanned": 284,
+      "files_considered": 6,
+      "active_files": 6,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 12,
+      "warning_classes": 15,
       "hard_instances": 0,
-      "warning_instances": 39,
-      "duplicate_lines": 14,
-      "duplicate_tokens": 42,
-      "duplicate_bytes": 454,
-      "total_redundant_lines": 29,
-      "total_redundant_tokens": 80,
-      "total_redundant_bytes": 924
+      "warning_instances": 50,
+      "duplicate_lines": 21,
+      "duplicate_tokens": 67,
+      "duplicate_bytes": 707,
+      "total_redundant_lines": 45,
+      "total_redundant_tokens": 136,
+      "total_redundant_bytes": 1504
     },
     "classes": [
+      {
+        "id": "copy-code-body-rust-8e14d464fae09dcb",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 5,
+        "duplicate_tokens": 15,
+        "duplicate_bytes": 141,
+        "instance_count": 3,
+        "total_redundant_lines": 10,
+        "total_redundant_tokens": 30,
+        "total_redundant_bytes": 282,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "1bc9be7308056891",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "tools/splitctl/src/program_release.rs",
+            "language": "rust",
+            "start_line": 1577,
+            "end_line": 1582,
+            "unit_name": "rooted_existing_file"
+          },
+          {
+            "path": "tools/splitctl/src/program_release.rs",
+            "language": "rust",
+            "start_line": 1590,
+            "end_line": 1595,
+            "unit_name": "rooted_existing_directory"
+          },
+          {
+            "path": "tools/splitctl/src/program_release.rs",
+            "language": "rust",
+            "start_line": 1603,
+            "end_line": 1608,
+            "unit_name": "rooted_existing"
+          }
+        ]
+      },
       {
         "id": "copy-code-body-rust-943d59e0a1f574c9",
         "kind": "exact_unit_different_name",
@@ -1222,6 +1264,104 @@
         ]
       },
       {
+        "id": "copy-code-body-rust-e10ac95b8356d645",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 70,
+        "instance_count": 4,
+        "total_redundant_lines": 3,
+        "total_redundant_tokens": 15,
+        "total_redundant_bytes": 210,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "326bae9e23290820",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "tools/splitctl/src/program_release.rs",
+            "language": "rust",
+            "start_line": 2066,
+            "end_line": 2067,
+            "unit_name": "protected_manifests_cannot_be_used_as_program_authority"
+          },
+          {
+            "path": "tools/splitctl/src/program_release.rs",
+            "language": "rust",
+            "start_line": 2074,
+            "end_line": 2075,
+            "unit_name": "omitted_and_falsely_promoted_evidence_fail_closed"
+          },
+          {
+            "path": "tools/splitctl/src/program_release.rs",
+            "language": "rust",
+            "start_line": 2128,
+            "end_line": 2129,
+            "unit_name": "writer_rejects_every_protected_release_component"
+          },
+          {
+            "path": "tools/splitctl/src/program_release.rs",
+            "language": "rust",
+            "start_line": 2264,
+            "end_line": 2265,
+            "unit_name": "tracked_status_matches_the_fresh_reduction"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-7e0285c6e0361d87",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 3,
+        "duplicate_bytes": 23,
+        "instance_count": 4,
+        "total_redundant_lines": 3,
+        "total_redundant_tokens": 9,
+        "total_redundant_bytes": 69,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "cf06f6670a0104b6",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "tools/splitctl/src/jeryu_client.rs",
+            "language": "rust",
+            "start_line": 561,
+            "end_line": 562,
+            "unit_name": "validate_publication_text"
+          },
+          {
+            "path": "tools/splitctl/src/jeryu_client.rs",
+            "language": "rust",
+            "start_line": 683,
+            "end_line": 684,
+            "unit_name": "validate_ref_name"
+          },
+          {
+            "path": "tools/splitctl/src/program_release.rs",
+            "language": "rust",
+            "start_line": 1900,
+            "end_line": 1901,
+            "unit_name": "validate_identifier"
+          },
+          {
+            "path": "tools/splitctl/src/program_release.rs",
+            "language": "rust",
+            "start_line": 1912,
+            "end_line": 1913,
+            "unit_name": "validate_branch"
+          }
+        ]
+      },
+      {
         "id": "copy-code-body-rust-6fc1cf0f26cfbe6e",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -1243,15 +1383,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2639,
-            "end_line": 2642,
+            "start_line": 2645,
+            "end_line": 2648,
             "unit_name": "validate_child_family_authority"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2655,
-            "end_line": 2658,
+            "start_line": 2661,
+            "end_line": 2664,
             "unit_name": "validate_child_engine_authority"
           }
         ]
@@ -1362,16 +1502,51 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2357,
-            "end_line": 2358,
+            "start_line": 2363,
+            "end_line": 2364,
             "unit_name": "physical_directory"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2365,
-            "end_line": 2366,
+            "start_line": 2371,
+            "end_line": 2372,
             "unit_name": "physical_regular_file"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-9abbc6fae165e2ef",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 5,
+        "duplicate_bytes": 42,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 5,
+        "total_redundant_bytes": 42,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "c54d349a690a5cb8",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "tools/splitctl/src/main.rs",
+            "language": "rust",
+            "start_line": 3068,
+            "end_line": 3069,
+            "unit_name": "sha256_bytes"
+          },
+          {
+            "path": "tools/splitctl/src/program_release.rs",
+            "language": "rust",
+            "start_line": 2028,
+            "end_line": 2029,
+            "unit_name": "sha256"
           }
         ]
       },
@@ -1481,41 +1656,6 @@
         ]
       },
       {
-        "id": "copy-code-body-rust-7e0285c6e0361d87",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 3,
-        "duplicate_bytes": 23,
-        "instance_count": 2,
-        "total_redundant_lines": 1,
-        "total_redundant_tokens": 3,
-        "total_redundant_bytes": 23,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "0fa7684a21fa02ca",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "tools/splitctl/src/jeryu_client.rs",
-            "language": "rust",
-            "start_line": 561,
-            "end_line": 562,
-            "unit_name": "validate_publication_text"
-          },
-          {
-            "path": "tools/splitctl/src/jeryu_client.rs",
-            "language": "rust",
-            "start_line": 683,
-            "end_line": 684,
-            "unit_name": "validate_ref_name"
-          }
-        ]
-      },
-      {
         "id": "copy-code-body-rust-b1fd77204b119b1d",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -1544,8 +1684,8 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1677,
-            "end_line": 1678,
+            "start_line": 1683,
+            "end_line": 1684,
             "unit_name": "valid_cargo_token"
           }
         ]
