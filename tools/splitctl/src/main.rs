@@ -253,6 +253,11 @@ struct LockedRegistryPackage {
     checksum: String,
 }
 
+struct LockedCargoInputs {
+    registry_packages: Vec<LockedRegistryPackage>,
+    governed_git_repositories: Vec<String>,
+}
+
 fn cargo_cache_stage_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let mut locks = Vec::new();
     let mut source = None;
@@ -300,9 +305,7 @@ fn cargo_cache_stage_command(args: Vec<String>) -> Result<(), Box<dyn std::error
     )
 }
 
-fn locked_registry_packages(
-    lock_path: &Path,
-) -> Result<Vec<LockedRegistryPackage>, Box<dyn std::error::Error>> {
+fn locked_cargo_inputs(lock_path: &Path) -> Result<LockedCargoInputs, Box<dyn std::error::Error>> {
     physical_regular_file(lock_path, "Cargo lock")?;
     let lock: toml::Value = fs::read_to_string(lock_path)?.parse()?;
     let packages = lock
@@ -310,6 +313,7 @@ fn locked_registry_packages(
         .and_then(toml::Value::as_array)
         .ok_or("Cargo lock has no package array")?;
     let mut locked = Vec::new();
+    let mut governed_git_repositories = Vec::new();
     for package in packages {
         let Some(table) = package.as_table() else {
             return Err("Cargo lock package is not a table".into());
@@ -317,13 +321,14 @@ fn locked_registry_packages(
         let Some(source) = table.get("source").and_then(toml::Value::as_str) else {
             continue;
         };
-        if governed_locked_git_source(source) {
+        if let Some(repository) = governed_locked_git_repository(source) {
             if table.contains_key("checksum") {
                 return Err(format!(
                     "governed locked Git package unexpectedly has a checksum: {source}"
                 )
                 .into());
             }
+            governed_git_repositories.push(repository.to_owned());
             continue;
         }
         if source != "registry+https://github.com/rust-lang/crates.io-index" {
@@ -373,24 +378,23 @@ fn locked_registry_packages(
     if locked.is_empty() {
         return Err("Cargo lock has no crates.io registry packages".into());
     }
-    Ok(locked)
+    governed_git_repositories.sort();
+    governed_git_repositories.dedup();
+    Ok(LockedCargoInputs {
+        registry_packages: locked,
+        governed_git_repositories,
+    })
 }
 
-fn governed_locked_git_source(source: &str) -> bool {
-    let Some(source) = source.strip_prefix("git+http://127.0.0.1:8787/git/") else {
-        return false;
-    };
-    let Some((identity, commit)) = source.rsplit_once('#') else {
-        return false;
-    };
+fn governed_locked_git_repository(source: &str) -> Option<&str> {
+    let source = source.strip_prefix("git+http://127.0.0.1:8787/git/")?;
+    let (identity, commit) = source.rsplit_once('#')?;
     if identity.contains('#') || !is_full_hex(commit, 40) {
-        return false;
+        return None;
     }
-    let Some((repo_path, tag)) = identity.split_once("?tag=") else {
-        return false;
-    };
+    let (repo_path, tag) = identity.split_once("?tag=")?;
     if repo_path.contains('?') || !valid_cargo_cache_component(tag) {
-        return false;
+        return None;
     }
     let mut components = repo_path.split('/');
     let owner = components.next().unwrap_or_default();
@@ -398,12 +402,13 @@ fn governed_locked_git_source(source: &str) -> bool {
         .next()
         .and_then(|value| value.strip_suffix(".git"))
         .unwrap_or_default();
-    components.next().is_none()
+    (components.next().is_none()
         && matches!(owner, "veox" | "jeryu" | "jain-split" | "redline")
         && valid_cargo_cache_component(repo)
         && !repo.starts_with('.')
         && !repo.ends_with('.')
-        && tag.starts_with(&format!("{repo}-v"))
+        && tag.starts_with(&format!("{repo}-v")))
+    .then_some(repo)
 }
 
 fn valid_cargo_cache_component(value: &str) -> bool {
@@ -788,10 +793,13 @@ fn stage_locked_cargo_caches(
         .filter(|name| valid_cargo_cache_component(name))
         .ok_or("Cargo cache destination name is unsafe")?;
     let mut packages = Vec::new();
+    let mut governed_git_repositories = Vec::new();
     let mut lock_digests = Vec::with_capacity(lock_paths.len());
     for lock_path in lock_paths {
         let digest_before = sha256_regular_file(lock_path, "Cargo lock")?;
-        packages.extend(locked_registry_packages(lock_path)?);
+        let inputs = locked_cargo_inputs(lock_path)?;
+        packages.extend(inputs.registry_packages);
+        governed_git_repositories.extend(inputs.governed_git_repositories);
         let digest_after = sha256_regular_file(lock_path, "Cargo lock")?;
         if digest_before != digest_after {
             return Err(
@@ -808,6 +816,8 @@ fn stage_locked_cargo_caches(
         ))
     });
     packages.dedup();
+    governed_git_repositories.sort();
+    governed_git_repositories.dedup();
     for pair in packages.windows(2) {
         if pair[0].name == pair[1].name && pair[0].version == pair[1].version {
             return Err(format!(
@@ -1002,6 +1012,7 @@ fn stage_locked_cargo_caches(
         "lock_sha256s": lock_digests,
         "package_count": staged.len(),
         "packages": staged,
+        "governed_git_repositories": governed_git_repositories,
     });
     let receipt_bytes = serde_json::to_vec_pretty(&receipt_value)?;
     let staged_receipt = staging_root.join(receipt_relative);
@@ -9200,6 +9211,7 @@ mod tests {
         assert_eq!(receipt["schema_version"], "jain.locked-cargo-cache/v2");
         assert_eq!(receipt["lock_count"], 1);
         assert_eq!(receipt["package_count"], 1);
+        assert_eq!(receipt["governed_git_repositories"], json!([]));
         assert_eq!(
             receipt["lock_sha256s"],
             json!([sha256_regular_file(&fixture.lock, "test Cargo lock").unwrap()])
@@ -9221,8 +9233,16 @@ mod tests {
             "git+http://127.0.0.1:8787/git/jain-split/jain-core.git?tag=jain-core-v8.0.1-split.1#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "git+http://127.0.0.1:8787/git/redline/redline-testing.git?tag=redline-testing-v4.1.0-jain.1#bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
         ];
-        for source in accepted {
-            assert!(governed_locked_git_source(source), "rejected {source}");
+        let expected_repositories = ["jain-math", "redline-core", "jain-core", "redline-testing"];
+        for (source, expected_repository) in accepted.into_iter().zip(expected_repositories) {
+            assert!(
+                governed_locked_git_repository(source).is_some(),
+                "rejected {source}"
+            );
+            assert_eq!(
+                governed_locked_git_repository(source),
+                Some(expected_repository)
+            );
         }
 
         let rejected = [
@@ -9235,7 +9255,11 @@ mod tests {
             "git+http://127.0.0.1:8787/git/veox/../jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
         ];
         for source in rejected {
-            assert!(!governed_locked_git_source(source), "accepted {source}");
+            assert!(
+                governed_locked_git_repository(source).is_none(),
+                "accepted {source}"
+            );
+            assert_eq!(governed_locked_git_repository(source), None);
         }
     }
 
@@ -9247,7 +9271,7 @@ mod tests {
         fs::write(
             &fixture.lock,
             format!(
-                "{registry_lock}\n[[package]]\nname = \"feat-math\"\nversion = \"8.0.1\"\nsource = \"git+http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b\"\n"
+                "{registry_lock}\n[[package]]\nname = \"feat-math\"\nversion = \"8.0.1\"\nsource = \"git+http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b\"\n\n[[package]]\nname = \"feat-math-alias\"\nversion = \"8.0.1\"\nsource = \"git+http://127.0.0.1:8787/git/veox/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b\"\n"
             ),
         )
         .unwrap();
@@ -9266,6 +9290,7 @@ mod tests {
             serde_json::from_slice(&fs::read(&fixture.receipt).unwrap()).unwrap();
         assert_eq!(receipt["package_count"], 1);
         assert_eq!(receipt["packages"][0]["name"], "demo");
+        assert_eq!(receipt["governed_git_repositories"], json!(["jain-math"]));
         assert_eq!(
             receipt["lock_sha256s"],
             json!([sha256_regular_file(&fixture.lock, "test Cargo lock").unwrap()])

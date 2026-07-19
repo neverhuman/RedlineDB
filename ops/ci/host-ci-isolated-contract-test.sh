@@ -46,9 +46,44 @@ jq -e --argjson lock_sha256s "$lock_sha256s" \
   select(.schema_version == "jain.locked-cargo-cache/v2")
   | select(.lock_count == $lock_count)
   | select(.lock_sha256s == $lock_sha256s)
-  | select(.package_count > 0)' \
+  | select(.package_count > 0)
+  | select((.governed_git_repositories | type) == "array")
+  | select(.governed_git_repositories
+      == (.governed_git_repositories | sort | unique))' \
   "$cargo_home/registry/stage-receipt.json" >/dev/null \
   || fail 'Cargo cache receipt is not bound to the exact lock'
+git_config_global="$(realpath -e -- "${GIT_CONFIG_GLOBAL:?}")" \
+  || fail 'scoped release Git configuration is unavailable'
+[[ -f "$git_config_global" && ! -L "$git_config_global" \
+  && "$(stat -c '%u:%g:%a' -- "$git_config_global")" == "$(id -u):$(id -g):600" \
+  && "$git_config_global" == "$writable_root/ci-gitconfig" \
+  && "${GIT_CONFIG_NOSYSTEM:-}" == 1 \
+  && ! -v GIT_CONFIG_PARAMETERS && ! -v GIT_CONFIG_COUNT \
+  && ! -v GIT_CONFIG_SYSTEM \
+  && "$(git config --global --get core.fsmonitor)" == false \
+  && "$(git config --global --get core.hooksPath)" == /dev/null ]] \
+  || fail 'release Git configuration escaped the bounded writable root'
+[[ -z "$(compgen -A variable GIT_CONFIG_KEY_)" \
+  && -z "$(compgen -A variable GIT_CONFIG_VALUE_)" ]] \
+  || fail 'inherited command-scope Git configuration survived setup'
+mapfile -t expected_safe_directories < <(
+  jq -r --arg mirror_root "$JAIN_SPLIT_ROOT/target/bare-mirrors" \
+    '.governed_git_repositories[] | "\($mirror_root)/\(.).git"' \
+    "$cargo_home/registry/stage-receipt.json"
+)
+mapfile -t actual_safe_directories < <(
+  git config --global --get-all safe.directory || true
+)
+[[ "${#actual_safe_directories[@]}" -eq "${#expected_safe_directories[@]}" ]] \
+  || fail 'release Git trust set differs from the exact locked repositories'
+for safe_index in "${!expected_safe_directories[@]}"; do
+  expected_safe_directory="${expected_safe_directories[$safe_index]}"
+  [[ "${actual_safe_directories[$safe_index]}" == "$expected_safe_directory" \
+    && "$expected_safe_directory" != '*' \
+    && -d "$expected_safe_directory" && ! -L "$expected_safe_directory" \
+    && "$(realpath -e -- "$expected_safe_directory")" == "$expected_safe_directory" ]] \
+    || fail 'release Git trust is not an exact physical governed mirror path'
+done
 [[ -z "$(find "$cargo_home/registry" -xdev -type l -print -quit)" \
   && -z "$(find "$cargo_home/registry" -xdev ! -type d ! -type f -print -quit)" ]] \
   || fail 'staged Cargo registry contains a symlink or special node'

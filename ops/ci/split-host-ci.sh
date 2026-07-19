@@ -371,6 +371,7 @@ fi
 # Release CI uses a fresh Cargo home and target. The root broker exposes only a
 # read-only registry archive/index cache; splitctl stages the exact crates.io
 # inputs named by Cargo.lock after verifying every archive checksum.
+governed_git_repositories=()
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
   [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 \
     && -d /opt/jain-ci/cargo-registry \
@@ -404,6 +405,23 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
       --receipt "$CARGO_HOME/registry/stage-receipt.json" \
       --expected-source-uid 0 --expected-source-gid 0 \
       || native_setup_failure "locked Cargo registry cache staging failed" 1
+    cargo_stage_receipt="$CARGO_HOME/registry/stage-receipt.json"
+    jq -e '
+      (.governed_git_repositories | type) == "array"
+      and (.governed_git_repositories
+        == (.governed_git_repositories | sort | unique))
+      and all(.governed_git_repositories[];
+        (type == "string")
+        and (length > 0 and length <= 128)
+        and test("^[A-Za-z0-9._+-]+$")
+        and (startswith(".") | not)
+        and (endswith(".") | not))
+    ' "$cargo_stage_receipt" >/dev/null \
+      || native_setup_failure \
+        "locked Cargo receipt has an unsafe governed Git trust set" 1
+    mapfile -t governed_git_repositories < <(
+      jq -r '.governed_git_repositories[]' "$cargo_stage_receipt"
+    )
   fi
   export CARGO_NET_OFFLINE=true
   export CARGO_REGISTRIES_CRATES_IO_PROTOCOL=sparse
@@ -456,8 +474,39 @@ fi
 if [ "$REPO" != "jain-split-ops" ]; then
   ci_gitconfig="${JAIN_HOST_CI_WRITABLE_ROOT:-$SPLIT_ROOT/target}/ci-gitconfig"
   mkdir -p "$(dirname "$ci_gitconfig")"
-  printf '[url "file://%s/target/bare-mirrors/"]\n\tinsteadOf = http://127.0.0.1:8787/git/veox/\n\tinsteadOf = http://127.0.0.1:8787/git/jeryu/\n\tinsteadOf = http://127.0.0.1:8787/git/jain-split/\n\tinsteadOf = http://127.0.0.1:8787/git/redline/\n\tinsteadOf = https://github.com/neverhuman/\n[net]\n\tgit-fetch-with-cli = true\n' "$SPLIT_ROOT" > "$ci_gitconfig"
+  {
+    printf '[url "file://%s/target/bare-mirrors/"]\n' "$SPLIT_ROOT"
+    printf '\tinsteadOf = http://127.0.0.1:8787/git/veox/\n'
+    printf '\tinsteadOf = http://127.0.0.1:8787/git/jeryu/\n'
+    printf '\tinsteadOf = http://127.0.0.1:8787/git/jain-split/\n'
+    printf '\tinsteadOf = http://127.0.0.1:8787/git/redline/\n'
+    printf '\tinsteadOf = https://github.com/neverhuman/\n'
+    if [ "${#governed_git_repositories[@]}" -gt 0 ]; then
+      printf '[safe]\n'
+      for governed_git_repository in "${governed_git_repositories[@]}"; do
+        governed_git_mirror="$SPLIT_ROOT/target/bare-mirrors/$governed_git_repository.git"
+        governed_git_mirror_real="$(realpath -e -- "$governed_git_mirror")" \
+          || native_setup_failure \
+            "governed locked Git mirror is unavailable: $governed_git_repository" 1
+        [[ -d "$governed_git_mirror" && ! -L "$governed_git_mirror" \
+          && "$governed_git_mirror_real" == "$governed_git_mirror" ]] \
+          || native_setup_failure \
+            "governed locked Git mirror is not a physical exact path: $governed_git_repository" 1
+        printf '\tdirectory = %s\n' "$governed_git_mirror"
+      done
+    fi
+    printf '[core]\n\tfsmonitor = false\n\thooksPath = /dev/null\n'
+    printf '[net]\n\tgit-fetch-with-cli = true\n'
+  } > "$ci_gitconfig" \
+    || native_setup_failure "cannot write scoped release Git configuration" 1
+  chmod 0600 "$ci_gitconfig" \
+    || native_setup_failure "cannot secure scoped release Git configuration" 1
+  unset GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_CONFIG_SYSTEM
+  for config_variable in "${!GIT_CONFIG_KEY_@}" "${!GIT_CONFIG_VALUE_@}"; do
+    [[ -n "$config_variable" ]] && unset "$config_variable"
+  done
   say "cross-repo resolution: local bare mirrors (CI cache for local Jeryu tags)"
+  export GIT_CONFIG_NOSYSTEM=1
   export GIT_CONFIG_GLOBAL="$ci_gitconfig"
 fi
 
