@@ -121,6 +121,12 @@ owner = "workspace-ops"
 reason = "pending tooling-repository authority extension; not a managed product row"
 
 [[excluded_path]]
+path = "/home/ubuntu/jain-split/jain-fabric"
+name = "jain-fabric"
+owner = "fabric"
+reason = "reviewed canonical source pending governed repository creation and v9 authority onboarding"
+
+[[excluded_path]]
 path = "/home/ubuntu/jain-split/jain-platform"
 name = "jain-platform"
 owner = "platform"
