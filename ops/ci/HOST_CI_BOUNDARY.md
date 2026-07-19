@@ -178,7 +178,12 @@ sparse-index records, and `config.json` beneath root-owned mode `0555`
 directories. The sandbox binds it read-only. For each release run, `splitctl`
 parses the exact `Cargo.lock`, checksum-verifies every selected `.crate`, and
 copies only those archives and their sparse-index records into a fresh private
-Cargo home before Cargo runs with networking forced offline.
+Cargo home before Cargo runs with networking forced offline. Git lock entries
+are never treated as registry archives: the parser accepts only immutable local
+Jeryu identities with an allowlisted owner, safe repository/tag, and exact
+40-hex commit, binds them through the complete lock digest, and rejects every
+external, branch, revision, unpinned, or malformed Git source. The worker then
+resolves those exact commits only through the scoped local bare-mirror rewrite.
 
 The request root must be on an executable filesystem because the sandbox copies
 the digest-pinned controller and reviewed runner beneath it before binding that

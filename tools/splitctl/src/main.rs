@@ -317,6 +317,15 @@ fn locked_registry_packages(
         let Some(source) = table.get("source").and_then(toml::Value::as_str) else {
             continue;
         };
+        if governed_locked_git_source(source) {
+            if table.contains_key("checksum") {
+                return Err(format!(
+                    "governed locked Git package unexpectedly has a checksum: {source}"
+                )
+                .into());
+            }
+            continue;
+        }
         if source != "registry+https://github.com/rust-lang/crates.io-index" {
             return Err(format!("unsupported locked registry source: {source}").into());
         }
@@ -365,6 +374,36 @@ fn locked_registry_packages(
         return Err("Cargo lock has no crates.io registry packages".into());
     }
     Ok(locked)
+}
+
+fn governed_locked_git_source(source: &str) -> bool {
+    let Some(source) = source.strip_prefix("git+http://127.0.0.1:8787/git/") else {
+        return false;
+    };
+    let Some((identity, commit)) = source.rsplit_once('#') else {
+        return false;
+    };
+    if identity.contains('#') || !is_full_hex(commit, 40) {
+        return false;
+    }
+    let Some((repo_path, tag)) = identity.split_once("?tag=") else {
+        return false;
+    };
+    if repo_path.contains('?') || !valid_cargo_cache_component(tag) {
+        return false;
+    }
+    let mut components = repo_path.split('/');
+    let owner = components.next().unwrap_or_default();
+    let repo = components
+        .next()
+        .and_then(|value| value.strip_suffix(".git"))
+        .unwrap_or_default();
+    components.next().is_none()
+        && matches!(owner, "veox" | "jeryu" | "jain-split" | "redline")
+        && valid_cargo_cache_component(repo)
+        && !repo.starts_with('.')
+        && !repo.ends_with('.')
+        && tag.starts_with(&format!("{repo}-v"))
 }
 
 fn valid_cargo_cache_component(value: &str) -> bool {
@@ -9172,6 +9211,90 @@ mod tests {
                 .file_name()
                 .to_string_lossy()
                 .starts_with(".staged-registry.stage-")));
+    }
+
+    #[test]
+    fn locked_cargo_cache_accepts_only_immutable_governed_git_sources() {
+        let accepted = [
+            "git+http://127.0.0.1:8787/git/veox/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
+            "git+http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.4#3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
+            "git+http://127.0.0.1:8787/git/jain-split/jain-core.git?tag=jain-core-v8.0.1-split.1#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "git+http://127.0.0.1:8787/git/redline/redline-testing.git?tag=redline-testing-v4.1.0-jain.1#bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+        ];
+        for source in accepted {
+            assert!(governed_locked_git_source(source), "rejected {source}");
+        }
+
+        let rejected = [
+            "git+https://github.com/neverhuman/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
+            "git+http://127.0.0.1:8787/git/unknown/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
+            "git+http://127.0.0.1:8787/git/veox/jain-math.git?branch=main#da87246d8339fab457b576bf0c08c3d394b9c92b",
+            "git+http://127.0.0.1:8787/git/veox/jain-math.git?tag=jain-math-v8.0.1-split.1",
+            "git+http://127.0.0.1:8787/git/veox/jain-math.git?tag=wrong-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
+            "git+http://127.0.0.1:8787/git/veox/jain-math.git?tag=jain-math-v8.0.1-split.1#DA87246D8339FAB457B576BF0C08C3D394B9C92B",
+            "git+http://127.0.0.1:8787/git/veox/../jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
+        ];
+        for source in rejected {
+            assert!(!governed_locked_git_source(source), "accepted {source}");
+        }
+    }
+
+    #[test]
+    fn locked_cargo_cache_skips_validated_git_packages_but_binds_the_lock() {
+        let temp = TestDir::new("cargo-cache-stage-governed-git");
+        let fixture = cargo_cache_fixture(temp.path(), b"deterministic crate archive");
+        let registry_lock = fs::read_to_string(&fixture.lock).unwrap();
+        fs::write(
+            &fixture.lock,
+            format!(
+                "{registry_lock}\n[[package]]\nname = \"feat-math\"\nversion = \"8.0.1\"\nsource = \"git+http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b\"\n"
+            ),
+        )
+        .unwrap();
+
+        stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap();
+
+        let receipt: JsonValue =
+            serde_json::from_slice(&fs::read(&fixture.receipt).unwrap()).unwrap();
+        assert_eq!(receipt["package_count"], 1);
+        assert_eq!(receipt["packages"][0]["name"], "demo");
+        assert_eq!(
+            receipt["lock_sha256s"],
+            json!([sha256_regular_file(&fixture.lock, "test Cargo lock").unwrap()])
+        );
+    }
+
+    #[test]
+    fn locked_cargo_cache_rejects_checksummed_governed_git_packages() {
+        let temp = TestDir::new("cargo-cache-stage-checksummed-git");
+        let fixture = cargo_cache_fixture(temp.path(), b"deterministic crate archive");
+        fs::write(
+            &fixture.lock,
+            "version = 4\n\n[[package]]\nname = \"feat-math\"\nversion = \"8.0.1\"\nsource = \"git+http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b\"\nchecksum = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\n",
+        )
+        .unwrap();
+
+        let error = stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("governed locked Git package unexpectedly has a checksum"));
+        assert!(!fixture.destination.exists());
     }
 
     #[test]

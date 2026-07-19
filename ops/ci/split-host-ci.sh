@@ -380,6 +380,10 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
   export CARGO_TARGET_DIR="$tmp/cargo-target"
   mkdir -m 0700 "$CARGO_HOME" "$CARGO_TARGET_DIR" \
     || native_setup_failure "cannot create fresh release Cargo directories" 1
+  printf '[net]\ngit-fetch-with-cli = true\n' >"$CARGO_HOME/config.toml" \
+    || native_setup_failure "cannot create fresh release Cargo configuration" 1
+  chmod 0600 "$CARGO_HOME/config.toml" \
+    || native_setup_failure "cannot secure fresh release Cargo configuration" 1
   mapfile -d '' -t cargo_lock_paths < <(
     git -C "$wt" ls-files -z -- Cargo.lock ':(glob)**/Cargo.lock' | LC_ALL=C sort -z
   )
@@ -455,6 +459,22 @@ if [ "$REPO" != "jain-split-ops" ]; then
   printf '[url "file://%s/target/bare-mirrors/"]\n\tinsteadOf = http://127.0.0.1:8787/git/veox/\n\tinsteadOf = http://127.0.0.1:8787/git/jeryu/\n\tinsteadOf = http://127.0.0.1:8787/git/jain-split/\n\tinsteadOf = http://127.0.0.1:8787/git/redline/\n\tinsteadOf = https://github.com/neverhuman/\n[net]\n\tgit-fetch-with-cli = true\n' "$SPLIT_ROOT" > "$ci_gitconfig"
   say "cross-repo resolution: local bare mirrors (CI cache for local Jeryu tags)"
   export GIT_CONFIG_GLOBAL="$ci_gitconfig"
+fi
+
+# cargo-cache-stage validates every lock source and stages only checksum-bound
+# crates.io inputs. Seed Cargo's private Git database separately while the
+# worker is already inside PrivateNetwork: the forced Git CLI honors only the
+# scoped file:// bare-mirror rewrites above. Once the exact locked commits are
+# present, every proof/build/test process returns to mandatory offline mode.
+if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ -f "$wt/Cargo.toml" ]; then
+  cargo_fetch_log="$tmp/release-cargo-fetch.log"
+  say "seeding immutable locked Git sources from local bare mirrors"
+  if ! (cd "$wt" && CARGO_NET_OFFLINE=false cargo fetch --locked) \
+    >"$cargo_fetch_log" 2>&1; then
+    tail -30 "$cargo_fetch_log" >&2
+    native_setup_failure "release Cargo source seeding failed" 1
+  fi
+  export CARGO_NET_OFFLINE=true
 fi
 
 # Hermetic test env. The `jain` CLI asserts fail-closed behavior when no API URL
