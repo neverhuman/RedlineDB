@@ -8,9 +8,12 @@
   1.6.11 executable from the exact-head sandbox PATH, verify its SHA-256 before
   every use, reject PATH/symlink/version/digest substitution, and bind clean
   exact-HEAD reports under `target/jankurai/`. The public GitHub workflow is a
-  stock-runner static contract only: it cannot install or execute Jankurai,
-  select a self-hosted runner, or claim release authority. Generated score
-  reports are no longer committed as source state.
+  stock-runner static contract only: a whole-document SHA-256/size/line-count
+  allowlist admits only the pinned checkout plus static validator, so added,
+  removed, renamed, reordered, or indirect executable steps fail closed. It
+  cannot install or execute Jankurai, select a self-hosted runner, or claim
+  release authority. Generated score reports are no longer committed as source
+  state.
 
 ## [4.1.0] - 2026-05-29
 

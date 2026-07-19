@@ -10,6 +10,12 @@ cd "$repo_root"
 tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/redline-governed-jankurai.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT
 
+actionlint_bin="$(command -v actionlint || true)"
+if [ -z "$actionlint_bin" ] || [ ! -x "$actionlint_bin" ]; then
+    printf 'actionlint is required to prove hostile workflow fixtures are valid\n' >&2
+    exit 1
+fi
+
 expect_rejected() {
     local name="$1"
     shift
@@ -113,7 +119,21 @@ for hostile_workflow in \
     floating-install \
     privileged-install \
     self-hosted \
-    bypass; do
+    bypass \
+    just-local-authority \
+    just-test \
+    just-check \
+    security-script \
+    ci-local-score \
+    run-sh-score \
+    bash-c-local-authority \
+    sh-c-security \
+    env-audit \
+    renamed-workflow \
+    renamed-step \
+    reordered-steps \
+    extra-action \
+    removed-step; do
     cp "$repo_root/.github/workflows/jankurai.yml" \
         "$tmp_dir/$hostile_workflow.yml"
 done
@@ -125,17 +145,65 @@ printf '%s\n' '      - run: cargo install jankurai' \
     >> "$tmp_dir/floating-install.yml"
 printf '%s\n' '      - run: sudo install jankurai /usr/local/bin/jankurai' \
     >> "$tmp_dir/privileged-install.yml"
-printf '%s\n' '    runs-on: self-hosted' \
-    >> "$tmp_dir/self-hosted.yml"
-printf '%s\n' '      continue-on-error: true' \
+sed -i 's/runs-on: ubuntu-24.04/runs-on: self-hosted/' \
+    "$tmp_dir/self-hosted.yml"
+printf '%s\n' '        continue-on-error: true' \
     >> "$tmp_dir/bypass.yml"
+printf '%s\n' '      - run: just jankurai-local-authority' \
+    >> "$tmp_dir/just-local-authority.yml"
+printf '%s\n' '      - run: just test' \
+    >> "$tmp_dir/just-test.yml"
+printf '%s\n' '      - run: just check' \
+    >> "$tmp_dir/just-check.yml"
+printf '%s\n' '      - run: bash tools/security-lane.sh' \
+    >> "$tmp_dir/security-script.yml"
+printf '%s\n' '      - run: bash scripts/ci-local.sh score' \
+    >> "$tmp_dir/ci-local-score.yml"
+printf '%s\n' '      - run: bash scripts/just/run.sh score' \
+    >> "$tmp_dir/run-sh-score.yml"
+printf '%s\n' "      - run: bash -c 'just jankurai-local-authority'" \
+    >> "$tmp_dir/bash-c-local-authority.yml"
+printf '%s\n' "      - run: sh -c 'bash tools/security-lane.sh'" \
+    >> "$tmp_dir/sh-c-security.yml"
+printf '%s\n' '      - run: env bash ops/ci/jankurai-audit.sh' \
+    >> "$tmp_dir/env-audit.yml"
+sed -i \
+    's/name: redline-hub-jankurai-static-mirror/name: renamed-static-mirror/' \
+    "$tmp_dir/renamed-workflow.yml"
+sed -i \
+    's/name: Reject release-authority drift/name: Renamed static step/' \
+    "$tmp_dir/renamed-step.yml"
+{
+    sed -n '1,23p' "$repo_root/.github/workflows/jankurai.yml"
+    sed -n '28,29p' "$repo_root/.github/workflows/jankurai.yml"
+    sed -n '24,27p' "$repo_root/.github/workflows/jankurai.yml"
+} > "$tmp_dir/reordered-steps.yml"
+printf '%s\n' \
+    '      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020' \
+    >> "$tmp_dir/extra-action.yml"
+sed -i '28,29d' "$tmp_dir/removed-step.yml"
 for hostile_workflow in \
     runtime-jankurai \
     indirect-audit \
     floating-install \
     privileged-install \
     self-hosted \
-    bypass; do
+    bypass \
+    just-local-authority \
+    just-test \
+    just-check \
+    security-script \
+    ci-local-score \
+    run-sh-score \
+    bash-c-local-authority \
+    sh-c-security \
+    env-audit \
+    renamed-workflow \
+    renamed-step \
+    reordered-steps \
+    extra-action \
+    removed-step; do
+    "$actionlint_bin" "$tmp_dir/$hostile_workflow.yml"
     expect_rejected "github-$hostile_workflow" \
         bash "$repo_root/ops/ci/github-mirror-contract.sh" \
         "$tmp_dir/$hostile_workflow.yml"

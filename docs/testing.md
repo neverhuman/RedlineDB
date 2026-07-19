@@ -98,7 +98,8 @@ The proof-lane definitions and audit policy remain pinned in
 `just jankurai-local-authority` is the complete local-fleet audit recipe. It
 uses the governed PATH contract in `ops/ci/lib.sh` and requires the bound
 `target/jankurai/repo-score.json` output. It is never invoked by the public
-GitHub static mirror.
+GitHub static mirror, whose entire workflow byte sequence is fixed by the
+static contract rather than inferred from a command blacklist.
 
 To test a locally built `redline-testing` tarball without editing CI pins, point
 the installer at `file://` URLs:
