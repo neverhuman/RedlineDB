@@ -9,6 +9,11 @@ name = "pr-ci"
 purpose = "exact local mirror of .github/workflows/ci.yml"
 
 [[lane]]
+command = "bash ops/ci/github-mirror-contract.sh"
+name = "github-static-mirror"
+purpose = "stock-runner static mirror that cannot claim local Jeryu release authority"
+
+[[lane]]
 command = "bash ops/ci/no-python-policy.sh"
 name = "no-python-policy"
 purpose = "fail closed on Python source files and executable interpreter or package invocations"

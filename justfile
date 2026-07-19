@@ -12,6 +12,7 @@ pr-ci:
 
 test:
   rtk cargo test --manifest-path tools/evidence-processor/Cargo.toml --locked
+  bash ops/ci/github-mirror-contract.sh
   bash ops/ci/governed-jankurai-test.sh
 
 score:

@@ -22,8 +22,8 @@
       "purpose": "validate workspace formatting controls"
     },
     ".github/": {
-      "command": "actionlint .github/workflows/*.yml",
-      "purpose": "validate workflow syntax and pinned action structure"
+      "command": "bash ops/ci/github-mirror-contract.sh && actionlint .github/workflows/*.yml",
+      "purpose": "prove the public mirror is stock-runner static and validate pinned workflow syntax"
     },
     ".gitignore": {
       "command": "just check",

@@ -1,83 +1,29 @@
-name: redline-hub-jankurai
+name: redline-hub-jankurai-static-mirror
 
 on:
   pull_request:
   push:
     branches: [main]
 
+# This public workflow is a non-authoritative structural mirror. The release
+# gate runs only on the local Jeryu fleet, which injects the protected-main,
+# root-owned Jankurai binary into an isolated exact-head sandbox.
 permissions:
   contents: read
 
 concurrency:
-  group: redline-hub-jankurai-${{ github.workflow }}-${{ github.ref }}
+  group: redline-hub-jankurai-static-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  audit:
-    name: Thin-hub audit
+  static-contract:
+    name: Validate non-authoritative mirror contract
     runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    permissions:
-      contents: read
-      security-events: write # publish generated SARIF to the code-scanning feed
+    timeout-minutes: 5
     steps:
       - name: Check out exact revision
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
-          fetch-depth: 0
           persist-credentials: false
-      - name: Pin Rust toolchain for Jankurai
-        run: |
-          rustup toolchain install 1.95.0 --profile minimal
-          rustup default 1.95.0
-      - name: Run governed score gate
-        run: |
-          . ops/ci/lib.sh
-          ci_require_clean_head
-          ci_require_governed_jankurai
-          mkdir -p target/jankurai/security
-          jankurai security run . --out target/jankurai/security/evidence.json
-          jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
-          jankurai audit . --mode ratchet --baseline .jankurai/baselines/main.repo-score.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --no-score-history --policy agent/audit-policy.toml
-          ci_verify_jankurai_report target/jankurai/repo-score.json target/jankurai/governed-evidence.json
-          jankurai proofbind verify . --changed-from origin/main
-      - name: Run canonical thin-hub audit
-        run: bash ops/ci/jankurai-audit.sh
-      - name: Verify exact-head audit evidence
-        run: |
-          . ops/ci/lib.sh
-          ci_assert_artifacts \
-            target/jankurai/governed-jankurai.log \
-            target/jankurai/governed-jankurai-test.log \
-            target/jankurai/governed-evidence.json \
-            target/jankurai/repo-score.json \
-            target/jankurai/repo-score.md \
-            target/jankurai/security/evidence.json \
-            target/jankurai/proofbind/surface-witness.json \
-            target/jankurai/proofbind/obligations.json
-      - name: Upload SARIF to code scanning
-        if: always() && hashFiles('target/jankurai/jankurai.sarif') != ''
-        uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
-        with:
-          sarif_file: target/jankurai/jankurai.sarif
-      - name: Upload exact-head audit evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: redline-hub-jankurai-evidence
-          retention-days: 14
-          if-no-files-found: error
-          path: |
-            target/jankurai/governed-jankurai.log
-            target/jankurai/governed-jankurai-test.log
-            target/jankurai/governed-evidence.json
-            target/jankurai/jankurai.sarif
-            target/jankurai/accepted-baseline.json
-            target/jankurai/repo-score.json
-            target/jankurai/repo-score.md
-            target/jankurai/repair-queue.jsonl
-            target/jankurai/security/evidence.json
-            target/jankurai/proofbind/surface-witness.json
-            target/jankurai/proofbind/obligations.json
-            target/jankurai/proofmark/not-applicable.json
-            target/jankurai/rust/not-applicable.json
+      - name: Reject release-authority drift
+        run: bash ops/ci/github-mirror-contract.sh
