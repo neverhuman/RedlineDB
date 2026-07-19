@@ -457,6 +457,17 @@ if [ "$REPO" != "jain-split-ops" ]; then
   ci_gitconfig="${JAIN_HOST_CI_WRITABLE_ROOT:-$SPLIT_ROOT/target}/ci-gitconfig"
   mkdir -p "$(dirname "$ci_gitconfig")"
   printf '[url "file://%s/target/bare-mirrors/"]\n\tinsteadOf = http://127.0.0.1:8787/git/veox/\n\tinsteadOf = http://127.0.0.1:8787/git/jeryu/\n\tinsteadOf = http://127.0.0.1:8787/git/jain-split/\n\tinsteadOf = http://127.0.0.1:8787/git/redline/\n\tinsteadOf = https://github.com/neverhuman/\n[net]\n\tgit-fetch-with-cli = true\n' "$SPLIT_ROOT" > "$ci_gitconfig"
+  # The mirrors are operator-owned shared cache while this lane runs as the
+  # unprivileged sandbox worker, so Git's ownership guard rejects every one of
+  # them ("detected dubious ownership") and the seeding fetch below dies before
+  # it can use the rewrites above. The sandbox pins GIT_CONFIG_GLOBAL=/dev/null
+  # and whitelists only its own two paths, so no user-level config can reach
+  # this; mark exactly the mirror directories safe, here, in the same temp
+  # config. Enumerated rather than `*` so the guard stays on everywhere else.
+  for mirror in "$SPLIT_ROOT"/target/bare-mirrors/*.git; do
+    [ -d "$mirror" ] || continue
+    printf '[safe]\n\tdirectory = %s\n' "$mirror" >> "$ci_gitconfig"
+  done
   say "cross-repo resolution: local bare mirrors (CI cache for local Jeryu tags)"
   export GIT_CONFIG_GLOBAL="$ci_gitconfig"
 fi
