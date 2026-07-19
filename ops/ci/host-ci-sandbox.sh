@@ -486,6 +486,8 @@ fi
 git -c filter.lfs.process= -c filter.lfs.clean= -c filter.lfs.smudge= \
   -c filter.lfs.required=false clone --quiet --no-local --no-checkout \
   "$product_authority" "${arguments[3]}"
+jain_git_object_tree_is_symlink_free "${arguments[3]}" "${arguments[2]}" \
+  || fail 'product worker object tree contains a prohibited mode'
 git -C "${arguments[3]}" -c filter.lfs.process= -c filter.lfs.clean= \
   -c filter.lfs.smudge= -c filter.lfs.required=false \
   checkout --quiet --detach "${arguments[2]}"
@@ -537,6 +539,8 @@ mkdir -m 0755 "$audit_source_root"
 git -c filter.lfs.process= -c filter.lfs.clean= -c filter.lfs.smudge= \
   -c filter.lfs.required=false clone --quiet --no-local --no-checkout \
   "$product_authority" "$audit_worktree"
+jain_git_object_tree_is_symlink_free "$audit_worktree" "${arguments[2]}" \
+  || fail 'product audit object tree contains a prohibited mode'
 git -C "$audit_worktree" -c filter.lfs.process= -c filter.lfs.clean= \
   -c filter.lfs.smudge= -c filter.lfs.required=false \
   checkout --quiet --detach "${arguments[2]}"

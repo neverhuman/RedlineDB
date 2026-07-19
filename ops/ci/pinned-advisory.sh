@@ -6,6 +6,29 @@
 JAIN_PINNED_RUSTSEC_COMMIT="6e3286f4efa8c142fb33e5ea4342c8db6693cf34"
 JAIN_CARGO_DENY_RUSTSEC_DIR="advisory-db-3157b0e258782691"
 
+# Inspect only the fetched object database before any checkout can create a
+# filesystem node. Recursive ls-tree omits directory entries; the only admitted
+# leaf modes are regular files, executables, and pinned submodule commits.
+jain_git_object_tree_is_symlink_free() {
+  local repository="${1:?Git repository is required}"
+  local revision="${2:?Git revision is required}"
+  local inventory
+  inventory="$(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 \
+    GIT_NO_LAZY_FETCH=1 GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 \
+    /usr/bin/git -c protocol.allow=never -c core.fsmonitor=false \
+    -c core.hooksPath=/dev/null -c core.untrackedCache=false \
+    -c core.alternateRefsCommand=false -c diff.external= \
+    -C "$repository" ls-tree -r --full-tree --format='%(objectmode)' \
+    "$revision")" || return 1
+  awk '
+        NF == 0 { next }
+        $1 == "120000" { prohibited = 1; next }
+        $1 !~ /^(100644|100755|160000)$/ { prohibited = 1 }
+        END { exit prohibited }
+      ' <<<"$inventory"
+}
+
 jain_materialize_pinned_advisory_db() {
   local source="${1:?advisory database source is required}"
   local destination="${2:?advisory database destination is required}"
@@ -83,6 +106,10 @@ jain_materialize_pinned_advisory_db() {
   "${safe_git[@]}" -C "$destination" index-pack --stdin \
     <"$pack" >/dev/null || return 1
   rm -f -- "$pack"
+  jain_git_object_tree_is_symlink_free "$destination" "$expected" || {
+    printf 'pinned RustSec object tree contains a prohibited mode\n' >&2
+    return 1
+  }
   "${safe_git[@]}" -C "$destination" checkout --quiet --detach \
     "$expected" || return 1
   actual="$("${safe_git[@]}" -C "$destination" rev-parse HEAD)" || return 1

@@ -18,6 +18,37 @@ git -C "$source_db" add .
 git -C "$source_db" commit -qm 'test advisory'
 expected="$(git -C "$source_db" rev-parse HEAD)"
 
+# Build a hostile mode-120000 tree entirely through Git's object/index APIs.
+# No filesystem symbolic link is created even as a test fixture.
+mode_source="$tmp/prohibited-mode-source"
+mode_destination="$tmp/prohibited-mode-destination"
+git init --quiet "$mode_source"
+git -C "$mode_source" config user.name test
+git -C "$mode_source" config user.email test@example.invalid
+printf 'never materialize this target\n' >"$mode_source/blob-source"
+mode_blob="$(git -C "$mode_source" hash-object -w blob-source)"
+git -C "$mode_source" update-index --add \
+  --cacheinfo "120000,$mode_blob,prohibited-link"
+mode_tree="$(git -C "$mode_source" write-tree)"
+mode_commit="$(git -C "$mode_source" commit-tree "$mode_tree" \
+  -m 'prohibited symlink tree')"
+if jain_git_object_tree_is_symlink_free "$mode_source" "$mode_commit"; then
+  printf 'object-tree preflight accepted mode 120000\n' >&2
+  exit 1
+fi
+if jain_materialize_pinned_advisory_db \
+  "$mode_source" "$mode_destination" "$mode_commit"; then
+  printf 'pinned advisory materialized mode 120000\n' >&2
+  exit 1
+fi
+[[ ! -e "$mode_source/prohibited-link" \
+  && ! -e "$mode_destination/prohibited-link" \
+  && -z "$(find "$mode_source" "$mode_destination" -type l -print -quit 2>/dev/null)" ]] \
+  || {
+    printf 'object-only hostile fixture created a symbolic link\n' >&2
+    exit 1
+  }
+
 # A user's source checkout may be dirty. Materialization must read the pinned
 # commit without resetting, cleaning, deleting, or copying those changes.
 printf 'user change\n' >>"$source_db/crates/example/RUSTSEC-2099-0001.md"

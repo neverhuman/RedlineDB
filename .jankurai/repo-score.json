@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:61687ebafc0568552e3a31b17c5363f80c4b9274910da04724d320ca661981d8",
-  "input_fingerprint": "sha256:7923cb611a33f709fef3cccd339c24a26fe2c441c8e315e20a66b76a7eb93ece",
+  "report_fingerprint": "sha256:2c39fffe47d5fce5fcdb4f4620cff9bbe034a345341cb42b0079c13ba1897d8f",
+  "input_fingerprint": "sha256:79cc241b6d64e37f14c49b936e8f4af487483a3041e5f6671c94b1dad43f381c",
   "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
   "manifest_fingerprints": {
     "owner_map": "sha256:4d4f78e32cf6f78fc77cb03ed13d3ec781d4d35da4db1ffc56bbb48f403dcfed",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:f33b9715b6109208b44f6931c43f37e8da642dd67ff6faaad77be486954243a4"
   },
   "dirty_worktree": true,
-  "generated_at": "1784425494",
+  "generated_at": "1784496954",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784425494",
-  "started_at": "1784425494",
-  "elapsed_ms": 2930,
+  "run_id": "1784496954",
+  "started_at": "1784496954",
+  "elapsed_ms": 2998,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "81c3aba",
+    "head": "fdd8027",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -306,9 +306,13 @@
         "jankurai audit lane found in CI",
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
-        "Rust property/integration tests present or no Rust surface"
+        "Rust property/integration tests present or no Rust surface",
+        "proofbind artifact found: surfaces=10 missing=10 high_or_critical_missing=10 verdict=review"
       ],
-      "notes": []
+      "notes": [
+        "proofbind reports 10 unresolved obligation(s)",
+        "proofbind reports 10 missing high/critical semantic proof obligation(s)"
+      ]
     },
     {
       "name": "Security and supply-chain posture",
@@ -1006,7 +1010,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-19T01:44:51.309841962+00:00",
+    "generated_at": "2026-07-19T21:35:51.299409729+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1044,20 +1048,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 264,
+      "files_scanned": 265,
       "files_considered": 4,
       "active_files": 4,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 12,
+      "warning_classes": 11,
       "hard_instances": 0,
-      "warning_instances": 39,
-      "duplicate_lines": 14,
-      "duplicate_tokens": 42,
-      "duplicate_bytes": 454,
-      "total_redundant_lines": 29,
-      "total_redundant_tokens": 80,
-      "total_redundant_bytes": 924
+      "warning_instances": 37,
+      "duplicate_lines": 13,
+      "duplicate_tokens": 41,
+      "duplicate_bytes": 443,
+      "total_redundant_lines": 28,
+      "total_redundant_tokens": 79,
+      "total_redundant_bytes": 913
     },
     "classes": [
       {
@@ -1196,27 +1200,27 @@
             "language": "rust",
             "start_line": 1431,
             "end_line": 1432,
-            "unit_name": "token_rejects_symlink_components_and_final_symlink"
+            "unit_name": "token_rejects_aliased_path_components"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1447,
-            "end_line": 1448,
+            "start_line": 1448,
+            "end_line": 1449,
             "unit_name": "token_rejects_hardlinks_special_files_and_oversize"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1486,
-            "end_line": 1487,
+            "start_line": 1487,
+            "end_line": 1488,
             "unit_name": "token_rejects_path_replacement"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1500,
-            "end_line": 1501,
+            "start_line": 1501,
+            "end_line": 1502,
             "unit_name": "token_rejects_parent_component_replacement"
           }
         ]
@@ -1243,15 +1247,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2512,
-            "end_line": 2515,
+            "start_line": 2637,
+            "end_line": 2640,
             "unit_name": "validate_child_family_authority"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2528,
-            "end_line": 2531,
+            "start_line": 2653,
+            "end_line": 2656,
             "unit_name": "validate_child_engine_authority"
           }
         ]
@@ -1327,15 +1331,15 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1521,
-            "end_line": 1522,
+            "start_line": 1522,
+            "end_line": 1523,
             "unit_name": "serve"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1608,
-            "end_line": 1609,
+            "start_line": 1609,
+            "end_line": 1610,
             "unit_name": "serve_sequence"
           }
         ]
@@ -1362,15 +1366,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2230,
-            "end_line": 2231,
+            "start_line": 2337,
+            "end_line": 2338,
             "unit_name": "physical_directory"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2238,
-            "end_line": 2239,
+            "start_line": 2345,
+            "end_line": 2346,
             "unit_name": "physical_regular_file"
           }
         ]
@@ -1397,15 +1401,15 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1652,
-            "end_line": 1653,
+            "start_line": 1653,
+            "end_line": 1654,
             "unit_name": "host_ci_publication_preserves_proof_readback_check_status_order"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1707,
-            "end_line": 1708,
+            "start_line": 1708,
+            "end_line": 1709,
             "unit_name": "host_ci_publication_reports_whether_proof_post_started"
           }
         ]
@@ -1432,15 +1436,15 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1802,
-            "end_line": 1803,
+            "start_line": 1803,
+            "end_line": 1804,
             "unit_name": "rejects_ambiguous_or_unsupported_response_framing"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1817,
-            "end_line": 1818,
+            "start_line": 1818,
+            "end_line": 1819,
             "unit_name": "rejects_malformed_or_truncated_chunked_responses"
           }
         ]
@@ -1544,44 +1548,9 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1550,
-            "end_line": 1551,
+            "start_line": 1655,
+            "end_line": 1656,
             "unit_name": "valid_cargo_token"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-1b7bc3b4ff4274dc",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 1,
-        "duplicate_bytes": 11,
-        "instance_count": 2,
-        "total_redundant_lines": 1,
-        "total_redundant_tokens": 1,
-        "total_redundant_bytes": 11,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "086037c938e45843",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "ops/ci/fake-git-http.rs",
-            "language": "rust",
-            "start_line": 231,
-            "end_line": 232,
-            "unit_name": "respond_unauthorized"
-          },
-          {
-            "path": "ops/ci/fake-git-http.rs",
-            "language": "rust",
-            "start_line": 239,
-            "end_line": 240,
-            "unit_name": "respond_internal_error"
           }
         ]
       }

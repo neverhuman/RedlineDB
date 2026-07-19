@@ -281,6 +281,8 @@ validate_physical_checkout() {
 
 git clone --quiet --no-local --no-checkout "$REPO_PATH" "$wt" \
   || { post_check failure; echo "physical checkout clone failed" >&2; exit 1; }
+jain_git_object_tree_is_symlink_free "$wt" "$SHA" \
+  || { post_check failure; echo "product object tree contains a prohibited mode" >&2; exit 1; }
 git -C "$wt" checkout --quiet --detach "$SHA" \
   || { post_check failure; echo "physical checkout failed" >&2; exit 1; }
 git -C "$wt" remote remove origin || exit 1
@@ -347,6 +349,8 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
         || native_setup_failure "cannot resolve sibling $sib" 1
       git clone --quiet --no-local --no-checkout "$SPLIT_ROOT/$sib" "$tmp/$sib" \
         || native_setup_failure "cannot clone sibling $sib" 1
+      jain_git_object_tree_is_symlink_free "$tmp/$sib" "$sib_sha" \
+        || native_setup_failure "sibling $sib object tree contains a prohibited mode" 1
       git -C "$tmp/$sib" checkout --quiet --detach "$sib_sha" \
         || native_setup_failure "cannot checkout sibling $sib" 1
       git -C "$tmp/$sib" remote remove origin \

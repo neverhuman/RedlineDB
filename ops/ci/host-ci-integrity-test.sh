@@ -34,6 +34,31 @@ for boundary in host-ci-sandbox.sh host-ci-publisher.sh; do
     exit 1
   fi
 done
+
+assert_guard_precedes_checkout() {
+  local path="${1:?path is required}" guard="${2:?guard is required}"
+  local checkout="${3:?checkout is required}" guard_line checkout_line
+  guard_line="$(grep -nF "$guard" "$repo_root/$path" | head -n1 | cut -d: -f1)"
+  checkout_line="$(grep -nF "$checkout" "$repo_root/$path" \
+    | awk -F: -v guard="$guard_line" '$1 > guard { print $1; exit }')"
+  [[ "$guard_line" =~ ^[0-9]+$ && "$checkout_line" =~ ^[0-9]+$ \
+    && "$guard_line" -lt "$checkout_line" ]] || {
+    printf '%s does not reject the object tree before checkout\n' "$path" >&2
+    exit 1
+  }
+}
+assert_guard_precedes_checkout ops/ci/host-ci-sandbox.sh \
+  'jain_git_object_tree_is_symlink_free "${arguments[3]}"' \
+  'checkout --quiet --detach "${arguments[2]}"'
+assert_guard_precedes_checkout ops/ci/host-ci-sandbox.sh \
+  'jain_git_object_tree_is_symlink_free "$audit_worktree"' \
+  'checkout --quiet --detach "${arguments[2]}"'
+assert_guard_precedes_checkout ops/ci/split-host-ci.sh \
+  'jain_git_object_tree_is_symlink_free "$wt" "$SHA"' \
+  'git -C "$wt" checkout --quiet --detach "$SHA"'
+assert_guard_precedes_checkout ops/ci/split-host-ci.sh \
+  'jain_git_object_tree_is_symlink_free "$tmp/$sib" "$sib_sha"' \
+  'git -C "$tmp/$sib" checkout --quiet --detach "$sib_sha"'
 git init --quiet "$fixture"
 git -C "$fixture" config user.name 'Host CI Fixture'
 git -C "$fixture" config user.email host-ci-fixture@example.invalid

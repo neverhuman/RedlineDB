@@ -5470,6 +5470,41 @@ fn secure_materialization_git_status(
     Ok(())
 }
 
+fn validate_materialization_object_tree(
+    repo: &Path,
+    revision: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let output = secure_git_command(Some(repo))
+        .args([
+            "ls-tree",
+            "-r",
+            "--full-tree",
+            "--format=%(objectmode)",
+            revision,
+        ])
+        .output()?;
+    if !output.status.success() {
+        return Err("Git materialization object-tree preflight failed".into());
+    }
+    let modes = std::str::from_utf8(&output.stdout)
+        .map_err(|_| "Git materialization object-tree preflight was not UTF-8")?;
+    for mode in modes.lines() {
+        match mode {
+            "100644" | "100755" | "160000" => {}
+            "120000" => {
+                return Err("Git materialization object tree contains a prohibited symlink".into())
+            }
+            _ => {
+                return Err(format!(
+                    "Git materialization object tree contains unsupported mode {mode:?}"
+                )
+                .into())
+            }
+        }
+    }
+    Ok(())
+}
+
 struct MaterializationDirectory {
     path: PathBuf,
     device: u64,
@@ -5623,6 +5658,14 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
         &token_file,
         &["fetch", "--quiet", "--no-tags", &remote, &reference],
     )?;
+    if secure_git_output(
+        Some(&destination),
+        &["rev-parse", "--verify", "FETCH_HEAD^{commit}"],
+    )? != expected_head
+    {
+        return Err("Git materialization fetched a different commit".into());
+    }
+    validate_materialization_object_tree(&destination, "FETCH_HEAD")?;
     if !secure_git_status(
         Some(&destination),
         &["checkout", "--quiet", "--detach", "FETCH_HEAD"],
@@ -11571,6 +11614,76 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let second = root.path().join("second");
         fs::create_dir(&second).unwrap();
         assert!(jeryu_git_materialize(args(&token_file, &second)).is_err());
+    }
+
+    #[test]
+    fn git_materialization_rejects_symlink_mode_before_checkout() {
+        let root = TestDir::new("git-materialization-symlink-mode");
+        let source = root.path().join("source");
+        let mut init = Command::new("git");
+        init.args(["init", "-b", "main"]).arg(&source);
+        command(init);
+        run_git_strict(&source, &["config", "user.name", "Release Test"]).unwrap();
+        run_git_strict(
+            &source,
+            &["config", "user.email", "release@example.invalid"],
+        )
+        .unwrap();
+        fs::write(
+            source.join("blob-source"),
+            "never materialize this target\n",
+        )
+        .unwrap();
+        let blob = strict_git_output(&source, &["hash-object", "-w", "blob-source"]).unwrap();
+        let cache_info = format!("120000,{blob},prohibited-link");
+        run_git_strict(
+            &source,
+            &["update-index", "--add", "--cacheinfo", &cache_info],
+        )
+        .unwrap();
+        let tree = strict_git_output(&source, &["write-tree"]).unwrap();
+        let head = strict_git_output(
+            &source,
+            &["commit-tree", &tree, "-m", "prohibited symlink tree"],
+        )
+        .unwrap();
+        run_git_strict(&source, &["update-ref", "refs/heads/main", &head]).unwrap();
+        assert!(!source.join("prohibited-link").exists());
+
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!("{head}:refs/heads/main"),
+            ],
+        )
+        .unwrap();
+        let token_root = TestDir::new_private_temp("git-materialization-symlink-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let destination = root.path().join("rejected");
+        let error = jeryu_git_materialize(vec![
+            "git-materialize".to_owned(),
+            "--repo".to_owned(),
+            "jeryu/example".to_owned(),
+            "--remote".to_owned(),
+            remote.display().to_string(),
+            "--ref".to_owned(),
+            "refs/heads/main".to_owned(),
+            "--expected-head".to_owned(),
+            head,
+            "--destination".to_owned(),
+            destination.display().to_string(),
+            "--token-file".to_owned(),
+            token_file.display().to_string(),
+        ])
+        .unwrap_err();
+        assert!(error.to_string().contains("prohibited symlink"));
+        assert!(!destination.exists());
+        assert!(!source.join("prohibited-link").exists());
     }
 
     #[test]
