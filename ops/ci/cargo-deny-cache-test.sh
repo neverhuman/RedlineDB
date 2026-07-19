@@ -7,16 +7,53 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 # fixture; the production security lane validates the fleet pin separately.
 unset JAIN_PINNED_ADVISORY_DB JAIN_ADVISORY_DB JAIN_PINNED_ADVISORY_COMMIT
 
-jain_ci_scratch_create "$ROOT_DIR" redline-web-cargo-deny-cache \
-  || fail "unable to create a custody-safe in-repository scratch directory"
-tmp="$JAIN_CI_SCRATCH_PATH"
+redline_container="$(realpath -e -- "$ROOT_DIR/..")"
+external_root="$(mktemp -d /tmp/redline-web-cargo-deny-cache.XXXXXX)"
+scratch_created=0
 cleanup() {
-  local rc=$?
+  local rc=$? cleanup_rc=0
   trap - EXIT
-  jain_ci_scratch_remove || exit 1
+  if (( scratch_created == 1 )); then
+    jain_ci_scratch_remove || cleanup_rc=1
+    exec {JAIN_CI_SCRATCH_PATH_FD}<&-
+    exec {JAIN_CI_SCRATCH_PARENT_FD}<&-
+    exec {JAIN_CI_SCRATCH_TARGET_FD}<&-
+    exec {JAIN_CI_SCRATCH_ROOT_FD}<&-
+    if (( cleanup_rc == 0 )); then
+      rmdir -- "$JAIN_CI_SCRATCH_PATH" "$JAIN_CI_SCRATCH_PARENT" \
+        "$JAIN_CI_SCRATCH_TARGET" "$external_root" || cleanup_rc=1
+    fi
+  else
+    rmdir -- "$external_root" || cleanup_rc=1
+  fi
+  if (( rc == 0 && cleanup_rc != 0 )); then
+    rc=1
+  fi
   exit "$rc"
 }
 trap cleanup EXIT
+
+external_root="$(realpath -e -- "$external_root")"
+[[ -d "$external_root" && ! -L "$external_root" \
+  && "$(stat -Lc '%u' -- "$external_root")" -eq "$EUID" \
+  && "$(stat -Lc '%a' -- "$external_root")" == 700 ]] \
+  || fail "external hostile-fixture root is not a private physical directory"
+case "$external_root/" in
+  "$redline_container/"*)
+    fail "hostile fixture root must remain outside the canonical Redline container"
+    ;;
+esac
+
+jain_ci_scratch_create "$external_root" redline-web-cargo-deny-cache \
+  || fail "unable to create a custody-safe external scratch directory"
+scratch_created=1
+tmp="$JAIN_CI_SCRATCH_PATH"
+
+case "$(realpath -e -- "$tmp")/" in
+  "$redline_container/"*)
+    fail "selected hostile fixture path entered the canonical Redline container"
+    ;;
+esac
 
 jain_ci_scratch_hostile_tests() {
   local hostile="$tmp/scratch-custody"
