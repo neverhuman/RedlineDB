@@ -145,6 +145,12 @@ owner = "shard"
 reason = "active protected Shard implementation pending a separate authority onboarding"
 
 [[excluded_path]]
+path = "/home/ubuntu/jain-split/jankurai-tools-tui"
+name = "jankurai-tools-tui"
+owner = "jankurai"
+reason = "temporary source custody only; requires governed creation and onboarding through corrected AUTH-006/007/008, then removal from exclusions"
+
+[[excluded_path]]
 path = "/home/ubuntu/jain-split/redline-split-ops"
 name = "redline-split-ops"
 owner = "release-engineering"

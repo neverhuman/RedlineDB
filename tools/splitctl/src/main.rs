@@ -12296,6 +12296,28 @@ source_inventory_sha256 = "{}"
         validate_manifest_data(&canonical, &path, false).unwrap();
         assert!(derived_manifest_is_pending(&canonical, "portal").unwrap());
         assert!(derived_manifest_is_pending(&canonical, "deploy").unwrap());
+        let jankurai_tui_custody = canonical["excluded_path"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|row| string(row, "name").as_deref() == Some("jankurai-tools-tui"))
+            .collect::<Vec<_>>();
+        assert_eq!(jankurai_tui_custody.len(), 1);
+        assert_eq!(
+            string(jankurai_tui_custody[0], "path").as_deref(),
+            Some("/home/ubuntu/jain-split/jankurai-tools-tui")
+        );
+        assert_eq!(
+            string(jankurai_tui_custody[0], "owner").as_deref(),
+            Some("jankurai")
+        );
+        assert_eq!(
+            string(jankurai_tui_custody[0], "reason").as_deref(),
+            Some(
+                "temporary source custody only; requires governed creation and onboarding through \
+                 corrected AUTH-006/007/008, then removal from exclusions"
+            )
+        );
         validate_derived_manifest(
             Path::new("/definitely/missing/held-projection.toml"),
             "not-used-while-pending",
