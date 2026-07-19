@@ -21,8 +21,8 @@ writable_root="$(realpath -e -- "${JAIN_HOST_CI_WRITABLE_ROOT:?}")" \
 cargo_home="$(realpath -e -- "${CARGO_HOME:?}")" \
   || fail 'fresh Cargo home is unavailable'
 case "$cargo_home" in
-  "$writable_root"/physical-checkouts/split-host-ci.??????/cargo-home) ;;
-  *) fail 'Cargo home escaped the bounded physical checkout' ;;
+  "$writable_root"/cargo-home) ;;
+  *) fail 'Cargo home escaped the bounded request root' ;;
 esac
 [[ -d "$cargo_home" && ! -L "$cargo_home" \
   && "$(stat -c '%u:%g:%a' -- "$cargo_home")" == "$(id -u):$(id -g):700" \
