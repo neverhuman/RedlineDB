@@ -2309,7 +2309,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         || value
             .get("manifest_authority")
             .and_then(toml::Value::as_str)
-            != Some("repos.manifest.toml")
+            != Some("/home/ubuntu/jain-split/jain-redline/redline-split-ops/repos.manifest.toml")
         || value.get("mirror_root").and_then(toml::Value::as_str)
             != Some("../../target/bare-mirrors")
         || value.get("container").and_then(toml::Value::as_str) != Some("..")
@@ -8321,7 +8321,7 @@ default_branch = "main"
             (
                 "tmp-authority",
                 canonical.replacen(
-                    "manifest_authority = \"repos.manifest.toml\"",
+                    "manifest_authority = \"/home/ubuntu/jain-split/jain-redline/redline-split-ops/repos.manifest.toml\"",
                     "manifest_authority = \"/tmp/redirect.toml\"",
                     1,
                 ),
