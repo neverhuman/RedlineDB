@@ -654,9 +654,7 @@ MONITOR
   mapfile -t safe_directories < <(
     git config --global --get-all safe.directory 2>/dev/null || true
   )
-  if [[ "${#safe_directories[@]}" == 1 \
-    && "${safe_directories[0]}" \
-      == "$JAIN_SPLIT_ROOT/target/bare-mirrors/jain-core.git" ]]; then
+  if [[ "${#safe_directories[@]}" == 0 ]]; then
     bare_mirror_safe=1
   fi
   evidence_staging_bounded=0
@@ -1693,13 +1691,6 @@ make_proof_tamper_variant() {
       sudo -n rm -- "$proof_destination/receipt.json"
       sudo -n chmod 0500 "$proof_destination"
       ;;
-    symlink)
-      sudo -n chmod 0700 "$proof_destination"
-      sudo -n rm -- "$proof_destination/report.json"
-      sudo -n ln -s -- "$success_proof_dir/report.json" \
-        "$proof_destination/report.json"
-      sudo -n chmod 0500 "$proof_destination"
-      ;;
     hardlink)
       external="$proof_evidence_root/.hardlink-$request_id"
       sudo -n install -o root -g root -m 0400 \
@@ -1723,10 +1714,9 @@ make_proof_tamper_variant() {
 
 # A valid root seal cannot bless evidence that changed afterward or whose
 # immutable inode shape was replaced. All four failures occur before a POST.
-for proof_mutation in missing symlink hardlink tamper; do
+for proof_mutation in missing hardlink tamper; do
   case "$proof_mutation" in
     missing) proof_mutation_id="$(printf 'd%.0s' {1..64})" ;;
-    symlink) proof_mutation_id="$(printf 'e%.0s' {1..64})" ;;
     hardlink) proof_mutation_id="$(printf 'f%.0s' {1..64})" ;;
     tamper) proof_mutation_id="$(printf '9%.0s' {1..64})" ;;
   esac

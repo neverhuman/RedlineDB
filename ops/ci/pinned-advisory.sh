@@ -106,6 +106,8 @@ jain_install_pinned_rustsec_tools() {
   local script_root="${4:?control-plane root is required}"
   local deny_db_root="$cargo_home/advisory-dbs"
   local deny_db="$deny_db_root/$JAIN_CARGO_DENY_RUSTSEC_DIR"
+  local advisory_commit deny_commit
+  local -a advisory_git deny_git
 
   case "$tool_dir:$advisory_db:$cargo_home:$script_root" in
     /*:/*:/*:/*) ;;
@@ -128,15 +130,43 @@ jain_install_pinned_rustsec_tools() {
       "$deny_db" >&2
     return 1
   }
-  [[ "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-      -C "$advisory_db" rev-parse 'HEAD^{commit}')" \
-      == "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-        -C "$deny_db" rev-parse 'HEAD^{commit}')" ]] || {
+  advisory_git=(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_LAZY_FETCH=1 \
+    GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 /usr/bin/git \
+    -c "safe.directory=$advisory_db" -c protocol.allow=never \
+    -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -c core.untrackedCache=false -c core.alternateRefsCommand=false \
+    -c diff.external=)
+  deny_git=(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
+    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_LAZY_FETCH=1 \
+    GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 /usr/bin/git \
+    -c "safe.directory=$deny_db" -c protocol.allow=never \
+    -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -c core.untrackedCache=false -c core.alternateRefsCommand=false \
+    -c diff.external=)
+  advisory_commit="$("${advisory_git[@]}" -C "$advisory_db" \
+    rev-parse 'HEAD^{commit}')" || return 1
+  deny_commit="$("${deny_git[@]}" -C "$deny_db" \
+    rev-parse 'HEAD^{commit}')" || return 1
+  [[ "$advisory_commit" == "$deny_commit" ]] || {
     printf 'cargo-audit and cargo-deny RustSec snapshots differ\n' >&2
     return 1
   }
 
   mkdir -p "$tool_dir"
-  ln -s "$script_root/ops/ci/pinned-cargo-audit.sh" "$tool_dir/cargo-audit"
-  ln -s "$script_root/ops/ci/pinned-cargo-deny.sh" "$tool_dir/cargo-deny"
+  [[ ! -e "$tool_dir/cargo-audit" && ! -L "$tool_dir/cargo-audit" \
+    && ! -e "$tool_dir/cargo-deny" && ! -L "$tool_dir/cargo-deny" ]] || {
+    printf 'pinned RustSec tool destination is not empty: %s\n' "$tool_dir" >&2
+    return 1
+  }
+  install -m 0555 -- \
+    "$script_root/ops/ci/pinned-cargo-audit.sh" "$tool_dir/cargo-audit"
+  install -m 0555 -- \
+    "$script_root/ops/ci/pinned-cargo-deny.sh" "$tool_dir/cargo-deny"
+  [[ ! -L "$tool_dir/cargo-audit" && ! -L "$tool_dir/cargo-deny" \
+    && "$(sha256sum -- "$tool_dir/cargo-audit" | cut -d' ' -f1)" \
+      == "$(sha256sum -- "$script_root/ops/ci/pinned-cargo-audit.sh" | cut -d' ' -f1)" \
+    && "$(sha256sum -- "$tool_dir/cargo-deny" | cut -d' ' -f1)" \
+      == "$(sha256sum -- "$script_root/ops/ci/pinned-cargo-deny.sh" | cut -d' ' -f1)" ]] \
+    || return 1
 }

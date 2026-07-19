@@ -20,10 +20,10 @@
     },
     {
       "name": "xgboost",
-      "revision": "62e7923619352c4079b24303b367134486b1c84f",
-      "git_tree": "5056140ec7fae172d6d14798bab0294684071ccf",
-      "tree_manifest_sha256": "4f84c6324779e395488917f102e01fbce3e2f1cb4842af77d70ba39369b2cd1a",
-      "source_content_sha256": "eb389dee816598baac4e119d8197a12a24dec3e6aa14a293eddbd7129809e09c",
+      "revision": "6bd0528d20f8f1fff2d065453dcb6af8382bc72b",
+      "git_tree": "06235574cb72e467590f9fd6f52e4719a41bd318",
+      "tree_manifest_sha256": "4652cdaaee7e1e281f7643ae96fd8ed2155eae9f1cfd4ad5d9ac9c9de833627d",
+      "source_content_sha256": "764c899913c7affa9b562af051cbcb9d2b61a8e73334406eab70baba100b165a",
       "required_files": [
         "CMakeLists.txt",
         "include/xgboost/c_api.h"

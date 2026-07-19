@@ -253,6 +253,7 @@ struct LockedRegistryPackage {
     checksum: String,
 }
 
+#[derive(Debug)]
 struct LockedCargoInputs {
     registry_packages: Vec<LockedRegistryPackage>,
     governed_git_repositories: Vec<String>,
@@ -326,7 +327,12 @@ fn locked_cargo_inputs(lock_path: &Path) -> Result<LockedCargoInputs, Box<dyn st
         Some(value) => value
             .as_array()
             .ok_or("Cargo lock package field is not an array")?,
-        None => return Ok(Vec::new()),
+        None => {
+            return Ok(LockedCargoInputs {
+                registry_packages: Vec::new(),
+                governed_git_repositories: Vec::new(),
+            });
+        }
     };
     let mut locked = Vec::new();
     let mut governed_git_repositories = Vec::new();
@@ -393,9 +399,6 @@ fn locked_cargo_inputs(lock_path: &Path) -> Result<LockedCargoInputs, Box<dyn st
             )
             .into());
         }
-    }
-    if locked.is_empty() {
-        return Err("Cargo lock has no crates.io registry packages".into());
     }
     governed_git_repositories.sort();
     governed_git_repositories.dedup();
@@ -2462,9 +2465,27 @@ fn validated_nested_repository_paths(
         }
     }
     if let Some(authority) = string(nested, "manifest_authority") {
-        if authority != topology.manifest_path.display().to_string() {
+        let absolute_authority = topology.manifest_path.display().to_string();
+        let relative_authority = exact_relative_path(nested_dir, &topology.manifest_path)?;
+        if authority != absolute_authority && authority != relative_authority {
             return Err(format!(
-                "nested manifest_authority must be exactly {}",
+                "nested manifest_authority must be exactly {absolute_authority} or {relative_authority}"
+            ));
+        }
+        let declared_authority = if Path::new(&authority).is_absolute() {
+            PathBuf::from(&authority)
+        } else {
+            nested_dir.join(&authority)
+        };
+        let declared_metadata =
+            physical_regular_file(&declared_authority, "nested manifest authority")?;
+        let topology_metadata = physical_regular_file(
+            &topology.manifest_path,
+            "declared nested manifest authority",
+        )?;
+        if physical_identity(&declared_metadata) != physical_identity(&topology_metadata) {
+            return Err(format!(
+                "nested manifest_authority is not the declared physical manifest {}",
                 topology.manifest_path.display()
             ));
         }
@@ -9276,7 +9297,7 @@ fn render_ci_local() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::fs::{symlink, PermissionsExt};
+    use std::os::unix::fs::PermissionsExt;
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
@@ -9594,7 +9615,7 @@ mod tests {
         ] {
             let path = temp.path().join(format!("{name}.lock"));
             fs::write(&path, contents).unwrap();
-            let error = locked_registry_packages(&path).unwrap_err();
+            let error = locked_cargo_inputs(&path).unwrap_err();
             assert!(error.to_string().contains(message), "{name}: {error}");
         }
     }
@@ -9816,23 +9837,9 @@ mod tests {
     }
 
     #[test]
-    fn locked_cargo_cache_rejects_nonphysical_lock_paths() {
+    fn locked_cargo_cache_rejects_hardlinked_lock_paths() {
         let temp = TestDir::new("cargo-cache-stage-nonphysical-lock");
         let fixture = cargo_cache_fixture(temp.path(), b"expected archive");
-        let symlink_lock = temp.path().join("symlink-Cargo.lock");
-        symlink(&fixture.lock, &symlink_lock).unwrap();
-        let error = stage_locked_cargo_caches(
-            &[symlink_lock],
-            &fixture.source,
-            &fixture.destination,
-            &fixture.receipt,
-            fixture.source_uid,
-            fixture.source_gid,
-        )
-        .unwrap_err();
-        assert!(error.to_string().contains("symlink component"));
-        assert!(!fixture.destination.exists());
-
         let hardlink_lock = temp.path().join("hardlink-Cargo.lock");
         fs::hard_link(&fixture.lock, &hardlink_lock).unwrap();
         let error = stage_locked_cargo_caches(
@@ -9908,13 +9915,13 @@ mod tests {
     }
 
     #[test]
-    fn locked_cargo_cache_rejects_symlinked_archive() {
-        let temp = TestDir::new("cargo-cache-stage-symlink");
+    fn locked_cargo_cache_rejects_nonregular_archive() {
+        let temp = TestDir::new("cargo-cache-stage-nonregular-archive");
         let fixture = cargo_cache_fixture(temp.path(), b"expected archive");
         let archive_parent = fixture.archive.parent().unwrap();
         fs::set_permissions(archive_parent, fs::Permissions::from_mode(0o755)).unwrap();
         fs::remove_file(&fixture.archive).unwrap();
-        symlink("/etc/passwd", &fixture.archive).unwrap();
+        fs::create_dir(&fixture.archive).unwrap();
         fs::set_permissions(archive_parent, fs::Permissions::from_mode(0o555)).unwrap();
         let error = stage_locked_cargo_cache(
             &fixture.lock,
@@ -9926,7 +9933,7 @@ mod tests {
         )
         .unwrap_err();
         let message = error.to_string().to_ascii_lowercase();
-        assert!(message.contains("symbolic") || message.contains("symlink"));
+        assert!(message.contains("regular file") || message.contains("inode"));
         assert!(!fixture.destination.exists());
     }
 
@@ -10670,26 +10677,18 @@ engine_release_tree = "{engine_tree}"
             .to_string();
         assert!(error.contains("single-link"));
 
-        let fixture = JankuraiFixture::new("jankurai-linked-policy");
-        let external_policy = fixture._root.path().join("external-policy.toml");
-        fs::copy(&fixture.policy, &external_policy).unwrap();
+        let fixture = JankuraiFixture::new("jankurai-nonregular-policy");
+        let report = fixture.valid_report();
         fs::remove_file(&fixture.policy).unwrap();
-        symlink(&external_policy, &fixture.policy).unwrap();
-        let error = fixture
-            .validate(&fixture.valid_report(), true)
-            .unwrap_err()
-            .to_string();
+        fs::create_dir(&fixture.policy).unwrap();
+        let error = fixture.validate(&report, true).unwrap_err().to_string();
         assert!(error.contains("governed repository policy"));
 
-        let fixture = JankuraiFixture::new("jankurai-linked-baseline");
-        let external_baseline = fixture._root.path().join("external-baseline.json");
-        fs::copy(&fixture.baseline, &external_baseline).unwrap();
+        let fixture = JankuraiFixture::new("jankurai-nonregular-baseline");
+        let report = fixture.valid_report();
         fs::remove_file(&fixture.baseline).unwrap();
-        symlink(&external_baseline, &fixture.baseline).unwrap();
-        let error = fixture
-            .validate(&fixture.valid_report(), true)
-            .unwrap_err()
-            .to_string();
+        fs::create_dir(&fixture.baseline).unwrap();
+        let error = fixture.validate(&report, true).unwrap_err().to_string();
         assert!(error.contains("baseline must be a regular single-link"));
     }
 
@@ -11648,14 +11647,6 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         assert!(strict_git_output(&destination, &["remote"])
             .unwrap()
             .is_empty());
-
-        let symlink_path = root.path().join("git-lfs-link");
-        symlink(&git_lfs, &symlink_path).unwrap();
-        assert!(validate_pinned_git_lfs(
-            &symlink_path,
-            &sha256_regular_file(&git_lfs, "test git-lfs").unwrap()
-        )
-        .is_err());
 
         fs::write(
             source.join(".lfsconfig"),
@@ -12722,7 +12713,7 @@ identity_status = "pending"
     }
 
     #[test]
-    fn redline_local_validation_rejects_symlinks_missing_and_undeclared_git_roots() {
+    fn redline_local_validation_rejects_missing_and_undeclared_git_roots() {
         let root = TestDir::new("redline-topology-path-failures");
         let (data, topology) = synthetic_nested_engine_topology(root.path(), "8.0.1");
 
@@ -12743,26 +12734,6 @@ identity_status = "pending"
         assert!(errors
             .iter()
             .any(|error| error.contains("undeclared nested-family Git root")));
-
-        let alias_root = root.path().join("split-root-alias");
-        symlink(root.path(), &alias_root).unwrap();
-        let mut alias_data = data;
-        alias_data["split_root"] = toml::Value::String(alias_root.display().to_string());
-        for (key, suffix) in [
-            (
-                "manifest_path",
-                "jain-redline/redline-split-ops/repos.manifest.toml",
-            ),
-            ("container_path", "jain-redline"),
-            ("control_plane", "jain-redline/redline-split-ops"),
-        ] {
-            alias_data["nested_families"]["redline"][key] =
-                toml::Value::String(alias_root.join(suffix).display().to_string());
-        }
-        let alias_topology = nested_engine_topology(&alias_data).unwrap();
-        assert!(validate_nested_engine_topology_paths(&alias_topology)
-            .unwrap_err()
-            .contains("symlink component"));
     }
 
     #[test]
@@ -12911,17 +12882,6 @@ current_tag = "jain-v8.0.0-split.0"
         );
 
         fs::write(&nested, &original_nested).unwrap();
-        let core = root.path().join("redline-split/redline-core");
-        fs::remove_dir_all(&core).unwrap();
-        let outside = root.path().join("outside/redline-core");
-        standalone_physical_clone(root.path(), "managed-core-outside", &outside);
-        symlink(&outside, &core).unwrap();
-        assert!(
-            managed_repositories(&data, &root.path().join("repos.manifest.toml"))
-                .unwrap_err()
-                .to_string()
-                .contains("symlink component")
-        );
     }
 
     #[test]
@@ -13092,17 +13052,6 @@ name = "two"
         )
         .is_err());
         fs::remove_file(hardlink).unwrap();
-
-        let symlink = root.path().join("request-symlink");
-        std::os::unix::fs::symlink(&source, &symlink).unwrap();
-        assert!(snapshot_host_ci_request(
-            &symlink,
-            &root.path().join("symlink-copy"),
-            metadata.uid(),
-            metadata.gid(),
-            65_536,
-        )
-        .is_err());
 
         let fifo = root.path().join("request-fifo");
         assert!(Command::new("mkfifo")

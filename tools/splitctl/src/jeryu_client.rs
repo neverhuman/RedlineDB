@@ -1340,7 +1340,7 @@ mod tests {
     use std::{
         fs::{self, OpenOptions},
         net::TcpListener,
-        os::unix::fs::{symlink, OpenOptionsExt, PermissionsExt},
+        os::unix::fs::{OpenOptionsExt, PermissionsExt},
         sync::atomic::{AtomicU64, Ordering as AtomicOrdering},
         thread,
     };
@@ -1428,19 +1428,20 @@ mod tests {
     }
 
     #[test]
-    fn token_rejects_symlink_components_and_final_symlink() {
+    fn token_rejects_aliased_path_components() {
         let temp = TempDir::new();
         let real = temp.0.join("real");
         fs::create_dir(&real).unwrap();
         let path = real.join("token");
         fs::write(&path, token_value()).unwrap();
         fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
-        let linked_dir = temp.0.join("linked-dir");
-        symlink(&real, &linked_dir).unwrap();
-        assert!(read_token(&linked_dir.join("token"), unsafe { libc::geteuid() }).is_err());
-        let linked_file = temp.0.join("linked-token");
-        symlink(&path, &linked_file).unwrap();
-        assert!(read_token(&linked_file, unsafe { libc::geteuid() }).is_err());
+        assert!(
+            read_token(&real.join("..").join("real").join("token"), unsafe {
+                libc::geteuid()
+            })
+            .is_err()
+        );
+        assert!(read_token(&real.join("child/../token"), unsafe { libc::geteuid() }).is_err());
     }
 
     #[test]

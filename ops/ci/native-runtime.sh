@@ -228,6 +228,172 @@ jain_native_source_root() {
   fi
 }
 
+# Run Git directly against a validated object database. This deliberately
+# avoids repository discovery and mutable worktree reads, so a release worker
+# can inspect root-owned native custody without granting wildcard trust.
+jain_native_git_object() {
+  local git_dir="${1:?native Git object database is required}"
+  local config_variable
+  shift
+  (
+    export GIT_CONFIG_NOSYSTEM=1
+    export GIT_CONFIG_GLOBAL=/dev/null
+    unset GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_CONFIG_SYSTEM
+    for config_variable in "${!GIT_CONFIG_KEY_@}" "${!GIT_CONFIG_VALUE_@}"; do
+      [[ -n "$config_variable" ]] && unset "$config_variable"
+    done
+    git --git-dir="$git_dir" \
+      -c core.fsmonitor=false -c core.hooksPath=/dev/null "$@"
+  )
+}
+
+jain_native_object_tree_is_symlink_free() {
+  local git_dir="${1:?native Git object database is required}"
+  local revision="${2:?native revision is required}"
+  jain_native_git_object "$git_dir" ls-tree -r --full-tree "$revision" \
+    | awk '$1 == "120000" {found=1} END {exit found}'
+}
+
+jain_native_physical_object_database() {
+  local repository="${1:?native source repository is required}"
+  local repository_real git_dir git_dir_real actual_git_dir common_dir is_bare
+  case "$repository" in
+    /*) ;;
+    *)
+      printf 'native source repository must be absolute: %s\n' "$repository" >&2
+      return 1
+      ;;
+  esac
+  # The exact path is later embedded in a command-scoped upload-pack command.
+  # Reject shell metacharacters and ambiguous spellings before that boundary.
+  [[ "$repository" =~ ^/[A-Za-z0-9._/-]+$ \
+    && "$repository" != *'//'*
+    && -d "$repository" && ! -L "$repository" ]] || {
+    printf 'native source repository is not a safe physical path: %s\n' \
+      "$repository" >&2
+    return 1
+  }
+  repository_real="$(realpath -e -- "$repository" 2>/dev/null)" || return 1
+  [[ "$repository_real" == "$repository" ]] || {
+    printf 'native source repository is aliased: %s\n' "$repository" >&2
+    return 1
+  }
+  git_dir="$repository/.git"
+  [[ -d "$git_dir" && ! -L "$git_dir" \
+    && ! -e "$git_dir/commondir" && ! -L "$git_dir/commondir" \
+    && ! -e "$git_dir/worktrees" && ! -L "$git_dir/worktrees" \
+    && ! -e "$git_dir/objects/info/alternates" \
+    && ! -L "$git_dir/objects/info/alternates" ]] || {
+    printf 'native source Git database is not an independent primary: %s\n' \
+      "$repository" >&2
+    return 1
+  }
+  git_dir_real="$(realpath -e -- "$git_dir" 2>/dev/null)" || return 1
+  [[ "$git_dir_real" == "$git_dir" ]] || {
+    printf 'native source Git database is aliased: %s\n' "$git_dir" >&2
+    return 1
+  }
+  actual_git_dir="$(jain_native_git_object "$git_dir" \
+    rev-parse --path-format=absolute --absolute-git-dir 2>/dev/null)" || return 1
+  common_dir="$(jain_native_git_object "$git_dir" \
+    rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  is_bare="$(jain_native_git_object "$git_dir" \
+    rev-parse --is-bare-repository 2>/dev/null)" || return 1
+  [[ "$actual_git_dir" == "$git_dir" && "$common_dir" == "$git_dir" \
+    && "$is_bare" == false ]] || {
+    printf 'native source Git database identity is invalid: %s\n' "$git_dir" >&2
+    return 1
+  }
+  printf '%s\n' "$git_dir"
+}
+
+# Resolve a populated submodule's physical object database without asking Git
+# to discover the foreign-owned worktree. The gitfile may only resolve inside
+# the already validated learner repository's private modules directory.
+jain_native_submodule_object_database() {
+  local repository="${1:?native submodule repository is required}"
+  local root_git_dir="${2:?native learner Git database is required}"
+  local repository_real root_git_dir_real modules_root git_file git_dir
+  local actual_git_dir common_dir is_bare
+  local -a git_file_lines=()
+
+  [[ "$repository" =~ ^/[A-Za-z0-9._/-]+$ \
+    && "$repository" != *'//'* \
+    && -d "$repository" && ! -L "$repository" \
+    && "$root_git_dir" =~ ^/[A-Za-z0-9._/-]+$ \
+    && "$root_git_dir" != *'//'* \
+    && -d "$root_git_dir" && ! -L "$root_git_dir" ]] || {
+    printf 'native submodule path is not physically safe: %s\n' \
+      "$repository" >&2
+    return 1
+  }
+  repository_real="$(realpath -e -- "$repository" 2>/dev/null)" || return 1
+  root_git_dir_real="$(realpath -e -- "$root_git_dir" 2>/dev/null)" || return 1
+  [[ "$repository_real" == "$repository" \
+    && "$root_git_dir_real" == "$root_git_dir" ]] || {
+    printf 'native submodule path is aliased: %s\n' "$repository" >&2
+    return 1
+  }
+
+  git_file="$repository/.git"
+  [[ -f "$git_file" && ! -L "$git_file" ]] || {
+    printf 'native submodule lacks a physical gitfile: %s\n' "$repository" >&2
+    return 1
+  }
+  mapfile -t git_file_lines <"$git_file"
+  [[ "${#git_file_lines[@]}" -eq 1 \
+    && "${git_file_lines[0]}" =~ ^gitdir:\ ([A-Za-z0-9._/-]+)$ ]] || {
+    printf 'native submodule gitfile is malformed: %s\n' "$git_file" >&2
+    return 1
+  }
+  git_dir="$(realpath -e -- "$repository/${BASH_REMATCH[1]}" 2>/dev/null)" \
+    || return 1
+  modules_root="$(realpath -e -- "$root_git_dir/modules" 2>/dev/null)" || return 1
+  [[ "$modules_root" == "$root_git_dir/modules" \
+    && "$git_dir" == "$modules_root/"* \
+    && -d "$git_dir" && ! -L "$git_dir" \
+    && ! -e "$git_dir/commondir" && ! -L "$git_dir/commondir" \
+    && ! -e "$git_dir/worktrees" && ! -L "$git_dir/worktrees" \
+    && ! -e "$git_dir/objects/info/alternates" \
+    && ! -L "$git_dir/objects/info/alternates" ]] || {
+    printf 'native submodule object database escaped learner custody: %s\n' \
+      "$repository" >&2
+    return 1
+  }
+  actual_git_dir="$(jain_native_git_object "$git_dir" \
+    rev-parse --path-format=absolute --absolute-git-dir 2>/dev/null)" || return 1
+  common_dir="$(jain_native_git_object "$git_dir" \
+    rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  is_bare="$(jain_native_git_object "$git_dir" \
+    rev-parse --is-bare-repository 2>/dev/null)" || return 1
+  [[ "$actual_git_dir" == "$git_dir" && "$common_dir" == "$git_dir" \
+    && "$is_bare" == false ]] || {
+    printf 'native submodule Git database identity is invalid: %s\n' \
+      "$git_dir" >&2
+    return 1
+  }
+  printf '%s\n' "$git_dir"
+}
+
+jain_clone_native_object_database() {
+  local git_dir="${1:?native Git object database is required}"
+  local destination="${2:?native clone destination is required}"
+  local config_variable
+  [[ "$git_dir" =~ ^/[A-Za-z0-9._/-]+$ && "$git_dir" != *'//'* \
+    && -d "$git_dir" && ! -L "$git_dir" && "$destination" == /* ]] || return 1
+  (
+    export GIT_CONFIG_NOSYSTEM=1
+    export GIT_CONFIG_GLOBAL=/dev/null
+    unset GIT_CONFIG_PARAMETERS GIT_CONFIG_COUNT GIT_CONFIG_SYSTEM
+    for config_variable in "${!GIT_CONFIG_KEY_@}" "${!GIT_CONFIG_VALUE_@}"; do
+      [[ -n "$config_variable" ]] && unset "$config_variable"
+    done
+    git clone --quiet --no-local --no-checkout \
+      --upload-pack="git -c safe.directory=$git_dir upload-pack" \
+      "$git_dir" "$destination"
+  )
+}
+
 # Create clean detached physical clones at the authority revisions without
 # registering linked checkouts or retaining object alternates to the canonical
 # source repositories. Dirty checkout bytes are never read. Git object, tree,
@@ -236,7 +402,8 @@ jain_stage_native_source_worktrees() {
   local authority="${1:?native source authority is required}"
   local source_input="${2:?native source root is required}"
   local staged_root="${3:?staged native source root is required}"
-  local source_root learner revision tree manifest actual
+  local source_root learner revision tree manifest actual object_database
+  local learner_object_database
   local sub_count index sub_path sub_revision sub_tree sub_manifest
   local -a learners=()
 
@@ -269,27 +436,46 @@ jain_stage_native_source_worktrees() {
       jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
       return 1
     }
-    actual="$(git -C "$source_root/$learner" rev-parse --verify 'HEAD^{commit}' 2>/dev/null || true)"
-    [[ "$actual" == "$revision" ]] || {
-      printf '%s native object source revision mismatch: expected %s, got %s\n' \
-        "$learner" "$revision" "${actual:-unresolved}" >&2
+    object_database="$(jain_native_physical_object_database \
+      "$source_root/$learner" 2>/dev/null || true)"
+    [[ -n "$object_database" ]] || {
+      printf '%s native object source is not a physical primary repository\n' \
+        "$learner" >&2
       jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
       return 1
     }
-    actual="$(git -C "$source_root/$learner" rev-parse --verify "$revision^{tree}" 2>/dev/null || true)"
+    learner_object_database="$object_database"
+    actual="$(jain_native_git_object "$object_database" \
+      rev-parse --verify "$revision^{commit}" 2>/dev/null || true)"
+    [[ "$actual" == "$revision" ]] || {
+      printf '%s native object source revision is unavailable: %s\n' \
+        "$learner" "$revision" >&2
+      jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+      return 1
+    }
+    actual="$(jain_native_git_object "$object_database" \
+      rev-parse --verify "$revision^{tree}" 2>/dev/null || true)"
     [[ "$actual" == "$tree" ]] || {
       printf '%s native object source tree mismatch\n' "$learner" >&2
       jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
       return 1
     }
-    actual="$(git -C "$source_root/$learner" ls-tree -r --full-tree "$revision" \
+    actual="$(jain_native_git_object "$object_database" \
+      ls-tree -r --full-tree "$revision" \
       | sha256sum | cut -d' ' -f1)"
     [[ "$actual" == "$manifest" ]] || {
       printf '%s native object source manifest mismatch\n' "$learner" >&2
       jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
       return 1
     }
-    git clone --quiet --no-local --no-checkout "$source_root/$learner" \
+    if ! jain_native_object_tree_is_symlink_free \
+      "$object_database" "$revision"; then
+      printf '%s native source tree contains a prohibited symlink\n' \
+        "$learner" >&2
+      jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+      return 1
+    fi
+    jain_clone_native_object_database "$object_database" \
       "$staged_root/$learner" || {
       jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
       return 1
@@ -334,30 +520,47 @@ jain_stage_native_source_worktrees() {
         jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
         return 1
       }
-      actual="$(git -C "$source_root/$learner/$sub_path" \
-        rev-parse --verify 'HEAD^{commit}' 2>/dev/null || true)"
-      [[ "$actual" == "$sub_revision" ]] || {
-        printf '%s pinned submodule revision mismatch: %s\n' "$learner" "$sub_path" >&2
+      object_database="$(jain_native_submodule_object_database \
+        "$source_root/$learner/$sub_path" \
+        "$learner_object_database" 2>/dev/null || true)"
+      [[ -n "$object_database" ]] || {
+        printf '%s pinned submodule is not a physical primary: %s\n' \
+          "$learner" "$sub_path" >&2
         jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
         return 1
       }
-      actual="$(git -C "$source_root/$learner/$sub_path" \
+      actual="$(jain_native_git_object "$object_database" \
+        rev-parse --verify "$sub_revision^{commit}" 2>/dev/null || true)"
+      [[ "$actual" == "$sub_revision" ]] || {
+        printf '%s pinned submodule revision is unavailable: %s\n' \
+          "$learner" "$sub_path" >&2
+        jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+        return 1
+      }
+      actual="$(jain_native_git_object "$object_database" \
         rev-parse --verify "$sub_revision^{tree}" 2>/dev/null || true)"
       [[ "$actual" == "$sub_tree" ]] || {
         printf '%s pinned submodule tree mismatch: %s\n' "$learner" "$sub_path" >&2
         jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
         return 1
       }
-      actual="$(git -C "$source_root/$learner/$sub_path" \
+      actual="$(jain_native_git_object "$object_database" \
         ls-tree -r --full-tree "$sub_revision" | sha256sum | cut -d' ' -f1)"
       [[ "$actual" == "$sub_manifest" ]] || {
         printf '%s pinned submodule manifest mismatch: %s\n' "$learner" "$sub_path" >&2
         jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
         return 1
       }
+      if ! jain_native_object_tree_is_symlink_free \
+        "$object_database" "$sub_revision"; then
+        printf '%s pinned submodule tree contains a prohibited symlink: %s\n' \
+          "$learner" "$sub_path" >&2
+        jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
+        return 1
+      fi
       mkdir -p "$(dirname "$staged_root/$learner/$sub_path")"
-      git clone --quiet --no-local --no-checkout \
-        "$source_root/$learner/$sub_path" "$staged_root/$learner/$sub_path" || {
+      jain_clone_native_object_database "$object_database" \
+        "$staged_root/$learner/$sub_path" || {
         jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_root"
         return 1
       }

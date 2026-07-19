@@ -7,6 +7,21 @@ set -euo pipefail
 : "${JAIN_CARGO_DENY_ADVISORY_DB:?physical cargo-deny database path is required}"
 : "${JAIN_PINNED_ADVISORY_COMMIT:?pinned advisory database commit is required}"
 
+advisory_git=(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_LAZY_FETCH=1 \
+  GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 /usr/bin/git \
+  -c "safe.directory=$JAIN_PINNED_ADVISORY_DB" -c protocol.allow=never \
+  -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+  -c core.untrackedCache=false -c core.alternateRefsCommand=false \
+  -c diff.external=)
+deny_git=(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_LAZY_FETCH=1 \
+  GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0 /usr/bin/git \
+  -c "safe.directory=$JAIN_CARGO_DENY_ADVISORY_DB" -c protocol.allow=never \
+  -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+  -c core.untrackedCache=false -c core.alternateRefsCommand=false \
+  -c diff.external=)
+
 [[ "$JAIN_ADVISORY_DB" == "$JAIN_PINNED_ADVISORY_DB" \
   && "$JAIN_PINNED_ADVISORY_DB" = /* \
   && "$(realpath -e -- "$JAIN_PINNED_ADVISORY_DB")" \
@@ -23,24 +38,26 @@ set -euo pipefail
   exit 1
 }
 
-actual="$(git -C "$JAIN_PINNED_ADVISORY_DB" rev-parse HEAD)"
+actual="$("${advisory_git[@]}" -C "$JAIN_PINNED_ADVISORY_DB" rev-parse HEAD)"
 [[ "$actual" == "$JAIN_PINNED_ADVISORY_COMMIT" ]] || {
   printf 'cargo-deny RustSec commit mismatch: expected %s, got %s\n' \
     "$JAIN_PINNED_ADVISORY_COMMIT" "$actual" >&2
   exit 1
 }
-[[ -z "$(git -C "$JAIN_PINNED_ADVISORY_DB" status --porcelain --untracked-files=all)" ]] || {
+[[ -z "$("${advisory_git[@]}" -C "$JAIN_PINNED_ADVISORY_DB" \
+  status --porcelain --untracked-files=all)" ]] || {
   printf 'cargo-deny isolated RustSec database is dirty: %s\n' \
     "$JAIN_PINNED_ADVISORY_DB" >&2
   exit 1
 }
-deny_actual="$(git -C "$JAIN_CARGO_DENY_ADVISORY_DB" rev-parse HEAD)"
+deny_actual="$("${deny_git[@]}" -C "$JAIN_CARGO_DENY_ADVISORY_DB" \
+  rev-parse HEAD)"
 [[ "$deny_actual" == "$JAIN_PINNED_ADVISORY_COMMIT" ]] || {
   printf 'cargo-deny physical RustSec commit mismatch: expected %s, got %s\n' \
     "$JAIN_PINNED_ADVISORY_COMMIT" "$deny_actual" >&2
   exit 1
 }
-[[ -z "$(git -C "$JAIN_CARGO_DENY_ADVISORY_DB" \
+[[ -z "$("${deny_git[@]}" -C "$JAIN_CARGO_DENY_ADVISORY_DB" \
   status --porcelain --untracked-files=all)" ]] || {
   printf 'cargo-deny physical RustSec database is dirty: %s\n' \
     "$JAIN_CARGO_DENY_ADVISORY_DB" >&2

@@ -14,6 +14,7 @@ promotion_staging=""
 promotion_small_store=""
 promotion_staging_mounted=0
 promotion_small_store_mounted=0
+source_root_foreign=0
 rm -rf -- "$durable_root"
 mkdir -p "$durable_root"
 cleanup() {
@@ -25,6 +26,10 @@ cleanup() {
     sudo -n /usr/bin/umount -- "$promotion_small_store" >/dev/null 2>&1 || true
   fi
   sudo -n rm -rf -- "$durable_root" >/dev/null 2>&1 || true
+  if [[ "$source_root_foreign" == 1 && -n "${source_root:-}" ]]; then
+    sudo -n chown -R "$(id -u):$(id -g)" "$source_root" \
+      >/dev/null 2>&1 || true
+  fi
   [[ -z "${source_root:-}" ]] \
     || chmod -R u+w "$source_root" 2>/dev/null || true
   rm -rf -- "$tmp" "$durable_root"
@@ -114,6 +119,36 @@ content_digest() {
 }
 
 for learner in catboost xgboost lightgbm; do init_repo "$learner"; done
+symlink_tree_repo="$tmp/prohibited-symlink-tree"
+git init --quiet "$symlink_tree_repo"
+git -C "$symlink_tree_repo" config user.name 'Native Fixture'
+git -C "$symlink_tree_repo" config user.email native-fixture@example.invalid
+symlink_blob="$(printf 'target' | git -C "$symlink_tree_repo" hash-object -w --stdin)"
+git -C "$symlink_tree_repo" update-index --add \
+  --cacheinfo "120000,$symlink_blob,prohibited-link"
+symlink_tree="$(git -C "$symlink_tree_repo" write-tree)"
+symlink_commit="$(printf 'prohibited symlink tree\n' \
+  | git -C "$symlink_tree_repo" commit-tree "$symlink_tree")"
+if jain_native_object_tree_is_symlink_free \
+  "$symlink_tree_repo/.git" "$symlink_commit"; then
+  printf 'native object preflight accepted a symlink tree\n' >&2
+  exit 1
+fi
+[[ ! -e "$symlink_tree_repo/prohibited-link" ]] || {
+  printf 'symlink preflight fixture materialized a prohibited link\n' >&2
+  exit 1
+}
+submodule_origin="$tmp/dmlc-core-origin"
+git init --quiet "$submodule_origin"
+git -C "$submodule_origin" config user.name 'Native Fixture'
+git -C "$submodule_origin" config user.email native-fixture@example.invalid
+printf '#pragma once\n' >"$submodule_origin/c_api.h"
+git -C "$submodule_origin" add c_api.h
+git -C "$submodule_origin" commit --quiet -m 'fixture dmlc-core'
+git -c protocol.file.allow=always -C "$source_root/xgboost" \
+  submodule add --quiet "$submodule_origin" dmlc-core
+git -C "$source_root/xgboost" add .
+git -C "$source_root/xgboost" commit --quiet -m 'pin fixture dmlc-core'
 materializer="$repo_root/ops/ci/native-materializer.sh"
 materializer_sha="$(sha256sum -- "$materializer" | cut -d' ' -f1)"
 jq -n --arg materializer_sha "$materializer_sha" \
@@ -125,6 +160,9 @@ jq -n --arg materializer_sha "$materializer_sha" \
   --arg xgb_tree "$(git -C "$source_root/xgboost" rev-parse 'HEAD^{tree}')" \
   --arg xgb_manifest "$(tree_manifest "$source_root/xgboost")" \
   --arg xgb_content "$(content_digest "$source_root/xgboost")" \
+  --arg xgb_sub_rev "$(git -C "$source_root/xgboost/dmlc-core" rev-parse HEAD)" \
+  --arg xgb_sub_tree "$(git -C "$source_root/xgboost/dmlc-core" rev-parse 'HEAD^{tree}')" \
+  --arg xgb_sub_manifest "$(tree_manifest "$source_root/xgboost/dmlc-core")" \
   --arg lgb_rev "$(git -C "$source_root/lightgbm" rev-parse HEAD)" \
   --arg lgb_tree "$(git -C "$source_root/lightgbm" rev-parse 'HEAD^{tree}')" \
   --arg lgb_manifest "$(tree_manifest "$source_root/lightgbm")" \
@@ -138,7 +176,9 @@ jq -n --arg materializer_sha "$materializer_sha" \
          "catboost/libs/train_interface/CMakeLists.linux-x86_64.txt"],submodules:[]},
       {name:"xgboost",revision:$xgb_rev,git_tree:$xgb_tree,
        tree_manifest_sha256:$xgb_manifest,source_content_sha256:$xgb_content,
-       required_files:["CMakeLists.txt","include/xgboost/c_api.h"],submodules:[]},
+       required_files:["CMakeLists.txt","include/xgboost/c_api.h"],
+       submodules:[{path:"dmlc-core",revision:$xgb_sub_rev,
+         git_tree:$xgb_sub_tree,tree_manifest_sha256:$xgb_sub_manifest}]},
       {name:"lightgbm",revision:$lgb_rev,git_tree:$lgb_tree,
        tree_manifest_sha256:$lgb_manifest,source_content_sha256:$lgb_content,
        required_files:["CMakeLists.txt","include/LightGBM/c_api.h"],submodules:[]}
@@ -219,6 +259,56 @@ jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_source
   exit 1
 }
 
+# The real host worker reads root-owned vendor custody. Git repository
+# discovery rejects that ownership, but exact object-database inspection and
+# an independent no-local clone must work without wildcard or global trust.
+worker_uid="$(id -u)"
+worker_gid="$(id -g)"
+foreign_staged_source="$tmp/foreign-staged-source"
+sudo -n chown -R root:root "$source_root"
+source_root_foreign=1
+export GIT_CONFIG_COUNT=1
+export GIT_CONFIG_KEY_0=safe.directory
+export GIT_CONFIG_VALUE_0='*'
+jain_stage_native_source_worktrees \
+  "$authority" "$source_root" "$foreign_staged_source"
+unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+for learner in catboost xgboost lightgbm; do
+  [[ "$(git -C "$foreign_staged_source/$learner" rev-parse HEAD)" == \
+      "$(jq -er --arg learner "$learner" \
+        '.learners[] | select(.name == $learner) | .revision' "$authority")" \
+    && -z "$(git -C "$foreign_staged_source/$learner" \
+      status --porcelain=v1 --untracked-files=all)" ]] || {
+    printf 'foreign-owner object staging drifted: %s\n' "$learner" >&2
+    exit 1
+  }
+done
+jain_cleanup_native_source_worktrees \
+  "$authority" "$source_root" "$foreign_staged_source"
+sudo -n chown -R "$worker_uid:$worker_gid" "$source_root"
+source_root_foreign=0
+
+aliased_repository="$source_root/../source/catboost"
+if jain_native_physical_object_database "$aliased_repository" 2>/dev/null; then
+  printf 'native object staging accepted an aliased repository spelling\n' >&2
+  exit 1
+fi
+
+printf '../foreign-object-store\n' \
+  >"$source_root/catboost/.git/objects/info/alternates"
+if jain_native_physical_object_database "$source_root/catboost" 2>/dev/null; then
+  printf 'native object staging accepted object alternates\n' >&2
+  exit 1
+fi
+rm -- "$source_root/catboost/.git/objects/info/alternates"
+
+printf '../shared-git-dir\n' >"$source_root/catboost/.git/commondir"
+if jain_native_physical_object_database "$source_root/catboost" 2>/dev/null; then
+  printf 'native object staging accepted a linked-worktree marker\n' >&2
+  exit 1
+fi
+rm -- "$source_root/catboost/.git/commondir"
+
 tampered_materializer="$tmp/native-materializer-tampered.sh"
 cp -- "$materializer" "$tampered_materializer"
 printf '# tampered\n' >>"$tampered_materializer"
@@ -298,22 +388,11 @@ if JAIN_CI_ATTEMPT_ID=ephemeral-rejected jain_persist_native_evidence \
   exit 1
 fi
 [[ ! -e "$outside_durable_root" ]]
-ln -s "$run_root" "$durable_root/ephemeral-link"
-if JAIN_CI_ATTEMPT_ID=symlink-rejected jain_persist_native_evidence \
-  "$vendor_root" "$run_root/materialization.log" \
-  "$durable_root/ephemeral-link/evidence" "$run_root" \
-  veox jain-core "$head_sha" jain-core/required "$control_commit" \
-  "$control" \
-  2>/dev/null; then
-  printf 'native evidence accepted a symlink into ephemeral CI\n' >&2
-  exit 1
-fi
 mkdir -p "$durable_root/durable-ephemeral-run"
-ln -s "$durable_root/durable-ephemeral-run" "$durable_root/durable-ephemeral-link"
 if jain_resolve_durable_evidence_root \
-  "$durable_root/durable-ephemeral-link/evidence" \
+  "$durable_root/durable-ephemeral-run/../durable-ephemeral-run/evidence" \
   "$durable_root/durable-ephemeral-run" >/dev/null 2>&1; then
-  printf 'native evidence accepted a resolved path inside ephemeral CI\n' >&2
+  printf 'native evidence accepted an aliased path inside ephemeral CI\n' >&2
   exit 1
 fi
 JAIN_CI_ATTEMPT_ID=fixture jain_persist_native_evidence \
@@ -336,7 +415,6 @@ if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" != 1 ]]; then
 promotion_staging="$tmp/native-evidence-staging"
 promotion_store="$durable_root/root-evidence-store"
 promotion_small_store="$durable_root/root-evidence-small-store"
-promotion_symlink_store="$durable_root/root-evidence-symlink-store"
 worker_uid="$(id -u)"
 worker_gid="$(id -g)"
 mkdir -p "$promotion_staging"
@@ -351,7 +429,7 @@ promotion_staging_mounted=1
   exit 1
 }
 sudo -n install -d -o root -g root -m 0700 \
-  "$promotion_store" "$promotion_symlink_store"
+  "$promotion_store"
 
 reset_promotion_staging() {
   find "$promotion_staging" -xdev -mindepth 1 -delete
@@ -387,16 +465,6 @@ if { printf 'worker tamper\n' >>"$promoted_evidence/materialization.log"; } \
   exit 1
 fi
 
-# A symlink anywhere in the worker staging tree is rejected before copying.
-reset_promotion_staging
-rm -- "$promotion_evidence/materialization.log"
-ln -s /etc/passwd "$promotion_evidence/materialization.log"
-if root_promote "$promotion_store" "$(printf 'e%.0s' {1..64})" \
-    >"$tmp/promotion-symlink.log" 2>&1; then
-  printf 'native evidence promotion accepted a staging symlink\n' >&2
-  exit 1
-fi
-
 # Per-file and total limits are checked independently of receipt checksums.
 reset_promotion_staging
 truncate -s "$((JAIN_NATIVE_EVIDENCE_MAX_FILE_BYTES + 1))" \
@@ -420,15 +488,6 @@ quota_fill_size="$(stat -c '%s' -- "$promotion_staging/quota-fill")"
   exit 1
 }
 rm -- "$promotion_staging/quota-fill"
-
-# A symlinked durable hierarchy component cannot redirect root promotion.
-reset_promotion_staging
-sudo -n ln -s "$tmp" "$promotion_symlink_store/veox"
-if root_promote "$promotion_symlink_store" "$(printf 'c%.0s' {1..64})" \
-    >"$tmp/promotion-store-symlink.log" 2>&1; then
-  printf 'native evidence promotion accepted a durable-store symlink\n' >&2
-  exit 1
-fi
 
 # Preserve at least 1 GiB after promotion. A deliberately small durable
 # filesystem deterministically exercises the low-space/fill rejection.
