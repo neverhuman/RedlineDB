@@ -86,7 +86,46 @@ printf 'hostile PATH jankurai\n'
 exit 0
 HOSTILE
 chmod 0755 "$tmp/hostile-bin/jankurai"
-resolved="$(jankurai_bin)"
+
+ambient_jankurai="$(command -v jankurai || true)"
+if [[ -n "$ambient_jankurai" ]] \
+  && ! jain_verify_governed_jankurai \
+    "$ambient_jankurai" \
+    "$JAIN_GOVERNED_JANKURAI_VERSION" \
+    "$JAIN_GOVERNED_JANKURAI_SHA256" >/dev/null 2>&1
+then
+  if jankurai_bin >/dev/null 2>&1; then
+    printf 'ambient wrong-digest Jankurai passed governed identity verification\n' >&2
+    exit 1
+  fi
+  printf 'ambient wrong-digest Jankurai rejected: %s\n' "$ambient_jankurai"
+fi
+
+governed_source=""
+while IFS= read -r candidate; do
+  if jain_verify_governed_jankurai \
+    "$candidate" \
+    "$JAIN_GOVERNED_JANKURAI_VERSION" \
+    "$JAIN_GOVERNED_JANKURAI_SHA256" >/dev/null 2>&1
+  then
+    governed_source="$candidate"
+    break
+  fi
+done < <(type -a -p jankurai)
+[[ -n "$governed_source" ]] \
+  || fail "PATH does not contain the pinned governed Jankurai bytes required by this test"
+
+mkdir "$tmp/governed-bin"
+cp -- "$governed_source" "$tmp/governed-bin/jankurai"
+chmod 0755 "$tmp/governed-bin/jankurai"
+jain_verify_governed_jankurai \
+  "$tmp/governed-bin/jankurai" \
+  "$JAIN_GOVERNED_JANKURAI_VERSION" \
+  "$JAIN_GOVERNED_JANKURAI_SHA256"
+
+resolved="$(PATH="$tmp/governed-bin:/usr/bin:/bin" jankurai_bin)"
+[[ "$resolved" == "$tmp/governed-bin/jankurai" ]] \
+  || fail "positive governed Jankurai proof did not select the staged exact bytes"
 jain_verify_governed_jankurai \
   "$resolved" "$JAIN_GOVERNED_JANKURAI_VERSION" "$JAIN_GOVERNED_JANKURAI_SHA256"
 if PATH="$tmp/hostile-bin:$PATH" jankurai_bin >/dev/null 2>&1; then
