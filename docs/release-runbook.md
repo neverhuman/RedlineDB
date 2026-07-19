@@ -49,12 +49,15 @@ The managed inventory must contain all Jain repositories, SmartCluster, `jain-sp
 complete Redline family rooted at `jain-redline/`. Generated views are changed only with
 `just sync-derived-apply`; validate them again immediately afterward.
 
-For a repository whose forge has no `main`, first run the dry plan, inspect it, and then apply the
-same reviewed SHA:
+For a repository whose forge has no `main`, first run the credentialless dry plan, inspect it, and
+then apply the same reviewed commit/tree through an explicit token file. The checkout must retain
+its sole authenticated source `origin`; apply proves that source `main` equals the reviewed commit,
+then uses authenticated Git with a zero-object-id lease to create the same-named `veox/*`
+destination. Direct bare-repository mutation is prohibited:
 
 ```bash
-just bootstrap-main /absolute/checkout http://127.0.0.1:8787/git/OWNER/REPO.git REVIEWED_SHA
-just bootstrap-main-apply /absolute/checkout http://127.0.0.1:8787/git/OWNER/REPO.git REVIEWED_SHA
+just bootstrap-main /absolute/checkout http://127.0.0.1:8787/git/OWNER/REPO.git REVIEWED_SHA REVIEWED_TREE
+just bootstrap-main-apply /absolute/checkout http://127.0.0.1:8787/git/OWNER/REPO.git REVIEWED_SHA REVIEWED_TREE /path/to/token
 ```
 
 Apply and read back immutable-main protection before accepting the repository into the graph:
@@ -67,6 +70,16 @@ just jeryu-protection-readback OWNER/REPO REPO/required
 
 Protection requires the declared status check, one independent approval, linear history, admin
 enforcement, and disabled force-push/deletion.
+
+A co-managed nested family is registered by one `nested_families` row in this protected authority.
+It declares `kind = "co-managed-family"`, absolute physical container/control/manifest paths, the
+exact `veox/*` control-plane remote and required check, and `required = true`; it must not invent a
+canonical engine. Its child control-plane manifest is relocatable: `manifest_authority` is exactly
+`repos.manifest.toml`, `container` is exactly `..`, all repository paths are direct `../NAME`
+children, and `required_repos` exactly matches the ordered repository rows. Every row binds the
+`veox/*` remote, `main`, `NAME/required`, immutable-main policy, immutable tag, commit, tree, and
+archive SHA-256. Validation rejects missing/extra Git roots, symlinks, hard links to the authority,
+linked worktrees, alternates, dirty checkouts, wrong origins, or identity drift.
 
 ## 2. Preservation and reviewed PR lifecycle
 

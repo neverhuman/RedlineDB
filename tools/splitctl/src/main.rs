@@ -107,6 +107,39 @@ struct NestedEngineTopology {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+struct CoManagedFamilyTopology {
+    declaration_name: String,
+    family: String,
+    split_root: PathBuf,
+    manifest_path: PathBuf,
+    container_path: PathBuf,
+    control_plane_path: PathBuf,
+    control_plane_name: String,
+    control_plane_remote: String,
+    control_plane_required_check: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CoManagedRepositoryIdentity {
+    name: String,
+    path: PathBuf,
+    remote: String,
+    required_check: String,
+    default_branch: String,
+    tag: String,
+    release_commit: String,
+    release_tree: String,
+    release_checksum_sha256: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct CoManagedDerivedManifestCopy {
+    target: String,
+    path: PathBuf,
+    authority: Vec<u8>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 struct PendingNestedRepository {
     name: String,
     remote: String,
@@ -241,7 +274,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA --reviewed-tree SHA [--token-file PATH] [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -1151,6 +1184,7 @@ fn manifest_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
         for (target, derived) in derived_manifest_targets(&data, &path)? {
             validate_derived_manifest(&derived, &expected, &data, &path, &target)?;
         }
+        validate_co_managed_derived_manifest_copies(&data)?;
     }
     let repos = family_repos(&data)?;
     if repos.is_empty() {
@@ -1396,6 +1430,33 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
                     None,
                 )?;
             }
+        }
+    }
+    for topology in co_managed_family_topologies(data)? {
+        let nested: toml::Value = fs::read_to_string(&topology.manifest_path)
+            .map_err(|error| {
+                format!(
+                    "cannot read co-managed child manifest {}: {error}",
+                    topology.manifest_path.display()
+                )
+            })?
+            .parse()
+            .map_err(|error| format!("cannot parse co-managed child manifest: {error}"))?;
+        co_managed_child_repositories(&topology, &nested)?;
+        for raw in nested
+            .get("repo")
+            .and_then(toml::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            add(
+                raw,
+                "name",
+                "required_check",
+                "remote",
+                "forge_owner",
+                Some("veox"),
+            )?;
         }
     }
 
@@ -1692,7 +1753,7 @@ fn managed_repositories(
         family_registered: true,
     });
 
-    if data.get("nested_families").is_some() {
+    if has_nested_engine_family(data) {
         let topology = nested_engine_topology(data)?;
         validate_nested_engine_topology_paths(&topology)?;
         let nested_path = &topology.manifest_path;
@@ -1759,6 +1820,40 @@ fn managed_repositories(
             tag: declared_release_tag(nested_control),
             kind: "nested-control-plane".to_owned(),
             family: nested_family,
+            family_registered: true,
+        });
+    }
+
+    for topology in co_managed_family_topologies(data)? {
+        let nested: toml::Value = fs::read_to_string(&topology.manifest_path)?.parse()?;
+        let repositories = co_managed_child_repositories(&topology, &nested)?;
+        validate_co_managed_family_paths(&topology, &nested, &repositories, true)?;
+        for repo in repositories {
+            managed.push(ManagedRepo {
+                name: repo.name,
+                path: repo.path,
+                remote: repo.remote,
+                required_check: repo.required_check,
+                branch: repo.default_branch,
+                tag: Some(repo.tag),
+                kind: "nested-family".to_owned(),
+                family: topology.family.clone(),
+                family_registered: true,
+            });
+        }
+        managed.push(ManagedRepo {
+            name: topology.control_plane_name.clone(),
+            path: topology.control_plane_path.clone(),
+            remote: topology.control_plane_remote.clone(),
+            required_check: topology.control_plane_required_check.clone(),
+            branch: "main".to_owned(),
+            tag: declared_release_tag(
+                nested
+                    .get("control_plane")
+                    .ok_or("co-managed child manifest is missing control_plane")?,
+            ),
+            kind: "nested-control-plane".to_owned(),
+            family: topology.family,
             family_registered: true,
         });
     }
@@ -2290,6 +2385,148 @@ fn nested_engine_topology(data: &toml::Value) -> Result<NestedEngineTopology, St
     })
 }
 
+fn has_nested_engine_family(data: &toml::Value) -> bool {
+    data.get("nested_families")
+        .and_then(toml::Value::as_table)
+        .is_some_and(|families| {
+            families
+                .values()
+                .any(|nested| nested.get("engine_repository").is_some())
+        })
+}
+
+fn co_managed_family_topologies(
+    data: &toml::Value,
+) -> Result<Vec<CoManagedFamilyTopology>, String> {
+    let Some(nested_families) = data.get("nested_families").and_then(toml::Value::as_table) else {
+        return Ok(Vec::new());
+    };
+    let mut selected = Vec::new();
+    for (declaration_name, nested) in nested_families {
+        let key = format!("nested_families.{declaration_name}");
+        let kind = optional_typed_string(nested, "kind", &format!("{key}.kind"))?;
+        let Some(kind) = kind else {
+            continue;
+        };
+        if kind != "co-managed-family" {
+            return Err(format!("{key}.kind must be co-managed-family when present"));
+        }
+        if nested.get("engine_repository").is_some()
+            || nested.get("engine_remote").is_some()
+            || nested.get("engine_tag").is_some()
+        {
+            return Err(format!(
+                "{key} co-managed-family must not declare canonical engine fields"
+            ));
+        }
+        if nested.get("required").and_then(toml::Value::as_bool) != Some(true) {
+            return Err(format!("{key}.required must be true"));
+        }
+        let family = optional_typed_string(nested, "family", &format!("{key}.family"))?
+            .filter(|value| valid_cargo_token(value))
+            .ok_or_else(|| format!("{key}.family must be one unaliased family token"))?;
+        let split_root_raw = string(data, "split_root")
+            .ok_or_else(|| "split_root is required for nested-family topology".to_owned())?;
+        let split_root = exact_absolute_path(&split_root_raw, "split_root")?;
+        let manifest_path = exact_absolute_path(
+            &optional_typed_string(nested, "manifest_path", &format!("{key}.manifest_path"))?
+                .ok_or_else(|| format!("{key}.manifest_path is required"))?,
+            &format!("{key}.manifest_path"),
+        )?;
+        let container_path = exact_absolute_path(
+            &optional_typed_string(nested, "container_path", &format!("{key}.container_path"))?
+                .ok_or_else(|| format!("{key}.container_path is required"))?,
+            &format!("{key}.container_path"),
+        )?;
+        let control_plane_path = exact_absolute_path(
+            &optional_typed_string(nested, "control_plane", &format!("{key}.control_plane"))?
+                .ok_or_else(|| format!("{key}.control_plane is required"))?,
+            &format!("{key}.control_plane"),
+        )?;
+        if container_path.parent() != Some(split_root.as_path()) {
+            return Err(format!(
+                "{key}.container_path must be a direct child of split_root"
+            ));
+        }
+        let control_plane_name = optional_typed_string(
+            nested,
+            "control_plane_name",
+            &format!("{key}.control_plane_name"),
+        )?
+        .filter(|value| valid_cargo_token(value))
+        .ok_or_else(|| {
+            format!("{key}.control_plane_name must be one unaliased repository token")
+        })?;
+        if control_plane_path != container_path.join(&control_plane_name) {
+            return Err(format!(
+                "{key}.control_plane must be the direct {control_plane_name} child of its container"
+            ));
+        }
+        if manifest_path != control_plane_path.join("repos.manifest.toml") {
+            return Err(format!(
+                "{key}.manifest_path must be the control plane repos.manifest.toml"
+            ));
+        }
+        if optional_typed_string(nested, "forge_owner", &format!("{key}.forge_owner"))?.as_deref()
+            != Some("veox")
+        {
+            return Err(format!("{key}.forge_owner must be veox"));
+        }
+        let control_plane_remote = optional_typed_string(
+            nested,
+            "control_plane_remote",
+            &format!("{key}.control_plane_remote"),
+        )?
+        .ok_or_else(|| format!("{key}.control_plane_remote is required"))?;
+        let expected_remote = format!("{FAMILY_REMOTE_PREFIX}{control_plane_name}.git");
+        if control_plane_remote != expected_remote {
+            return Err(format!(
+                "{key}.control_plane_remote must be {expected_remote}"
+            ));
+        }
+        let control_plane_required_check = optional_typed_string(
+            nested,
+            "control_plane_required_check",
+            &format!("{key}.control_plane_required_check"),
+        )?
+        .ok_or_else(|| format!("{key}.control_plane_required_check is required"))?;
+        if control_plane_required_check != format!("{control_plane_name}/required") {
+            return Err(format!(
+                "{key}.control_plane_required_check must be {control_plane_name}/required"
+            ));
+        }
+        selected.push(CoManagedFamilyTopology {
+            declaration_name: declaration_name.clone(),
+            family,
+            split_root,
+            manifest_path,
+            container_path,
+            control_plane_path,
+            control_plane_name,
+            control_plane_remote,
+            control_plane_required_check,
+        });
+    }
+    let mut families = std::collections::BTreeSet::new();
+    let mut containers = std::collections::BTreeSet::new();
+    let mut controls = std::collections::BTreeSet::new();
+    for topology in &selected {
+        if !families.insert(topology.family.clone()) {
+            return Err(format!(
+                "duplicate co-managed nested family: {}",
+                topology.family
+            ));
+        }
+        if !containers.insert(topology.container_path.clone()) {
+            return Err("co-managed nested families share one container path".to_owned());
+        }
+        if !controls.insert(topology.control_plane_name.clone()) {
+            return Err("co-managed nested families share one control-plane name".to_owned());
+        }
+    }
+    Ok(selected)
+}
+
 fn physical_metadata(path: &Path, kind: &str) -> Result<fs::Metadata, String> {
     if !path.is_absolute() {
         return Err(format!(
@@ -2442,13 +2679,39 @@ fn validated_nested_repository_paths(
             ));
         }
     }
-    if let Some(authority) = string(nested, "manifest_authority") {
-        if authority != topology.manifest_path.display().to_string() {
-            return Err(format!(
-                "nested manifest_authority must be exactly {}",
-                topology.manifest_path.display()
-            ));
-        }
+    let authority = string(nested, "manifest_authority")
+        .ok_or_else(|| "nested manifest_authority is required".to_owned())?;
+    let expected_authority = topology
+        .manifest_path
+        .file_name()
+        .and_then(OsStr::to_str)
+        .ok_or_else(|| "nested family manifest has no UTF-8 file name".to_owned())?;
+    let authority_path = Path::new(&authority);
+    if authority != expected_authority
+        || authority_path.is_absolute()
+        || authority_path.components().count() != 1
+        || !matches!(
+            authority_path.components().next(),
+            Some(Component::Normal(_))
+        )
+    {
+        return Err(format!(
+            "nested manifest_authority must be exactly {expected_authority}"
+        ));
+    }
+    let resolved_authority = nested_dir.join(authority_path);
+    let authority_metadata =
+        physical_regular_file(&resolved_authority, "nested manifest authority")?;
+    let declared_manifest =
+        physical_regular_file(&topology.manifest_path, "declared nested family manifest")?;
+    if authority_metadata.nlink() != 1 {
+        return Err("nested manifest authority must have exactly one hard link".to_owned());
+    }
+    if physical_identity(&authority_metadata) != physical_identity(&declared_manifest) {
+        return Err(format!(
+            "nested manifest_authority {authority} does not resolve to {}",
+            topology.manifest_path.display()
+        ));
     }
 
     let mut identities = std::collections::BTreeMap::new();
@@ -2610,6 +2873,264 @@ fn validate_child_family_authority(
     Ok(())
 }
 
+fn validate_immutable_main_policy(nested: &toml::Value) -> Result<(), String> {
+    let policy = nested
+        .get("protection_policies")
+        .and_then(|value| value.get("immutable-main-v1"))
+        .ok_or_else(|| {
+            "co-managed manifest must declare protection_policies.immutable-main-v1".to_owned()
+        })?;
+    let valid = policy
+        .get("required_approvals")
+        .and_then(toml::Value::as_integer)
+        == Some(1)
+        && policy
+            .get("required_status_check")
+            .and_then(toml::Value::as_bool)
+            == Some(true)
+        && policy.get("linear_history").and_then(toml::Value::as_bool) == Some(true)
+        && policy.get("enforce_admins").and_then(toml::Value::as_bool) == Some(true)
+        && policy
+            .get("allow_force_push")
+            .and_then(toml::Value::as_bool)
+            == Some(false)
+        && policy.get("allow_deletions").and_then(toml::Value::as_bool) == Some(false);
+    if valid {
+        Ok(())
+    } else {
+        Err(
+            "protection_policies.immutable-main-v1 must be the exact protected-main policy"
+                .to_owned(),
+        )
+    }
+}
+
+fn co_managed_child_repositories(
+    topology: &CoManagedFamilyTopology,
+    nested: &toml::Value,
+) -> Result<Vec<CoManagedRepositoryIdentity>, String> {
+    if string(nested, "family").as_deref() != Some(topology.family.as_str()) {
+        return Err(format!(
+            "co-managed child family must be {}",
+            topology.family
+        ));
+    }
+    if string(nested, "manifest_authority").as_deref() != Some("repos.manifest.toml") {
+        return Err(
+            "co-managed child manifest_authority must be exactly repos.manifest.toml".to_owned(),
+        );
+    }
+    if string(nested, "container").as_deref() != Some("..") {
+        return Err("co-managed child container must be exactly ..".to_owned());
+    }
+    validate_immutable_main_policy(nested)?;
+    let control = nested
+        .get("control_plane")
+        .ok_or_else(|| "co-managed child manifest is missing control_plane".to_owned())?;
+    let expected_slug = format!("veox/{}", topology.control_plane_name);
+    if string(control, "name").as_deref() != Some(topology.control_plane_name.as_str())
+        || string(control, "path").as_deref() != Some(".")
+        || declared_remote(control).as_deref() != Some(topology.control_plane_remote.as_str())
+        || string(control, "required_check").as_deref()
+            != Some(topology.control_plane_required_check.as_str())
+        || string(control, "forge_owner").as_deref() != Some("veox")
+        || string(control, "jeryu_slug").as_deref() != Some(expected_slug.as_str())
+        || string(control, "default_branch").as_deref() != Some("main")
+        || string(control, "protection_policy").as_deref() != Some("immutable-main-v1")
+    {
+        return Err(
+            "co-managed child control plane must exactly match its protected parent declaration"
+                .to_owned(),
+        );
+    }
+    let required = nested
+        .get("required_repos")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| "co-managed child manifest must declare required_repos".to_owned())?;
+    let mut required_names = Vec::new();
+    let mut required_set = std::collections::BTreeSet::new();
+    for (index, value) in required.iter().enumerate() {
+        let name = value
+            .as_str()
+            .filter(|name| valid_cargo_token(name))
+            .ok_or_else(|| format!("required_repos[{index}] must be one repository token"))?;
+        if !required_set.insert(name.to_owned()) {
+            return Err(format!("duplicate co-managed required repository: {name}"));
+        }
+        required_names.push(name.to_owned());
+    }
+    if required_names.is_empty() {
+        return Err("co-managed child required_repos must not be empty".to_owned());
+    }
+    let rows = nested
+        .get("repo")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| "co-managed child manifest must declare repo rows".to_owned())?;
+    let mut repositories = Vec::new();
+    let mut names = std::collections::BTreeSet::new();
+    for (index, raw) in rows.iter().enumerate() {
+        let row_key = format!("repo[{index}]");
+        let name = optional_typed_string(raw, "name", &format!("{row_key}.name"))?
+            .filter(|name| valid_cargo_token(name))
+            .ok_or_else(|| format!("{row_key}.name must be one repository token"))?;
+        if name == topology.control_plane_name || !names.insert(name.clone()) {
+            return Err(format!(
+                "duplicate or reserved co-managed repository name: {name}"
+            ));
+        }
+        let expected_path = format!("../{name}");
+        let expected_remote = format!("{FAMILY_REMOTE_PREFIX}{name}.git");
+        let expected_slug = format!("veox/{name}");
+        let expected_check = format!("{name}/required");
+        if optional_typed_string(raw, "path", &format!("{row_key}.path"))?.as_deref()
+            != Some(expected_path.as_str())
+            || declared_remote(raw).as_deref() != Some(expected_remote.as_str())
+            || optional_typed_string(raw, "forge_owner", &format!("{row_key}.forge_owner"))?
+                .as_deref()
+                != Some("veox")
+            || optional_typed_string(raw, "jeryu_slug", &format!("{row_key}.jeryu_slug"))?
+                .as_deref()
+                != Some(expected_slug.as_str())
+            || optional_typed_string(raw, "family", &format!("{row_key}.family"))?.as_deref()
+                != Some(topology.family.as_str())
+            || optional_typed_string(raw, "default_branch", &format!("{row_key}.default_branch"))?
+                .as_deref()
+                != Some("main")
+            || optional_typed_string(raw, "required_check", &format!("{row_key}.required_check"))?
+                .as_deref()
+                != Some(expected_check.as_str())
+            || optional_typed_string(
+                raw,
+                "protection_policy",
+                &format!("{row_key}.protection_policy"),
+            )?
+            .as_deref()
+                != Some("immutable-main-v1")
+        {
+            return Err(format!(
+                "{row_key} must bind the exact relative path, veox identity, family, main branch, check, and protection policy"
+            ));
+        }
+        let tag = optional_typed_string(raw, "immutable_tag", &format!("{row_key}.immutable_tag"))?
+            .or(optional_typed_string(
+                raw,
+                "current_tag",
+                &format!("{row_key}.current_tag"),
+            )?)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| format!("{row_key} must declare an immutable tag"))?;
+        let release_commit =
+            optional_typed_string(raw, "release_commit", &format!("{row_key}.release_commit"))?
+                .filter(|value| is_full_hex(value, 40))
+                .ok_or_else(|| format!("{row_key}.release_commit must be 40 lowercase hex"))?;
+        let release_tree =
+            optional_typed_string(raw, "release_tree", &format!("{row_key}.release_tree"))?
+                .filter(|value| is_full_hex(value, 40))
+                .ok_or_else(|| format!("{row_key}.release_tree must be 40 lowercase hex"))?;
+        let release_checksum_sha256 = optional_typed_string(
+            raw,
+            "release_checksum_sha256",
+            &format!("{row_key}.release_checksum_sha256"),
+        )?
+        .filter(|value| is_full_hex(value, 64))
+        .ok_or_else(|| format!("{row_key}.release_checksum_sha256 must be 64 lowercase hex"))?;
+        repositories.push(CoManagedRepositoryIdentity {
+            name: name.clone(),
+            path: topology.container_path.join(&name),
+            remote: expected_remote,
+            required_check: expected_check,
+            default_branch: "main".to_owned(),
+            tag,
+            release_commit,
+            release_tree,
+            release_checksum_sha256,
+        });
+    }
+    let row_names = repositories
+        .iter()
+        .map(|repo| repo.name.clone())
+        .collect::<Vec<_>>();
+    if row_names != required_names {
+        return Err("co-managed required_repos must exactly match repo row order".to_owned());
+    }
+    co_managed_derived_manifest_targets(topology, nested, &names)?;
+    Ok(repositories)
+}
+
+fn co_managed_derived_manifest_targets(
+    topology: &CoManagedFamilyTopology,
+    nested: &toml::Value,
+    repository_names: &std::collections::BTreeSet<String>,
+) -> Result<Vec<(String, String, PathBuf)>, String> {
+    let targets = nested
+        .get("derived_manifests")
+        .and_then(toml::Value::as_table)
+        .ok_or_else(|| "co-managed child manifest must declare derived_manifests".to_owned())?;
+    let expected_names =
+        std::collections::BTreeSet::from(["deploy".to_owned(), "portal".to_owned()]);
+    if targets
+        .keys()
+        .cloned()
+        .collect::<std::collections::BTreeSet<_>>()
+        != expected_names
+    {
+        return Err("co-managed derived_manifests must be exactly portal and deploy".to_owned());
+    }
+    let mut resolved = Vec::new();
+    let mut target_repositories = std::collections::BTreeSet::new();
+    for target in ["portal", "deploy"] {
+        let declaration = targets
+            .get(target)
+            .ok_or_else(|| format!("co-managed derived manifest {target} is missing"))?;
+        if string(declaration, "mode").as_deref() != Some("byte-copy-v1") {
+            return Err(format!(
+                "co-managed derived manifest {target} mode must be byte-copy-v1"
+            ));
+        }
+        let raw = string(declaration, "path")
+            .ok_or_else(|| format!("co-managed derived manifest {target} path is required"))?;
+        let path = Path::new(&raw);
+        let components = path.components().collect::<Vec<_>>();
+        let repository = match components.as_slice() {
+            [Component::ParentDir, Component::Normal(repository), Component::Normal(file)]
+                if *file == OsStr::new("repos.manifest.toml") => repository
+                    .to_str()
+                    .filter(|name| repository_names.contains(*name))
+                    .ok_or_else(|| {
+                        format!(
+                            "co-managed derived manifest {target} must target a declared UTF-8 repository"
+                        )
+                    })?
+                    .to_owned(),
+            _ => {
+                return Err(format!(
+                    "co-managed derived manifest {target} path must be exactly ../REPOSITORY/repos.manifest.toml"
+                ))
+            }
+        };
+        if raw != format!("../{repository}/repos.manifest.toml") {
+            return Err(format!(
+                "co-managed derived manifest {target} path must be exactly ../REPOSITORY/repos.manifest.toml"
+            ));
+        }
+        if !target_repositories.insert(repository.clone()) {
+            return Err(
+                "co-managed portal and deploy derivatives must target different repositories"
+                    .to_owned(),
+            );
+        }
+        resolved.push((
+            target.to_owned(),
+            repository.clone(),
+            topology
+                .container_path
+                .join(repository)
+                .join("repos.manifest.toml"),
+        ));
+    }
+    Ok(resolved)
+}
+
 fn validate_child_engine_authority(
     topology: &NestedEngineTopology,
     nested: &toml::Value,
@@ -2688,7 +3209,315 @@ fn validate_child_engine_authority(
     Ok(())
 }
 
-fn validate_nested_family_local(
+fn recursive_git_roots_without_symlinks(root: &Path) -> Result<Vec<PathBuf>, String> {
+    physical_directory(root, "co-managed family container")?;
+    let mut stack = vec![root.to_path_buf()];
+    let mut git_roots = Vec::new();
+    while let Some(directory) = stack.pop() {
+        let mut entries = fs::read_dir(&directory)
+            .map_err(|error| format!("cannot scan {}: {error}", directory.display()))?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| format!("cannot scan {}: {error}", directory.display()))?;
+        entries.sort_by_key(std::fs::DirEntry::file_name);
+        for entry in entries {
+            let path = entry.path();
+            let metadata = fs::symlink_metadata(&path)
+                .map_err(|error| format!("cannot inspect {}: {error}", path.display()))?;
+            if metadata.file_type().is_symlink() {
+                return Err(format!(
+                    "co-managed family contains a symlink: {}",
+                    path.display()
+                ));
+            }
+            if metadata.is_dir() {
+                if entry.file_name() == OsStr::new(".git") {
+                    git_roots.push(directory.clone());
+                }
+                stack.push(path);
+            }
+        }
+    }
+    Ok(git_roots)
+}
+
+fn validate_single_checkout(repo: &Path, name: &str) -> Result<(), String> {
+    let git_dir = repo.join(".git");
+    physical_directory(&git_dir, "co-managed repository Git directory")?;
+    for forbidden in [
+        git_dir.join("worktrees"),
+        git_dir.join("objects/info/alternates"),
+    ] {
+        match fs::symlink_metadata(&forbidden) {
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+            Err(error) => return Err(format!("cannot inspect {}: {error}", forbidden.display())),
+            Ok(_) => {
+                return Err(format!(
+                    "{name}: linked-worktree or alternate metadata is forbidden: {}",
+                    forbidden.display()
+                ))
+            }
+        }
+    }
+    let worktrees = secure_git_output(Some(repo), &["worktree", "list", "--porcelain"])
+        .map_err(|error| format!("{name}: cannot read worktree inventory: {error}"))?;
+    let paths = worktrees
+        .lines()
+        .filter_map(|line| line.strip_prefix("worktree "))
+        .collect::<Vec<_>>();
+    if paths != vec![repo.display().to_string()] {
+        return Err(format!(
+            "{name}: repository must have exactly one canonical checkout"
+        ));
+    }
+    let status = secure_git_output(
+        Some(repo),
+        &["status", "--porcelain=v1", "--untracked-files=all"],
+    )
+    .map_err(|error| format!("{name}: cannot read repository status: {error}"))?;
+    if !status.is_empty() {
+        return Err(format!("{name}: co-managed repository is not clean"));
+    }
+    if secure_git_output(Some(repo), &["branch", "--show-current"])
+        .map_err(|error| format!("{name}: cannot read repository branch: {error}"))?
+        != "main"
+    {
+        return Err(format!("{name}: co-managed repository must be on main"));
+    }
+    Ok(())
+}
+
+fn validate_co_managed_family_paths(
+    topology: &CoManagedFamilyTopology,
+    nested: &toml::Value,
+    repositories: &[CoManagedRepositoryIdentity],
+    skip_remotes: bool,
+) -> Result<(), String> {
+    let split = physical_directory(&topology.split_root, "split root")?;
+    let container = physical_directory(&topology.container_path, "co-managed family container")?;
+    let container_parent = topology
+        .container_path
+        .parent()
+        .ok_or_else(|| "co-managed family container has no parent".to_owned())?;
+    if physical_identity(&physical_directory(container_parent, "split root")?)
+        != physical_identity(&split)
+    {
+        return Err(
+            "co-managed family container is not a direct physical split-root child".to_owned(),
+        );
+    }
+    if fs::symlink_metadata(topology.container_path.join(".git")).is_ok() {
+        return Err("co-managed family container must not be a Git repository".to_owned());
+    }
+    let control = physical_directory(
+        &topology.control_plane_path,
+        "co-managed family control plane",
+    )?;
+    let control_parent = topology
+        .control_plane_path
+        .parent()
+        .ok_or_else(|| "co-managed control plane has no parent".to_owned())?;
+    if physical_identity(&physical_directory(
+        control_parent,
+        "co-managed control-plane parent",
+    )?) != physical_identity(&container)
+    {
+        return Err("co-managed control plane is not a direct physical container child".to_owned());
+    }
+    let manifest = physical_regular_file(&topology.manifest_path, "co-managed family manifest")?;
+    if manifest.nlink() != 1 {
+        return Err("co-managed family manifest must have exactly one hard link".to_owned());
+    }
+    let manifest_parent = topology
+        .manifest_path
+        .parent()
+        .ok_or_else(|| "co-managed manifest has no parent".to_owned())?;
+    if physical_identity(&physical_directory(
+        manifest_parent,
+        "co-managed manifest parent",
+    )?) != physical_identity(&control)
+    {
+        return Err("co-managed manifest is not physically inside its control plane".to_owned());
+    }
+    validate_single_checkout(&topology.control_plane_path, &topology.control_plane_name)?;
+    if !skip_remotes {
+        let remotes = git_remotes(&topology.control_plane_path)
+            .map_err(|error| format!("{}: {error}", topology.control_plane_name))?;
+        if remotes.len() != 1
+            || remotes.get("origin") != Some(&vec![topology.control_plane_remote.clone()])
+        {
+            return Err(format!(
+                "{}: co-managed control origin must be exactly {}",
+                topology.control_plane_name, topology.control_plane_remote
+            ));
+        }
+    }
+
+    let mut declared_roots = std::collections::BTreeMap::new();
+    declared_roots.insert(
+        physical_identity(&control),
+        topology.control_plane_name.clone(),
+    );
+    for repo in repositories {
+        let metadata = physical_directory(&repo.path, "co-managed family repository")?;
+        let parent = repo
+            .path
+            .parent()
+            .ok_or_else(|| format!("{} has no parent", repo.name))?;
+        if physical_identity(&physical_directory(parent, "co-managed repository parent")?)
+            != physical_identity(&container)
+        {
+            return Err(format!(
+                "{} is not a direct physical container child",
+                repo.name
+            ));
+        }
+        if let Some(existing) =
+            declared_roots.insert(physical_identity(&metadata), repo.name.clone())
+        {
+            return Err(format!(
+                "co-managed repositories {existing} and {} share one physical path",
+                repo.name
+            ));
+        }
+        validate_single_checkout(&repo.path, &repo.name)?;
+        if !skip_remotes {
+            let remotes =
+                git_remotes(&repo.path).map_err(|error| format!("{}: {error}", repo.name))?;
+            if remotes.len() != 1 || remotes.get("origin") != Some(&vec![repo.remote.clone()]) {
+                return Err(format!(
+                    "{}: co-managed origin must be exactly {}",
+                    repo.name, repo.remote
+                ));
+            }
+        }
+        let commit = secure_git_output(
+            Some(&repo.path),
+            &["rev-parse", "--verify", "HEAD^{commit}"],
+        )
+        .map_err(|error| format!("{}: cannot resolve HEAD: {error}", repo.name))?;
+        let tree = secure_git_output(Some(&repo.path), &["rev-parse", "--verify", "HEAD^{tree}"])
+            .map_err(|error| format!("{}: cannot resolve HEAD tree: {error}", repo.name))?;
+        let tag_commit = secure_git_output(
+            Some(&repo.path),
+            &[
+                "rev-parse",
+                "--verify",
+                &format!("refs/tags/{}^{{commit}}", repo.tag),
+            ],
+        )
+        .map_err(|error| format!("{}: cannot resolve immutable tag: {error}", repo.name))?;
+        let checksum = git_archive_sha256(&repo.path, &commit)
+            .ok_or_else(|| format!("{}: cannot hash release archive", repo.name))?;
+        if commit != repo.release_commit
+            || tree != repo.release_tree
+            || tag_commit != repo.release_commit
+            || checksum != repo.release_checksum_sha256
+        {
+            return Err(format!(
+                "{}: checked-out commit, tree, tag, or archive checksum differs from child authority",
+                repo.name
+            ));
+        }
+    }
+    let repository_names = repositories
+        .iter()
+        .map(|repo| repo.name.clone())
+        .collect::<std::collections::BTreeSet<_>>();
+    let authority_bytes = fs::read(&topology.manifest_path)
+        .map_err(|error| format!("cannot read co-managed authority bytes: {error}"))?;
+    for (target, repository_name, path) in
+        co_managed_derived_manifest_targets(topology, nested, &repository_names)?
+    {
+        let metadata = physical_regular_file(&path, "co-managed derived manifest")?;
+        if metadata.nlink() != 1 {
+            return Err(format!(
+                "co-managed {target} derived manifest must have exactly one hard link"
+            ));
+        }
+        let repository = repositories
+            .iter()
+            .find(|repo| repo.name == repository_name)
+            .ok_or_else(|| format!("co-managed {target} derivative repository is missing"))?;
+        let parent = path
+            .parent()
+            .ok_or_else(|| format!("co-managed {target} derivative has no parent"))?;
+        if physical_identity(&physical_directory(
+            parent,
+            "co-managed derived manifest parent",
+        )?) != physical_identity(&physical_directory(
+            &repository.path,
+            "co-managed derivative repository",
+        )?) {
+            return Err(format!(
+                "co-managed {target} derived manifest is outside its declared repository"
+            ));
+        }
+        if fs::read(&path)
+            .map_err(|error| format!("cannot read co-managed {target} derivative: {error}"))?
+            != authority_bytes
+        {
+            return Err(format!(
+                "co-managed {target} derived manifest is not byte-identical to its authority"
+            ));
+        }
+    }
+    let discovered = recursive_git_roots_without_symlinks(&topology.container_path)?;
+    if discovered.len() != declared_roots.len() {
+        return Err(format!(
+            "co-managed family Git-root matrix is incomplete: declared {}, found {}",
+            declared_roots.len(),
+            discovered.len()
+        ));
+    }
+    for root in discovered {
+        let metadata = physical_directory(&root, "co-managed Git root")?;
+        if !declared_roots.contains_key(&physical_identity(&metadata)) {
+            return Err(format!(
+                "undeclared co-managed family Git root: {}",
+                root.display()
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_co_managed_family_local(
+    topology: &CoManagedFamilyTopology,
+    skip_remotes: bool,
+    errors: &mut Vec<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let nested: toml::Value = fs::read_to_string(&topology.manifest_path)?.parse()?;
+    let repositories = match co_managed_child_repositories(topology, &nested) {
+        Ok(repositories) => repositories,
+        Err(error) => {
+            errors.push(format!("{}: {error}", topology.declaration_name));
+            return Ok(());
+        }
+    };
+    if let Err(error) =
+        validate_co_managed_family_paths(topology, &nested, &repositories, skip_remotes)
+    {
+        errors.push(format!("{}: {error}", topology.declaration_name));
+        return Ok(());
+    }
+    for identity in repositories {
+        check_cargo_sources(
+            &Repo {
+                name: identity.name,
+                path: identity.path,
+                profile: String::new(),
+                authored: false,
+                cargo_members: Vec::new(),
+                copy_paths: Vec::new(),
+                source_paths: Vec::new(),
+            },
+            errors,
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_nested_engine_family_local(
     data: &toml::Value,
     skip_remotes: bool,
     errors: &mut Vec<String>,
@@ -2852,6 +3681,27 @@ fn validate_nested_family_local(
     Ok(())
 }
 
+fn validate_nested_family_local(
+    data: &toml::Value,
+    skip_remotes: bool,
+    errors: &mut Vec<String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if has_nested_engine_family(data) {
+        validate_nested_engine_family_local(data, skip_remotes, errors)?;
+    }
+    let co_managed = match co_managed_family_topologies(data) {
+        Ok(topologies) => topologies,
+        Err(error) => {
+            errors.push(error);
+            return Ok(());
+        }
+    };
+    for topology in &co_managed {
+        validate_co_managed_family_local(topology, skip_remotes, errors)?;
+    }
+    Ok(())
+}
+
 fn sync_derived_manifests_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
@@ -2914,6 +3764,31 @@ fn sync_derived_manifests_command(args: Vec<String>) -> Result<(), Box<dyn std::
                 "action": if pending {"pending"} else if apply && changed {"updated"} else if changed {"would-update"} else {"verified"},
             }));
         }
+        for row in co_managed_derived_copy_rows(&data)? {
+            let current = safe_derived_copy_read(&row.path)?;
+            let current_sha256 = current.as_deref().map(sha256_bytes);
+            let expected_sha256 = sha256_bytes(&row.authority);
+            let changed = current.as_deref() != Some(row.authority.as_slice());
+            if apply && changed {
+                write_atomic_bytes(&row.path, &row.authority)?;
+                if safe_derived_copy_read(&row.path)?.as_deref() != Some(row.authority.as_slice()) {
+                    return Err(format!(
+                        "co-managed derived manifest write failed readback: {}",
+                        row.path.display()
+                    )
+                    .into());
+                }
+            }
+            rows.push(json!({
+                "target": row.target,
+                "path": row.path,
+                "mode": "byte-copy-v1",
+                "changed": changed,
+                "current_sha256": current_sha256,
+                "expected_sha256": expected_sha256,
+                "action": if apply && changed {"updated"} else if changed {"would-update"} else {"verified"},
+            }));
+        }
         report["canonical_manifest_sha256"] = json!(canonical_hash);
         report["derived_manifests"] = json!(rows);
         Ok(())
@@ -2948,6 +3823,80 @@ fn derived_manifest_targets(
             Ok((target.to_owned(), path))
         })
         .collect()
+}
+
+fn co_managed_derived_copy_rows(
+    data: &toml::Value,
+) -> Result<Vec<CoManagedDerivedManifestCopy>, Box<dyn std::error::Error>> {
+    let mut rows = Vec::new();
+    for topology in co_managed_family_topologies(data)? {
+        let authority = fs::read(&topology.manifest_path)?;
+        let nested: toml::Value = std::str::from_utf8(&authority)?.parse()?;
+        let repositories = co_managed_child_repositories(&topology, &nested)?;
+        let names = repositories
+            .iter()
+            .map(|repo| repo.name.clone())
+            .collect::<std::collections::BTreeSet<_>>();
+        for (target, repository, path) in
+            co_managed_derived_manifest_targets(&topology, &nested, &names)?
+        {
+            let parent = path.parent().ok_or("co-managed derivative has no parent")?;
+            if physical_identity(&physical_directory(
+                parent,
+                "co-managed derived manifest parent",
+            )?) != physical_identity(&physical_directory(
+                &topology.container_path.join(&repository),
+                "co-managed derivative repository",
+            )?) {
+                return Err(format!(
+                    "{}:{target} derived manifest is outside its declared repository",
+                    topology.family
+                )
+                .into());
+            }
+            rows.push(CoManagedDerivedManifestCopy {
+                target: format!("{}:{target}", topology.family),
+                path,
+                authority: authority.clone(),
+            });
+        }
+    }
+    Ok(rows)
+}
+
+fn safe_derived_copy_read(path: &Path) -> Result<Option<Vec<u8>>, Box<dyn std::error::Error>> {
+    match fs::symlink_metadata(path) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.into()),
+        Ok(metadata)
+            if metadata.file_type().is_file()
+                && !metadata.file_type().is_symlink()
+                && metadata.nlink() == 1 =>
+        {
+            Ok(Some(fs::read(path)?))
+        }
+        Ok(_) => Err(format!(
+            "derived manifest must be an independent regular file: {}",
+            path.display()
+        )
+        .into()),
+    }
+}
+
+fn validate_co_managed_derived_manifest_copies(
+    data: &toml::Value,
+) -> Result<(), Box<dyn std::error::Error>> {
+    for row in co_managed_derived_copy_rows(data)? {
+        if safe_derived_copy_read(&row.path)?.as_deref() != Some(row.authority.as_slice()) {
+            return Err(format!(
+                "co-managed derived manifest {} is not byte-identical to its authority: {}",
+                row.target,
+                row.path.display()
+            )
+            .into());
+        }
+    }
+    Ok(())
 }
 
 fn render_derived_manifest(
@@ -3630,6 +4579,7 @@ fn validate_manifest_command(args: Vec<String>) -> Result<(), Box<dyn std::error
         for (target, derived) in derived_manifest_targets(&data, &path)? {
             validate_derived_manifest(&derived, &expected, &data, &path, &target)?;
         }
+        validate_co_managed_derived_manifest_copies(&data)?;
     }
     println!(
         "manifest valid: {} family repositories, {} infrastructure repositories, sha256 {}",
@@ -3851,8 +4801,35 @@ fn validate_manifest_data(
         if let Err(error) = validate_nested_family_local(data, true, &mut errors) {
             errors.push(format!("nested family path validation failed: {error}"));
         }
-    } else if let Err(error) = nested_engine_topology(data) {
-        errors.push(error);
+    } else {
+        if has_nested_engine_family(data) {
+            if let Err(error) = nested_engine_topology(data) {
+                errors.push(error);
+            }
+        }
+        match co_managed_family_topologies(data) {
+            Ok(topologies) => {
+                for topology in topologies {
+                    match fs::read_to_string(&topology.manifest_path)
+                        .map_err(|error| error.to_string())
+                        .and_then(|bytes| {
+                            bytes
+                                .parse::<toml::Value>()
+                                .map_err(|error| error.to_string())
+                        })
+                        .and_then(|nested| {
+                            co_managed_child_repositories(&topology, &nested).map(|_| ())
+                        }) {
+                        Ok(()) => {}
+                        Err(error) => errors.push(format!(
+                            "{} co-managed child authority is invalid: {error}",
+                            topology.declaration_name
+                        )),
+                    }
+                }
+            }
+            Err(error) => errors.push(error),
+        }
     }
     if !errors.is_empty() {
         return Err(format!(
@@ -4214,6 +5191,8 @@ fn bootstrap_main_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
     let mut repo = None;
     let mut remote = None;
     let mut reviewed_commit = None;
+    let mut reviewed_tree = None;
+    let mut token_file = None;
     let mut receipt = None;
     let mut apply = false;
     let mut iter = args.into_iter();
@@ -4224,6 +5203,14 @@ fn bootstrap_main_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
             "--reviewed-commit" => {
                 reviewed_commit = Some(iter.next().ok_or("--reviewed-commit needs a SHA")?)
             }
+            "--reviewed-tree" => {
+                reviewed_tree = Some(iter.next().ok_or("--reviewed-tree needs a SHA")?)
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
+            }
             "--receipt" => {
                 receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
             }
@@ -4231,9 +5218,14 @@ fn bootstrap_main_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
             value => return Err(format!("unknown bootstrap-main argument: {value}").into()),
         }
     }
-    let repo = repo.ok_or("bootstrap-main requires --repo")?;
+    let repo =
+        validate_independent_physical_git_checkout(&repo.ok_or("bootstrap-main requires --repo")?)?;
     let remote = remote.ok_or("bootstrap-main requires --remote")?;
+    let repo_slug = fixed_jeryu_git_slug(&remote)?;
+    let source_remote = secure_git_output(Some(&repo), &["remote", "get-url", "origin"])?;
+    validate_bootstrap_remote_transition(&source_remote, &remote)?;
     let reviewed_commit = reviewed_commit.ok_or("bootstrap-main requires --reviewed-commit")?;
+    let reviewed_tree = reviewed_tree.ok_or("bootstrap-main requires --reviewed-tree")?;
     let receipt = match receipt {
         Some(path) => path,
         None => {
@@ -4244,11 +5236,28 @@ fn bootstrap_main_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
             release_evidence_path(&format!("bootstrap-main-{}.json", receipt_component(name)))
         }
     };
-    let mut report = receipt_header("jain.bootstrap-main/v1", "bootstrap-main", apply);
+    let mut report = receipt_header("jain.bootstrap-main/v2", "bootstrap-main", apply);
     report["repository"] = json!(repo);
+    report["source_remote"] = json!(source_remote);
     report["remote"] = json!(remote);
     report["reviewed_commit_input"] = json!(reviewed_commit);
-    let result = bootstrap_main(&repo, &remote, &reviewed_commit, apply, &mut report);
+    report["reviewed_tree_input"] = json!(reviewed_tree);
+    if apply {
+        let token = token_file
+            .as_deref()
+            .ok_or("bootstrap-main apply requires --token-file")?;
+        report["api_identity"] = authenticated_repository_identity(&repo_slug, token)?;
+        report["token_metadata_validated"] = json!(true);
+    }
+    let result = bootstrap_main(
+        &repo,
+        &remote,
+        &reviewed_commit,
+        &reviewed_tree,
+        token_file.as_deref(),
+        apply,
+        &mut report,
+    );
     finish_receipted_operation(&receipt, &mut report, result)
 }
 
@@ -4256,12 +5265,80 @@ fn bootstrap_main(
     repo: &Path,
     remote: &str,
     reviewed_commit: &str,
+    reviewed_tree: &str,
+    token_file: Option<&Path>,
     apply: bool,
     report: &mut JsonValue,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if !is_full_sha(reviewed_commit)
+        || reviewed_commit.chars().any(|ch| ch.is_ascii_uppercase())
+        || !is_full_sha(reviewed_tree)
+        || reviewed_tree.chars().any(|ch| ch.is_ascii_uppercase())
+    {
+        return Err("bootstrap-main reviewed commit and tree must be lowercase full SHAs".into());
+    }
+    if secure_git_output(Some(repo), &["remote"])? != "origin" {
+        return Err("bootstrap-main requires one source origin".into());
+    }
+    let source_remote = secure_git_output(Some(repo), &["remote", "get-url", "origin"])?;
     let reviewed = resolve_commit(repo, reviewed_commit)?;
+    if reviewed != reviewed_commit
+        || secure_git_output(Some(repo), &["rev-parse", "--verify", "HEAD^{commit}"])? != reviewed
+    {
+        return Err("bootstrap-main checkout HEAD must be the exact reviewed commit".into());
+    }
+    let tree = secure_git_output(
+        Some(repo),
+        &["rev-parse", "--verify", &format!("{reviewed}^{{tree}}")],
+    )?;
+    if tree != reviewed_tree {
+        return Err(format!(
+            "bootstrap-main reviewed tree mismatch: expected {reviewed_tree}, found {tree}"
+        )
+        .into());
+    }
+    let closure = secure_git_output(
+        Some(repo),
+        &["rev-list", "--objects", "--missing=print", &reviewed],
+    )?;
+    if closure.is_empty()
+        || closure
+            .lines()
+            .any(|line| line.starts_with('?') || line.trim().is_empty())
+    {
+        return Err("bootstrap-main reviewed commit object closure is incomplete".into());
+    }
+    secure_git_output(
+        Some(repo),
+        &[
+            "fsck",
+            "--connectivity-only",
+            "--strict",
+            "--no-dangling",
+            &reviewed,
+        ],
+    )?;
     report["reviewed_commit"] = json!(reviewed);
-    let before = ls_remote_ref(repo, remote, "refs/heads/main")?;
+    report["reviewed_tree"] = json!(tree);
+    report["closure_object_count"] = json!(closure.lines().count());
+    if !apply && token_file.is_none() {
+        report["action"] = json!("would-authenticate-and-create-if-absent");
+        report["source"] = json!({"remote": source_remote, "main": JsonValue::Null});
+        report["before"] = json!({"remote_main": JsonValue::Null});
+        report["after"] = json!({"remote_main": JsonValue::Null});
+        return Ok(());
+    }
+    let token_file = token_file.ok_or("bootstrap-main apply requires --token-file")?;
+    let source_main = secure_ls_remote_at(&source_remote, "refs/heads/main", token_file)?
+        .ok_or("bootstrap-main authenticated source main is absent")?;
+    report["source"] = json!({"remote": source_remote, "main": source_main});
+    if source_main != reviewed {
+        return Err(format!(
+            "bootstrap-main authenticated source main {source_main} differs from reviewed commit {reviewed}"
+        )
+        .into());
+    }
+    let before = secure_ls_remote_at(remote, "refs/heads/main", token_file)?;
     report["before"] = json!({"remote_main": before});
     match before {
         Some(existing) if existing == reviewed => {
@@ -4283,8 +5360,16 @@ fn bootstrap_main(
             Ok(())
         }
         None => {
-            create_remote_main_cas(repo, remote, &reviewed, report)?;
-            let after = ls_remote_ref(repo, remote, "refs/heads/main")?;
+            let lease = "--force-with-lease=refs/heads/main:";
+            let refspec = format!("{reviewed}:refs/heads/main");
+            secure_materialization_git_status(
+                repo,
+                remote,
+                token_file,
+                &["push", "--porcelain", lease, remote, &refspec],
+            )?;
+            report["transport"] = json!("authenticated-zero-oid-git-cas");
+            let after = secure_ls_remote_at(remote, "refs/heads/main", token_file)?;
             report["action"] = json!("created");
             report["after"] = json!({"remote_main": after});
             if after.as_deref() == Some(reviewed.as_str()) {
@@ -4294,70 +5379,6 @@ fn bootstrap_main(
             }
         }
     }
-}
-
-fn create_remote_main_cas(
-    repo: &Path,
-    remote: &str,
-    reviewed: &str,
-    report: &mut JsonValue,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(bare) = local_jeryu_bare_repo(remote)? {
-        let output = Command::new("git")
-            .args([
-                "--git-dir",
-                bare.to_str().ok_or("non-UTF8 Jeryu repository path")?,
-                "update-ref",
-                "refs/heads/main",
-                reviewed,
-                "0000000000000000000000000000000000000000",
-            ])
-            .output()?;
-        if !output.status.success() {
-            return Err(format!(
-                "local Jeryu compare-and-swap bootstrap failed: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            )
-            .into());
-        }
-        report["transport"] = json!("local-jeryu-server-update-ref-cas");
-        return Ok(());
-    }
-    let refspec = format!("{reviewed}:refs/heads/main");
-    run_git_strict(
-        repo,
-        &[
-            "push",
-            "--porcelain",
-            "--force-with-lease=refs/heads/main:",
-            remote,
-            &refspec,
-        ],
-    )?;
-    report["transport"] = json!("git-push-absent-lease");
-    Ok(())
-}
-
-fn local_jeryu_bare_repo(remote: &str) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    let Some(slug) = remote
-        .strip_prefix(&format!("{LOCAL_JERYU_ORIGIN}/git/"))
-        .and_then(|value| value.strip_suffix(".git"))
-    else {
-        return Ok(None);
-    };
-    validate_jeryu_repo_slug(slug)?;
-    let root = env::var_os("JERYU_GIT_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/home/ubuntu/.local/share/jeryu/git"));
-    let path = root.join(format!("{slug}.git"));
-    if !path.is_dir() {
-        return Err(format!(
-            "declared local Jeryu bare repository is missing: {}",
-            path.display()
-        )
-        .into());
-    }
-    Ok(Some(path))
 }
 
 fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -4973,6 +5994,7 @@ fn strict_git_output(repo: &Path, args: &[&str]) -> Result<String, Box<dyn std::
     Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 
+#[cfg(test)]
 fn run_git_strict(repo: &Path, args: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
     let output = Command::new("git")
         .arg("-C")
@@ -5162,6 +6184,9 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
 
 fn jeryu_repo_create(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let mut repo = None;
+    let mut family = None;
+    let mut privacy = None;
+    let mut default_branch = None;
     let mut description = None;
     let mut evidence_out = None;
     let mut token_file = None;
@@ -5173,6 +6198,11 @@ fn jeryu_repo_create(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--repo" => repo = Some(iter.next().ok_or("--repo needs owner/name")?),
+            "--family" => family = Some(iter.next().ok_or("--family needs a value")?),
+            "--privacy" => privacy = Some(iter.next().ok_or("--privacy needs private or public")?),
+            "--default-branch" => {
+                default_branch = Some(iter.next().ok_or("--default-branch needs a value")?)
+            }
             "--description" => {
                 description = Some(iter.next().ok_or("--description needs a value")?)
             }
@@ -5192,17 +6222,34 @@ fn jeryu_repo_create(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
     }
     let repo = repo.ok_or("repo-create requires --repo veox/name")?;
     validate_governed_repo_create_slug(&repo)?;
-    let request = JeryuRequest::repo_create(&repo, description.as_deref())?;
+    let family = family.ok_or("repo-create requires explicit --family")?;
+    if !valid_cargo_token(&family) {
+        return Err("repo-create --family must be one unaliased family token".into());
+    }
+    let privacy = privacy.ok_or("repo-create requires explicit --privacy private|public")?;
+    let private = match privacy.as_str() {
+        "private" => true,
+        "public" => false,
+        _ => return Err("repo-create --privacy must be private or public".into()),
+    };
+    let default_branch = default_branch.ok_or("repo-create requires explicit --default-branch")?;
+    let request =
+        JeryuRequest::repo_create(&repo, private, &default_branch, description.as_deref())?;
+    let family_request = JeryuRequest::repo_family_update(&repo, &family)?;
     let mut report = receipt_header(
-        "jain.jeryu-repository-creation/v1",
+        "jain.jeryu-repository-creation/v2",
         "jeryu-local repo-create",
         apply,
     );
     report["repository"] = json!(repo);
+    report["family"] = json!(family);
+    report["privacy"] = json!(privacy);
+    report["default_branch"] = json!(default_branch);
     report["request"] = jeryu_request_json(&request);
+    report["family_request"] = jeryu_request_json(&family_request);
     let result = (|| {
         if !apply {
-            report["action"] = json!("would-create-private-empty-repository");
+            report["action"] = json!("would-create-and-classify-empty-repository");
             return Ok(());
         }
         let token_file = token_file
@@ -5219,19 +6266,36 @@ fn jeryu_repo_create(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
                 "repository creation outcome is ambiguous after the mutation attempt; perform exact readback before any retry: {error}"
             )
         })?;
-        validate_repo_creation_response(&response, &repo)?;
+        validate_repo_creation_response(&response, &repo, private, &default_branch)?;
         report["response"] = response;
 
         let details = client.execute(&JeryuRequest::repo_details(&repo)?)?;
-        validate_repo_creation_response(&details, &repo)?;
+        validate_repo_creation_response(&details, &repo, private, &default_branch)?;
         report["details_readback"] = details;
 
+        let family_response = client.execute(&family_request).map_err(|error| {
+            format!(
+                "repository was created but family assignment outcome is ambiguous; perform exact readback before any retry: {error}"
+            )
+        })?;
+        validate_repo_family_response(&family_response, &repo, &family, private, &default_branch)?;
+        report["family_readback"] = family_response;
+
         let repositories = client.execute(&JeryuRequest::repo_list()?)?;
-        report["repository_identity"] = validate_repo_list_identity(&repositories, &repo)?;
-        if secure_ls_remote(&repo, "refs/heads/main", token_file)?.is_some() {
-            return Err("new governed repository unexpectedly advertises refs/heads/main".into());
+        report["repository_identity"] = validate_created_repo_list_identity(
+            &repositories,
+            &repo,
+            &family,
+            private,
+            &default_branch,
+        )?;
+        let default_ref = format!("refs/heads/{default_branch}");
+        if secure_ls_remote(&repo, &default_ref, token_file)?.is_some() {
+            return Err(
+                format!("new governed repository unexpectedly advertises {default_ref}").into(),
+            );
         }
-        report["main_ref_absent"] = json!(true);
+        report["default_ref_absent"] = json!(true);
         report["action"] = json!("created-and-verified-empty-repository");
         report["external_state_changed"] = json!(true);
         Ok(())
@@ -5294,6 +6358,8 @@ fn validate_repo_absent(
 fn validate_repo_creation_response(
     response: &JsonValue,
     repo: &str,
+    private: bool,
+    default_branch: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let (owner, name) = repo
         .split_once('/')
@@ -5302,8 +6368,8 @@ fn validate_repo_creation_response(
     let expected_html_url = format!("/{repo}");
     let valid = response.get("name").and_then(JsonValue::as_str) == Some(name)
         && response.get("full_name").and_then(JsonValue::as_str) == Some(repo)
-        && response.get("private").and_then(JsonValue::as_bool) == Some(true)
-        && response.get("default_branch").and_then(JsonValue::as_str) == Some("main")
+        && response.get("private").and_then(JsonValue::as_bool) == Some(private)
+        && response.get("default_branch").and_then(JsonValue::as_str) == Some(default_branch)
         && response.get("archived").and_then(JsonValue::as_bool) == Some(false)
         && response.get("disabled").and_then(JsonValue::as_bool) == Some(false)
         && response.pointer("/owner/login").and_then(JsonValue::as_str) == Some(owner)
@@ -5312,10 +6378,31 @@ fn validate_repo_creation_response(
     if valid {
         Ok(())
     } else {
-        Err(
-            "Jeryu repository creation readback differs from the exact private veox/main identity"
-                .into(),
-        )
+        Err("Jeryu repository creation readback differs from the exact requested identity".into())
+    }
+}
+
+fn validate_repo_family_response(
+    response: &JsonValue,
+    repo: &str,
+    family: &str,
+    private: bool,
+    default_branch: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (owner, name) = repo
+        .split_once('/')
+        .ok_or("repository identity needs owner/name")?;
+    let expected_visibility = if private { "private" } else { "public" };
+    let valid = response.pointer("/id/host").and_then(JsonValue::as_str) == Some("jeryu")
+        && response.pointer("/id/owner").and_then(JsonValue::as_str) == Some(owner)
+        && response.pointer("/id/name").and_then(JsonValue::as_str) == Some(name)
+        && response.get("family").and_then(JsonValue::as_str) == Some(family)
+        && response.get("visibility").and_then(JsonValue::as_str) == Some(expected_visibility)
+        && response.get("default_branch").and_then(JsonValue::as_str) == Some(default_branch);
+    if valid {
+        Ok(())
+    } else {
+        Err("Jeryu repository family readback differs from the exact requested identity".into())
     }
 }
 
@@ -6028,15 +7115,22 @@ fn validate_physical_git_checkout_beneath(
     path: &Path,
     split_root: &Path,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let canonical = validate_independent_physical_git_checkout(path)?;
+    if !canonical.starts_with(split_root) {
+        return Err("--repo-path must remain beneath the split root".into());
+    }
+    Ok(canonical)
+}
+
+fn validate_independent_physical_git_checkout(
+    path: &Path,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
     if !path.is_absolute() {
         return Err("--repo-path must be absolute".into());
     }
     let canonical = fs::canonicalize(path)?;
     if canonical != path {
         return Err("--repo-path must already be canonical".into());
-    }
-    if !canonical.starts_with(split_root) {
-        return Err("--repo-path must remain beneath the split root".into());
     }
     let dot_git = canonical.join(".git");
     let metadata = fs::symlink_metadata(&dot_git)?;
@@ -6070,6 +7164,31 @@ fn validate_physical_git_checkout_beneath(
         return Err("checkout does not own an independent Git directory".into());
     }
     Ok(canonical)
+}
+
+fn validate_bootstrap_remote_transition(
+    source_remote: &str,
+    destination_remote: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source_slug = fixed_jeryu_git_slug(source_remote)?;
+    let destination_slug = fixed_jeryu_git_slug(destination_remote)?;
+    let (source_owner, source_name) = source_slug
+        .split_once('/')
+        .ok_or("bootstrap-main source needs owner/name")?;
+    let (destination_owner, destination_name) = destination_slug
+        .split_once('/')
+        .ok_or("bootstrap-main destination needs owner/name")?;
+    if destination_owner != "veox"
+        || source_name != destination_name
+        || !matches!(source_owner, "jeryu" | "veox")
+        || (source_owner == "veox" && source_slug != destination_slug)
+    {
+        return Err(
+            "bootstrap-main must migrate the same repository from jeryu/* to veox/* or verify its exact veox/* origin"
+                .into(),
+        );
+    }
+    Ok(())
 }
 
 fn reject_local_git_injection(repo: &Path) -> Result<(), Box<dyn std::error::Error>> {
@@ -6313,6 +7432,63 @@ fn validate_repo_list_identity(
         "default_branch": "main",
         "clone_http_url": expected_clone,
     }))
+}
+
+fn validate_created_repo_list_identity(
+    response: &JsonValue,
+    repo: &str,
+    family: &str,
+    private: bool,
+    default_branch: &str,
+) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    let identity = validate_repo_list_identity_match(response, repo)?;
+    let expected_clone = format!("/git/{repo}.git");
+    let expected_visibility = if private { "private" } else { "public" };
+    if identity.get("default_branch").and_then(JsonValue::as_str) != Some(default_branch)
+        || identity.get("clone_http_url").and_then(JsonValue::as_str)
+            != Some(expected_clone.as_str())
+        || identity.get("family").and_then(JsonValue::as_str) != Some(family)
+        || identity.get("visibility").and_then(JsonValue::as_str) != Some(expected_visibility)
+    {
+        return Err(
+            "Jeryu repository list readback differs from requested family, visibility, branch, or clone identity"
+                .into(),
+        );
+    }
+    Ok(json!({
+        "host": "jeryu",
+        "owner": repo.split_once('/').unwrap().0,
+        "name": repo.split_once('/').unwrap().1,
+        "family": family,
+        "visibility": expected_visibility,
+        "default_branch": default_branch,
+        "clone_http_url": expected_clone,
+    }))
+}
+
+fn validate_repo_list_identity_match<'a>(
+    response: &'a JsonValue,
+    repo: &str,
+) -> Result<&'a JsonValue, Box<dyn std::error::Error>> {
+    let (owner, name) = repo
+        .split_once('/')
+        .ok_or("repository identity needs owner/name")?;
+    let rows = response
+        .get("repositories")
+        .and_then(JsonValue::as_array)
+        .ok_or("Jeryu repository readback has no repositories array")?;
+    let matches = rows
+        .iter()
+        .filter(|row| {
+            row.pointer("/id/host").and_then(JsonValue::as_str) == Some("jeryu")
+                && row.pointer("/id/owner").and_then(JsonValue::as_str) == Some(owner)
+                && row.pointer("/id/name").and_then(JsonValue::as_str) == Some(name)
+        })
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return Err("Jeryu repository identity readback is missing or ambiguous".into());
+    }
+    Ok(matches[0])
 }
 
 fn authenticated_repository_identity(
@@ -10011,6 +11187,7 @@ mod tests {
             control.join("repos.manifest.toml"),
             format!(
                 r#"family = "redline-split"
+manifest_authority = "repos.manifest.toml"
 container = "{nested_container}"
 lock = "redline.lock.toml"
 [control_plane]
@@ -10082,6 +11259,123 @@ engine_release_tree = "{engine_tree}"
         .parse()
         .unwrap();
         let topology = nested_engine_topology(&parent).unwrap();
+        (parent, topology)
+    }
+
+    fn synthetic_co_managed_topology(root: &Path) -> (toml::Value, CoManagedFamilyTopology) {
+        let container = root.join("jeryu-split");
+        let control = container.join("jeryu-split-ops");
+        standalone_physical_clone(root, "jeryu-control-source", &control);
+        run_git_strict(
+            &control,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "http://127.0.0.1:8787/git/veox/jeryu-split-ops.git",
+            ],
+        )
+        .unwrap();
+        let mut rows = Vec::new();
+        for name in ["jeryu", "jeryu-core"] {
+            let path = container.join(name);
+            standalone_physical_clone(root, &format!("{name}-fixture-source"), &path);
+            let remote = format!("http://127.0.0.1:8787/git/veox/{name}.git");
+            run_git_strict(&path, &["remote", "add", "origin", &remote]).unwrap();
+            let commit = git_query(&path, &["rev-parse", "HEAD"]).unwrap();
+            let tree = git_query(&path, &["rev-parse", "HEAD^{tree}"]).unwrap();
+            let checksum = git_archive_sha256(&path, &commit).unwrap();
+            let tag = format!("{name}-v5.0.1-split.0");
+            run_git_strict(&path, &["tag", &tag, &commit]).unwrap();
+            rows.push(format!(
+                r#"[[repo]]
+name = "{name}"
+path = "../{name}"
+family = "jeryu-split"
+forge_owner = "veox"
+jeryu_slug = "veox/{name}"
+remote = "{remote}"
+default_branch = "main"
+required_check = "{name}/required"
+protection_policy = "immutable-main-v1"
+current_tag = "{tag}"
+release_commit = "{commit}"
+release_tree = "{tree}"
+release_checksum_sha256 = "{checksum}"
+"#
+            ));
+        }
+        fs::write(
+            control.join("repos.manifest.toml"),
+            format!(
+                r#"schema_version = "1"
+family = "jeryu-split"
+manifest_authority = "repos.manifest.toml"
+container = ".."
+required_repos = ["jeryu", "jeryu-core"]
+
+[protection_policies.immutable-main-v1]
+required_approvals = 1
+required_status_check = true
+linear_history = true
+enforce_admins = true
+allow_force_push = false
+allow_deletions = false
+
+[control_plane]
+name = "jeryu-split-ops"
+path = "."
+family = "jeryu-split"
+forge_owner = "veox"
+jeryu_slug = "veox/jeryu-split-ops"
+remote = "http://127.0.0.1:8787/git/veox/jeryu-split-ops.git"
+default_branch = "main"
+required_check = "jeryu-split-ops/required"
+protection_policy = "immutable-main-v1"
+
+[derived_manifests.portal]
+path = "../jeryu/repos.manifest.toml"
+mode = "byte-copy-v1"
+
+[derived_manifests.deploy]
+path = "../jeryu-core/repos.manifest.toml"
+mode = "byte-copy-v1"
+
+{}"#,
+                rows.join("\n")
+            ),
+        )
+        .unwrap();
+        let authority_bytes = fs::read(control.join("repos.manifest.toml")).unwrap();
+        for name in ["jeryu", "jeryu-core"] {
+            let path = container.join(name);
+            fs::write(path.join(".git/info/exclude"), b"repos.manifest.toml\n").unwrap();
+            fs::write(path.join("repos.manifest.toml"), &authority_bytes).unwrap();
+        }
+        run_git_strict(&control, &["add", "repos.manifest.toml"]).unwrap();
+        run_git_strict(&control, &["commit", "-m", "fixture co-managed authority"]).unwrap();
+        let parent: toml::Value = format!(
+            r#"split_root = "{}"
+[nested_families.jeryu]
+kind = "co-managed-family"
+family = "jeryu-split"
+manifest_path = "{}"
+container_path = "{}"
+control_plane = "{}"
+control_plane_name = "jeryu-split-ops"
+control_plane_remote = "http://127.0.0.1:8787/git/veox/jeryu-split-ops.git"
+control_plane_required_check = "jeryu-split-ops/required"
+forge_owner = "veox"
+required = true
+"#,
+            root.display(),
+            control.join("repos.manifest.toml").display(),
+            container.display(),
+            control.display(),
+        )
+        .parse()
+        .unwrap();
+        let topology = co_managed_family_topologies(&parent).unwrap().remove(0);
         (parent, topology)
     }
 
@@ -10819,52 +12113,159 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     fn bootstrap_main_is_dry_run_cas_idempotent_and_refuses_history() {
         let root = TestDir::new("bootstrap-main");
         let (repo, reviewed) = init_source(root.path());
-        let remote = init_bare(root.path());
-        let receipt = root.path().join("bootstrap.json");
-        let base_args = || {
-            vec![
-                "--repo".to_owned(),
-                repo.display().to_string(),
-                "--remote".to_owned(),
-                remote.display().to_string(),
-                "--reviewed-commit".to_owned(),
-                reviewed.clone(),
-                "--receipt".to_owned(),
-                receipt.display().to_string(),
-            ]
-        };
+        let source_remote = root.path().join("source.git");
+        let destination_remote = root.path().join("destination.git");
+        let mut source_init = Command::new("git");
+        source_init.args(["init", "--bare"]).arg(&source_remote);
+        command(source_init);
+        let mut destination_init = Command::new("git");
+        destination_init
+            .args(["init", "--bare"])
+            .arg(&destination_remote);
+        command(destination_init);
+        let source_refspec = format!("{reviewed}:refs/heads/main");
+        run_git_strict(
+            &repo,
+            &["push", source_remote.to_str().unwrap(), &source_refspec],
+        )
+        .unwrap();
+        run_git_strict(
+            &repo,
+            &["remote", "add", "origin", source_remote.to_str().unwrap()],
+        )
+        .unwrap();
+        let tree = git_query(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap();
+        let token_root = TestDir::new_private_temp("bootstrap-main-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let mut report = receipt_header("test", "bootstrap-main", false);
 
-        bootstrap_main_command(base_args()).unwrap();
+        bootstrap_main(
+            &repo,
+            destination_remote.to_str().unwrap(),
+            &reviewed,
+            &tree,
+            None,
+            false,
+            &mut report,
+        )
+        .unwrap();
         assert_eq!(
-            ls_remote_ref(&repo, remote.to_str().unwrap(), "refs/heads/main").unwrap(),
+            ls_remote_ref(
+                &repo,
+                destination_remote.to_str().unwrap(),
+                "refs/heads/main"
+            )
+            .unwrap(),
             None
         );
-        assert_eq!(read_json(&receipt)["action"], "would-create");
+        assert_eq!(report["action"], "would-authenticate-and-create-if-absent");
+        assert!(bootstrap_main(
+            &repo,
+            destination_remote.to_str().unwrap(),
+            &reviewed,
+            &"0".repeat(40),
+            Some(&token_file),
+            true,
+            &mut report,
+        )
+        .is_err());
 
-        let mut apply = base_args();
-        apply.push("--apply".to_owned());
-        bootstrap_main_command(apply.clone()).unwrap();
+        bootstrap_main(
+            &repo,
+            destination_remote.to_str().unwrap(),
+            &reviewed,
+            &tree,
+            Some(&token_file),
+            true,
+            &mut report,
+        )
+        .unwrap();
         assert_eq!(
-            ls_remote_ref(&repo, remote.to_str().unwrap(), "refs/heads/main").unwrap(),
+            ls_remote_ref(
+                &repo,
+                destination_remote.to_str().unwrap(),
+                "refs/heads/main"
+            )
+            .unwrap(),
             Some(reviewed.clone())
         );
-        bootstrap_main_command(apply).unwrap();
-        assert_eq!(read_json(&receipt)["action"], "verified-existing");
+        assert_eq!(report["transport"], "authenticated-zero-oid-git-cas");
+        bootstrap_main(
+            &repo,
+            destination_remote.to_str().unwrap(),
+            &reviewed,
+            &tree,
+            Some(&token_file),
+            true,
+            &mut report,
+        )
+        .unwrap();
+        assert_eq!(report["action"], "verified-existing");
 
         let different = commit_next(&repo);
-        let mut refuse = base_args();
-        let index = refuse
-            .iter()
-            .position(|value| value == "--reviewed-commit")
-            .unwrap();
-        refuse[index + 1] = different;
-        refuse.push("--apply".to_owned());
-        assert!(bootstrap_main_command(refuse).is_err());
-        assert_eq!(read_json(&receipt)["status"], "fail");
+        let different_tree = git_query(&repo, &["rev-parse", "HEAD^{tree}"]).unwrap();
+        let different_source_refspec = format!("{different}:refs/heads/main");
+        run_git_strict(
+            &repo,
+            &[
+                "push",
+                "--force",
+                source_remote.to_str().unwrap(),
+                &different_source_refspec,
+            ],
+        )
+        .unwrap();
+        assert!(bootstrap_main(
+            &repo,
+            destination_remote.to_str().unwrap(),
+            &different,
+            &different_tree,
+            Some(&token_file),
+            true,
+            &mut report,
+        )
+        .is_err());
         assert_eq!(
-            ls_remote_ref(&repo, remote.to_str().unwrap(), "refs/heads/main").unwrap(),
+            ls_remote_ref(
+                &repo,
+                destination_remote.to_str().unwrap(),
+                "refs/heads/main"
+            )
+            .unwrap(),
             Some(reviewed)
         );
+    }
+
+    #[test]
+    fn bootstrap_main_remote_transition_is_exact_and_name_preserving() {
+        validate_bootstrap_remote_transition(
+            "http://127.0.0.1:8787/git/jeryu/jeryu-core.git",
+            "http://127.0.0.1:8787/git/veox/jeryu-core.git",
+        )
+        .unwrap();
+        validate_bootstrap_remote_transition(
+            "http://127.0.0.1:8787/git/veox/jeryu-core.git",
+            "http://127.0.0.1:8787/git/veox/jeryu-core.git",
+        )
+        .unwrap();
+        for (source, destination) in [
+            (
+                "http://127.0.0.1:8787/git/jeryu/jeryu-core.git",
+                "http://127.0.0.1:8787/git/veox/jeryu-web.git",
+            ),
+            (
+                "http://127.0.0.1:8787/git/other/jeryu-core.git",
+                "http://127.0.0.1:8787/git/veox/jeryu-core.git",
+            ),
+            (
+                "http://127.0.0.1:8787/git/veox/jeryu-core.git",
+                "http://127.0.0.1:8787/git/jeryu/jeryu-core.git",
+            ),
+        ] {
+            assert!(validate_bootstrap_remote_transition(source, destination).is_err());
+        }
     }
 
     #[test]
@@ -11458,10 +12859,14 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     }
 
     #[test]
-    fn governed_repository_creation_request_is_private_veox_main_only() {
-        let request =
-            JeryuRequest::repo_create("veox/jain-fabric", Some("Canonical Jain fabric contracts"))
-                .unwrap();
+    fn governed_repository_creation_request_binds_explicit_veox_identity() {
+        let request = JeryuRequest::repo_create(
+            "veox/jain-fabric",
+            false,
+            "trunk",
+            Some("Canonical Jain fabric contracts"),
+        )
+        .unwrap();
         assert_eq!(request.method(), "POST");
         assert_eq!(request.path(), "/repos");
         assert_eq!(
@@ -11469,17 +12874,28 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             json!({
                 "owner": "veox",
                 "name": "jain-fabric",
-                "private": true,
-                "default_branch": "main",
+                "private": false,
+                "default_branch": "trunk",
                 "description": "Canonical Jain fabric contracts",
             })
         );
         let details = JeryuRequest::repo_details("veox/jain-fabric").unwrap();
         assert_eq!(details.method(), "GET");
         assert_eq!(details.path(), "/repos/veox/jain-fabric");
-        assert!(JeryuRequest::repo_create("jeryu/jain-fabric", None).is_err());
-        assert!(JeryuRequest::repo_create("veox/../jain-fabric", None).is_err());
-        assert!(JeryuRequest::repo_create("veox/jain-fabric", Some("bad\ntext")).is_err());
+        let family = JeryuRequest::repo_family_update("veox/jain-fabric", "jeryu-split").unwrap();
+        assert_eq!(family.method(), "PATCH");
+        assert_eq!(family.path(), "/api/v1/repos/veox%2Fjain-fabric");
+        assert_eq!(
+            serde_json::from_str::<JsonValue>(family.body().unwrap()).unwrap(),
+            json!({"family": "jeryu-split"})
+        );
+        assert!(JeryuRequest::repo_create("jeryu/jain-fabric", true, "main", None).is_err());
+        assert!(JeryuRequest::repo_create("veox/../jain-fabric", true, "main", None).is_err());
+        assert!(JeryuRequest::repo_create("veox/jain-fabric", true, "../main", None).is_err());
+        assert!(
+            JeryuRequest::repo_create("veox/jain-fabric", true, "main", Some("bad\ntext")).is_err()
+        );
+        assert!(JeryuRequest::repo_family_update("veox/jain-fabric", "../family").is_err());
     }
 
     #[test]
@@ -11495,7 +12911,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             "url": "/repos/veox/jain-fabric",
             "html_url": "/veox/jain-fabric",
         });
-        validate_repo_creation_response(&response, "veox/jain-fabric").unwrap();
+        validate_repo_creation_response(&response, "veox/jain-fabric", true, "main").unwrap();
         for (pointer, wrong) in [
             ("/private", json!(false)),
             ("/default_branch", json!("trunk")),
@@ -11505,8 +12921,45 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         ] {
             let mut hostile = response.clone();
             *hostile.pointer_mut(pointer).unwrap() = wrong;
-            assert!(validate_repo_creation_response(&hostile, "veox/jain-fabric").is_err());
+            assert!(
+                validate_repo_creation_response(&hostile, "veox/jain-fabric", true, "main")
+                    .is_err()
+            );
         }
+
+        let family_response = json!({
+            "id": {"host": "jeryu", "owner": "veox", "name": "jain-fabric"},
+            "family": "jeryu-split",
+            "visibility": "private",
+            "default_branch": "main",
+        });
+        validate_repo_family_response(
+            &family_response,
+            "veox/jain-fabric",
+            "jeryu-split",
+            true,
+            "main",
+        )
+        .unwrap();
+        let list = json!({"repositories": [{
+            "id": {"host": "jeryu", "owner": "veox", "name": "jain-fabric"},
+            "family": "jeryu-split",
+            "visibility": "private",
+            "default_branch": "main",
+            "clone_http_url": "/git/veox/jain-fabric.git",
+        }]});
+        validate_created_repo_list_identity(&list, "veox/jain-fabric", "jeryu-split", true, "main")
+            .unwrap();
+        let mut wrong_family = family_response;
+        wrong_family["family"] = json!("other");
+        assert!(validate_repo_family_response(
+            &wrong_family,
+            "veox/jain-fabric",
+            "jeryu-split",
+            true,
+            "main",
+        )
+        .is_err());
 
         validate_repo_absent(&json!({"repositories": []}), "veox/jain-fabric").unwrap();
         let identity_collision = json!({"repositories": [{
@@ -11547,40 +13000,67 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
 
     #[test]
     fn governed_repository_creation_dry_run_needs_no_token_or_network() {
-        jeryu_repo_create(vec![
+        let base_args = vec![
             "repo-create".to_owned(),
             "--repo".to_owned(),
             "veox/jain-fabric".to_owned(),
-        ])
-        .unwrap();
+            "--family".to_owned(),
+            "jeryu-split".to_owned(),
+            "--privacy".to_owned(),
+            "private".to_owned(),
+            "--default-branch".to_owned(),
+            "main".to_owned(),
+        ];
+        jeryu_repo_create(base_args.clone()).unwrap();
 
         let root = TestDir::new("repo-create-dry-run");
         let evidence = root.path().join("evidence.json");
-        jeryu_repo_create(vec![
-            "repo-create".to_owned(),
-            "--repo".to_owned(),
-            "veox/jain-fabric".to_owned(),
+        let mut evidence_args = base_args.clone();
+        evidence_args.extend([
             "--description".to_owned(),
             "Canonical Jain fabric contracts".to_owned(),
             "--evidence-out".to_owned(),
             evidence.display().to_string(),
-        ])
-        .unwrap();
+        ]);
+        jeryu_repo_create(evidence_args).unwrap();
         let report = read_json(&evidence);
         assert_eq!(report["status"], "pass");
         assert_eq!(report["mode"], "dry-run");
-        assert_eq!(report["action"], "would-create-private-empty-repository");
+        assert_eq!(
+            report["action"],
+            "would-create-and-classify-empty-repository"
+        );
+        assert_eq!(report["family"], "jeryu-split");
+        assert_eq!(report["privacy"], "private");
+        assert_eq!(report["default_branch"], "main");
         assert_eq!(report["request"]["method"], "POST");
         assert_eq!(report["request"]["path"], "/repos");
+        assert_eq!(report["family_request"]["method"], "PATCH");
 
-        let error = jeryu_repo_create(vec![
-            "repo-create".to_owned(),
-            "--repo".to_owned(),
-            "veox/jain-fabric".to_owned(),
-            "--apply".to_owned(),
-        ])
-        .unwrap_err();
+        let mut apply_args = base_args;
+        apply_args.push("--apply".to_owned());
+        let error = jeryu_repo_create(apply_args).unwrap_err();
         assert!(error.to_string().contains("explicit --token-file"));
+
+        for hostile in [
+            vec!["--family", "../family"],
+            vec!["--privacy", "secret"],
+            vec!["--default-branch", "../main"],
+        ] {
+            let mut args = vec![
+                "repo-create".to_owned(),
+                "--repo".to_owned(),
+                "veox/jain-fabric".to_owned(),
+                "--family".to_owned(),
+                "jeryu-split".to_owned(),
+                "--privacy".to_owned(),
+                "private".to_owned(),
+                "--default-branch".to_owned(),
+                "main".to_owned(),
+            ];
+            args.extend(hostile.into_iter().map(str::to_owned));
+            assert!(jeryu_repo_create(args).is_err());
+        }
     }
 
     #[test]
@@ -12044,6 +13524,227 @@ source_inventory_sha256 = "{}"
             validate_nested_family_local(&data, true, &mut errors).unwrap();
             assert!(errors.is_empty(), "{release}: {errors:?}");
         }
+    }
+
+    #[test]
+    fn co_managed_family_accepts_closed_matrix_without_an_engine() {
+        let root = TestDir::new("co-managed-family");
+        let (data, topology) = synthetic_co_managed_topology(root.path());
+        assert!(!has_nested_engine_family(&data));
+        assert_eq!(co_managed_family_topologies(&data).unwrap().len(), 1);
+        let nested: toml::Value = fs::read_to_string(&topology.manifest_path)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let repositories = co_managed_child_repositories(&topology, &nested).unwrap();
+        assert_eq!(
+            repositories
+                .iter()
+                .map(|repo| repo.name.as_str())
+                .collect::<Vec<_>>(),
+            vec!["jeryu", "jeryu-core"]
+        );
+        validate_co_managed_family_paths(&topology, &nested, &repositories, false).unwrap();
+        validate_co_managed_derived_manifest_copies(&data).unwrap();
+        let derived_rows = co_managed_derived_copy_rows(&data).unwrap();
+        assert_eq!(derived_rows.len(), 2);
+        fs::write(&derived_rows[0].path, b"stale derivative\n").unwrap();
+        assert!(validate_co_managed_derived_manifest_copies(&data)
+            .unwrap_err()
+            .to_string()
+            .contains("not byte-identical"));
+        fs::write(&derived_rows[0].path, &derived_rows[0].authority).unwrap();
+        let mut errors = Vec::new();
+        validate_nested_family_local(&data, false, &mut errors).unwrap();
+        assert!(errors.is_empty(), "{errors:?}");
+
+        for repo in ["jeryu", "jeryu-core", "jeryu-split-ops"] {
+            let authority = host_ci_authority(&data, repo).unwrap();
+            assert_eq!(authority["repository"], repo);
+            assert_eq!(authority["forge_owner"], "veox");
+            assert_eq!(authority["required_check"], format!("{repo}/required"));
+            assert_eq!(
+                authority["remote"],
+                format!("http://127.0.0.1:8787/git/veox/{repo}.git")
+            );
+        }
+    }
+
+    #[test]
+    fn co_managed_family_rejects_engine_aliases_and_incomplete_child_authority() {
+        let root = TestDir::new("co-managed-family-static-hostile");
+        let (data, topology) = synthetic_co_managed_topology(root.path());
+        let mut engine = data.clone();
+        engine["nested_families"]["jeryu"]
+            .as_table_mut()
+            .unwrap()
+            .insert(
+                "engine_repository".to_owned(),
+                toml::Value::String("jeryu-core".to_owned()),
+            );
+        assert!(co_managed_family_topologies(&engine)
+            .unwrap_err()
+            .contains("must not declare canonical engine"));
+
+        let original = fs::read_to_string(&topology.manifest_path).unwrap();
+        let nested: toml::Value = original.parse().unwrap();
+        let mut missing = nested.clone();
+        missing["required_repos"].as_array_mut().unwrap().pop();
+        assert!(co_managed_child_repositories(&topology, &missing)
+            .unwrap_err()
+            .contains("exactly match"));
+        let mut wrong_owner = nested.clone();
+        wrong_owner["repo"][0]["forge_owner"] = toml::Value::String("jeryu".to_owned());
+        assert!(co_managed_child_repositories(&topology, &wrong_owner)
+            .unwrap_err()
+            .contains("exact relative path"));
+        let mut wrong_policy = nested.clone();
+        wrong_policy["protection_policies"]["immutable-main-v1"]["allow_force_push"] =
+            toml::Value::Boolean(true);
+        assert!(co_managed_child_repositories(&topology, &wrong_policy)
+            .unwrap_err()
+            .contains("exact protected-main policy"));
+        let mut wrong_commit = nested;
+        wrong_commit["repo"][0]["release_commit"] = toml::Value::String("A".repeat(40));
+        assert!(co_managed_child_repositories(&topology, &wrong_commit)
+            .unwrap_err()
+            .contains("lowercase hex"));
+
+        let nested: toml::Value = original.parse().unwrap();
+        let mut wrong_derivative = nested.clone();
+        wrong_derivative["derived_manifests"]["portal"]["mode"] =
+            toml::Value::String("rendered".to_owned());
+        assert!(co_managed_child_repositories(&topology, &wrong_derivative)
+            .unwrap_err()
+            .contains("mode must be byte-copy-v1"));
+        let mut aliased_derivative = nested;
+        aliased_derivative["derived_manifests"]["portal"]["path"] =
+            toml::Value::String("../jeryu/./repos.manifest.toml".to_owned());
+        assert!(
+            co_managed_child_repositories(&topology, &aliased_derivative)
+                .unwrap_err()
+                .contains("path must be exactly")
+        );
+    }
+
+    #[test]
+    fn co_managed_family_rejects_symlinks_hardlinks_and_undeclared_git_roots() {
+        let symlink_root = TestDir::new("co-managed-family-symlink");
+        let (_, topology) = synthetic_co_managed_topology(symlink_root.path());
+        let nested: toml::Value = fs::read_to_string(&topology.manifest_path)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let repositories = co_managed_child_repositories(&topology, &nested).unwrap();
+        symlink(
+            topology.container_path.join("jeryu"),
+            topology.container_path.join("forbidden-link"),
+        )
+        .unwrap();
+        assert!(
+            validate_co_managed_family_paths(&topology, &nested, &repositories, true)
+                .unwrap_err()
+                .contains("contains a symlink")
+        );
+
+        let hardlink_root = TestDir::new("co-managed-family-hardlink");
+        let (_, topology) = synthetic_co_managed_topology(hardlink_root.path());
+        let nested: toml::Value = fs::read_to_string(&topology.manifest_path)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let repositories = co_managed_child_repositories(&topology, &nested).unwrap();
+        fs::hard_link(
+            &topology.manifest_path,
+            topology.control_plane_path.join("manifest-alias.toml"),
+        )
+        .unwrap();
+        assert!(
+            validate_co_managed_family_paths(&topology, &nested, &repositories, true)
+                .unwrap_err()
+                .contains("exactly one hard link")
+        );
+
+        let extra_root = TestDir::new("co-managed-family-extra-root");
+        let (_, topology) = synthetic_co_managed_topology(extra_root.path());
+        let nested: toml::Value = fs::read_to_string(&topology.manifest_path)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let repositories = co_managed_child_repositories(&topology, &nested).unwrap();
+        standalone_physical_clone(
+            extra_root.path(),
+            "undeclared-jeryu-source",
+            &topology.container_path.join("undeclared"),
+        );
+        assert!(
+            validate_co_managed_family_paths(&topology, &nested, &repositories, true)
+                .unwrap_err()
+                .contains("Git-root matrix is incomplete")
+        );
+
+        let alternate_root = TestDir::new("co-managed-family-alternate");
+        let (_, topology) = synthetic_co_managed_topology(alternate_root.path());
+        let nested: toml::Value = fs::read_to_string(&topology.manifest_path)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let repositories = co_managed_child_repositories(&topology, &nested).unwrap();
+        let alternate = topology
+            .container_path
+            .join("jeryu/.git/objects/info/alternates");
+        fs::write(&alternate, b"/forbidden/alternate\n").unwrap();
+        assert!(
+            validate_co_managed_family_paths(&topology, &nested, &repositories, true)
+                .unwrap_err()
+                .contains("linked-worktree or alternate metadata is forbidden")
+        );
+    }
+
+    #[test]
+    fn nested_manifest_authority_is_relative_physical_and_single_link() {
+        let root = TestDir::new("nested-relative-authority");
+        let (_, topology) = synthetic_nested_engine_topology(root.path(), "8.0.1");
+        let original = fs::read_to_string(&topology.manifest_path).unwrap();
+        let nested: toml::Value = original.parse().unwrap();
+        validated_nested_repository_paths(&topology, &nested).unwrap();
+        for hostile in [
+            topology.manifest_path.display().to_string(),
+            "./repos.manifest.toml".to_owned(),
+            "../redline-split-ops/repos.manifest.toml".to_owned(),
+            "other.toml".to_owned(),
+        ] {
+            let mut changed = nested.clone();
+            changed["manifest_authority"] = toml::Value::String(hostile);
+            assert!(validated_nested_repository_paths(&topology, &changed).is_err());
+        }
+        let mut missing = nested.clone();
+        missing.as_table_mut().unwrap().remove("manifest_authority");
+        assert!(validated_nested_repository_paths(&topology, &missing)
+            .unwrap_err()
+            .contains("is required"));
+        fs::hard_link(
+            &topology.manifest_path,
+            topology.control_plane_path.join("manifest-hardlink.toml"),
+        )
+        .unwrap();
+        assert!(validated_nested_repository_paths(&topology, &nested)
+            .unwrap_err()
+            .contains("exactly one hard link"));
+
+        let symlink_root = TestDir::new("nested-relative-authority-symlink");
+        let (_, topology) = synthetic_nested_engine_topology(symlink_root.path(), "8.0.1");
+        let nested: toml::Value = fs::read_to_string(&topology.manifest_path)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let replacement = topology.control_plane_path.join("replacement.toml");
+        fs::write(&replacement, fs::read(&topology.manifest_path).unwrap()).unwrap();
+        fs::remove_file(&topology.manifest_path).unwrap();
+        symlink(&replacement, &topology.manifest_path).unwrap();
+        assert!(validated_nested_repository_paths(&topology, &nested)
+            .unwrap_err()
+            .contains("symlink component"));
     }
 
     #[test]
@@ -12589,6 +14290,7 @@ identity_status = "pending"
             format!(
                 r#"
 family = "redline-split"
+manifest_authority = "repos.manifest.toml"
 [control_plane]
 name = "redline-split-ops"
 path = "."

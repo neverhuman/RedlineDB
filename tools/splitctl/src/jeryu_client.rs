@@ -120,8 +120,14 @@ impl JeryuRequest {
         Self::new(Method::Get, "/api/v1/repos?host=jeryu".to_owned(), None)
     }
 
-    pub fn repo_create(repo: &str, description: Option<&str>) -> Result<Self> {
+    pub fn repo_create(
+        repo: &str,
+        private: bool,
+        default_branch: &str,
+        description: Option<&str>,
+    ) -> Result<Self> {
         validate_repo_slug(repo)?;
+        validate_ref_name(default_branch, "repository default branch")?;
         let (owner, name) = repo
             .split_once('/')
             .ok_or_else(|| JeryuError::new("repository must contain owner/name"))?;
@@ -142,8 +148,8 @@ impl JeryuRequest {
                 json!({
                     "owner": owner,
                     "name": name,
-                    "private": true,
-                    "default_branch": "main",
+                    "private": private,
+                    "default_branch": default_branch,
                     "description": description,
                 })
                 .to_string(),
@@ -154,6 +160,18 @@ impl JeryuRequest {
     pub fn repo_details(repo: &str) -> Result<Self> {
         validate_repo_slug(repo)?;
         Self::new(Method::Get, format!("/repos/{repo}"), None)
+    }
+
+    pub fn repo_family_update(repo: &str, family: &str) -> Result<Self> {
+        validate_repo_slug(repo)?;
+        if !safe_component(family) {
+            return Err(JeryuError::new("repository family is unsafe"));
+        }
+        Self::new(
+            Method::Patch,
+            format!("/api/v1/repos/{}", encoded_repo(repo)),
+            Some(json!({"family": family}).to_string()),
+        )
     }
 
     pub fn pr_list(repo: &str, state: &str) -> Result<Self> {
@@ -1781,7 +1799,8 @@ mod tests {
     #[test]
     fn repository_creation_requires_http_created() {
         let request =
-            JeryuRequest::repo_create("veox/jain-fabric", Some("Fabric contracts")).unwrap();
+            JeryuRequest::repo_create("veox/jain-fabric", true, "main", Some("Fabric contracts"))
+                .unwrap();
         let body = json!({"full_name": "veox/jain-fabric"});
         let (address, server) = serve_sequence(vec![json_response("200 OK", body.clone())]);
         let client = JeryuClient::for_test(token_value(), address);
