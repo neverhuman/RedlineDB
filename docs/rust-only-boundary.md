@@ -16,6 +16,18 @@ Current allowed Python surfaces:
   this belongs to the independent nested Redline control plane, is not Jain
   product/deploy code, and is bounded to receipt verification and lock derivation
 
+`python-parity-exceptions.toml` is the machine authority for this inventory.
+`splitctl python-boundary` verifies the exact path set and SHA-256 of every Python
+file, the named Rust evidence and recorded outputs for parity entries, and the
+declared invocation paths. A directory-prefix match is never sufficient.
+
+The current `jain-python` customer SDK is recorded as
+`temporary-retirement-debt`, not as final-v9 authorization. Its exact files are
+hash-bound only so changes cannot pass unnoticed while its contract, CLI,
+orchestration, reporting, and deployment behavior is retired or ported to Rust.
+The C08 exporter is separately classified as an isolated offline training
+generator and has no default CI, release, deploy, or runtime invocation path.
+
 `splitctl` in `jain-split-ops` is the native replacement for CI-contract
 refresh, authored-repo refresh, local-Jeryu validation, and bare-mirror refresh.
 The portal and deploy control planes use native Rust commands for source

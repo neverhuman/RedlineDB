@@ -5,7 +5,7 @@ use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, Jery
 use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     env,
     ffi::OsStr,
     fs,
@@ -7512,58 +7512,268 @@ fn source_coverage(manifest: &Path, json_output: bool) -> Result<(), Box<dyn std
     }
 }
 
-fn python_boundary_exception(relative: &str) -> Option<&'static str> {
-    match relative {
-        "jain-router/tools/refit_export_c08.py" => Some("frozen-offline-parity-oracle"),
-        "jain-smartcluster/jope/ten_guest_activation_receipt.py" => {
-            Some("temporary-protected-rust-port-cycle")
-        }
-        _ => None,
-    }
+fn python_policy_string(
+    value: &toml::Value,
+    key: &str,
+    context: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let result = value
+        .get(key)
+        .and_then(toml::Value::as_str)
+        .filter(|text| !text.is_empty())
+        .ok_or_else(|| format!("{context}.{key} must be a non-empty string"))?;
+    Ok(result.to_owned())
 }
 
-fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
-    let root = control_plane_root()
-        .parent()
-        .ok_or("split root unavailable")?
-        .to_path_buf();
-    let mut files = Vec::new();
-    collect_python(&root, &mut files)?;
-    let mut unexpected = Vec::new();
-    let mut declared = Vec::new();
-    for path in files {
-        let rel = path
-            .strip_prefix(&root)
-            .unwrap_or(&path)
-            .to_string_lossy()
-            .replace('\\', "/");
-        let allowed = rel.starts_with("jain-model-zoo/ops/parity/")
-            || rel.starts_with("redline-split/")
-            || rel == "redline-split-ops/scripts/redline_proof.py"
-            || rel == "redline-split-ops/tests/test_redline_proof.py"
-            || rel.contains("/parity/")
-            || rel.contains("/oracle/")
-            || rel.starts_with("jain-deploy/ops/ci/testdata/")
-            || rel.starts_with("jain-python/python/ai-service/examples/")
-            || rel.starts_with("jain-python/python/ai-service/src/")
-            || rel.starts_with("jain-python/python/ai-service/tests/")
-            || python_boundary_exception(&rel).is_some();
-        if allowed {
-            declared.push(rel);
-        } else {
-            unexpected.push(rel);
-        }
+fn python_policy_strings(
+    value: &toml::Value,
+    key: &str,
+    context: &str,
+) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let values = value
+        .get(key)
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| format!("{context}.{key} must be an array"))?;
+    values
+        .iter()
+        .enumerate()
+        .map(|(index, item)| {
+            item.as_str()
+                .filter(|text| !text.is_empty())
+                .map(ToOwned::to_owned)
+                .ok_or_else(|| {
+                    format!("{context}.{key}[{index}] must be a non-empty string").into()
+                })
+        })
+        .collect()
+}
+
+fn python_policy_relative_path(
+    raw: &str,
+    context: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let path = PathBuf::from(raw);
+    if raw.is_empty()
+        || raw.contains('\\')
+        || path.is_absolute()
+        || !path
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+        || path.components().collect::<PathBuf>().as_os_str() != OsStr::new(raw)
+    {
+        return Err(format!("{context} must use exact normalized relative spelling: {raw}").into());
     }
-    if !unexpected.is_empty() {
+    Ok(path)
+}
+
+fn python_policy_file(
+    root: &Path,
+    relative: &str,
+    expected_sha256: &str,
+    context: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if !is_full_hex(expected_sha256, 64) {
+        return Err(format!("{context} must bind a full lowercase SHA-256").into());
+    }
+    let relative_path = python_policy_relative_path(relative, context)?;
+    let path = root.join(&relative_path);
+    let actual_sha256 = sha256_regular_file(&path, context)?;
+    if actual_sha256 != expected_sha256 {
         return Err(format!(
-            "unexpected Python outside declared parity/customer boundary:\n{}",
-            unexpected.join("\n")
+            "{context} hash mismatch for {relative}: expected {expected_sha256}, got {actual_sha256}"
         )
         .into());
     }
+    Ok(relative_path.to_string_lossy().into_owned())
+}
+
+fn python_policy_existing_file(
+    root: &Path,
+    relative: &str,
+    context: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let relative_path = python_policy_relative_path(relative, context)?;
+    physical_regular_file(&root.join(relative_path), context)?;
+    Ok(())
+}
+
+fn insert_python_policy_file(
+    root: &Path,
+    value: &toml::Value,
+    path_key: &str,
+    hash_key: &str,
+    context: &str,
+    declared: &mut BTreeMap<String, String>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let relative = python_policy_string(value, path_key, context)?;
+    let expected_sha256 = python_policy_string(value, hash_key, context)?;
+    let normalized = python_policy_file(root, &relative, &expected_sha256, context)?;
+    if declared
+        .insert(normalized.clone(), expected_sha256)
+        .is_some()
+    {
+        return Err(format!("duplicate Python policy path: {normalized}").into());
+    }
+    Ok(())
+}
+
+fn validate_python_boundary(
+    root: &Path,
+    manifest_path: &Path,
+) -> Result<(usize, usize), Box<dyn std::error::Error>> {
+    physical_directory(root, "Python boundary root")?;
+    let manifest_text = fs::read_to_string(manifest_path)?;
+    let manifest: toml::Value = manifest_text.parse()?;
+    if python_policy_string(&manifest, "schema_version", "python policy")? != "1" {
+        return Err("python policy schema_version must be 1".into());
+    }
+    python_policy_string(&manifest, "policy", "python policy")?;
+
+    let mut declared = BTreeMap::new();
+    let exceptions = manifest
+        .get("exception")
+        .and_then(toml::Value::as_array)
+        .ok_or("python policy must contain an exception array")?;
+    for (index, exception) in exceptions.iter().enumerate() {
+        let context = format!("exception[{index}]");
+        python_policy_string(exception, "justification", &context)?;
+        python_policy_string(exception, "rust_owner", &context)?;
+        let rust_evidence = python_policy_string(exception, "rust_evidence", &context)?;
+        python_policy_existing_file(root, &rust_evidence, &format!("{context}.rust_evidence"))?;
+        let comparison = python_policy_string(exception, "comparison", &context)?;
+        if !matches!(
+            comparison.as_str(),
+            "byte-identical" | "normalized-semantic"
+        ) {
+            return Err(format!("{context}.comparison has an unsupported value").into());
+        }
+        for invocation in python_policy_strings(exception, "invocation_paths", &context)? {
+            python_policy_existing_file(root, &invocation, &format!("{context}.invocation_paths"))?;
+        }
+        insert_python_policy_file(
+            root,
+            exception,
+            "path",
+            "input_sha256",
+            &context,
+            &mut declared,
+        )?;
+        let output = python_policy_string(exception, "output_path", &context)?;
+        let output_sha256 = python_policy_string(exception, "output_sha256", &context)?;
+        python_policy_file(root, &output, &output_sha256, &format!("{context}.output"))?;
+    }
+
+    let inline_exceptions = manifest
+        .get("inline_exception")
+        .and_then(toml::Value::as_array)
+        .ok_or("python policy must contain an inline_exception array")?;
+    for (index, exception) in inline_exceptions.iter().enumerate() {
+        let context = format!("inline_exception[{index}]");
+        python_policy_string(exception, "justification", &context)?;
+        python_policy_string(exception, "rust_owner", &context)?;
+        let comparison = python_policy_string(exception, "comparison", &context)?;
+        if !matches!(
+            comparison.as_str(),
+            "byte-identical" | "normalized-semantic"
+        ) {
+            return Err(format!("{context}.comparison has an unsupported value").into());
+        }
+        let rust_evidence = python_policy_string(exception, "rust_evidence", &context)?;
+        python_policy_existing_file(root, &rust_evidence, &format!("{context}.rust_evidence"))?;
+        let input = python_policy_string(exception, "input_path", &context)?;
+        let input_sha256 = python_policy_string(exception, "input_sha256", &context)?;
+        python_policy_file(root, &input, &input_sha256, &format!("{context}.input"))?;
+        let output = python_policy_string(exception, "output_path", &context)?;
+        let output_sha256 = python_policy_string(exception, "output_sha256", &context)?;
+        python_policy_file(root, &output, &output_sha256, &format!("{context}.output"))?;
+    }
+
+    let groups = manifest
+        .get("exception_group")
+        .and_then(toml::Value::as_array)
+        .ok_or("python policy must contain an exception_group array")?;
+    let mut temporary_groups = 0usize;
+    let mut group_ids = BTreeSet::new();
+    for (index, group) in groups.iter().enumerate() {
+        let context = format!("exception_group[{index}]");
+        let id = python_policy_string(group, "id", &context)?;
+        if !group_ids.insert(id.clone()) {
+            return Err(format!("duplicate Python policy group id: {id}").into());
+        }
+        let classification = python_policy_string(group, "classification", &context)?;
+        if !matches!(
+            classification.as_str(),
+            "temporary-retirement-debt" | "isolated-training-generator"
+        ) {
+            return Err(format!("{context}.classification has an unsupported value").into());
+        }
+        temporary_groups += usize::from(classification == "temporary-retirement-debt");
+        python_policy_string(group, "owner", &context)?;
+        python_policy_string(group, "purpose", &context)?;
+        python_policy_string(group, "exit_criteria", &context)?;
+        let rust_evidence = python_policy_string(group, "rust_evidence", &context)?;
+        python_policy_existing_file(root, &rust_evidence, &format!("{context}.rust_evidence"))?;
+        for output in python_policy_strings(group, "output_paths", &context)? {
+            python_policy_relative_path(&output, &format!("{context}.output_paths"))?;
+        }
+        for invocation in python_policy_strings(group, "invocation_paths", &context)? {
+            python_policy_existing_file(root, &invocation, &format!("{context}.invocation_paths"))?;
+        }
+        let files = group
+            .get("files")
+            .and_then(toml::Value::as_array)
+            .filter(|files| !files.is_empty())
+            .ok_or_else(|| format!("{context}.files must be a non-empty array"))?;
+        for (file_index, file) in files.iter().enumerate() {
+            insert_python_policy_file(
+                root,
+                file,
+                "path",
+                "input_sha256",
+                &format!("{context}.files[{file_index}]"),
+                &mut declared,
+            )?;
+        }
+    }
+
+    let mut python_files = Vec::new();
+    collect_python(root, &mut python_files)?;
+    let actual = python_files
+        .into_iter()
+        .map(|path| {
+            let relative = path
+                .strip_prefix(root)
+                .map_err(|_| format!("Python path escaped boundary root: {}", path.display()))?
+                .to_string_lossy()
+                .replace('\\', "/");
+            Ok(relative)
+        })
+        .collect::<Result<BTreeSet<_>, Box<dyn std::error::Error>>>()?;
+    let expected = declared.keys().cloned().collect::<BTreeSet<_>>();
+    let unexpected = actual.difference(&expected).cloned().collect::<Vec<_>>();
+    let missing = expected.difference(&actual).cloned().collect::<Vec<_>>();
+    if !unexpected.is_empty() || !missing.is_empty() {
+        return Err(format!(
+            "Python policy set mismatch; unexpected=[{}]; missing=[{}]",
+            unexpected.join(","),
+            missing.join(",")
+        )
+        .into());
+    }
+    Ok((declared.len(), temporary_groups))
+}
+
+fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
+    let control_root = control_plane_root();
+    let root = control_root
+        .parent()
+        .ok_or("split root unavailable")?
+        .to_path_buf();
+    let manifest_path = control_root.join("python-parity-exceptions.toml");
+    let manifest_sha256 = sha256_regular_file(&manifest_path, "Python boundary policy")?;
+    let (declared, temporary_groups) = validate_python_boundary(&root, &manifest_path)?;
     println!(
-        "python boundary ok: {} declared files (customer SDK, parity, and nested Redline proof only)",
-        declared.len()
+        "python boundary ok: {declared} exact files; policy_sha256={manifest_sha256}; temporary_retirement_groups={temporary_groups}"
     );
     Ok(())
 }
@@ -8052,6 +8262,13 @@ fn collect_python(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
     }
     for entry in fs::read_dir(root)? {
         let path = entry?.path();
+        let metadata = fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() {
+            return Err(io::Error::other(format!(
+                "Python boundary traversal encountered a symbolic link: {}",
+                path.display()
+            )));
+        }
         if path
             .file_name()
             .and_then(|name| name.to_str())
@@ -8064,7 +8281,7 @@ fn collect_python(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
         {
             continue;
         }
-        if path.is_dir() {
+        if metadata.is_dir() {
             collect_python(&path, out)?;
         } else if path.extension().and_then(|ext| ext.to_str()) == Some("py") {
             out.push(path);
@@ -9712,24 +9929,122 @@ mod tests {
             .contains("receipt must be beneath the destination"));
     }
 
+    fn write_minimal_python_policy(
+        root: &Path,
+        relative: &str,
+        digest: &str,
+        duplicate: bool,
+    ) -> PathBuf {
+        let policy = root.join("python-parity-exceptions.toml");
+        let duplicate_entry = if duplicate {
+            format!(",\n  {{ path = \"{relative}\", input_sha256 = \"{digest}\" }}")
+        } else {
+            String::new()
+        };
+        fs::write(
+            &policy,
+            format!(
+                r#"schema_version = "1"
+policy = "test exact Python boundary"
+exception = []
+inline_exception = []
+
+[[exception_group]]
+id = "test-group"
+classification = "isolated-training-generator"
+owner = "test-owner"
+purpose = "test purpose"
+exit_criteria = "remove after test"
+rust_evidence = "owner.rs"
+output_paths = []
+invocation_paths = []
+files = [
+  {{ path = "{relative}", input_sha256 = "{digest}" }}{duplicate_entry},
+]
+"#
+            ),
+        )
+        .unwrap();
+        policy
+    }
+
+    fn python_policy_fixture(label: &str) -> (TestDir, PathBuf, String) {
+        let temp = TestDir::new(label);
+        fs::create_dir(temp.path().join("oracle")).unwrap();
+        fs::write(temp.path().join("owner.rs"), "fn owner() {}\n").unwrap();
+        fs::write(temp.path().join("oracle/sample.py"), "print('frozen')\n").unwrap();
+        let digest = sha256_bytes(b"print('frozen')\n");
+        let policy = write_minimal_python_policy(temp.path(), "oracle/sample.py", &digest, false);
+        (temp, policy, digest)
+    }
+
     #[test]
-    fn python_boundary_exceptions_are_exact_and_classified() {
+    fn python_boundary_accepts_only_the_exact_hashed_set() {
+        let (temp, policy, _) = python_policy_fixture("python-policy-exact");
         assert_eq!(
-            python_boundary_exception("jain-router/tools/refit_export_c08.py"),
-            Some("frozen-offline-parity-oracle")
+            validate_python_boundary(temp.path(), &policy).unwrap(),
+            (1, 0)
         );
-        assert_eq!(
-            python_boundary_exception("jain-smartcluster/jope/ten_guest_activation_receipt.py"),
-            Some("temporary-protected-rust-port-cycle")
-        );
-        for near_miss in [
-            "jain-router/tools/refit_export_c08.py.bak",
-            "jain-router/tools/another_export.py",
-            "jain-smartcluster/jope/ten_guest_activation_receipt.py.bak",
-            "jain-smartcluster/jope/another.py",
-        ] {
-            assert_eq!(python_boundary_exception(near_miss), None, "{near_miss}");
-        }
+
+        fs::write(temp.path().join("oracle/unlisted.py"), "pass\n").unwrap();
+        let error = validate_python_boundary(temp.path(), &policy).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("unexpected=[oracle/unlisted.py]"));
+    }
+
+    #[test]
+    fn python_boundary_rejects_hash_mismatch_duplicate_and_unsafe_paths() {
+        let (hash_temp, hash_policy, _) = python_policy_fixture("python-policy-hash");
+        fs::write(
+            hash_temp.path().join("oracle/sample.py"),
+            "print('changed')\n",
+        )
+        .unwrap();
+        let error = validate_python_boundary(hash_temp.path(), &hash_policy).unwrap_err();
+        assert!(error.to_string().contains("hash mismatch"));
+
+        let (duplicate_temp, _, digest) = python_policy_fixture("python-policy-duplicate");
+        let duplicate_policy =
+            write_minimal_python_policy(duplicate_temp.path(), "oracle/sample.py", &digest, true);
+        let error = validate_python_boundary(duplicate_temp.path(), &duplicate_policy).unwrap_err();
+        assert!(error.to_string().contains("duplicate Python policy path"));
+
+        let (unsafe_temp, _, digest) = python_policy_fixture("python-policy-unsafe");
+        let unsafe_policy =
+            write_minimal_python_policy(unsafe_temp.path(), "../sample.py", &digest, false);
+        let error = validate_python_boundary(unsafe_temp.path(), &unsafe_policy).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("exact normalized relative spelling"));
+
+        let (classification_temp, classification_policy, _) =
+            python_policy_fixture("python-policy-classification");
+        let invalid = fs::read_to_string(&classification_policy)
+            .unwrap()
+            .replace("isolated-training-generator", "unbounded-runtime");
+        fs::write(&classification_policy, invalid).unwrap();
+        let error = validate_python_boundary(classification_temp.path(), &classification_policy)
+            .unwrap_err();
+        assert!(error.to_string().contains("unsupported value"));
+    }
+
+    #[test]
+    fn python_boundary_rejects_missing_files_and_symbolic_links() {
+        let (missing_temp, _, digest) = python_policy_fixture("python-policy-missing");
+        let missing_policy =
+            write_minimal_python_policy(missing_temp.path(), "oracle/missing.py", &digest, false);
+        let error = validate_python_boundary(missing_temp.path(), &missing_policy).unwrap_err();
+        assert!(error.to_string().contains("is missing"));
+
+        let (link_temp, link_policy, _) = python_policy_fixture("python-policy-link");
+        symlink(
+            link_temp.path().join("oracle/sample.py"),
+            link_temp.path().join("oracle/alias.py"),
+        )
+        .unwrap();
+        let error = validate_python_boundary(link_temp.path(), &link_policy).unwrap_err();
+        assert!(error.to_string().contains("encountered a symbolic link"));
     }
 
     #[test]

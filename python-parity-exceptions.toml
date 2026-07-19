@@ -1,0 +1,252 @@
+schema_version = "1"
+policy = "frozen Python reference data may exist only when a named Rust owner verifies its hashed output"
+
+[[exception]]
+path = "jain-deploy/ops/ci/testdata/invention-export/model.py"
+justification = "Frozen export fixture exercised by the Rust compatibility implementation."
+rust_owner = "jain-deploy/release-engineering"
+rust_evidence = "jain-deploy/ops/ci/testdata/invention-export/model.rs"
+output_path = "jain-deploy/ops/ci/testdata/invention-export/reference_predictions.txt"
+input_sha256 = "e3bf5349e78f09bf31e696830d411d80c04849281346bd3c0db9573757daa49b"
+output_sha256 = "0b9b9a1cd0b25b3ff3d92ea5e35b973f52cdab18d3f51f95d1a3672f24c8a0e0"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/ops/parity/parity_suite.py"
+justification = "Frozen cross-model reference driver whose recorded result is consumed by Rust release validation."
+rust_owner = "jain-model-zoo/model-parity"
+rust_evidence = "jain-model-zoo/tools/model-zoo-ops/src/main.rs"
+output_path = "jain-model-zoo/ops/parity/parity_errors.json"
+input_sha256 = "d1ef84935bbad864a8bd36c79658e95349eb29f32ce82216e8883b8f74d2839f"
+output_sha256 = "e0cf0965edb49fe6fce0d760330244bd4fbdbe6a8005c891f6a05e43ec7ade58"
+comparison = "normalized-semantic"
+invocation_paths = ["jain-model-zoo/ops/parity/run.sh"]
+
+[[exception]]
+path = "jain-model-zoo/ops/parity/plot_errors.py"
+justification = "Frozen renderer retained only to explain the checksummed parity report image."
+rust_owner = "jain-model-zoo/model-parity"
+rust_evidence = "jain-model-zoo/tools/model-zoo-ops/src/main.rs"
+output_path = "jain-model-zoo/ops/parity/parity_errors.png"
+input_sha256 = "f0859005fae4242b0eb88afad33f253fcb17323e9c8acd2140f2242349e3239b"
+output_sha256 = "c7d63fcb5346742961681a36f143859264db8119ed79aced43704c34563cdff1"
+comparison = "byte-identical"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/tabicl/oracle/dump_oracle.py"
+justification = "Frozen TabICL oracle source for the committed probability fixture."
+rust_owner = "jain-model-zoo/tabicl-port"
+rust_evidence = "jain-model-zoo/reference/ported/tabicl/tests/e2e_parity.rs"
+output_path = "jain-model-zoo/reference/ported/tabicl/oracle/dump/proba.npy"
+input_sha256 = "6c5a799f55cde924c4c6e8a9059fd62ca0a4af6e8f18b507c9720ae9cfcd2ff0"
+output_sha256 = "daa40b29b04740e7e77c7adc04b866f3d5b0aac0532e8c537c97d2324eba2116"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump_oracle.py"
+justification = "Frozen TabDPT classifier oracle source for the committed probability fixture."
+rust_owner = "jain-model-zoo/tabdpt-classifier-port"
+rust_evidence = "jain-model-zoo/reference/ported/tabdpt_classifier/src/bin/verify_oracle.rs"
+output_path = "jain-model-zoo/reference/ported/tabdpt_classifier/oracle/dump/p1.npy"
+input_sha256 = "115bf2fa7847d8b33f6c19fecaacd045e36f18464084cbef310fb0fff6963619"
+output_sha256 = "5dd1c10c80361c60c4ac02ccc706f120357b622fff5ced610fb2295bb6af7550"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump_oracle.py"
+justification = "Frozen TabDPT regressor oracle source for the committed prediction fixture."
+rust_owner = "jain-model-zoo/tabdpt-regressor-port"
+rust_evidence = "jain-model-zoo/reference/ported/tabdpt_regressor/src/bin/verify_oracle.rs"
+output_path = "jain-model-zoo/reference/ported/tabdpt_regressor/oracle/dump/yhat.npy"
+input_sha256 = "eab410657cada0c0490a7438d6e9b27b02ed2f352746f3b8a3e6ced5d31596d4"
+output_sha256 = "b7e3d30e532aaaae40081777bc673e6058b60b195e92cd2b54f65586a06ea5ff"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/parity/oracle.py"
+justification = "Frozen NewMath oracle whose constants are asserted by the named Rust test."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs"
+output_path = "jain-model-zoo/reference/ported/nm_copula_log_density_estimate_ridge/tests/known_values.rs"
+input_sha256 = "53abd3b8e51cdb8153c5504bfa098711f5117120d84d8251c6fe202fa4660e9d"
+output_sha256 = "a6235b561e6bf93dc1c11b8df964238b66b0b123e923fbb10604e13cd411b751"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/parity/oracle.py"
+justification = "Frozen NewMath oracle whose constants are asserted by the named Rust test."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs"
+output_path = "jain-model-zoo/reference/ported/nm_copula_gaussian_loglik_ridge/tests/known_values.rs"
+input_sha256 = "4052fcbc07fc3b82dae53472a6b8cf62c354870bf5690d9c5d4972959362b3aa"
+output_sha256 = "8642081ea681c9780e5fa7569f6768d624b6f0410074fc2129d9f9682efa8c46"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/regression_oracle.py"
+justification = "Frozen NewMath regression oracle bound to the Rust regression report tests."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_regression_report.rs"
+input_sha256 = "89963f2fdc511055d0592ec21c3f5bf6492c143103e46240085f4d7d51ebf3d1"
+output_sha256 = "2097bd7fd27c77a7ad473a197b54da67ebb7ac865c9f2fc593e49321be511b5f"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/oracle.py"
+justification = "Frozen NewMath classification oracle bound to committed Rust expected matrices."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_compressed_rank_parity.rs"
+input_sha256 = "1229906a5766c04b38f1e1e159c4770d50309a2e03e31505978a6662e98b8e7f"
+output_sha256 = "89793636db12c47e700c7642f333e71897d599d60572ebc07f0aec88fb4413ad"
+comparison = "normalized-semantic"
+invocation_paths = [
+  "jain-model-zoo/reference/ported/_nm/parity/verify_parity.sh",
+  "jain-model-zoo/reference/ported/_nm/parity/verify_parity_apex67.sh",
+]
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/nm_xform1_oracle.py"
+justification = "Frozen NewMath transform oracle bound to committed Rust expected matrices."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_xform1_parity.rs"
+input_sha256 = "78f8d6d05f2b7b8ee0a7e4bb141d5587dbf85a21d6f628b59e022b93853e220f"
+output_sha256 = "8162dda92170d093883bb3b8ca35c99d1cbf8264774ad535828f4987c8deb0a3"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/nm_xform2_oracle.py"
+justification = "Frozen NewMath transform oracle bound to committed Rust expected matrices."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_xform2_parity.rs"
+input_sha256 = "5668e1ad1cb317706b62eda0b8b38d340171b0cec048f47e481998d077f6a08b"
+output_sha256 = "5c4f892f3a79d0fe26c060d817c1da484131ceb4efd60a32a1b28696bccb0bd5"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/nm_xform3_oracle.py"
+justification = "Frozen NewMath transform oracle bound to committed Rust expected matrices."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_xform3_parity.rs"
+input_sha256 = "48352edad011addd7366b19f5191e80accd2670554a52df65cf45c4f22e9a7a1"
+output_sha256 = "fbe6c82b5b4f312fe3fe98deea6bacc5d87e6dcd6dd59569276c698cb979692b"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[exception]]
+path = "jain-model-zoo/reference/ported/_nm/parity/nm_xform4_oracle.py"
+justification = "Frozen NewMath transform oracle bound to committed Rust expected matrices."
+rust_owner = "jain-model-zoo/newmath-port"
+rust_evidence = "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs"
+output_path = "jain-model-zoo/reference/ported/_nm/tests/nm_xform4_parity.rs"
+input_sha256 = "788be280714fa2c99978cc77313723bd5ff1c47ddb3792b8516c51a868e79d3c"
+output_sha256 = "7199f0694ba2885656a18ca36fa1886a81741b536c92ba130edb6ac92e5a9eed"
+comparison = "normalized-semantic"
+invocation_paths = []
+
+[[inline_exception]]
+rust_evidence = "jain-math/crates/feat-math/tests/golden.rs"
+justification = "Rust parity tests generate deterministic Python and Rust artifacts from one genome and compare their predictions byte-for-byte."
+rust_owner = "jain-math/feat-math"
+input_path = "jain-math/crates/feat-math/tests/golden.rs"
+output_path = "jain-math/crates/feat-math/tests/golden.rs"
+input_sha256 = "0a222254ab9ff7ee30bb00243b1a52071bfe3637e0881fe70f625233960e11ec"
+output_sha256 = "0a222254ab9ff7ee30bb00243b1a52071bfe3637e0881fe70f625233960e11ec"
+comparison = "byte-identical"
+
+[[inline_exception]]
+rust_evidence = "jain-math/crates/feat-math/tests/champion_parity.rs"
+justification = "Rust parity tests execute the deterministically emitted Python reference and compare predictions to the Rust interpreter."
+rust_owner = "jain-math/feat-math"
+input_path = "jain-math/crates/feat-math/tests/champion_parity.rs"
+output_path = "jain-math/crates/feat-math/tests/champion_parity.rs"
+input_sha256 = "cb79da4b7f64555ba51ec60b6a6ffcf72ac9325ea03bedc8d8130472fd8d1e85"
+output_sha256 = "cb79da4b7f64555ba51ec60b6a6ffcf72ac9325ea03bedc8d8130472fd8d1e85"
+comparison = "normalized-semantic"
+
+[[exception_group]]
+id = "jain-python-customer-sdk-retirement"
+classification = "temporary-retirement-debt"
+owner = "jain-python/customer-sdk"
+purpose = "Exact custody of the pre-v9 customer SDK while its contract and orchestration surfaces are retired or ported to Rust. This classification is not final-v9 production authorization."
+exit_criteria = "Remove this complete group after the bounded training implementation, if any, is relocated behind the signed Training WorkUnit boundary and all ordinary SDK, CLI, CI, reporting, and deployment behavior is retired or ported to Rust."
+rust_evidence = "jain-python/agent/owner-map.json"
+output_paths = []
+invocation_paths = [
+  "jain-python/ops/ci/artifact_support.sh",
+  "jain-python/ops/ci/check.sh",
+  "jain-python/ops/ci/contract-drift.sh",
+  "jain-python/ops/ci/required.sh",
+  "jain-python/ops/ci/sagemaker-integration.sh",
+  "jain-python/ops/ci/score.sh",
+  "jain-python/ops/ci/security.sh",
+  "jain-python/agent/generated-zones.toml",
+  "jain-python/python/ai-service/pyproject.toml",
+]
+files = [
+  { path = "jain-python/python/ai-service/examples/quickstart_local.py", input_sha256 = "f22bcfbc6fc11ba0fc3fffc9ab6aa5f07ba771022ba424b90426b966026bb2f2" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/__init__.py", input_sha256 = "18d8a6163ba2b26a230cca5af42bef1ff1b6415c4af2b835230e6399480817a8" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/__main__.py", input_sha256 = "e0930aeba5a3e2e2d94ca6c5fac4f72c0c4eb2be9bba283becf98e909091471c" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/backends/__init__.py", input_sha256 = "a06b836a4d7cdafd6684a5f6388f72149f9eecc7d184eca14b8aaf11e709868e" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/backends/aws.py", input_sha256 = "52c4dca78a4755457acaae96af45098786dc7095bc4a6979c924ac8e09fe8abe" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/backends/base.py", input_sha256 = "4d2cb6abe050e01586097cfaaa25c64929e3a623b837faa76fbf26bf054ebd59" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/backends/local_docker.py", input_sha256 = "ae5514705384b7764263f2286161f3c5427aba0966be74b959b47b8856241df1" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/cli.py", input_sha256 = "09043ec22edea4986f59f644ae981c0f4380e7770e37b05d71abf882f85752ff" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/client.py", input_sha256 = "a74a6ff67a0201bffdf64f42a42d9c7bb0a9708a948f1e367ffd5aa8cbd9971e" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/contract.py", input_sha256 = "e4089a02095b68aa7f7f9286cd799d306797fc7f827e5c219c8a6cc0a8fb8278" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/csvio.py", input_sha256 = "8563078f00975072953e69b503296d11477a0b856a5d1b94268fe8801df4c376" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/endpoint.py", input_sha256 = "ec085bcab7e537af08491e9c6c5043d5ed70c44ea533e115950bd73500b84f6b" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/errors.py", input_sha256 = "68bb572a5a108c6dee4a5ebf96beebcdc76853779018ac93b605c2cdf2bb3209" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/exports.py", input_sha256 = "6a17f9d001376eda7d6afbdf847d52c70013eb22fc6d44d250e36f5ca6adc9cf" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/mcp_server.py", input_sha256 = "b65ac7656a0534dcec96a4b9fbcd56d6389e7722a1e917bc6de7aead4c93d853" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/models.py", input_sha256 = "992f0b9037c2d69343a89dd9973291de392ab72ca0d70bd1a3b617f3c5eff9c4" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/progress/__init__.py", input_sha256 = "86358e2b3b34073624654fb9aa24cb069594f0dd5f0c2aeb3c2c540aea05066b" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/progress/engine.py", input_sha256 = "eb50e85415e1fa41b70234b6659f031e285e86afecb173da2a0dd6155a00dcc4" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/progress/events.py", input_sha256 = "4d196b86c6f5708885481139efd329bdcb66487e6ec6261d620bce7338715fff" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/progress/grammar.py", input_sha256 = "7f56a3b58e06278c4b5e190c56fb508f783c04d32ac16a2159feff505f1af56a" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/progress/sources.py", input_sha256 = "1e72a9cc56f033d567992eb829a47b5932036e99dd4ca64d1b1cf690c19eb6df" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/progress/stages.py", input_sha256 = "6f8ff777ef7fe8214266d59c961300ddbdea7359d10593ad259808d0f2358214" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/progress/status.py", input_sha256 = "b38b714116878073f442eeda2cd981fef80295e6a8befda505c53d21bb27f54c" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/render/__init__.py", input_sha256 = "25f0544cac667f7209e9740df62432b5eae1e9e936505bb7c6635cadbeff890d" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/render/base.py", input_sha256 = "1202b948c12a5193cf51398ecc0350a7ebf7cbf80f43ffdf80520ae5122ef65e" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/render/detect.py", input_sha256 = "0f91c27984eb0ab0f9d9a07fa6e53d5ea19d7cd2346c6d5f6d62c3d3a09227c5" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/render/notebook.py", input_sha256 = "4ec73f11e81540e4d4d4e123a98ed2bf807898397a2ae855eef6752b8ee1edb6" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/render/plain.py", input_sha256 = "0c434bd68b824c1d71d15d77002cff8236896cb546f267a434c561eb95c69add" },
+  { path = "jain-python/python/ai-service/src/jain_sagemaker/report.py", input_sha256 = "bbad5d550d18c0b2cad540f94b0eef41b1a57d90ce38803a3de076235c9180b2" },
+  { path = "jain-python/python/ai-service/tests/test_aws.py", input_sha256 = "2150ba9e3b8a211ed17c5040e96a825d9a28337ec12b03fa6d2ce66b23c4a22a" },
+  { path = "jain-python/python/ai-service/tests/test_contract.py", input_sha256 = "058888b2b18109801181dbbd4ada4288f1f68dde7b6a1d522da0c8f0a5760afe" },
+  { path = "jain-python/python/ai-service/tests/test_csvio.py", input_sha256 = "5400e34b192ade9c61f5bb2552770ad9a4055e154f9761ce7d3a8baa07e4d1e1" },
+  { path = "jain-python/python/ai-service/tests/test_endpoint.py", input_sha256 = "88cafc8275dfa05cbb574475436f30349128bf2946498f16e4f0847614c91932" },
+  { path = "jain-python/python/ai-service/tests/test_exports.py", input_sha256 = "a5815c3417ad052259a1624ac1043a23e26ee91ddda5deb4cb805044f0b71f3b" },
+  { path = "jain-python/python/ai-service/tests/test_no_banned_terms.py", input_sha256 = "2807dd43698a7d8ff3f268880b5596937629e380ae16f975f7bade959028bdf3" },
+  { path = "jain-python/python/ai-service/tests/test_progress.py", input_sha256 = "e8685aa8f6db1d68444185d0b4b71730bbc4b13f5270363b9c466575e70c152d" },
+  { path = "jain-python/python/ai-service/tests/test_report.py", input_sha256 = "0f49d1b3776e3e535cdb7e2ab2c3396b4b14e89cc074404677ac4ca157ec393c" },
+  { path = "jain-python/python/ai-service/tests/test_sagemaker_integration.py", input_sha256 = "30cc92b9727256570e916ae1b339a55afb2e553ad8a5623f9ee38f79a0d74283" },
+]
+
+[[exception_group]]
+id = "jain-router-c08-offline-training"
+classification = "isolated-training-generator"
+owner = "jain-router/training-tooling"
+purpose = "Frozen offline C08 refit/export generator. It is not a general release helper and is not reachable from default CI, release, deploy, or runtime entrypoints."
+exit_criteria = "Retain only while the signed offline Training WorkUnit boundary requires regeneration of the governed C08 artifacts; otherwise remove after the artifact corpus is frozen."
+rust_evidence = "jain-router/agent/test-map.json"
+output_paths = ["jain-router/artifacts/c08-v1"]
+invocation_paths = []
+files = [
+  { path = "jain-router/tools/refit_export_c08.py", input_sha256 = "4181661fe74c052e7b69638002698161b6a27d66862ea79fbb8739df67f3a349" },
+]
