@@ -133,8 +133,8 @@ fn jankurai_lane_routes_existing_paths_from_diffs_or_clean_snapshots() {
     let workflow = repo_file(".github/workflows/ci.yml");
 
     assert!(library.contains("JANKURAI_BIN=\"$(command -v jankurai 2>/dev/null || true)\""));
+    assert_eq!(library.matches("JANKURAI_BIN=").count(), 1);
     assert!(library.contains("readonly JANKURAI_BIN"));
-    assert!(!library.contains("/home/ubuntu/"));
     assert!(library.contains("readonly JANKURAI_VERSION=\"jankurai 1.6.11\""));
     assert!(library.contains("fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"));
     assert!(library.contains("verify_jankurai_identity"));
