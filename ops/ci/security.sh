@@ -41,15 +41,19 @@ fi
 
 # --- dependency license / ban / source policy --------------------------------
 if repo_has Cargo.toml; then
+    cargo_deny_binding_identity="$(
+        cargo_deny_db_binding_identity \
+            "${CARGO_HOME:-/home/ubuntu/.cargo}" "$rustsec_db"
+    )" || fail "cargo-deny is not bound to physical governed RustSec custody"
     verify_locked_cargo_closure "$repo_root/Cargo.toml" \
         || fail "offline locked Cargo metadata closure is incomplete"
-    verify_cargo_deny_db_binding "${CARGO_HOME:-/home/ubuntu/.cargo}" "$rustsec_db" \
-        || fail "cargo-deny is not bound to the governed RustSec identity"
     run_if_has cargo-deny "Rust dependency policy" cargo deny check --disable-fetch
     verify_rustsec_db_identity "$rustsec_db" "$RUSTSEC_DB_COMMIT" "$RUSTSEC_DB_TREE" \
         || fail "RustSec database identity changed during dependency policy scanning"
-    verify_cargo_deny_db_binding "${CARGO_HOME:-/home/ubuntu/.cargo}" "$rustsec_db" \
-        || fail "cargo-deny RustSec binding changed during dependency policy scanning"
+    verify_cargo_deny_db_binding_unchanged \
+        "$cargo_deny_binding_identity" \
+        "${CARGO_HOME:-/home/ubuntu/.cargo}" "$rustsec_db" \
+        || fail "cargo-deny physical RustSec custody changed during dependency policy scanning"
 fi
 
 # --- npm advisory review (only if a JS lockfile exists) ----------------------

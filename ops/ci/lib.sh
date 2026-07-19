@@ -165,18 +165,45 @@ verify_locked_cargo_closure() {
 verify_cargo_deny_db_binding() {
     local cargo_home="${1:?Cargo home is required}"
     local advisory_db="${2:?governed advisory database is required}"
+    local expected_commit="${3:-$RUSTSEC_DB_COMMIT}"
+    local expected_tree="${4:-$RUSTSEC_DB_TREE}"
+    local advisory_parent="$cargo_home/advisory-dbs"
     local deny_db="$cargo_home/advisory-dbs/$CARGO_DENY_RUSTSEC_DIR"
-    local deny_resolved advisory_resolved
 
-    [[ "$cargo_home" == /* ]] || return 1
-    deny_resolved="$(realpath -e -- "$deny_db")" || return 1
-    advisory_resolved="$(realpath -e -- "$advisory_db")" || return 1
-    if [ "$deny_resolved" = "$advisory_resolved" ]; then
-        return 0
-    fi
-    [ ! -L "$deny_db" ] || return 1
+    [[ "$cargo_home" == /* && -d "$cargo_home" && ! -L "$cargo_home" \
+        && "$(realpath -e -- "$cargo_home")" == "$cargo_home" ]] || return 1
+    [[ -d "$advisory_parent" && ! -L "$advisory_parent" \
+        && "$(realpath -e -- "$advisory_parent")" == "$advisory_parent" ]] || return 1
+    [[ -d "$deny_db" && ! -L "$deny_db" \
+        && "$(realpath -e -- "$deny_db")" == "$deny_db" ]] || return 1
     verify_rustsec_db_identity \
-        "$deny_db" "$RUSTSEC_DB_COMMIT" "$RUSTSEC_DB_TREE"
+        "$advisory_db" "$expected_commit" "$expected_tree" || return 1
+    verify_rustsec_db_identity \
+        "$deny_db" "$expected_commit" "$expected_tree"
+}
+
+cargo_deny_db_binding_identity() {
+    local cargo_home="${1:?Cargo home is required}"
+    local advisory_db="${2:?governed advisory database is required}"
+    local expected_commit="${3:-$RUSTSEC_DB_COMMIT}"
+    local expected_tree="${4:-$RUSTSEC_DB_TREE}"
+    local advisory_parent="$cargo_home/advisory-dbs"
+    local deny_db="$advisory_parent/$CARGO_DENY_RUSTSEC_DIR"
+
+    verify_cargo_deny_db_binding \
+        "$cargo_home" "$advisory_db" "$expected_commit" "$expected_tree" \
+        || return 1
+    stat -Lc '%d:%i:%h:%u:%a' -- \
+        "$cargo_home" "$advisory_parent" "$deny_db" | paste -sd ';' -
+}
+
+verify_cargo_deny_db_binding_unchanged() {
+    local expected_identity="${1:?expected custody identity is required}"
+    shift
+    local actual_identity
+
+    actual_identity="$(cargo_deny_db_binding_identity "$@")" || return 1
+    [[ "$actual_identity" == "$expected_identity" ]]
 }
 
 missing_tool() {

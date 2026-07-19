@@ -82,12 +82,77 @@ rm -f "$db/.git/objects/info/alternates"
 
 deny_home="$fixture_root/deny-home"
 mkdir -p "$deny_home/advisory-dbs"
-ln -s "$db" "$deny_home/advisory-dbs/$CARGO_DENY_RUSTSEC_DIR"
-verify_cargo_deny_db_binding "$deny_home" "$db"
-rm -f "$deny_home/advisory-dbs/$CARGO_DENY_RUSTSEC_DIR"
-ln -s "$other_db" "$deny_home/advisory-dbs/$CARGO_DENY_RUSTSEC_DIR"
-if verify_cargo_deny_db_binding "$deny_home" "$db" >/dev/null 2>&1; then
+deny_db="$deny_home/advisory-dbs/$CARGO_DENY_RUSTSEC_DIR"
+git clone -q --no-local --no-checkout "$db" "$deny_db"
+git -C "$deny_db" checkout -q --detach "$head"
+binding_identity="$(
+    cargo_deny_db_binding_identity "$deny_home" "$db" "$head" "$tree"
+)"
+verify_cargo_deny_db_binding_unchanged \
+    "$binding_identity" "$deny_home" "$db" "$head" "$tree"
+
+mv "$deny_db" "$fixture_root/original-deny-db"
+ln -s "$db" "$deny_db"
+if verify_cargo_deny_db_binding \
+    "$deny_home" "$db" "$head" "$tree" >/dev/null 2>&1
+then
+    printf 'expected correct-target cargo-deny symlink to be rejected\n' >&2
+    exit 1
+fi
+rm -f "$deny_db"
+mv "$fixture_root/original-deny-db" "$deny_db"
+
+parent_link_home="$fixture_root/parent-link-home"
+real_advisory_parent="$fixture_root/real-advisory-parent"
+mkdir "$parent_link_home" "$real_advisory_parent"
+git clone -q --no-local --no-checkout \
+    "$db" "$real_advisory_parent/$CARGO_DENY_RUSTSEC_DIR"
+git -C "$real_advisory_parent/$CARGO_DENY_RUSTSEC_DIR" \
+    checkout -q --detach "$head"
+ln -s "$real_advisory_parent" "$parent_link_home/advisory-dbs"
+if verify_cargo_deny_db_binding \
+    "$parent_link_home" "$db" "$head" "$tree" >/dev/null 2>&1
+then
+    printf 'expected symlinked cargo-deny advisory parent to be rejected\n' >&2
+    exit 1
+fi
+
+mv "$deny_db" "$fixture_root/pre-wrong-target-deny-db"
+ln -s "$other_db" "$deny_db"
+if verify_cargo_deny_db_binding \
+    "$deny_home" "$db" "$head" "$tree" >/dev/null 2>&1
+then
     printf 'expected wrong cargo-deny database binding to be rejected\n' >&2
+    exit 1
+fi
+rm -f "$deny_db"
+mv "$fixture_root/pre-wrong-target-deny-db" "$deny_db"
+
+replacement_db="$fixture_root/replacement-deny-db"
+git clone -q --no-local --no-checkout "$db" "$replacement_db"
+git -C "$replacement_db" checkout -q --detach "$head"
+mv "$deny_db" "$fixture_root/pre-replacement-deny-db"
+mv "$replacement_db" "$deny_db"
+verify_cargo_deny_db_binding "$deny_home" "$db" "$head" "$tree"
+if verify_cargo_deny_db_binding_unchanged \
+    "$binding_identity" "$deny_home" "$db" "$head" "$tree" >/dev/null 2>&1
+then
+    printf 'expected physical cargo-deny database replacement to be rejected\n' >&2
+    exit 1
+fi
+
+physical_home="$fixture_root/physical-home"
+mkdir -p "$physical_home/advisory-dbs"
+git clone -q --no-local --no-checkout \
+    "$db" "$physical_home/advisory-dbs/$CARGO_DENY_RUSTSEC_DIR"
+git -C "$physical_home/advisory-dbs/$CARGO_DENY_RUSTSEC_DIR" \
+    checkout -q --detach "$head"
+home_link="$fixture_root/home-link"
+ln -s "$physical_home" "$home_link"
+if verify_cargo_deny_db_binding \
+    "$home_link" "$db" "$head" "$tree" >/dev/null 2>&1
+then
+    printf 'expected symlinked cargo home to be rejected\n' >&2
     exit 1
 fi
 
