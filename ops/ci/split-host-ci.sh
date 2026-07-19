@@ -45,22 +45,40 @@ SPLIT_ROOT="${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}"
   && ! -L "$RUNNER_PATH" \
   && "$(stat -c '%a:%h' -- "$RUNNER_PATH")" == '555:1' ]] || exit 2
 jq -e '
-  select(.schema_version == "jain.host-ci-reexec/v4")
+  select(.schema_version == "jain.host-ci-reexec/v5")
   | select(.source_root == "/opt/jain-ci/authority/control-plane")
   | select(.exact_root == "/opt/jain-ci/authority/control-plane")
   | select(.result_path | type == "string" and startswith("/"))
   | select(.splitctl_path == "/opt/jain-ci/authority/splitctl")
-  | select(.commit | test("^[0-9a-f]{40}$"))' "$REEXEC_STATE" >/dev/null \
+  | select(.control_repository | test("^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$"))
+  | select(.control_remote | type == "string" and length > 0)
+  | select(.control_api_identity.host == "jeryu")
+  | select(.control_api_identity.owner | type == "string")
+  | select(.control_api_identity.name | type == "string")
+  | select(.control_api_identity.default_branch == "main")
+  | select(.control_api_identity.clone_http_url | type == "string")
+  | select(.control_ref | test("^refs/heads/[a-z0-9][a-z0-9._/-]*[a-z0-9]$"))
+  | select(.control_plane_commit | test("^[0-9a-f]{40}$"))' \
+  "$REEXEC_STATE" >/dev/null \
   || exit 2
 SOURCE_OPS_ROOT="$(realpath -e -- "$(jq -er '.source_root' "$REEXEC_STATE")")" \
   || exit 2
 OPS_ROOT="$(realpath -e -- "$(jq -er '.exact_root' "$REEXEC_STATE")")" \
   || exit 2
-CONTROL_PLANE_COMMIT="$(jq -er '.commit' "$REEXEC_STATE")" || exit 2
+CONTROL_REPOSITORY="$(jq -er '.control_repository' "$REEXEC_STATE")" || exit 2
+CONTROL_REMOTE="$(jq -er '.control_remote' "$REEXEC_STATE")" || exit 2
+CONTROL_API_IDENTITY="$(jq -c '.control_api_identity' "$REEXEC_STATE")" || exit 2
+CONTROL_REF="$(jq -er '.control_ref' "$REEXEC_STATE")" || exit 2
+CONTROL_PLANE_COMMIT="$(jq -er '.control_plane_commit' "$REEXEC_STATE")" || exit 2
 CHILD_RESULT_PATH="$(jq -er '.result_path' "$REEXEC_STATE")" || exit 2
 SPLITCTL_BIN="$(realpath -e -- "$(jq -er '.splitctl_path' "$REEXEC_STATE")")" \
   || exit 2
-[[ "$SOURCE_OPS_ROOT" == "$OPS_ROOT" \
+[[ "$CONTROL_REPOSITORY" \
+    == "$(jq -er '.owner + "/" + .name' <<<"$CONTROL_API_IDENTITY")" \
+  && "$(jq -er '.clone_http_url' <<<"$CONTROL_API_IDENTITY")" \
+    == "/git/$CONTROL_REPOSITORY.git" \
+  && "$CONTROL_REMOTE" == */git/"$CONTROL_REPOSITORY".git \
+  && "$SOURCE_OPS_ROOT" == "$OPS_ROOT" \
   && "$OPS_ROOT" == /opt/jain-ci/authority/control-plane \
   && -d "$OPS_ROOT/.git" && ! -L "$OPS_ROOT" \
   && "$SPLITCTL_BIN" == /opt/jain-ci/authority/splitctl \
@@ -73,6 +91,8 @@ SPLITCTL_BIN="$(realpath -e -- "$(jq -er '.splitctl_path' "$REEXEC_STATE")")" \
   && "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
     -C "$OPS_ROOT" rev-parse --verify 'HEAD^{commit}')" \
     == "$CONTROL_PLANE_COMMIT" \
+  && "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -C "$OPS_ROOT" remote get-url origin)" == "$CONTROL_REMOTE" \
   && "$(sha256sum -- "$RUNNER_PATH" | cut -d' ' -f1)" \
     == "$(sha256sum -- "$OPS_ROOT/ops/ci/split-host-ci.sh" | cut -d' ' -f1)" ]] \
   || exit 2
@@ -112,11 +132,16 @@ post_check() {
   [[ "$conclusion" == success ]] || return 0
   result_tmp="$CHILD_RESULT_PATH.tmp.$$"
   jq -n --arg owner "$OWNER" --arg repo "$REPO" --arg head_sha "$SHA" \
-    --arg check "$CHECK" --arg commit "$CONTROL_PLANE_COMMIT" \
+    --arg check "$CHECK" --arg control_repository "$CONTROL_REPOSITORY" \
+    --arg control_remote "$CONTROL_REMOTE" \
+    --argjson control_api_identity "$CONTROL_API_IDENTITY" \
+    --arg control_ref "$CONTROL_REF" --arg commit "$CONTROL_PLANE_COMMIT" \
     --arg evidence_dir "${JAIN_NATIVE_EVIDENCE_DIR:-}" \
     --arg evidence_sha "${JAIN_NATIVE_EVIDENCE_SHA256:-}" \
-    '{schema_version:"jain.host-ci-worker-evidence/v4",
+    '{schema_version:"jain.host-ci-worker-evidence/v5",
       owner:$owner,repository:$repo,head_sha:$head_sha,required_check:$check,
+      control_repository:$control_repository,control_remote:$control_remote,
+      control_api_identity:$control_api_identity,control_ref:$control_ref,
       control_plane_commit:$commit,
       native_evidence_dir:$evidence_dir,
       native_evidence_sha256:$evidence_sha}' >"$result_tmp" || return 1
@@ -195,11 +220,7 @@ protected_check="$(jain_authoritative_required_check "$managed_inventory" "$REPO
   echo "repository is absent or ambiguous in canonical managed inventory: $REPO" >&2
   exit 2
 }
-control_plane_remote="$(jain_authoritative_control_plane_remote "$managed_inventory")" || {
-  post_check failure || true
-  echo "control-plane remote is absent or ambiguous in canonical managed inventory" >&2
-  exit 2
-}
+control_plane_remote="$CONTROL_REMOTE"
 authority_mode=remote
 [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 ]] && authority_mode=local
 jain_verify_reviewed_control_plane_commit \

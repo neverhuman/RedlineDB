@@ -122,6 +122,27 @@ fn handle(
         return respond(&mut stream, 500, "fixture failure", "text/plain");
     }
 
+    if method == "GET" && path == "/api/v1/repos?host=jeryu" {
+        let valid_control = r#"{"id":{"host":"jeryu","owner":"veox","name":"jain-split-ops"},"default_branch":"main","clone_http_url":"/git/veox/jain-split-ops.git"}"#;
+        let valid_product = r#"{"id":{"host":"jeryu","owner":"jeryu","name":"jain-report"},"default_branch":"main","clone_http_url":"/git/jeryu/jain-report.git"}"#;
+        let control = match behavior.as_str() {
+            "authority-wrong-owner" => r#"{"id":{"host":"jeryu","owner":"attacker","name":"jain-split-ops"},"default_branch":"main","clone_http_url":"/git/attacker/jain-split-ops.git"}"#,
+            "authority-wrong-default" => r#"{"id":{"host":"jeryu","owner":"veox","name":"jain-split-ops"},"default_branch":"trunk","clone_http_url":"/git/veox/jain-split-ops.git"}"#,
+            "authority-wrong-clone" => r#"{"id":{"host":"jeryu","owner":"veox","name":"jain-split-ops"},"default_branch":"main","clone_http_url":"/git/veox/wrong.git"}"#,
+            _ => valid_control,
+        };
+        let mut rows = Vec::new();
+        if behavior != "authority-missing" {
+            rows.push(control);
+        }
+        if behavior == "authority-duplicate" {
+            rows.push(control);
+        }
+        rows.push(valid_product);
+        let response = format!("{{\"repositories\":[{}]}}", rows.join(","));
+        return respond(&mut stream, 200, &response, "application/json");
+    }
+
     if method == "POST" && path.ends_with("/check-runs") {
         let mut state = OpenOptions::new()
             .create(true)

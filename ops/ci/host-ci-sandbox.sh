@@ -30,8 +30,8 @@ validate_control_authority() {
     && "$expires" =~ ^[0-9]+$ ]] \
     || fail 'invalid bootstrap control authority'
   now="$(date +%s)"
-  (( expires >= now && expires - now <= 7200 )) \
-    || fail 'bootstrap control authority is expired or exceeds two hours'
+  (( expires >= now && expires - now <= 6900 )) \
+    || fail 'bootstrap control authority is expired or exceeds 6,900 seconds'
 }
 
 validate_cargo_registry_cache() {
@@ -370,17 +370,45 @@ control_remote="$(jq -er '.control_remote' "$config")"
 control_ref="$(jq -er '.control_ref // "refs/heads/main"' "$config")"
 bootstrap_commit="$(jq -er '.bootstrap_commit // ""' "$config")"
 bootstrap_expires_at="$(jq -er '.bootstrap_expires_at // ""' "$config")"
+control_repository=veox/jain-split-ops
 validate_control_authority \
   "$control_ref" "$bootstrap_commit" "$bootstrap_expires_at"
 if [[ "$control_ref" != refs/heads/main && "$bootstrap_commit" != "$control_commit" ]]; then
   fail 'bootstrap control commit differs from the exact request'
 fi
-"$splitctl_path" jeryu-local git-materialize \
-  --repo veox/jain-split-ops --remote "$control_remote" \
+control_authority_json="$("$splitctl_path" jeryu-local authority-readback \
+  --repo "$control_repository" --remote "$control_remote" \
+  --ref "$control_ref" --expected-head "$control_commit" \
+  --token-file "$token_file")" \
+  || fail 'cannot authenticate configured control authority'
+jq -e --arg repository "$control_repository" --arg remote "$control_remote" \
+  --arg ref "$control_ref" --arg commit "$control_commit" '
+  select(.schema_version == "jain.jeryu-authority-readback/v1")
+  | select(.repository == $repository and .remote == $remote)
+  | select(.ref == $ref and .commit == $commit)
+  | select(.api_identity.host == "jeryu")
+  | select(.api_identity.owner + "/" + .api_identity.name == $repository)
+  | select(.api_identity.default_branch == "main")
+  | select(.api_identity.clone_http_url == ("/git/" + $repository + ".git"))' \
+  <<<"$control_authority_json" >/dev/null \
+  || fail 'invalid authenticated control authority readback'
+control_api_identity="$(jq -c '.api_identity' <<<"$control_authority_json")" \
+  || fail 'cannot normalize authenticated control API identity'
+control_materialization_json="$("$splitctl_path" jeryu-local git-materialize \
+  --repo "$control_repository" --remote "$control_remote" \
   --ref "$control_ref" --expected-head "$control_commit" \
   --destination "$control_root" --token-file "$token_file" \
-  --retain-origin >/dev/null \
+  --retain-origin)" \
   || fail 'cannot materialize authenticated configured control authority'
+jq -e --arg repository "$control_repository" --arg remote "$control_remote" \
+  --arg ref "$control_ref" --arg commit "$control_commit" \
+  --argjson api_identity "$control_api_identity" '
+  select(.schema_version == "jain.jeryu-git-materialization/v1")
+  | select(.repository == $repository and .remote == $remote)
+  | select(.reference == $ref and .commit == $commit)
+  | select(.api_identity == $api_identity)' \
+  <<<"$control_materialization_json" >/dev/null \
+  || fail 'materialized control authority differs from authenticated readback'
 [[ "$("${safe_git[@]}" -C "$control_root" rev-parse 'HEAD^{commit}')" \
   == "$control_commit" ]] || fail 'root immutable checkout mismatch'
 [[ "$(sha256sum -- "$control_root/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
@@ -477,11 +505,17 @@ install -o root -g root -m 0555 \
   "$control_root/ops/ci/split-host-ci.sh" \
   "$worker_authority/.split-host-ci-reviewed"
 worker_result="$bootstrap_root/writable/worker-evidence.json"
-jq -n --arg commit "$control_commit" --arg result "$worker_result" \
-  '{schema_version:"jain.host-ci-reexec/v4",
+jq -n --arg control_repository "$control_repository" \
+  --arg control_remote "$control_remote" \
+  --argjson control_api_identity "$control_api_identity" \
+  --arg control_ref "$control_ref" --arg commit "$control_commit" \
+  --arg result "$worker_result" \
+  '{schema_version:"jain.host-ci-reexec/v5",
     source_root:"/opt/jain-ci/authority/control-plane",
     exact_root:"/opt/jain-ci/authority/control-plane",
-    commit:$commit,result_path:$result,
+    control_repository:$control_repository,control_remote:$control_remote,
+    control_api_identity:$control_api_identity,control_ref:$control_ref,
+    control_plane_commit:$commit,result_path:$result,
     splitctl_path:"/opt/jain-ci/authority/splitctl"}' \
   >"$worker_authority/reexec-state.json"
 chmod 0444 "$worker_authority/reexec-state.json"
@@ -495,7 +529,9 @@ chown -R root:root "$worker_authority"
 created_at="$(date +%s)"
 root_state="$root_request/root-state.json"
 jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
+  --arg control_repository "$control_repository" \
   --arg commit "$control_commit" --arg remote "$control_remote" \
+  --argjson control_api_identity "$control_api_identity" \
   --arg control_ref "$control_ref" \
   --arg bootstrap_expires_at "$bootstrap_expires_at" \
   --arg publisher_sha "$publisher_sha" --arg sandbox_sha "$sandbox_sha" \
@@ -507,9 +543,11 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
   --argjson created_at "$created_at" \
-  '{schema_version:"jain.host-ci-root-state/v4",status:"running",
+  '{schema_version:"jain.host-ci-root-state/v5",status:"running",
     request_id:$request_id,nonce:$nonce,created_at:$created_at,
-    control_plane_commit:$commit,control_remote:$remote,control_ref:$control_ref,
+    control_repository:$control_repository,control_remote:$remote,
+    control_api_identity:$control_api_identity,control_ref:$control_ref,
+    control_plane_commit:$commit,
     bootstrap_expires_at:$bootstrap_expires_at,
     publisher_sha256:$publisher_sha,sandbox_sha256:$sandbox_sha,
     splitctl_sha256:$splitctl_sha,jankurai_sha256:$jankurai_sha,
@@ -740,10 +778,17 @@ if [[ "$runner_rc" == 0 && -f "$worker_result" && ! -L "$worker_result" \
   && "$(stat -c '%u:%a:%h' -- "$worker_result")" == "$worker_uid:600:1" ]] \
   && jq -e --arg owner "${arguments[0]}" --arg repo "$repo" \
     --arg head "${arguments[2]}" --arg check "${arguments[4]}" \
-    --arg commit "$control_commit" \
-    'select(.schema_version == "jain.host-ci-worker-evidence/v4")
+    --arg control_repository "$control_repository" \
+    --arg control_remote "$control_remote" \
+    --argjson control_api_identity "$control_api_identity" \
+    --arg control_ref "$control_ref" --arg commit "$control_commit" \
+    'select(.schema_version == "jain.host-ci-worker-evidence/v5")
      | select(.owner == $owner and .repository == $repo)
      | select(.head_sha == $head and .required_check == $check)
+     | select(.control_repository == $control_repository)
+     | select(.control_remote == $control_remote)
+     | select(.control_api_identity == $control_api_identity)
+     | select(.control_ref == $control_ref)
      | select(.control_plane_commit == $commit)
      | select(.native_evidence_dir | type == "string")
      | select(.native_evidence_sha256 | type == "string")' \
@@ -840,7 +885,11 @@ if /usr/bin/findmnt -rn -M "$evidence_staging_root" >/dev/null; then
 fi
 
 root_result="$root_request/root-result.json"
-jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
+jq -n --arg request_id "$request_id" \
+  --arg control_repository "$control_repository" \
+  --arg control_remote "$control_remote" \
+  --argjson control_api_identity "$control_api_identity" \
+  --arg control_ref "$control_ref" --arg commit "$control_commit" \
   --arg owner "${arguments[0]}" --arg repo "$repo" \
   --arg head "${arguments[2]}" --arg check "${arguments[4]}" \
   --arg conclusion "$conclusion" --arg evidence_dir "$evidence_dir" \
@@ -854,7 +903,9 @@ jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
   --argjson audit_rc "$audit_rc" \
   --argjson proof_validator_rc "$proof_validator_rc" \
   --argjson evidence_required "$derived_required" \
-  '{schema_version:"jain.host-ci-root-result/v4",request_id:$request_id,
+  '{schema_version:"jain.host-ci-root-result/v5",request_id:$request_id,
+    control_repository:$control_repository,control_remote:$control_remote,
+    control_api_identity:$control_api_identity,control_ref:$control_ref,
     control_plane_commit:$commit,owner:$owner,repository:$repo,head_sha:$head,
     required_check:$check,conclusion:$conclusion,runner_exit_code:$rc,
     native_evidence_required:$evidence_required,

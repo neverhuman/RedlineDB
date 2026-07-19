@@ -29,8 +29,8 @@ validate_control_authority() {
     && "$expires" =~ ^[0-9]+$ ]] \
     || fail 'invalid bootstrap control authority'
   now="$(date +%s)"
-  (( expires >= now && expires - now <= 7200 )) \
-    || fail 'bootstrap control authority is expired or exceeds two hours'
+  (( expires >= now && expires - now <= 6900 )) \
+    || fail 'bootstrap control authority is expired or exceeds 6,900 seconds'
 }
 
 [[ "$(id -u)" == 0 ]] || fail 'must run as root'
@@ -166,14 +166,21 @@ mkdir -m 0700 "$request_dir/publish.lock" 2>/dev/null \
   || fail 'request was already used or is being published'
 
 jq -e --arg request_id "$request_id" \
-  'select(.schema_version == "jain.host-ci-root-state/v4")
+  'select(.schema_version == "jain.host-ci-root-state/v5")
    | select(.request_id == $request_id and .status == "sealed")
    | select(.nonce | test("^[0-9a-f]{64}$"))
    | select(.result_sha256 | test("^[0-9a-f]{64}$"))
    | select(.root_seal | test("^[0-9a-f]{64}$"))
    | select(.sealed_at | type == "number")
-   | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
+   | select(.control_repository | test("^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$"))
+   | select(.control_remote | type == "string" and length > 0)
+   | select(.control_api_identity.host == "jeryu")
+   | select(.control_api_identity.owner | type == "string")
+   | select(.control_api_identity.name | type == "string")
+   | select(.control_api_identity.default_branch == "main")
+   | select(.control_api_identity.clone_http_url | type == "string")
    | select(.control_ref | type == "string")
+   | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
    | select(.bootstrap_expires_at | type == "string")
    | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
    | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
@@ -220,8 +227,16 @@ expected_seal="$({
   || fail 'root request broker binding mismatch'
 
 jq -e --arg request_id "$request_id" \
-  'select(.schema_version == "jain.host-ci-root-result/v4")
+  'select(.schema_version == "jain.host-ci-root-result/v5")
    | select(.request_id == $request_id)
+   | select(.control_repository | test("^[a-z0-9][a-z0-9._-]*/[a-z0-9][a-z0-9._-]*$"))
+   | select(.control_remote | type == "string" and length > 0)
+   | select(.control_api_identity.host == "jeryu")
+   | select(.control_api_identity.owner | type == "string")
+   | select(.control_api_identity.name | type == "string")
+   | select(.control_api_identity.default_branch == "main")
+   | select(.control_api_identity.clone_http_url | type == "string")
+   | select(.control_ref | type == "string")
    | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
    | select(.owner | test("^[a-z0-9][a-z0-9-]*$"))
    | select(.repository | test("^[a-z0-9][a-z0-9-]*$"))
@@ -260,9 +275,26 @@ for critical in repos.manifest.toml ops/ci/host-ci-publisher.sh \
     && "$(stat -c '%u' -- "$control_root/$critical")" == 0 ]] \
     || fail "unsafe immutable control input: $critical"
 done
+reexec_state="$request_dir/worker-authority/reexec-state.json"
+[[ -f "$reexec_state" && ! -L "$reexec_state" \
+  && "$(stat -c '%u:%a:%h' -- "$reexec_state")" == '0:444:1' ]] \
+  || fail 'unsafe worker re-exec authority'
+jq -e '
+  select(.schema_version == "jain.host-ci-reexec/v5")
+  | select(.source_root == "/opt/jain-ci/authority/control-plane")
+  | select(.exact_root == "/opt/jain-ci/authority/control-plane")
+  | select(.control_repository | type == "string")
+  | select(.control_remote | type == "string")
+  | select(.control_api_identity | type == "object")
+  | select(.control_ref | type == "string")
+  | select(.control_plane_commit | test("^[0-9a-f]{40}$"))' \
+  "$reexec_state" >/dev/null || fail 'invalid worker re-exec authority'
 control_commit="$(jq -er '.control_plane_commit' "$result")"
 [[ "$control_commit" == "$(jq -er '.control_plane_commit' "$state")" ]] \
   || fail 'control commit differs across root artifacts'
+control_repository="$(jq -er '.control_repository' "$state")"
+control_remote="$(jq -er '.control_remote' "$config")"
+control_api_identity="$(jq -c '.control_api_identity' "$state")"
 [[ "$(jq -er '.control_ref' "$state")" == "$control_ref" ]] \
   || fail 'control ref differs across root artifacts'
 [[ "$(jq -er '.bootstrap_expires_at' "$state")" == "$bootstrap_expires_at" ]] \
@@ -270,6 +302,20 @@ control_commit="$(jq -er '.control_plane_commit' "$result")"
 if [[ "$control_ref" != refs/heads/main && "$bootstrap_commit" != "$control_commit" ]]; then
   fail 'bootstrap control commit differs from the sealed result'
 fi
+for artifact in "$result" "$reexec_state"; do
+  [[ "$(jq -er '.control_repository' "$artifact")" == "$control_repository" \
+    && "$(jq -er '.control_remote' "$artifact")" == "$control_remote" \
+    && "$(jq -c '.control_api_identity' "$artifact")" == "$control_api_identity" \
+    && "$(jq -er '.control_ref' "$artifact")" == "$control_ref" \
+    && "$(jq -er '.control_plane_commit' "$artifact")" == "$control_commit" ]] \
+    || fail 'control authority differs across broker-owned evidence'
+done
+[[ "$control_repository" \
+    == "$(jq -er '.owner + "/" + .name' <<<"$control_api_identity")" \
+  && "$(jq -er '.clone_http_url' <<<"$control_api_identity")" \
+    == "/git/$control_repository.git" \
+  && "$control_remote" == */git/"$control_repository".git ]] \
+  || fail 'sealed control API identity is not canonical authority'
 safe_git=(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
   -c core.untrackedCache=false -c diff.external=)
 [[ "$("${safe_git[@]}" -C "$control_root" rev-parse --verify 'HEAD^{commit}')" \
@@ -366,16 +412,8 @@ else
     || fail 'failure result lacks a failed exact-SHA Jankurai receipt'
 fi
 
-control_remote="$(jq -er '.control_remote' "$config")"
 [[ "$(jq -er '.control_remote' "$state")" == "$control_remote" ]] \
   || fail 'root request control remote binding mismatch'
-if [[ "$conclusion" == success ]]; then
-  reviewed_commit="$("${safe_git[@]}" ls-remote --exit-code \
-    "$control_remote" "$control_ref" 2>/dev/null | cut -f1)" \
-    || fail 'cannot read configured control-plane authority'
-  [[ "$reviewed_commit" == "$control_commit" ]] \
-    || fail 'success authority no longer equals the sealed control commit'
-fi
 forge_git_base="$(jq -er '.forge_git_base' "$config")"
 product_remote="${forge_git_base%/}/$owner/$repo.git"
 "${safe_git[@]}" ls-remote --exit-code "$product_remote" 2>/dev/null \
@@ -390,6 +428,26 @@ write_status() {
   mv -f -- "$tmp" "$state"
 }
 write_status publishing
+
+# This is the final pre-publication admission gate. It repeats both the API
+# identity and exact-ref readback after the one-shot state transition and
+# immediately before splitctl can issue the first forge POST.
+validate_control_authority \
+  "$control_ref" "$bootstrap_commit" "$bootstrap_expires_at"
+current_control_authority="$("$splitctl_path" jeryu-local authority-readback \
+  --repo "$control_repository" --remote "$control_remote" \
+  --ref "$control_ref" --expected-head "$control_commit" \
+  --token-file "$token_file")" \
+  || fail 'cannot repeat authenticated control authority before publication'
+jq -e --arg repository "$control_repository" --arg remote "$control_remote" \
+  --arg ref "$control_ref" --arg commit "$control_commit" \
+  --argjson api_identity "$control_api_identity" '
+  select(.schema_version == "jain.jeryu-authority-readback/v1")
+  | select(.repository == $repository and .remote == $remote)
+  | select(.api_identity == $api_identity)
+  | select(.ref == $ref and .commit == $commit)' \
+  <<<"$current_control_authority" >/dev/null \
+  || fail 'pre-publication control authority differs from sealed evidence'
 
 proof_run_id="$(jq -er '.run_id' "$proof_evidence_resolved/receipt.json")"
 proof_score="$(jq -er '.score' "$proof_evidence_resolved/receipt.json")"

@@ -4989,6 +4989,9 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     if command == "git-materialize" {
         return jeryu_git_materialize(args);
     }
+    if command == "authority-readback" {
+        return jeryu_authority_readback_command(args);
+    }
     let json_output = args.iter().any(|arg| arg == "--json");
     let apply = args.iter().any(|arg| arg == "--apply");
     let value = |flag: &str| -> Result<String, Box<dyn std::error::Error>> {
@@ -5213,7 +5216,7 @@ fn validate_materialization_remote(
     repo: &str,
     remote: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if remote == fixed_jeryu_git_remote(repo)? {
+    if fixed_jeryu_git_slug(remote).is_ok_and(|derived| derived == repo) {
         return Ok(());
     }
     #[cfg(debug_assertions)]
@@ -5227,6 +5230,31 @@ fn validate_materialization_remote(
         }
     }
     Err("Git materialization remote is not the fixed local Jeryu repository".into())
+}
+
+fn authority_repository_slug(
+    repo: &str,
+    remote: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    validate_jeryu_repo_slug(repo)?;
+    match fixed_jeryu_git_slug(remote) {
+        Ok(derived) if derived == repo => Ok(derived),
+        Ok(_) => Err("repository does not match the slug derived from the fixed remote".into()),
+        Err(_error) => {
+            // Debug builds alone retain the existing absolute bare-repository
+            // fixture path. Installed release binaries always require the
+            // fixed loopback URL and derive the repository from it.
+            #[cfg(debug_assertions)]
+            {
+                validate_materialization_remote(repo, remote)?;
+                Ok(repo.to_owned())
+            }
+            #[cfg(not(debug_assertions))]
+            {
+                Err(_error)
+            }
+        }
+    }
 }
 
 fn validate_heads_ref(reference: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -5401,6 +5429,19 @@ impl Drop for MaterializationDirectory {
 }
 
 fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    jeryu_git_materialize_with(args, authenticated_jeryu_authority_readback)
+}
+
+fn jeryu_git_materialize_with(
+    args: Vec<String>,
+    authority_readback: impl Fn(
+        &str,
+        &str,
+        &str,
+        &str,
+        &Path,
+    ) -> Result<JsonValue, Box<dyn std::error::Error>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut repo = None;
     let mut remote = None;
     let mut reference = None;
@@ -5438,7 +5479,6 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     let token_file = token_file.ok_or("git-materialize requires --token-file")?;
     validate_jeryu_repo_slug(&repo)?;
     validate_materialization_remote(&repo, &remote)?;
-    drop(JeryuClient::from_token_file(&token_file)?);
     if !is_full_sha(&expected_head) || expected_head.chars().any(|ch| ch.is_ascii_uppercase()) {
         return Err("--expected-head must be a lowercase full 40-character commit SHA".into());
     }
@@ -5456,11 +5496,7 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             .next()
             .ok_or("requested head is not an advertised product ref")?
     };
-    if secure_ls_remote_at(&remote, &reference, &token_file)?.as_deref()
-        != Some(expected_head.as_str())
-    {
-        return Err("Git materialization ref does not equal the expected head".into());
-    }
+    let authority = authority_readback(&repo, &remote, &reference, &expected_head, &token_file)?;
 
     let destination_text = destination
         .to_str()
@@ -5519,6 +5555,7 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             "remote": remote,
             "reference": reference,
             "commit": expected_head,
+            "api_identity": authority["api_identity"].clone(),
             "destination": destination,
             "origin_retained": retain_origin,
             "status": "pass"
@@ -6072,6 +6109,107 @@ fn authenticated_repository_identity(
     let client = JeryuClient::from_token_file(token_file)?;
     let repository_readback = client.execute(&JeryuRequest::repo_list()?)?;
     validate_repo_list_identity(&repository_readback, repo)
+}
+
+fn normalized_jeryu_authority_readback(
+    repository: &str,
+    remote: &str,
+    reference: &str,
+    expected_head: &str,
+    api_identity: JsonValue,
+    observed_head: Option<&str>,
+) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    let derived = authority_repository_slug(repository, remote)?;
+    if !is_full_sha(expected_head) || expected_head.chars().any(|ch| ch.is_ascii_uppercase()) {
+        return Err("--expected-head must be a lowercase full 40-character commit SHA".into());
+    }
+    if reference.starts_with("refs/heads/") {
+        validate_heads_ref(reference)?;
+    } else if reference.starts_with("refs/tags/") {
+        secure_git_output(None, &["check-ref-format", reference])?;
+    } else {
+        return Err("authority readback requires an exact heads or tags ref".into());
+    }
+    let (owner, name) = derived
+        .split_once('/')
+        .ok_or("derived repository identity needs owner/name")?;
+    let expected_clone = format!("/git/{derived}.git");
+    if api_identity
+        != json!({
+            "host": "jeryu",
+            "owner": owner,
+            "name": name,
+            "default_branch": "main",
+            "clone_http_url": expected_clone,
+        })
+    {
+        return Err("normalized API identity differs from the fixed repository authority".into());
+    }
+    if observed_head != Some(expected_head) {
+        return Err("authenticated authority ref does not equal the expected head".into());
+    }
+    Ok(json!({
+        "schema_version": "jain.jeryu-authority-readback/v1",
+        "repository": derived,
+        "remote": remote,
+        "api_identity": api_identity,
+        "ref": reference,
+        "commit": expected_head,
+    }))
+}
+
+fn authenticated_jeryu_authority_readback(
+    repository: &str,
+    remote: &str,
+    reference: &str,
+    expected_head: &str,
+    token_file: &Path,
+) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    let derived = authority_repository_slug(repository, remote)?;
+    let api_identity = authenticated_repository_identity(&derived, token_file)?;
+    let observed_head = secure_ls_remote_at(remote, reference, token_file)?;
+    normalized_jeryu_authority_readback(
+        repository,
+        remote,
+        reference,
+        expected_head,
+        api_identity,
+        observed_head.as_deref(),
+    )
+}
+
+fn jeryu_authority_readback_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repository = None;
+    let mut remote = None;
+    let mut reference = None;
+    let mut expected_head = None;
+    let mut token_file = None;
+    let mut iter = args.into_iter().skip(1);
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repo" => repository = Some(iter.next().ok_or("--repo needs owner/name")?),
+            "--remote" => remote = Some(iter.next().ok_or("--remote needs a URL")?),
+            "--ref" => reference = Some(iter.next().ok_or("--ref needs a value")?),
+            "--expected-head" => {
+                expected_head = Some(iter.next().ok_or("--expected-head needs a SHA")?)
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
+            }
+            value => return Err(format!("unknown authority-readback argument: {value}").into()),
+        }
+    }
+    let report = authenticated_jeryu_authority_readback(
+        &repository.ok_or("authority-readback requires --repo")?,
+        &remote.ok_or("authority-readback requires --remote")?,
+        &reference.ok_or("authority-readback requires --ref")?,
+        &expected_head.ok_or("authority-readback requires --expected-head")?,
+        &token_file.ok_or("authority-readback requires --token-file")?,
+    )?;
+    println!("{}", serde_json::to_string(&report)?);
+    Ok(())
 }
 
 fn fetch_authenticated_main(
@@ -11008,13 +11146,33 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 token.display().to_string(),
             ]
         };
+        let authority_readback =
+            |repo: &str, remote: &str, reference: &str, expected: &str, token: &Path| {
+                drop(JeryuClient::from_token_file(token)?);
+                normalized_jeryu_authority_readback(
+                    repo,
+                    remote,
+                    reference,
+                    expected,
+                    json!({
+                        "host": "jeryu",
+                        "owner": "jeryu",
+                        "name": "example",
+                        "default_branch": "main",
+                        "clone_http_url": "/git/jeryu/example.git",
+                    }),
+                    Some(expected),
+                )
+            };
         let rejected = root.path().join("rejected");
-        assert!(
-            jeryu_git_materialize(args(&root.path().join("missing-token"), &rejected)).is_err()
-        );
+        assert!(jeryu_git_materialize_with(
+            args(&root.path().join("missing-token"), &rejected),
+            authority_readback
+        )
+        .is_err());
         assert!(!rejected.exists());
 
-        jeryu_git_materialize(args(&token_file, &destination)).unwrap();
+        jeryu_git_materialize_with(args(&token_file, &destination), authority_readback).unwrap();
         assert_eq!(resolve_commit(&destination, "HEAD").unwrap(), head);
         assert!(strict_git_output(&destination, &["remote"])
             .unwrap()
@@ -11028,7 +11186,9 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         );
         let second = root.path().join("second");
         fs::create_dir(&second).unwrap();
-        assert!(jeryu_git_materialize(args(&token_file, &second)).is_err());
+        assert!(
+            jeryu_git_materialize_with(args(&token_file, &second), authority_readback).is_err()
+        );
     }
 
     #[test]
@@ -11085,6 +11245,74 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 "clone_http_url": "/git/veox/example.git",
             }]}),
             "veox/example"
+        )
+        .is_err());
+        assert!(validate_repo_list_identity(
+            &json!({"repositories": [{
+                "id": {"host": "jeryu", "owner": "veox", "name": "example"},
+                "default_branch": "main",
+                "clone_http_url": "/git/veox/wrong.git",
+            }]}),
+            "veox/example"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn authority_readback_binds_remote_api_ref_and_commit() {
+        let head = "a".repeat(40);
+        let remote = fixed_jeryu_git_remote("veox/example").unwrap();
+        let identity = json!({
+            "host": "jeryu",
+            "owner": "veox",
+            "name": "example",
+            "default_branch": "main",
+            "clone_http_url": "/git/veox/example.git",
+        });
+        let receipt = normalized_jeryu_authority_readback(
+            "veox/example",
+            &remote,
+            "refs/heads/main",
+            &head,
+            identity.clone(),
+            Some(&head),
+        )
+        .unwrap();
+        assert_eq!(
+            receipt,
+            json!({
+                "schema_version": "jain.jeryu-authority-readback/v1",
+                "repository": "veox/example",
+                "remote": remote,
+                "api_identity": identity,
+                "ref": "refs/heads/main",
+                "commit": head,
+            })
+        );
+
+        let wrong = "b".repeat(40);
+        assert!(normalized_jeryu_authority_readback(
+            "veox/example",
+            &fixed_jeryu_git_remote("veox/example").unwrap(),
+            "refs/heads/main",
+            &head,
+            json!({
+                "host": "jeryu",
+                "owner": "veox",
+                "name": "example",
+                "default_branch": "main",
+                "clone_http_url": "/git/veox/example.git",
+            }),
+            Some(&wrong),
+        )
+        .is_err());
+        assert!(normalized_jeryu_authority_readback(
+            "jeryu/example",
+            &fixed_jeryu_git_remote("veox/example").unwrap(),
+            "refs/heads/main",
+            &head,
+            json!({}),
+            Some(&head),
         )
         .is_err());
     }
