@@ -37,9 +37,12 @@ has() { command -v "$1" >/dev/null 2>&1; }
 readonly JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
 readonly JANKURAI_VERSION="jankurai 1.6.11"
 readonly JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
-# Sourced security lanes consume this constant; standalone ShellCheck cannot see that use.
-# shellcheck disable=SC2034
-readonly RUSTSEC_DB_COMMIT="9f3e138091487e69144f536d36976e427a7a3307"
+# The fleet control plane materializes this exact RustSec object inside the
+# release sandbox. Repository lanes may select it through either the current
+# variable or the compatibility name while the fleet finishes converging.
+readonly RUSTSEC_DB_COMMIT="6e3286f4efa8c142fb33e5ea4342c8db6693cf34"
+readonly RUSTSEC_DB_TREE="d12220aff0053a035739bec6e64aefbaafbf01a3"
+readonly CARGO_DENY_RUSTSEC_DIR="advisory-db-3157b0e258782691"
 
 verify_jankurai_identity() {
     local path="${1:?jankurai path is required}"
@@ -83,7 +86,15 @@ jankurai() {
 verify_rustsec_db_identity() {
     local path="${1:?RustSec database path is required}"
     local expected_commit="${2:?RustSec database commit is required}"
-    local resolved head status
+    local expected_tree="${3:?RustSec database tree is required}"
+    local resolved head tree status
+
+    [[ "$path" == /* ]] || {
+        warn "RustSec database path is not absolute: $path"
+        return 1
+    }
+    [[ "$expected_commit" =~ ^[0-9a-f]{40}$ ]] || return 1
+    [[ "$expected_tree" =~ ^[0-9a-f]{40}$ ]] || return 1
 
     if [ ! -d "$path" ] || [ -L "$path" ]; then
         warn "RustSec database is missing or symlinked: $path"
@@ -99,12 +110,65 @@ verify_rustsec_db_identity() {
         warn "RustSec database commit mismatch: $head"
         return 1
     }
+    tree="$(git -C "$path" rev-parse 'HEAD^{tree}' 2>/dev/null)" || return 1
+    [ "$tree" = "$expected_tree" ] || {
+        warn "RustSec database tree mismatch: $tree"
+        return 1
+    }
     status="$(git -C "$path" status --porcelain=v1 --untracked-files=all)" || return 1
     [ -z "$status" ] || {
         warn "RustSec database is dirty"
         return 1
     }
     git -C "$path" fsck --strict --no-progress >/dev/null 2>&1
+}
+
+governed_advisory_db_path() {
+    local pinned="${JAIN_PINNED_ADVISORY_DB:-}"
+    local compatibility="${JAIN_ADVISORY_DB:-}"
+    local selected
+
+    if [ -n "$pinned" ] && [ -n "$compatibility" ] && [ "$pinned" != "$compatibility" ]; then
+        warn "governed advisory database variables disagree"
+        return 1
+    fi
+    selected="${pinned:-${compatibility:-${CARGO_HOME:-/home/ubuntu/.cargo}/advisory-db}}"
+    [[ "$selected" == /* ]] || {
+        warn "governed advisory database path is not absolute: $selected"
+        return 1
+    }
+    if [ -n "${JAIN_PINNED_ADVISORY_COMMIT:-}" ] \
+        && [ "$JAIN_PINNED_ADVISORY_COMMIT" != "$RUSTSEC_DB_COMMIT" ]; then
+        warn "fleet RustSec commit disagrees with the repository pin"
+        return 1
+    fi
+    printf '%s\n' "$selected"
+}
+
+verify_locked_cargo_closure() {
+    local manifest="${1:?Cargo manifest path is required}"
+
+    [ -f "$manifest" ] && [ ! -L "$manifest" ] || return 1
+    ci_run env CARGO_NET_OFFLINE=true cargo metadata \
+        --manifest-path "$manifest" --locked --offline --format-version 1 \
+        >/dev/null
+}
+
+verify_cargo_deny_db_binding() {
+    local cargo_home="${1:?Cargo home is required}"
+    local advisory_db="${2:?governed advisory database is required}"
+    local deny_db="$cargo_home/advisory-dbs/$CARGO_DENY_RUSTSEC_DIR"
+    local deny_resolved advisory_resolved
+
+    [[ "$cargo_home" == /* ]] || return 1
+    deny_resolved="$(realpath -e -- "$deny_db")" || return 1
+    advisory_resolved="$(realpath -e -- "$advisory_db")" || return 1
+    if [ "$deny_resolved" = "$advisory_resolved" ]; then
+        return 0
+    fi
+    [ ! -L "$deny_db" ] || return 1
+    verify_rustsec_db_identity \
+        "$deny_db" "$RUSTSEC_DB_COMMIT" "$RUSTSEC_DB_TREE"
 }
 
 missing_tool() {
@@ -127,9 +191,3 @@ run_if_has() {
 }
 
 repo_has() { [ -e "$ROOT_DIR/$1" ]; }
-
-cargo_workspace_ready() {
-    repo_has Cargo.toml || return 1
-    has cargo || return 1
-    cargo metadata --no-deps --format-version 1 >/dev/null 2>&1
-}

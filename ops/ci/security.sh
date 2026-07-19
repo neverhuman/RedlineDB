@@ -26,20 +26,30 @@ fi
 
 # --- dependency advisory review ---------------------------------------------
 if repo_has Cargo.lock; then
-    rustsec_db="${CARGO_HOME:-/home/ubuntu/.cargo}/advisory-db"
-    verify_rustsec_db_identity "$rustsec_db" "$RUSTSEC_DB_COMMIT" \
+    rustsec_db="$(governed_advisory_db_path)" \
+        || fail "fleet-governed RustSec database selection failed"
+    verify_rustsec_db_identity "$rustsec_db" "$RUSTSEC_DB_COMMIT" "$RUSTSEC_DB_TREE" \
         || fail "pinned local RustSec database verification failed"
+    log "security: RustSec commit $RUSTSEC_DB_COMMIT tree $RUSTSEC_DB_TREE"
     run_if_has cargo-audit "RustSec advisory scanning" \
         cargo audit --db "$rustsec_db" --no-fetch
+    verify_rustsec_db_identity "$rustsec_db" "$RUSTSEC_DB_COMMIT" "$RUSTSEC_DB_TREE" \
+        || fail "RustSec database identity changed during advisory scanning"
 elif repo_has Cargo.toml; then
     warn "skipping cargo-audit: Cargo.lock not present"
 fi
 
 # --- dependency license / ban / source policy --------------------------------
-if cargo_workspace_ready; then
-    run_if_has cargo-deny "Rust dependency policy" cargo deny check
-elif repo_has Cargo.toml; then
-    warn "skipping cargo-deny: Cargo workspace metadata is not ready"
+if repo_has Cargo.toml; then
+    verify_locked_cargo_closure "$repo_root/Cargo.toml" \
+        || fail "offline locked Cargo metadata closure is incomplete"
+    verify_cargo_deny_db_binding "${CARGO_HOME:-/home/ubuntu/.cargo}" "$rustsec_db" \
+        || fail "cargo-deny is not bound to the governed RustSec identity"
+    run_if_has cargo-deny "Rust dependency policy" cargo deny check --disable-fetch
+    verify_rustsec_db_identity "$rustsec_db" "$RUSTSEC_DB_COMMIT" "$RUSTSEC_DB_TREE" \
+        || fail "RustSec database identity changed during dependency policy scanning"
+    verify_cargo_deny_db_binding "${CARGO_HOME:-/home/ubuntu/.cargo}" "$rustsec_db" \
+        || fail "cargo-deny RustSec binding changed during dependency policy scanning"
 fi
 
 # --- npm advisory review (only if a JS lockfile exists) ----------------------

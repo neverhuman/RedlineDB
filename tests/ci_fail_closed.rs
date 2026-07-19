@@ -176,10 +176,19 @@ fn governed_jankurai_rejects_missing_linked_wrong_digest_and_wrong_version() {
 fn security_lane_uses_pinned_local_rustsec_and_rejects_bad_inputs() {
     let security = repo_file("ops/ci/security.sh");
     let library = repo_file("ops/ci/lib.sh");
-    assert!(library.contains("9f3e138091487e69144f536d36976e427a7a3307"));
+    assert!(library.contains("6e3286f4efa8c142fb33e5ea4342c8db6693cf34"));
+    assert!(library.contains("d12220aff0053a035739bec6e64aefbaafbf01a3"));
+    assert!(library.contains("JAIN_PINNED_ADVISORY_DB"));
+    assert!(library.contains("JAIN_ADVISORY_DB"));
+    assert!(library.contains("JAIN_PINNED_ADVISORY_COMMIT"));
+    assert!(!library.contains("9f3e138091487e69144f536d36976e427a7a3307"));
     assert!(library.contains("verify_rustsec_db_identity"));
+    assert!(library.contains("verify_locked_cargo_closure"));
+    assert!(library.contains("verify_cargo_deny_db_binding"));
     assert!(security.contains("export CARGO_NET_OFFLINE=true"));
     assert!(security.contains("cargo audit --db \"$rustsec_db\" --no-fetch"));
+    assert!(security.contains("cargo deny check --disable-fetch"));
+    assert!(!security.contains("cargo_workspace_ready"));
     assert!(security.contains("SYFT_CHECK_FOR_APP_UPDATE=false"));
 
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
