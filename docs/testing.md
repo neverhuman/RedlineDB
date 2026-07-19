@@ -49,6 +49,16 @@ Mirror identity, live family checkout, and hub-engine guards remain in
 `./redlinectl lock-verify`, `./redlinectl validate`, and
 `./redlinectl family-ci`.
 
+The manifest parser is closed-schema: it requires the canonical relative
+manifest authority, container, lock, repository paths, exact Jain/Jeryu
+consumer set and rows, and rejects unknown or omitted fields. Operational
+commands also walk the physical Redline container without following links and
+reject any symlink or `.git/worktrees` registry. Lock, mirror, and checksum
+sidecars must each be regular single-link files with distinct device/inode
+identities before reads and after transactional writes. The locked Rust suite
+contains hostile schema, path, consumer, symlink, hard-link, and post-write
+alias-race regressions for these controls.
+
 An explicitly ineligible historical lock may retain its prior immutable tags
 while the canonical manifest advances to reviewed corrective identities. It
 cannot pass cutover. `proof-refresh` is the only writer that can replace it and

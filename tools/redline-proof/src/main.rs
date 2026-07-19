@@ -134,7 +134,16 @@ fn atomic_write(path: &Path, data: &[u8]) -> Result<()> {
     let parent = path
         .parent()
         .ok_or_else(|| error(format!("{} has no parent", path.display())))?;
+    reject_symlink_components(parent, "transaction output parent")?;
     fs::create_dir_all(parent)?;
+    reject_symlink_components(parent, "transaction output parent")?;
+    let parent_metadata = fs::symlink_metadata(parent)?;
+    if !parent_metadata.is_dir() || parent_metadata.file_type().is_symlink() {
+        return Err(error(format!(
+            "transaction output parent is not a physical directory: {}",
+            parent.display()
+        )));
+    }
     let name = path
         .file_name()
         .and_then(|value| value.to_str())
@@ -174,6 +183,10 @@ where
                 absolute.display()
             )));
         }
+        reject_symlink_components(path, "transaction output")?;
+        if fs::symlink_metadata(path).is_ok() {
+            require_physical_file(path, "existing transaction output")?;
+        }
         snapshots.push((
             absolute,
             if path.is_file() {
@@ -188,6 +201,7 @@ where
             writer(path, data)?;
         }
         for (path, expected) in outputs {
+            require_physical_file(path, "transaction output")?;
             if fs::read(path)? != *expected {
                 return Err(error(format!(
                     "transactional output verification failed: {}",
@@ -195,6 +209,11 @@ where
                 )));
             }
         }
+        let physical_outputs = outputs
+            .iter()
+            .map(|(path, _)| ("transaction output", path.as_path()))
+            .collect::<Vec<_>>();
+        require_distinct_file_ids(&physical_outputs)?;
         Ok(())
     })();
     if let Err(original) = attempt {
@@ -249,12 +268,12 @@ fn write_checksummed_json(path: &Path, value: &JsonValue) -> Result<String> {
 
 fn verify_checksum(path: &Path) -> Result<String> {
     let sidecar = checksum_path(path);
-    if !path.is_file() || !sidecar.is_file() {
-        return Err(error(format!(
-            "evidence or checksum is missing: {}",
-            path.display()
-        )));
-    }
+    require_physical_file(path, "checksummed file")?;
+    require_physical_file(&sidecar, "checksum sidecar")?;
+    require_distinct_file_ids(&[
+        ("checksummed file", path),
+        ("checksum sidecar", sidecar.as_path()),
+    ])?;
     let raw = fs::read_to_string(&sidecar)?;
     let parts: Vec<&str> = raw.split_whitespace().collect();
     let expected_name = path
@@ -341,6 +360,17 @@ fn require_physical_file(path: &Path, context: &str) -> Result<()> {
             path.display()
         )));
     }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.nlink() != 1 {
+            return Err(error(format!(
+                "{context} must have exactly one physical directory entry, found {}: {}",
+                metadata.nlink(),
+                path.display()
+            )));
+        }
+    }
     Ok(())
 }
 
@@ -375,6 +405,22 @@ fn require_distinct_file_ids(paths: &[(&str, &Path)]) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn require_physical_lock_set(manifest: &Path, lock: &Path, mirror: Option<&Path>) -> Result<()> {
+    let lock_sidecar = checksum_path(lock);
+    let mut paths = vec![
+        ("canonical manifest", manifest),
+        ("authoritative lock", lock),
+        ("authoritative lock sidecar", lock_sidecar.as_path()),
+    ];
+    let mirror_sidecar;
+    if let Some(mirror) = mirror {
+        mirror_sidecar = checksum_path(mirror);
+        paths.push(("compatibility mirror", mirror));
+        paths.push(("compatibility mirror sidecar", mirror_sidecar.as_path()));
+    }
+    require_distinct_file_ids(&paths)
 }
 
 #[cfg(not(unix))]
@@ -2006,6 +2052,7 @@ struct Repo {
 #[derive(Clone, Debug)]
 struct Manifest {
     path: PathBuf,
+    container_root: PathBuf,
     repos: Vec<Repo>,
     successor: SuccessorTransition,
 }
@@ -2032,6 +2079,55 @@ fn toml_integer(table: &toml::value::Table, key: &str, context: &str) -> Result<
         .get(key)
         .and_then(toml::Value::as_integer)
         .ok_or_else(|| error(format!("{context} lacks integer {key}")))
+}
+
+fn require_exact_toml_fields(
+    table: &toml::value::Table,
+    expected: &[&str],
+    context: &str,
+) -> Result<()> {
+    let actual = table.keys().map(String::as_str).collect::<BTreeSet<_>>();
+    let expected = expected.iter().copied().collect::<BTreeSet<_>>();
+    if actual != expected {
+        let unknown = actual.difference(&expected).copied().collect::<Vec<_>>();
+        let missing = expected.difference(&actual).copied().collect::<Vec<_>>();
+        return Err(error(format!(
+            "{context} fields are not exact; unknown={unknown:?} missing={missing:?}"
+        )));
+    }
+    Ok(())
+}
+
+fn expected_repo_contract(
+    name: &str,
+) -> Option<(&'static str, &'static str, &'static str, &'static str)> {
+    match name {
+        "redline" => Some((
+            "../redline",
+            "neverhuman/RedlineDB",
+            "jeryu/redlineDB",
+            "public-hub",
+        )),
+        "redline-core" => Some((
+            "../redline-core",
+            "neverhuman/redline-core",
+            "jeryu/redline-core",
+            "canonical-engine",
+        )),
+        "redline-testing" => Some((
+            "../redline-testing",
+            "neverhuman/redline-testing",
+            "jeryu/redline-testing",
+            "parity-harness",
+        )),
+        "redline-web" => Some((
+            "../redline-web",
+            "neverhuman/redline-web",
+            "jeryu/redline-web",
+            "observability-console",
+        )),
+        _ => None,
+    }
 }
 
 fn expected_repo_release(name: &str) -> Option<(&'static str, i64)> {
@@ -2101,11 +2197,31 @@ fn validate_release_identity(
 }
 
 fn validate_protection_policy(value: &toml::Value) -> Result<()> {
-    let policy = value
+    let policies = value
         .get("protection_policies")
-        .and_then(|value| value.get(RELEASE_PROTECTION_POLICY))
+        .and_then(toml::Value::as_table)
+        .ok_or_else(|| error("manifest lacks protection_policies"))?;
+    require_exact_toml_fields(
+        policies,
+        &[RELEASE_PROTECTION_POLICY],
+        "manifest protection_policies",
+    )?;
+    let policy = policies
+        .get(RELEASE_PROTECTION_POLICY)
         .and_then(toml::Value::as_table)
         .ok_or_else(|| error("manifest lacks immutable-main-v1 protection policy"))?;
+    require_exact_toml_fields(
+        policy,
+        &[
+            "required_approvals",
+            "required_status_check",
+            "linear_history",
+            "enforce_admins",
+            "allow_force_push",
+            "allow_deletions",
+        ],
+        "immutable-main-v1 protection policy",
+    )?;
     let integer = |key: &str| policy.get(key).and_then(toml::Value::as_integer);
     let boolean = |key: &str| policy.get(key).and_then(toml::Value::as_bool);
     if integer("required_approvals") != Some(1)
@@ -2123,8 +2239,98 @@ fn validate_protection_policy(value: &toml::Value) -> Result<()> {
 }
 
 fn load_manifest(path: &Path) -> Result<Manifest> {
+    require_physical_file(path, "canonical manifest")?;
     let text = fs::read_to_string(path)?;
     let value: toml::Value = text.parse()?;
+    let top = value
+        .as_table()
+        .ok_or_else(|| error("canonical manifest must be a TOML table"))?;
+    require_exact_toml_fields(
+        top,
+        &[
+            "schema_version",
+            "family",
+            "parent_family",
+            "release_version",
+            "status",
+            "formal_ga",
+            "sagemaker",
+            "manifest_authority",
+            "mirror_root",
+            "release_evidence_root",
+            "container",
+            "lock",
+            "consumers",
+            "successor_transition",
+            "protection_policies",
+            "control_plane",
+            "consumer",
+            "repo",
+        ],
+        "canonical manifest",
+    )?;
+    if value.get("schema_version").and_then(toml::Value::as_str) != Some("1")
+        || value
+            .get("manifest_authority")
+            .and_then(toml::Value::as_str)
+            != Some("repos.manifest.toml")
+        || value.get("mirror_root").and_then(toml::Value::as_str)
+            != Some("../../target/bare-mirrors")
+        || value.get("container").and_then(toml::Value::as_str) != Some("..")
+        || value.get("lock").and_then(toml::Value::as_str) != Some("redline.lock.toml")
+    {
+        return Err(error(
+            "manifest schema, authority, mirror root, container, or lock path is not canonical",
+        ));
+    }
+    let manifest_path = absolute_path(path)?;
+    if manifest_path.file_name() != Some(OsStr::new("repos.manifest.toml")) {
+        return Err(error(
+            "canonical manifest path must end in repos.manifest.toml",
+        ));
+    }
+    let consumers = value
+        .get("consumers")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| error("manifest consumers must be an exact array"))?;
+    let consumers = consumers
+        .iter()
+        .map(|consumer| {
+            consumer
+                .as_str()
+                .ok_or_else(|| error("manifest consumer names must be strings"))
+        })
+        .collect::<Result<Vec<_>>>()?;
+    if consumers != REQUIRED_CONSUMERS {
+        return Err(error(
+            "manifest consumers must name Jain and Jeryu exactly once in canonical order",
+        ));
+    }
+    let consumer_rows = value
+        .get("consumer")
+        .and_then(toml::Value::as_array)
+        .ok_or_else(|| error("manifest consumer rows are missing"))?;
+    if consumer_rows.len() != REQUIRED_CONSUMERS.len() {
+        return Err(error("manifest requires exactly two consumer rows"));
+    }
+    for (row, expected_family) in consumer_rows.iter().zip(REQUIRED_CONSUMERS) {
+        let row = row
+            .as_table()
+            .ok_or_else(|| error("manifest consumer row must be a table"))?;
+        require_exact_toml_fields(
+            row,
+            &["family", "role", "lock_field"],
+            &format!("{expected_family} consumer row"),
+        )?;
+        if row.get("family").and_then(toml::Value::as_str) != Some(expected_family)
+            || row.get("role").and_then(toml::Value::as_str) != Some("nested-dependency")
+            || row.get("lock_field").and_then(toml::Value::as_str) != Some("nested.redline")
+        {
+            return Err(error(format!(
+                "{expected_family} consumer row contract is invalid"
+            )));
+        }
+    }
     if value.get("family").and_then(toml::Value::as_str) != Some(FAMILY)
         || value.get("parent_family").and_then(toml::Value::as_str) != Some("independent")
     {
@@ -2155,6 +2361,16 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         .get("successor_transition")
         .and_then(toml::Value::as_table)
         .ok_or_else(|| error("manifest lacks successor_transition"))?;
+    require_exact_toml_fields(
+        successor,
+        &[
+            "predecessor_lock_sha256",
+            "predecessor_engine_tag",
+            "predecessor_engine_commit",
+            "prepared_lock_sha256",
+        ],
+        "successor_transition",
+    )?;
     let successor = SuccessorTransition {
         predecessor_lock_sha256: toml_string(
             successor,
@@ -2190,7 +2406,25 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         .get("control_plane")
         .and_then(toml::Value::as_table)
         .ok_or_else(|| error("manifest lacks control_plane"))?;
+    require_exact_toml_fields(
+        control,
+        &[
+            "name",
+            "path",
+            "remote",
+            "required_check",
+            "family",
+            "product_version",
+            "tag_revision",
+            "current_tag",
+            "release_commit",
+            "release_checksum_sha256",
+            "protection_policy",
+        ],
+        "manifest control_plane",
+    )?;
     if toml_string(control, "name", "control_plane")? != "redline-split-ops"
+        || toml_string(control, "path", "control_plane")? != "."
         || toml_string(control, "remote", "control_plane")?
             != "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
         || toml_string(control, "required_check", "control_plane")? != "redline-split-ops/required"
@@ -2214,10 +2448,37 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             .as_table()
             .ok_or_else(|| error("manifest repository row must be a table"))?;
         let name = toml_string(table, "name", "manifest repository")?;
+        require_exact_toml_fields(
+            table,
+            &[
+                "name",
+                "path",
+                "github_slug",
+                "jeryu_slug",
+                "remote",
+                "role",
+                "profile",
+                "has_jeryu_std",
+                "product_version",
+                "tag_revision",
+                "current_tag",
+                "release_commit",
+                "release_checksum_sha256",
+                "protection_policy",
+                "required_check",
+                "default_branch",
+            ],
+            &format!("{name} repository row"),
+        )?;
+        let (expected_path, expected_github, expected_jeryu, expected_role) =
+            expected_repo_contract(&name)
+                .ok_or_else(|| error(format!("{name}: release identity is not authorized")))?;
         let raw_path = toml_string(table, "path", &name)?;
         let repo_path = PathBuf::from(&raw_path);
-        if repo_path.is_absolute() || raw_path.contains("/home/ubuntu") {
-            return Err(error(format!("{name}: manifest path must be relative")));
+        if raw_path != expected_path {
+            return Err(error(format!(
+                "{name}: manifest path must be {expected_path}, found {raw_path}"
+            )));
         }
         let default_branch = table
             .get("default_branch")
@@ -2244,6 +2505,18 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             expected_revision,
         )?;
         let jeryu_slug = toml_string(table, "jeryu_slug", "manifest repository")?;
+        let github_slug = toml_string(table, "github_slug", "manifest repository")?;
+        let role = toml_string(table, "role", "manifest repository")?;
+        if github_slug != expected_github
+            || jeryu_slug != expected_jeryu
+            || role != expected_role
+            || table.get("profile").and_then(toml::Value::as_str) != Some("custom")
+            || table.get("has_jeryu_std").and_then(toml::Value::as_bool) != Some(true)
+            || table.get("required_check").and_then(toml::Value::as_str)
+                != Some(format!("{name}/required").as_str())
+        {
+            return Err(error(format!("{name}: repository row contract is invalid")));
+        }
         let remote = toml_string(table, "remote", "manifest repository")?;
         let expected_remote = format!(
             "{LOCAL_JERYU_BASE}{}.git",
@@ -2257,7 +2530,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         repos.push(Repo {
             name,
             path: repo_path,
-            github_slug: toml_string(table, "github_slug", "manifest repository")?,
+            github_slug,
             remote,
             product_version,
             tag_revision,
@@ -2275,7 +2548,14 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         return Err(error("manifest repository set is invalid"));
     }
     Ok(Manifest {
-        path: absolute_path(path)?,
+        container_root: absolute_path(
+            manifest_path
+                .parent()
+                .unwrap_or(Path::new("."))
+                .join("..")
+                .as_path(),
+        )?,
+        path: manifest_path,
         repos,
         successor,
     })
@@ -2288,6 +2568,48 @@ impl Manifest {
             .unwrap_or(Path::new("."))
             .join(&repo.path)
     }
+}
+
+fn validate_canonical_container(manifest: &Manifest) -> Result<()> {
+    reject_symlink_components(&manifest.container_root, "canonical Redline container")?;
+    let root_metadata = fs::symlink_metadata(&manifest.container_root)?;
+    if !root_metadata.is_dir() || root_metadata.file_type().is_symlink() {
+        return Err(error(format!(
+            "canonical Redline container is not a physical directory: {}",
+            manifest.container_root.display()
+        )));
+    }
+    let mut pending = vec![manifest.container_root.clone()];
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(&directory)? {
+            let entry = entry?;
+            let path = entry.path();
+            let metadata = fs::symlink_metadata(&path)?;
+            if metadata.file_type().is_symlink() {
+                return Err(error(format!(
+                    "canonical Redline container contains a symlink: {}",
+                    path.display()
+                )));
+            }
+            if entry.file_name() == OsStr::new("worktrees")
+                && directory.file_name() == Some(OsStr::new(".git"))
+            {
+                return Err(error(format!(
+                    "canonical Redline container contains a linked-worktree registry: {}",
+                    path.display()
+                )));
+            }
+            if metadata.is_dir() {
+                pending.push(path);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_operational_manifest(path: &Path) -> Result<()> {
+    let manifest = load_manifest(path)?;
+    validate_canonical_container(&manifest)
 }
 
 fn expected_origin(repo: &Repo) -> String {
@@ -4407,6 +4729,7 @@ fn proof_refresh_prepare_successor_with(
     ])?;
     verify_checksum(lock)?;
     verify_checksum(mirror)?;
+    require_physical_lock_set(manifest_path, lock, Some(mirror))?;
     let manifest = load_manifest(manifest_path)?;
     let authoritative_bytes = fs::read(lock)?;
     let mirror_bytes = fs::read(mirror)?;
@@ -4449,6 +4772,8 @@ fn proof_refresh_prepare_successor_with(
         (operation_receipt.to_path_buf(), receipt_data),
         (checksum_path(operation_receipt), receipt_sidecar),
     ])?;
+    verify_checksum(mirror)?;
+    require_physical_lock_set(manifest_path, lock, Some(mirror))?;
     verify_lock(manifest_path, lock, None)?;
     println!(
         "redline successor review prepared: lock_sha256={} receipt_sha256={}",
@@ -4489,6 +4814,7 @@ fn proof_refresh_reconcile_successor_with(
     ])?;
     verify_checksum(lock)?;
     verify_checksum(mirror)?;
+    require_physical_lock_set(manifest_path, lock, Some(mirror))?;
     let manifest = load_manifest(manifest_path)?;
     let authoritative_bytes = fs::read(lock)?;
     let mirror_bytes = fs::read(mirror)?;
@@ -4539,6 +4865,7 @@ fn proof_refresh_reconcile_successor_with(
         (operation_receipt.to_path_buf(), receipt_data),
         (checksum_path(operation_receipt), receipt_sidecar),
     ])?;
+    require_physical_lock_set(manifest_path, lock, Some(mirror))?;
     verify_lock(manifest_path, lock, Some(mirror))?;
     println!(
         "redline successor mirror reconciled: lock_sha256={} receipt_sha256={}",
@@ -4573,6 +4900,7 @@ fn review_lock_verify_with(
 ) -> Result<&'static str> {
     verify_checksum(lock)?;
     verify_checksum(mirror)?;
+    require_physical_lock_set(manifest_path, lock, Some(mirror))?;
     let authoritative_bytes = fs::read(lock)?;
     let mirror_bytes = fs::read(mirror)?;
     if authoritative_bytes == mirror_bytes {
@@ -4671,6 +4999,9 @@ fn proof_refresh(
         ));
     }
     ensure_distinct_paths(&paths)?;
+    verify_checksum(lock)?;
+    verify_checksum(mirror)?;
+    require_physical_lock_set(manifest_path, lock, Some(mirror))?;
     if consumer_paths
         .keys()
         .map(String::as_str)
@@ -4787,6 +5118,8 @@ fn proof_refresh(
         (operation_receipt.to_path_buf(), receipt_data),
         (checksum_path(operation_receipt), receipt_sidecar),
     ])?;
+    require_physical_lock_set(manifest_path, lock, Some(mirror))?;
+    verify_lock_with(manifest_path, lock, Some(mirror), false)?;
     if fs::read(lock)? != fs::read(mirror)? {
         return Err(error("lock mirror differs after proof-refresh transaction"));
     }
@@ -4795,6 +5128,7 @@ fn proof_refresh(
 }
 
 fn load_lock(path: &Path) -> Result<toml::Value> {
+    require_physical_file(path, "Redline lock")?;
     let value: toml::Value = fs::read_to_string(path)?.parse()?;
     if value.get("schema_version").and_then(toml::Value::as_str) != Some(LOCK_SCHEMA)
         || value.get("family").and_then(toml::Value::as_str) != Some(FAMILY)
@@ -4843,6 +5177,7 @@ fn verify_lock_with(
             ));
         }
     }
+    require_physical_lock_set(manifest_path, lock, mirror)?;
     let lock_digest = verify_checksum(lock)?;
     if let Some(mirror) = mirror {
         if lock_digest != verify_checksum(mirror)? {
@@ -5249,6 +5584,8 @@ fn cutover_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()
 }
 
 fn consumer_verify(lock: &Path, consumer_lock: &Path) -> Result<()> {
+    verify_checksum(lock)?;
+    require_physical_file(consumer_lock, "consumer lock")?;
     let value = load_lock(lock)?;
     let consumer_value: toml::Value = fs::read_to_string(consumer_lock)?.parse()?;
     let mut consumer = consumer_value
@@ -5295,6 +5632,7 @@ fn consumer_verify(lock: &Path, consumer_lock: &Path) -> Result<()> {
 }
 
 fn remote_verify(lock: &Path) -> Result<()> {
+    verify_checksum(lock)?;
     let value = load_lock(lock)?;
     for entry in lock_entries(&value)? {
         let name = entry
@@ -5963,6 +6301,26 @@ fn ci_required(paths: &Paths) -> Result<()> {
 }
 
 fn dispatch(paths: &Paths, command: &str, mut args: Vec<String>) -> Result<()> {
+    if matches!(
+        command,
+        "validate"
+            | "control-validate"
+            | "ci-required"
+            | "doctor"
+            | "lock-verify"
+            | "review-lock-verify"
+            | "control-review-lock-verify"
+            | "family-ci"
+            | "ci"
+            | "proof-refresh"
+            | "cutover-verify"
+            | "successor-receipt-verify"
+            | "release-receipt"
+            | "clone"
+            | "update"
+    ) {
+        validate_operational_manifest(&paths.manifest)?;
+    }
     match command {
         "validate" => { if !args.is_empty() { return Err(error("validate accepts no arguments")); } validate(&paths.manifest, &paths.lock, &paths.mirror) }
         "control-validate" => {
@@ -7460,6 +7818,46 @@ mod tests {
         assert_eq!(fs::read(second).unwrap(), b"old-mirror\n");
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn transaction_rejects_post_write_hardlink_and_symlink_aliases() {
+        use std::os::unix::fs::symlink;
+
+        for (name, use_symlink) in [("hardlink", false), ("symlink", true)] {
+            let root = TestDir::new_in_root(&format!("post-write-{name}"));
+            let first = root.path().join("control.lock");
+            let second = root.path().join("mirror.lock");
+            atomic_write(&first, b"old-control\n").unwrap();
+            atomic_write(&second, b"old-mirror\n").unwrap();
+            let outputs = vec![
+                (first.clone(), b"new\n".to_vec()),
+                (second.clone(), b"new\n".to_vec()),
+            ];
+            let mut calls = 0;
+            let result = transactional_write_with(&outputs, |path, data| {
+                calls += 1;
+                atomic_write(path, data)?;
+                if calls == 2 {
+                    fs::remove_file(&second)?;
+                    if use_symlink {
+                        symlink(&first, &second)?;
+                    } else {
+                        fs::hard_link(&first, &second)?;
+                    }
+                }
+                Ok(())
+            });
+            let failure = result.unwrap_err().to_string();
+            assert!(
+                failure.contains("exactly one physical directory entry")
+                    || failure.contains("symlinked path component"),
+                "unexpected {name} failure: {failure}"
+            );
+            assert_eq!(fs::read(&first).unwrap(), b"old-control\n");
+            assert_eq!(fs::read(&second).unwrap(), b"old-mirror\n");
+        }
+    }
+
     #[test]
     fn proof_refresh_rejects_output_input_collisions() {
         let root = TestDir::new_in_root("collision");
@@ -7471,6 +7869,53 @@ mod tests {
         ])
         .unwrap_err();
         assert!(found.to_string().contains("path collision"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn lock_verification_rejects_hardlinked_and_symlinked_pairs() {
+        use std::os::unix::fs::symlink;
+
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let hardlink_fixture = TestDir::new_in_root("lock-hardlink-pair");
+        let authoritative = hardlink_fixture.path().join("authoritative.lock");
+        let mirror = hardlink_fixture.path().join("mirror.lock");
+        fs::copy(source.join("redline.lock.toml"), &authoritative).unwrap();
+        fs::copy(
+            source.join("redline.lock.toml.sha256"),
+            checksum_path(&authoritative),
+        )
+        .unwrap();
+        fs::hard_link(&authoritative, &mirror).unwrap();
+        fs::hard_link(checksum_path(&authoritative), checksum_path(&mirror)).unwrap();
+        let failure = verify_lock(
+            &source.join("repos.manifest.toml"),
+            &authoritative,
+            Some(&mirror),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(failure.contains("exactly one physical directory entry"));
+
+        let symlink_fixture = TestDir::new_in_root("lock-symlink-pair");
+        let authoritative = symlink_fixture.path().join("authoritative.lock");
+        let mirror = symlink_fixture.path().join("mirror.lock");
+        fs::copy(source.join("redline.lock.toml"), &authoritative).unwrap();
+        fs::copy(
+            source.join("redline.lock.toml.sha256"),
+            checksum_path(&authoritative),
+        )
+        .unwrap();
+        symlink(&authoritative, &mirror).unwrap();
+        symlink(checksum_path(&authoritative), checksum_path(&mirror)).unwrap();
+        let failure = verify_lock(
+            &source.join("repos.manifest.toml"),
+            &authoritative,
+            Some(&mirror),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(failure.contains("symlinked path component"));
     }
 
     #[test]
@@ -7651,6 +8096,100 @@ mod tests {
                 "accepted legacy field {index}"
             );
         }
+    }
+
+    #[test]
+    fn manifest_rejects_schema_authority_and_consumer_substitutions() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let canonical = fs::read_to_string(source).unwrap();
+        let fixture = TestDir::new_in_root("strict-manifest-contract");
+        let cases = [
+            (
+                "schema-999",
+                canonical.replacen("schema_version = \"1\"", "schema_version = 999", 1),
+            ),
+            (
+                "tmp-authority",
+                canonical.replacen(
+                    "manifest_authority = \"repos.manifest.toml\"",
+                    "manifest_authority = \"/tmp/redirect.toml\"",
+                    1,
+                ),
+            ),
+            (
+                "single-consumer",
+                canonical.replacen(
+                    "consumers = [\"jain-split\", \"jeryu-split\"]",
+                    "consumers = [\"jain-split\"]",
+                    1,
+                ),
+            ),
+            (
+                "duplicate-consumer",
+                canonical.replacen(
+                    "consumers = [\"jain-split\", \"jeryu-split\"]",
+                    "consumers = [\"jain-split\", \"jain-split\"]",
+                    1,
+                ),
+            ),
+            (
+                "missing-consumers",
+                canonical.replacen("consumers = [\"jain-split\", \"jeryu-split\"]\n", "", 1),
+            ),
+            (
+                "duplicate-consumer-row",
+                canonical.replacen(
+                    "family = \"jeryu-split\"\nrole = \"nested-dependency\"",
+                    "family = \"jain-split\"\nrole = \"nested-dependency\"",
+                    1,
+                ),
+            ),
+            (
+                "unknown-top-level",
+                canonical.replacen(
+                    "schema_version = \"1\"\n",
+                    "schema_version = \"1\"\nredirect = \"/tmp\"\n",
+                    1,
+                ),
+            ),
+        ];
+        for (name, manifest) in cases {
+            let path = fixture.path().join(name).join("repos.manifest.toml");
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(&path, manifest).unwrap();
+            assert!(
+                load_manifest(&path).is_err(),
+                "accepted hostile case {name}"
+            );
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn canonical_container_rejects_symlinks_and_worktree_registries() {
+        use std::os::unix::fs::symlink;
+
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let manifest = load_manifest(&source.join("repos.manifest.toml")).unwrap();
+
+        let symlink_fixture = TestDir::new_in_root("container-symlink");
+        let victim = symlink_fixture.path().join("victim");
+        fs::write(&victim, b"preserved\n").unwrap();
+        symlink(&victim, symlink_fixture.path().join("redirect")).unwrap();
+        let mut hostile = manifest.clone();
+        hostile.container_root = symlink_fixture.path().to_path_buf();
+        assert!(validate_canonical_container(&hostile)
+            .unwrap_err()
+            .to_string()
+            .contains("contains a symlink"));
+
+        let worktree_fixture = TestDir::new_in_root("container-worktrees");
+        fs::create_dir_all(worktree_fixture.path().join("repo/.git/worktrees/linked")).unwrap();
+        hostile.container_root = worktree_fixture.path().to_path_buf();
+        assert!(validate_canonical_container(&hostile)
+            .unwrap_err()
+            .to_string()
+            .contains("linked-worktree registry"));
     }
 
     #[test]
