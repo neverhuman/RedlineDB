@@ -305,17 +305,36 @@ fn locked_registry_packages(
 ) -> Result<Vec<LockedRegistryPackage>, Box<dyn std::error::Error>> {
     physical_regular_file(lock_path, "Cargo lock")?;
     let lock: toml::Value = fs::read_to_string(lock_path)?.parse()?;
-    let packages = lock
-        .get("package")
-        .and_then(toml::Value::as_array)
-        .ok_or("Cargo lock has no package array")?;
+    let root = lock.as_table().ok_or("Cargo lock root is not a table")?;
+    if root
+        .keys()
+        .any(|key| !matches!(key.as_str(), "version" | "package"))
+    {
+        return Err("Cargo lock contains an unknown top-level field".into());
+    }
+    let version = root
+        .get("version")
+        .and_then(toml::Value::as_integer)
+        .ok_or("Cargo lock has no integer version")?;
+    if !matches!(version, 3 | 4) {
+        return Err(format!("unsupported Cargo lock version: {version}").into());
+    }
+    let packages = match root.get("package") {
+        Some(value) => value
+            .as_array()
+            .ok_or("Cargo lock package field is not an array")?,
+        None => return Ok(Vec::new()),
+    };
     let mut locked = Vec::new();
     for package in packages {
         let Some(table) = package.as_table() else {
             return Err("Cargo lock package is not a table".into());
         };
-        let Some(source) = table.get("source").and_then(toml::Value::as_str) else {
-            continue;
+        let source = match table.get("source") {
+            None => continue,
+            Some(value) => value
+                .as_str()
+                .ok_or("Cargo lock package source is not a string")?,
         };
         if governed_locked_git_source(source) {
             if table.contains_key("checksum") {
@@ -369,9 +388,6 @@ fn locked_registry_packages(
             )
             .into());
         }
-    }
-    if locked.is_empty() {
-        return Err("Cargo lock has no crates.io registry packages".into());
     }
     Ok(locked)
 }
@@ -5485,6 +5501,8 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     let mut destination = None;
     let mut token_file = None;
     let mut retain_origin = false;
+    let mut git_lfs_path = None;
+    let mut git_lfs_sha256 = None;
     let mut iter = args.into_iter().skip(1);
     while let Some(arg) = iter.next() {
         match arg.as_str() {
@@ -5504,6 +5522,14 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
                     iter.next().ok_or("--token-file needs a path")?,
                 ))
             }
+            "--git-lfs-path" => {
+                git_lfs_path = Some(PathBuf::from(
+                    iter.next().ok_or("--git-lfs-path needs a path")?,
+                ))
+            }
+            "--git-lfs-sha256" => {
+                git_lfs_sha256 = Some(iter.next().ok_or("--git-lfs-sha256 needs a digest")?)
+            }
             "--retain-origin" => retain_origin = true,
             value => return Err(format!("unknown git-materialize argument: {value}").into()),
         }
@@ -5519,6 +5545,16 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     if !is_full_sha(&expected_head) || expected_head.chars().any(|ch| ch.is_ascii_uppercase()) {
         return Err("--expected-head must be a lowercase full 40-character commit SHA".into());
     }
+    let git_lfs = match (git_lfs_path, git_lfs_sha256) {
+        (None, None) => None,
+        (Some(path), Some(digest)) if repo == "veox/jain-starforge" => {
+            Some(validate_pinned_git_lfs(&path, &digest)?)
+        }
+        (Some(_), Some(_)) => {
+            return Err("git-lfs materialization is restricted to veox/jain-starforge".into())
+        }
+        _ => return Err("git-lfs path and SHA-256 must be supplied together".into()),
+    };
     let reference = if let Some(reference) = reference {
         validate_heads_ref(&reference)?;
         reference
@@ -5565,27 +5601,48 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     {
         return Err("Git materialization fetched a different commit".into());
     }
+    if let Some(git_lfs) = git_lfs.as_deref() {
+        if !secure_git_status(Some(&destination), &["remote", "add", "origin", &remote])? {
+            return Err("Git materialization could not configure its exact LFS origin".into());
+        }
+        hydrate_authenticated_lfs(&destination, &remote, &expected_head, &token_file, git_lfs)?;
+    }
     if secure_ls_remote_at(&remote, &reference, &token_file)?.as_deref()
         != Some(expected_head.as_str())
     {
         return Err("Git materialization ref moved during fetch".into());
     }
-    if !secure_git_output(
-        Some(&destination),
-        &["status", "--porcelain=v1", "--untracked-files=all"],
-    )?
-    .is_empty()
-    {
+    let materialized_status = if let Some(git_lfs) = git_lfs.as_deref() {
+        secure_lfs_git_output(
+            &destination,
+            git_lfs,
+            &["status", "--porcelain=v1", "--untracked-files=all"],
+        )?
+    } else {
+        secure_git_output(
+            Some(&destination),
+            &["status", "--porcelain=v1", "--untracked-files=all"],
+        )?
+    };
+    if !materialized_status.is_empty() {
         return Err("Git materialization checkout is not clean standalone authority".into());
     }
     if retain_origin {
-        if !secure_git_status(Some(&destination), &["remote", "add", "origin", &remote])?
+        if (git_lfs.is_none()
+            && !secure_git_status(Some(&destination), &["remote", "add", "origin", &remote])?)
             || secure_git_output(Some(&destination), &["remote", "get-url", "origin"])? != remote
         {
             return Err("Git materialization could not retain the reviewed origin".into());
         }
-    } else if !secure_git_output(Some(&destination), &["remote"])?.is_empty() {
-        return Err("Git materialization retained an unexpected remote".into());
+    } else {
+        if git_lfs.is_some()
+            && !secure_git_status(Some(&destination), &["remote", "remove", "origin"])?
+        {
+            return Err("Git materialization could not remove its LFS origin".into());
+        }
+        if !secure_git_output(Some(&destination), &["remote"])?.is_empty() {
+            return Err("Git materialization retained an unexpected remote".into());
+        }
     }
     created.commit();
     println!(
@@ -5598,6 +5655,7 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             "commit": expected_head,
             "destination": destination,
             "origin_retained": retain_origin,
+            "lfs_hydrated": git_lfs.is_some(),
             "status": "pass"
         }))?
     );
@@ -5660,10 +5718,10 @@ struct AuthenticatedGitCommand {
     _askpass_executable: fs::File,
 }
 
-fn secure_git_authenticated_command(
-    repo: Option<&Path>,
+fn configure_jeryu_askpass(
+    command: &mut Command,
     token_file: &Path,
-) -> Result<AuthenticatedGitCommand, Box<dyn std::error::Error>> {
+) -> Result<fs::File, Box<dyn std::error::Error>> {
     if !token_file.is_absolute() {
         return Err("Jeryu token path must be absolute".into());
     }
@@ -5677,7 +5735,7 @@ fn secure_git_authenticated_command(
     }
     let descriptor = executable.as_raw_fd();
     // SAFETY: `descriptor` is owned by `executable`; clearing only CLOEXEC deliberately
-    // pins these exact running bytes across Git's child chain until it invokes askpass.
+    // pins these exact running bytes across the child chain until it invokes askpass.
     let descriptor_flags = unsafe { libc::fcntl(descriptor, libc::F_GETFD) };
     if descriptor_flags < 0
         || unsafe {
@@ -5694,26 +5752,149 @@ fn secure_git_authenticated_command(
         )
         .into());
     }
-    let executable_path = format!("/proc/self/fd/{descriptor}");
-    let mut command = secure_git_command(repo);
     command
-        .env("GIT_ASKPASS", &executable_path)
+        .env("GIT_ASKPASS", format!("/proc/self/fd/{descriptor}"))
         .env(JERYU_ASKPASS_MODE, "v1")
-        .env(JERYU_ASKPASS_TOKEN_FILE, token_file)
-        .args([
-            "-c",
-            "credential.username=x-access-token",
-            "-c",
-            "credential.useHttpPath=false",
-            "-c",
-            "http.followRedirects=false",
-            "-c",
-            "http.maxRequests=1",
-        ]);
+        .env(JERYU_ASKPASS_TOKEN_FILE, token_file);
+    Ok(executable)
+}
+
+fn secure_git_authenticated_command(
+    repo: Option<&Path>,
+    token_file: &Path,
+) -> Result<AuthenticatedGitCommand, Box<dyn std::error::Error>> {
+    let mut command = secure_git_command(repo);
+    let executable = configure_jeryu_askpass(&mut command, token_file)?;
+    command.args([
+        "-c",
+        "credential.username=x-access-token",
+        "-c",
+        "credential.useHttpPath=false",
+        "-c",
+        "http.followRedirects=false",
+        "-c",
+        "http.maxRequests=1",
+    ]);
     Ok(AuthenticatedGitCommand {
         command,
         _askpass_executable: executable,
     })
+}
+
+fn validate_pinned_git_lfs(
+    path: &Path,
+    expected_sha256: &str,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    if !path.is_absolute() || !is_full_hex(expected_sha256, 64) {
+        return Err("git-lfs authority requires an absolute path and SHA-256".into());
+    }
+    let canonical = fs::canonicalize(path)?;
+    let metadata = fs::symlink_metadata(path)?;
+    if canonical != Path::new("/usr/bin/git-lfs")
+        || canonical != path
+        || !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || (metadata.uid() != 0 && metadata.uid() != unsafe { libc::geteuid() })
+        || metadata.mode() & 0o111 == 0
+        || metadata.mode() & 0o022 != 0
+        || metadata.nlink() != 1
+        || sha256_regular_file(path, "git-lfs executable")? != expected_sha256
+    {
+        return Err("git-lfs executable digest or physical metadata mismatch".into());
+    }
+    let output = Command::new(&canonical)
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("LC_ALL", "C")
+        .env("HOME", "/nonexistent")
+        .arg("version")
+        .output()?;
+    if !output.status.success()
+        || std::str::from_utf8(&output.stdout)?.trim()
+            != "git-lfs/3.4.1 (GitHub; linux amd64; go 1.22.2)"
+    {
+        return Err("git-lfs executable version mismatch".into());
+    }
+    Ok(canonical)
+}
+
+fn hydrate_authenticated_lfs(
+    repo: &Path,
+    remote: &str,
+    expected_head: &str,
+    token_file: &Path,
+    git_lfs: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if !secure_git_output(
+        Some(repo),
+        &["ls-tree", "--name-only", expected_head, ".lfsconfig"],
+    )?
+    .is_empty()
+    {
+        return Err("tracked .lfsconfig is forbidden in authenticated materialization".into());
+    }
+    let mut fetch = Command::new(git_lfs);
+    let local_remote = cfg!(debug_assertions) && Path::new(remote).is_absolute();
+    fetch
+        .env_clear()
+        .env("PATH", "/usr/bin:/bin")
+        .env("LC_ALL", "C")
+        .env("HOME", "/nonexistent")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_ATTR_NOSYSTEM", "1")
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_CONFIG_COUNT", if local_remote { "4" } else { "5" })
+        .env("GIT_CONFIG_KEY_0", "credential.username")
+        .env("GIT_CONFIG_VALUE_0", "x-access-token")
+        .env("GIT_CONFIG_KEY_1", "credential.useHttpPath")
+        .env("GIT_CONFIG_VALUE_1", "false")
+        .env("GIT_CONFIG_KEY_2", "http.followRedirects")
+        .env("GIT_CONFIG_VALUE_2", "false")
+        .env("GIT_CONFIG_KEY_3", "http.maxRequests")
+        .env("GIT_CONFIG_VALUE_3", "1")
+        .current_dir(repo);
+    if !local_remote {
+        fetch
+            .env("GIT_CONFIG_KEY_4", format!("lfs.{remote}/info/lfs.access"))
+            .env("GIT_CONFIG_VALUE_4", "basic");
+    }
+    let _askpass = configure_jeryu_askpass(&mut fetch, token_file)?;
+    let output = fetch.args(["fetch", "origin", expected_head]).output()?;
+    if !output.status.success() {
+        return Err("authenticated git-lfs fetch failed".into());
+    }
+
+    for args in [["checkout"].as_slice(), ["fsck"].as_slice()] {
+        let filter_process = format!("{} filter-process", git_lfs.display());
+        let filter_clean = format!("{} clean -- %f", git_lfs.display());
+        let filter_smudge = format!("{} smudge -- %f", git_lfs.display());
+        let status = Command::new(git_lfs)
+            .env_clear()
+            .env("PATH", "/usr/bin:/bin")
+            .env("LC_ALL", "C")
+            .env("HOME", "/nonexistent")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_ATTR_NOSYSTEM", "1")
+            .env("GIT_TERMINAL_PROMPT", "0")
+            .env("GIT_CONFIG_COUNT", "4")
+            .env("GIT_CONFIG_KEY_0", "filter.lfs.process")
+            .env("GIT_CONFIG_VALUE_0", filter_process)
+            .env("GIT_CONFIG_KEY_1", "filter.lfs.clean")
+            .env("GIT_CONFIG_VALUE_1", filter_clean)
+            .env("GIT_CONFIG_KEY_2", "filter.lfs.smudge")
+            .env("GIT_CONFIG_VALUE_2", filter_smudge)
+            .env("GIT_CONFIG_KEY_3", "filter.lfs.required")
+            .env("GIT_CONFIG_VALUE_3", "true")
+            .current_dir(repo)
+            .args(args)
+            .status()?;
+        if !status.success() {
+            return Err(format!("offline git-lfs {} failed", args[0]).into());
+        }
+    }
+    Ok(())
 }
 
 fn secure_git_output(
@@ -5732,6 +5913,38 @@ fn secure_git_output(
     let stdout = std::str::from_utf8(&output.stdout)
         .map_err(|_| "credentialless git output was not UTF-8")?;
     Ok(stdout.trim().to_owned())
+}
+
+fn secure_lfs_git_output(
+    repo: &Path,
+    git_lfs: &Path,
+    args: &[&str],
+) -> Result<String, Box<dyn std::error::Error>> {
+    let process = format!("filter.lfs.process={} filter-process", git_lfs.display());
+    let clean = format!("filter.lfs.clean={} clean -- %f", git_lfs.display());
+    let smudge = format!("filter.lfs.smudge={} smudge -- %f", git_lfs.display());
+    let output = secure_git_command(Some(repo))
+        .args([
+            "-c",
+            &process,
+            "-c",
+            &clean,
+            "-c",
+            &smudge,
+            "-c",
+            "filter.lfs.required=true",
+        ])
+        .args(args)
+        .output()?;
+    if !output.status.success() {
+        return Err(format!(
+            "credentialless pinned-LFS git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&output.stderr).trim()
+        )
+        .into());
+    }
+    Ok(std::str::from_utf8(&output.stdout)?.trim().to_owned())
 }
 
 fn secure_git_authenticated_output(
@@ -5913,6 +6126,7 @@ fn reject_local_git_injection(repo: &Path) -> Result<(), Box<dyn std::error::Err
         .map_err(|_| "local Git configuration is not UTF-8")?
         .to_owned();
     let mut section = None;
+    let mut section_header = String::new();
     for raw in text.lines() {
         let line = raw.trim();
         if line.is_empty() || line.starts_with(['#', ';']) {
@@ -5927,13 +6141,14 @@ fn reject_local_git_injection(repo: &Path) -> Result<(), Box<dyn std::error::Err
             }
             let header = line[1..line.len() - 1].trim().to_ascii_lowercase();
             let name = header.split_ascii_whitespace().next().unwrap_or_default();
-            if !matches!(name, "core" | "remote" | "branch" | "user") {
+            if !matches!(name, "core" | "remote" | "branch" | "user" | "lfs") {
                 return Err(format!(
                     "local Git configuration section is forbidden for branch publication: {name}"
                 )
                 .into());
             }
             section = Some(name.to_owned());
+            section_header = header;
             continue;
         }
         let current = section
@@ -5977,6 +6192,22 @@ fn reject_local_git_injection(repo: &Path) -> Result<(), Box<dyn std::error::Err
             "user" => {
                 matches!(key.as_str(), "name" | "email")
                     && !value.bytes().any(|byte| byte.is_ascii_control())
+            }
+            "lfs" => {
+                let repo_name = repo.file_name().and_then(OsStr::to_str).unwrap_or_default();
+                if repo_name != "jain-starforge" {
+                    false
+                } else if section_header == "lfs" {
+                    key == "repositoryformatversion" && value == "0"
+                } else {
+                    let expected_veox =
+                        format!("lfs \"http://127.0.0.1:8787/git/veox/{repo_name}.git/info/lfs\"");
+                    let expected_jeryu =
+                        format!("lfs \"http://127.0.0.1:8787/git/jeryu/{repo_name}.git/info/lfs\"");
+                    (section_header == expected_veox || section_header == expected_jeryu)
+                        && key == "access"
+                        && value == "basic"
+                }
             }
             _ => false,
         };
@@ -9273,6 +9504,109 @@ mod tests {
     }
 
     #[test]
+    fn locked_cargo_cache_accepts_digest_bound_zero_package_v3_v4_locks() {
+        for version in [3, 4] {
+            let temp = TestDir::new(&format!("cargo-cache-stage-empty-v{version}"));
+            let fixture = cargo_cache_fixture(temp.path(), b"unused archive");
+            fs::write(&fixture.lock, format!("version = {version}\n")).unwrap();
+
+            stage_locked_cargo_cache(
+                &fixture.lock,
+                &fixture.source,
+                &fixture.destination,
+                &fixture.receipt,
+                fixture.source_uid,
+                fixture.source_gid,
+            )
+            .unwrap();
+
+            let receipt: JsonValue =
+                serde_json::from_slice(&fs::read(&fixture.receipt).unwrap()).unwrap();
+            assert_eq!(receipt["lock_count"], 1);
+            assert_eq!(receipt["package_count"], 0);
+            assert_eq!(receipt["packages"], json!([]));
+            assert_eq!(
+                receipt["lock_sha256s"],
+                json!([sha256_regular_file(&fixture.lock, "empty Cargo lock").unwrap()])
+            );
+        }
+    }
+
+    #[test]
+    fn zero_package_cargo_lock_rejects_malformed_unknown_and_source_bearing_forms() {
+        let temp = TestDir::new("cargo-cache-stage-empty-rejections");
+        for (name, contents, message) in [
+            ("missing-version", "", "no integer version"),
+            ("string-version", "version = \"4\"\n", "no integer version"),
+            (
+                "unknown-version",
+                "version = 5\n",
+                "unsupported Cargo lock version",
+            ),
+            (
+                "unknown-field",
+                "version = 4\nmetadata = {}\n",
+                "unknown top-level field",
+            ),
+            (
+                "source-bearing",
+                "version = 4\nsource = \"registry+https://github.com/rust-lang/crates.io-index\"\n",
+                "unknown top-level field",
+            ),
+            (
+                "package-not-array",
+                "version = 4\npackage = {}\n",
+                "not an array",
+            ),
+            (
+                "malformed-package-source",
+                "version = 4\n\n[[package]]\nname = \"local\"\nversion = \"1.0.0\"\nsource = 42\n",
+                "source is not a string",
+            ),
+        ] {
+            let path = temp.path().join(format!("{name}.lock"));
+            fs::write(&path, contents).unwrap();
+            let error = locked_registry_packages(&path).unwrap_err();
+            assert!(error.to_string().contains(message), "{name}: {error}");
+        }
+    }
+
+    #[test]
+    fn nested_redline_web_zero_registry_lock_is_digest_bound() {
+        let temp = TestDir::new("cargo-cache-stage-redline-web-empty");
+        let fixture = cargo_cache_fixture(temp.path(), b"registry archive");
+        let nested = temp.path().join("jain-redline/redline-web/Cargo.lock");
+        fs::create_dir_all(nested.parent().unwrap()).unwrap();
+        fs::write(
+            &nested,
+            "version = 4\n\n[[package]]\nname = \"redline-web-release-control\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+
+        stage_locked_cargo_caches(
+            std::slice::from_ref(&nested),
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap();
+        let receipt: JsonValue =
+            serde_json::from_slice(&fs::read(&fixture.receipt).unwrap()).unwrap();
+        assert_eq!(receipt["lock_count"], 1);
+        assert_eq!(receipt["package_count"], 0);
+        assert!(receipt["lock_sha256s"]
+            .as_array()
+            .unwrap()
+            .contains(&json!(sha256_regular_file(
+                &nested,
+                "nested Redline Web lock"
+            )
+            .unwrap())));
+    }
+
+    #[test]
     fn locked_cargo_cache_rejects_checksummed_governed_git_packages() {
         let temp = TestDir::new("cargo-cache-stage-checksummed-git");
         let fixture = cargo_cache_fixture(temp.path(), b"deterministic crate archive");
@@ -11213,6 +11547,135 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     }
 
     #[test]
+    fn starforge_materialization_hydrates_real_lfs_pointer_from_pinned_binary() {
+        let git_lfs = PathBuf::from("/usr/bin/git-lfs");
+        assert!(git_lfs.is_file(), "pinned /usr/bin/git-lfs is required");
+        let root = TestDir::new("git-materialization-lfs");
+        let source = root.path().join("jain-starforge");
+        let mut init = Command::new("git");
+        init.args(["init", "-b", "main"]).arg(&source);
+        command(init);
+        run_git_strict(&source, &["config", "user.name", "LFS Fixture"]).unwrap();
+        run_git_strict(&source, &["config", "user.email", "lfs@example.invalid"]).unwrap();
+        let mut install = Command::new(&git_lfs);
+        install.current_dir(&source).args(["install", "--local"]);
+        command(install);
+        let mut track = Command::new(&git_lfs);
+        track.current_dir(&source).args(["track", "*.bin"]);
+        command(track);
+        let payload = b"real offline LFS payload\n";
+        fs::write(source.join("artifact.bin"), payload).unwrap();
+        run_git_strict(&source, &["add", ".gitattributes", "artifact.bin"]).unwrap();
+        run_git_strict(&source, &["commit", "-m", "reviewed LFS object"]).unwrap();
+        let head = resolve_commit(&source, "HEAD").unwrap();
+        let pointer = strict_git_output(&source, &["show", "HEAD:artifact.bin"]).unwrap();
+        assert!(pointer.starts_with("version https://git-lfs.github.com/spec/v1\n"));
+
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &source,
+            &[
+                "-c",
+                "core.hooksPath=/dev/null",
+                "push",
+                remote.to_str().unwrap(),
+                &format!("{head}:refs/heads/main"),
+            ],
+        )
+        .unwrap();
+        let mut lfs_push = Command::new(&git_lfs);
+        lfs_push.current_dir(&source).args([
+            "push",
+            &format!("file://{}", remote.display()),
+            "--all",
+        ]);
+        command(lfs_push);
+
+        let token_root = TestDir::new_private_temp("git-materialization-lfs-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let destination = root.path().join("hydrated");
+        jeryu_git_materialize(vec![
+            "git-materialize".to_owned(),
+            "--repo".to_owned(),
+            "veox/jain-starforge".to_owned(),
+            "--remote".to_owned(),
+            remote.display().to_string(),
+            "--ref".to_owned(),
+            "refs/heads/main".to_owned(),
+            "--expected-head".to_owned(),
+            head,
+            "--destination".to_owned(),
+            destination.display().to_string(),
+            "--token-file".to_owned(),
+            token_file.display().to_string(),
+            "--git-lfs-path".to_owned(),
+            git_lfs.display().to_string(),
+            "--git-lfs-sha256".to_owned(),
+            sha256_regular_file(&git_lfs, "test git-lfs").unwrap(),
+        ])
+        .unwrap();
+        assert_eq!(fs::read(destination.join("artifact.bin")).unwrap(), payload);
+        assert!(strict_git_output(&destination, &["remote"])
+            .unwrap()
+            .is_empty());
+
+        let symlink_path = root.path().join("git-lfs-link");
+        symlink(&git_lfs, &symlink_path).unwrap();
+        assert!(validate_pinned_git_lfs(
+            &symlink_path,
+            &sha256_regular_file(&git_lfs, "test git-lfs").unwrap()
+        )
+        .is_err());
+
+        fs::write(
+            source.join(".lfsconfig"),
+            "[lfs \"customtransfer.hostile\"]\npath = /tmp/execute-me\n",
+        )
+        .unwrap();
+        run_git_strict(&source, &["add", ".lfsconfig"]).unwrap();
+        run_git_strict(&source, &["commit", "-m", "hostile LFS config"]).unwrap();
+        let hostile_head = resolve_commit(&source, "HEAD").unwrap();
+        run_git_strict(
+            &source,
+            &[
+                "-c",
+                "core.hooksPath=/dev/null",
+                "push",
+                remote.to_str().unwrap(),
+                &format!("{hostile_head}:refs/heads/hostile"),
+            ],
+        )
+        .unwrap();
+        let hostile_destination = root.path().join("hostile");
+        let error = jeryu_git_materialize(vec![
+            "git-materialize".to_owned(),
+            "--repo".to_owned(),
+            "veox/jain-starforge".to_owned(),
+            "--remote".to_owned(),
+            remote.display().to_string(),
+            "--ref".to_owned(),
+            "refs/heads/hostile".to_owned(),
+            "--expected-head".to_owned(),
+            hostile_head,
+            "--destination".to_owned(),
+            hostile_destination.display().to_string(),
+            "--token-file".to_owned(),
+            token_file.display().to_string(),
+            "--git-lfs-path".to_owned(),
+            git_lfs.display().to_string(),
+            "--git-lfs-sha256".to_owned(),
+            sha256_regular_file(&git_lfs, "test git-lfs").unwrap(),
+        ])
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("tracked .lfsconfig is forbidden"));
+        assert!(!hostile_destination.exists());
+    }
+
+    #[test]
     fn branch_push_apply_requires_an_explicit_token_before_remote_access() {
         let root = TestDir::new("branch-push-token-required");
         let (repo, head) = init_source(root.path());
@@ -11417,6 +11880,45 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 "config",
                 "url.http://attacker.invalid/.insteadOf",
                 LOCAL_JERYU_ORIGIN,
+            ],
+        )
+        .unwrap();
+        assert!(reject_local_git_injection(&repo).is_err());
+    }
+
+    #[test]
+    fn starforge_branch_publication_accepts_only_bounded_lfs_access_metadata() {
+        let root = TestDir::new("starforge-lfs-config");
+        let repo = root.path().join("jain-starforge");
+        fs::create_dir(&repo).unwrap();
+        run_git_strict(&repo, &["init", "--quiet"]).unwrap();
+        run_git_strict(
+            &repo,
+            &[
+                "config",
+                "lfs.http://127.0.0.1:8787/git/veox/jain-starforge.git/info/lfs.access",
+                "basic",
+            ],
+        )
+        .unwrap();
+        run_git_strict(&repo, &["config", "lfs.repositoryformatversion", "0"]).unwrap();
+        reject_local_git_injection(&repo).unwrap();
+
+        for (key, value) in [
+            ("lfs.customtransfer.hostile.path", "/tmp/execute-me"),
+            ("lfs.fetchinclude", "../../secret"),
+            ("filter.lfs.process", "/tmp/execute-me"),
+        ] {
+            run_git_strict(&repo, &["config", key, value]).unwrap();
+            assert!(reject_local_git_injection(&repo).is_err(), "accepted {key}");
+            run_git_strict(&repo, &["config", "--unset-all", key]).unwrap();
+        }
+        run_git_strict(
+            &repo,
+            &[
+                "config",
+                "lfs.http://attacker.invalid/jain-starforge.git/info/lfs.access",
+                "basic",
             ],
         )
         .unwrap();

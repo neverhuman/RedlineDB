@@ -376,9 +376,9 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
     && -d /opt/jain-ci/cargo-registry \
     && ! -L /opt/jain-ci/cargo-registry ]] \
     || native_setup_failure "release Cargo cache is not inside the isolated worker" 1
-  export CARGO_HOME="$tmp/cargo-home"
+  export CARGO_HOME="$JAIN_HOST_CI_WRITABLE_ROOT/cargo-home"
   export CARGO_TARGET_DIR="$tmp/cargo-target"
-  mkdir -m 0700 "$CARGO_HOME" "$CARGO_TARGET_DIR" \
+  mkdir -p -m 0700 "$CARGO_HOME" "$CARGO_TARGET_DIR" \
     || native_setup_failure "cannot create fresh release Cargo directories" 1
   printf '[net]\ngit-fetch-with-cli = true\n' >"$CARGO_HOME/config.toml" \
     || native_setup_failure "cannot create fresh release Cargo configuration" 1
@@ -420,8 +420,11 @@ export PATH="${CARGO_HOME:-$HOME/.cargo}/bin:$PATH"
 # commit. The cargo-audit/cargo-deny shims force advisory no-fetch operation, so
 # a concurrent or dirty user advisory DB is neither read nor reset.
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
-  rustsec_source="${JAIN_RUSTSEC_ADVISORY_SOURCE:-$SPLIT_ROOT/target/advisory-db}"
-  rustsec_db="$CARGO_HOME/advisory-db"
+  : "${JAIN_RUSTSEC_ADVISORY_SOURCE:?root-staged RustSec source is required}"
+  : "${JAIN_PINNED_ADVISORY_DB:?root-staged pinned advisory DB is required}"
+  : "${JAIN_ADVISORY_DB:?root-staged advisory DB is required}"
+  : "${JAIN_CARGO_DENY_ADVISORY_DB:?physical cargo-deny advisory DB is required}"
+  rustsec_db="$JAIN_PINNED_ADVISORY_DB"
   rustsec_tools="$tmp/pinned-rustsec-tools"
   real_cargo_audit="$(command -v cargo-audit)" || {
     native_setup_failure "release CI requires cargo-audit" 2
@@ -429,9 +432,9 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
   real_cargo_deny="$(command -v cargo-deny)" || {
     native_setup_failure "release CI requires cargo-deny" 2
   }
-  jain_materialize_pinned_advisory_db \
-    "$rustsec_source" "$rustsec_db" "$JAIN_PINNED_RUSTSEC_COMMIT" || {
-    native_setup_failure "release CI pinned RustSec database setup failed" 1
+  [[ "$JAIN_RUSTSEC_ADVISORY_SOURCE" == "$rustsec_db" \
+    && "$JAIN_ADVISORY_DB" == "$rustsec_db" ]] || {
+    native_setup_failure "release CI RustSec variables differ from root authority" 1
   }
   jain_install_pinned_rustsec_tools \
     "$rustsec_tools" "$rustsec_db" "$CARGO_HOME" "$OPS_ROOT" || {
@@ -439,7 +442,6 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
   }
   export JAIN_REAL_CARGO_AUDIT="$real_cargo_audit"
   export JAIN_REAL_CARGO_DENY="$real_cargo_deny"
-  export JAIN_PINNED_ADVISORY_DB="$rustsec_db"
   export JAIN_PINNED_ADVISORY_COMMIT="$JAIN_PINNED_RUSTSEC_COMMIT"
   export PATH="$rustsec_tools:$PATH"
   say "RustSec advisory database: isolated commit $JAIN_PINNED_RUSTSEC_COMMIT"
@@ -457,6 +459,18 @@ if [ "$REPO" != "jain-split-ops" ]; then
   ci_gitconfig="${JAIN_HOST_CI_WRITABLE_ROOT:-$SPLIT_ROOT/target}/ci-gitconfig"
   mkdir -p "$(dirname "$ci_gitconfig")"
   printf '[url "file://%s/target/bare-mirrors/"]\n\tinsteadOf = http://127.0.0.1:8787/git/veox/\n\tinsteadOf = http://127.0.0.1:8787/git/jeryu/\n\tinsteadOf = http://127.0.0.1:8787/git/jain-split/\n\tinsteadOf = http://127.0.0.1:8787/git/redline/\n\tinsteadOf = https://github.com/neverhuman/\n[net]\n\tgit-fetch-with-cli = true\n' "$SPLIT_ROOT" > "$ci_gitconfig"
+  # The root-owned bare mirrors are a read-only cache used by this unprivileged
+  # worker. Enumerate only canonical repository-shaped children; never weaken
+  # Git's ownership guard globally with safe.directory=*.
+  for mirror in "$SPLIT_ROOT"/target/bare-mirrors/*.git; do
+    [ -d "$mirror" ] || continue
+    mirror_name="${mirror##*/}"
+    [[ "$mirror_name" =~ ^[a-z0-9][a-z0-9._-]*\.git$ \
+      && "$(realpath -e -- "$mirror")" == "$mirror" ]] || {
+      native_setup_failure "unsafe bare-mirror cache path: $mirror" 1
+    }
+    printf '[safe]\n\tdirectory = %s\n' "$mirror" >>"$ci_gitconfig"
+  done
   say "cross-repo resolution: local bare mirrors (CI cache for local Jeryu tags)"
   export GIT_CONFIG_GLOBAL="$ci_gitconfig"
 fi

@@ -89,6 +89,18 @@ validate_grype_db() {
     || fail 'Grype database inventory digest mismatch'
 }
 
+validate_git_lfs() {
+  local configured="$1" expected_sha="$2" path
+  path="$(realpath -e -- "$configured")" || fail 'git-lfs executable is unavailable'
+  [[ "$path" == /usr/bin/git-lfs && "$path" == "$configured" && ! -L "$path" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$path" 2>/dev/null)" == '0:0:755:1' \
+    && "$(sha256sum -- "$path" | cut -d' ' -f1)" == "$expected_sha" \
+    && "$(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
+      "$path" version)" == 'git-lfs/3.4.1 (GitHub; linux amd64; go 1.22.2)' ]] \
+    || fail 'git-lfs executable digest, metadata, or version mismatch'
+  printf '%s\n' "$path"
+}
+
 [[ "$(id -u)" == 0 ]] || fail 'must run as root'
 [[ "$#" == 1 ]] || fail 'expected one sandbox request path'
 request="$1"
@@ -121,7 +133,7 @@ security_tool_names=(actionlint grype syft)
   && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
   || fail 'unsafe root sandbox config'
 jq -e '
-  select(.schema_version == "jain.host-ci-sandbox-config/v5")
+  select(.schema_version == "jain.host-ci-sandbox-config/v6")
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
@@ -139,6 +151,8 @@ jq -e '
   | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.cargo_bin | type == "string" and startswith("/"))
   | select(.rustup_home | type == "string" and startswith("/"))
+  | select(.git_lfs_path | type == "string" and startswith("/"))
+  | select(.git_lfs_sha256 | test("^[0-9a-f]{64}$"))
   | select(.control_remote | type == "string" and length > 0)
   | select(.forge_git_base | type == "string" and length > 0)
   | select(.request_root | type == "string" and startswith("/"))
@@ -216,6 +230,8 @@ cargo_bin="$(realpath -e -- "$(jq -er '.cargo_bin' "$config")")" \
   || fail 'Cargo bin directory unavailable'
 rustup_home="$(realpath -e -- "$(jq -er '.rustup_home' "$config")")" \
   || fail 'rustup home unavailable'
+git_lfs_path="$(validate_git_lfs "$(jq -er '.git_lfs_path' "$config")" \
+  "$(jq -er '.git_lfs_sha256' "$config")")"
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$config")")" \
   || fail 'root request directory unavailable'
 request_root_options="$(/usr/bin/findmnt -rn -o OPTIONS --target "$request_root")" \
@@ -311,14 +327,16 @@ request="$root_request/caller-request.json"
   && "$(stat -c '%s' -- "$request")" -le 65536 ]] \
   || fail 'unsafe root request snapshot'
 jq -e '
-  select(.schema_version == "jain.host-ci-sandbox-request/v4")
+  select(.schema_version == "jain.host-ci-sandbox-request/v5")
   | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
+  | select(.control_ref | type == "string" and startswith("refs/heads/"))
   | select(.split_root | type == "string" and startswith("/"))
   | select(.arguments | type == "array" and length == 5)
   | select(.environment | type == "object")
   | select(.environment | all(to_entries[]; .value | type == "string"))' \
   "$request" >/dev/null || fail 'invalid sandbox request schema'
 control_commit="$(jq -er '.control_plane_commit' "$request")"
+request_control_ref="$(jq -er '.control_ref' "$request")"
 split_root="$(realpath -e -- "$(jq -er '.split_root' "$request")")" \
   || fail 'split root unavailable'
 [[ "$split_root" == "$family_root" ]] || fail 'split root is not configured authority'
@@ -343,6 +361,9 @@ for name in "${environment_names[@]}"; do
     && "$name" != JAIN_PROOF_EVIDENCE_ROOT \
     && "$name" != JAIN_PROOF_EVIDENCE_STAGING_ROOT \
     && "$name" != JAIN_RUSTSEC_ADVISORY_SOURCE \
+    && "$name" != JAIN_PINNED_ADVISORY_DB \
+    && "$name" != JAIN_ADVISORY_DB \
+    && "$name" != JAIN_CARGO_DENY_ADVISORY_DB \
     && "$name" != JAIN_GRYPE_DB_ROOT \
     && "$name" != JAIN_GRYPE_DB_INVENTORY_SHA256 \
     && "$name" != JAIN_SPLIT_OPS_ROOT \
@@ -372,6 +393,8 @@ bootstrap_commit="$(jq -er '.bootstrap_commit // ""' "$config")"
 bootstrap_expires_at="$(jq -er '.bootstrap_expires_at // ""' "$config")"
 validate_control_authority \
   "$control_ref" "$bootstrap_commit" "$bootstrap_expires_at"
+[[ "$request_control_ref" == "$control_ref" ]] \
+  || fail 'request control ref differs from configured authority'
 if [[ "$control_ref" != refs/heads/main && "$bootstrap_commit" != "$control_commit" ]]; then
   fail 'bootstrap control commit differs from the exact request'
 fi
@@ -399,13 +422,24 @@ rustsec_source="$(realpath -e -- "$rustsec_source")" \
 # shellcheck source=ops/ci/pinned-advisory.sh
 source "$control_root/ops/ci/pinned-advisory.sh"
 rustsec_stage="$worker_authority/advisory-db"
+deny_db_root="$worker_authority/cargo-deny-advisory-dbs"
+deny_rustsec_stage="$deny_db_root/$JAIN_CARGO_DENY_RUSTSEC_DIR"
 jain_materialize_pinned_advisory_db \
   "$rustsec_source" "$rustsec_stage" "$JAIN_PINNED_RUSTSEC_COMMIT" \
   "$parent_uid" "$parent_gid" \
   || fail 'root pinned RustSec staging failed'
+jain_materialize_pinned_advisory_db \
+  "$rustsec_source" "$deny_rustsec_stage" "$JAIN_PINNED_RUSTSEC_COMMIT" \
+  "$parent_uid" "$parent_gid" \
+  || fail 'root physical cargo-deny RustSec staging failed'
 [[ -d "$rustsec_stage/.git" && ! -L "$rustsec_stage/.git" \
   && "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
     -C "$rustsec_stage" rev-parse 'HEAD^{commit}')" \
+    == "$JAIN_PINNED_RUSTSEC_COMMIT" \
+  && -d "$deny_rustsec_stage/.git" && ! -L "$deny_db_root" \
+  && ! -L "$deny_rustsec_stage" && ! -L "$deny_rustsec_stage/.git" \
+  && "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -C "$deny_rustsec_stage" rev-parse 'HEAD^{commit}')" \
     == "$JAIN_PINNED_RUSTSEC_COMMIT" ]] \
   || fail 'root pinned RustSec snapshot is not standalone authority'
 
@@ -433,16 +467,65 @@ IFS=$'\t' read -r protected_owner protected_check <<<"$repo_authority"
 forge_git_base="$(jq -er '.forge_git_base' "$config")"
 product_remote="${forge_git_base%/}/$protected_owner/$repo.git"
 product_authority="$root_request/product-authority"
-"$splitctl_path" jeryu-local git-materialize \
+product_materialize_args=(
+  jeryu-local git-materialize
   --repo "$protected_owner/$repo" --remote "$product_remote" \
   --expected-head "${arguments[2]}" --destination "$product_authority" \
-  --token-file "$token_file" >/dev/null \
+  --token-file "$token_file"
+)
+if [[ "$repo" == jain-starforge ]]; then
+  product_materialize_args+=(
+    --git-lfs-path "$git_lfs_path"
+    --git-lfs-sha256 "$(jq -er '.git_lfs_sha256' "$config")"
+  )
+fi
+"$splitctl_path" "${product_materialize_args[@]}" >/dev/null \
   || fail 'cannot materialize authenticated product authority'
 [[ "$("${safe_git[@]}" -C "$product_authority" rev-parse 'HEAD^{commit}')" \
   == "${arguments[2]}" ]] || fail 'root product checkout commit mismatch'
-git clone --quiet --no-local --no-checkout \
+git -c filter.lfs.process= -c filter.lfs.clean= -c filter.lfs.smudge= \
+  -c filter.lfs.required=false clone --quiet --no-local --no-checkout \
   "$product_authority" "${arguments[3]}"
-git -C "${arguments[3]}" checkout --quiet --detach "${arguments[2]}"
+git -C "${arguments[3]}" -c filter.lfs.process= -c filter.lfs.clean= \
+  -c filter.lfs.smudge= -c filter.lfs.required=false \
+  checkout --quiet --detach "${arguments[2]}"
+
+hydrate_local_lfs_checkout() {
+  local checkout="$1" source="$2" commit="$3" operation
+  git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -c core.attributesFile=/dev/null -c diff.external= \
+    -C "$checkout" cat-file -e "$commit:.lfsconfig" 2>/dev/null \
+    && fail 'tracked .lfsconfig is forbidden in offline LFS staging'
+  for operation in fetch checkout fsck; do
+    case "$operation" in
+      fetch)
+        (cd "$checkout" && /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
+          HOME=/nonexistent GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+          GIT_ATTR_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 \
+          "$git_lfs_path" fetch "file://$source" "$commit") \
+          || fail 'offline git-lfs object transfer failed'
+        ;;
+      checkout | fsck)
+        (cd "$checkout" && /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
+          HOME=/nonexistent GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+          GIT_ATTR_NOSYSTEM=1 GIT_TERMINAL_PROMPT=0 GIT_CONFIG_COUNT=4 \
+          GIT_CONFIG_KEY_0=filter.lfs.process \
+          GIT_CONFIG_VALUE_0="$git_lfs_path filter-process" \
+          GIT_CONFIG_KEY_1=filter.lfs.clean \
+          GIT_CONFIG_VALUE_1="$git_lfs_path clean -- %f" \
+          GIT_CONFIG_KEY_2=filter.lfs.smudge \
+          GIT_CONFIG_VALUE_2="$git_lfs_path smudge -- %f" \
+          GIT_CONFIG_KEY_3=filter.lfs.required GIT_CONFIG_VALUE_3=true \
+          "$git_lfs_path" "$operation") \
+          || fail "offline git-lfs $operation failed"
+        ;;
+    esac
+  done
+}
+if [[ "$repo" == jain-starforge ]]; then
+  hydrate_local_lfs_checkout \
+    "${arguments[3]}" "$product_authority" "${arguments[2]}"
+fi
 
 # The proof auditor never reuses the product worker's mutable checkout. Root
 # creates a second standalone exact-head checkout, strips its remote, verifies
@@ -451,15 +534,38 @@ git -C "${arguments[3]}" checkout --quiet --detach "${arguments[2]}"
 audit_source_root="$root_request/audit-source"
 audit_worktree="$audit_source_root/$repo"
 mkdir -m 0755 "$audit_source_root"
-git clone --quiet --no-local --no-checkout "$product_authority" "$audit_worktree"
-git -C "$audit_worktree" checkout --quiet --detach "${arguments[2]}"
+git -c filter.lfs.process= -c filter.lfs.clean= -c filter.lfs.smudge= \
+  -c filter.lfs.required=false clone --quiet --no-local --no-checkout \
+  "$product_authority" "$audit_worktree"
+git -C "$audit_worktree" -c filter.lfs.process= -c filter.lfs.clean= \
+  -c filter.lfs.smudge= -c filter.lfs.required=false \
+  checkout --quiet --detach "${arguments[2]}"
+if [[ "$repo" == jain-starforge ]]; then
+  hydrate_local_lfs_checkout \
+    "$audit_worktree" "$product_authority" "${arguments[2]}"
+fi
 git -C "$audit_worktree" remote remove origin
+if [[ "$repo" == jain-starforge ]]; then
+  audit_status="$(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
+    HOME=/nonexistent GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null \
+    GIT_ATTR_NOSYSTEM=1 GIT_CONFIG_COUNT=4 \
+    GIT_CONFIG_KEY_0=filter.lfs.process \
+    GIT_CONFIG_VALUE_0="$git_lfs_path filter-process" \
+    GIT_CONFIG_KEY_1=filter.lfs.clean \
+    GIT_CONFIG_VALUE_1="$git_lfs_path clean -- %f" \
+    GIT_CONFIG_KEY_2=filter.lfs.smudge \
+    GIT_CONFIG_VALUE_2="$git_lfs_path smudge -- %f" \
+    GIT_CONFIG_KEY_3=filter.lfs.required GIT_CONFIG_VALUE_3=true \
+    git -C "$audit_worktree" status --porcelain=v1 --untracked-files=all)"
+else
+  audit_status="$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -c diff.external= -C "$audit_worktree" status --porcelain=v1 \
+      --untracked-files=all)"
+fi
 [[ "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
     -c diff.external= -C "$audit_worktree" rev-parse 'HEAD^{commit}')" \
     == "${arguments[2]}" \
-  && -z "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-    -c diff.external= -C "$audit_worktree" status --porcelain=v1 \
-      --untracked-files=all)" ]] \
+  && -z "$audit_status" ]] \
   || fail 'root exact-head audit checkout is not clean authority'
 chmod -R go-w "$audit_source_root"
 chown -R root:root "$audit_source_root"
@@ -473,6 +579,8 @@ done
 install -d -o root -g root -m 0555 "$worker_authority/release-bin"
 install -o root -g root -m 0555 \
   "$jankurai_path" "$worker_authority/release-bin/jankurai"
+install -o root -g root -m 0555 \
+  "$git_lfs_path" "$worker_authority/release-bin/git-lfs"
 install -o root -g root -m 0555 \
   "$control_root/ops/ci/split-host-ci.sh" \
   "$worker_authority/.split-host-ci-reviewed"
@@ -491,6 +599,15 @@ chown root:root "$worker_authority/reexec-state.json"
 # the worker with the same 0755/0644-or-executable shape as the former clone.
 chmod -R a+rX,go-w "$control_root"
 chown -R root:root "$worker_authority"
+
+# This request's Cargo home is fresh and worker-writable, except for the whole
+# advisory-dbs mountpoint below. Binding the parent directory read-only makes
+# rename/swap/restore attacks fail even between wrapper validation and deny's
+# database open.
+worker_cargo_home="$bootstrap_root/writable/cargo-home"
+worker_deny_mount="$worker_cargo_home/advisory-dbs"
+mkdir -m 0700 "$worker_cargo_home"
+mkdir -m 0755 "$worker_deny_mount"
 
 created_at="$(date +%s)"
 root_state="$root_request/root-state.json"
@@ -586,6 +703,7 @@ systemd_args=(
   --property=TimeoutStopSec=5s
   --property="BindPaths=$bootstrap_root"
   --property="BindPaths=$worker_cache:/opt/jain-ci/cargo-home"
+  --property="BindReadOnlyPaths=$deny_db_root:$worker_deny_mount"
   --property="BindReadOnlyPaths=$cargo_registry_cache:/opt/jain-ci/cargo-registry"
   --property="BindReadOnlyPaths=$grype_db_root:/opt/jain-ci/grype-db"
   --property="BindReadOnlyPaths=$worker_authority:/opt/jain-ci/authority"
@@ -600,6 +718,9 @@ systemd_args=(
   --setenv=PATH=/opt/jain-ci/authority/security-bin:/opt/jain-ci/authority/release-bin:/opt/jain-ci/cargo-bin:/usr/bin:/bin
   --setenv=CARGO_HOME=/opt/jain-ci/cargo-home
   --setenv=RUSTUP_HOME=/opt/jain-ci/rustup
+  --setenv=GIT_CONFIG_NOSYSTEM=1
+  --setenv=GIT_CONFIG_GLOBAL=/dev/null
+  --setenv=GIT_ATTR_NOSYSTEM=1
   --setenv=JAIN_HOST_CI_REEXEC_STATE=/opt/jain-ci/authority/reexec-state.json
   --setenv=JAIN_SPLIT_OPS_ROOT=/opt/jain-ci/authority/control-plane
   --setenv=GIT_CONFIG_COUNT=3
@@ -613,11 +734,27 @@ systemd_args=(
   --setenv="JAIN_HOST_CI_HOST_USER_NAMESPACE=$host_user_namespace"
   --setenv=JAIN_HOST_CI_NETWORK_ISOLATED=1
   --setenv=JAIN_RUSTSEC_ADVISORY_SOURCE=/opt/jain-ci/authority/advisory-db
+  --setenv=JAIN_PINNED_ADVISORY_DB=/opt/jain-ci/authority/advisory-db
+  --setenv=JAIN_ADVISORY_DB=/opt/jain-ci/authority/advisory-db
+  --setenv="JAIN_CARGO_DENY_ADVISORY_DB=$worker_deny_mount/$JAIN_CARGO_DENY_RUSTSEC_DIR"
   --setenv=JAIN_GRYPE_DB_ROOT=/opt/jain-ci/grype-db
   --setenv="JAIN_GRYPE_DB_INVENTORY_SHA256=$grype_db_inventory_sha256"
   --setenv=GRYPE_DB_CACHE_DIR=/opt/jain-ci/grype-db
   --setenv="JAIN_NATIVE_EVIDENCE_STAGING_ROOT=$evidence_staging_root"
 )
+if [[ "$repo" == jain-starforge ]]; then
+  systemd_args+=(
+    --setenv=GIT_CONFIG_COUNT=7
+    --setenv=GIT_CONFIG_KEY_3=filter.lfs.process
+    --setenv='GIT_CONFIG_VALUE_3=/opt/jain-ci/authority/release-bin/git-lfs filter-process'
+    --setenv=GIT_CONFIG_KEY_4=filter.lfs.clean
+    --setenv='GIT_CONFIG_VALUE_4=/opt/jain-ci/authority/release-bin/git-lfs clean -- %f'
+    --setenv=GIT_CONFIG_KEY_5=filter.lfs.smudge
+    --setenv='GIT_CONFIG_VALUE_5=/opt/jain-ci/authority/release-bin/git-lfs smudge -- %f'
+    --setenv=GIT_CONFIG_KEY_6=filter.lfs.required
+    --setenv=GIT_CONFIG_VALUE_6=true
+  )
+fi
 while IFS=$'\t' read -r name value; do
   systemd_args+=(--setenv="$name=$value")
 done < <(jq -r '.environment | to_entries[] | [.key, .value] | @tsv' "$request")
@@ -665,9 +802,7 @@ proof_mounted=1
   || fail 'proof evidence staging is not the expected tmpfs'
 
 audit_clean_start=false
-if [[ -z "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-    -c diff.external= -C "$audit_worktree" status --porcelain=v1 \
-      --untracked-files=all)" ]]; then
+if [[ -z "$audit_status" ]]; then
   audit_clean_start=true
 fi
 [[ "$audit_clean_start" == true ]] || fail 'exact-head audit checkout became dirty'

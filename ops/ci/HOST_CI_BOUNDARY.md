@@ -106,7 +106,7 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
 
 ```json
 {
-  "schema_version": "jain.host-ci-sandbox-config/v5",
+  "schema_version": "jain.host-ci-sandbox-config/v6",
   "sandbox_sha256": "<64 lowercase hex>",
   "publisher_sha256": "<64 lowercase hex>",
   "splitctl_sha256": "<64 lowercase hex>",
@@ -120,6 +120,8 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
   "cargo_registry_cache": "/var/lib/jain-host-ci/cargo-registry",
   "cargo_bin": "/home/ubuntu/.cargo/bin",
   "rustup_home": "/home/ubuntu/.rustup",
+  "git_lfs_path": "/usr/bin/git-lfs",
+  "git_lfs_sha256": "<64 lowercase hex for physical git-lfs 3.4.1>",
   "control_remote": "http://127.0.0.1:8787/git/veox/jain-split-ops.git",
   "forge_git_base": "http://127.0.0.1:8787/git",
   "request_root": "/var/lib/jain-host-ci/requests",
@@ -142,6 +144,21 @@ overlong, or moved authority fails closed. Immediately after the protected
 fast-forward merge, reinstall the identical merged bytes with all three fields
 removed and prove production `main` authority through preflight and a live
 readback.
+
+Ordinary product invocations derive `control_plane_commit` from the local
+published `refs/remotes/origin/main`, never from the editable checkout HEAD.
+An explicit bootstrap invocation additionally sets
+`JAIN_HOST_CI_BOOTSTRAP_REF=refs/heads/<published-branch>`; the parent requires
+that named checkout and its matching `refs/remotes/origin/...`, while root
+still authenticates the configured ref, commit, and expiry independently.
+
+The sandbox validates a canonical root-owned, single-link `/usr/bin/git-lfs`
+at the configured digest and exact 3.4.1 build. Only Starforge may request LFS
+materialization. Its authenticated pointer objects are fetched before the
+networkless worker begins, then transferred into each standalone checkout from
+the root materialization with no network. System/global Git configuration and
+tracked `.lfsconfig` are disabled; the worker receives only the exact pinned
+`filter.lfs.{process,clean,smudge,required}` values.
 
 Create `/usr/local/libexec/jain/jeryu-merge-token` as a canonical root-owned,
 single-link regular file at exact mode `0600`. Supply the token through a

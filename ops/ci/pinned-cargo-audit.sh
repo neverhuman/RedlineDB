@@ -3,7 +3,19 @@ set -euo pipefail
 
 : "${JAIN_REAL_CARGO_AUDIT:?real cargo-audit path is required}"
 : "${JAIN_PINNED_ADVISORY_DB:?isolated advisory database path is required}"
+: "${JAIN_ADVISORY_DB:?canonical advisory database path is required}"
 : "${JAIN_PINNED_ADVISORY_COMMIT:?pinned advisory database commit is required}"
+
+[[ "$JAIN_ADVISORY_DB" == "$JAIN_PINNED_ADVISORY_DB" \
+  && "$JAIN_PINNED_ADVISORY_DB" = /* \
+  && "$(realpath -e -- "$JAIN_PINNED_ADVISORY_DB")" \
+    == "$JAIN_PINNED_ADVISORY_DB" \
+  && ! -L "$JAIN_PINNED_ADVISORY_DB" \
+  && -d "$JAIN_PINNED_ADVISORY_DB/.git" \
+  && ! -L "$JAIN_PINNED_ADVISORY_DB/.git" ]] || {
+  printf 'cargo-audit RustSec authority is not one canonical physical snapshot\n' >&2
+  exit 1
+}
 
 actual="$(git -C "$JAIN_PINNED_ADVISORY_DB" rev-parse HEAD)"
 [[ "$actual" == "$JAIN_PINNED_ADVISORY_COMMIT" ]] || {
