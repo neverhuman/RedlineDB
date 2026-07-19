@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/locked-cargo-graph.v1.schema.json",
+  "title": "Jain locked cross-repository Cargo graph v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "release", "repositories", "edges"],
+  "properties": {
+    "schema_version": { "const": "jain.locked-cargo-graph/v1" },
+    "release": { "const": "9.0.0-distributed.1" },
+    "repositories": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository", "cargo_lock_sha256"],
+        "properties": {
+          "repository": { "$ref": "#/$defs/repository" },
+          "cargo_lock_sha256": {
+            "oneOf": [
+              { "$ref": "#/$defs/sha256" },
+              { "type": "null" }
+            ]
+          }
+        }
+      }
+    },
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["consumer", "dependency"],
+        "properties": {
+          "consumer": { "$ref": "#/$defs/repository" },
+          "dependency": { "$ref": "#/$defs/repository" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "repository": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]{0,127}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": { "const": "0000000000000000000000000000000000000000000000000000000000000000" }
+    }
+  }
+}

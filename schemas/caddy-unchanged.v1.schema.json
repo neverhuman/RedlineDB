@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/caddy-unchanged.v1.schema.json",
+  "title": "Jain external Caddy unchanged proof v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "release", "receipt_id", "status", "etag_before",
+    "etag_after", "route_array_sha256_before", "route_array_sha256_after",
+    "dns_unchanged", "public_admission_unchanged"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.caddy-unchanged/v1" },
+    "release": { "const": "9.0.0-distributed.1" },
+    "receipt_id": { "const": "9.0.0-distributed.1/caddy-unchanged" },
+    "status": { "const": "pass" },
+    "etag_before": { "type": "string", "minLength": 1 },
+    "etag_after": { "type": "string", "minLength": 1 },
+    "route_array_sha256_before": { "$ref": "#/$defs/sha256" },
+    "route_array_sha256_after": { "$ref": "#/$defs/sha256" },
+    "dns_unchanged": { "const": true },
+    "public_admission_unchanged": { "const": true }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": { "const": "0000000000000000000000000000000000000000000000000000000000000000" }
+    }
+  }
+}

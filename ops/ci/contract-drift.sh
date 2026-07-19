@@ -22,13 +22,19 @@ jq -e '
 for schema in \
   schemas/distributed-release.v1.schema.json \
   schemas/soak-status.v1.schema.json \
-  schemas/accelerated-qualification.v1.schema.json; do
+  schemas/accelerated-qualification.v1.schema.json \
+  schemas/caddy-unchanged.v1.schema.json \
+  schemas/rollback-proof.v1.schema.json \
+  schemas/owner-signature.v1.schema.json \
+  schemas/locked-cargo-graph.v1.schema.json; do
   jq -e '
     .type == "object" and
     .additionalProperties == false and
     .properties.release.const == "9.0.0-distributed.1"
   ' "$schema" >/dev/null
 done
+cargo test --locked --quiet --bin splitctl \
+  distributed_release::tests::release_dag_is_lock_derived_deterministic_and_rejects_disagreement
 cargo run --locked --quiet -- validate-local-jeryu --manifest repos.manifest.toml --skip-remotes
 cargo run --locked --quiet -- validate-manifest --manifest repos.manifest.toml --check-derived
 cargo run --locked --quiet -- managed-repos --manifest repos.manifest.toml --json \

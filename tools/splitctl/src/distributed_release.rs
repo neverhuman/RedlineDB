@@ -2,20 +2,103 @@ use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    env, fs,
-    io::{self, Write},
-    os::unix::fs::{MetadataExt, OpenOptionsExt},
-    path::{Path, PathBuf},
+    env,
+    ffi::{CString, OsStr, OsString},
+    fs::{self, File},
+    io::{self, Read, Write},
+    os::{
+        fd::{AsRawFd, FromRawFd},
+        unix::{ffi::OsStrExt, fs::MetadataExt},
+    },
+    path::{Component, Path, PathBuf},
 };
 
 const RELEASE: &str = "9.0.0-distributed.1";
 const ROLLBACK: &str = "7.0.6";
 const MAX_AUTHORITY_BYTES: u64 = 16 * 1024 * 1024;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct FileIdentity {
+    device: u64,
+    inode: u64,
+    mode: u32,
+    links: u64,
+    length: u64,
+    uid: u32,
+    gid: u32,
+    modified_seconds: i64,
+    modified_nanoseconds: i64,
+    changed_seconds: i64,
+    changed_nanoseconds: i64,
+}
+
+impl FileIdentity {
+    fn from_metadata(metadata: &fs::Metadata) -> Self {
+        Self {
+            device: metadata.dev(),
+            inode: metadata.ino(),
+            mode: metadata.mode(),
+            links: metadata.nlink(),
+            length: metadata.len(),
+            uid: metadata.uid(),
+            gid: metadata.gid(),
+            modified_seconds: metadata.mtime(),
+            modified_nanoseconds: metadata.mtime_nsec(),
+            changed_seconds: metadata.ctime(),
+            changed_nanoseconds: metadata.ctime_nsec(),
+        }
+    }
+}
+
+struct OpenedPhysical {
+    file: File,
+    absolute: PathBuf,
+    identity: FileIdentity,
+    component_ids: Vec<(u64, u64)>,
+}
+
+struct PreparedOutput {
+    parent: OpenedPhysical,
+    name: OsString,
+    absolute: PathBuf,
+}
+
+#[derive(Clone)]
+struct ProofDocuments {
+    dag_bytes: Vec<u8>,
+    dag: JsonValue,
+    routes_before_bytes: Vec<u8>,
+    routes_after_bytes: Vec<u8>,
+    caddy_proof_bytes: Vec<u8>,
+    caddy_proof: JsonValue,
+    family_ci_bytes: Vec<u8>,
+    family_ci: JsonValue,
+    redline_lock_bytes: Vec<u8>,
+    redline_lock_mirror_bytes: Vec<u8>,
+    jain_consumer_bytes: Vec<u8>,
+    jain_consumer: JsonValue,
+    jeryu_consumer_bytes: Vec<u8>,
+    jeryu_consumer: JsonValue,
+    rollback_bytes: Vec<u8>,
+    rollback: JsonValue,
+    signature_receipts: Vec<(Vec<u8>, JsonValue)>,
+}
+
 pub(crate) fn validate_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let mut release_spec = None;
     let mut soak_status = None;
     let mut qualification = None;
+    let mut release_dag = None;
+    let mut caddy_routes_before = None;
+    let mut caddy_routes_after = None;
+    let mut caddy_proof = None;
+    let mut redline_family_ci = None;
+    let mut redline_lock = None;
+    let mut redline_lock_mirror = None;
+    let mut redline_jain_consumer = None;
+    let mut redline_jeryu_consumer = None;
+    let mut rollback_proof = None;
+    let mut signature_receipts = Vec::new();
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
@@ -34,16 +117,103 @@ pub(crate) fn validate_command(args: Vec<String>) -> Result<(), Box<dyn std::err
                     iter.next().ok_or("--qualification needs a path")?,
                 ))
             }
+            "--release-dag" => {
+                release_dag = Some(PathBuf::from(
+                    iter.next().ok_or("--release-dag needs a path")?,
+                ))
+            }
+            "--caddy-routes-before" => {
+                caddy_routes_before = Some(PathBuf::from(
+                    iter.next().ok_or("--caddy-routes-before needs a path")?,
+                ))
+            }
+            "--caddy-routes-after" => {
+                caddy_routes_after = Some(PathBuf::from(
+                    iter.next().ok_or("--caddy-routes-after needs a path")?,
+                ))
+            }
+            "--caddy-proof" => {
+                caddy_proof = Some(PathBuf::from(
+                    iter.next().ok_or("--caddy-proof needs a path")?,
+                ))
+            }
+            "--redline-family-ci" => {
+                redline_family_ci = Some(PathBuf::from(
+                    iter.next().ok_or("--redline-family-ci needs a path")?,
+                ))
+            }
+            "--redline-lock" => {
+                redline_lock = Some(PathBuf::from(
+                    iter.next().ok_or("--redline-lock needs a path")?,
+                ))
+            }
+            "--redline-lock-mirror" => {
+                redline_lock_mirror = Some(PathBuf::from(
+                    iter.next().ok_or("--redline-lock-mirror needs a path")?,
+                ))
+            }
+            "--redline-jain-consumer" => {
+                redline_jain_consumer = Some(PathBuf::from(
+                    iter.next().ok_or("--redline-jain-consumer needs a path")?,
+                ))
+            }
+            "--redline-jeryu-consumer" => {
+                redline_jeryu_consumer = Some(PathBuf::from(
+                    iter.next().ok_or("--redline-jeryu-consumer needs a path")?,
+                ))
+            }
+            "--rollback-proof" => {
+                rollback_proof = Some(PathBuf::from(
+                    iter.next().ok_or("--rollback-proof needs a path")?,
+                ))
+            }
+            "--signature-receipt" => signature_receipts.push(PathBuf::from(
+                iter.next().ok_or("--signature-receipt needs a path")?,
+            )),
             value => return Err(format!("unknown distributed-validate argument: {value}").into()),
         }
     }
     let release_spec = release_spec.ok_or("--release-spec is required")?;
     let soak_status = soak_status.ok_or("--soak-status is required")?;
     let qualification = qualification.ok_or("--qualification is required")?;
+    let release_dag = release_dag.ok_or("--release-dag is required")?;
+    let caddy_routes_before = caddy_routes_before.ok_or("--caddy-routes-before is required")?;
+    let caddy_routes_after = caddy_routes_after.ok_or("--caddy-routes-after is required")?;
+    let caddy_proof = caddy_proof.ok_or("--caddy-proof is required")?;
+    let redline_family_ci = redline_family_ci.ok_or("--redline-family-ci is required")?;
+    let redline_lock = redline_lock.ok_or("--redline-lock is required")?;
+    let redline_lock_mirror = redline_lock_mirror.ok_or("--redline-lock-mirror is required")?;
+    let redline_jain_consumer =
+        redline_jain_consumer.ok_or("--redline-jain-consumer is required")?;
+    let redline_jeryu_consumer =
+        redline_jeryu_consumer.ok_or("--redline-jeryu-consumer is required")?;
+    let rollback_proof = rollback_proof.ok_or("--rollback-proof is required")?;
+    if signature_receipts.len() != 2 {
+        return Err("exactly two --signature-receipt paths are required".into());
+    }
     let (release_bytes, release_value) = read_authority_json(&release_spec, "release spec")?;
     let (soak_bytes, soak_value) = read_authority_json(&soak_status, "soak status")?;
     let (qualification_bytes, qualification_value) =
         read_authority_json(&qualification, "qualification")?;
+    let (dag_bytes, dag_value) = read_authority_json(&release_dag, "release DAG")?;
+    let routes_before_bytes = read_regular_bytes(&caddy_routes_before, "Caddy routes before")?;
+    let routes_after_bytes = read_regular_bytes(&caddy_routes_after, "Caddy routes after")?;
+    let (caddy_proof_bytes, caddy_proof_value) =
+        read_authority_json(&caddy_proof, "Caddy unchanged proof")?;
+    let (family_ci_bytes, family_ci_value) =
+        read_authority_json(&redline_family_ci, "Redline family CI")?;
+    let redline_lock_bytes = read_regular_bytes(&redline_lock, "Redline authoritative lock")?;
+    let redline_lock_mirror_bytes =
+        read_regular_bytes(&redline_lock_mirror, "Redline compatibility lock")?;
+    let (jain_consumer_bytes, jain_consumer_value) =
+        read_authority_json(&redline_jain_consumer, "Redline Jain consumer evidence")?;
+    let (jeryu_consumer_bytes, jeryu_consumer_value) =
+        read_authority_json(&redline_jeryu_consumer, "Redline Jeryu consumer evidence")?;
+    let (rollback_bytes, rollback_value) = read_authority_json(&rollback_proof, "rollback proof")?;
+    let mut signature_documents = Vec::new();
+    for path in &signature_receipts {
+        signature_documents.push(read_authority_json(path, "owner signature receipt")?);
+    }
 
     validate_release_spec(&release_value)?;
     validate_soak_status(&soak_value)?;
@@ -55,6 +225,26 @@ pub(crate) fn validate_command(args: Vec<String>) -> Result<(), Box<dyn std::err
         &soak_bytes,
         &qualification_bytes,
     )?;
+    let proofs = ProofDocuments {
+        dag_bytes,
+        dag: dag_value,
+        routes_before_bytes,
+        routes_after_bytes,
+        caddy_proof_bytes,
+        caddy_proof: caddy_proof_value,
+        family_ci_bytes,
+        family_ci: family_ci_value,
+        redline_lock_bytes,
+        redline_lock_mirror_bytes,
+        jain_consumer_bytes,
+        jain_consumer: jain_consumer_value,
+        jeryu_consumer_bytes,
+        jeryu_consumer: jeryu_consumer_value,
+        rollback_bytes,
+        rollback: rollback_value,
+        signature_receipts: signature_documents,
+    };
+    validate_proof_bindings(&release_value, &proofs)?;
     println!(
         "distributed authority valid: release={} spec_sha256={} soak_sha256={} qualification_sha256={}",
         RELEASE,
@@ -67,6 +257,7 @@ pub(crate) fn validate_command(args: Vec<String>) -> Result<(), Box<dyn std::err
 
 pub(crate) fn dag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let mut manifest = None;
+    let mut locked_cargo_graph = None;
     let mut release = None;
     let mut output = None;
     let mut apply = false;
@@ -76,6 +267,11 @@ pub(crate) fn dag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
             "--manifest" => {
                 manifest = Some(PathBuf::from(iter.next().ok_or("--manifest needs a path")?))
             }
+            "--locked-cargo-graph" => {
+                locked_cargo_graph = Some(PathBuf::from(
+                    iter.next().ok_or("--locked-cargo-graph needs a path")?,
+                ))
+            }
             "--release" => release = Some(iter.next().ok_or("--release needs a value")?),
             "--json" => output = Some(PathBuf::from(iter.next().ok_or("--json needs a path")?)),
             "--apply" => apply = true,
@@ -83,13 +279,22 @@ pub(crate) fn dag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
         }
     }
     let manifest = manifest.ok_or("--manifest is required")?;
+    let locked_cargo_graph = locked_cargo_graph.ok_or("--locked-cargo-graph is required")?;
     if release.as_deref() != Some(RELEASE) {
         return Err(format!("--release must be {RELEASE}").into());
     }
     let bytes = read_regular_bytes(&manifest, "release DAG manifest")?;
     let data: toml::Value = std::str::from_utf8(&bytes)?.parse()?;
-    let report = build_dag(&data, sha256_bytes(&bytes))?;
-    emit_json(report, output.as_deref(), apply)
+    let (locked_graph_bytes, locked_graph) =
+        read_authority_json(&locked_cargo_graph, "locked Cargo graph")?;
+    let prepared_output = output.as_deref().map(prepare_output).transpose()?;
+    let report = build_dag(
+        &data,
+        sha256_bytes(&bytes),
+        &locked_graph,
+        sha256_bytes(&locked_graph_bytes),
+    )?;
+    emit_json(report, prepared_output.as_ref(), apply)
 }
 
 pub(crate) fn evidence_index_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -141,14 +346,14 @@ pub(crate) fn evidence_index_command(args: Vec<String>) -> Result<(), Box<dyn st
             Err(error) => return Err(error.into()),
         }
     }
-    let output_canonical = output.as_deref().map(resolve_output_path).transpose()?;
+    let prepared_output = output.as_deref().map(prepare_output).transpose()?;
     let report = build_evidence_index(
         &root,
         &historical_roots,
         &absent_historical_roots,
-        output_canonical.as_deref(),
+        prepared_output.as_ref(),
     )?;
-    emit_json(report, output_canonical.as_deref(), apply)
+    emit_json(report, prepared_output.as_ref(), apply)
 }
 
 fn read_authority_json(
@@ -161,16 +366,38 @@ fn read_authority_json(
 }
 
 fn read_regular_bytes(path: &Path, label: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let metadata = fs::symlink_metadata(path)?;
+    read_regular_bytes_with_hook(path, label, || {})
+}
+
+fn read_regular_bytes_with_hook<F>(
+    path: &Path,
+    label: &str,
+    hook: F,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>>
+where
+    F: FnOnce(),
+{
+    let opened = open_physical(path, libc::O_RDONLY, label)?;
+    let metadata = opened.file.metadata()?;
     if !metadata.file_type().is_file()
-        || metadata.file_type().is_symlink()
-        || metadata.nlink() != 1
-        || metadata.len() == 0
-        || metadata.len() > MAX_AUTHORITY_BYTES
+        || opened.identity.links != 1
+        || opened.identity.length == 0
+        || opened.identity.length > MAX_AUTHORITY_BYTES
     {
         return Err(format!("{label} is not a bounded independent regular file").into());
     }
-    Ok(fs::read(path)?)
+    hook();
+    let mut bytes = Vec::with_capacity(opened.identity.length as usize);
+    (&opened.file)
+        .take(MAX_AUTHORITY_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 != opened.identity.length
+        || FileIdentity::from_metadata(&opened.file.metadata()?) != opened.identity
+    {
+        return Err(format!("{label} changed while reading").into());
+    }
+    ensure_path_identity(&opened, libc::O_RDONLY, label)?;
+    Ok(bytes)
 }
 
 fn validate_release_spec(value: &JsonValue) -> Result<(), Box<dyn std::error::Error>> {
@@ -181,12 +408,14 @@ fn validate_release_spec(value: &JsonValue) -> Result<(), Box<dyn std::error::Er
             "activation_eligible",
             "artifact_set_sha256",
             "artifacts",
+            "canonical_payload_sha256",
             "formal_ga",
             "hosts",
             "public_routed",
             "receipts",
             "redline",
             "release",
+            "release_dag_sha256",
             "release_id",
             "rollback",
             "rollback_target",
@@ -213,6 +442,8 @@ fn validate_release_spec(value: &JsonValue) -> Result<(), Box<dyn std::error::Er
     expect_string(object, "rollback_target", ROLLBACK)?;
     require_sha256(object, "source_freeze_sha256")?;
     require_sha256(object, "artifact_set_sha256")?;
+    require_sha256(object, "release_dag_sha256")?;
+    require_sha256(object, "canonical_payload_sha256")?;
 
     let source_matrix = require_array(object, "source_matrix")?;
     if source_matrix.is_empty() {
@@ -232,8 +463,10 @@ fn validate_release_spec(value: &JsonValue) -> Result<(), Box<dyn std::error::Er
             );
         }
         let tag = require_string(row, "tag")?;
-        if !tag.contains("-v9.0.0-distributed.1-") {
-            return Err(format!("source_matrix tag is not distributed.1: {tag}").into());
+        if !valid_release_tag(repository, tag) {
+            return Err(
+                format!("source_matrix tag does not bind repository {repository}: {tag}").into(),
+            );
         }
         require_hex(row, "commit", 40)?;
         require_hex(row, "tree", 40)?;
@@ -287,7 +520,16 @@ fn validate_release_spec(value: &JsonValue) -> Result<(), Box<dyn std::error::Er
     if require_string(object, "artifact_set_sha256")? != artifact_set_digest(artifacts)? {
         return Err("artifact_set_sha256 does not bind the canonical artifact inventory".into());
     }
-    for required in ["caddy", "hub", "node", "worker", "appliance_bundle"] {
+    for required in [
+        "caddy",
+        "hub",
+        "node",
+        "worker",
+        "pack",
+        "compose",
+        "installer",
+        "appliance_bundle",
+    ] {
         if !kinds.contains(required) {
             return Err(
                 format!("required distributed artifact kind is missing: {required}").into(),
@@ -295,7 +537,10 @@ fn validate_release_spec(value: &JsonValue) -> Result<(), Box<dyn std::error::Er
         }
     }
 
-    validate_hosts(require_array(object, "hosts")?)?;
+    validate_hosts(
+        require_array(object, "hosts")?,
+        &deployed_image_set_digest(artifacts)?,
+    )?;
     validate_routes(object.get("routes").ok_or("routes is required")?)?;
     let receipts = exact_object(
         object.get("receipts").ok_or("receipts is required")?,
@@ -325,11 +570,26 @@ fn validate_release_spec(value: &JsonValue) -> Result<(), Box<dyn std::error::Er
         object.get("rollback").ok_or("rollback is required")?,
         receipts,
     )?;
-    validate_signatures(require_array(object, "signatures")?, 2, true)?;
+    validate_release_signatures(require_array(object, "signatures")?)?;
+    let expected_payload = canonical_release_payload_digest(value)?;
+    if require_string(object, "canonical_payload_sha256")? != expected_payload {
+        return Err("canonical_payload_sha256 does not bind the unsigned release payload".into());
+    }
+    for signature in require_array(object, "signatures")? {
+        let signature = signature
+            .as_object()
+            .ok_or("release signature row is not an object")?;
+        if require_sha256(signature, "payload_sha256")? != expected_payload {
+            return Err("release signature row signs the wrong canonical payload".into());
+        }
+    }
     Ok(())
 }
 
-fn validate_hosts(hosts: &[JsonValue]) -> Result<(), Box<dyn std::error::Error>> {
+fn validate_hosts(
+    hosts: &[JsonValue],
+    expected_image_set_sha256: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
     if hosts.len() != 3 {
         return Err("distributed release must bind exactly three hosts".into());
     }
@@ -381,7 +641,12 @@ fn validate_hosts(hosts: &[JsonValue]) -> Result<(), Box<dyn std::error::Error>>
             return Err(format!("host {id} has a zero controller epoch").into());
         }
         epochs.insert(epoch);
-        require_sha256(host, "image_set_sha256")?;
+        if require_sha256(host, "image_set_sha256")? != expected_image_set_sha256 {
+            return Err(format!(
+                "host {id} image_set_sha256 does not bind canonical registry readback images"
+            )
+            .into());
+        }
         expect_bool(host, "external_caddy_unchanged", true)?;
         let actual_ports = require_array(host, "ports")?
             .iter()
@@ -633,6 +898,597 @@ fn validate_cross_bindings(
     Ok(())
 }
 
+fn validate_proof_bindings(
+    release: &JsonValue,
+    proofs: &ProofDocuments,
+) -> Result<(), Box<dyn std::error::Error>> {
+    validate_release_dag_binding(release, &proofs.dag_bytes, &proofs.dag)?;
+    validate_caddy_proof(release, proofs)?;
+    validate_redline_proofs(release, proofs)?;
+    validate_rollback_proof(release, &proofs.rollback_bytes, &proofs.rollback)?;
+    validate_owner_signature_receipts(release, &proofs.signature_receipts)?;
+    Ok(())
+}
+
+fn validate_release_dag_binding(
+    release: &JsonValue,
+    dag_bytes: &[u8],
+    dag: &JsonValue,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let release = release.as_object().ok_or("release spec is not an object")?;
+    let dag = exact_object(
+        dag,
+        &[
+            "locked_cargo_graph_sha256",
+            "manifest_sha256",
+            "release",
+            "repositories",
+            "repository_count",
+            "rollout_wave_order",
+            "schema_version",
+            "status",
+        ],
+        "release DAG",
+    )?;
+    expect_string(dag, "schema_version", "jain.release-dag/v1")?;
+    expect_string(dag, "release", RELEASE)?;
+    expect_string(dag, "status", "pass")?;
+    require_sha256(dag, "manifest_sha256")?;
+    require_sha256(dag, "locked_cargo_graph_sha256")?;
+    if require_sha256(release, "release_dag_sha256")? != sha256_bytes(dag_bytes) {
+        return Err("release_dag_sha256 does not bind exact DAG bytes".into());
+    }
+    let waves = require_array(dag, "rollout_wave_order")?;
+    let wave_values = waves
+        .iter()
+        .map(JsonValue::as_i64)
+        .collect::<Option<Vec<_>>>()
+        .ok_or("release DAG rollout wave is not an integer")?;
+    if wave_values.is_empty() || wave_values.windows(2).any(|pair| pair[0] >= pair[1]) {
+        return Err("release DAG rollout_wave_order is invalid".into());
+    }
+    let rows = require_array(dag, "repositories")?;
+    if require_u64(dag, "repository_count")? != rows.len() as u64 || rows.is_empty() {
+        return Err("release DAG repository_count is invalid".into());
+    }
+    let mut dag_repositories = BTreeSet::new();
+    let mut dependencies_by_repository = BTreeMap::new();
+    let mut dag_sources = BTreeMap::new();
+    for (position, row) in rows.iter().enumerate() {
+        let row = exact_object(
+            row,
+            &[
+                "cargo_lock_sha256",
+                "checksum_sha256",
+                "commit",
+                "declared_wave",
+                "depends_on",
+                "position",
+                "repository",
+                "tag",
+                "tree",
+            ],
+            &format!("release DAG repositories[{position}]"),
+        )?;
+        expect_u64(row, "position", position as u64)?;
+        require_u64(row, "declared_wave")?;
+        let repository = require_string(row, "repository")?;
+        if !valid_repository_name(repository) || !dag_repositories.insert(repository.to_owned()) {
+            return Err(
+                format!("release DAG repository is invalid or duplicate: {repository}").into(),
+            );
+        }
+        match row.get("cargo_lock_sha256") {
+            Some(JsonValue::Null) => {}
+            Some(JsonValue::String(value)) if valid_nonzero_hex(value, 64) => {}
+            _ => return Err(format!("release DAG Cargo lock is invalid: {repository}").into()),
+        }
+        let tag = require_string(row, "tag")?;
+        if !valid_release_tag(repository, tag) {
+            return Err(format!("release DAG tag does not bind {repository}").into());
+        }
+        let commit = require_hex(row, "commit", 40)?;
+        let tree = require_hex(row, "tree", 40)?;
+        let checksum = require_sha256(row, "checksum_sha256")?;
+        dag_sources.insert(
+            repository.to_owned(),
+            (
+                tag.to_owned(),
+                commit.to_owned(),
+                tree.to_owned(),
+                checksum.to_owned(),
+            ),
+        );
+        let dependencies = require_array(row, "depends_on")?
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .filter(|value| valid_repository_name(value))
+                    .map(str::to_owned)
+                    .ok_or("release DAG dependency is invalid")
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        if dependencies.len() != require_array(row, "depends_on")?.len() {
+            return Err(format!("release DAG has duplicate dependencies: {repository}").into());
+        }
+        dependencies_by_repository.insert(repository.to_owned(), dependencies);
+    }
+    for (repository, dependencies) in &dependencies_by_repository {
+        if dependencies
+            .iter()
+            .any(|dependency| dependency == repository || !dag_repositories.contains(dependency))
+        {
+            return Err(
+                format!("release DAG has an unknown or self dependency: {repository}").into(),
+            );
+        }
+    }
+    let source_rows = require_array(release, "source_matrix")?;
+    let source_repositories = source_rows
+        .iter()
+        .map(|row| {
+            row.as_object()
+                .and_then(|row| row.get("repository"))
+                .and_then(JsonValue::as_str)
+                .map(str::to_owned)
+                .ok_or("source matrix repository is invalid")
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    if source_repositories != dag_repositories {
+        return Err("source_matrix is not the complete DAG repository inventory".into());
+    }
+    let release_sources = source_rows
+        .iter()
+        .map(|row| {
+            let row = row
+                .as_object()
+                .ok_or("source matrix row is not an object")?;
+            Ok((
+                require_string(row, "repository")?.to_owned(),
+                (
+                    require_string(row, "tag")?.to_owned(),
+                    require_string(row, "commit")?.to_owned(),
+                    require_string(row, "tree")?.to_owned(),
+                    require_string(row, "checksum_sha256")?.to_owned(),
+                ),
+            ))
+        })
+        .collect::<Result<BTreeMap<_, _>, Box<dyn std::error::Error>>>()?;
+    if release_sources != dag_sources {
+        return Err("source_matrix identities differ from authority-derived DAG rows".into());
+    }
+    Ok(())
+}
+
+fn validate_caddy_proof(
+    release: &JsonValue,
+    proofs: &ProofDocuments,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let release = release.as_object().ok_or("release spec is not an object")?;
+    let routes = release
+        .get("routes")
+        .and_then(JsonValue::as_object)
+        .ok_or("release routes are missing")?;
+    let receipts = release
+        .get("receipts")
+        .and_then(JsonValue::as_object)
+        .ok_or("release receipts are missing")?;
+    let proof = exact_object(
+        &proofs.caddy_proof,
+        &[
+            "dns_unchanged",
+            "etag_after",
+            "etag_before",
+            "public_admission_unchanged",
+            "receipt_id",
+            "release",
+            "route_array_sha256_after",
+            "route_array_sha256_before",
+            "schema_version",
+            "status",
+        ],
+        "Caddy unchanged proof",
+    )?;
+    expect_string(proof, "schema_version", "jain.caddy-unchanged/v1")?;
+    expect_string(proof, "release", RELEASE)?;
+    expect_string(proof, "receipt_id", "9.0.0-distributed.1/caddy-unchanged")?;
+    expect_string(proof, "status", "pass")?;
+    expect_bool(proof, "dns_unchanged", true)?;
+    expect_bool(proof, "public_admission_unchanged", true)?;
+    let before_sha = sha256_bytes(&proofs.routes_before_bytes);
+    let after_sha = sha256_bytes(&proofs.routes_after_bytes);
+    if proofs.routes_before_bytes != proofs.routes_after_bytes
+        || require_sha256(proof, "route_array_sha256_before")? != before_sha
+        || require_sha256(proof, "route_array_sha256_after")? != after_sha
+        || require_sha256(routes, "external_caddy_route_sha256_before")? != before_sha
+        || require_sha256(routes, "external_caddy_route_sha256_after")? != after_sha
+    {
+        return Err("Caddy proof does not bind identical exact route-array bytes".into());
+    }
+    for (route_key, proof_key) in [
+        ("external_caddy_etag_before", "etag_before"),
+        ("external_caddy_etag_after", "etag_after"),
+    ] {
+        if require_string(routes, route_key)? != require_string(proof, proof_key)? {
+            return Err("Caddy proof ETag differs from release routes".into());
+        }
+    }
+    if require_sha256(receipts, "caddy_unchanged_sha256")?
+        != sha256_bytes(&proofs.caddy_proof_bytes)
+    {
+        return Err("release does not bind exact Caddy proof bytes".into());
+    }
+    Ok(())
+}
+
+fn validate_redline_proofs(
+    release: &JsonValue,
+    proofs: &ProofDocuments,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let release = release.as_object().ok_or("release spec is not an object")?;
+    let redline = release
+        .get("redline")
+        .and_then(JsonValue::as_object)
+        .ok_or("release Redline identity is missing")?;
+    let receipts = release
+        .get("receipts")
+        .and_then(JsonValue::as_object)
+        .ok_or("release receipts are missing")?;
+    let engine_tag = require_string(redline, "engine_tag")?;
+    let engine_commit = require_string(redline, "engine_commit")?;
+    let proof_lock_id = format!("redline-proof/v2/4.1.0/{engine_commit}");
+    let family_sha = sha256_bytes(&proofs.family_ci_bytes);
+    let lock_sha = sha256_bytes(&proofs.redline_lock_bytes);
+    let jain_sha = sha256_bytes(&proofs.jain_consumer_bytes);
+    let jeryu_sha = sha256_bytes(&proofs.jeryu_consumer_bytes);
+    if proofs.redline_lock_bytes != proofs.redline_lock_mirror_bytes {
+        return Err("Redline authoritative and compatibility locks differ byte-for-byte".into());
+    }
+    for (object, key, expected) in [
+        (redline, "family_ci_sha256", family_sha.as_str()),
+        (redline, "lock_sha256", lock_sha.as_str()),
+        (redline, "jain_consumer_sha256", jain_sha.as_str()),
+        (redline, "jeryu_consumer_sha256", jeryu_sha.as_str()),
+        (receipts, "redline_lock_sha256", lock_sha.as_str()),
+        (receipts, "redline_jain_consumer_sha256", jain_sha.as_str()),
+        (
+            receipts,
+            "redline_jeryu_consumer_sha256",
+            jeryu_sha.as_str(),
+        ),
+    ] {
+        if require_sha256(object, key)? != expected {
+            return Err(format!("Redline exact proof bytes do not bind {key}").into());
+        }
+    }
+
+    let family = proofs
+        .family_ci
+        .as_object()
+        .ok_or("Redline family CI is not an object")?;
+    expect_string(family, "schema_version", "redline.family-ci/v1")?;
+    expect_string(family, "family", "redline-split")?;
+    expect_string(family, "status", "pass")?;
+    let repositories = require_array(family, "repositories")?;
+    if repositories
+        .iter()
+        .any(|row| row.get("status").and_then(JsonValue::as_str) != Some("pass"))
+    {
+        return Err("Redline family CI contains a non-passing repository".into());
+    }
+    let family_repositories = repositories
+        .iter()
+        .map(|row| {
+            row.get("name")
+                .and_then(JsonValue::as_str)
+                .ok_or("Redline family CI repository has no name")
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    if family_repositories
+        != BTreeSet::from(["redline", "redline-core", "redline-testing", "redline-web"])
+        || repositories.len() != 4
+    {
+        return Err("Redline family CI repository inventory is not exact".into());
+    }
+    let core = repositories
+        .iter()
+        .find(|row| row.get("name").and_then(JsonValue::as_str) == Some("redline-core"))
+        .and_then(JsonValue::as_object)
+        .ok_or("Redline family CI has no redline-core row")?;
+    if require_string(core, "tag")? != engine_tag
+        || require_string(core, "release_commit")? != engine_commit
+    {
+        return Err("Redline family CI engine identity differs from release".into());
+    }
+
+    validate_redline_consumer(
+        &proofs.jain_consumer,
+        "jain-split",
+        engine_tag,
+        engine_commit,
+        &proof_lock_id,
+        &family_sha,
+    )?;
+    validate_redline_consumer(
+        &proofs.jeryu_consumer,
+        "jeryu-split",
+        engine_tag,
+        engine_commit,
+        &proof_lock_id,
+        &family_sha,
+    )?;
+
+    let lock: toml::Value = std::str::from_utf8(&proofs.redline_lock_bytes)?.parse()?;
+    let lock = lock.as_table().ok_or("Redline lock is not a table")?;
+    for (key, expected) in [
+        ("schema_version", "redline.split.lock/v2"),
+        ("family", "redline-split"),
+        ("engine_tag", engine_tag),
+        ("engine_commit", engine_commit),
+        ("proof_lock_id", proof_lock_id.as_str()),
+    ] {
+        if lock.get(key).and_then(toml::Value::as_str) != Some(expected) {
+            return Err(format!("Redline lock {key} differs from release proof identity").into());
+        }
+    }
+    let consumers = lock
+        .get("consumers")
+        .and_then(toml::Value::as_array)
+        .ok_or("Redline lock consumers are missing")?
+        .iter()
+        .map(|value| {
+            value
+                .as_str()
+                .ok_or("Redline lock consumer is not a string")
+        })
+        .collect::<Result<BTreeSet<_>, _>>()?;
+    if consumers != BTreeSet::from(["jain-split", "jeryu-split"]) {
+        return Err("Redline lock consumer set is not exact".into());
+    }
+    let proof = lock
+        .get("proof")
+        .and_then(toml::Value::as_table)
+        .ok_or("Redline lock proof table is missing")?;
+    if proof.get("cutover_eligible").and_then(toml::Value::as_bool) != Some(true)
+        || proof
+            .get("family_ci_receipt_sha256")
+            .and_then(toml::Value::as_str)
+            != Some(family_sha.as_str())
+    {
+        return Err("Redline lock is not cutover-eligible for exact family CI bytes".into());
+    }
+    for key in ["required_consumer_evidence", "accepted_consumer_evidence"] {
+        let values = proof
+            .get(key)
+            .and_then(toml::Value::as_array)
+            .ok_or_else(|| format!("Redline lock {key} is missing"))?
+            .iter()
+            .map(|value| {
+                value
+                    .as_str()
+                    .ok_or("Redline proof consumer is not a string")
+            })
+            .collect::<Result<BTreeSet<_>, _>>()?;
+        if values != BTreeSet::from(["jain-split", "jeryu-split"]) {
+            return Err(format!("Redline lock {key} is not exact").into());
+        }
+    }
+    let evidence = proof
+        .get("consumer_evidence")
+        .and_then(toml::Value::as_array)
+        .ok_or("Redline lock consumer evidence rows are missing")?;
+    let mut evidence_digests = BTreeMap::new();
+    for row in evidence {
+        let row = row
+            .as_table()
+            .ok_or("Redline consumer evidence row is not a table")?;
+        let consumer = row
+            .get("consumer")
+            .and_then(toml::Value::as_str)
+            .ok_or("Redline lock consumer evidence has no consumer")?;
+        let digest = row
+            .get("sha256")
+            .and_then(toml::Value::as_str)
+            .ok_or("Redline lock consumer evidence has no digest")?;
+        if evidence_digests.insert(consumer, digest).is_some() {
+            return Err("Redline lock repeats consumer evidence".into());
+        }
+    }
+    if evidence_digests
+        != BTreeMap::from([
+            ("jain-split", jain_sha.as_str()),
+            ("jeryu-split", jeryu_sha.as_str()),
+        ])
+    {
+        return Err("Redline lock does not bind both exact consumer evidence files".into());
+    }
+    Ok(())
+}
+
+fn validate_redline_consumer(
+    value: &JsonValue,
+    expected_consumer: &str,
+    engine_tag: &str,
+    engine_commit: &str,
+    proof_lock_id: &str,
+    family_sha256: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let object = exact_object(
+        value,
+        &[
+            "consumer",
+            "consumer_manifest_sha256",
+            "consumer_policy_sha256",
+            "engine_commit",
+            "engine_tag",
+            "family",
+            "family_ci_receipt_sha256",
+            "generated_at",
+            "manifest_sha256",
+            "policy_sha256",
+            "proof_lock_id",
+            "required_check",
+            "schema_version",
+            "source_commit",
+            "status",
+            "test_log",
+            "test_log_sha256",
+            "tool_version",
+        ],
+        "Redline consumer evidence",
+    )?;
+    expect_string(object, "schema_version", "redline.consumer-evidence/v1")?;
+    expect_string(object, "consumer", expected_consumer)?;
+    expect_string(object, "family", "redline-split")?;
+    expect_string(object, "status", "pass")?;
+    expect_string(object, "engine_tag", engine_tag)?;
+    expect_string(object, "engine_commit", engine_commit)?;
+    expect_string(object, "proof_lock_id", proof_lock_id)?;
+    if require_sha256(object, "family_ci_receipt_sha256")? != family_sha256 {
+        return Err("Redline consumer does not bind exact family CI bytes".into());
+    }
+    require_hex(object, "source_commit", 40)?;
+    for key in [
+        "manifest_sha256",
+        "policy_sha256",
+        "consumer_manifest_sha256",
+        "consumer_policy_sha256",
+        "test_log_sha256",
+    ] {
+        require_sha256(object, key)?;
+    }
+    let required_check = format!("{expected_consumer}/redline-consumer");
+    expect_string(object, "required_check", &required_check)?;
+    if require_string(object, "generated_at")?.is_empty()
+        || require_string(object, "test_log")?.is_empty()
+        || require_string(object, "tool_version")?.is_empty()
+    {
+        return Err("Redline consumer evidence has an empty identity field".into());
+    }
+    Ok(())
+}
+
+fn validate_rollback_proof(
+    release: &JsonValue,
+    proof_bytes: &[u8],
+    proof: &JsonValue,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let release = release.as_object().ok_or("release spec is not an object")?;
+    let rollback = release
+        .get("rollback")
+        .and_then(JsonValue::as_object)
+        .ok_or("release rollback identity is missing")?;
+    let receipts = release
+        .get("receipts")
+        .and_then(JsonValue::as_object)
+        .ok_or("release receipts are missing")?;
+    let proof = exact_object(
+        proof,
+        &[
+            "artifact_set_sha256",
+            "receipt_id",
+            "release",
+            "roll_forward_artifact_set_sha256",
+            "rollback_verified",
+            "schema_version",
+            "source_freeze_sha256",
+            "status",
+            "target_release",
+        ],
+        "rollback proof",
+    )?;
+    expect_string(proof, "schema_version", "jain.rollback-proof/v1")?;
+    expect_string(proof, "release", RELEASE)?;
+    expect_string(proof, "receipt_id", "9.0.0-distributed.1/rollback-proof")?;
+    expect_string(proof, "status", "pass")?;
+    expect_string(proof, "target_release", ROLLBACK)?;
+    expect_bool(proof, "rollback_verified", true)?;
+    for key in ["source_freeze_sha256", "artifact_set_sha256"] {
+        if require_sha256(proof, key)? != require_sha256(rollback, key)? {
+            return Err(format!("rollback proof does not bind release {key}").into());
+        }
+    }
+    if require_sha256(proof, "roll_forward_artifact_set_sha256")?
+        != require_sha256(release, "artifact_set_sha256")?
+    {
+        return Err(
+            "rollback proof does not bind identical distributed roll-forward artifacts".into(),
+        );
+    }
+    let digest = sha256_bytes(proof_bytes);
+    if require_sha256(rollback, "receipt_sha256")? != digest
+        || require_sha256(receipts, "rollback_sha256")? != digest
+    {
+        return Err("release does not bind exact rollback proof bytes".into());
+    }
+    Ok(())
+}
+
+fn validate_owner_signature_receipts(
+    release: &JsonValue,
+    receipts: &[(Vec<u8>, JsonValue)],
+) -> Result<(), Box<dyn std::error::Error>> {
+    if receipts.len() != 2 {
+        return Err("exactly two owner signature receipts are required".into());
+    }
+    let release = release.as_object().ok_or("release spec is not an object")?;
+    let payload = require_sha256(release, "canonical_payload_sha256")?;
+    let signatures = require_array(release, "signatures")?;
+    let mut by_receipt = BTreeMap::new();
+    for row in signatures {
+        let row = row
+            .as_object()
+            .ok_or("release signature row is not an object")?;
+        by_receipt.insert(require_string(row, "receipt_id")?, row);
+    }
+    for (bytes, value) in receipts {
+        let receipt = exact_object(
+            value,
+            &[
+                "key_fingerprint_sha256",
+                "owner_id",
+                "payload_sha256",
+                "receipt_id",
+                "release",
+                "schema_version",
+                "signature_sha256",
+                "status",
+                "verifier",
+            ],
+            "owner signature receipt",
+        )?;
+        expect_string(receipt, "schema_version", "jain.owner-signature/v1")?;
+        expect_string(receipt, "release", RELEASE)?;
+        expect_string(receipt, "status", "verified")?;
+        expect_string(receipt, "verifier", "jain-owner-signature-verify/v1")?;
+        if require_sha256(receipt, "payload_sha256")? != payload {
+            return Err("owner signature receipt signs the wrong canonical payload".into());
+        }
+        let receipt_id = require_string(receipt, "receipt_id")?;
+        let row = by_receipt
+            .remove(receipt_id)
+            .ok_or("owner signature receipt is not declared by release")?;
+        for key in [
+            "owner_id",
+            "key_fingerprint_sha256",
+            "payload_sha256",
+            "signature_sha256",
+        ] {
+            if require_string(receipt, key)? != require_string(row, key)? {
+                return Err(format!("owner signature receipt differs at {key}").into());
+            }
+        }
+        if require_sha256(row, "receipt_sha256")? != sha256_bytes(bytes) {
+            return Err("release does not bind exact owner signature receipt bytes".into());
+        }
+    }
+    if !by_receipt.is_empty() {
+        return Err("release has an owner signature without an exact receipt file".into());
+    }
+    Ok(())
+}
+
 fn validate_signatures(
     signatures: &[JsonValue],
     minimum: usize,
@@ -659,11 +1515,141 @@ fn validate_signatures(
     Ok(())
 }
 
+fn validate_release_signatures(signatures: &[JsonValue]) -> Result<(), Box<dyn std::error::Error>> {
+    if signatures.len() != 2 {
+        return Err("expected exactly two distinct owner signature receipts".into());
+    }
+    let mut owners = BTreeSet::new();
+    let mut keys = BTreeSet::new();
+    let mut receipt_ids = BTreeSet::new();
+    for (index, signature) in signatures.iter().enumerate() {
+        let signature = exact_object(
+            signature,
+            &[
+                "key_fingerprint_sha256",
+                "owner_id",
+                "payload_sha256",
+                "receipt_id",
+                "receipt_sha256",
+                "signature_sha256",
+            ],
+            &format!("signatures[{index}]"),
+        )?;
+        let owner = require_string(signature, "owner_id")?;
+        let key = require_sha256(signature, "key_fingerprint_sha256")?;
+        let receipt_id = require_string(signature, "receipt_id")?;
+        if receipt_id != format!("{RELEASE}/owner-signature/{owner}") {
+            return Err("owner signature receipt_id does not bind its owner".into());
+        }
+        require_sha256(signature, "payload_sha256")?;
+        require_sha256(signature, "receipt_sha256")?;
+        require_sha256(signature, "signature_sha256")?;
+        if owner.is_empty()
+            || receipt_id.is_empty()
+            || !owners.insert(owner.to_owned())
+            || !keys.insert(key.to_owned())
+            || !receipt_ids.insert(receipt_id.to_owned())
+        {
+            return Err("signature owners, keys, and receipt IDs must be distinct".into());
+        }
+    }
+    Ok(())
+}
+
+struct DagNode {
+    wave: i64,
+    dependencies: BTreeSet<String>,
+    has_cargo_members: bool,
+    tag: String,
+    commit: String,
+    tree: String,
+    checksum_sha256: String,
+}
+
 fn build_dag(
     data: &toml::Value,
     manifest_sha256: String,
+    locked_graph: &JsonValue,
+    locked_cargo_graph_sha256: String,
 ) -> Result<JsonValue, Box<dyn std::error::Error>> {
-    let mut nodes: BTreeMap<String, (i64, BTreeSet<String>)> = BTreeMap::new();
+    let manifest_root = data
+        .as_table()
+        .ok_or("release DAG manifest is not a table")?;
+    let rollout_wave_order = manifest_root
+        .get("rollout_wave_order")
+        .and_then(toml::Value::as_array)
+        .ok_or("release DAG manifest has no rollout_wave_order")?
+        .iter()
+        .map(|value| value.as_integer().ok_or("rollout wave is not an integer"))
+        .collect::<Result<Vec<_>, _>>()?;
+    if rollout_wave_order.is_empty()
+        || rollout_wave_order.iter().any(|wave| *wave < 0)
+        || rollout_wave_order.windows(2).any(|pair| pair[0] >= pair[1])
+    {
+        return Err("rollout_wave_order must be non-empty, unique, and ascending".into());
+    }
+    let wave_positions = rollout_wave_order
+        .iter()
+        .enumerate()
+        .map(|(position, wave)| (*wave, position))
+        .collect::<BTreeMap<_, _>>();
+
+    let locked_graph = exact_object(
+        locked_graph,
+        &["edges", "release", "repositories", "schema_version"],
+        "locked Cargo graph",
+    )?;
+    expect_string(locked_graph, "schema_version", "jain.locked-cargo-graph/v1")?;
+    expect_string(locked_graph, "release", RELEASE)?;
+    let mut locked_repositories = BTreeMap::new();
+    for (index, row) in require_array(locked_graph, "repositories")?
+        .iter()
+        .enumerate()
+    {
+        let row = exact_object(
+            row,
+            &["cargo_lock_sha256", "repository"],
+            &format!("locked Cargo graph repositories[{index}]"),
+        )?;
+        let repository = require_string(row, "repository")?;
+        if !valid_repository_name(repository) || locked_repositories.contains_key(repository) {
+            return Err(
+                format!("locked Cargo repository is invalid or duplicate: {repository}").into(),
+            );
+        }
+        let lock = match row.get("cargo_lock_sha256") {
+            Some(JsonValue::Null) => None,
+            Some(JsonValue::String(value)) => {
+                if !valid_nonzero_hex(value, 64) {
+                    return Err(format!("locked Cargo digest is invalid: {repository}").into());
+                }
+                Some(value.to_owned())
+            }
+            _ => return Err(format!("locked Cargo digest has invalid type: {repository}").into()),
+        };
+        locked_repositories.insert(repository.to_owned(), lock);
+    }
+    let mut locked_edges = BTreeSet::new();
+    for (index, row) in require_array(locked_graph, "edges")?.iter().enumerate() {
+        let row = exact_object(
+            row,
+            &["consumer", "dependency"],
+            &format!("locked Cargo graph edges[{index}]"),
+        )?;
+        let consumer = require_string(row, "consumer")?;
+        let dependency = require_string(row, "dependency")?;
+        if !valid_repository_name(consumer)
+            || !valid_repository_name(dependency)
+            || !locked_edges.insert((consumer.to_owned(), dependency.to_owned()))
+        {
+            return Err(format!(
+                "locked Cargo edge is invalid or duplicate: {consumer}->{dependency}"
+            )
+            .into());
+        }
+    }
+
+    let mut nodes: BTreeMap<String, DagNode> = BTreeMap::new();
     for key in ["repo", "infrastructure_repo"] {
         for row in data
             .get(key)
@@ -685,8 +1671,39 @@ fn build_dag(
                 .get("rollout_wave")
                 .and_then(toml::Value::as_integer)
                 .ok_or_else(|| format!("release DAG repository has no rollout_wave: {name}"))?;
+            if !wave_positions.contains_key(&wave) {
+                return Err(format!(
+                    "repository {name} uses wave {wave} outside rollout_wave_order"
+                )
+                .into());
+            }
             let dependencies = toml_string_set(table.get("cross_repo_deps"), name)?;
-            nodes.insert(name.to_owned(), (wave, dependencies));
+            let has_cargo_members = table
+                .get("cargo_members")
+                .and_then(toml::Value::as_array)
+                .is_some_and(|members| !members.is_empty());
+            let tag = table
+                .get("current_tag")
+                .and_then(toml::Value::as_str)
+                .ok_or_else(|| format!("release DAG repository has no current_tag: {name}"))?;
+            if !valid_release_tag(name, tag) {
+                return Err(format!("release DAG repository has an invalid tag: {name}").into());
+            }
+            let commit = manifest_hex(table, "release_commit", 40, name)?;
+            let tree = manifest_hex(table, "release_tree", 40, name)?;
+            let checksum_sha256 = manifest_hex(table, "release_checksum_sha256", 64, name)?;
+            nodes.insert(
+                name.to_owned(),
+                DagNode {
+                    wave,
+                    dependencies,
+                    has_cargo_members,
+                    tag: tag.to_owned(),
+                    commit,
+                    tree,
+                    checksum_sha256,
+                },
+            );
         }
     }
     if nodes.is_empty() {
@@ -709,15 +1726,42 @@ fn build_dag(
                 .ok_or_else(|| {
                     format!("release DAG dependency edge names unknown consumer: {consumer}")
                 })?
-                .1
+                .dependencies
                 .insert(source.to_owned());
         }
     }
-    for (name, (_, dependencies)) in &nodes {
-        for dependency in dependencies {
+    if locked_repositories.keys().collect::<BTreeSet<_>>() != nodes.keys().collect::<BTreeSet<_>>()
+    {
+        return Err("locked Cargo repository inventory differs from authority manifest".into());
+    }
+    for (name, node) in &nodes {
+        if node.has_cargo_members && locked_repositories[name].is_none() {
+            return Err(format!("Rust repository has no locked Cargo digest: {name}").into());
+        }
+    }
+    let manifest_edges = nodes
+        .iter()
+        .flat_map(|(consumer, node)| {
+            node.dependencies
+                .iter()
+                .map(move |dependency| (consumer.clone(), dependency.clone()))
+        })
+        .collect::<BTreeSet<_>>();
+    if locked_edges != manifest_edges {
+        return Err("locked Cargo edges disagree with authority dependency edges".into());
+    }
+    for (name, node) in &nodes {
+        for dependency in &node.dependencies {
             if dependency == name || !nodes.contains_key(dependency) {
                 return Err(format!(
                     "release DAG dependency is self-referential or unknown: {name}->{dependency}"
+                )
+                .into());
+            }
+            let dependency_wave = nodes[dependency].wave;
+            if wave_positions[&dependency_wave] > wave_positions[&node.wave] {
+                return Err(format!(
+                    "authority wave orders dependency after consumer: {name}->{dependency}"
                 )
                 .into());
             }
@@ -726,7 +1770,7 @@ fn build_dag(
 
     let mut remaining = nodes
         .iter()
-        .map(|(name, (_, dependencies))| (name.clone(), dependencies.clone()))
+        .map(|(name, node)| (name.clone(), node.dependencies.clone()))
         .collect::<BTreeMap<_, _>>();
     let mut ordered = Vec::new();
     while !remaining.is_empty() {
@@ -734,7 +1778,7 @@ fn build_dag(
             .iter()
             .filter(|(_, dependencies)| dependencies.is_empty())
             .map(|(name, _)| name.clone())
-            .min_by_key(|name| (nodes[name].0, name.clone()))
+            .min_by_key(|name| (wave_positions[&nodes[name].wave], name.clone()))
             .ok_or("release DAG contains a dependency cycle")?;
         remaining.remove(&ready);
         for dependencies in remaining.values_mut() {
@@ -746,12 +1790,17 @@ fn build_dag(
         .iter()
         .enumerate()
         .map(|(position, name)| {
-            let (wave, dependencies) = &nodes[name];
+            let node = &nodes[name];
             json!({
                 "position": position,
                 "repository": name,
-                "declared_wave": wave,
-                "depends_on": dependencies.iter().collect::<Vec<_>>(),
+                "declared_wave": node.wave,
+                "depends_on": node.dependencies.iter().collect::<Vec<_>>(),
+                "cargo_lock_sha256": locked_repositories[name],
+                "tag": node.tag.as_str(),
+                "commit": node.commit.as_str(),
+                "tree": node.tree.as_str(),
+                "checksum_sha256": node.checksum_sha256.as_str(),
             })
         })
         .collect::<Vec<_>>();
@@ -759,6 +1808,8 @@ fn build_dag(
         "schema_version": "jain.release-dag/v1",
         "release": RELEASE,
         "manifest_sha256": manifest_sha256,
+        "locked_cargo_graph_sha256": locked_cargo_graph_sha256,
+        "rollout_wave_order": rollout_wave_order,
         "repository_count": rows.len(),
         "repositories": rows,
         "status": "pass",
@@ -781,6 +1832,22 @@ fn toml_string_set(
     Ok(values)
 }
 
+fn manifest_hex(
+    table: &toml::map::Map<String, toml::Value>,
+    key: &str,
+    length: usize,
+    repository: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let value = table
+        .get(key)
+        .and_then(toml::Value::as_str)
+        .ok_or_else(|| format!("release DAG repository has no {key}: {repository}"))?;
+    if !valid_nonzero_hex(value, length) {
+        return Err(format!("release DAG repository has invalid {key}: {repository}").into());
+    }
+    Ok(value.to_owned())
+}
+
 #[derive(Clone)]
 struct IndexedFile {
     relative: String,
@@ -795,26 +1862,37 @@ fn build_evidence_index(
     root: &Path,
     historical_roots: &[PathBuf],
     absent_historical_roots: &[PathBuf],
-    output: Option<&Path>,
+    output: Option<&PreparedOutput>,
 ) -> Result<JsonValue, Box<dyn std::error::Error>> {
-    let root = canonical_directory(root, "distributed evidence root")?;
-    if output.is_some_and(|output| output.starts_with(&root)) {
+    let root = open_physical_directory(root, "distributed evidence root")?;
+    let output_parent_identity =
+        output.map(|output| (output.parent.identity.device, output.parent.identity.inode));
+    if output.is_some_and(|output| output.absolute.starts_with(&root.absolute))
+        || output_parent_identity == Some((root.identity.device, root.identity.inode))
+    {
         return Err("evidence index output must be outside the indexed root".into());
     }
     let mut present_historical = Vec::new();
+    let mut present_historical_ids = BTreeSet::new();
     let mut historical_files = Vec::new();
     for historical in historical_roots {
-        let historical = canonical_directory(historical, "historical evidence root")?;
-        if historical.starts_with(&root)
-            || root.starts_with(&historical)
+        let historical = open_physical_directory(historical, "historical evidence root")?;
+        let identity = (historical.identity.device, historical.identity.inode);
+        if identity == (root.identity.device, root.identity.inode)
+            || !present_historical_ids.insert(identity)
+            || historical.absolute.starts_with(&root.absolute)
+            || root.absolute.starts_with(&historical.absolute)
             || present_historical.iter().any(|prior: &PathBuf| {
-                historical.starts_with(prior) || prior.starts_with(&historical)
+                historical.absolute.starts_with(prior) || prior.starts_with(&historical.absolute)
             })
         {
             return Err("distributed and historical evidence roots overlap or repeat".into());
         }
-        historical_files.extend(index_tree(&historical, None)?);
-        present_historical.push(historical);
+        if output.is_some_and(|output| output.absolute.starts_with(&historical.absolute)) {
+            return Err("evidence index output must be outside historical evidence".into());
+        }
+        historical_files.extend(index_tree(&historical, output_parent_identity)?);
+        present_historical.push(historical.absolute);
     }
     let mut asserted_absent = Vec::new();
     for absent in absent_historical_roots {
@@ -832,7 +1910,7 @@ fn build_evidence_index(
             }
         }
     }
-    let files = index_tree(&root, None)?;
+    let files = index_tree(&root, output_parent_identity)?;
     if files.is_empty() {
         return Err("distributed evidence root is empty".into());
     }
@@ -913,7 +1991,7 @@ fn build_evidence_index(
     Ok(json!({
         "schema_version": "jain.distributed-evidence-index/v1",
         "release": RELEASE,
-        "root": root,
+        "root": root.absolute,
         "historical_roots": present_historical,
         "absent_historical_roots": asserted_absent,
         "file_count": rows.len(),
@@ -923,65 +2001,122 @@ fn build_evidence_index(
     }))
 }
 
-fn canonical_directory(path: &Path, label: &str) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let metadata = fs::symlink_metadata(path)?;
-    if !metadata.file_type().is_dir() || metadata.file_type().is_symlink() {
-        return Err(format!("{label} is not a physical directory").into());
-    }
-    Ok(fs::canonicalize(path)?)
-}
-
 fn index_tree(
-    root: &Path,
-    excluded_output: Option<&Path>,
+    root: &OpenedPhysical,
+    forbidden_directory_identity: Option<(u64, u64)>,
 ) -> Result<Vec<IndexedFile>, Box<dyn std::error::Error>> {
     fn visit(
-        root: &Path,
-        directory: &Path,
-        excluded_output: Option<&Path>,
+        directory: &File,
+        relative_directory: &Path,
+        forbidden_directory_identity: Option<(u64, u64)>,
         files: &mut Vec<IndexedFile>,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        let mut entries = fs::read_dir(directory)?.collect::<Result<Vec<_>, _>>()?;
+        let directory_metadata = directory.metadata()?;
+        if forbidden_directory_identity
+            == Some((directory_metadata.dev(), directory_metadata.ino()))
+        {
+            return Err("evidence index output parent aliases an evidence directory".into());
+        }
+        // `/proc/self/fd` is used only to enumerate names. Every child is opened and
+        // validated relative to the retained directory descriptor below.
+        let descriptor_path = PathBuf::from(format!("/proc/self/fd/{}", directory.as_raw_fd()));
+        let mut entries = fs::read_dir(descriptor_path)?.collect::<Result<Vec<_>, _>>()?;
         entries.sort_by_key(|entry| entry.file_name());
         for entry in entries {
-            let path = entry.path();
-            if excluded_output.is_some_and(|output| output == path) {
-                continue;
+            let name = entry.file_name();
+            if name.as_bytes().is_empty()
+                || name.as_bytes().contains(&b'/')
+                || name.as_bytes().contains(&0)
+            {
+                return Err("evidence tree contains an unsafe path component".into());
             }
-            let metadata = fs::symlink_metadata(&path)?;
-            if metadata.file_type().is_symlink() {
-                return Err(format!("evidence tree contains a symlink: {}", path.display()).into());
-            }
+            let relative = relative_directory.join(&name);
+            let mut child = open_at_file(
+                directory.as_raw_fd(),
+                &name,
+                libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+                0,
+                "evidence entry",
+            )?;
+            let metadata = child.metadata()?;
+            let identity = FileIdentity::from_metadata(&metadata);
             if metadata.file_type().is_dir() {
-                visit(root, &path, excluded_output, files)?;
+                visit(&child, &relative, forbidden_directory_identity, files)?;
+                let reopened = open_at_file(
+                    directory.as_raw_fd(),
+                    &name,
+                    libc::O_RDONLY
+                        | libc::O_DIRECTORY
+                        | libc::O_NOFOLLOW
+                        | libc::O_NONBLOCK
+                        | libc::O_CLOEXEC,
+                    0,
+                    "evidence directory",
+                )?;
+                if FileIdentity::from_metadata(&reopened.metadata()?) != identity {
+                    return Err(format!(
+                        "evidence directory changed while indexing: {}",
+                        relative.display()
+                    )
+                    .into());
+                }
                 continue;
             }
             if !metadata.file_type().is_file()
-                || metadata.nlink() != 1
-                || metadata.len() > MAX_AUTHORITY_BYTES
+                || identity.links != 1
+                || identity.length > MAX_AUTHORITY_BYTES
             {
                 return Err(format!(
                     "evidence is not an independent bounded regular file: {}",
-                    path.display()
+                    relative.display()
                 )
                 .into());
             }
-            let bytes = fs::read(&path)?;
+            let mut bytes = Vec::with_capacity(identity.length as usize);
+            Read::by_ref(&mut child)
+                .take(MAX_AUTHORITY_BYTES + 1)
+                .read_to_end(&mut bytes)?;
+            if bytes.len() as u64 != identity.length
+                || FileIdentity::from_metadata(&child.metadata()?) != identity
+            {
+                return Err(format!(
+                    "evidence file changed while indexing: {}",
+                    relative.display()
+                )
+                .into());
+            }
+            let reopened = open_at_file(
+                directory.as_raw_fd(),
+                &name,
+                libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC,
+                0,
+                "evidence file",
+            )?;
+            if FileIdentity::from_metadata(&reopened.metadata()?) != identity {
+                return Err(format!(
+                    "evidence file path changed while indexing: {}",
+                    relative.display()
+                )
+                .into());
+            }
             let mut receipt_ids = BTreeSet::new();
-            if path.extension().and_then(|extension| extension.to_str()) == Some("json") {
+            if relative
+                .extension()
+                .and_then(|extension| extension.to_str())
+                == Some("json")
+            {
                 let value: JsonValue = serde_json::from_slice(&bytes)?;
                 collect_receipt_ids(&value, &mut receipt_ids)?;
             }
             files.push(IndexedFile {
-                relative: path
-                    .strip_prefix(root)?
+                relative: relative
                     .to_str()
                     .ok_or("evidence path is not UTF-8")?
                     .to_owned(),
-                size: metadata.len(),
+                size: identity.length,
                 sha256: sha256_bytes(&bytes),
-                device: metadata.dev(),
-                inode: metadata.ino(),
+                device: identity.device,
+                inode: identity.inode,
                 receipt_ids,
             });
             if files.len() > 100_000 {
@@ -991,7 +2126,13 @@ fn index_tree(
         Ok(())
     }
     let mut files = Vec::new();
-    visit(root, root, excluded_output, &mut files)?;
+    visit(
+        &root.file,
+        Path::new(""),
+        forbidden_directory_identity,
+        &mut files,
+    )?;
+    ensure_path_identity(root, libc::O_RDONLY | libc::O_DIRECTORY, "evidence root")?;
     Ok(files)
 }
 
@@ -1025,7 +2166,7 @@ fn collect_receipt_ids(
 
 fn emit_json(
     value: JsonValue,
-    output: Option<&Path>,
+    output: Option<&PreparedOutput>,
     apply: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut bytes = serde_json::to_vec_pretty(&value)?;
@@ -1034,48 +2175,175 @@ fn emit_json(
         if !apply {
             return Err("writing JSON output requires --apply".into());
         }
-        let parent = output.parent().ok_or("JSON output has no parent")?;
-        let parent = fs::canonicalize(parent)?;
-        if output.exists() || output.symlink_metadata().is_ok() {
-            return Err(format!("refusing to replace JSON output: {}", output.display()).into());
+        ensure_path_identity(
+            &output.parent,
+            libc::O_RDONLY | libc::O_DIRECTORY,
+            "JSON output parent",
+        )?;
+        let mut file = open_at_file(
+            output.parent.file.as_raw_fd(),
+            &output.name,
+            libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0o644,
+            "JSON output",
+        )?;
+        let metadata = file.metadata()?;
+        if !metadata.file_type().is_file() || metadata.nlink() != 1 {
+            return Err("JSON output is not a new independent regular file".into());
         }
-        let name = output.file_name().ok_or("JSON output has no file name")?;
-        let exact = parent.join(name);
-        let mut file = fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o644)
-            .open(&exact)?;
         file.write_all(&bytes)?;
         file.sync_all()?;
-        println!("wrote {}", exact.display());
+        output.parent.file.sync_all()?;
+        println!("wrote {}", output.absolute.display());
     } else {
         io::stdout().write_all(&bytes)?;
     }
     Ok(())
 }
 
-fn resolve_output_path(path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    if path.is_absolute() {
-        Ok(path.to_path_buf())
-    } else {
-        Ok(env::current_dir()?.join(path))
+fn prepare_output(path: &Path) -> Result<PreparedOutput, Box<dyn std::error::Error>> {
+    let absolute = normalized_absolute(path)?;
+    let name = absolute
+        .file_name()
+        .ok_or("JSON output has no file name")?
+        .to_owned();
+    if name.as_bytes().is_empty() || name.as_bytes().contains(&0) {
+        return Err("JSON output has an unsafe file name".into());
     }
+    let parent_path = absolute.parent().ok_or("JSON output has no parent")?;
+    let parent = open_physical_directory(parent_path, "JSON output parent")?;
+    match fs::symlink_metadata(&absolute) {
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error.into()),
+        Ok(_) => {
+            return Err(format!("refusing to replace JSON output: {}", absolute.display()).into())
+        }
+    }
+    Ok(PreparedOutput {
+        parent,
+        name,
+        absolute,
+    })
 }
 
 fn absolute_lexical(path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let path = if path.is_absolute() {
+    normalized_absolute(path)
+}
+
+fn normalized_absolute(path: &Path) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let absolute = if path.is_absolute() {
         path.to_path_buf()
     } else {
         env::current_dir()?.join(path)
     };
-    if path
-        .components()
-        .any(|component| matches!(component, std::path::Component::ParentDir))
-    {
-        return Err(format!("path contains parent traversal: {}", path.display()).into());
+    let mut normalized = PathBuf::from("/");
+    for component in absolute.components() {
+        match component {
+            Component::RootDir | Component::CurDir => {}
+            Component::Normal(value) => normalized.push(value),
+            Component::ParentDir => {
+                return Err(format!("path contains parent traversal: {}", path.display()).into())
+            }
+            Component::Prefix(_) => return Err("unsupported path prefix".into()),
+        }
     }
-    Ok(path)
+    Ok(normalized)
+}
+
+fn open_physical_directory(
+    path: &Path,
+    label: &str,
+) -> Result<OpenedPhysical, Box<dyn std::error::Error>> {
+    let opened = open_physical(path, libc::O_RDONLY | libc::O_DIRECTORY, label)?;
+    if !opened.file.metadata()?.file_type().is_dir() {
+        return Err(format!("{label} is not a physical directory").into());
+    }
+    Ok(opened)
+}
+
+fn open_physical(
+    path: &Path,
+    final_flags: i32,
+    label: &str,
+) -> Result<OpenedPhysical, Box<dyn std::error::Error>> {
+    let absolute = normalized_absolute(path)?;
+    let components = absolute
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(value) => Some(value.to_owned()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    let mut file = open_at_file(
+        libc::AT_FDCWD,
+        OsStr::new("/"),
+        libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        0,
+        label,
+    )?;
+    let mut component_ids = Vec::new();
+    let root_metadata = file.metadata()?;
+    component_ids.push((root_metadata.dev(), root_metadata.ino()));
+    for (index, component) in components.iter().enumerate() {
+        let is_final = index + 1 == components.len();
+        let flags = if is_final {
+            final_flags | libc::O_NOFOLLOW | libc::O_NONBLOCK | libc::O_CLOEXEC
+        } else {
+            libc::O_RDONLY
+                | libc::O_DIRECTORY
+                | libc::O_NOFOLLOW
+                | libc::O_NONBLOCK
+                | libc::O_CLOEXEC
+        };
+        let next = open_at_file(file.as_raw_fd(), component, flags, 0, label)?;
+        let metadata = next.metadata()?;
+        if !is_final && !metadata.file_type().is_dir() {
+            return Err(format!("{label} has a non-directory parent").into());
+        }
+        component_ids.push((metadata.dev(), metadata.ino()));
+        file = next;
+    }
+    let identity = FileIdentity::from_metadata(&file.metadata()?);
+    Ok(OpenedPhysical {
+        file,
+        absolute,
+        identity,
+        component_ids,
+    })
+}
+
+fn ensure_path_identity(
+    opened: &OpenedPhysical,
+    final_flags: i32,
+    label: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let reopened = open_physical(&opened.absolute, final_flags, label)?;
+    if reopened.identity != opened.identity || reopened.component_ids != opened.component_ids {
+        return Err(format!("{label} path changed while in use").into());
+    }
+    Ok(())
+}
+
+fn open_at_file(
+    directory: i32,
+    name: &OsStr,
+    flags: i32,
+    mode: libc::mode_t,
+    label: &str,
+) -> Result<File, Box<dyn std::error::Error>> {
+    let name = CString::new(name.as_bytes()).map_err(|_| format!("{label} contains a NUL byte"))?;
+    // SAFETY: the name is NUL-terminated, directory is AT_FDCWD or a live
+    // descriptor, and a successful descriptor is immediately owned by File.
+    let descriptor = unsafe { libc::openat(directory, name.as_ptr(), flags, mode) };
+    if descriptor < 0 {
+        return Err(format!(
+            "cannot securely open {label}: {}",
+            io::Error::last_os_error()
+        )
+        .into());
+    }
+    // SAFETY: openat returned a new owned descriptor.
+    Ok(unsafe { File::from_raw_fd(descriptor) })
 }
 
 fn exact_object<'a>(
@@ -1173,12 +2441,7 @@ fn require_hex<'a>(
     length: usize,
 ) -> Result<&'a str, Box<dyn std::error::Error>> {
     let value = require_string(object, key)?;
-    if value.len() != length
-        || !value
-            .bytes()
-            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
-        || value.bytes().all(|byte| byte == b'0')
-    {
+    if !valid_nonzero_hex(value, length) {
         return Err(format!("{key} is not a non-zero lowercase {length}-hex value").into());
     }
     Ok(value)
@@ -1222,6 +2485,21 @@ fn valid_repository_name(value: &str) -> bool {
         })
 }
 
+fn valid_nonzero_hex(value: &str, length: usize) -> bool {
+    value.len() == length
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        && !value.bytes().all(|byte| byte == b'0')
+}
+
+fn valid_release_tag(repository: &str, tag: &str) -> bool {
+    let prefix = format!("{repository}-v{RELEASE}-split.");
+    tag.strip_prefix(&prefix)
+        .and_then(|revision| revision.parse::<u64>().ok())
+        .is_some_and(|revision| revision > 0)
+}
+
 fn source_matrix_digest(rows: &[JsonValue]) -> Result<String, Box<dyn std::error::Error>> {
     let mut lines = Vec::new();
     for row in rows {
@@ -1256,6 +2534,41 @@ fn artifact_set_digest(rows: &[JsonValue]) -> Result<String, Box<dyn std::error:
     }
     lines.sort();
     Ok(sha256_bytes(lines.concat().as_bytes()))
+}
+
+fn deployed_image_set_digest(rows: &[JsonValue]) -> Result<String, Box<dyn std::error::Error>> {
+    let mut lines = Vec::new();
+    for row in rows {
+        let row = row.as_object().ok_or("artifact row is not an object")?;
+        let kind = require_string(row, "kind")?;
+        if matches!(kind, "caddy" | "hub" | "node" | "worker") {
+            lines.push(format!(
+                "{}\0{}\0{}\n",
+                kind,
+                require_string(row, "name")?,
+                require_string(row, "readback_sha256")?,
+            ));
+        }
+    }
+    lines.sort();
+    if lines.len() != 4 {
+        return Err("canonical deployed image inventory must contain exactly four images".into());
+    }
+    Ok(sha256_bytes(lines.concat().as_bytes()))
+}
+
+fn canonical_release_payload_digest(
+    release: &JsonValue,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let mut payload = release.clone();
+    let object = payload
+        .as_object_mut()
+        .ok_or("release spec is not an object")?;
+    object.remove("canonical_payload_sha256");
+    object.remove("signatures");
+    let mut bytes = b"jain.distributed-release/v1\0".to_vec();
+    bytes.extend(serde_json::to_vec(&payload)?);
+    Ok(sha256_bytes(&bytes))
 }
 
 fn qualification_seed(source_freeze_sha256: &str) -> String {
@@ -1455,9 +2768,274 @@ mod tests {
         (release, soak, qualification)
     }
 
+    struct TestDocuments {
+        release: JsonValue,
+        soak: JsonValue,
+        qualification: JsonValue,
+        proofs: ProofDocuments,
+    }
+
+    fn consumer_evidence(
+        consumer: &str,
+        engine_tag: &str,
+        engine_commit: &str,
+        family_sha256: &str,
+    ) -> JsonValue {
+        let (required_check, tool_version) = match consumer {
+            "jain-split" => ("jain-split/redline-consumer", "jain-redline-consumer/v1"),
+            "jeryu-split" => ("jeryu-split/redline-consumer", "jeryu-redline-consumer/v1"),
+            _ => unreachable!(),
+        };
+        json!({
+            "schema_version": "redline.consumer-evidence/v1",
+            "consumer": consumer,
+            "family": "redline-split",
+            "generated_at": "2026-07-19T00:00:00Z",
+            "status": "pass",
+            "source_commit": "5".repeat(40),
+            "required_check": required_check,
+            "engine_tag": engine_tag,
+            "engine_commit": engine_commit,
+            "proof_lock_id": format!("redline-proof/v2/4.1.0/{engine_commit}"),
+            "family_ci_receipt_sha256": family_sha256,
+            "manifest_sha256": digest('1'),
+            "policy_sha256": digest('2'),
+            "consumer_manifest_sha256": digest('3'),
+            "consumer_policy_sha256": digest('4'),
+            "test_log": format!("{consumer}.log"),
+            "test_log_sha256": digest('5'),
+            "tool_version": tool_version
+        })
+    }
+
+    fn valid_bundle() -> TestDocuments {
+        let (mut release, mut soak, mut qualification) = valid_documents();
+        let (artifact_set, image_set) = {
+            let artifacts = release["artifacts"].as_array_mut().unwrap();
+            for (kind, name, character) in [
+                ("pack", "jain-cpu-demo-pack", 'a'),
+                ("compose", "compose.yaml", 'b'),
+                ("installer", "jain-appliance", 'c'),
+            ] {
+                artifacts.push(json!({
+                    "kind": kind,
+                    "name": name,
+                    "sha256": digest(character),
+                    "readback_sha256": digest(character),
+                    "signature_receipt_sha256": digest('d')
+                }));
+            }
+            (
+                artifact_set_digest(artifacts).unwrap(),
+                deployed_image_set_digest(artifacts).unwrap(),
+            )
+        };
+        release["artifact_set_sha256"] = json!(artifact_set);
+        qualification["artifact_set_sha256"] = json!(artifact_set);
+        for host in release["hosts"].as_array_mut().unwrap() {
+            host["image_set_sha256"] = json!(image_set);
+        }
+
+        let dag = json!({
+            "schema_version": "jain.release-dag/v1",
+            "release": RELEASE,
+            "manifest_sha256": digest('a'),
+            "locked_cargo_graph_sha256": digest('b'),
+            "rollout_wave_order": [0],
+            "repository_count": 1,
+            "repositories": [{
+                "position": 0,
+                "repository": "jain-fabric",
+                "declared_wave": 0,
+                "depends_on": [],
+                "cargo_lock_sha256": digest('c'),
+                "tag": "jain-fabric-v9.0.0-distributed.1-split.1",
+                "commit": "1".repeat(40),
+                "tree": "2".repeat(40),
+                "checksum_sha256": digest('3')
+            }],
+            "status": "pass"
+        });
+        let dag_bytes = serde_json::to_vec_pretty(&dag).unwrap();
+        release["release_dag_sha256"] = json!(sha256_bytes(&dag_bytes));
+
+        let routes_before_bytes = br#"[{"handle":"legacy-public"}]
+"#
+        .to_vec();
+        let routes_after_bytes = routes_before_bytes.clone();
+        let route_sha = sha256_bytes(&routes_before_bytes);
+        release["routes"]["external_caddy_route_sha256_before"] = json!(route_sha);
+        release["routes"]["external_caddy_route_sha256_after"] = json!(route_sha);
+        let caddy_proof = json!({
+            "schema_version": "jain.caddy-unchanged/v1",
+            "release": RELEASE,
+            "receipt_id": "9.0.0-distributed.1/caddy-unchanged",
+            "status": "pass",
+            "etag_before": "fixture-etag",
+            "etag_after": "fixture-etag",
+            "route_array_sha256_before": route_sha,
+            "route_array_sha256_after": route_sha,
+            "dns_unchanged": true,
+            "public_admission_unchanged": true
+        });
+        let caddy_proof_bytes = serde_json::to_vec_pretty(&caddy_proof).unwrap();
+        release["receipts"]["caddy_unchanged_sha256"] = json!(sha256_bytes(&caddy_proof_bytes));
+
+        let engine_tag = "redline-core-v4.1.0-jain.4";
+        let engine_commit = "4".repeat(40);
+        let family_ci = json!({
+            "schema_version": "redline.family-ci/v1",
+            "family": "redline-split",
+            "status": "pass",
+            "repositories": [
+                {"name": "redline", "status": "pass"},
+                {
+                    "name": "redline-core",
+                    "tag": engine_tag,
+                    "release_commit": engine_commit,
+                    "status": "pass"
+                },
+                {"name": "redline-testing", "status": "pass"},
+                {"name": "redline-web", "status": "pass"}
+            ]
+        });
+        let family_ci_bytes = serde_json::to_vec_pretty(&family_ci).unwrap();
+        let family_sha = sha256_bytes(&family_ci_bytes);
+        let jain_consumer =
+            consumer_evidence("jain-split", engine_tag, &engine_commit, &family_sha);
+        let jeryu_consumer =
+            consumer_evidence("jeryu-split", engine_tag, &engine_commit, &family_sha);
+        let jain_consumer_bytes = serde_json::to_vec_pretty(&jain_consumer).unwrap();
+        let jeryu_consumer_bytes = serde_json::to_vec_pretty(&jeryu_consumer).unwrap();
+        let jain_sha = sha256_bytes(&jain_consumer_bytes);
+        let jeryu_sha = sha256_bytes(&jeryu_consumer_bytes);
+        let redline_lock_bytes = format!(
+            "schema_version = \"redline.split.lock/v2\"\n\
+             family = \"redline-split\"\n\
+             engine_tag = \"{engine_tag}\"\n\
+             engine_commit = \"{engine_commit}\"\n\
+             proof_lock_id = \"redline-proof/v2/4.1.0/{engine_commit}\"\n\
+             consumers = [\"jain-split\", \"jeryu-split\"]\n\
+             \n\
+             [proof]\n\
+             family_ci_receipt_sha256 = \"{family_sha}\"\n\
+             required_consumer_evidence = [\"jain-split\", \"jeryu-split\"]\n\
+             accepted_consumer_evidence = [\"jain-split\", \"jeryu-split\"]\n\
+             cutover_eligible = true\n\
+             \n\
+             [[proof.consumer_evidence]]\n\
+             consumer = \"jain-split\"\n\
+             sha256 = \"{jain_sha}\"\n\
+             \n\
+             [[proof.consumer_evidence]]\n\
+             consumer = \"jeryu-split\"\n\
+             sha256 = \"{jeryu_sha}\"\n"
+        )
+        .into_bytes();
+        let redline_lock_mirror_bytes = redline_lock_bytes.clone();
+        let lock_sha = sha256_bytes(&redline_lock_bytes);
+        release["redline"] = json!({
+            "engine_tag": engine_tag,
+            "engine_commit": engine_commit,
+            "family_ci_sha256": family_sha,
+            "lock_sha256": lock_sha,
+            "jain_consumer_sha256": jain_sha,
+            "jeryu_consumer_sha256": jeryu_sha,
+            "cutover_eligible": true
+        });
+        release["receipts"]["redline_lock_sha256"] = json!(lock_sha);
+        release["receipts"]["redline_jain_consumer_sha256"] = json!(jain_sha);
+        release["receipts"]["redline_jeryu_consumer_sha256"] = json!(jeryu_sha);
+
+        let rollback = json!({
+            "schema_version": "jain.rollback-proof/v1",
+            "release": RELEASE,
+            "receipt_id": "9.0.0-distributed.1/rollback-proof",
+            "status": "pass",
+            "target_release": ROLLBACK,
+            "source_freeze_sha256": digest('d'),
+            "artifact_set_sha256": digest('e'),
+            "roll_forward_artifact_set_sha256": artifact_set,
+            "rollback_verified": true
+        });
+        let rollback_bytes = serde_json::to_vec_pretty(&rollback).unwrap();
+        let rollback_sha = sha256_bytes(&rollback_bytes);
+        release["rollback"]["receipt_sha256"] = json!(rollback_sha);
+        release["receipts"]["rollback_sha256"] = json!(rollback_sha);
+
+        let qualification_bytes = serde_json::to_vec_pretty(&qualification).unwrap();
+        let qualification_sha = sha256_bytes(&qualification_bytes);
+        soak["replacement_receipt_sha256"] = json!(qualification_sha);
+        let soak_bytes = serde_json::to_vec_pretty(&soak).unwrap();
+        release["receipts"]["accelerated_qualification_sha256"] = json!(qualification_sha);
+        release["receipts"]["soak_status_sha256"] = json!(sha256_bytes(&soak_bytes));
+
+        release["canonical_payload_sha256"] = json!(digest('a'));
+        release["signatures"] = json!([]);
+        let payload = canonical_release_payload_digest(&release).unwrap();
+        release["canonical_payload_sha256"] = json!(payload);
+        let mut signature_receipts = Vec::new();
+        let mut signatures = Vec::new();
+        for (owner, key_character, signature_character) in
+            [("owner-1", '1', '2'), ("owner-2", '3', '4')]
+        {
+            let receipt_id = format!("{RELEASE}/owner-signature/{owner}");
+            let receipt = json!({
+                "schema_version": "jain.owner-signature/v1",
+                "release": RELEASE,
+                "receipt_id": receipt_id,
+                "status": "verified",
+                "owner_id": owner,
+                "key_fingerprint_sha256": digest(key_character),
+                "payload_sha256": payload,
+                "signature_sha256": digest(signature_character)
+                ,"verifier": "jain-owner-signature-verify/v1"
+            });
+            let bytes = serde_json::to_vec_pretty(&receipt).unwrap();
+            signatures.push(json!({
+                "receipt_id": receipt_id,
+                "owner_id": owner,
+                "key_fingerprint_sha256": digest(key_character),
+                "payload_sha256": payload,
+                "signature_sha256": digest(signature_character),
+                "receipt_sha256": sha256_bytes(&bytes)
+            }));
+            signature_receipts.push((bytes, receipt));
+        }
+        release["signatures"] = JsonValue::Array(signatures);
+
+        TestDocuments {
+            release,
+            soak,
+            qualification,
+            proofs: ProofDocuments {
+                dag_bytes,
+                dag,
+                routes_before_bytes,
+                routes_after_bytes,
+                caddy_proof_bytes,
+                caddy_proof,
+                family_ci_bytes,
+                family_ci,
+                redline_lock_bytes,
+                redline_lock_mirror_bytes,
+                jain_consumer_bytes,
+                jain_consumer,
+                jeryu_consumer_bytes,
+                jeryu_consumer,
+                rollback_bytes,
+                rollback,
+                signature_receipts,
+            },
+        }
+    }
+
     #[test]
     fn distributed_documents_are_closed_and_cross_bound() {
-        let (release, soak, qualification) = valid_documents();
+        let documents = valid_bundle();
+        let release = documents.release;
+        let soak = documents.soak;
+        let qualification = documents.qualification;
         let soak_bytes = serde_json::to_vec_pretty(&soak).unwrap();
         let qualification_bytes = serde_json::to_vec_pretty(&qualification).unwrap();
         validate_release_spec(&release).unwrap();
@@ -1471,6 +3049,7 @@ mod tests {
             &qualification_bytes,
         )
         .unwrap();
+        validate_proof_bindings(&release, &documents.proofs).unwrap();
 
         for (name, mutation) in [
             ("ga", ("formal_ga", json!(true))),
@@ -1484,6 +3063,10 @@ mod tests {
         let mut stale = release.clone();
         stale["source_matrix"][0]["tag"] = json!("jain-fabric-v9.0.0-appliance.1-split.1");
         assert!(validate_release_spec(&stale).is_err());
+        let mut wrong_repository_tag = release.clone();
+        wrong_repository_tag["source_matrix"][0]["tag"] =
+            json!("jain-shard-v9.0.0-distributed.1-split.1");
+        assert!(validate_release_spec(&wrong_repository_tag).is_err());
         let mut unbound_source = release.clone();
         unbound_source["source_matrix"][0]["checksum_sha256"] = json!(digest('4'));
         assert!(validate_release_spec(&unbound_source).is_err());
@@ -1499,75 +3082,235 @@ mod tests {
         let mut duplicate_owner = release.clone();
         duplicate_owner["signatures"][1]["owner_id"] = json!("owner-1");
         assert!(validate_release_spec(&duplicate_owner).is_err());
+        let mut wrong_host_images = release.clone();
+        wrong_host_images["hosts"][1]["image_set_sha256"] = json!(digest('f'));
+        assert!(validate_release_spec(&wrong_host_images).is_err());
+        let mut missing_compose = release.clone();
+        missing_compose["artifacts"]
+            .as_array_mut()
+            .unwrap()
+            .retain(|artifact| artifact["kind"] != "compose");
+        assert!(validate_release_spec(&missing_compose).is_err());
         let mut extra = qualification.clone();
         extra["soak_passed"] = json!(true);
         assert!(validate_qualification(&extra).is_err());
         let mut wrong_seed = qualification.clone();
         wrong_seed["random_seed_sha256"] = json!(digest('9'));
         assert!(validate_qualification(&wrong_seed).is_err());
+
+        let mut wrong_signature = documents.proofs.clone();
+        wrong_signature.signature_receipts[0].1["payload_sha256"] = json!(digest('f'));
+        assert!(validate_proof_bindings(&release, &wrong_signature).is_err());
+        let mut unrelated_rollback = documents.proofs.clone();
+        unrelated_rollback.rollback["source_freeze_sha256"] = json!(digest('f'));
+        unrelated_rollback.rollback_bytes =
+            serde_json::to_vec_pretty(&unrelated_rollback.rollback).unwrap();
+        assert!(validate_proof_bindings(&release, &unrelated_rollback).is_err());
+        let mut changed_caddy = documents.proofs.clone();
+        changed_caddy.routes_after_bytes.push(b' ');
+        assert!(validate_proof_bindings(&release, &changed_caddy).is_err());
+        let mut wrong_redline = documents.proofs.clone();
+        wrong_redline.jain_consumer["engine_commit"] = json!("6".repeat(40));
+        wrong_redline.jain_consumer_bytes =
+            serde_json::to_vec_pretty(&wrong_redline.jain_consumer).unwrap();
+        assert!(validate_proof_bindings(&release, &wrong_redline).is_err());
+        let mut wrong_dag_identity = documents.proofs.dag.clone();
+        wrong_dag_identity["repositories"][0]["commit"] = json!("6".repeat(40));
+        let wrong_dag_bytes = serde_json::to_vec_pretty(&wrong_dag_identity).unwrap();
+        let mut release_for_wrong_dag = release.clone();
+        release_for_wrong_dag["release_dag_sha256"] = json!(sha256_bytes(&wrong_dag_bytes));
+        assert!(validate_release_dag_binding(
+            &release_for_wrong_dag,
+            &wrong_dag_bytes,
+            &wrong_dag_identity
+        )
+        .is_err());
     }
 
     #[test]
     fn distributed_validate_command_reads_exact_independent_files() {
         let temp = TestDir::new("validate-command");
-        let (release, soak, qualification) = valid_documents();
+        let documents = valid_bundle();
         let release_path = temp.0.join("release.json");
         let soak_path = temp.0.join("soak.json");
         let qualification_path = temp.0.join("qualification.json");
-        fs::write(&release_path, serde_json::to_vec_pretty(&release).unwrap()).unwrap();
-        fs::write(&soak_path, serde_json::to_vec_pretty(&soak).unwrap()).unwrap();
+        let dag_path = temp.0.join("dag.json");
+        let caddy_before_path = temp.0.join("caddy-before.json");
+        let caddy_after_path = temp.0.join("caddy-after.json");
+        let caddy_proof_path = temp.0.join("caddy-proof.json");
+        let family_path = temp.0.join("redline-family.json");
+        let lock_path = temp.0.join("redline.lock.toml");
+        let mirror_path = temp.0.join("redline-mirror.lock.toml");
+        let jain_consumer_path = temp.0.join("redline-jain.json");
+        let jeryu_consumer_path = temp.0.join("redline-jeryu.json");
+        let rollback_path = temp.0.join("rollback.json");
+        let signature_one_path = temp.0.join("signature-one.json");
+        let signature_two_path = temp.0.join("signature-two.json");
         fs::write(
-            &qualification_path,
-            serde_json::to_vec_pretty(&qualification).unwrap(),
+            &release_path,
+            serde_json::to_vec_pretty(&documents.release).unwrap(),
         )
         .unwrap();
-        validate_command(vec![
+        fs::write(
+            &soak_path,
+            serde_json::to_vec_pretty(&documents.soak).unwrap(),
+        )
+        .unwrap();
+        fs::write(
+            &qualification_path,
+            serde_json::to_vec_pretty(&documents.qualification).unwrap(),
+        )
+        .unwrap();
+        for (path, bytes) in [
+            (&dag_path, documents.proofs.dag_bytes.as_slice()),
+            (
+                &caddy_before_path,
+                documents.proofs.routes_before_bytes.as_slice(),
+            ),
+            (
+                &caddy_after_path,
+                documents.proofs.routes_after_bytes.as_slice(),
+            ),
+            (
+                &caddy_proof_path,
+                documents.proofs.caddy_proof_bytes.as_slice(),
+            ),
+            (&family_path, documents.proofs.family_ci_bytes.as_slice()),
+            (&lock_path, documents.proofs.redline_lock_bytes.as_slice()),
+            (
+                &mirror_path,
+                documents.proofs.redline_lock_mirror_bytes.as_slice(),
+            ),
+            (
+                &jain_consumer_path,
+                documents.proofs.jain_consumer_bytes.as_slice(),
+            ),
+            (
+                &jeryu_consumer_path,
+                documents.proofs.jeryu_consumer_bytes.as_slice(),
+            ),
+            (&rollback_path, documents.proofs.rollback_bytes.as_slice()),
+            (
+                &signature_one_path,
+                documents.proofs.signature_receipts[0].0.as_slice(),
+            ),
+            (
+                &signature_two_path,
+                documents.proofs.signature_receipts[1].0.as_slice(),
+            ),
+        ] {
+            fs::write(path, bytes).unwrap();
+        }
+        let arguments = vec![
             "--release-spec".to_owned(),
             release_path.display().to_string(),
             "--soak-status".to_owned(),
             soak_path.display().to_string(),
             "--qualification".to_owned(),
             qualification_path.display().to_string(),
-        ])
-        .unwrap();
+            "--release-dag".to_owned(),
+            dag_path.display().to_string(),
+            "--caddy-routes-before".to_owned(),
+            caddy_before_path.display().to_string(),
+            "--caddy-routes-after".to_owned(),
+            caddy_after_path.display().to_string(),
+            "--caddy-proof".to_owned(),
+            caddy_proof_path.display().to_string(),
+            "--redline-family-ci".to_owned(),
+            family_path.display().to_string(),
+            "--redline-lock".to_owned(),
+            lock_path.display().to_string(),
+            "--redline-lock-mirror".to_owned(),
+            mirror_path.display().to_string(),
+            "--redline-jain-consumer".to_owned(),
+            jain_consumer_path.display().to_string(),
+            "--redline-jeryu-consumer".to_owned(),
+            jeryu_consumer_path.display().to_string(),
+            "--rollback-proof".to_owned(),
+            rollback_path.display().to_string(),
+            "--signature-receipt".to_owned(),
+            signature_one_path.display().to_string(),
+            "--signature-receipt".to_owned(),
+            signature_two_path.display().to_string(),
+        ];
+        validate_command(arguments.clone()).unwrap();
 
         let linked = temp.0.join("linked-soak.json");
         symlink(&soak_path, &linked).unwrap();
-        assert!(validate_command(vec![
-            "--release-spec".to_owned(),
-            release_path.display().to_string(),
-            "--soak-status".to_owned(),
-            linked.display().to_string(),
-            "--qualification".to_owned(),
-            qualification_path.display().to_string(),
-        ])
-        .is_err());
+        let mut linked_arguments = arguments;
+        let soak_index = linked_arguments
+            .iter()
+            .position(|argument| argument == "--soak-status")
+            .unwrap()
+            + 1;
+        linked_arguments[soak_index] = linked.display().to_string();
+        assert!(validate_command(linked_arguments).is_err());
     }
 
     #[test]
-    fn release_dag_is_deterministic_and_rejects_cycles() {
+    fn release_dag_is_lock_derived_deterministic_and_rejects_disagreement() {
         let manifest: toml::Value = r#"
+            rollout_wave_order = [0, 1, 2, 3]
             [[repo]]
             name = "leaf"
             rollout_wave = 3
             cross_repo_deps = ["middle"]
+            cargo_members = ["."]
+            current_tag = "leaf-v9.0.0-distributed.1-split.1"
+            release_commit = "1111111111111111111111111111111111111111"
+            release_tree = "2222222222222222222222222222222222222222"
+            release_checksum_sha256 = "3333333333333333333333333333333333333333333333333333333333333333"
             [[repo]]
             name = "root"
             rollout_wave = 1
             cross_repo_deps = []
+            cargo_members = ["."]
+            current_tag = "root-v9.0.0-distributed.1-split.1"
+            release_commit = "1111111111111111111111111111111111111111"
+            release_tree = "2222222222222222222222222222222222222222"
+            release_checksum_sha256 = "3333333333333333333333333333333333333333333333333333333333333333"
             [[repo]]
             name = "middle"
             rollout_wave = 2
             cross_repo_deps = ["root"]
+            cargo_members = ["."]
+            current_tag = "middle-v9.0.0-distributed.1-split.1"
+            release_commit = "1111111111111111111111111111111111111111"
+            release_tree = "2222222222222222222222222222222222222222"
+            release_checksum_sha256 = "3333333333333333333333333333333333333333333333333333333333333333"
             [[infrastructure_repo]]
             name = "fabric"
             rollout_wave = 0
             cross_repo_deps = []
             dependency_edges = ["leaf"]
+            cargo_members = ["."]
+            current_tag = "fabric-v9.0.0-distributed.1-split.1"
+            release_commit = "1111111111111111111111111111111111111111"
+            release_tree = "2222222222222222222222222222222222222222"
+            release_checksum_sha256 = "3333333333333333333333333333333333333333333333333333333333333333"
         "#
         .parse()
         .unwrap();
-        let report = build_dag(&manifest, digest('a')).unwrap();
+        let locked_repositories = ["fabric", "root", "middle", "leaf"]
+            .into_iter()
+            .map(|repository| {
+                json!({
+                    "repository": repository,
+                    "cargo_lock_sha256": digest('a')
+                })
+            })
+            .collect::<Vec<_>>();
+        let locked_graph = json!({
+            "schema_version": "jain.locked-cargo-graph/v1",
+            "release": RELEASE,
+            "repositories": locked_repositories,
+            "edges": [
+                {"consumer": "middle", "dependency": "root"},
+                {"consumer": "leaf", "dependency": "middle"},
+                {"consumer": "leaf", "dependency": "fabric"}
+            ]
+        });
+        let report = build_dag(&manifest, digest('a'), &locked_graph, digest('b')).unwrap();
         let names = report["repositories"]
             .as_array()
             .unwrap()
@@ -1575,19 +3318,71 @@ mod tests {
             .map(|row| row["repository"].as_str().unwrap())
             .collect::<Vec<_>>();
         assert_eq!(names, ["fabric", "root", "middle", "leaf"]);
+        let repeated = build_dag(&manifest, digest('a'), &locked_graph, digest('b')).unwrap();
+        assert_eq!(
+            serde_json::to_vec(&report).unwrap(),
+            serde_json::to_vec(&repeated).unwrap()
+        );
+        let mut omitted_edge = locked_graph.clone();
+        omitted_edge["edges"].as_array_mut().unwrap().pop();
+        assert!(build_dag(&manifest, digest('a'), &omitted_edge, digest('b')).is_err());
+        let wrong_wave: toml::Value = r#"
+            rollout_wave_order = [0, 1]
+            [[repo]]
+            name = "root"
+            rollout_wave = 2
+            cross_repo_deps = []
+            cargo_members = ["."]
+            current_tag = "root-v9.0.0-distributed.1-split.1"
+            release_commit = "1111111111111111111111111111111111111111"
+            release_tree = "2222222222222222222222222222222222222222"
+            release_checksum_sha256 = "3333333333333333333333333333333333333333333333333333333333333333"
+        "#
+        .parse()
+        .unwrap();
+        let wrong_wave_graph = json!({
+            "schema_version": "jain.locked-cargo-graph/v1",
+            "release": RELEASE,
+            "repositories": [{"repository":"root","cargo_lock_sha256":digest('a')}],
+            "edges": []
+        });
+        assert!(build_dag(&wrong_wave, digest('a'), &wrong_wave_graph, digest('b')).is_err());
         let cyclic: toml::Value = r#"
+            rollout_wave_order = [1]
             [[repo]]
             name="a"
             rollout_wave=1
             cross_repo_deps=["b"]
+            cargo_members=["."]
+            current_tag="a-v9.0.0-distributed.1-split.1"
+            release_commit="1111111111111111111111111111111111111111"
+            release_tree="2222222222222222222222222222222222222222"
+            release_checksum_sha256="3333333333333333333333333333333333333333333333333333333333333333"
             [[repo]]
             name="b"
             rollout_wave=1
             cross_repo_deps=["a"]
+            cargo_members=["."]
+            current_tag="b-v9.0.0-distributed.1-split.1"
+            release_commit="1111111111111111111111111111111111111111"
+            release_tree="2222222222222222222222222222222222222222"
+            release_checksum_sha256="3333333333333333333333333333333333333333333333333333333333333333"
         "#
         .parse()
         .unwrap();
-        assert!(build_dag(&cyclic, digest('b')).is_err());
+        let cyclic_graph = json!({
+            "schema_version": "jain.locked-cargo-graph/v1",
+            "release": RELEASE,
+            "repositories": [
+                {"repository":"a","cargo_lock_sha256":digest('a')},
+                {"repository":"b","cargo_lock_sha256":digest('b')}
+            ],
+            "edges": [
+                {"consumer":"a","dependency":"b"},
+                {"consumer":"b","dependency":"a"}
+            ]
+        });
+        assert!(build_dag(&cyclic, digest('b'), &cyclic_graph, digest('c')).is_err());
     }
 
     #[test]
@@ -1662,6 +3457,67 @@ mod tests {
     }
 
     #[test]
+    fn authority_reads_and_evidence_outputs_reject_path_replacement_and_aliases() {
+        let temp = TestDir::new("descriptor-custody");
+        let authority = temp.0.join("authority.json");
+        let moved = temp.0.join("authority-opened.json");
+        fs::write(&authority, br#"{"status":"original"}"#).unwrap();
+        let result = read_regular_bytes_with_hook(&authority, "test authority", || {
+            fs::rename(&authority, &moved).unwrap();
+            fs::write(&authority, br#"{"status":"replacement"}"#).unwrap();
+        });
+        assert!(result.is_err());
+
+        let current = temp.0.join("current");
+        let historical = temp.0.join("historical");
+        let outside = temp.0.join("outside");
+        fs::create_dir(&current).unwrap();
+        fs::create_dir(&historical).unwrap();
+        fs::create_dir(&outside).unwrap();
+        fs::write(
+            current.join("current.json"),
+            br#"{"receipt_id":"new/descriptor"}"#,
+        )
+        .unwrap();
+        fs::write(
+            historical.join("old.json"),
+            br#"{"receipt_id":"old/descriptor"}"#,
+        )
+        .unwrap();
+        let alias = temp.0.join("current-alias");
+        symlink(&current, &alias).unwrap();
+        let output = alias.join("index.json");
+        assert!(evidence_index_command(vec![
+            "--release".to_owned(),
+            RELEASE.to_owned(),
+            "--root".to_owned(),
+            current.display().to_string(),
+            "--historical-root".to_owned(),
+            historical.display().to_string(),
+            "--json".to_owned(),
+            output.display().to_string(),
+            "--apply".to_owned(),
+        ])
+        .is_err());
+        assert!(!current.join("index.json").exists());
+
+        let safe_output = outside.join("index.json");
+        evidence_index_command(vec![
+            "--release".to_owned(),
+            RELEASE.to_owned(),
+            "--root".to_owned(),
+            current.display().to_string(),
+            "--historical-root".to_owned(),
+            historical.display().to_string(),
+            "--json".to_owned(),
+            safe_output.display().to_string(),
+            "--apply".to_owned(),
+        ])
+        .unwrap();
+        assert!(safe_output.is_file());
+    }
+
+    #[test]
     fn distributed_json_schemas_are_closed_and_parseable() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("schemas");
         for (name, schema_version) in [
@@ -1673,6 +3529,13 @@ mod tests {
             (
                 "accelerated-qualification.v1.schema.json",
                 "jain.accelerated-qualification/v1",
+            ),
+            ("caddy-unchanged.v1.schema.json", "jain.caddy-unchanged/v1"),
+            ("rollback-proof.v1.schema.json", "jain.rollback-proof/v1"),
+            ("owner-signature.v1.schema.json", "jain.owner-signature/v1"),
+            (
+                "locked-cargo-graph.v1.schema.json",
+                "jain.locked-cargo-graph/v1",
             ),
         ] {
             let value: JsonValue =

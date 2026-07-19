@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/rollback-proof.v1.schema.json",
+  "title": "Jain distributed rollback proof v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "release", "receipt_id", "status", "target_release",
+    "source_freeze_sha256", "artifact_set_sha256",
+    "roll_forward_artifact_set_sha256", "rollback_verified"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.rollback-proof/v1" },
+    "release": { "const": "9.0.0-distributed.1" },
+    "receipt_id": { "const": "9.0.0-distributed.1/rollback-proof" },
+    "status": { "const": "pass" },
+    "target_release": { "const": "7.0.6" },
+    "source_freeze_sha256": { "$ref": "#/$defs/sha256" },
+    "artifact_set_sha256": { "$ref": "#/$defs/sha256" },
+    "roll_forward_artifact_set_sha256": { "$ref": "#/$defs/sha256" },
+    "rollback_verified": { "const": true }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": { "const": "0000000000000000000000000000000000000000000000000000000000000000" }
+    }
+  }
+}
