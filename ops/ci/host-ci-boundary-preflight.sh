@@ -23,8 +23,8 @@ validate_control_authority() {
     && "$expires" =~ ^[0-9]+$ ]] \
     || fail 'invalid bootstrap control authority'
   now="$(date +%s)"
-  (( expires >= now && expires - now <= 7200 )) \
-    || fail 'bootstrap control authority is expired or exceeds two hours'
+  (( expires >= now && expires - now <= 6900 )) \
+    || fail 'bootstrap control authority is expired or exceeds 6,900 seconds'
 }
 
 validate_cargo_registry_cache() {

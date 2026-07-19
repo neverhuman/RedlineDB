@@ -60,6 +60,10 @@ runs and verify the exact receipt digest, attempt, and full SHA, POST
 status, then GET and verify that exact context, description, state, and SHA. A
 proof POST failure prevents required publication. After the first proof POST is
 attempted, every failure consumes the request; it can never be replayed.
+Immediately before the first proof POST, the publisher repeats the authenticated
+API repository-identity and exact Git-ref readback sealed by the sandbox. A
+repository, remote, normalized API identity, ref, commit, result, state, expiry,
+or re-exec mismatch consumes the one-shot request with zero check/status POSTs.
 
 ## One-time administrator installation
 
@@ -136,12 +140,72 @@ Ordinary installed configs omit `control_ref`, `bootstrap_commit`, and
 cycle-breaking exception is an owner-authorized exact-head bootstrap. In that
 case both configs must carry the same safe `refs/heads/...` value, the exact
 lowercase 40-hex commit advertised by that ref, and a decimal-string Unix
-expiry no more than two hours ahead. Sandbox, root state, preflight, and
+expiry no more than 6,900 seconds ahead. Sandbox, root state, preflight, and
 publisher bind all three values; missing, partial, mismatched, expired,
 overlong, or moved authority fails closed. Immediately after the protected
 fast-forward merge, reinstall the identical merged bytes with all three fields
 removed and prove production `main` authority through preflight and a live
 readback.
+
+For AUTH-001 the limit is exactly 6,900 seconds, not a rounded two-hour
+allowance. The bootstrap byte set is closed to these six installed files:
+
+- `host-ci-sandbox`, copied from `ops/ci/host-ci-sandbox.sh`
+- `host-ci-publisher`, copied from `ops/ci/host-ci-publisher.sh`
+- `host-ci-boundary-preflight`, copied from
+  `ops/ci/host-ci-boundary-preflight.sh`
+- the twice-reproduced locked release build of `splitctl`
+- `host-ci-sandbox.config.json`
+- `host-ci-publisher.config.json`
+
+The two configs remain schema v5. During the exceptional window only, both add
+the reviewed feature `control_ref`, its identical `bootstrap_commit`, and the
+identical decimal `bootstrap_expires_at`; every other byte is reviewed and
+checksum-bound. The caller request remains v4. The broker-owned re-exec, root
+state, root result, and worker evidence records are v5 and all bind
+`control_repository`, `control_remote`, normalized `control_api_identity`,
+`control_ref`, and `control_plane_commit`.
+
+Before installation, make a root-only, mode-`0700`, symlink-free rollback
+directory outside the checkout. Copy the six currently installed files there
+without following links, require each source and copy to be a regular
+single-link root-owned file, write a sorted SHA-256 manifest, verify it once,
+then create a mode-`0400` archive plus a separate SHA-256 sidecar. Record the
+archive path, archive digest, manifest digest, installed-file digests, reviewed
+source SHA/ref, and expiry in the bootstrap receipt. Any missing installed file,
+link, metadata mismatch, copy mismatch, archive mismatch, or expiry greater
+than 6,900 seconds aborts before installation.
+
+After installing the reviewed byte set, run the installed boundary preflight
+and the explicit authenticated readback before host CI:
+
+```bash
+/usr/local/libexec/jain/host-ci-boundary-preflight
+/usr/local/libexec/jain/splitctl jeryu-local authority-readback \
+  --repo veox/jain-split-ops \
+  --remote http://127.0.0.1:8787/git/veox/jain-split-ops.git \
+  --ref refs/heads/<reviewed-bridge-ref> \
+  --expected-head <reviewed-bridge-sha> \
+  --token-file /usr/local/libexec/jain/jeryu-merge-token
+```
+
+The window closes immediately after the protected bridge merge. Reinstall the
+identical merged bridge executables from two hash-identical locked builds,
+replace both configs in one root-owned operation with `control_ref` omitted
+(therefore `refs/heads/main`) and with no `bootstrap_commit` or
+`bootstrap_expires_at`, and require canonical
+`veox/jain-split-ops`. Run preflight, repeat `authority-readback` against
+`refs/heads/main` and the merged SHA, then run one host-CI smoke test. If any
+restoration step fails, stop publication, restore the checksum-verified archive,
+re-run preflight/readback against the preserved prior authority, and retain all
+failure evidence; do not continue release CI.
+
+Finally rotate or revoke the temporary publisher credential through the
+governed forge-administration path. Retain two redacted receipts: one showing
+the old token gets an authentication rejection, and one showing the replacement
+successfully returns exactly one canonical `veox/jain-split-ops` API identity
+and the expected protected-main ref. If governed credential administration is
+unavailable, the bridge may be restored but no further release CI is allowed.
 
 Create `/usr/local/libexec/jain/jeryu-merge-token` as a canonical root-owned,
 single-link regular file at exact mode `0600`. Supply the token through a

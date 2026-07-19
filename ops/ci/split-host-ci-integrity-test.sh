@@ -71,13 +71,19 @@ cleanup() {
   sudo -n rm -rf -- "$proof_evidence_root" 2>/dev/null || true
   sudo -n rm -rf -- "$control_remote" 2>/dev/null || true
   sudo -n rm -rf -- "$product_forge_root" 2>/dev/null || true
+  case "${sandbox_family_root:-}" in
+    "$tmp/sandbox-family")
+      sudo -n rm -rf -- \
+        "$sandbox_family_root/target/host-ci-sandboxes" 2>/dev/null || true
+      ;;
+  esac
   rm -rf -- "$tmp"
   return "$cleanup_rc"
 }
 trap cleanup EXIT
 
 control="$tmp/control"
-control_remote="$tmp/jain-split-ops.git"
+control_remote="$tmp/git/veox/jain-split-ops.git"
 split_root="$tmp/split"
 sandbox_family_root="$tmp/sandbox-family"
 pinned_advisory_commit="$(sed -n \
@@ -140,7 +146,8 @@ forge_log="$tmp/forge.log"
 forge_state="$tmp/forge-state.jsonl"
 forge_behavior="$tmp/forge-behavior"
 forge_address_file="$tmp/forge-address"
-started="$tmp/started"
+started="$worker_cache/started"
+started_worker=/opt/jain-ci/cargo-home/started
 continue_file="$tmp/continue"
 attack_log="$tmp/candidate-attack.log"
 survivor_log="$tmp/candidate-survivor.log"
@@ -153,7 +160,7 @@ rustc --edition=2021 "$repo_root/ops/ci/fake-forge.rs" -o "$tmp/fake-forge"
 "$tmp/fake-forge" "$forge_address_file" "$forge_log" \
   "$forge_state" "$forge_behavior" >"$tmp/forge.stderr" 2>&1 &
 forge_pid=$!
-for _ in $(seq 1 500); do
+for _ in $(seq 1 3000); do
   [[ -s "$forge_address_file" ]] && break
   kill -0 "$forge_pid" 2>/dev/null || break
   sleep 0.01
@@ -275,6 +282,7 @@ install -D -m 0644 "$repo_root/tools/splitctl/src/main.rs" \
   "$control/tools/splitctl/src/main.rs"
 install -D -m 0644 "$repo_root/tools/splitctl/src/jeryu_client.rs" \
   "$control/tools/splitctl/src/jeryu_client.rs"
+mkdir -p "$(dirname "$control_remote")"
 git init --quiet --bare "$control_remote"
 sed -i \
   "s#/home/ubuntu/jain-split#$sandbox_family_root#g" \
@@ -302,6 +310,10 @@ control_commit="$(git -C "$control" rev-parse HEAD)"
 bootstrap_control_ref=refs/heads/codex/host-ci-bootstrap-test
 git -C "$control" push --quiet origin \
   "$control_commit:$bootstrap_control_ref"
+moved_control_commit="$(printf 'fixture moved authority\n' \
+  | git -C "$control" commit-tree "$control_commit^{tree}" -p "$control_commit")"
+git -C "$control" push --quiet origin \
+  "$moved_control_commit:refs/heads/fixture-moved-control"
 bootstrap_expires_at="$(( $(date +%s) + 3600 ))"
 sudo -n chown -R root:root "$control_remote"
 
@@ -560,6 +572,9 @@ printf 'valid\n' >"$product/agent/test-auditor-mode"
 cat >"$product/scripts/ci-local.sh" <<'SCRIPT'
 #!/usr/bin/env bash
 set -euo pipefail
+if [[ -n "${JAIN_TEST_STARTED_PATH:-}" ]]; then
+  : >"$JAIN_TEST_STARTED_PATH"
+fi
 if [[ "${JAIN_RELEASE_CI:-0}" == 1 ]]; then
   [[ "$(command -v jankurai)" \
     == /opt/jain-ci/authority/release-bin/jankurai ]]
@@ -723,13 +738,13 @@ for bootstrap_case in missing-commit wrong-commit expired overlong; do
     expired)
       sudo -n jq '.bootstrap_expires_at = "1"' "$sandbox_config" \
         >"$tmp/bootstrap-reject.json"
-      expected_bootstrap_failure='bootstrap control authority is expired or exceeds two hours'
+      expected_bootstrap_failure='bootstrap control authority is expired or exceeds 6,900 seconds'
       ;;
     overlong)
       jq --arg expires "$(( $(date +%s) + 10800 ))" \
         '.bootstrap_expires_at = $expires' "$valid_sandbox_config" \
         >"$tmp/bootstrap-reject.json"
-      expected_bootstrap_failure='bootstrap control authority is expired or exceeds two hours'
+      expected_bootstrap_failure='bootstrap control authority is expired or exceeds 6,900 seconds'
       ;;
   esac
   sudo -n install -o root -g root -m 0600 \
@@ -752,6 +767,66 @@ for bootstrap_case in missing-commit wrong-commit expired overlong; do
   sudo -n install -o root -g root -m 0600 \
     "$valid_sandbox_config" "$sandbox_config"
 done
+
+# API identity admission is root-only and precedes both the worker and every
+# check/status POST. Missing, duplicate, incorrect, wrong-default, and
+# wrong-clone rows all fail without starting candidate code.
+for authority_case in authority-missing authority-duplicate \
+  authority-wrong-owner authority-wrong-default authority-wrong-clone; do
+  printf '%s\n' "$authority_case" >"$forge_behavior"
+  sudo -n rm -f -- "$started"
+  authority_offset="$(stat -c '%s' "$forge_log")"
+  authority_log="$tmp/$authority_case.log"
+  if JAIN_HOST_CI_SANDBOX="$sandbox" \
+    JAIN_SPLIT_ROOT="$sandbox_family_root" \
+    JAIN_TEST_STARTED_PATH="$started_worker" \
+      "$control/ops/ci/split-host-ci.sh" \
+        jeryu jain-report "$product_sha" "$product" \
+        jain-report/required >"$authority_log" 2>&1; then
+    printf 'sandbox accepted hostile repository identity: %s\n' \
+      "$authority_case" >&2
+    exit 1
+  fi
+  grep -Fq 'cannot authenticate configured control authority' \
+    "$authority_log"
+  ! sudo -n test -e "$started" || {
+    printf 'repository identity rejection started a worker: %s\n' \
+      "$authority_case" >&2
+    exit 1
+  }
+  authority_tail="$(tail -c "+$((authority_offset + 1))" "$forge_log")"
+  if grep -Eq '^POST .*/(check-runs|statuses/)' <<<"$authority_tail"; then
+    printf 'repository identity rejection published to the forge: %s\n' \
+      "$authority_case" >&2
+    exit 1
+  fi
+done
+printf 'ok\n' >"$forge_behavior"
+
+# A moved configured control ref is equally pre-admission: the authenticated
+# API row can still be correct, but no worker or publication authority exists.
+sudo -n git --git-dir="$control_remote" update-ref \
+  "$bootstrap_control_ref" "$moved_control_commit" "$control_commit"
+sudo -n rm -f -- "$started"
+moved_ref_offset="$(stat -c '%s' "$forge_log")"
+if JAIN_HOST_CI_SANDBOX="$sandbox" JAIN_SPLIT_ROOT="$sandbox_family_root" \
+  JAIN_TEST_STARTED_PATH="$started_worker" \
+    "$control/ops/ci/split-host-ci.sh" \
+      jeryu jain-report "$product_sha" "$product" jain-report/required \
+      >"$tmp/moved-control-ref.log" 2>&1; then
+  printf 'sandbox accepted a moved control authority ref\n' >&2
+  exit 1
+fi
+grep -Fq 'cannot authenticate configured control authority' \
+  "$tmp/moved-control-ref.log"
+! sudo -n test -e "$started" || {
+  printf 'moved control authority started a worker\n' >&2
+  exit 1
+}
+moved_ref_tail="$(tail -c "+$((moved_ref_offset + 1))" "$forge_log")"
+! grep -Eq '^POST .*/(check-runs|statuses/)' <<<"$moved_ref_tail"
+sudo -n git --git-dir="$control_remote" update-ref \
+  "$bootstrap_control_ref" "$control_commit" "$moved_control_commit"
 
 # A caller-local commit is not product authority. Keeping it as the caller's
 # HEAD also proves the successful run below is staged from the forge ref.
@@ -858,10 +933,56 @@ grep -Fq 'requested head is not an advertised product ref' \
   printf 'sandbox did not reject caller-only product authority\n' >&2
   exit 1
 }
-[[ "$(stat -c '%s' "$forge_log")" == "$unadvertised_offset" ]] || {
-  printf 'caller-only product rejection reached the forge\n' >&2
+unadvertised_tail="$(tail -c "+$((unadvertised_offset + 1))" "$forge_log")"
+if grep -Eq '^POST .*/(check-runs|statuses/)' <<<"$unadvertised_tail"; then
+  printf 'caller-only product rejection emitted a check/status POST\n' >&2
+  exit 1
+fi
+
+# The publisher must repeat the same authenticated control ref after the
+# worker and auditor have stopped. Move it only after candidate startup; the
+# completed lane must still produce zero check/status POSTs.
+sudo -n jq '.retain_requests=false' "$sandbox_config" \
+  >"$tmp/nonretained-sandbox-config.json"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/nonretained-sandbox-config.json" "$sandbox_config"
+sudo -n rm -f -- "$started"
+publisher_move_offset="$(stat -c '%s' "$forge_log")"
+JAIN_HOST_CI_SANDBOX="$sandbox" \
+JAIN_SPLIT_ROOT="$sandbox_family_root" \
+JAIN_TEST_STARTED_PATH="$started_worker" \
+JAIN_TEST_SLEEP_SECONDS=3 \
+  "$control/ops/ci/split-host-ci.sh" \
+    jeryu jain-report "$product_sha" "$product" jain-report/required \
+    >"$tmp/publisher-moved-ref.log" 2>&1 &
+runner_pid=$!
+for _ in $(seq 1 500); do
+  sudo -n test -e "$started" && break
+  kill -0 "$runner_pid" 2>/dev/null || break
+  sleep 0.01
+done
+sudo -n test -e "$started" || {
+  printf 'publisher moved-ref fixture never started its worker\n' >&2
   exit 1
 }
+sudo -n git --git-dir="$control_remote" update-ref \
+  "$bootstrap_control_ref" "$moved_control_commit" "$control_commit"
+if wait "$runner_pid"; then
+  printf 'publisher accepted a control ref moved after worker admission\n' >&2
+  exit 1
+fi
+runner_pid=""
+sudo -n git --git-dir="$control_remote" update-ref \
+  "$bootstrap_control_ref" "$control_commit" "$moved_control_commit"
+sudo -n install -o root -g root -m 0600 \
+  "$valid_sandbox_config" "$sandbox_config"
+grep -Fq 'cannot repeat authenticated control authority before publication' \
+  "$tmp/publisher-moved-ref.log"
+publisher_move_tail="$(tail -c "+$((publisher_move_offset + 1))" "$forge_log")"
+if grep -Eq '^POST .*/(check-runs|statuses/)' <<<"$publisher_move_tail"; then
+  printf 'publisher moved-ref rejection emitted a check/status POST\n' >&2
+  exit 1
+fi
 
 # Full parent -> reviewed runner -> candidate path. The candidate scans every
 # visible proc entry and the root config path, then makes a real forged-status
@@ -1001,8 +1122,23 @@ sudo -n jq -e 'select(.status == "consumed")' \
   "$success_request/root-state.json" >/dev/null
 sudo -n jq -e --arg ref "$bootstrap_control_ref" \
   --arg expires "$bootstrap_expires_at" '
-    select(.control_ref == $ref and .bootstrap_expires_at == $expires)' \
+    select(.schema_version == "jain.host-ci-root-state/v5")
+    | select(.control_ref == $ref and .bootstrap_expires_at == $expires)
+    | select(.control_repository == "veox/jain-split-ops")
+    | select(.control_api_identity.owner == "veox")
+    | select(.control_api_identity.name == "jain-split-ops")' \
   "$success_request/root-state.json" >/dev/null
+sudo -n jq -e '
+  select(.schema_version == "jain.host-ci-root-result/v5")
+  | select(.control_repository == "veox/jain-split-ops")
+  | select(.control_api_identity.owner == "veox")
+  | select(.control_ref == "refs/heads/codex/host-ci-bootstrap-test")' \
+  "$success_request/root-result.json" >/dev/null
+sudo -n jq -e '
+  select(.schema_version == "jain.host-ci-reexec/v5")
+  | select(.control_repository == "veox/jain-split-ops")
+  | select(.control_api_identity.owner == "veox")' \
+  "$success_request/worker-authority/reexec-state.json" >/dev/null
 success_proof_dir="$(sudo -n jq -er '.proof_evidence_dir' \
   "$success_request/root-result.json")"
 case "$success_proof_dir" in
@@ -1030,7 +1166,7 @@ sudo -n jq -e '
     and .fixture.network_isolated == true)' \
   "$success_proof_dir/report.json" >/dev/null
 # Installed protocol versions are mandatory trust inputs, not advisory parser
-# hints. A v4 publisher config is rejected even for an otherwise sealed v4
+# hints. A v4 publisher config is rejected even for an otherwise sealed v5
 # request, and restoring the exact v5 bytes does not make that request replayable.
 sudo -n cp -- "$publisher_config" "$tmp/publisher-config.v5"
 sudo -n jq '.schema_version="jain.host-ci-publisher-config/v4"' \
@@ -1099,6 +1235,83 @@ make_sealed_variant() {
     "$destination/root-state.json"
 }
 
+# The v5 control identity must agree byte-for-byte across state, result, and
+# re-exec evidence. Recomputing the result seal cannot legitimize a divergent
+# field, and no such rejection may reach a forge endpoint.
+result_tamper_id="$(printf '1%.0s' {1..64})"
+make_sealed_variant "$result_tamper_id" \
+  '.request_id=$request_id | .control_ref="refs/heads/attacker"' \
+  "$(date +%s)"
+tamper_offset="$(stat -c '%s' "$forge_log")"
+if sudo -n "$publisher" "$request_root/$result_tamper_id" \
+  >"$tmp/result-authority-tamper.log" 2>&1; then
+  printf 'publisher accepted result control-authority tampering\n' >&2
+  exit 1
+fi
+grep -Fq 'control authority differs across broker-owned evidence' \
+  "$tmp/result-authority-tamper.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$tamper_offset" ]]
+
+state_tamper_id="$(printf '2%.0s' {1..64})"
+make_sealed_variant "$state_tamper_id" '.request_id=$request_id' \
+  "$(date +%s)"
+sudo -n jq '.control_api_identity.owner="attacker"' \
+  "$request_root/$state_tamper_id/root-state.json" \
+  >"$tmp/state-authority-tamper.json"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/state-authority-tamper.json" \
+  "$request_root/$state_tamper_id/root-state.json"
+tamper_offset="$(stat -c '%s' "$forge_log")"
+if sudo -n "$publisher" "$request_root/$state_tamper_id" \
+  >"$tmp/state-authority-tamper.log" 2>&1; then
+  printf 'publisher accepted state control-authority tampering\n' >&2
+  exit 1
+fi
+grep -Fq 'control authority differs across broker-owned evidence' \
+  "$tmp/state-authority-tamper.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$tamper_offset" ]]
+
+reexec_tamper_id="$(printf '3%.0s' {1..64})"
+make_sealed_variant "$reexec_tamper_id" '.request_id=$request_id' \
+  "$(date +%s)"
+sudo -n jq '.control_remote="http://127.0.0.1:8787/git/attacker/wrong.git"' \
+  "$request_root/$reexec_tamper_id/worker-authority/reexec-state.json" \
+  >"$tmp/reexec-authority-tamper.json"
+sudo -n install -o root -g root -m 0444 \
+  "$tmp/reexec-authority-tamper.json" \
+  "$request_root/$reexec_tamper_id/worker-authority/reexec-state.json"
+tamper_offset="$(stat -c '%s' "$forge_log")"
+if sudo -n "$publisher" "$request_root/$reexec_tamper_id" \
+  >"$tmp/reexec-authority-tamper.log" 2>&1; then
+  printf 'publisher accepted re-exec control-authority tampering\n' >&2
+  exit 1
+fi
+grep -Fq 'control authority differs across broker-owned evidence' \
+  "$tmp/reexec-authority-tamper.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$tamper_offset" ]]
+
+# Restoration is all-or-nothing: selecting main while retaining bootstrap
+# commit/expiry fields is not a valid post-merge installation.
+restoration_id="$(printf '4%.0s' {1..64})"
+make_sealed_variant "$restoration_id" '.request_id=$request_id' \
+  "$(date +%s)"
+sudo -n cat "$publisher_config" >"$tmp/bootstrap-publisher-config.json"
+sudo -n jq '.control_ref="refs/heads/main"' "$publisher_config" \
+  >"$tmp/incomplete-restoration-config.json"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/incomplete-restoration-config.json" "$publisher_config"
+tamper_offset="$(stat -c '%s' "$forge_log")"
+if sudo -n "$publisher" "$request_root/$restoration_id" \
+  >"$tmp/incomplete-restoration.log" 2>&1; then
+  printf 'publisher accepted an incomplete main restoration\n' >&2
+  exit 1
+fi
+grep -Fq 'production control authority cannot carry bootstrap fields' \
+  "$tmp/incomplete-restoration.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$tamper_offset" ]]
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/bootstrap-publisher-config.json" "$publisher_config"
+
 # A correctly recomputed but old root seal is stale and becomes one-shot even
 # on rejection.
 stale_id="$(printf 'a%.0s' {1..64})"
@@ -1145,7 +1358,7 @@ make_sealed_variant "$old_result_id" \
    | .schema_version="jain.host-ci-root-result/v3"' "$(date +%s)"
 if sudo -n "$publisher" "$request_root/$old_result_id" \
   >"$tmp/old-root-result.log" 2>&1; then
-  printf 'v4 publisher accepted a v3 root result protocol\n' >&2
+  printf 'v5 publisher accepted a v3 root result protocol\n' >&2
   exit 1
 fi
 grep -Fq 'invalid root result schema' "$tmp/old-root-result.log"
@@ -1418,10 +1631,11 @@ if env \
 fi
 grep -Eq 'score report git.head|rev-parse|proof evidence promotion failed' \
   "$tmp/forged-report.log"
-[[ "$(stat -c '%s' "$forge_log")" == "$forged_report_offset" ]] || {
-  printf 'forged Jankurai report reached the forge\n' >&2
+forged_report_tail="$(tail -c "+$((forged_report_offset + 1))" "$forge_log")"
+if grep -Eq '^POST .*/(check-runs|statuses/)' <<<"$forged_report_tail"; then
+  printf 'forged Jankurai report emitted a check/status POST\n' >&2
   exit 1
-}
+fi
 
 # A caller can retain a writable descriptor even after the sandbox changes the
 # bootstrap tree to the worker identity. Mutating the request through that
