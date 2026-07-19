@@ -5071,6 +5071,9 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     if command == "branch-push" {
         return jeryu_branch_push(args);
     }
+    if command == "repo-create" {
+        return jeryu_repo_create(args);
+    }
     if command == "main-fetch" {
         return jeryu_main_fetch(args);
     }
@@ -5155,6 +5158,148 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         println!("{}", compact_json_output(&response));
     }
     Ok(())
+}
+
+fn jeryu_repo_create(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repo = None;
+    let mut description = None;
+    let mut evidence_out = None;
+    let mut token_file = None;
+    let mut apply = false;
+    let mut iter = args.into_iter();
+    if iter.next().as_deref() != Some("repo-create") {
+        return Err("repo-create command identity is invalid".into());
+    }
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repo" => repo = Some(iter.next().ok_or("--repo needs owner/name")?),
+            "--description" => {
+                description = Some(iter.next().ok_or("--description needs a value")?)
+            }
+            "--evidence-out" => {
+                evidence_out = Some(PathBuf::from(
+                    iter.next().ok_or("--evidence-out needs a path")?,
+                ))
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
+            }
+            "--apply" => apply = true,
+            value => return Err(format!("unknown repo-create argument: {value}").into()),
+        }
+    }
+    let repo = repo.ok_or("repo-create requires --repo veox/name")?;
+    validate_governed_repo_create_slug(&repo)?;
+    let request = JeryuRequest::repo_create(&repo, description.as_deref())?;
+    let mut report = receipt_header(
+        "jain.jeryu-repository-creation/v1",
+        "jeryu-local repo-create",
+        apply,
+    );
+    report["repository"] = json!(repo);
+    report["request"] = jeryu_request_json(&request);
+    let result = (|| {
+        if !apply {
+            report["action"] = json!("would-create-private-empty-repository");
+            return Ok(());
+        }
+        let token_file = token_file
+            .as_deref()
+            .ok_or("Jeryu repository creation requires an explicit --token-file path")?;
+        let client = JeryuClient::from_token_file(token_file)?;
+        let before = client.execute(&JeryuRequest::repo_list()?)?;
+        validate_repo_absent(&before, &repo)?;
+        report["absence_readback"] = json!(true);
+
+        report["mutation_attempted"] = json!(true);
+        let response = client.execute_created(&request).map_err(|error| {
+            format!(
+                "repository creation outcome is ambiguous after the mutation attempt; perform exact readback before any retry: {error}"
+            )
+        })?;
+        validate_repo_creation_response(&response, &repo)?;
+        report["response"] = response;
+
+        let details = client.execute(&JeryuRequest::repo_details(&repo)?)?;
+        validate_repo_creation_response(&details, &repo)?;
+        report["details_readback"] = details;
+
+        let repositories = client.execute(&JeryuRequest::repo_list()?)?;
+        report["repository_identity"] = validate_repo_list_identity(&repositories, &repo)?;
+        if secure_ls_remote(&repo, "refs/heads/main", token_file)?.is_some() {
+            return Err("new governed repository unexpectedly advertises refs/heads/main".into());
+        }
+        report["main_ref_absent"] = json!(true);
+        report["action"] = json!("created-and-verified-empty-repository");
+        report["external_state_changed"] = json!(true);
+        Ok(())
+    })();
+    finish_optional_evidence(evidence_out.as_deref(), &mut report, result)
+}
+
+fn validate_governed_repo_create_slug(repo: &str) -> Result<(), Box<dyn std::error::Error>> {
+    validate_jeryu_repo_slug(repo)?;
+    let (owner, name) = repo
+        .split_once('/')
+        .ok_or("repository identity needs owner/name")?;
+    if owner != "veox" || name.len() > 100 {
+        return Err("governed repository creation requires a safe veox/name slug".into());
+    }
+    Ok(())
+}
+
+fn validate_repo_absent(
+    response: &JsonValue,
+    repo: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (owner, name) = repo
+        .split_once('/')
+        .ok_or("repository identity needs owner/name")?;
+    let expected_clone = format!("/git/{repo}.git");
+    let rows = response
+        .get("repositories")
+        .and_then(JsonValue::as_array)
+        .ok_or("Jeryu repository absence readback has no repositories array")?;
+    if rows.iter().any(|row| {
+        (row.pointer("/id/host").and_then(JsonValue::as_str) == Some("jeryu")
+            && row.pointer("/id/owner").and_then(JsonValue::as_str) == Some(owner)
+            && row.pointer("/id/name").and_then(JsonValue::as_str) == Some(name))
+            || row.get("clone_http_url").and_then(JsonValue::as_str)
+                == Some(expected_clone.as_str())
+    }) {
+        return Err("governed repository already exists or has a clone-path collision".into());
+    }
+    Ok(())
+}
+
+fn validate_repo_creation_response(
+    response: &JsonValue,
+    repo: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let (owner, name) = repo
+        .split_once('/')
+        .ok_or("repository identity needs owner/name")?;
+    let expected_url = format!("/repos/{repo}");
+    let expected_html_url = format!("/{repo}");
+    let valid = response.get("name").and_then(JsonValue::as_str) == Some(name)
+        && response.get("full_name").and_then(JsonValue::as_str) == Some(repo)
+        && response.get("private").and_then(JsonValue::as_bool) == Some(true)
+        && response.get("default_branch").and_then(JsonValue::as_str) == Some("main")
+        && response.get("archived").and_then(JsonValue::as_bool) == Some(false)
+        && response.get("disabled").and_then(JsonValue::as_bool) == Some(false)
+        && response.pointer("/owner/login").and_then(JsonValue::as_str) == Some(owner)
+        && response.get("url").and_then(JsonValue::as_str) == Some(expected_url.as_str())
+        && response.get("html_url").and_then(JsonValue::as_str) == Some(expected_html_url.as_str());
+    if valid {
+        Ok(())
+    } else {
+        Err(
+            "Jeryu repository creation readback differs from the exact private veox/main identity"
+                .into(),
+        )
+    }
 }
 
 fn validate_pr_open_readback(
@@ -11293,6 +11438,109 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             "veox/example"
         )
         .is_err());
+    }
+
+    #[test]
+    fn governed_repository_creation_request_is_private_veox_main_only() {
+        let request =
+            JeryuRequest::repo_create("veox/jain-fabric", Some("Canonical Jain fabric contracts"))
+                .unwrap();
+        assert_eq!(request.method(), "POST");
+        assert_eq!(request.path(), "/repos");
+        assert_eq!(
+            serde_json::from_str::<JsonValue>(request.body().unwrap()).unwrap(),
+            json!({
+                "owner": "veox",
+                "name": "jain-fabric",
+                "private": true,
+                "default_branch": "main",
+                "description": "Canonical Jain fabric contracts",
+            })
+        );
+        let details = JeryuRequest::repo_details("veox/jain-fabric").unwrap();
+        assert_eq!(details.method(), "GET");
+        assert_eq!(details.path(), "/repos/veox/jain-fabric");
+        assert!(JeryuRequest::repo_create("jeryu/jain-fabric", None).is_err());
+        assert!(JeryuRequest::repo_create("veox/../jain-fabric", None).is_err());
+        assert!(JeryuRequest::repo_create("veox/jain-fabric", Some("bad\ntext")).is_err());
+    }
+
+    #[test]
+    fn governed_repository_creation_readback_is_exact_and_absence_is_closed() {
+        let response = json!({
+            "name": "jain-fabric",
+            "full_name": "veox/jain-fabric",
+            "private": true,
+            "default_branch": "main",
+            "archived": false,
+            "disabled": false,
+            "owner": {"login": "veox", "type": "User"},
+            "url": "/repos/veox/jain-fabric",
+            "html_url": "/veox/jain-fabric",
+        });
+        validate_repo_creation_response(&response, "veox/jain-fabric").unwrap();
+        for (pointer, wrong) in [
+            ("/private", json!(false)),
+            ("/default_branch", json!("trunk")),
+            ("/owner/login", json!("jeryu")),
+            ("/archived", json!(true)),
+            ("/url", json!("/repos/veox/other")),
+        ] {
+            let mut hostile = response.clone();
+            *hostile.pointer_mut(pointer).unwrap() = wrong;
+            assert!(validate_repo_creation_response(&hostile, "veox/jain-fabric").is_err());
+        }
+
+        validate_repo_absent(&json!({"repositories": []}), "veox/jain-fabric").unwrap();
+        let identity_collision = json!({"repositories": [{
+            "id": {"host": "jeryu", "owner": "veox", "name": "jain-fabric"},
+            "clone_http_url": "/git/veox/jain-fabric.git",
+        }]});
+        assert!(validate_repo_absent(&identity_collision, "veox/jain-fabric").is_err());
+        let clone_collision = json!({"repositories": [{
+            "id": {"host": "jeryu", "owner": "veox", "name": "other"},
+            "clone_http_url": "/git/veox/jain-fabric.git",
+        }]});
+        assert!(validate_repo_absent(&clone_collision, "veox/jain-fabric").is_err());
+        assert!(validate_repo_absent(&json!({}), "veox/jain-fabric").is_err());
+    }
+
+    #[test]
+    fn governed_repository_creation_dry_run_needs_no_token_or_network() {
+        jeryu_repo_create(vec![
+            "repo-create".to_owned(),
+            "--repo".to_owned(),
+            "veox/jain-fabric".to_owned(),
+        ])
+        .unwrap();
+
+        let root = TestDir::new("repo-create-dry-run");
+        let evidence = root.path().join("evidence.json");
+        jeryu_repo_create(vec![
+            "repo-create".to_owned(),
+            "--repo".to_owned(),
+            "veox/jain-fabric".to_owned(),
+            "--description".to_owned(),
+            "Canonical Jain fabric contracts".to_owned(),
+            "--evidence-out".to_owned(),
+            evidence.display().to_string(),
+        ])
+        .unwrap();
+        let report = read_json(&evidence);
+        assert_eq!(report["status"], "pass");
+        assert_eq!(report["mode"], "dry-run");
+        assert_eq!(report["action"], "would-create-private-empty-repository");
+        assert_eq!(report["request"]["method"], "POST");
+        assert_eq!(report["request"]["path"], "/repos");
+
+        let error = jeryu_repo_create(vec![
+            "repo-create".to_owned(),
+            "--repo".to_owned(),
+            "veox/jain-fabric".to_owned(),
+            "--apply".to_owned(),
+        ])
+        .unwrap_err();
+        assert!(error.to_string().contains("explicit --token-file"));
     }
 
     #[test]
