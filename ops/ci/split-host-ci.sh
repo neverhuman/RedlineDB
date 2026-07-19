@@ -477,8 +477,7 @@ fi
 # also rewritten here only so older lockfiles fail less noisily while the family
 # is being migrated. Bare mirrors are a credential-free CI cache, not canonical
 # source.
-if [ "$REPO" != "jain-split-ops" ]; then
-  ci_gitconfig="${JAIN_HOST_CI_WRITABLE_ROOT:-$SPLIT_ROOT/target}/ci-gitconfig"
+ci_gitconfig="${JAIN_HOST_CI_WRITABLE_ROOT:-$SPLIT_ROOT/target}/ci-gitconfig"
   mkdir -p "$(dirname "$ci_gitconfig")"
   {
     printf '[url "file://%s/target/bare-mirrors/"]\n' "$SPLIT_ROOT"
@@ -514,7 +513,6 @@ if [ "$REPO" != "jain-split-ops" ]; then
   say "cross-repo resolution: local bare mirrors (CI cache for local Jeryu tags)"
   export GIT_CONFIG_NOSYSTEM=1
   export GIT_CONFIG_GLOBAL="$ci_gitconfig"
-fi
 
 # cargo-cache-stage validates every lock source and stages only checksum-bound
 # crates.io inputs. Seed Cargo's private Git database separately while the

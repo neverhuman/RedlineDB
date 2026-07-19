@@ -2,6 +2,17 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+bounded_git_setup="$(sed -n \
+  '/^# Cross-repo dependency resolution/,/^# cargo-cache-stage/p' \
+  "$repo_root/ops/ci/split-host-ci.sh")"
+[[ "$bounded_git_setup" == *'ci_gitconfig='* ]] || {
+  printf 'host CI bounded Git configuration setup is absent\n' >&2
+  exit 1
+}
+if [[ "$bounded_git_setup" == *'$REPO'* ]]; then
+  printf 'host CI bounded Git configuration is repository-conditional\n' >&2
+  exit 1
+fi
 mkdir -p "$repo_root/target/test-tmp"
 tmp="$(mktemp -d "$repo_root/target/test-tmp/jain-split-host-integrity-test.XXXXXX")"
 # The worker traverses to separately bind-mounted fixture roots beneath this
