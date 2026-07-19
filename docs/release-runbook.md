@@ -53,9 +53,13 @@ For a repository whose forge has no `main`, first run the dry plan, inspect it, 
 same reviewed SHA:
 
 ```bash
-just bootstrap-main /absolute/checkout http://127.0.0.1:8787/git/OWNER/REPO.git REVIEWED_SHA
-just bootstrap-main-apply /absolute/checkout http://127.0.0.1:8787/git/OWNER/REPO.git REVIEWED_SHA
+just bootstrap-main /absolute/checkout http://127.0.0.1:8787/git/veox/REPO.git REVIEWED_SHA /absolute/owner-token
+just bootstrap-main-apply /absolute/checkout http://127.0.0.1:8787/git/veox/REPO.git REVIEWED_SHA /absolute/owner-token
 ```
+
+The reviewed commit must already exist in the new repository through reviewed branch custody.
+Bootstrap authenticates the exact forge identity, then performs a zero-old-OID create of the
+otherwise absent `main`; it cannot replace an existing ref.
 
 Apply and read back immutable-main protection before accepting the repository into the graph:
 

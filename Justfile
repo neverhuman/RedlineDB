@@ -49,11 +49,11 @@ sync-derived:
 sync-derived-apply:
   cargo run --locked --quiet -- sync-derived-manifests --manifest repos.manifest.toml --apply
 
-bootstrap-main repo remote reviewed_commit:
-  cargo run --locked --quiet -- bootstrap-main --repo "{{repo}}" --remote "{{remote}}" --reviewed-commit "{{reviewed_commit}}"
+bootstrap-main repo remote reviewed_commit token_file:
+  cargo run --locked --quiet -- bootstrap-main --repo "{{repo}}" --remote "{{remote}}" --reviewed-commit "{{reviewed_commit}}" --token-file "{{token_file}}"
 
-bootstrap-main-apply repo remote reviewed_commit:
-  cargo run --locked --quiet -- bootstrap-main --repo "{{repo}}" --remote "{{remote}}" --reviewed-commit "{{reviewed_commit}}" --apply
+bootstrap-main-apply repo remote reviewed_commit token_file:
+  cargo run --locked --quiet -- bootstrap-main --repo "{{repo}}" --remote "{{remote}}" --reviewed-commit "{{reviewed_commit}}" --token-file "{{token_file}}" --apply
 
 immutable-tag repo remote tag commit token_file:
   cargo run --locked --quiet -- immutable-tag --repo "{{repo}}" --remote "{{remote}}" --tag "{{tag}}" --commit "{{commit}}" --token-file "{{token_file}}"
