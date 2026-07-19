@@ -15,9 +15,16 @@ magic/version handshake and invalid-magic rejection. The dependency guard separa
 default Redline, explicit Redline, SQLite, and Postgres Cargo closures. The
 `db-shim.used-operations/v2` corpus is table-driven and backend-neutral; it asserts identical
 integer, real, text, and blob null round trips plus success-only execution. Ordinary required runs
-it against real in-memory SQLite. `JAIN_RELEASE_CI=1` additionally requires explicit Redline and
-Postgres DSNs and runs the identical corpus against both real services. Missing DSNs fail closed.
-No result is described as arbitrary or full SQL parity.
+it against real in-memory SQLite. `JAIN_RELEASE_CI=1` changes build custody but does not request
+network credentials. `bash scripts/ci-local.sh family-release` is the separate armed family lane:
+it requires `REDLINE_CORPUS_DSN` and `POSTGRES_CORPUS_DSN` and runs the identical corpus against
+both real services. Missing or substitute DSNs fail closed. No result is described as arbitrary or
+full SQL parity.
+
+Security evidence distinguishes local readiness from governed host proof. Local runs bind the
+actual clean advisory checkout they inspect. Release host CI must provide both
+`JAIN_PINNED_ADVISORY_DB` and `JAIN_PINNED_ADVISORY_COMMIT`; the lane validates that exact clean
+commit, derives its full tree identity, and records both commit and tree in the receipt.
 
 Generated proof output lives under `target/` except the reviewed Jankurai score
 copy under `agent/`. A passing local lane is not a merge receipt: the protected

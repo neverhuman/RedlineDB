@@ -11,6 +11,7 @@ case "$lane" in
   score) bash ops/ci/jankurai.sh ;;
   contract-drift) bash ops/ci/contract-drift.sh ;;
   artifact-support) bash ops/ci/artifact-support.sh ;;
+  family-release) bash ops/ci/family-release.sh ;;
   coverage) bash ops/ci/coverage.sh ;;
   required) bash ops/ci/required.sh ;;
   *)

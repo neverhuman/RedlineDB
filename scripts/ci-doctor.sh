@@ -26,18 +26,27 @@ grep -Fq 'bash ops/ci/jankurai.sh' .github/workflows/jankurai.yml
   .github/workflows/jankurai.yml)" -eq 4 ]]
 [[ "$(grep -Fc 'persist-credentials: false' .github/workflows/jankurai.yml)" -eq 4 ]]
 grep -Fq 'bash ops/ci/pinned-rustsec-test.sh' ops/ci/security.sh
-grep -Fq 'cargo audit --db target/jankurai/security/rustsec-db --no-fetch --json' \
+grep -Fq "cargo audit --db \"\$JAIN_RESOLVED_ADVISORY_DB\" --no-fetch --json" \
   ops/ci/security.sh
-grep -Fq 'JAIN_RUSTSEC_COMMIT="9f3e138091487e69144f536d36976e427a7a3307"' \
+grep -Fq 'JAIN_PINNED_ADVISORY_DB' \
   ops/ci/pinned-rustsec.sh
-grep -Fq 'JAIN_RUSTSEC_ARCHIVE_SHA256="08098d56e4349bd8fc08e8be06ba057e481ef547c859194fc538f0acbd0be63c"' \
+grep -Fq 'JAIN_PINNED_ADVISORY_COMMIT' \
   ops/ci/pinned-rustsec.sh
+grep -Fq 'JAIN_RESOLVED_ADVISORY_TREE' ops/ci/pinned-rustsec.sh
+grep -Fq 'bash ops/ci/family-release-test.sh' ops/ci/required.sh
+if grep -Fq 'REDLINE_CORPUS_DSN' ops/ci/fast.sh; then
+  printf 'protected fast lane must not require an external Redline DSN\n' >&2
+  exit 1
+fi
 grep -Fq 'cargo metadata --locked --format-version 1 --no-deps' ops/ci/artifact-support.sh
 if grep -Eq 'install .*target/release/(redlinedb-client-smoke|db-shim-parity)' \
   ops/ci/artifact-support.sh; then
   printf 'artifact lane must honor the exact Cargo target directory\n' >&2
   exit 1
 fi
+grep -Fq 'export SOURCE_DATE_EPOCH=' ops/ci/artifact-support.sh
+grep -Fq "CARGO_TARGET_DIR=\"\$first_target\"" ops/ci/artifact-support-test.sh
+grep -Fq "CARGO_TARGET_DIR=\"\$second_target\"" ops/ci/artifact-support-test.sh
 grep -Fq 'zizmor --offline --format json' ops/ci/security.sh
 if grep -Fq -- '--no-exit-codes' ops/ci/security.sh; then
   printf 'security lane must not suppress Zizmor findings\n' >&2

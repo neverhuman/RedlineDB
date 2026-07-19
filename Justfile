@@ -24,6 +24,9 @@ contract-drift:
 artifact-support:
 	bash ops/ci/artifact-support.sh
 
+family-release:
+	bash ops/ci/family-release.sh
+
 coverage:
 	bash ops/ci/coverage.sh
 
