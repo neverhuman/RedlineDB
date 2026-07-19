@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:fff455b564f454a10846f583eef8a235e5b1a2d3c65f2eb302a048f20b0a1da1",
-  "input_fingerprint": "sha256:4ee2b4d0ded38379a77119e43a6dcf589d09d11c5790ff38d9cfe6a400069343",
+  "report_fingerprint": "sha256:6871c603e893f730d8b19d2204098886c7fe6201cd30dc459a29529120e234d0",
+  "input_fingerprint": "sha256:c03739fa9af9a3b3959f254ff71b1d6f6435de4ddd2cbe99758cd177976eeb93",
   "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
   "manifest_fingerprints": {
     "owner_map": "sha256:4d4f78e32cf6f78fc77cb03ed13d3ec781d4d35da4db1ffc56bbb48f403dcfed",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:f33b9715b6109208b44f6931c43f37e8da642dd67ff6faaad77be486954243a4"
   },
   "dirty_worktree": true,
-  "generated_at": "1784418053",
+  "generated_at": "1784420883",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784418053",
-  "started_at": "1784418053",
-  "elapsed_ms": 4310,
+  "run_id": "1784420883",
+  "started_at": "1784420883",
+  "elapsed_ms": 4177,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "b73a1ec",
+    "head": "01d1cb3",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1006,7 +1006,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-18T23:40:48.832340870+00:00",
+    "generated_at": "2026-07-19T00:27:59.500305584+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1044,7 +1044,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 284,
+      "files_scanned": 283,
       "files_considered": 6,
       "active_files": 6,
       "exact_file_classes": 0,
@@ -1124,71 +1124,71 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 123,
-            "end_line": 124,
+            "start_line": 144,
+            "end_line": 145,
             "unit_name": "pr_list"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 169,
-            "end_line": 170,
+            "start_line": 190,
+            "end_line": 191,
             "unit_name": "checks"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 179,
-            "end_line": 180,
+            "start_line": 200,
+            "end_line": 201,
             "unit_name": "pr_update"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 189,
-            "end_line": 190,
+            "start_line": 210,
+            "end_line": 211,
             "unit_name": "pr_readback"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 199,
-            "end_line": 200,
+            "start_line": 220,
+            "end_line": 221,
             "unit_name": "pr_details"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 233,
-            "end_line": 234,
+            "start_line": 254,
+            "end_line": 255,
             "unit_name": "pr_merge"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 244,
-            "end_line": 245,
+            "start_line": 265,
+            "end_line": 266,
             "unit_name": "protection"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 258,
-            "end_line": 259,
+            "start_line": 279,
+            "end_line": 280,
             "unit_name": "check_run"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 267,
-            "end_line": 268,
+            "start_line": 288,
+            "end_line": 289,
             "unit_name": "commit_status"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 277,
-            "end_line": 278,
+            "start_line": 298,
+            "end_line": 299,
             "unit_name": "commit_status_readback"
           }
         ]
@@ -1215,50 +1215,50 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1386,
-            "end_line": 1387,
+            "start_line": 1434,
+            "end_line": 1435,
             "unit_name": "secure_token_file_is_accepted"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1407,
-            "end_line": 1408,
+            "start_line": 1455,
+            "end_line": 1456,
             "unit_name": "token_accepts_exactly_one_terminal_lf_as_file_framing"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1421,
-            "end_line": 1422,
+            "start_line": 1469,
+            "end_line": 1470,
             "unit_name": "token_requires_absolute_path_current_owner_and_exact_mode"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1431,
-            "end_line": 1432,
+            "start_line": 1479,
+            "end_line": 1480,
             "unit_name": "token_rejects_symlink_components_and_final_symlink"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1447,
-            "end_line": 1448,
+            "start_line": 1495,
+            "end_line": 1496,
             "unit_name": "token_rejects_hardlinks_special_files_and_oversize"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1486,
-            "end_line": 1487,
+            "start_line": 1534,
+            "end_line": 1535,
             "unit_name": "token_rejects_path_replacement"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1500,
-            "end_line": 1501,
+            "start_line": 1548,
+            "end_line": 1549,
             "unit_name": "token_rejects_parent_component_replacement"
           }
         ]
@@ -1334,15 +1334,15 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 561,
-            "end_line": 562,
+            "start_line": 582,
+            "end_line": 583,
             "unit_name": "validate_publication_text"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 683,
-            "end_line": 684,
+            "start_line": 731,
+            "end_line": 732,
             "unit_name": "validate_ref_name"
           },
           {
@@ -1383,15 +1383,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2645,
-            "end_line": 2648,
+            "start_line": 2649,
+            "end_line": 2652,
             "unit_name": "validate_child_family_authority"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2661,
-            "end_line": 2664,
+            "start_line": 2665,
+            "end_line": 2668,
             "unit_name": "validate_child_engine_authority"
           }
         ]
@@ -1418,29 +1418,29 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 505,
-            "end_line": 506,
+            "start_line": 526,
+            "end_line": 527,
             "unit_name": "for_test"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 546,
-            "end_line": 547,
+            "start_line": 567,
+            "end_line": 568,
             "unit_name": "before"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 553,
-            "end_line": 554,
+            "start_line": 574,
+            "end_line": 575,
             "unit_name": "after"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 764,
-            "end_line": 765,
+            "start_line": 812,
+            "end_line": 813,
             "unit_name": "from_metadata"
           }
         ]
@@ -1467,15 +1467,15 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1521,
-            "end_line": 1522,
+            "start_line": 1569,
+            "end_line": 1570,
             "unit_name": "serve"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1608,
-            "end_line": 1609,
+            "start_line": 1656,
+            "end_line": 1657,
             "unit_name": "serve_sequence"
           }
         ]
@@ -1502,15 +1502,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2363,
-            "end_line": 2364,
+            "start_line": 2367,
+            "end_line": 2368,
             "unit_name": "physical_directory"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2371,
-            "end_line": 2372,
+            "start_line": 2375,
+            "end_line": 2376,
             "unit_name": "physical_regular_file"
           }
         ]
@@ -1537,8 +1537,8 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 3068,
-            "end_line": 3069,
+            "start_line": 3072,
+            "end_line": 3073,
             "unit_name": "sha256_bytes"
           },
           {
@@ -1572,15 +1572,15 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1652,
-            "end_line": 1653,
+            "start_line": 1700,
+            "end_line": 1701,
             "unit_name": "host_ci_publication_preserves_proof_readback_check_status_order"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1707,
-            "end_line": 1708,
+            "start_line": 1755,
+            "end_line": 1756,
             "unit_name": "host_ci_publication_reports_whether_proof_post_started"
           }
         ]
@@ -1607,15 +1607,15 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1802,
-            "end_line": 1803,
+            "start_line": 1850,
+            "end_line": 1851,
             "unit_name": "rejects_ambiguous_or_unsupported_response_framing"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 1817,
-            "end_line": 1818,
+            "start_line": 1865,
+            "end_line": 1866,
             "unit_name": "rejects_malformed_or_truncated_chunked_responses"
           }
         ]
@@ -1642,15 +1642,15 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 573,
-            "end_line": 574,
+            "start_line": 594,
+            "end_line": 595,
             "unit_name": "validate_proof_readback"
           },
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 603,
-            "end_line": 604,
+            "start_line": 624,
+            "end_line": 625,
             "unit_name": "validate_required_readback"
           }
         ]
@@ -1677,15 +1677,15 @@
           {
             "path": "tools/splitctl/src/jeryu_client.rs",
             "language": "rust",
-            "start_line": 672,
-            "end_line": 673,
+            "start_line": 720,
+            "end_line": 721,
             "unit_name": "safe_component"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1683,
-            "end_line": 1684,
+            "start_line": 1687,
+            "end_line": 1688,
             "unit_name": "valid_cargo_token"
           }
         ]
