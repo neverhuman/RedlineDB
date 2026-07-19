@@ -2,25 +2,22 @@
 
 ## Workspace Boundary
 
-- Work only in the user-named active repo/worktree.
+- Mutate source only in the claimed canonical checkout.
 - Never switch to sibling clones, archives, backups, resolved symlink targets, or duplicate roots.
-- Never create repo copies or side folders outside the active repo; preserve work with git branches.
+- Exact-SHA isolation may use an automatically removed standalone `git clone --no-local` sandbox;
+  it must never register a worktree or become a second persistent source of truth.
 - Before edits, report `pwd`, `git rev-parse --show-toplevel`, and `git status --short --branch`.
 - Use Jeryu APIs/CLI for local GitLab/MR work; no `glab`, credential scraping, or raw local GitLab API calls.
 
-## Git Worktree Policy — MANDATORY
+## Zero Git Worktrees — MANDATORY
 
-**Agents MUST NOT create worktrees in `$HOME` or any persistent directory.**
-
-Rules:
-1. **Only create worktrees under `/tmp/`** — e.g. `git worktree add /tmp/rdb-fix-xyz`.
-2. **Delete the worktree before the session ends** — `git worktree remove --force /tmp/rdb-fix-xyz`.
-3. **Never leave a worktree at `/home/ubuntu/redlineDB-*` or any sibling of the main repo.**
-   This causes directory sprawl that accumulates across agent sessions and is very hard to clean up.
-4. If you find orphaned worktrees at `git worktree list`, **remove them immediately** with
-   `git worktree remove --force <path>` before starting your own work.
-5. Branches can and should outlive the worktree — create branches freely, but the working-directory
-   checkout must live in `/tmp/` and be cleaned up when done.
+- Never create or register a Git worktree anywhere, including under `/tmp`.
+- Work only in the claimed canonical checkout and preserve source history with Git refs and verified
+  bundles, not copied directories.
+- Existing auxiliary worktrees are cleanup inputs only. Do not prune or force-remove them without a
+  separately claimed, verified cleanup.
+- Use only an automatically removed standalone `git clone --no-local` sandbox for exact-SHA
+  isolation; it must never be registered with `git worktree`.
 
 Mission: keep invariants local, edit the smallest lawful surface, and preserve raw evidence.
 
