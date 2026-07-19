@@ -28,6 +28,12 @@ jeryu-branch-push repo repo_path branch expected_head:
 jeryu-branch-push-apply repo repo_path branch expected_head token_file:
   cargo run --locked --quiet -- jeryu-local branch-push --repo "{{repo}}" --repo-path "{{repo_path}}" --branch "{{branch}}" --expected-head "{{expected_head}}" --token-file "{{token_file}}" --apply
 
+jeryu-main-fetch repo repo_path token_file:
+  cargo run --locked --quiet -- jeryu-local main-fetch --repo "{{repo}}" --repo-path "{{repo_path}}" --token-file "{{token_file}}"
+
+jeryu-main-fetch-apply repo repo_path expected_head token_file:
+  cargo run --locked --quiet -- jeryu-local main-fetch --repo "{{repo}}" --repo-path "{{repo_path}}" --expected-head "{{expected_head}}" --token-file "{{token_file}}" --apply
+
 jeryu-pr-open repo title head expected_head base="main":
   cargo run --locked --quiet -- jeryu-local pr-open --repo "{{repo}}" --title "{{title}}" --head "{{head}}" --expected-head "{{expected_head}}" --base "{{base}}"
 
@@ -49,11 +55,11 @@ bootstrap-main repo remote reviewed_commit:
 bootstrap-main-apply repo remote reviewed_commit:
   cargo run --locked --quiet -- bootstrap-main --repo "{{repo}}" --remote "{{remote}}" --reviewed-commit "{{reviewed_commit}}" --apply
 
-immutable-tag repo remote tag commit:
-  cargo run --locked --quiet -- immutable-tag --repo "{{repo}}" --remote "{{remote}}" --tag "{{tag}}" --commit "{{commit}}"
+immutable-tag repo remote tag commit token_file:
+  cargo run --locked --quiet -- immutable-tag --repo "{{repo}}" --remote "{{remote}}" --tag "{{tag}}" --commit "{{commit}}" --token-file "{{token_file}}"
 
-immutable-tag-apply repo remote tag commit:
-  cargo run --locked --quiet -- immutable-tag --repo "{{repo}}" --remote "{{remote}}" --tag "{{tag}}" --commit "{{commit}}" --apply
+immutable-tag-apply repo remote tag commit token_file:
+  cargo run --locked --quiet -- immutable-tag --repo "{{repo}}" --remote "{{remote}}" --tag "{{tag}}" --commit "{{commit}}" --token-file "{{token_file}}" --apply
 
 jeryu-pr-ready repo number:
   cargo run --locked --quiet -- jeryu-local pr-ready --repo "{{repo}}" --number "{{number}}"

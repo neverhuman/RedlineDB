@@ -5,6 +5,7 @@ use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, Jery
 use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
+    collections::BTreeMap,
     env,
     ffi::OsStr,
     fs,
@@ -237,7 +238,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -4272,10 +4273,12 @@ fn local_jeryu_bare_repo(remote: &str) -> Result<Option<PathBuf>, Box<dyn std::e
 }
 
 fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    reject_legacy_jeryu_environment()?;
     let mut repo = None;
     let mut remote = None;
     let mut tag = None;
     let mut commit = None;
+    let mut token_file = None;
     let mut receipt = None;
     let mut apply = false;
     let mut iter = args.into_iter();
@@ -4285,6 +4288,11 @@ fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             "--remote" => remote = Some(iter.next().ok_or("--remote needs a URL")?),
             "--tag" => tag = Some(iter.next().ok_or("--tag needs a name")?),
             "--commit" => commit = Some(iter.next().ok_or("--commit needs a SHA")?),
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
+            }
             "--receipt" => {
                 receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
             }
@@ -4292,10 +4300,21 @@ fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             value => return Err(format!("unknown immutable-tag argument: {value}").into()),
         }
     }
-    let repo = repo.ok_or("immutable-tag requires --repo")?;
+    let control_root = control_plane_root();
+    let split_root = control_root.parent().ok_or("splitctl root has no parent")?;
+    let repo = validate_physical_git_checkout_beneath(
+        &repo.ok_or("immutable-tag requires --repo")?,
+        split_root,
+    )?;
     let remote = remote.ok_or("immutable-tag requires --remote")?;
+    let repo_slug = fixed_jeryu_git_slug(&remote)?;
     let tag = tag.ok_or("immutable-tag requires --tag")?;
     let commit = commit.ok_or("immutable-tag requires --commit")?;
+    let token_file = token_file.ok_or("immutable-tag requires --token-file")?;
+    let client = JeryuClient::from_token_file(&token_file)?;
+    let repository_readback = client.execute(&JeryuRequest::repo_list()?)?;
+    let identity = validate_repo_list_identity(&repository_readback, &repo_slug)?;
+    drop(client);
     let receipt = match receipt {
         Some(path) => path,
         None => release_evidence_path(&format!("immutable-tag-{}.json", receipt_component(&tag))),
@@ -4303,9 +4322,19 @@ fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     let mut report = receipt_header("jain.immutable-tag/v1", "immutable-tag", apply);
     report["repository"] = json!(repo);
     report["remote"] = json!(remote);
+    report["api_identity"] = identity;
+    report["token_metadata_validated"] = json!(true);
     report["tag"] = json!(tag);
     report["commit_input"] = json!(commit);
-    let result = create_or_verify_immutable_tag(&repo, &remote, &tag, &commit, apply, &mut report);
+    let result = create_or_verify_immutable_tag(
+        &repo,
+        &remote,
+        &tag,
+        &commit,
+        &token_file,
+        apply,
+        &mut report,
+    );
     finish_receipted_operation(&receipt, &mut report, result)
 }
 
@@ -4314,14 +4343,21 @@ fn create_or_verify_immutable_tag(
     remote: &str,
     tag: &str,
     commit: &str,
+    token_file: &Path,
     apply: bool,
     report: &mut JsonValue,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let tag_ref = format!("refs/tags/{tag}");
-    run_git_strict(repo, &["check-ref-format", &tag_ref])?;
-    let reviewed = resolve_commit(repo, commit)?;
+    secure_git_output(Some(repo), &["check-ref-format", &tag_ref])?;
+    let reviewed = secure_git_output(
+        Some(repo),
+        &["rev-parse", "--verify", &format!("{commit}^{{commit}}")],
+    )?;
+    if !is_full_sha(&reviewed) || reviewed.chars().any(|ch| ch.is_ascii_uppercase()) {
+        return Err("immutable tag commit did not resolve to a lowercase full SHA".into());
+    }
     report["commit"] = json!(reviewed);
-    let remote_main = ls_remote_ref(repo, remote, "refs/heads/main")?;
+    let remote_main = secure_ls_remote_at(remote, "refs/heads/main", token_file)?;
     report["remote_main"] = json!(remote_main);
     if remote_main.as_deref() != Some(reviewed.as_str()) {
         report["action"] = json!("refused-non-main-tag");
@@ -4331,8 +4367,8 @@ fn create_or_verify_immutable_tag(
         )
         .into());
     }
-    let local_before = local_ref_commit(repo, &tag_ref)?;
-    let remote_before = ls_remote_ref(repo, remote, &tag_ref)?;
+    let local_before = secure_local_ref_commit(repo, &tag_ref)?;
+    let remote_before = secure_ls_remote_at(remote, &tag_ref, token_file)?;
     report["before"] = json!({"local": local_before, "remote": remote_before});
     if let Some(existing) = local_before
         .as_ref()
@@ -4362,36 +4398,56 @@ fn create_or_verify_immutable_tag(
         report["after"] = json!({"local": local_before, "remote": remote_before});
         return Ok(());
     }
-    if local_before.is_none() {
-        run_git_strict(
+    if remote_before.is_none() {
+        let lease = format!("--force-with-lease={tag_ref}:");
+        let refspec = format!("{reviewed}:{tag_ref}");
+        secure_materialization_git_status(
             repo,
+            remote,
+            token_file,
+            &["push", "--porcelain", &lease, remote, &refspec],
+        )?;
+    }
+    let remote_after_push = secure_ls_remote_at(remote, &tag_ref, token_file)?;
+    if remote_after_push.as_deref() != Some(reviewed.as_str()) {
+        return Err("immutable remote tag compare-and-swap did not read back exactly".into());
+    }
+    if local_before.is_none()
+        && !secure_git_status(
+            Some(repo),
             &[
                 "update-ref",
                 &tag_ref,
                 &reviewed,
                 "0000000000000000000000000000000000000000",
             ],
-        )?;
+        )?
+    {
+        return Err("immutable local tag compare-and-swap failed".into());
     }
-    if remote_before.is_none() {
-        let lease = format!("--force-with-lease={tag_ref}:");
-        let refspec = format!("{tag_ref}:{tag_ref}");
-        run_git_strict(repo, &["push", "--porcelain", &lease, remote, &refspec])?;
-    }
-    let local_after = local_ref_commit(repo, &tag_ref)?;
-    let remote_after = ls_remote_ref(repo, remote, &tag_ref)?;
+    let local_after = secure_local_ref_commit(repo, &tag_ref)?;
+    let remote_after = secure_ls_remote_at(remote, &tag_ref, token_file)?;
+    let remote_main_after = secure_ls_remote_at(remote, "refs/heads/main", token_file)?;
     report["action"] = json!(if local_before.is_some() && remote_before.is_some() {
         "verified-existing"
     } else {
         "created-and-verified"
     });
-    report["after"] = json!({"local": local_after, "remote": remote_after});
+    report["after"] = json!({
+        "local": local_after,
+        "remote": remote_after,
+        "remote_main": remote_main_after,
+    });
     if local_after.as_deref() == Some(reviewed.as_str())
         && remote_after.as_deref() == Some(reviewed.as_str())
+        && remote_main_after.as_deref() == Some(reviewed.as_str())
     {
         Ok(())
     } else {
-        Err("immutable tag verification did not resolve to the reviewed commit".into())
+        Err(
+            "immutable tag or final main verification did not resolve to the reviewed commit"
+                .into(),
+        )
     }
 }
 
@@ -4919,6 +4975,9 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     if command == "branch-push" {
         return jeryu_branch_push(args);
     }
+    if command == "main-fetch" {
+        return jeryu_main_fetch(args);
+    }
     if command == "git-materialize" {
         return jeryu_git_materialize(args);
     }
@@ -5130,6 +5189,18 @@ fn fixed_jeryu_git_remote(repo: &str) -> Result<String, Box<dyn std::error::Erro
     Ok(format!("{LOCAL_JERYU_ORIGIN}/git/{repo}.git"))
 }
 
+fn fixed_jeryu_git_slug(remote: &str) -> Result<String, Box<dyn std::error::Error>> {
+    let slug = remote
+        .strip_prefix(&format!("{LOCAL_JERYU_ORIGIN}/git/"))
+        .and_then(|value| value.strip_suffix(".git"))
+        .ok_or("remote is not a fixed local Jeryu HTTP repository")?;
+    validate_jeryu_repo_slug(slug)?;
+    if fixed_jeryu_git_remote(slug)? != remote {
+        return Err("remote is not the canonical fixed local Jeryu URL".into());
+    }
+    Ok(slug.to_owned())
+}
+
 fn validate_materialization_remote(
     repo: &str,
     remote: &str,
@@ -5193,7 +5264,13 @@ fn secure_ls_remote_at(
     reference: &str,
     token_file: &Path,
 ) -> Result<Option<String>, Box<dyn std::error::Error>> {
-    validate_heads_ref(reference)?;
+    if reference.starts_with("refs/heads/") {
+        validate_heads_ref(reference)?;
+    } else if reference.starts_with("refs/tags/") {
+        secure_git_output(None, &["check-ref-format", reference])?;
+    } else {
+        return Err("remote readback requires an exact heads or tags ref".into());
+    }
     let output = secure_materialization_git_output(
         remote,
         token_file,
@@ -5607,6 +5684,23 @@ fn secure_git_status(
     Ok(secure_git_command(repo).args(args).status()?.success())
 }
 
+fn secure_local_ref_commit(
+    repo: &Path,
+    reference: &str,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let output = secure_git_command(Some(repo))
+        .args(["rev-parse", "--verify", &format!("{reference}^{{commit}}")])
+        .output()?;
+    if !output.status.success() {
+        return Ok(None);
+    }
+    let value = std::str::from_utf8(&output.stdout)?.trim().to_owned();
+    if !is_full_sha(&value) || value.chars().any(|ch| ch.is_ascii_uppercase()) {
+        return Err("local ref did not resolve to a lowercase full SHA".into());
+    }
+    Ok(Some(value))
+}
+
 fn secure_ls_remote(
     repo: &str,
     reference: &str,
@@ -5809,6 +5903,299 @@ fn reject_local_git_injection(repo: &Path) -> Result<(), Box<dyn std::error::Err
         }
     }
     Ok(())
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct MainFetchSnapshot {
+    head: String,
+    tree: String,
+    branch: String,
+    status: String,
+    refs: BTreeMap<String, String>,
+    remotes: String,
+    origin_url: String,
+    worktrees: String,
+    config_sha256: String,
+    index_sha256: String,
+    fetch_head_sha256: Option<String>,
+}
+
+impl MainFetchSnapshot {
+    fn json(&self) -> JsonValue {
+        json!({
+            "head": self.head,
+            "tree": self.tree,
+            "branch": self.branch,
+            "status": self.status,
+            "refs": self.refs,
+            "remotes": self.remotes,
+            "origin_url": self.origin_url,
+            "worktrees": self.worktrees,
+            "config_sha256": self.config_sha256,
+            "index_sha256": self.index_sha256,
+            "fetch_head_sha256": self.fetch_head_sha256,
+        })
+    }
+}
+
+fn optional_file_sha256(path: &Path) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    match fs::read(path) {
+        Ok(bytes) => Ok(Some(sha256_bytes(&bytes))),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.into()),
+    }
+}
+
+fn exact_ref_snapshot(repo: &Path) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let output = secure_git_output(
+        Some(repo),
+        &["for-each-ref", "--format=%(refname)%09%(objectname)"],
+    )?;
+    let mut refs = BTreeMap::new();
+    for line in output.lines() {
+        let (reference, object) = line
+            .split_once('\t')
+            .ok_or("local ref snapshot is malformed")?;
+        if reference.is_empty()
+            || !is_full_sha(object)
+            || object.chars().any(|ch| ch.is_ascii_uppercase())
+            || refs
+                .insert(reference.to_owned(), object.to_owned())
+                .is_some()
+        {
+            return Err("local ref snapshot contains an invalid or duplicate ref".into());
+        }
+    }
+    Ok(refs)
+}
+
+fn main_fetch_snapshot(repo: &Path) -> Result<MainFetchSnapshot, Box<dyn std::error::Error>> {
+    let dot_git = repo.join(".git");
+    Ok(MainFetchSnapshot {
+        head: secure_git_output(Some(repo), &["rev-parse", "--verify", "HEAD^{commit}"])?,
+        tree: secure_git_output(Some(repo), &["rev-parse", "--verify", "HEAD^{tree}"])?,
+        branch: secure_git_output(Some(repo), &["branch", "--show-current"])?,
+        status: secure_git_output(
+            Some(repo),
+            &["status", "--porcelain=v1", "--untracked-files=all"],
+        )?,
+        refs: exact_ref_snapshot(repo)?,
+        remotes: secure_git_output(Some(repo), &["remote"])?,
+        origin_url: secure_git_output(Some(repo), &["remote", "get-url", "origin"])?,
+        worktrees: secure_git_output(Some(repo), &["worktree", "list", "--porcelain"])?,
+        config_sha256: sha256_bytes(&fs::read(dot_git.join("config"))?),
+        index_sha256: sha256_bytes(&fs::read(dot_git.join("index"))?),
+        fetch_head_sha256: optional_file_sha256(&dot_git.join("FETCH_HEAD"))?,
+    })
+}
+
+fn validate_main_fetch_side_effects(
+    before: &MainFetchSnapshot,
+    after: &MainFetchSnapshot,
+    expected_head: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut before_without_main = before.clone();
+    let mut after_without_main = after.clone();
+    before_without_main.refs.remove("refs/remotes/origin/main");
+    after_without_main.refs.remove("refs/remotes/origin/main");
+    if before_without_main != after_without_main {
+        return Err(
+            "main fetch changed checkout, configuration, worktree, tag, or non-main ref state"
+                .into(),
+        );
+    }
+    if after
+        .refs
+        .get("refs/remotes/origin/main")
+        .map(String::as_str)
+        != Some(expected_head)
+    {
+        return Err(
+            "main fetch did not update origin/main to the authenticated expected head".into(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_repo_list_identity(
+    response: &JsonValue,
+    repo: &str,
+) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    let (owner, name) = repo
+        .split_once('/')
+        .ok_or("repository identity needs owner/name")?;
+    let rows = response
+        .get("repositories")
+        .and_then(JsonValue::as_array)
+        .ok_or("Jeryu repository readback has no repositories array")?;
+    let matches = rows
+        .iter()
+        .filter(|row| {
+            row.pointer("/id/host").and_then(JsonValue::as_str) == Some("jeryu")
+                && row.pointer("/id/owner").and_then(JsonValue::as_str) == Some(owner)
+                && row.pointer("/id/name").and_then(JsonValue::as_str) == Some(name)
+        })
+        .collect::<Vec<_>>();
+    if matches.len() != 1 {
+        return Err("Jeryu repository identity readback is missing or ambiguous".into());
+    }
+    let row = matches[0];
+    let expected_clone = format!("/git/{repo}.git");
+    if row.get("default_branch").and_then(JsonValue::as_str) != Some("main")
+        || row.get("clone_http_url").and_then(JsonValue::as_str) != Some(expected_clone.as_str())
+    {
+        return Err(
+            "Jeryu repository identity readback has the wrong main branch or clone path".into(),
+        );
+    }
+    Ok(json!({
+        "host": "jeryu",
+        "owner": owner,
+        "name": name,
+        "default_branch": "main",
+        "clone_http_url": expected_clone,
+    }))
+}
+
+fn fetch_authenticated_main(
+    repo: &Path,
+    remote: &str,
+    token_file: &Path,
+    expected_head: Option<&str>,
+    apply: bool,
+    report: &mut JsonValue,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let remote_head = secure_ls_remote_at(remote, "refs/heads/main", token_file)?
+        .ok_or("authenticated remote main is absent")?;
+    if let Some(expected) = expected_head {
+        if !is_full_sha(expected)
+            || expected.chars().any(|ch| ch.is_ascii_uppercase())
+            || expected != remote_head
+        {
+            return Err("authenticated remote main differs from --expected-head".into());
+        }
+    }
+    let before = main_fetch_snapshot(repo)?;
+    report["before"] = before.json();
+    report["remote_main"] = json!(remote_head);
+    if !before.status.is_empty() {
+        return Err("main fetch requires a clean canonical checkout".into());
+    }
+    if before.remotes != "origin" || before.origin_url != remote {
+        return Err(
+            "main fetch requires the sole exact canonical origin without rewriting it".into(),
+        );
+    }
+    if !apply {
+        report["action"] = json!(if before
+            .refs
+            .get("refs/remotes/origin/main")
+            .map(String::as_str)
+            == Some(remote_head.as_str())
+        {
+            "verified-existing"
+        } else {
+            "would-fetch-main"
+        });
+        report["after"] = before.json();
+        return Ok(());
+    }
+    let expected_head = expected_head.ok_or("main-fetch --apply requires --expected-head")?;
+    let refspec = "refs/heads/main:refs/remotes/origin/main";
+    secure_materialization_git_status(
+        repo,
+        remote,
+        token_file,
+        &[
+            "fetch",
+            "--quiet",
+            "--no-tags",
+            "--no-prune",
+            "--no-recurse-submodules",
+            "--no-write-fetch-head",
+            "--no-auto-maintenance",
+            remote,
+            refspec,
+        ],
+    )?;
+    let after = main_fetch_snapshot(repo)?;
+    validate_main_fetch_side_effects(&before, &after, expected_head)?;
+    report["after"] = after.json();
+    report["external_state_changed"] = json!(before.refs != after.refs);
+    report["action"] = json!(if before.refs == after.refs {
+        "verified-existing"
+    } else {
+        "fetched-and-verified"
+    });
+    Ok(())
+}
+
+fn jeryu_main_fetch(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let control_root = control_plane_root();
+    let split_root = control_root.parent().ok_or("splitctl root has no parent")?;
+    let mut repo = None;
+    let mut repo_path = None;
+    let mut expected_head = None;
+    let mut token_file = None;
+    let mut evidence_out = None;
+    let mut apply = false;
+    let mut iter = args.into_iter().skip(1);
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repo" => repo = Some(iter.next().ok_or("--repo needs owner/name")?),
+            "--repo-path" => {
+                repo_path = Some(PathBuf::from(
+                    iter.next().ok_or("--repo-path needs a path")?,
+                ))
+            }
+            "--expected-head" => {
+                expected_head = Some(iter.next().ok_or("--expected-head needs a SHA")?)
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
+            }
+            "--evidence-out" => {
+                evidence_out = Some(PathBuf::from(
+                    iter.next().ok_or("--evidence-out needs a path")?,
+                ))
+            }
+            "--apply" => apply = true,
+            value => return Err(format!("unknown main-fetch argument: {value}").into()),
+        }
+    }
+    let repo = repo.ok_or("main-fetch requires --repo")?;
+    validate_jeryu_repo_slug(&repo)?;
+    let path = validate_physical_git_checkout_beneath(
+        &repo_path.ok_or("main-fetch requires --repo-path")?,
+        split_root,
+    )?;
+    let token_file = token_file.ok_or("main-fetch requires --token-file")?;
+    if apply && expected_head.is_none() {
+        return Err("main-fetch --apply requires --expected-head".into());
+    }
+    let remote = fixed_jeryu_git_remote(&repo)?;
+    let client = JeryuClient::from_token_file(&token_file)?;
+    let repository_readback = client.execute(&JeryuRequest::repo_list()?)?;
+    let identity = validate_repo_list_identity(&repository_readback, &repo)?;
+    drop(client);
+
+    let mut report = receipt_header("jain.jeryu-main-fetch/v1", "jeryu-local main-fetch", apply);
+    report["repository"] = json!(repo);
+    report["repository_path"] = json!(path);
+    report["remote"] = json!(remote);
+    report["api_identity"] = identity;
+    report["token_metadata_validated"] = json!(true);
+    let result = fetch_authenticated_main(
+        &path,
+        &remote,
+        &token_file,
+        expected_head.as_deref(),
+        apply,
+        &mut report,
+    );
+    finish_optional_evidence(evidence_out.as_deref(), &mut report, result)
 }
 
 fn jeryu_branch_push(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -10100,40 +10487,52 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let remote = init_bare(root.path());
         let main_refspec = format!("{reviewed}:refs/heads/main");
         run_git_strict(&repo, &["push", remote.to_str().unwrap(), &main_refspec]).unwrap();
-        let receipt = root.path().join("tag.json");
-        let args = || {
-            vec![
-                "--repo".to_owned(),
-                repo.display().to_string(),
-                "--remote".to_owned(),
-                remote.display().to_string(),
-                "--tag".to_owned(),
-                "example-v8.0.0-split.0".to_owned(),
-                "--commit".to_owned(),
-                reviewed.clone(),
-                "--receipt".to_owned(),
-                receipt.display().to_string(),
-            ]
-        };
-        immutable_tag_command(args()).unwrap();
+        let token_root = TestDir::new_private_temp("immutable-tag-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let mut report = receipt_header("test", "immutable-tag", false);
+        create_or_verify_immutable_tag(
+            &repo,
+            remote.to_str().unwrap(),
+            "example-v8.0.0-split.0",
+            &reviewed,
+            &token_file,
+            false,
+            &mut report,
+        )
+        .unwrap();
         assert_eq!(
-            local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
+            secure_local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
             None
         );
-        let mut apply = args();
-        apply.push("--apply".to_owned());
-        immutable_tag_command(apply.clone()).unwrap();
-        immutable_tag_command(apply).unwrap();
-        assert_eq!(read_json(&receipt)["action"], "verified-existing");
+        for _ in 0..2 {
+            create_or_verify_immutable_tag(
+                &repo,
+                remote.to_str().unwrap(),
+                "example-v8.0.0-split.0",
+                &reviewed,
+                &token_file,
+                true,
+                &mut report,
+            )
+            .unwrap();
+        }
+        assert_eq!(report["action"], "verified-existing");
 
         let different = commit_next(&repo);
-        let mut refuse = args();
-        let index = refuse.iter().position(|value| value == "--commit").unwrap();
-        refuse[index + 1] = different;
-        refuse.push("--apply".to_owned());
-        assert!(immutable_tag_command(refuse).is_err());
+        assert!(create_or_verify_immutable_tag(
+            &repo,
+            remote.to_str().unwrap(),
+            "example-v8.0.0-split.0",
+            &different,
+            &token_file,
+            true,
+            &mut report,
+        )
+        .is_err());
         assert_eq!(
-            local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
+            secure_local_ref_commit(&repo, "refs/tags/example-v8.0.0-split.0").unwrap(),
             Some(reviewed.clone())
         );
         assert_eq!(
@@ -10159,11 +10558,16 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         .unwrap();
         run_git_strict(&repo, &["push", "-u", "origin", "main"]).unwrap();
         let mut tag_report = receipt_header("test", "tag", true);
+        let token_root = TestDir::new_private_temp("worktree-tag-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
         create_or_verify_immutable_tag(
             &repo,
             remote.to_str().unwrap(),
             "example-v8.0.0-split.0",
             &reviewed,
+            &token_file,
             true,
             &mut tag_report,
         )
@@ -10535,6 +10939,122 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         )
         .unwrap_err();
         assert!(error.to_string().contains("requires --token-file"));
+    }
+
+    #[test]
+    fn repository_api_identity_is_exact_and_unambiguous() {
+        let row = json!({
+            "id": {"host": "jeryu", "owner": "veox", "name": "example"},
+            "default_branch": "main",
+            "clone_http_url": "/git/veox/example.git",
+        });
+        let response = json!({"repositories": [row.clone()]});
+        assert_eq!(
+            validate_repo_list_identity(&response, "veox/example").unwrap(),
+            json!({
+                "host": "jeryu",
+                "owner": "veox",
+                "name": "example",
+                "default_branch": "main",
+                "clone_http_url": "/git/veox/example.git",
+            })
+        );
+        assert!(validate_repo_list_identity(&response, "veox/other").is_err());
+        assert!(validate_repo_list_identity(
+            &json!({"repositories": [row.clone(), row]}),
+            "veox/example"
+        )
+        .is_err());
+        assert!(validate_repo_list_identity(
+            &json!({"repositories": [{
+                "id": {"host": "jeryu", "owner": "veox", "name": "example"},
+                "default_branch": "trunk",
+                "clone_http_url": "/git/veox/example.git",
+            }]}),
+            "veox/example"
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn authenticated_main_fetch_changes_only_origin_main() {
+        let root = TestDir::new("main-fetch");
+        let (repo, initial) = init_source(root.path());
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &repo,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        )
+        .unwrap();
+        let initial_refspec = format!("{initial}:refs/heads/main");
+        run_git_strict(&repo, &["push", remote.to_str().unwrap(), &initial_refspec]).unwrap();
+        run_git_strict(
+            &repo,
+            &[
+                "fetch",
+                "--no-tags",
+                remote.to_str().unwrap(),
+                "refs/heads/main:refs/remotes/origin/main",
+            ],
+        )
+        .unwrap();
+
+        let remote_head = commit_next(&repo);
+        let remote_refspec = format!("{remote_head}:refs/heads/main");
+        run_git_strict(&repo, &["push", remote.to_str().unwrap(), &remote_refspec]).unwrap();
+        run_git_strict(
+            &repo,
+            &["update-ref", "refs/tags/remote-only", &remote_head],
+        )
+        .unwrap();
+        run_git_strict(
+            &repo,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                "refs/tags/remote-only:refs/tags/remote-only",
+            ],
+        )
+        .unwrap();
+        run_git_strict(&repo, &["update-ref", "-d", "refs/tags/remote-only"]).unwrap();
+
+        let token_root = TestDir::new_private_temp("main-fetch-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+
+        let before = main_fetch_snapshot(&repo).unwrap();
+        let mut report = receipt_header("test", "main-fetch", false);
+        fetch_authenticated_main(
+            &repo,
+            remote.to_str().unwrap(),
+            &token_file,
+            Some(&remote_head),
+            false,
+            &mut report,
+        )
+        .unwrap();
+        assert_eq!(report["action"], "would-fetch-main");
+        assert_eq!(main_fetch_snapshot(&repo).unwrap(), before);
+
+        fetch_authenticated_main(
+            &repo,
+            remote.to_str().unwrap(),
+            &token_file,
+            Some(&remote_head),
+            true,
+            &mut report,
+        )
+        .unwrap();
+        let after = main_fetch_snapshot(&repo).unwrap();
+        assert_eq!(
+            after.refs.get("refs/remotes/origin/main"),
+            Some(&remote_head)
+        );
+        assert_eq!(after.head, before.head);
+        assert_eq!(after.tree, before.tree);
+        assert!(!after.refs.contains_key("refs/tags/remote-only"));
+        assert_eq!(report["action"], "fetched-and-verified");
     }
 
     #[test]
