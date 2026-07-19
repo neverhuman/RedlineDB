@@ -5254,22 +5254,39 @@ fn validate_repo_absent(
     response: &JsonValue,
     repo: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let (owner, name) = repo
-        .split_once('/')
-        .ok_or("repository identity needs owner/name")?;
     let expected_clone = format!("/git/{repo}.git");
     let rows = response
         .get("repositories")
         .and_then(JsonValue::as_array)
         .ok_or("Jeryu repository absence readback has no repositories array")?;
-    if rows.iter().any(|row| {
-        (row.pointer("/id/host").and_then(JsonValue::as_str) == Some("jeryu")
-            && row.pointer("/id/owner").and_then(JsonValue::as_str) == Some(owner)
-            && row.pointer("/id/name").and_then(JsonValue::as_str) == Some(name))
-            || row.get("clone_http_url").and_then(JsonValue::as_str)
-                == Some(expected_clone.as_str())
-    }) {
-        return Err("governed repository already exists or has a clone-path collision".into());
+    for row in rows {
+        let host = row
+            .pointer("/id/host")
+            .and_then(JsonValue::as_str)
+            .ok_or("Jeryu repository absence readback row has no string id.host")?;
+        let owner = row
+            .pointer("/id/owner")
+            .and_then(JsonValue::as_str)
+            .ok_or("Jeryu repository absence readback row has no string id.owner")?;
+        let name = row
+            .pointer("/id/name")
+            .and_then(JsonValue::as_str)
+            .ok_or("Jeryu repository absence readback row has no string id.name")?;
+        let clone = row
+            .get("clone_http_url")
+            .and_then(JsonValue::as_str)
+            .ok_or("Jeryu repository absence readback row has no string clone_http_url")?;
+        let row_repo = format!("{owner}/{name}");
+        validate_jeryu_repo_slug(&row_repo)?;
+        if host != "jeryu" || clone != format!("/git/{row_repo}.git") {
+            return Err(
+                "Jeryu repository absence readback row has contradictory identity or clone path"
+                    .into(),
+            );
+        }
+        if row_repo == repo || clone == expected_clone {
+            return Err("governed repository already exists or has a clone-path collision".into());
+        }
     }
     Ok(())
 }
@@ -11502,6 +11519,29 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             "clone_http_url": "/git/veox/jain-fabric.git",
         }]});
         assert!(validate_repo_absent(&clone_collision, "veox/jain-fabric").is_err());
+        let unrelated = json!({"repositories": [{
+            "id": {"host": "jeryu", "owner": "veox", "name": "other"},
+            "clone_http_url": "/git/veox/other.git",
+        }]});
+        validate_repo_absent(&unrelated, "veox/jain-fabric").unwrap();
+        for malformed in [
+            json!({"id": {"owner": "veox", "name": "other"}, "clone_http_url": "/git/veox/other.git"}),
+            json!({"id": {"host": 1, "owner": "veox", "name": "other"}, "clone_http_url": "/git/veox/other.git"}),
+            json!({"id": {"host": "jeryu", "name": "other"}, "clone_http_url": "/git/veox/other.git"}),
+            json!({"id": {"host": "jeryu", "owner": 1, "name": "other"}, "clone_http_url": "/git/veox/other.git"}),
+            json!({"id": {"host": "jeryu", "owner": "veox"}, "clone_http_url": "/git/veox/other.git"}),
+            json!({"id": {"host": "jeryu", "owner": "veox", "name": 1}, "clone_http_url": "/git/veox/other.git"}),
+            json!({"id": {"host": "jeryu", "owner": "veox", "name": "other"}}),
+            json!({"id": {"host": "jeryu", "owner": "veox", "name": "other"}, "clone_http_url": 1}),
+            json!({"id": {"host": "other", "owner": "veox", "name": "other"}, "clone_http_url": "/git/veox/other.git"}),
+            json!({"id": {"host": "jeryu", "owner": "veox", "name": "other"}, "clone_http_url": "/git/veox/different.git"}),
+        ] {
+            assert!(validate_repo_absent(
+                &json!({"repositories": [malformed]}),
+                "veox/jain-fabric"
+            )
+            .is_err());
+        }
         assert!(validate_repo_absent(&json!({}), "veox/jain-fabric").is_err());
     }
 
