@@ -120,6 +120,27 @@ impl JeryuRequest {
         Self::new(Method::Get, "/api/v1/repos?host=jeryu".to_owned(), None)
     }
 
+    /// Plan the forge repository-create call. The verified route is
+    /// `POST /repos` with a private:false body; the forge materializes a bare
+    /// repository at `~/.local/share/jeryu/git/jeryu/<name>.git`.
+    pub fn repo_create(owner: &str, name: &str, default_branch: &str) -> Result<Self> {
+        validate_repo_name(owner)?;
+        validate_repo_name(name)?;
+        validate_ref_name(default_branch, "default branch")?;
+        Self::new(
+            Method::Post,
+            "/repos".to_owned(),
+            Some(
+                json!({
+                    "name": name,
+                    "private": false,
+                    "default_branch": default_branch,
+                })
+                .to_string(),
+            ),
+        )
+    }
+
     pub fn pr_list(repo: &str, state: &str) -> Result<Self> {
         validate_repo_slug(repo)?;
         if !matches!(state, "open" | "closed" | "all") {
@@ -665,6 +686,33 @@ fn validate_repo_slug(repo: &str) -> Result<()> {
     let name = parts.next().unwrap_or_default();
     if parts.next().is_some() || !safe_component(owner) || !safe_component(name) {
         return Err(JeryuError::new("repository must be a safe owner/name slug"));
+    }
+    Ok(())
+}
+
+/// Validate a bare repository name (no owner). Enforces `^[a-z0-9][a-z0-9-]{0,62}$`
+/// and additionally rejects a trailing `.git` and any path components, giving
+/// precise diagnostics before the charset check would also reject them.
+pub fn validate_repo_name(name: &str) -> Result<()> {
+    if name.contains('/') || name.contains('\\') {
+        return Err(JeryuError::new(
+            "repository name must not contain path components",
+        ));
+    }
+    if name.ends_with(".git") {
+        return Err(JeryuError::new("repository name must not end with .git"));
+    }
+    let bytes = name.as_bytes();
+    let first_ok = bytes
+        .first()
+        .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit());
+    let rest_ok = name
+        .bytes()
+        .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-');
+    if !first_ok || !rest_ok || name.is_empty() || name.len() > 63 {
+        return Err(JeryuError::new(
+            "repository name must match ^[a-z0-9][a-z0-9-]{0,62}$",
+        ));
     }
     Ok(())
 }

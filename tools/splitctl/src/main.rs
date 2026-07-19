@@ -3,7 +3,9 @@ mod jeryu_client;
 mod program_release;
 mod release_flow;
 
-use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, JeryuRequest};
+use jeryu_client::{
+    validate_repo_name, write_token_for_askpass, HostCiPublication, JeryuClient, JeryuRequest,
+};
 use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
@@ -223,6 +225,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             validate_local_jeryu(manifest, skip_remotes, skip_program_checkouts)?;
         }
         Some("jeryu-local") => jeryu_local(args.collect())?,
+        Some("repo-create") => repo_create_command(args.collect())?,
+        Some("family-register") => family_register_command(args.collect())?,
         Some("jeryu-publish-host-ci") => {
             if let Err(error) = jeryu_publish_host_ci(args.collect()) {
                 eprintln!("splitctl: {}", error.message);
@@ -250,7 +254,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | host-ci-producer-lock --lock PATH --broker PATH --request PATH | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--skip-program-checkouts] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | program-release validate --authority PATH | program-release validate-all --authority-dir PATH | program-release status --authority PATH [--record ABSOLUTE_PATH] | release-flow --manifest PATH --evidence-root PATH [--cloud-spec PATH] [--token-file PATH] [--resume PATH] [--record PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] [--skip-remotes] [--skip-program-checkouts] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | host-ci-producer-lock --lock PATH --broker PATH --request PATH | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--skip-program-checkouts] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | program-release validate --authority PATH | program-release validate-all --authority-dir PATH | program-release status --authority PATH [--record ABSOLUTE_PATH] | release-flow --manifest PATH --evidence-root PATH [--cloud-spec PATH] [--token-file PATH] [--resume PATH] [--record PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | repo-create --name NAME [--owner OWNER] [--branch main] [--required-check CHECK] [--token-file PATH] [--evidence-out PATH] [--apply] | family-register --name NAME [--owner OWNER] [--infrastructure] --readback PATH [--manifest PATH] [--evidence-out PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] [--skip-remotes] [--skip-program-checkouts] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -3843,36 +3847,51 @@ fn validate_manifest_data(
         .get("infrastructure_repo")
         .and_then(toml::Value::as_array)
         .ok_or("manifest must declare infrastructure_repo")?;
-    let smartcluster = infrastructure
+    if infrastructure.is_empty() {
+        errors.push("manifest must declare at least one infrastructure repo".to_owned());
+    }
+    if !infrastructure
         .iter()
-        .find(|raw| string(raw, "name").as_deref() == Some("jain-smartcluster"));
-    if infrastructure.len() != 1 || smartcluster.is_none() {
-        errors.push(
-            "manifest must declare exactly one infrastructure repo: jain-smartcluster".to_owned(),
-        );
-    } else if let Some(raw) = smartcluster {
+        .any(|raw| string(raw, "name").as_deref() == Some("jain-smartcluster"))
+    {
+        errors.push("manifest must declare the jain-smartcluster infrastructure repo".to_owned());
+    }
+    for raw in infrastructure {
+        let name = string(raw, "name").unwrap_or_else(|| "<missing-name>".to_owned());
+        if !names.insert(name.clone()) {
+            errors.push(format!("duplicate repository name: {name}"));
+        }
+        match string(raw, "path") {
+            Some(path) => {
+                let path = PathBuf::from(path);
+                if !paths.insert(path.clone()) {
+                    errors.push(format!("duplicate repository path: {}", path.display()));
+                }
+            }
+            None => errors.push(format!("{name}: path is required")),
+        }
         for (key, expected) in [
-            ("kind", "required-infrastructure"),
-            ("forge_owner", "jain-split"),
-            ("forge_slug", "jain-split/jain-smartcluster"),
-            ("required_check", "jain-smartcluster/required"),
-            ("default_branch", "main"),
+            ("kind", "required-infrastructure".to_owned()),
+            ("forge_owner", "jain-split".to_owned()),
+            ("forge_slug", format!("jain-split/{name}")),
+            ("required_check", format!("{name}/required")),
+            ("default_branch", "main".to_owned()),
         ] {
-            if string(raw, key).as_deref() != Some(expected) {
-                errors.push(format!("jain-smartcluster: {key} must be {expected}"));
+            if string(raw, key).as_deref() != Some(expected.as_str()) {
+                errors.push(format!("{name}: {key} must be {expected}"));
             }
         }
-        let expected_infra_remote = format!("{INFRA_REMOTE_PREFIX}jain-smartcluster.git");
+        let expected_infra_remote = format!("{INFRA_REMOTE_PREFIX}{name}.git");
         if declared_remote(raw).as_deref() != Some(expected_infra_remote.as_str()) {
-            errors.push("jain-smartcluster: remote must use the jain-split namespace".to_owned());
+            errors.push(format!("{name}: remote must be {expected_infra_remote}"));
         }
         if raw.get("family_registered").and_then(toml::Value::as_bool) != Some(true) {
-            errors.push("jain-smartcluster: family_registered must be true".to_owned());
+            errors.push(format!("{name}: family_registered must be true"));
         }
         if let Err(error) = validate_managed_release_identity(
             raw,
-            "infrastructure_repo[jain-smartcluster]",
-            "jain-smartcluster",
+            &format!("infrastructure_repo[{name}]"),
+            &name,
             "immutable_tag",
         ) {
             errors.push(error);
@@ -6554,6 +6573,300 @@ fn validate_protection_policy(
         return Ok(());
     }
     Err("branch protection readback is not the exact immutable-main policy".into())
+}
+
+const REPO_CREATE_SCHEMA: &str = "jain.repo-create/v1";
+const FAMILY_REGISTER_SCHEMA: &str = "jain.family-register/v1";
+
+/// Decide whether the forge repository listing already contains `owner/name`.
+/// The `GET /api/v1/repos?host=jeryu` response shape is tolerated in its
+/// common forms (a bare array, or an object carrying a `data`/`repos` array),
+/// matching on `full_name` or an owner/name pair so the collision guard never
+/// re-creates an existing repository.
+fn repo_exists_in_list(list: &JsonValue, owner: &str, name: &str) -> bool {
+    let entries = list
+        .as_array()
+        .cloned()
+        .or_else(|| list.get("data").and_then(JsonValue::as_array).cloned())
+        .or_else(|| list.get("repos").and_then(JsonValue::as_array).cloned())
+        .unwrap_or_default();
+    let slug = format!("{owner}/{name}");
+    entries.iter().any(|entry| {
+        if entry.get("full_name").and_then(JsonValue::as_str) == Some(slug.as_str()) {
+            return true;
+        }
+        let entry_name = entry.get("name").and_then(JsonValue::as_str);
+        let entry_owner = entry
+            .get("owner")
+            .and_then(|value| value.get("login").or_else(|| value.get("name")))
+            .and_then(JsonValue::as_str)
+            .or_else(|| entry.get("owner").and_then(JsonValue::as_str));
+        entry_name == Some(name) && entry_owner == Some(owner)
+    })
+}
+
+/// Load a repo-create receipt and prove it attests a materialized repository
+/// (`created-and-verified` or `exists-no-op`, status pass, with a full-SHA
+/// `head_readback`). Family registration refuses to proceed without it.
+fn require_repo_create_readback(
+    path: &Path,
+    owner: &str,
+    name: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let text = fs::read_to_string(path).map_err(|error| {
+        format!(
+            "cannot read repo-create readback {}: {error}",
+            path.display()
+        )
+    })?;
+    let data: JsonValue = serde_json::from_str(&text)
+        .map_err(|error| format!("repo-create readback is not valid JSON: {error}"))?;
+    if data.get("schema_version").and_then(JsonValue::as_str) != Some(REPO_CREATE_SCHEMA) {
+        return Err("repo-create readback has an unexpected schema_version".into());
+    }
+    if data.get("status").and_then(JsonValue::as_str) != Some("pass") {
+        return Err("repo-create readback did not pass".into());
+    }
+    if data.get("repository").and_then(JsonValue::as_str)
+        != Some(format!("{owner}/{name}").as_str())
+    {
+        return Err("repo-create readback is for a different repository".into());
+    }
+    if !matches!(
+        data.get("action").and_then(JsonValue::as_str),
+        Some("created-and-verified") | Some("exists-no-op")
+    ) {
+        return Err("repo-create readback does not prove the repository exists".into());
+    }
+    let head = data
+        .get("head_readback")
+        .and_then(JsonValue::as_str)
+        .filter(|value| is_full_sha(value))
+        .ok_or("repo-create readback has no full-SHA head_readback")?;
+    Ok(head.to_owned())
+}
+
+fn repo_create_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    reject_legacy_jeryu_environment()?;
+    let mut name = None;
+    let mut owner = "jeryu".to_owned();
+    let mut branch = "main".to_owned();
+    let mut required_check = None;
+    let mut token_file = None;
+    let mut evidence_out = None;
+    let mut apply = false;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--name" => name = Some(iter.next().ok_or("--name needs a value")?),
+            "--owner" => owner = iter.next().ok_or("--owner needs a value")?,
+            "--branch" => branch = iter.next().ok_or("--branch needs a value")?,
+            "--required-check" => {
+                required_check = Some(iter.next().ok_or("--required-check needs a value")?)
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
+            }
+            "--evidence-out" => {
+                evidence_out = Some(PathBuf::from(
+                    iter.next().ok_or("--evidence-out needs a path")?,
+                ))
+            }
+            "--apply" => apply = true,
+            value => return Err(format!("unknown repo-create argument: {value}").into()),
+        }
+    }
+    let name = name.ok_or("repo-create requires --name")?;
+    validate_repo_name(&name)?;
+    validate_repo_name(&owner)?;
+    if branch != "main" {
+        return Err("repo-create only provisions the protected main branch".into());
+    }
+    let required_check = required_check.unwrap_or_else(|| format!("{name}/required"));
+    if required_check != format!("{name}/required") {
+        return Err(format!("--required-check must be {name}/required").into());
+    }
+    let slug = format!("{owner}/{name}");
+    let mut report = receipt_header(REPO_CREATE_SCHEMA, "repo-create", apply);
+    report["repository"] = json!(slug);
+    report["default_branch"] = json!(branch);
+    report["required_check"] = json!(required_check);
+    report["request"] = jeryu_request_json(&JeryuRequest::repo_create(&owner, &name, &branch)?);
+    let result = (|| -> Result<(), Box<dyn std::error::Error>> {
+        if !apply {
+            report["action"] = json!("would-create");
+            report["external_state_changed"] = json!(false);
+            return Ok(());
+        }
+        let token_file = token_file
+            .as_deref()
+            .ok_or("repo-create --apply requires an explicit --token-file path")?;
+        let client = JeryuClient::from_token_file(token_file)?;
+        // Collision guard: list first, never overwrite an existing repository.
+        let existing = client.execute(&JeryuRequest::repo_list()?)?;
+        let already = repo_exists_in_list(&existing, &owner, &name);
+        if !already {
+            client.execute(&JeryuRequest::repo_create(&owner, &name, &branch)?)?;
+        }
+        // Readback: the repository must now be listed and carry an immutable main.
+        let listed = client.execute(&JeryuRequest::repo_list()?)?;
+        if !repo_exists_in_list(&listed, &owner, &name) {
+            return Err(
+                "repo-create readback did not find the repository in the forge listing".into(),
+            );
+        }
+        let head = secure_ls_remote(&slug, "refs/heads/main", token_file)?
+            .ok_or("repo-create readback found no commit on refs/heads/main")?;
+        report["head_readback"] = json!(head);
+        // Apply and prove the immutable-main branch protection policy.
+        client.execute(&JeryuRequest::protection(
+            &slug,
+            &branch,
+            Some(immutable_main_policy(&required_check)),
+        )?)?;
+        let policy = client.execute(&JeryuRequest::protection(&slug, &branch, None)?)?;
+        validate_protection_policy(&policy, &slug, &branch, &required_check)?;
+        report["protection_readback"] = policy;
+        report["action"] = json!(if already {
+            "exists-no-op"
+        } else {
+            "created-and-verified"
+        });
+        report["external_state_changed"] = json!(!already);
+        Ok(())
+    })();
+    finish_optional_evidence(evidence_out.as_deref(), &mut report, result)
+}
+
+/// Render the TOML block for a newly registered family or infrastructure repo.
+/// The identity is left `pending`: a freshly created repository has no bound
+/// release tag yet, so `validate_managed_release_identity` accepts it.
+fn family_register_row(
+    name: &str,
+    owner: &str,
+    required_check: &str,
+    split_root: &str,
+    infrastructure: bool,
+) -> String {
+    let path = format!("{}/{name}", split_root.trim_end_matches('/'));
+    if infrastructure {
+        format!(
+            "\n[[infrastructure_repo]]\n\
+path = \"{path}\"\n\
+name = \"{name}\"\n\
+kind = \"required-infrastructure\"\n\
+forge_owner = \"jain-split\"\n\
+forge_slug = \"jain-split/{name}\"\n\
+remote = \"{INFRA_REMOTE_PREFIX}{name}.git\"\n\
+family_registered = true\n\
+required = true\n\
+default_branch = \"main\"\n\
+identity_status = \"pending\"\n\
+required_check = \"{required_check}\"\n"
+        )
+    } else {
+        format!(
+            "\n[[repo]]\n\
+path = \"{path}\"\n\
+name = \"{name}\"\n\
+github_slug = \"neverhuman/{name}\"\n\
+jeryu_slug = \"{owner}/{name}\"\n\
+remote = \"{FAMILY_REMOTE_PREFIX}{name}.git\"\n\
+profile = \"rust-crate\"\n\
+role = \"library\"\n\
+default_branch = \"main\"\n\
+has_jeryu_std = true\n\
+onboarded = false\n\
+identity_status = \"pending\"\n\
+required_check = \"{required_check}\"\n"
+        )
+    }
+}
+
+fn family_register_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    reject_legacy_jeryu_environment()?;
+    let root = control_plane_root();
+    let mut name = None;
+    let mut owner = "jeryu".to_owned();
+    let mut branch = "main".to_owned();
+    let mut required_check = None;
+    let mut readback = None;
+    let mut manifest = root.join("repos.manifest.toml");
+    let mut evidence_out = None;
+    let mut infrastructure = false;
+    let mut apply = false;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--name" => name = Some(iter.next().ok_or("--name needs a value")?),
+            "--owner" => owner = iter.next().ok_or("--owner needs a value")?,
+            "--branch" => branch = iter.next().ok_or("--branch needs a value")?,
+            "--required-check" => {
+                required_check = Some(iter.next().ok_or("--required-check needs a value")?)
+            }
+            "--readback" => {
+                readback = Some(PathBuf::from(iter.next().ok_or("--readback needs a path")?))
+            }
+            "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
+            "--evidence-out" => {
+                evidence_out = Some(PathBuf::from(
+                    iter.next().ok_or("--evidence-out needs a path")?,
+                ))
+            }
+            "--infrastructure" => infrastructure = true,
+            "--apply" => apply = true,
+            value => return Err(format!("unknown family-register argument: {value}").into()),
+        }
+    }
+    let name = name.ok_or("family-register requires --name")?;
+    validate_repo_name(&name)?;
+    validate_repo_name(&owner)?;
+    if branch != "main" {
+        return Err("family-register only registers the protected main branch".into());
+    }
+    let required_check = required_check.unwrap_or_else(|| format!("{name}/required"));
+    if required_check != format!("{name}/required") {
+        return Err(format!("--required-check must be {name}/required").into());
+    }
+    let readback =
+        readback.ok_or("family-register requires a prior --readback repo-create receipt")?;
+    let head = require_repo_create_readback(&readback, &owner, &name)?;
+
+    let current_text = fs::read_to_string(&manifest)
+        .map_err(|error| format!("cannot read manifest {}: {error}", manifest.display()))?;
+    let current: toml::Value = current_text.parse()?;
+    let split_root = string(&current, "split_root")
+        .ok_or("manifest missing split_root; cannot place the new repository path")?;
+    let row = family_register_row(&name, &owner, &required_check, &split_root, infrastructure);
+    let candidate_text = format!("{}{}", current_text.trim_end_matches('\n'), row);
+    let candidate: toml::Value = candidate_text
+        .parse()
+        .map_err(|error| format!("candidate manifest does not parse: {error}"))?;
+    // The census-and-family invariants must hold on the FULL candidate before a
+    // single byte is written. This rejects duplicates and broken censuses.
+    validate_manifest_data(&candidate, &manifest, false)?;
+
+    let mut report = receipt_header(FAMILY_REGISTER_SCHEMA, "family-register", apply);
+    report["repository"] = json!(format!("{owner}/{name}"));
+    report["infrastructure"] = json!(infrastructure);
+    report["required_check"] = json!(required_check);
+    report["head_readback"] = json!(head);
+    report["manifest"] = json!(manifest.display().to_string());
+    report["row_diff"] = json!(row);
+    let result = (|| -> Result<(), Box<dyn std::error::Error>> {
+        if !apply {
+            report["action"] = json!("would-register");
+            report["external_state_changed"] = json!(false);
+            return Ok(());
+        }
+        fs::write(&manifest, &candidate_text)?;
+        report["action"] = json!("registered");
+        report["external_state_changed"] = json!(true);
+        Ok(())
+    })();
+    finish_optional_evidence(evidence_out.as_deref(), &mut report, result)
 }
 
 fn reconcile(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -11280,6 +11593,211 @@ source_inventory_sha256 = "{}"
                 .to_string()
                 .contains(expected));
         }
+    }
+
+    fn canonical_manifest() -> (PathBuf, toml::Value) {
+        let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let data: toml::Value = fs::read_to_string(&path).unwrap().parse().unwrap();
+        (path, data)
+    }
+
+    fn infra_row(name: &str) -> toml::Value {
+        format!(
+            r#"
+path = "/home/ubuntu/jain-split/{name}"
+name = "{name}"
+kind = "required-infrastructure"
+forge_owner = "jain-split"
+forge_slug = "jain-split/{name}"
+remote = "http://127.0.0.1:8787/git/jain-split/{name}.git"
+family_registered = true
+required = true
+default_branch = "main"
+identity_status = "pending"
+required_check = "{name}/required"
+"#
+        )
+        .parse()
+        .unwrap()
+    }
+
+    fn push_infra(manifest: &mut toml::Value, row: toml::Value) {
+        manifest
+            .as_table_mut()
+            .unwrap()
+            .get_mut("infrastructure_repo")
+            .and_then(toml::Value::as_array_mut)
+            .unwrap()
+            .push(row);
+    }
+
+    #[test]
+    fn multi_infra_accepts_smartcluster_plus_a_second_generic_infra() {
+        let (path, mut data) = canonical_manifest();
+        push_infra(&mut data, infra_row("jain-fabric"));
+        validate_manifest_data(&data, &path, false).unwrap();
+    }
+
+    #[test]
+    fn multi_infra_rejects_a_set_that_drops_smartcluster() {
+        let (path, mut data) = canonical_manifest();
+        let array = data
+            .as_table_mut()
+            .unwrap()
+            .get_mut("infrastructure_repo")
+            .and_then(toml::Value::as_array_mut)
+            .unwrap();
+        array.clear();
+        array.push(infra_row("jain-fabric"));
+        assert!(validate_manifest_data(&data, &path, false)
+            .unwrap_err()
+            .to_string()
+            .contains("jain-smartcluster"));
+    }
+
+    #[test]
+    fn multi_infra_rejects_a_malformed_second_infra() {
+        let (path, mut data) = canonical_manifest();
+        let mut malformed = infra_row("jain-fabric");
+        malformed.as_table_mut().unwrap().insert(
+            "forge_slug".to_owned(),
+            toml::Value::String("wrong/jain-fabric".to_owned()),
+        );
+        push_infra(&mut data, malformed);
+        assert!(validate_manifest_data(&data, &path, false)
+            .unwrap_err()
+            .to_string()
+            .contains("jain-fabric: forge_slug must be jain-split/jain-fabric"));
+    }
+
+    #[test]
+    fn multi_infra_rejects_a_second_infra_colliding_with_smartcluster_path() {
+        let (path, mut data) = canonical_manifest();
+        let mut collide = infra_row("jain-fabric");
+        collide.as_table_mut().unwrap().insert(
+            "path".to_owned(),
+            toml::Value::String("/home/ubuntu/jain-split/jain-smartcluster".to_owned()),
+        );
+        push_infra(&mut data, collide);
+        assert!(validate_manifest_data(&data, &path, false)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate repository path"));
+    }
+
+    #[test]
+    fn repo_name_validation_matches_the_documented_grammar() {
+        for good in ["jain-fabric", "j", "a1", "jain-platform", "jainnode"] {
+            validate_repo_name(good).unwrap();
+        }
+        for bad in [
+            "",
+            "-leading-hyphen",
+            "Uppercase",
+            "under_score",
+            "has.dot",
+            "trailing.git",
+            "path/component",
+            "back\\slash",
+            &"x".repeat(64),
+        ] {
+            assert!(validate_repo_name(bad).is_err(), "accepted bad name: {bad}");
+        }
+        // The .git suffix and path components get precise diagnostics.
+        assert!(validate_repo_name("repo.git")
+            .unwrap_err()
+            .to_string()
+            .contains(".git"));
+        assert!(validate_repo_name("a/b")
+            .unwrap_err()
+            .to_string()
+            .contains("path components"));
+    }
+
+    #[test]
+    fn repo_create_request_targets_the_verified_route() {
+        let request = JeryuRequest::repo_create("jeryu", "jain-fabric", "main").unwrap();
+        assert_eq!(request.method(), "POST");
+        assert_eq!(request.path(), "/repos");
+        let body: JsonValue = serde_json::from_str(request.body().unwrap()).unwrap();
+        assert_eq!(body["name"], "jain-fabric");
+        assert_eq!(body["private"], false);
+        assert_eq!(body["default_branch"], "main");
+        assert!(JeryuRequest::repo_create("jeryu", "Bad_Name", "main").is_err());
+    }
+
+    #[test]
+    fn repo_collision_guard_is_idempotent_across_listing_shapes() {
+        let full_name = json!([{"full_name": "jeryu/jain-fabric"}]);
+        let owner_login = json!({"data": [{"name": "jain-fabric", "owner": {"login": "jeryu"}}]});
+        let owner_name = json!({"repos": [{"name": "jain-fabric", "owner": {"name": "jeryu"}}]});
+        let owner_scalar = json!([{"name": "jain-fabric", "owner": "jeryu"}]);
+        for present in [&full_name, &owner_login, &owner_name, &owner_scalar] {
+            assert!(repo_exists_in_list(present, "jeryu", "jain-fabric"));
+        }
+        // Absent, and near-misses (right name wrong owner) must not collide.
+        assert!(!repo_exists_in_list(&json!([]), "jeryu", "jain-fabric"));
+        assert!(!repo_exists_in_list(&full_name, "jeryu", "jain-platform"));
+        assert!(!repo_exists_in_list(
+            &owner_scalar,
+            "someone-else",
+            "jain-fabric"
+        ));
+    }
+
+    #[test]
+    fn family_register_refuses_a_missing_or_dishonest_readback() {
+        let dir = TestDir::new("family-register-readback");
+        let head = "a".repeat(40);
+        let good = dir.path().join("good.json");
+        fs::write(
+            &good,
+            json!({
+                "schema_version": REPO_CREATE_SCHEMA,
+                "status": "pass",
+                "repository": "jeryu/jain-fabric",
+                "action": "created-and-verified",
+                "head_readback": head,
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert_eq!(
+            require_repo_create_readback(&good, "jeryu", "jain-fabric").unwrap(),
+            head
+        );
+
+        // Missing head, wrong repository, and a non-passing status are all refused.
+        let no_head = dir.path().join("no-head.json");
+        fs::write(
+            &no_head,
+            json!({
+                "schema_version": REPO_CREATE_SCHEMA,
+                "status": "pass",
+                "repository": "jeryu/jain-fabric",
+                "action": "created-and-verified",
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert!(require_repo_create_readback(&no_head, "jeryu", "jain-fabric").is_err());
+
+        assert!(require_repo_create_readback(&good, "jeryu", "jain-platform").is_err());
+
+        let failed = dir.path().join("failed.json");
+        fs::write(
+            &failed,
+            json!({
+                "schema_version": REPO_CREATE_SCHEMA,
+                "status": "fail",
+                "repository": "jeryu/jain-fabric",
+                "action": "created-and-verified",
+                "head_readback": head,
+            })
+            .to_string(),
+        )
+        .unwrap();
+        assert!(require_repo_create_readback(&failed, "jeryu", "jain-fabric").is_err());
     }
 
     #[test]

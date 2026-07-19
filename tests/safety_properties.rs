@@ -405,3 +405,167 @@ fn bare_mirror_refresh_is_dry_run_by_default_and_verifies_applied_refs() {
         .expect("mirror head UTF-8");
     assert_eq!(source_head.trim(), mirror_head.trim());
 }
+
+fn write_repo_create_readback(path: &Path, repository: &str, action: &str) {
+    let receipt = format!(
+        "{{\"schema_version\":\"jain.repo-create/v1\",\"status\":\"pass\",\
+\"repository\":\"{repository}\",\"action\":\"{action}\",\"head_readback\":\"{}\"}}",
+        "a".repeat(40)
+    );
+    fs::write(path, receipt).expect("write repo-create readback");
+}
+
+#[test]
+fn dry_run_repo_create_needs_no_token_and_touches_no_external_state() {
+    let scratch = Scratch::new();
+    let receipt = scratch.path().join("repo-create.json");
+    let output = splitctl(&[
+        "repo-create",
+        "--name",
+        "jain-fabric",
+        "--evidence-out",
+        receipt.to_str().expect("UTF-8 receipt path"),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value =
+        serde_json::from_slice(&fs::read(receipt).expect("read receipt")).expect("parse receipt");
+    assert_eq!(report["mode"], "dry-run");
+    assert_eq!(report["action"], "would-create");
+    assert_eq!(report["external_state_changed"], false);
+    assert_eq!(report["repository"], "jeryu/jain-fabric");
+    assert_eq!(report["request"]["method"], "POST");
+    assert_eq!(report["request"]["path"], "/repos");
+    assert_eq!(report["request"]["body"]["private"], false);
+    assert_eq!(report["request"]["body"]["default_branch"], "main");
+}
+
+#[test]
+fn repo_create_rejects_a_malformed_name() {
+    for name in ["Bad_Name", "trailing.git", "path/component", "-leading"] {
+        let output = splitctl(&["repo-create", "--name", name]);
+        assert!(!output.status.success(), "accepted malformed name: {name}");
+    }
+}
+
+#[test]
+fn dry_run_family_register_validates_the_candidate_without_mutating_the_manifest() {
+    let scratch = Scratch::new();
+    let canonical = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+    let manifest = scratch.path().join("repos.manifest.toml");
+    let before = fs::read_to_string(&canonical).expect("read canonical manifest");
+    fs::write(&manifest, &before).expect("copy manifest");
+    let readback = scratch.path().join("repo-create.json");
+    write_repo_create_readback(&readback, "jeryu/jain-fabric", "created-and-verified");
+
+    let receipt = scratch.path().join("register.json");
+    let output = splitctl(&[
+        "family-register",
+        "--name",
+        "jain-fabric",
+        "--infrastructure",
+        "--readback",
+        readback.to_str().expect("UTF-8 readback path"),
+        "--manifest",
+        manifest.to_str().expect("UTF-8 manifest path"),
+        "--evidence-out",
+        receipt.to_str().expect("UTF-8 receipt path"),
+    ]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let report: Value =
+        serde_json::from_slice(&fs::read(receipt).expect("read receipt")).expect("parse receipt");
+    assert_eq!(report["mode"], "dry-run");
+    assert_eq!(report["action"], "would-register");
+    assert_eq!(report["external_state_changed"], false);
+    assert_eq!(report["infrastructure"], true);
+    // The only file family-register mutates is the manifest, and never in dry-run.
+    assert_eq!(
+        fs::read_to_string(&manifest).expect("re-read manifest"),
+        before,
+        "dry-run family-register must not touch the manifest"
+    );
+}
+
+#[test]
+fn family_register_rejects_a_duplicate_infrastructure_repo() {
+    let scratch = Scratch::new();
+    let canonical = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+    let manifest = scratch.path().join("repos.manifest.toml");
+    fs::write(
+        &manifest,
+        fs::read_to_string(&canonical).expect("read canonical manifest"),
+    )
+    .expect("copy manifest");
+    let readback = scratch.path().join("repo-create.json");
+    write_repo_create_readback(&readback, "jeryu/jain-smartcluster", "exists-no-op");
+
+    let output = splitctl(&[
+        "family-register",
+        "--name",
+        "jain-smartcluster",
+        "--infrastructure",
+        "--readback",
+        readback.to_str().expect("UTF-8 readback path"),
+        "--manifest",
+        manifest.to_str().expect("UTF-8 manifest path"),
+    ]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("duplicate repository"));
+}
+
+#[test]
+fn family_register_rejects_a_broken_census() {
+    let scratch = Scratch::new();
+    let canonical = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+    let manifest = scratch.path().join("repos.manifest.toml");
+    fs::write(
+        &manifest,
+        fs::read_to_string(&canonical).expect("read canonical manifest"),
+    )
+    .expect("copy manifest");
+    let readback = scratch.path().join("repo-create.json");
+    write_repo_create_readback(&readback, "jeryu/jain-fabric", "created-and-verified");
+
+    // Registering a family member (not infrastructure) would take the family
+    // census to 27, which the manifest invariant refuses.
+    let output = splitctl(&[
+        "family-register",
+        "--name",
+        "jain-fabric",
+        "--readback",
+        readback.to_str().expect("UTF-8 readback path"),
+        "--manifest",
+        manifest.to_str().expect("UTF-8 manifest path"),
+    ]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("26 family repositories"));
+}
+
+#[test]
+fn family_register_refuses_without_a_repo_create_readback() {
+    let scratch = Scratch::new();
+    let canonical = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+    let manifest = scratch.path().join("repos.manifest.toml");
+    fs::write(
+        &manifest,
+        fs::read_to_string(&canonical).expect("read canonical manifest"),
+    )
+    .expect("copy manifest");
+    let output = splitctl(&[
+        "family-register",
+        "--name",
+        "jain-fabric",
+        "--infrastructure",
+        "--manifest",
+        manifest.to_str().expect("UTF-8 manifest path"),
+    ]);
+    assert!(!output.status.success());
+    assert!(String::from_utf8_lossy(&output.stderr).contains("readback"));
+}
