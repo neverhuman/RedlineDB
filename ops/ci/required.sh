@@ -7,6 +7,7 @@ cd "$ROOT"
 bash ops/ci/fast.sh
 bash ops/ci/family-release-test.sh
 bash ops/ci/security.sh
+bash ops/ci/governed-jankurai-test.sh
 bash ops/ci/jankurai.sh
 bash ops/ci/contract-drift.sh
 bash ops/ci/artifact-support-test.sh

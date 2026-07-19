@@ -12,8 +12,8 @@ Rules:
 - Land changes through a protected local-Jeryu pull request. Never push `main`.
 - Keep the native Redline release identity (`4.1.0-jain.N`); Jain binds the
   accepted immutable Redline identity into its own release authority.
-- Select Jankurai only through `/home/ubuntu/.jeryu/bin/jankurai`, version
-  `1.6.11`, SHA-256
+- Select Jankurai only from the root-controlled release PATH, then freeze and
+  verify its physical path, version `1.6.11`, and SHA-256
   `fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e`.
 - Run `rtk bash scripts/ci-local.sh required` before requesting review.
 - The live TCP smoke binary needs a separately managed RedlineDB server. The

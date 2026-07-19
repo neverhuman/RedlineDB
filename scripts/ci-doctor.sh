@@ -9,13 +9,7 @@ for command in cargo jq rg sha256sum realpath; do
   require_cmd "$command"
 done
 
-JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
-JANKURAI_VERSION="1.6.11"
-JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
-[[ -f "$JANKURAI_BIN" && ! -L "$JANKURAI_BIN" && -x "$JANKURAI_BIN" ]]
-[[ "$(realpath -e -- "$JANKURAI_BIN")" == "$JANKURAI_BIN" ]]
-[[ "$($JANKURAI_BIN --version)" == "jankurai $JANKURAI_VERSION" ]]
-[[ "$(sha256sum -- "$JANKURAI_BIN" | awk '{print $1}')" == "$JANKURAI_SHA256" ]]
+require_governed_jankurai
 
 for script in ops/ci/*.sh scripts/ci-local.sh scripts/ci-doctor.sh; do
   bash -n "$script"
@@ -23,6 +17,7 @@ done
 [[ -x ops/ci/jankurai.sh && -x ops/ci/required.sh && -x scripts/ci-local.sh ]]
 grep -Fq 'bash ops/ci/jankurai.sh' .github/workflows/jankurai.yml
 grep -Fq 'JANKURAI_UPDATE_REVIEWED=1' scripts/ci-local.sh
+grep -Fq 'bash ops/ci/governed-jankurai-test.sh' ops/ci/required.sh
 [[ "$(grep -Fc 'uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' \
   .github/workflows/jankurai.yml)" -eq 4 ]]
 [[ "$(grep -Fc 'persist-credentials: false' .github/workflows/jankurai.yml)" -eq 4 ]]
