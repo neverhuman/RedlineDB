@@ -26,6 +26,15 @@ expect_rejected() {
     fi
 }
 
+expect_command_rejected() {
+    local label="$1"
+    shift
+    if "$@" >"$fixture_root/$label.log" 2>&1; then
+        printf 'expected governed Jankurai command rejection: %s\n' "$label" >&2
+        exit 1
+    fi
+}
+
 correct="$fixture_root/correct"
 write_fixture "$correct" "$JANKURAI_VERSION"
 correct_sha="$(sha256sum -- "$correct" | awk '{print $1}')"
@@ -43,5 +52,31 @@ wrong_version="$fixture_root/wrong-version"
 write_fixture "$wrong_version" 'jankurai 1.6.10'
 wrong_version_sha="$(sha256sum -- "$wrong_version" | awk '{print $1}')"
 expect_rejected wrong-version "$wrong_version" "$JANKURAI_VERSION" "$wrong_version_sha"
+
+mkdir -p "$fixture_root/hostile-bin"
+write_fixture "$fixture_root/hostile-bin/jankurai" 'jankurai 1.6.11-hostile'
+expect_command_rejected hostile-source-selection \
+    /usr/bin/env PATH="$fixture_root/hostile-bin:/usr/bin:/bin" \
+    /usr/bin/bash -c \
+    'set -euo pipefail; . "$1"; require_jankurai' \
+    _ "$repo_root/ops/ci/lib.sh"
+
+mkdir -p "$fixture_root/empty-bin"
+expect_command_rejected missing-source-selection \
+    /usr/bin/env PATH="$fixture_root/empty-bin:/usr/bin:/bin" \
+    /usr/bin/bash -c \
+    'set -euo pipefail; . "$1"; require_jankurai' \
+    _ "$repo_root/ops/ci/lib.sh"
+
+PATH="$fixture_root/hostile-bin:/usr/bin:/bin"
+export PATH
+require_jankurai
+[ "$(type -t jankurai)" = function ]
+[ "$(jankurai --version)" = "$JANKURAI_VERSION" ]
+
+if grep -Fq '/home/ubuntu/.jeryu/bin/jankurai' "$repo_root/ops/ci/lib.sh"; then
+    printf 'governed Jankurai selection still depends on the user home\n' >&2
+    exit 1
+fi
 
 printf 'governed Jankurai negative probes ok\n'

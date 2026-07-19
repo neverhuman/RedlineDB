@@ -34,9 +34,14 @@ fail() {
 
 has() { command -v "$1" >/dev/null 2>&1; }
 
-readonly JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
 readonly JANKURAI_VERSION="jankurai 1.6.11"
 readonly JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+
+# The release sandbox owns PATH. Freeze its selection before the wrapper below
+# shadows the command name; require_jankurai and the wrapper both enforce the
+# exact physical path, version, and digest.
+JANKURAI_BIN="$(command -v jankurai 2>/dev/null || true)"
+readonly JANKURAI_BIN
 # The fleet control plane materializes this exact RustSec object inside the
 # release sandbox. Repository lanes may select it through either the current
 # variable or the compatibility name while the fleet finishes converging.
@@ -78,8 +83,11 @@ require_jankurai() {
         || fail "governed jankurai identity verification failed"
 }
 
-# PATH and JANKURAI_BIN from the caller cannot select different bytes.
+# Later PATH changes cannot select different bytes, and every invocation
+# revalidates the identity frozen when this library was sourced.
 jankurai() {
+    verify_jankurai_identity "$JANKURAI_BIN" "$JANKURAI_VERSION" "$JANKURAI_SHA256" \
+        || fail "governed jankurai identity verification failed"
     "$JANKURAI_BIN" "$@"
 }
 
