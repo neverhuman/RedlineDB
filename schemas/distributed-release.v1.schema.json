@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/distributed-release.v1.schema.json",
+  "title": "Jain distributed release authority v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "release", "release_id", "status", "formal_ga",
+    "public_routed", "activation_eligible", "rollback_target",
+    "source_freeze_sha256", "artifact_set_sha256", "source_matrix",
+    "artifacts", "hosts", "routes", "redline", "rollback", "receipts", "signatures"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.distributed-release/v1" },
+    "release": { "const": "9.0.0-distributed.1" },
+    "release_id": { "const": "9.0.0-distributed.1/release-authority" },
+    "status": { "const": "candidate" },
+    "formal_ga": { "const": false },
+    "public_routed": { "const": false },
+    "activation_eligible": { "const": false },
+    "rollback_target": { "const": "7.0.6" },
+    "source_freeze_sha256": { "$ref": "#/$defs/sha256" },
+    "artifact_set_sha256": { "$ref": "#/$defs/sha256" },
+    "source_matrix": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["repository", "tag", "commit", "tree", "checksum_sha256"],
+        "properties": {
+          "repository": { "type": "string", "pattern": "^[a-z0-9][a-z0-9_-]{0,127}$" },
+          "tag": { "type": "string", "pattern": "-v9\\.0\\.0-distributed\\.1-" },
+          "commit": { "$ref": "#/$defs/gitOid" },
+          "tree": { "$ref": "#/$defs/gitOid" },
+          "checksum_sha256": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 5,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "name", "sha256", "readback_sha256", "signature_receipt_sha256"],
+        "properties": {
+          "kind": { "enum": ["caddy", "hub", "node", "worker", "pack", "compose", "installer", "appliance_bundle"] },
+          "name": { "type": "string", "minLength": 1, "maxLength": 255 },
+          "sha256": { "$ref": "#/$defs/sha256" },
+          "readback_sha256": { "$ref": "#/$defs/sha256" },
+          "signature_receipt_sha256": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    },
+    "hosts": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["host_id", "role", "storage_quota_bytes", "epoch", "image_set_sha256", "ports", "external_caddy_unchanged"],
+        "properties": {
+          "host_id": { "enum": ["AtomicSoul", "xbabe2", "xbabe3"] },
+          "role": { "enum": ["edge-storage", "primary-compute", "follower-compute"] },
+          "storage_quota_bytes": { "type": "integer", "minimum": 1 },
+          "epoch": { "type": "integer", "minimum": 1 },
+          "image_set_sha256": { "$ref": "#/$defs/sha256" },
+          "ports": { "type": "array", "uniqueItems": true, "items": { "type": "integer", "minimum": 1, "maximum": 65535 } },
+          "external_caddy_unchanged": { "const": true }
+        }
+      }
+    },
+    "routes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "canary_listen", "standalone_listen", "dns_unchanged",
+        "public_admission_unchanged", "external_caddy_etag_before",
+        "external_caddy_etag_after", "external_caddy_route_sha256_before",
+        "external_caddy_route_sha256_after"
+      ],
+      "properties": {
+        "canary_listen": { "const": "127.0.0.1:18080" },
+        "standalone_listen": { "const": "127.0.0.1:8080" },
+        "dns_unchanged": { "const": true },
+        "public_admission_unchanged": { "const": true },
+        "external_caddy_etag_before": { "type": "string", "minLength": 1 },
+        "external_caddy_etag_after": { "type": "string", "minLength": 1 },
+        "external_caddy_route_sha256_before": { "$ref": "#/$defs/sha256" },
+        "external_caddy_route_sha256_after": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "redline": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine_tag", "engine_commit", "family_ci_sha256", "lock_sha256",
+        "jain_consumer_sha256", "jeryu_consumer_sha256", "cutover_eligible"
+      ],
+      "properties": {
+        "engine_tag": { "type": "string", "pattern": "^redline-core-v4\\.1\\.0-jain\\.[1-9][0-9]*$" },
+        "engine_commit": { "$ref": "#/$defs/gitOid" },
+        "family_ci_sha256": { "$ref": "#/$defs/sha256" },
+        "lock_sha256": { "$ref": "#/$defs/sha256" },
+        "jain_consumer_sha256": { "$ref": "#/$defs/sha256" },
+        "jeryu_consumer_sha256": { "$ref": "#/$defs/sha256" },
+        "cutover_eligible": { "const": true }
+      }
+    },
+    "rollback": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target_release", "source_freeze_sha256", "artifact_set_sha256", "receipt_sha256"],
+      "properties": {
+        "target_release": { "const": "7.0.6" },
+        "source_freeze_sha256": { "$ref": "#/$defs/sha256" },
+        "artifact_set_sha256": { "$ref": "#/$defs/sha256" },
+        "receipt_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "receipts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "accelerated_qualification_sha256", "soak_status_sha256",
+        "redline_lock_sha256", "redline_jain_consumer_sha256",
+        "redline_jeryu_consumer_sha256", "migration_sha256",
+        "rollback_sha256", "gpu_sha256", "jeryu_parity_sha256",
+        "storage_sha256", "caddy_unchanged_sha256"
+      ],
+      "properties": {
+        "accelerated_qualification_sha256": { "$ref": "#/$defs/sha256" },
+        "soak_status_sha256": { "$ref": "#/$defs/sha256" },
+        "redline_lock_sha256": { "$ref": "#/$defs/sha256" },
+        "redline_jain_consumer_sha256": { "$ref": "#/$defs/sha256" },
+        "redline_jeryu_consumer_sha256": { "$ref": "#/$defs/sha256" },
+        "migration_sha256": { "$ref": "#/$defs/sha256" },
+        "rollback_sha256": { "$ref": "#/$defs/sha256" },
+        "gpu_sha256": { "$ref": "#/$defs/sha256" },
+        "jeryu_parity_sha256": { "$ref": "#/$defs/sha256" },
+        "storage_sha256": { "$ref": "#/$defs/sha256" },
+        "caddy_unchanged_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "signatures": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": { "$ref": "#/$defs/signature" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "not": { "const": "0000000000000000000000000000000000000000000000000000000000000000" } },
+    "gitOid": { "type": "string", "pattern": "^[0-9a-f]{40}$", "not": { "const": "0000000000000000000000000000000000000000" } },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner_id", "key_fingerprint_sha256", "signature_sha256"],
+      "properties": {
+        "owner_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "key_fingerprint_sha256": { "$ref": "#/$defs/sha256" },
+        "signature_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

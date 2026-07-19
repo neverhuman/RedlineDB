@@ -45,6 +45,9 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
 - `docs/release.md`: control-plane version, integrity, installation, and rollback policy.
 - `docs/release-runbook.md`: canonical v8.0.1 candidate, SmartCluster, Redline,
   artifact, canary, promotion, and rollback workflow.
+- `docs/distributed-release-authority.md`: dormant fail-closed contracts for the
+  unrouted `9.0.0-distributed.1` candidate, accelerated qualification, honest
+  no-soak status, dependency DAG, and isolated evidence index.
 
 SmartCluster is managed as required infrastructure under the declared
 `veox/jain-smartcluster` namespace. Redline ground truth lives only in the

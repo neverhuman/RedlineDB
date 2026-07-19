@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/accelerated-qualification.v1.schema.json",
+  "title": "Jain accelerated qualification receipt v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "release", "receipt_id", "source_freeze_sha256",
+    "artifact_set_sha256", "random_seed_sha256", "status", "soak_status",
+    "soak_duration_seconds", "severity_1_2_defects", "parity_mismatches",
+    "invalidating_findings", "matrix", "signatures"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.accelerated-qualification/v1" },
+    "release": { "const": "9.0.0-distributed.1" },
+    "receipt_id": { "const": "9.0.0-distributed.1/accelerated-qualification" },
+    "source_freeze_sha256": { "$ref": "#/$defs/sha256" },
+    "artifact_set_sha256": { "$ref": "#/$defs/sha256" },
+    "random_seed_sha256": { "$ref": "#/$defs/sha256" },
+    "status": { "const": "pass" },
+    "soak_status": { "const": "not_run" },
+    "soak_duration_seconds": { "const": 0 },
+    "severity_1_2_defects": { "const": 0 },
+    "parity_mismatches": { "const": 0 },
+    "invalidating_findings": { "type": "array", "maxItems": 0 },
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "offline_appliance", "guest_path", "workload_coverage", "jeryu", "gpu",
+        "storage", "ha", "security", "migration_rollback", "ui", "host_resources"
+      ],
+      "properties": {
+        "offline_appliance": { "$ref": "#/$defs/sha256" },
+        "guest_path": { "$ref": "#/$defs/sha256" },
+        "workload_coverage": { "$ref": "#/$defs/sha256" },
+        "jeryu": { "$ref": "#/$defs/sha256" },
+        "gpu": { "$ref": "#/$defs/sha256" },
+        "storage": { "$ref": "#/$defs/sha256" },
+        "ha": { "$ref": "#/$defs/sha256" },
+        "security": { "$ref": "#/$defs/sha256" },
+        "migration_rollback": { "$ref": "#/$defs/sha256" },
+        "ui": { "$ref": "#/$defs/sha256" },
+        "host_resources": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "signatures": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/signature" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$", "not": { "const": "0000000000000000000000000000000000000000000000000000000000000000" } },
+    "signature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["owner_id", "key_fingerprint_sha256", "signature_sha256"],
+      "properties": {
+        "owner_id": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "key_fingerprint_sha256": { "$ref": "#/$defs/sha256" },
+        "signature_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  }
+}

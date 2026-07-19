@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/soak-status.v1.schema.json",
+  "title": "Jain distributed candidate soak status v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "release", "receipt_id", "status", "duration_seconds",
+    "reason", "replacement_receipt_sha256", "formal_ga", "public_routed",
+    "activation_eligible"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.soak-status/v1" },
+    "release": { "const": "9.0.0-distributed.1" },
+    "receipt_id": { "const": "9.0.0-distributed.1/soak-status" },
+    "status": { "const": "not_run" },
+    "duration_seconds": { "const": 0 },
+    "reason": { "const": "unrouted_preproduction" },
+    "replacement_receipt_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "not": { "const": "0000000000000000000000000000000000000000000000000000000000000000" }
+    },
+    "formal_ga": { "const": false },
+    "public_routed": { "const": false },
+    "activation_eligible": { "const": false }
+  }
+}
