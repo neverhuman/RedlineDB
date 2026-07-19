@@ -22,3 +22,8 @@ purpose = "save-gate every changed non-generated file against origin/main"
 name = "security"
 command = "just security"
 purpose = "dependency, secret, SBOM, and workflow security evidence"
+
+[[lane]]
+name = "github-static-mirror"
+command = "bash ops/ci/github-mirror-contract.sh"
+purpose = "prove the public workflow stays stock-runner static and non-authoritative"

@@ -25,10 +25,14 @@ it does not authorize moving an existing hub tag.
 1. Start from a clean branch whose base is the current Jeryu `main` head. The
    checkout must have exactly one managed `origin` pointing to Jeryu.
 2. Run `just check`, then the governed Jankurai 1.6.11 audit and security lane
-   from a clean exact-head checkout. The lane verifies the fixed executable's
-   SHA-256, writes evidence only under `target/jankurai/`, and never installs or
-   fetches Jankurai source. The thin-hub guard must prove that no Cargo workspace
-   or engine source has returned.
+   from a clean exact-head checkout. The authoritative local Jeryu fleet injects
+   the protected-main, root-owned executable into its isolated sandbox PATH;
+   the lane freezes that physical path, verifies its version and SHA-256 before
+   every use, and writes evidence only under `target/jankurai/`. It never
+   installs or fetches tool source. The public GitHub workflow is only a
+   stock-runner static contract because it cannot reach the local forge; it
+   emits no release evidence. The thin-hub guard must prove that no Cargo
+   workspace or engine source has returned.
 3. Run the Redline family CI through `redline-split-ops`. Its proof-refresh
    command must consume fresh core, testing, web, hub, and Jain-consumer
    receipts. Never edit `redline.lock.toml` by hand.
