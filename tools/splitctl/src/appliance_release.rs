@@ -1396,6 +1396,10 @@ fn consume_nonce(spec: &LoadedSpec, nonce: &str, envelope_sha256: &str) -> Resul
             .ok_or("validated nonce root is absent")?,
     );
     require_root_private_dir(&root)?;
+    consume_nonce_at(&root, nonce, envelope_sha256)
+}
+
+fn consume_nonce_at(root: &Path, nonce: &str, envelope_sha256: &str) -> Result<(), AnyError> {
     let path = root.join(nonce);
     let body = format!("{envelope_sha256}\n");
     write_new_private(&path, body.as_bytes())
@@ -1936,6 +1940,170 @@ mod tests {
         }
     }
 
+    struct RejectVerifier;
+
+    impl SignatureVerifier for RejectVerifier {
+        fn verify(
+            &self,
+            _public_key: &[u8],
+            _payload: &[u8],
+            _signature: &str,
+        ) -> Result<(), AnyError> {
+            Err("rejected by test verifier".into())
+        }
+    }
+
+    struct PayloadVerifier {
+        expected_sha256: String,
+    }
+
+    impl SignatureVerifier for PayloadVerifier {
+        fn verify(
+            &self,
+            _public_key: &[u8],
+            payload: &[u8],
+            signature: &str,
+        ) -> Result<(), AnyError> {
+            if sha256(payload) != self.expected_sha256 || signature != "accepted-by-test-verifier" {
+                return Err("test verifier received the wrong payload or signature".into());
+            }
+            Ok(())
+        }
+    }
+
+    struct EnvelopeFixture {
+        root: Temp,
+        spec: LoadedSpec,
+        authority: Authority,
+        plan: Value,
+        envelope: Value,
+    }
+
+    impl EnvelopeFixture {
+        fn new() -> Self {
+            let root = Temp::new("envelope");
+            fs::create_dir(root.0.join("keys")).unwrap();
+            let mut owner_keys = Vec::new();
+            for (name, bytes) in [
+                ("a.pub", b"owner-a".as_slice()),
+                ("b.pub", b"owner-b".as_slice()),
+            ] {
+                fs::write(root.0.join("keys").join(name), bytes).unwrap();
+                let digest = sha256(bytes);
+                owner_keys.push(json!({
+                    "fingerprint": format!("sha256:{digest}"),
+                    "path": format!("keys/{name}"),
+                    "sha256": digest,
+                }));
+            }
+            owner_keys.sort_by(|left, right| {
+                left["fingerprint"]
+                    .as_str()
+                    .cmp(&right["fingerprint"].as_str())
+            });
+            let spec_sha = "b".repeat(64);
+            let authority_sha = "a".repeat(64);
+            let spec = LoadedSpec {
+                path: root.0.join("release-spec.json"),
+                value: json!({"action_policy": {"owner_keys": owner_keys}}),
+                sha256: spec_sha.clone(),
+                evidence_root: root.0.clone(),
+            };
+            let authority = Authority {
+                path: root.0.join("authority.toml"),
+                sha256: authority_sha.clone(),
+                evidence_root: root.0.clone(),
+                signature_max_age_seconds: 100,
+            };
+            let plan = finish_plan(json!({
+                "release": RELEASE,
+                "status": STATUS,
+                "formal_ga": false,
+                "operation": "build",
+                "authority_sha256": authority_sha,
+                "spec_sha256": spec_sha,
+                "scope": {},
+                "mode": "dry-run",
+            }))
+            .unwrap();
+            let envelope = json!({
+                "schema_version": ACTION_SCHEMA,
+                "release": RELEASE,
+                "operation": "build",
+                "authority_sha256": authority.sha256,
+                "spec_sha256": spec.sha256,
+                "plan_sha256": plan["plan_sha256"],
+                "issued_unix_seconds": 100,
+                "expires_unix_seconds": 150,
+                "nonce": "1234567890abcdef",
+                "signatures": [],
+            });
+            let mut fixture = Self {
+                root,
+                spec,
+                authority,
+                plan,
+                envelope,
+            };
+            fixture.resign();
+            fixture
+        }
+
+        fn resign(&mut self) {
+            self.envelope["signatures"] = Value::Array(Vec::new());
+            let signed_over = sha256(&canonical_json(&self.envelope).unwrap());
+            let signatures = self.spec.value["action_policy"]["owner_keys"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|key| {
+                    json!({
+                        "signer_fingerprint": key["fingerprint"],
+                        "signature": "accepted-by-test-verifier",
+                        "signed_over_sha256": signed_over,
+                    })
+                })
+                .collect();
+            self.envelope["signatures"] = Value::Array(signatures);
+        }
+
+        fn verify(
+            &self,
+            verifier: &dyn SignatureVerifier,
+            now: u64,
+        ) -> Result<VerifiedEnvelope, AnyError> {
+            let path = self.root.0.join(format!(
+                "envelope-{}.json",
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            fs::write(&path, serde_json::to_vec_pretty(&self.envelope)?).unwrap();
+            load_and_verify_envelope(
+                &path,
+                &self.plan,
+                &self.spec,
+                &self.authority,
+                verifier,
+                now,
+            )
+        }
+    }
+
+    fn assert_envelope_error(
+        fixture: &EnvelopeFixture,
+        verifier: &dyn SignatureVerifier,
+        now: u64,
+        expected: &str,
+    ) {
+        let error = match fixture.verify(verifier, now) {
+            Ok(_) => panic!("hostile envelope must be rejected"),
+            Err(error) => error,
+        };
+        assert!(
+            error.to_string().contains(expected),
+            "unexpected error: {error}"
+        );
+    }
+
     #[test]
     fn command_shapes_are_closed_and_apply_always_needs_an_envelope() {
         assert!(parse_args(vec!["build".into(), "--spec".into(), "s".into()]).is_ok());
@@ -2011,24 +2179,37 @@ mod tests {
     }
 
     #[test]
-    fn signatures_are_excluded_from_the_canonical_action_payload() {
-        let base = json!({
-            "schema_version": ACTION_SCHEMA,
-            "release": RELEASE,
-            "operation": "build",
-            "authority_sha256": "a".repeat(64),
-            "spec_sha256": "b".repeat(64),
-            "plan_sha256": "c".repeat(64),
-            "issued_unix_seconds": 10,
-            "expires_unix_seconds": 20,
-            "nonce": "1234567890abcdef",
-            "signatures": [],
-        });
-        let before = canonical_json(&base).unwrap();
-        let mut with_signatures = base;
-        with_signatures["signatures"] = json!([{"untrusted": "bytes"}]);
-        with_signatures["signatures"] = Value::Array(Vec::new());
-        assert_eq!(before, canonical_json(&with_signatures).unwrap());
+    fn signature_bytes_are_excluded_from_the_verified_payload() {
+        let fixture = EnvelopeFixture::new();
+        let mut unsigned = fixture.envelope.clone();
+        unsigned["signatures"] = Value::Array(Vec::new());
+        let expected_sha256 = sha256(&canonical_json(&unsigned).unwrap());
+        let verified = fixture
+            .verify(&PayloadVerifier { expected_sha256 }, 120)
+            .unwrap();
+        assert_eq!(
+            verified.signed_payload_sha256,
+            sha256(&canonical_json(&unsigned).unwrap())
+        );
+    }
+
+    #[test]
+    fn nonce_consumption_is_an_atomic_one_use_fence() {
+        let root = Temp::new("nonce");
+        let nonce = "1234567890abcdef";
+        let envelope_sha256 = "a".repeat(64);
+        consume_nonce_at(&root.0, nonce, &envelope_sha256).unwrap();
+        let error = match consume_nonce_at(&root.0, nonce, &envelope_sha256) {
+            Ok(()) => panic!("a consumed nonce must not be reusable"),
+            Err(error) => error,
+        };
+        assert!(error
+            .to_string()
+            .contains("already consumed or unavailable"));
+        assert_eq!(
+            fs::read_to_string(root.0.join(nonce)).unwrap(),
+            format!("{envelope_sha256}\n")
+        );
     }
 
     #[test]
@@ -2097,107 +2278,104 @@ mod tests {
 
     #[test]
     fn action_envelope_binds_exact_plan_and_two_sorted_owner_keys() {
-        let root = Temp::new("envelope");
-        fs::create_dir(root.0.join("keys")).unwrap();
-        let mut owner_keys = Vec::new();
-        for (name, bytes) in [
-            ("a.pub", b"owner-a".as_slice()),
-            ("b.pub", b"owner-b".as_slice()),
-        ] {
-            fs::write(root.0.join("keys").join(name), bytes).unwrap();
-            let digest = sha256(bytes);
-            owner_keys.push(json!({
-                "fingerprint": format!("sha256:{digest}"),
-                "path": format!("keys/{name}"),
-                "sha256": digest,
-            }));
-        }
-        owner_keys.sort_by(|left, right| {
-            left["fingerprint"]
-                .as_str()
-                .cmp(&right["fingerprint"].as_str())
-        });
-        let spec_sha = "b".repeat(64);
-        let authority_sha = "a".repeat(64);
-        let spec = LoadedSpec {
-            path: root.0.join("release-spec.json"),
-            value: json!({"action_policy": {"owner_keys": owner_keys}}),
-            sha256: spec_sha.clone(),
-            evidence_root: root.0.clone(),
-        };
-        let authority = Authority {
-            path: root.0.join("authority.toml"),
-            sha256: authority_sha.clone(),
-            evidence_root: root.0.clone(),
-            signature_max_age_seconds: 100,
-        };
-        let plan = finish_plan(json!({
-            "release": RELEASE,
-            "status": STATUS,
-            "formal_ga": false,
-            "operation": "build",
-            "authority_sha256": authority_sha,
-            "spec_sha256": spec_sha,
-            "scope": {},
-            "mode": "dry-run",
-        }))
-        .unwrap();
-        let mut envelope = json!({
-            "schema_version": ACTION_SCHEMA,
-            "release": RELEASE,
-            "operation": "build",
-            "authority_sha256": authority.sha256,
-            "spec_sha256": spec.sha256,
-            "plan_sha256": plan["plan_sha256"],
-            "issued_unix_seconds": 100,
-            "expires_unix_seconds": 150,
-            "nonce": "1234567890abcdef",
-            "signatures": [],
-        });
-        let signed_over = sha256(&canonical_json(&envelope).unwrap());
-        envelope["signatures"] = Value::Array(
-            spec.value["action_policy"]["owner_keys"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|key| {
-                    json!({
-                        "signer_fingerprint": key["fingerprint"],
-                        "signature": "accepted-by-test-verifier",
-                        "signed_over_sha256": signed_over,
-                    })
-                })
-                .collect(),
-        );
-        let envelope_path = root.0.join("envelope.json");
-        fs::write(
-            &envelope_path,
-            serde_json::to_vec_pretty(&envelope).unwrap(),
-        )
-        .unwrap();
-        let verified = load_and_verify_envelope(
-            &envelope_path,
-            &plan,
-            &spec,
-            &authority,
-            &AcceptVerifier,
-            120,
-        )
-        .unwrap();
+        let mut fixture = EnvelopeFixture::new();
+        let verified = fixture.verify(&AcceptVerifier, 120).unwrap();
         assert_eq!(verified.verified_signers.len(), 2);
 
-        let mut other_plan = plan;
-        other_plan["scope"] = json!({"unexpected": true});
-        other_plan = finish_plan(other_plan).unwrap();
-        assert!(load_and_verify_envelope(
-            &envelope_path,
-            &other_plan,
-            &spec,
-            &authority,
+        fixture.plan["scope"] = json!({"unexpected": true});
+        fixture.plan = finish_plan(fixture.plan).unwrap();
+        assert_envelope_error(
+            &fixture,
             &AcceptVerifier,
             120,
-        )
-        .is_err());
+            "plan_sha256 differs from authority",
+        );
+    }
+
+    #[test]
+    fn action_envelope_rejects_invalid_signature_bytes_and_payload_bindings() {
+        let fixture = EnvelopeFixture::new();
+        assert_envelope_error(&fixture, &RejectVerifier, 120, "rejected by test verifier");
+
+        let mut wrong_payload = EnvelopeFixture::new();
+        wrong_payload.envelope["signatures"][0]["signed_over_sha256"] = json!("d".repeat(64));
+        assert_envelope_error(
+            &wrong_payload,
+            &AcceptVerifier,
+            120,
+            "does not bind the canonical envelope payload",
+        );
+    }
+
+    #[test]
+    fn action_envelope_rejects_expired_and_future_dated_authority() {
+        let mut expired = EnvelopeFixture::new();
+        expired.envelope["issued_unix_seconds"] = json!(50);
+        expired.envelope["expires_unix_seconds"] = json!(100);
+        expired.resign();
+        assert_envelope_error(
+            &expired,
+            &AcceptVerifier,
+            120,
+            "future-dated, expired, or exceeds its authority window",
+        );
+
+        let mut future = EnvelopeFixture::new();
+        future.envelope["issued_unix_seconds"] = json!(121);
+        future.envelope["expires_unix_seconds"] = json!(150);
+        future.resign();
+        assert_envelope_error(
+            &future,
+            &AcceptVerifier,
+            120,
+            "future-dated, expired, or exceeds its authority window",
+        );
+    }
+
+    #[test]
+    fn action_envelope_rejects_duplicate_and_unknown_signers() {
+        let mut duplicate = EnvelopeFixture::new();
+        let first = duplicate.envelope["signatures"][0]["signer_fingerprint"].clone();
+        duplicate.envelope["signatures"][1]["signer_fingerprint"] = first;
+        assert_envelope_error(
+            &duplicate,
+            &AcceptVerifier,
+            120,
+            "sorted and from distinct owners",
+        );
+
+        let mut unknown = EnvelopeFixture::new();
+        unknown.envelope["signatures"][0]["signer_fingerprint"] =
+            json!(format!("sha256:{}", "f".repeat(64)));
+        assert_envelope_error(&unknown, &AcceptVerifier, 120, "uses an unknown owner key");
+    }
+
+    #[test]
+    fn action_envelope_requires_exactly_two_signatures() {
+        let mut one = EnvelopeFixture::new();
+        one.envelope["signatures"]
+            .as_array_mut()
+            .unwrap()
+            .truncate(1);
+        assert_envelope_error(
+            &one,
+            &AcceptVerifier,
+            120,
+            "requires exactly two signatures",
+        );
+
+        let mut three = EnvelopeFixture::new();
+        let extra = three.envelope["signatures"][0].clone();
+        three.envelope["signatures"]
+            .as_array_mut()
+            .unwrap()
+            .push(extra);
+        assert_envelope_error(
+            &three,
+            &AcceptVerifier,
+            120,
+            "requires exactly two signatures",
+        );
     }
 
     #[test]
