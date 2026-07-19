@@ -17,6 +17,7 @@ readable repair receipts.
 | `verify`                             | Alias for the root validation gate.                                                                   |
 | `fast`                               | Workspace fmt, file-size policy, type-check, and full unit/integration test sweep. Uses `scripts/sccache_wrapper.sh`, which falls back cleanly when local `sccache` is absent. Quick iteration lane, not the pre-push gate. |
 | `pr-ci`                              | Exact local mirror of `.github/workflows/ci.yml`: preflight, test shards, the verified `redline-testing-official` gate, and `official-evidence-guard`. Run with `scripts/ci-local.sh pr-ci`. |
+| `github-static-mirror`               | Proves the public workflow remains stock-runner static and cannot install or execute release tooling.                 |
 | `fast-check`                         | Workspace compile proof for the default health lane.                                                  |
 | `fast-test`                          | Workspace test proof for the default health lane.                                                     |
 | `hygiene`                            | Format and file-size only; cheapest pre-commit gate.                                                  |
@@ -134,9 +135,11 @@ candidate changes and run:
 rtk scripts/ci-local.sh pr-gate
 ```
 
-That command fetches `origin/main`, applies the same branch-freshness check as
-`.github/workflows/jankurai.yml`, then runs `ops/ci/jankurai-staged-gate.sh`
-with `BASE_REF=origin/main`.
+That command fetches `origin/main`, applies the authoritative local Jeryu
+branch-freshness check, then runs `ops/ci/jankurai-staged-gate.sh` with
+`BASE_REF=origin/main`. The public `.github/workflows/jankurai.yml` intentionally
+does not mirror this release-authority path: `ops/ci/github-mirror-contract.sh`
+keeps it a stock-runner static check.
 
 To reproduce the complete PR CI surface locally, run:
 
@@ -265,15 +268,15 @@ Test evidence rolls into the release-readiness gate documented in
 [`docs/release.md`](release.md). The launch gates that every
 tagged release must satisfy:
 
-- **Security** — `just security` (cargo audit, cargo deny,
-  gitleaks) green; the `security` job in
-  `.github/workflows/jankurai.yml` blocks the PR otherwise.
+- **Security** — `just security` (cargo audit, cargo deny, gitleaks) green in
+  the local Jeryu exact-head gate. The public Jankurai workflow only proves it
+  cannot execute or install release tooling.
 - **Backups** — kernel `Engine::backup` integration test green
   (`cargo test -p redlinedb-kernel backup`); restore round-trip
   proven by the failpoint matrix lane.
 - **Monitoring** — bench `kill_receipt.json` plus the clean-head
-  `target/jankurai/governed-evidence.json` receipt archived per release; the
-  audit upload step in `jankurai.yml` is the canonical artifact.
+  `target/jankurai/governed-evidence.json` receipt archived by the local Jeryu
+  release lane; the public static workflow produces no canonical artifact.
 - **Rollback** — `gh release delete` + `cargo yank` runbook in
   `docs/release.md`; `release-bad-behavior` lane in
   `.jankurai/proof-lanes.toml`.

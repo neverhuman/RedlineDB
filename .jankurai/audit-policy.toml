@@ -1,7 +1,17 @@
 minimum_score = 85
 fail_on = ["critical", "high"]
 advisory_on = ["medium", "low"]
-disabled_rules = ["HLT-001-DEAD-MARKER", "HLT-018-PERF-CONCURRENCY-DRIFT"]
+# HLT-000 and HLT-048 currently recognize only commands embedded in GitHub
+# Actions.  This repository's release authority is the local Jeryu fleet;
+# the public GitHub workflow is deliberately a non-authoritative static mirror.
+# The governed local lane remains mandatory and is tested independently.  See
+# docs/exceptions/jankurai-local-ci-authority.md.
+disabled_rules = [
+  "HLT-001-DEAD-MARKER",
+  "HLT-018-PERF-CONCURRENCY-DRIFT",
+  "HLT-000-SCORE-DIMENSION",
+  "HLT-048-CANONICAL-CI-GAP",
+]
 [history]
 max_rows = 500
 max_bytes = 1048576

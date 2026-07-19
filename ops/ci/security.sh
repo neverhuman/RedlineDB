@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Security lane: supply-chain + secret-scan evidence.
 #
-# Mirrors the `security` recipe in `justfile` and the `security` job in
-# `.github/workflows/jankurai.yml`, so the same three commands run
-# locally (`just security`, `scripts/ci-local.sh security`) and in CI.
+# Runs through the authoritative local Jeryu fleet and its exact-head sandbox.
+# The public `.github/workflows/jankurai.yml` is deliberately a stock-runner
+# static contract only and never claims to execute these governed scanners.
 # Audit reference: HLT-016 supply-chain-drift, HLT-034 ci-bad-behavior.
 #
 # Soft-gate rationale: see .jankurai/ci-soft-gate-ledger.toml#cargo-deny-check
@@ -23,6 +23,7 @@ set -euo pipefail
 . "$(dirname "$0")/lib.sh"
 
 mkdir -p .jankurai/security
+bash ops/ci/github-mirror-contract.sh
 control_manifest="tools/evidence-processor/Cargo.toml"
 control_lock="tools/evidence-processor/Cargo.lock"
 cargo_audit_args=()
@@ -96,12 +97,12 @@ fi
 
 # General SBOM generation via syft — soft-gated; produces a CycloneDX SBOM
 # for both Rust workspaces and the shell/docs-only hub. Requires syft in PATH;
-# installed in CI by the jankurai.yml security job.
+# provisioned by the local fleet image.
 # See ledger: .jankurai/ci-soft-gate-ledger.toml#syft-sbom.
 ci_soft_gate syft-sbom .jankurai/security/syft.log -- just security-sbom
 
 # Workflow linting via actionlint — soft-gated; validates CI YAML for
-# schema correctness and security best practices. Requires actionlint
-# in PATH; installed in CI by the jankurai.yml security job.
+# schema correctness and security best practices. Requires actionlint in PATH;
+# provisioned by the local fleet image.
 # See ledger: .jankurai/ci-soft-gate-ledger.toml#actionlint-workflow-lint.
 ci_soft_gate actionlint-workflow-lint .jankurai/security/actionlint.log -- just security-workflows
