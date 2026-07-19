@@ -255,7 +255,8 @@ fi
 for critical in repos.manifest.toml ops/ci/host-ci-publisher.sh \
   ops/ci/host-ci-sandbox.sh ops/ci/native-runtime.sh \
   ops/ci/host-ci-evidence.sh ops/ci/host-ci-proof-evidence.sh \
-  tools/splitctl/src/main.rs tools/splitctl/src/jeryu_client.rs; do
+  tools/splitctl/src/main.rs tools/splitctl/src/appliance_release.rs \
+  tools/splitctl/src/jeryu_client.rs; do
   [[ -f "$control_root/$critical" && ! -L "$control_root/$critical" \
     && "$(stat -c '%u' -- "$control_root/$critical")" == 0 ]] \
     || fail "unsafe immutable control input: $critical"

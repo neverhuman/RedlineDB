@@ -1,4 +1,5 @@
 // Repository-local release and Jeryu control-plane CLI.
+mod appliance_release;
 mod jeryu_client;
 
 use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, JeryuRequest};
@@ -216,6 +217,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             validate_local_jeryu(manifest, skip_remotes)?;
         }
         Some("jeryu-local") => jeryu_local(args.collect())?,
+        Some("appliance-release") => appliance_release::run(args.collect(), &control_plane_root())?,
         Some("jeryu-publish-host-ci") => {
             if let Err(error) = jeryu_publish_host_ci(args.collect()) {
                 eprintln!("splitctl: {}", error.message);
@@ -241,7 +243,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl appliance-release plan|build|publish|stage|qualify|canary|promote|rollback ... | refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -5997,6 +5999,7 @@ struct MainFetchSnapshot {
     branch: String,
     status: String,
     refs: BTreeMap<String, String>,
+    symbolic_refs: BTreeMap<String, String>,
     remotes: String,
     origin_url: String,
     worktrees: String,
@@ -6013,6 +6016,7 @@ impl MainFetchSnapshot {
             "branch": self.branch,
             "status": self.status,
             "refs": self.refs,
+            "symbolic_refs": self.symbolic_refs,
             "remotes": self.remotes,
             "origin_url": self.origin_url,
             "worktrees": self.worktrees,
@@ -6054,6 +6058,36 @@ fn exact_ref_snapshot(repo: &Path) -> Result<BTreeMap<String, String>, Box<dyn s
     Ok(refs)
 }
 
+fn exact_symbolic_ref_snapshot(
+    repo: &Path,
+) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    let output = secure_git_output(
+        Some(repo),
+        &["for-each-ref", "--format=%(refname)%09%(symref)%09END"],
+    )?;
+    let mut refs = BTreeMap::new();
+    for line in output.lines() {
+        let line = line
+            .strip_suffix("\tEND")
+            .ok_or("symbolic ref snapshot sentinel is malformed")?;
+        let (reference, target) = line
+            .split_once('\t')
+            .ok_or("symbolic ref snapshot is malformed")?;
+        if target.is_empty() {
+            continue;
+        }
+        if !reference.starts_with("refs/")
+            || !target.starts_with("refs/")
+            || refs
+                .insert(reference.to_owned(), target.to_owned())
+                .is_some()
+        {
+            return Err("symbolic ref snapshot contains an invalid or duplicate ref".into());
+        }
+    }
+    Ok(refs)
+}
+
 fn main_fetch_snapshot(repo: &Path) -> Result<MainFetchSnapshot, Box<dyn std::error::Error>> {
     let dot_git = repo.join(".git");
     Ok(MainFetchSnapshot {
@@ -6065,6 +6099,7 @@ fn main_fetch_snapshot(repo: &Path) -> Result<MainFetchSnapshot, Box<dyn std::er
             &["status", "--porcelain=v1", "--untracked-files=all"],
         )?,
         refs: exact_ref_snapshot(repo)?,
+        symbolic_refs: exact_symbolic_ref_snapshot(repo)?,
         remotes: secure_git_output(Some(repo), &["remote"])?,
         origin_url: secure_git_output(Some(repo), &["remote", "get-url", "origin"])?,
         worktrees: secure_git_output(Some(repo), &["worktree", "list", "--porcelain"])?,
@@ -6083,6 +6118,20 @@ fn validate_main_fetch_side_effects(
     let mut after_without_main = after.clone();
     before_without_main.refs.remove("refs/remotes/origin/main");
     after_without_main.refs.remove("refs/remotes/origin/main");
+    let origin_head_tracks_main = before
+        .symbolic_refs
+        .get("refs/remotes/origin/HEAD")
+        .map(String::as_str)
+        == Some("refs/remotes/origin/main")
+        && after
+            .symbolic_refs
+            .get("refs/remotes/origin/HEAD")
+            .map(String::as_str)
+            == Some("refs/remotes/origin/main");
+    if origin_head_tracks_main {
+        before_without_main.refs.remove("refs/remotes/origin/HEAD");
+        after_without_main.refs.remove("refs/remotes/origin/HEAD");
+    }
     if before_without_main != after_without_main {
         return Err(
             "main fetch changed checkout, configuration, worktree, tag, or non-main ref state"
@@ -11292,6 +11341,15 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             ],
         )
         .unwrap();
+        run_git_strict(
+            &repo,
+            &[
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/main",
+            ],
+        )
+        .unwrap();
 
         let remote_head = commit_next(&repo);
         let remote_refspec = format!("{remote_head}:refs/heads/main");
@@ -11349,6 +11407,53 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         assert_eq!(after.tree, before.tree);
         assert!(!after.refs.contains_key("refs/tags/remote-only"));
         assert_eq!(report["action"], "fetched-and-verified");
+        assert_eq!(
+            after.symbolic_refs.get("refs/remotes/origin/HEAD"),
+            Some(&"refs/remotes/origin/main".to_owned())
+        );
+    }
+
+    #[test]
+    fn main_fetch_rejects_direct_or_retargeted_origin_head_changes() {
+        let root = TestDir::new("main-fetch-origin-head-hostile");
+        let (repo, _) = init_source(root.path());
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &repo,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        )
+        .unwrap();
+        let mut before = main_fetch_snapshot(&repo).unwrap();
+        before
+            .refs
+            .insert("refs/remotes/origin/main".into(), "a".repeat(40));
+        before
+            .refs
+            .insert("refs/remotes/origin/HEAD".into(), "a".repeat(40));
+        before.symbolic_refs.insert(
+            "refs/remotes/origin/HEAD".into(),
+            "refs/remotes/origin/main".into(),
+        );
+
+        let mut direct = before.clone();
+        direct
+            .refs
+            .insert("refs/remotes/origin/main".into(), "b".repeat(40));
+        direct
+            .refs
+            .insert("refs/remotes/origin/HEAD".into(), "b".repeat(40));
+        direct.symbolic_refs.remove("refs/remotes/origin/HEAD");
+        assert!(validate_main_fetch_side_effects(&before, &direct, &"b".repeat(40)).is_err());
+
+        let mut retargeted = before.clone();
+        retargeted
+            .refs
+            .insert("refs/remotes/origin/main".into(), "b".repeat(40));
+        retargeted.symbolic_refs.insert(
+            "refs/remotes/origin/HEAD".into(),
+            "refs/remotes/origin/other".into(),
+        );
+        assert!(validate_main_fetch_side_effects(&before, &retargeted, &"b".repeat(40)).is_err());
     }
 
     #[test]

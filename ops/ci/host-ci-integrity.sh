@@ -48,6 +48,7 @@ paths=(
   ops/ci/pinned-cargo-deny.sh
   ops/ci/split-host-ci-parent.sh
   ops/ci/split-host-ci.sh
+  tools/splitctl/src/appliance_release.rs
   tools/splitctl/src/jeryu_client.rs
   tools/splitctl/src/main.rs
 )

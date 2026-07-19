@@ -1,0 +1,193 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/appliance-release-spec/v1",
+  "title": "Jain appliance release spec v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "release", "status", "formal_ga", "runtime_roster",
+    "public_host", "evidence_root", "authority_sha256", "release_index",
+    "runtime_roles", "payloads", "configuration", "source_freeze", "rollback",
+    "qualification", "action_policy", "operator"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.appliance-release-spec/v1" },
+    "release": { "const": "9.0.0-appliance.1" },
+    "status": { "const": "production-hotfix" },
+    "formal_ga": { "const": false },
+    "runtime_roster": { "const": "appliance-v9" },
+    "public_host": { "const": "www.neverhuman.org" },
+    "evidence_root": { "const": "docs/release-evidence/9.0.0-appliance.1" },
+    "authority_sha256": { "$ref": "#/$defs/sha256" },
+    "release_index": {
+      "type": "object", "additionalProperties": false,
+      "required": ["media_type", "reference"],
+      "properties": {
+        "media_type": { "const": "application/vnd.jain.appliance.release.v1+json" },
+        "reference": {
+          "oneOf": [
+            { "type": "null" },
+            { "type": "string", "pattern": "^image\\.neverhuman\\.org/jain/appliance@sha256:(?!0{64}$)[0-9a-f]{64}$" }
+          ]
+        }
+      }
+    },
+    "runtime_roles": {
+      "type": "array", "minItems": 3, "maxItems": 3,
+      "prefixItems": [
+        { "$ref": "#/$defs/caddyRole" },
+        { "$ref": "#/$defs/hubRole" },
+        { "$ref": "#/$defs/nodeRole" }
+      ],
+      "items": false
+    },
+    "payloads": {
+      "type": "object", "additionalProperties": false,
+      "required": ["web_assets", "platform_adapter", "jope_model_pack", "typst_font_tool_pack"],
+      "properties": {
+        "web_assets": { "$ref": "#/$defs/optionalSha256" },
+        "platform_adapter": { "$ref": "#/$defs/optionalSha256" },
+        "jope_model_pack": { "$ref": "#/$defs/optionalSha256" },
+        "typst_font_tool_pack": { "$ref": "#/$defs/optionalSha256" }
+      }
+    },
+    "configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["local_compose_sha256", "production_compose_sha256", "config_sha256"],
+      "properties": {
+        "local_compose_sha256": { "$ref": "#/$defs/optionalSha256" },
+        "production_compose_sha256": { "$ref": "#/$defs/optionalSha256" },
+        "config_sha256": { "$ref": "#/$defs/optionalSha256" }
+      }
+    },
+    "source_freeze": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "closure_sha256", "entries"],
+      "properties": {
+        "status": { "enum": ["pending", "complete"] },
+        "closure_sha256": { "$ref": "#/$defs/optionalSha256" },
+        "entries": {
+          "type": "array", "uniqueItems": true,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["repository", "tag", "commit", "tree", "archive_sha256"],
+            "properties": {
+              "repository": { "type": "string", "pattern": "^(veox/[A-Za-z0-9._-]+|jeryu/redline-[A-Za-z0-9._-]+)$" },
+              "tag": { "type": "string", "minLength": 1 },
+              "commit": { "$ref": "#/$defs/gitOid" },
+              "tree": { "$ref": "#/$defs/gitOid" },
+              "archive_sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        }
+      }
+    },
+    "rollback": {
+      "type": "object", "additionalProperties": false,
+      "required": ["capture_status", "capture_receipt", "caddy_routes_sha256", "non_jain_routes_sha256", "configuration_sha256", "source_tag", "containers"],
+      "properties": {
+        "capture_status": { "enum": ["pending", "complete"] },
+        "capture_receipt": { "$ref": "#/$defs/optionalReceipt" },
+        "caddy_routes_sha256": { "$ref": "#/$defs/optionalSha256" },
+        "non_jain_routes_sha256": { "$ref": "#/$defs/optionalSha256" },
+        "configuration_sha256": { "$ref": "#/$defs/optionalSha256" },
+        "source_tag": { "type": ["string", "null"] },
+        "containers": {
+          "type": "array", "uniqueItems": true,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["name", "image_id"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1 },
+              "image_id": { "$ref": "#/$defs/imageDigest" }
+            }
+          }
+        }
+      }
+    },
+    "qualification": {
+      "type": "object", "additionalProperties": false,
+      "required": ["minimum_stage_soak_seconds", "minimum_canary_seconds", "stage_soak_started_unix_seconds", "stage_soak_ended_unix_seconds", "canary_started_unix_seconds", "canary_ended_unix_seconds", "receipts"],
+      "properties": {
+        "minimum_stage_soak_seconds": { "const": 21600 },
+        "minimum_canary_seconds": { "const": 3600 },
+        "stage_soak_started_unix_seconds": { "$ref": "#/$defs/optionalEpoch" },
+        "stage_soak_ended_unix_seconds": { "$ref": "#/$defs/optionalEpoch" },
+        "canary_started_unix_seconds": { "$ref": "#/$defs/optionalEpoch" },
+        "canary_ended_unix_seconds": { "$ref": "#/$defs/optionalEpoch" },
+        "receipts": {
+          "type": "object", "additionalProperties": false,
+          "required": ["build", "publish", "stage", "qualify", "canary", "promote", "rollback"],
+          "properties": {
+            "build": { "$ref": "#/$defs/optionalReceipt" },
+            "publish": { "$ref": "#/$defs/optionalReceipt" },
+            "stage": { "$ref": "#/$defs/optionalReceipt" },
+            "qualify": { "$ref": "#/$defs/optionalReceipt" },
+            "canary": { "$ref": "#/$defs/optionalReceipt" },
+            "promote": { "$ref": "#/$defs/optionalReceipt" },
+            "rollback": { "$ref": "#/$defs/optionalReceipt" }
+          }
+        }
+      }
+    },
+    "action_policy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["required_signatures", "signature_max_age_seconds", "nonce_root", "signature_scratch_root", "owner_keys"],
+      "properties": {
+        "required_signatures": { "const": 2 },
+        "signature_max_age_seconds": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "nonce_root": { "const": "/var/lib/jain-split-ops/appliance-release/consumed-nonces" },
+        "signature_scratch_root": { "const": "/var/lib/jain-split-ops/appliance-release/signature-scratch" },
+        "owner_keys": {
+          "type": "array", "minItems": 0, "maxItems": 2, "uniqueItems": true,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["fingerprint", "path", "sha256"],
+            "properties": {
+              "fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+              "path": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+" },
+              "sha256": { "$ref": "#/$defs/sha256" }
+            }
+          }
+        }
+      }
+    },
+    "operator": {
+      "type": "object", "additionalProperties": false,
+      "required": ["protocol", "path", "sha256"],
+      "properties": {
+        "protocol": { "const": "jain.appliance-operator-stdin/v1" },
+        "path": { "type": ["string", "null"] },
+        "sha256": { "$ref": "#/$defs/optionalSha256" }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^(?!0{64}$)[0-9a-f]{64}$" },
+    "gitOid": { "type": "string", "pattern": "^(?!0{40}$)[0-9a-f]{40}$" },
+    "imageDigest": { "type": "string", "pattern": "^sha256:(?!0{64}$)[0-9a-f]{64}$" },
+    "optionalSha256": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/sha256" }] },
+    "optionalEpoch": { "oneOf": [{ "type": "null" }, { "type": "integer", "minimum": 1 }] },
+    "receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sha256"],
+      "properties": {
+        "path": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "optionalReceipt": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/receipt" }] },
+    "roleBase": {
+      "type": "object", "additionalProperties": false,
+      "required": ["role", "image_digest", "source_commit"],
+      "properties": {
+        "role": { "type": "string" },
+        "image_digest": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/imageDigest" }] },
+        "source_commit": { "oneOf": [{ "type": "null" }, { "$ref": "#/$defs/gitOid" }] }
+      }
+    },
+    "caddyRole": { "allOf": [{ "$ref": "#/$defs/roleBase" }, { "properties": { "role": { "const": "caddy" } } }] },
+    "hubRole": { "allOf": [{ "$ref": "#/$defs/roleBase" }, { "properties": { "role": { "const": "jainhub" } } }] },
+    "nodeRole": { "allOf": [{ "$ref": "#/$defs/roleBase" }, { "properties": { "role": { "const": "jainnode" } } }] }
+  }
+}
