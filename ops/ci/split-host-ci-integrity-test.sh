@@ -708,7 +708,8 @@ sudo -n chown -R root:root "$product_forge_root"
 # worker startup, or publication.
 valid_sandbox_config="$tmp/valid-sandbox-config.json"
 sudo -n cat "$sandbox_config" >"$valid_sandbox_config"
-for bootstrap_case in missing-commit wrong-commit expired overlong; do
+for bootstrap_case in \
+  missing-commit wrong-commit expired overlong stale-control-namespace; do
   case "$bootstrap_case" in
     missing-commit)
       sudo -n jq 'del(.bootstrap_commit)' "$sandbox_config" \
@@ -730,6 +731,11 @@ for bootstrap_case in missing-commit wrong-commit expired overlong; do
         '.bootstrap_expires_at = $expires' "$valid_sandbox_config" \
         >"$tmp/bootstrap-reject.json"
       expected_bootstrap_failure='bootstrap control authority is expired or exceeds two hours'
+      ;;
+    stale-control-namespace)
+      jq '.control_remote = "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git"' \
+        "$valid_sandbox_config" >"$tmp/bootstrap-reject.json"
+      expected_bootstrap_failure='cannot materialize authenticated configured control authority'
       ;;
   esac
   sudo -n install -o root -g root -m 0600 \

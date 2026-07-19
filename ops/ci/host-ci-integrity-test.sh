@@ -34,6 +34,16 @@ for boundary in host-ci-sandbox.sh host-ci-publisher.sh; do
     exit 1
   fi
 done
+grep -F -- '--repo veox/jain-split-ops --remote "$control_remote"' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'host CI sandbox is not bound to canonical veox control authority\n' >&2
+  exit 1
+}
+if grep -F -- '--repo jeryu/jain-split-ops' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null; then
+  printf 'host CI sandbox still trusts stale jeryu control authority\n' >&2
+  exit 1
+fi
 git init --quiet "$fixture"
 git -C "$fixture" config user.name 'Host CI Fixture'
 git -C "$fixture" config user.email host-ci-fixture@example.invalid
