@@ -20,6 +20,10 @@ blocking = true
 commands = ["bash ops/ci/artifact-support.sh"]
 blocking = true
 
+[lanes.family_release]
+commands = ["bash ops/ci/family-release.sh"]
+blocking = true
+
 [lanes.coverage]
 commands = ["bash ops/ci/coverage.sh"]
 blocking = true

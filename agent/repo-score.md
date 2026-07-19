@@ -7,9 +7,9 @@
 - Target stack ID: `rust`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1784247068`
-- Started at: `1784247068`
-- Elapsed: `275` ms
+- Run ID: `1784470979`
+- Started at: `1784470979`
+- Elapsed: `286` ms
 - Scope: `full`
 - Raw score: `87`
 - Final score: `87`
