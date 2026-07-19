@@ -193,9 +193,15 @@ fn security_lane_uses_pinned_local_rustsec_and_rejects_bad_inputs() {
     assert!(library.contains("verify_rustsec_db_identity"));
     assert!(library.contains("verify_locked_cargo_closure"));
     assert!(library.contains("verify_cargo_deny_db_binding"));
+    assert!(library.contains("governed_cargo_deny_db_path"));
+    assert!(library.contains("JAIN_CARGO_DENY_ADVISORY_DB"));
+    assert!(library.contains("verify_cargo_deny_db_immutable_custody"));
+    assert!(library.contains("findmnt -n -T \"$advisory_parent\""));
+    assert!(library.contains("run_with_cargo_deny_db_custody"));
     assert!(security.contains("export CARGO_NET_OFFLINE=true"));
     assert!(security.contains("cargo audit --db \"$rustsec_db\" --no-fetch"));
     assert!(security.contains("cargo deny check --disable-fetch"));
+    assert!(security.contains("run_with_cargo_deny_db_custody"));
     assert!(!security.contains("cargo_workspace_ready"));
     assert!(security.contains("SYFT_CHECK_FOR_APP_UPDATE=false"));
 

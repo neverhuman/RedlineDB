@@ -92,3 +92,13 @@ launch-gate evidence is present before a tag is published:
   immutable (see [`docs/release.md`](release.md#rollback)).
 - **abuse controls**: the runner only drives allowlisted local subprocess
   shells with bounded timeouts; no untrusted network input is accepted.
+
+The authoritative local host-CI security lane requires
+`JAIN_CARGO_DENY_ADVISORY_DB` to name the exact physical cargo-deny database
+under its request-local Cargo home. In isolated release CI, `advisory-dbs` must
+be an exact root-owned read-only mountpoint and the database must be recursively
+non-writable before cargo-deny starts. This prevents a same-commit database
+from being swapped in during the scan and the original inode restored before
+the post-scan identity check. Developer runs retain exact commit/tree and
+pre/post physical-identity validation but do not claim that immutable mount
+boundary.

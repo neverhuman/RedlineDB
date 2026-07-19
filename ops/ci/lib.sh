@@ -162,13 +162,32 @@ verify_locked_cargo_closure() {
         >/dev/null
 }
 
+governed_cargo_deny_db_path() {
+    local cargo_home="${1:?Cargo home is required}"
+    local expected="$cargo_home/advisory-dbs/$CARGO_DENY_RUSTSEC_DIR"
+    local selected="${JAIN_CARGO_DENY_ADVISORY_DB:-$expected}"
+
+    [[ "$selected" == /* && "$selected" == "$expected" ]] || {
+        warn "cargo-deny advisory database does not match its exact Cargo-home location"
+        return 1
+    }
+    if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 \
+        && -z "${JAIN_CARGO_DENY_ADVISORY_DB:-}" ]]; then
+        warn "isolated release CI did not bind an explicit cargo-deny database"
+        return 1
+    fi
+    printf '%s\n' "$selected"
+}
+
 verify_cargo_deny_db_binding() {
     local cargo_home="${1:?Cargo home is required}"
     local advisory_db="${2:?governed advisory database is required}"
     local expected_commit="${3:-$RUSTSEC_DB_COMMIT}"
     local expected_tree="${4:-$RUSTSEC_DB_TREE}"
     local advisory_parent="$cargo_home/advisory-dbs"
-    local deny_db="$cargo_home/advisory-dbs/$CARGO_DENY_RUSTSEC_DIR"
+    local deny_db
+
+    deny_db="$(governed_cargo_deny_db_path "$cargo_home")" || return 1
 
     [[ "$cargo_home" == /* && -d "$cargo_home" && ! -L "$cargo_home" \
         && "$(realpath -e -- "$cargo_home")" == "$cargo_home" ]] || return 1
@@ -182,17 +201,50 @@ verify_cargo_deny_db_binding() {
         "$deny_db" "$expected_commit" "$expected_tree"
 }
 
+verify_cargo_deny_db_immutable_custody_for_owner() {
+    local cargo_home="${1:?Cargo home is required}"
+    local advisory_db="${2:?governed advisory database is required}"
+    local expected_commit="${3:-$RUSTSEC_DB_COMMIT}"
+    local expected_tree="${4:-$RUSTSEC_DB_TREE}"
+    local expected_owner="${5:?expected custody owner is required}"
+    local advisory_parent="$cargo_home/advisory-dbs"
+    local deny_db mount_target mount_options path owner mode
+
+    verify_cargo_deny_db_binding \
+        "$cargo_home" "$advisory_db" "$expected_commit" "$expected_tree" \
+        || return 1
+    deny_db="$(governed_cargo_deny_db_path "$cargo_home")" || return 1
+    command -v findmnt >/dev/null 2>&1 || return 1
+    mount_target="$(findmnt -n -T "$advisory_parent" -o TARGET)" || return 1
+    [[ "$mount_target" == "$advisory_parent" ]] || return 1
+    mount_options="$(findmnt -n -T "$advisory_parent" -o VFS-OPTIONS)" || return 1
+    [[ ",$mount_options," == *,ro,* ]] || return 1
+    for path in "$advisory_parent" "$deny_db"; do
+        owner="$(stat -Lc '%u' -- "$path")" || return 1
+        mode="$(stat -Lc '%a' -- "$path")" || return 1
+        [[ "$owner" == "$expected_owner" \
+            && $((8#$mode & 022)) -eq 0 \
+            && ! -w "$path" ]] || return 1
+    done
+    [[ -z "$(find "$deny_db" -writable -print -quit)" ]]
+}
+
+verify_cargo_deny_db_immutable_custody() {
+    verify_cargo_deny_db_immutable_custody_for_owner "$@" 0
+}
+
 cargo_deny_db_binding_identity() {
     local cargo_home="${1:?Cargo home is required}"
     local advisory_db="${2:?governed advisory database is required}"
     local expected_commit="${3:-$RUSTSEC_DB_COMMIT}"
     local expected_tree="${4:-$RUSTSEC_DB_TREE}"
     local advisory_parent="$cargo_home/advisory-dbs"
-    local deny_db="$advisory_parent/$CARGO_DENY_RUSTSEC_DIR"
+    local deny_db
 
     verify_cargo_deny_db_binding \
         "$cargo_home" "$advisory_db" "$expected_commit" "$expected_tree" \
         || return 1
+    deny_db="$(governed_cargo_deny_db_path "$cargo_home")" || return 1
     stat -Lc '%d:%i:%h:%u:%a' -- \
         "$cargo_home" "$advisory_parent" "$deny_db" | paste -sd ';' -
 }
@@ -204,6 +256,32 @@ verify_cargo_deny_db_binding_unchanged() {
 
     actual_identity="$(cargo_deny_db_binding_identity "$@")" || return 1
     [[ "$actual_identity" == "$expected_identity" ]]
+}
+
+run_with_cargo_deny_db_custody() {
+    local cargo_home="${1:?Cargo home is required}"
+    local advisory_db="${2:?governed advisory database is required}"
+    local expected_commit="${3:-$RUSTSEC_DB_COMMIT}"
+    local expected_tree="${4:-$RUSTSEC_DB_TREE}"
+    local binding_identity command_status=0
+    shift 4
+    [[ "$#" -gt 0 ]] || return 1
+
+    binding_identity="$(
+        cargo_deny_db_binding_identity \
+            "$cargo_home" "$advisory_db" "$expected_commit" "$expected_tree"
+    )" || return 1
+    if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 ]]; then
+        verify_cargo_deny_db_immutable_custody \
+            "$cargo_home" "$advisory_db" "$expected_commit" "$expected_tree" \
+            || return 1
+    fi
+
+    "$@" || command_status=$?
+    verify_cargo_deny_db_binding_unchanged \
+        "$binding_identity" "$cargo_home" "$advisory_db" \
+        "$expected_commit" "$expected_tree" || return 1
+    return "$command_status"
 }
 
 missing_tool() {

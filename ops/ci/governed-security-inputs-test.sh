@@ -56,6 +56,10 @@ expect_rejected() {
     fi
 }
 
+mark_policy_command_started() {
+    : >"${1:?policy command marker is required}"
+}
+
 expect_rejected missing "$fixture_root/missing" "$head" "$tree"
 
 linked="$fixture_root/linked"
@@ -85,6 +89,8 @@ mkdir -p "$deny_home/advisory-dbs"
 deny_db="$deny_home/advisory-dbs/$CARGO_DENY_RUSTSEC_DIR"
 git clone -q --no-local --no-checkout "$db" "$deny_db"
 git -C "$deny_db" checkout -q --detach "$head"
+export JAIN_CARGO_DENY_ADVISORY_DB="$deny_db"
+[ "$(governed_cargo_deny_db_path "$deny_home")" = "$deny_db" ]
 binding_identity="$(
     cargo_deny_db_binding_identity "$deny_home" "$db" "$head" "$tree"
 )"
@@ -138,6 +144,74 @@ if verify_cargo_deny_db_binding_unchanged \
     "$binding_identity" "$deny_home" "$db" "$head" "$tree" >/dev/null 2>&1
 then
     printf 'expected physical cargo-deny database replacement to be rejected\n' >&2
+    exit 1
+fi
+
+transient_replacement_db="$fixture_root/transient-replacement-deny-db"
+mv "$deny_db" "$transient_replacement_db"
+mv "$fixture_root/pre-replacement-deny-db" "$deny_db"
+verify_cargo_deny_db_binding_unchanged \
+    "$binding_identity" "$deny_home" "$db" "$head" "$tree"
+
+export JAIN_CARGO_DENY_ADVISORY_DB="$db"
+if governed_cargo_deny_db_path "$deny_home" >/dev/null 2>&1; then
+    printf 'expected an off-location cargo-deny database to be rejected\n' >&2
+    exit 1
+fi
+export JAIN_CARGO_DENY_ADVISORY_DB="$deny_db"
+
+# Reproduce the exact swap-and-restore gap in a plain worker-owned Cargo home:
+# a separately cloned same-commit database is visible during the simulated
+# scan, while the original inode is restored before the old post-check.
+scan_started="$fixture_root/transient-scan-started"
+swap_visible="$fixture_root/transient-swap-visible"
+scan_release="$fixture_root/transient-scan-release"
+transient_original_db="$fixture_root/transient-original-deny-db"
+(
+    while [ ! -e "$scan_started" ]; do sleep 0.01; done
+    mv "$deny_db" "$transient_original_db"
+    mv "$transient_replacement_db" "$deny_db"
+    : >"$swap_visible"
+    while [ ! -e "$scan_release" ]; do sleep 0.01; done
+    mv "$deny_db" "$transient_replacement_db"
+    mv "$transient_original_db" "$deny_db"
+) &
+swapper_pid=$!
+: >"$scan_started"
+while [ ! -e "$swap_visible" ]; do sleep 0.01; done
+verify_cargo_deny_db_binding "$deny_home" "$db" "$head" "$tree"
+: >"$scan_release"
+wait "$swapper_pid"
+verify_cargo_deny_db_binding_unchanged \
+    "$binding_identity" "$deny_home" "$db" "$head" "$tree"
+
+# Release CI must reject that mutable topology before the policy command can
+# start. The real fleet positive uses a root-owned read-only bind mount; this
+# hostile fixture deliberately is neither a mountpoint nor immutable custody.
+forbidden_scan_marker="$fixture_root/forbidden-policy-command-start"
+if JAIN_HOST_CI_NETWORK_ISOLATED=1 \
+    run_with_cargo_deny_db_custody \
+        "$deny_home" "$db" "$head" "$tree" \
+        mark_policy_command_started "$forbidden_scan_marker" >/dev/null 2>&1
+then
+    printf 'expected mutable isolated cargo-deny custody to be rejected\n' >&2
+    exit 1
+fi
+[ ! -e "$forbidden_scan_marker" ] || {
+    printf 'dependency-policy command started before immutable custody proof\n' >&2
+    exit 1
+}
+if verify_cargo_deny_db_immutable_custody_for_owner \
+    "$deny_home" "$db" "$head" "$tree" "$(id -u)" >/dev/null 2>&1
+then
+    printf 'expected a renameable non-mount advisory parent to be rejected\n' >&2
+    exit 1
+fi
+unset JAIN_CARGO_DENY_ADVISORY_DB
+if JAIN_HOST_CI_NETWORK_ISOLATED=1 \
+    governed_cargo_deny_db_path "$deny_home" >/dev/null 2>&1
+then
+    printf 'expected isolated CI without an explicit deny DB to be rejected\n' >&2
     exit 1
 fi
 
