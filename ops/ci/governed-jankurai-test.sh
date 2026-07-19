@@ -106,6 +106,41 @@ then
 fi
 grep -Fq 'contract-drift|artifact-support' "$tmp_dir/unknown-dispatch.log"
 
+bash "$repo_root/ops/ci/github-mirror-contract.sh"
+for hostile_workflow in \
+    runtime-jankurai \
+    indirect-audit \
+    floating-install \
+    privileged-install \
+    self-hosted \
+    bypass; do
+    cp "$repo_root/.github/workflows/jankurai.yml" \
+        "$tmp_dir/$hostile_workflow.yml"
+done
+printf '%s\n' '      - run: jankurai audit .' \
+    >> "$tmp_dir/runtime-jankurai.yml"
+printf '%s\n' '      - run: bash ops/ci/jankurai-audit.sh' \
+    >> "$tmp_dir/indirect-audit.yml"
+printf '%s\n' '      - run: cargo install jankurai' \
+    >> "$tmp_dir/floating-install.yml"
+printf '%s\n' '      - run: sudo install jankurai /usr/local/bin/jankurai' \
+    >> "$tmp_dir/privileged-install.yml"
+printf '%s\n' '    runs-on: self-hosted' \
+    >> "$tmp_dir/self-hosted.yml"
+printf '%s\n' '      continue-on-error: true' \
+    >> "$tmp_dir/bypass.yml"
+for hostile_workflow in \
+    runtime-jankurai \
+    indirect-audit \
+    floating-install \
+    privileged-install \
+    self-hosted \
+    bypass; do
+    expect_rejected "github-$hostile_workflow" \
+        bash "$repo_root/ops/ci/github-mirror-contract.sh" \
+        "$tmp_dir/$hostile_workflow.yml"
+done
+
 if grep -Fq '/home/ubuntu/.jeryu/bin/jankurai' "$repo_root/ops/ci/lib.sh"; then
     printf 'governed Jankurai selection still depends on the user home\n' >&2
     exit 1

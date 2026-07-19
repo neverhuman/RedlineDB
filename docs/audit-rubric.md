@@ -111,3 +111,6 @@ just score
 The lane validates the fixed Jankurai 1.6.11 binary, compares the target-only
 report with `.jankurai/baselines/main.repo-score.json`, and binds the clean
 HEAD/tree and report digest in `target/jankurai/governed-evidence.json`.
+The authoritative local Jeryu fleet injects those protected-main bytes into the
+exact-head sandbox. The public GitHub job runs only
+`ops/ci/github-mirror-contract.sh` and produces no audit or release evidence.

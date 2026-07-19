@@ -129,7 +129,7 @@
     },
     ".github/workflows/": {
       "command": "just security",
-      "purpose": "verify CI workflows lint clean and the security lane runs"
+      "purpose": "verify workflows lint clean and the public mirror cannot claim local release authority"
     },
     ".gitignore": {
       "command": "just score",
@@ -350,6 +350,16 @@
       "command": "rtk bash scripts/ci-local.sh pr-ci",
       "purpose": "verify GitHub CI remains mirrored by the local PR dispatcher and runs the verified redline-testing official gate",
       "proof_lane": "pr-ci"
+    },
+    ".github/workflows/jankurai.yml": {
+      "command": "rtk bash ops/ci/github-mirror-contract.sh",
+      "purpose": "prove the stock-runner workflow is static and delegates release authority only to local Jeryu",
+      "proof_lane": "github-static-mirror"
+    },
+    "ops/ci/github-mirror-contract.sh": {
+      "command": "rtk bash ops/ci/governed-jankurai-test.sh",
+      "purpose": "reject Jankurai execution, indirect audit, floating install, self-hosted runner, and bypass drift",
+      "proof_lane": "github-static-mirror"
     },
     "ops/ci/no-python-policy.sh": {
       "command": "rtk bash ops/ci/no-python-policy.sh",

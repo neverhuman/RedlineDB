@@ -12,10 +12,15 @@ pr-ci:
 
 test:
   rtk cargo test --manifest-path tools/evidence-processor/Cargo.toml --locked
+  bash ops/ci/github-mirror-contract.sh
   bash ops/ci/governed-jankurai-test.sh
 
 score:
   bash scripts/just/run.sh score
+
+jankurai-local-authority:
+  bash ops/ci/jankurai-audit.sh
+  test -s target/jankurai/repo-score.json
 
 security:
   bash tools/security-lane.sh
