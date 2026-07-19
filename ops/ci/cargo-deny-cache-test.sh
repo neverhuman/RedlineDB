@@ -2,6 +2,11 @@
 set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 
+# This script builds a synthetic advisory repository to exercise hostile
+# identities. Do not let the release sandbox's real fleet pin constrain that
+# fixture; the production security lane validates the fleet pin separately.
+unset JAIN_PINNED_ADVISORY_DB JAIN_ADVISORY_DB JAIN_PINNED_ADVISORY_COMMIT
+
 jain_ci_scratch_create "$ROOT_DIR" redline-web-cargo-deny-cache \
   || fail "unable to create a custody-safe in-repository scratch directory"
 tmp="$JAIN_CI_SCRATCH_PATH"
