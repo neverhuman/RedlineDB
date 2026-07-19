@@ -1,17 +1,17 @@
 {
-  "report_fingerprint": "sha256:bb7d69b6ac56c9ee4b8b7b59b1893f545e66953b0e908f801a564c71d66ce44e",
-  "input_fingerprint": "sha256:23d7a2b1e23a03f748faf6e7aaeee0f8efea2bcacd3e6724e6229090acb320b9",
+  "report_fingerprint": "sha256:a0d7054a5909bf8fe53dad59820863966bfa9f14f9ddf2c603c2b4c01574e36b",
+  "input_fingerprint": "sha256:809ac72416d2f096bab1311c453813014ee079bd01455f8ed5a6c32a2f516de9",
   "policy_fingerprint": "sha256:92dfb8d9e771009cec6723aa24f8d981bdfe9004dea60545d0a40371f4a43c2e",
   "manifest_fingerprints": {
     "owner_map": "sha256:90f2bf51161bc3dc6efb1f25fd7cb18686087d30b2d9dd5abdf9858a70db2f13",
     "test_map": "sha256:9f90e8fefcaa5b312d62ef68bf430ae6804991e6ad4e30e437365946d9e4d115",
     "generated_zones": "sha256:3c1f00f8c3f17d1c89abd0d2b18df0907cccd4df7ccf961c356ff53b8324b38b",
     "boundaries": "sha256:71ea3c7191d7ce3cf361d3e24a94bccafdd0c048fc4c5355e3bc3024a615df8a",
-    "proof_lanes": "sha256:714bf010823e72c0115bebdbdedab5b8dfaab9e60eee84a3092da3ba3c1c8580",
+    "proof_lanes": "sha256:b706baad8177a3e164ea52eea5712388178f9ba5a2e9c2e6fd4ab3199d9953eb",
     "standard_version": "sha256:3479d9d94209d198314f0fac07e16bd4015128b4ed8dacb4bddba90b2f381bd7"
   },
   "dirty_worktree": true,
-  "generated_at": "1784247068",
+  "generated_at": "1784471058",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784247068",
-  "started_at": "1784247068",
-  "elapsed_ms": 275,
+  "run_id": "1784471058",
+  "started_at": "1784471058",
+  "elapsed_ms": 289,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "9b21555",
+    "head": "34d2645",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -980,7 +980,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-17T00:11:08.142693692+00:00",
+    "generated_at": "2026-07-19T14:24:18.148763247+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "pass",
@@ -1018,7 +1018,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 62,
+      "files_scanned": 65,
       "files_considered": 9,
       "active_files": 9,
       "exact_file_classes": 0,

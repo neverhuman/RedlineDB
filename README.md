@@ -43,8 +43,9 @@ redlinedb-server --database ./central.redline --listen 127.0.0.1:6033   # from r
 - ✅ `db-shim` has exact isolated Redline, SQLite, and Postgres dependency graphs. The same governed
   `db-shim.used-operations/v2` corpus covers values, typed nulls, success-only execution, validated
   namespacing, parameter binding, query ordering, and rollback. Host-local required runs genuine
-  SQLite. Armed release CI requires genuine Redline and Postgres services and fails closed when
-  their DSNs are absent.
+  SQLite. The separate explicit `family-release` lane requires genuine Redline and Postgres
+  services and fails closed when either DSN is absent; protected host CI never accepts or requires
+  forwarded service credentials.
 - ⚠️ The corpus is the compatibility claim. Arbitrary SQL-dialect equivalence is not claimed.
 
 ## Validate
@@ -52,3 +53,11 @@ redlinedb-server --database ./central.redline --listen 127.0.0.1:6033   # from r
 Run the complete protected-review contract with
 `bash scripts/ci-local.sh required`. Release identity and immutable-tag rules
 are documented in [`docs/release.md`](docs/release.md).
+
+Run the external family corpus only from its governed service environment:
+
+```sh
+REDLINE_CORPUS_DSN=redline://HOST:6033 \
+POSTGRES_CORPUS_DSN=postgres://USER@HOST/DATABASE \
+bash scripts/ci-local.sh family-release
+```
