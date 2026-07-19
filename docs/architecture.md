@@ -13,8 +13,10 @@ root is the held physical parent directory of the canonical control plane.
 `REDLINE_SPLIT_ROOT` is accepted by `ci-required` only when it resolves to that
 same root. Serialized operations flock and retain the root directory descriptor;
 any `.redline-family.lock` entry is non-authoritative. `redline-central`
-remains a separately reviewed, unaccepted onboarding repository until an exact
-identity can be added to both manifest and lock through the proof lifecycle.
+remains separately reviewed and absent from the active authority until its
+protected commit and initial immutable tag exist. The closed-schema parser
+reserves that exact row, and its presence makes real-service `family-release`
+mandatory before the family receipt can pass.
 
 A Core successor crosses that boundary in two protected states. Preparation
 writes only the authoritative ineligible lock; reconciliation copies those

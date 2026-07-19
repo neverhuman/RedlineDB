@@ -27,10 +27,11 @@ clone/update delegation, bounded family CI, and diagnostics. The four child
 repositories remain independent Git repositories and are never included in an
 umbrella Cargo workspace.
 
-`redline-central` has a separate protected onboarding review, but it is not an
-accepted family identity yet. It is intentionally absent from this manifest
-and lock until its release commit and checksum can be added without changing
-the meaning of the accepted four-repository proof.
+`redline-central` has a separate protected onboarding review and is not active
+in the current manifest or lock. The parser already reserves its exact initial
+release identity, and family CI requires both its protected `required` lane and
+its real-service `family-release` lane whenever the governed row is present.
+Adding that row remains a protected authority change after Central lands.
 
 The manifest is the sole release-identity authority. Each repository declares
 its product version, corrective tag revision, exact tag, Jeryu remote,
@@ -44,7 +45,7 @@ jain-redline/
 │   ├── repos.manifest.toml            # canonical child manifest
 │   └── redline.lock.toml              # authoritative child pins and proof lock
 ├── redline{,-core,-testing,-web}/     # physical standalone repositories
-├── redline-central/                   # onboarded separately; not accepted here
+├── redline-central/                   # governed support; active row awaits landing
 └── redline.lock.toml                  # transactional compatibility mirror
 ```
 

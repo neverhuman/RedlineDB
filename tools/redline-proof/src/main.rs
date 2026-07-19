@@ -423,6 +423,35 @@ fn require_physical_lock_set(manifest: &Path, lock: &Path, mirror: Option<&Path>
     require_distinct_file_ids(&paths)
 }
 
+fn validate_proof_refresh_lock_inputs(manifest: &Path, lock: &Path, mirror: &Path) -> Result<()> {
+    verify_checksum(lock)?;
+    require_physical_lock_set(manifest, lock, None)?;
+
+    let mirror_sidecar = checksum_path(mirror);
+    reject_symlink_components(mirror, "proof-refresh compatibility mirror")?;
+    reject_symlink_components(
+        &mirror_sidecar,
+        "proof-refresh compatibility mirror sidecar",
+    )?;
+    let is_present = |path: &Path| -> Result<bool> {
+        match fs::symlink_metadata(path) {
+            Ok(_) => Ok(true),
+            Err(value) if value.kind() == io::ErrorKind::NotFound => Ok(false),
+            Err(value) => Err(value.into()),
+        }
+    };
+    match (is_present(mirror)?, is_present(&mirror_sidecar)?) {
+        (false, false) => Ok(()),
+        (true, true) => {
+            verify_checksum(mirror)?;
+            require_physical_lock_set(manifest, lock, Some(mirror))
+        }
+        _ => Err(error(
+            "proof-refresh compatibility mirror and sidecar must either both be absent or both be physical files",
+        )),
+    }
+}
+
 #[cfg(not(unix))]
 fn require_distinct_file_ids(paths: &[(&str, &Path)]) -> Result<()> {
     for (label, path) in paths {
@@ -2114,6 +2143,12 @@ fn expected_repo_contract(
             "jeryu/redline-core",
             "canonical-engine",
         )),
+        "redline-central" => Some((
+            "../redline-central",
+            "neverhuman/redline-central",
+            "jeryu/redline-central",
+            "shared-client-shim",
+        )),
         "redline-testing" => Some((
             "../redline-testing",
             "neverhuman/redline-testing",
@@ -2134,6 +2169,7 @@ fn expected_repo_release(name: &str) -> Option<(&'static str, i64)> {
     match name {
         "redline" => Some(("4.1.0", 2)),
         "redline-core" => Some(("4.1.0", 4)),
+        "redline-central" => Some(("4.1.0", 1)),
         "redline-testing" => Some(("1.0.1", 1)),
         "redline-web" => Some(("0.1.0", 1)),
         _ => None,
@@ -2437,9 +2473,9 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         .get("repo")
         .and_then(toml::Value::as_array)
         .ok_or_else(|| error("manifest must contain repository rows"))?;
-    if rows.len() != 4 {
+    if !matches!(rows.len(), 4 | 5) {
         return Err(error(
-            "manifest must contain exactly four Redline repositories",
+            "manifest must contain the four active Redline repositories and at most one governed redline-central row",
         ));
     }
     let mut repos = Vec::new();
@@ -2543,7 +2579,11 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         });
     }
     let names: BTreeSet<&str> = repos.iter().map(|repo| repo.name.as_str()).collect();
-    let expected = BTreeSet::from(["redline", "redline-core", "redline-testing", "redline-web"]);
+    let mut expected =
+        BTreeSet::from(["redline", "redline-core", "redline-testing", "redline-web"]);
+    if names.contains("redline-central") {
+        expected.insert("redline-central");
+    }
     if names != expected {
         return Err(error("manifest repository set is invalid"));
     }
@@ -2790,10 +2830,27 @@ fn cargo_package_version(path: &Path) -> Result<String> {
         .ok_or_else(|| error(format!("{} lacks package.version", path.display())))
 }
 
+fn cargo_workspace_version(path: &Path) -> Result<String> {
+    let value: toml::Value = fs::read_to_string(path)?.parse()?;
+    value
+        .get("workspace")
+        .and_then(|value| value.get("package"))
+        .and_then(|value| value.get("version"))
+        .and_then(toml::Value::as_str)
+        .map(str::to_owned)
+        .ok_or_else(|| {
+            error(format!(
+                "{} lacks workspace.package.version",
+                path.display()
+            ))
+        })
+}
+
 fn validate_product_version(root: &Path, repo: &Repo) -> Result<()> {
     let found = match repo.name.as_str() {
         "redline" => fs::read_to_string(root.join("VERSION"))?.trim().to_owned(),
         "redline-core" => cargo_package_version(&root.join("crates/redlinedb/Cargo.toml"))?,
+        "redline-central" => cargo_workspace_version(&root.join("Cargo.toml"))?,
         "redline-testing" => cargo_package_version(&root.join("Cargo.toml"))?,
         "redline-web" => cargo_package_version(&root.join("apps/api/Cargo.toml"))?,
         _ => {
@@ -3068,6 +3125,10 @@ fn ci_commands(repo: &Repo, checkout: &Path) -> Result<Vec<Vec<String>>> {
             vec!["bash", "ops/ci/jankurai-audit.sh"],
         ],
         "redline-core" => vec![vec!["bash", "scripts/ci-local.sh", "all"]],
+        "redline-central" => vec![
+            vec!["bash", "scripts/ci-local.sh", "required"],
+            vec!["bash", "scripts/ci-local.sh", "family-release"],
+        ],
         "redline-testing" => vec![
             vec!["bash", "scripts/ci-local.sh", "pr-ci"],
             vec!["bash", "scripts/ci-local.sh", "jankurai"],
@@ -3092,6 +3153,16 @@ fn ci_commands(repo: &Repo, checkout: &Path) -> Result<Vec<Vec<String>>> {
         .into_iter()
         .map(|row| row.into_iter().map(str::to_owned).collect())
         .collect())
+}
+
+fn validate_family_commands(row: &JsonValue, repo: &Repo, checkout: &Path) -> Result<()> {
+    if row.get("commands") != Some(&json!(ci_commands(repo, checkout)?)) {
+        return Err(error(format!(
+            "{}: family CI command list differs from the governed lane",
+            repo.name
+        )));
+    }
+    Ok(())
 }
 
 const TESTING_ARTIFACT_FIELDS: [&str; 17] = [
@@ -3945,11 +4016,7 @@ fn validate_family_receipt(
                 "{name}: family CI metadata differs from manifest"
             )));
         }
-        if row.get("commands") != Some(&json!(ci_commands(repo, &manifest.repo_root(repo))?)) {
-            return Err(error(format!(
-                "{name}: family CI command list differs from the governed lane"
-            )));
-        }
+        validate_family_commands(row, repo, &manifest.repo_root(repo))?;
         let dependencies = row
             .get("dependency_artifacts")
             .and_then(JsonValue::as_array)
@@ -4999,9 +5066,7 @@ fn proof_refresh(
         ));
     }
     ensure_distinct_paths(&paths)?;
-    verify_checksum(lock)?;
-    verify_checksum(mirror)?;
-    require_physical_lock_set(manifest_path, lock, Some(mirror))?;
+    validate_proof_refresh_lock_inputs(manifest_path, lock, mirror)?;
     if consumer_paths
         .keys()
         .map(String::as_str)
@@ -7352,6 +7417,74 @@ mod tests {
             identities.get("redline-web"),
             Some(&("0.1.0", 1, "redline-web-v0.1.0-jain.1"))
         );
+        assert!(!identities.contains_key("redline-central"));
+    }
+
+    #[test]
+    fn governed_central_row_requires_real_family_release_lane() {
+        let fixture = TestDir::new_in_root("central-family-release-contract");
+        let control = fixture.path().join("redline-split-ops");
+        let central = fixture.path().join("redline-central");
+        fs::create_dir_all(control.parent().unwrap()).unwrap();
+        fs::create_dir_all(central.join("scripts")).unwrap();
+        fs::write(central.join("scripts/ci-doctor.sh"), b"#!/bin/sh\n").unwrap();
+        fs::write(central.join("scripts/ci-local.sh"), b"#!/bin/sh\n").unwrap();
+
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut manifest_text = fs::read_to_string(source.join("repos.manifest.toml")).unwrap();
+        manifest_text.push_str(
+            r#"
+
+[[repo]]
+name = "redline-central"
+path = "../redline-central"
+github_slug = "neverhuman/redline-central"
+jeryu_slug = "jeryu/redline-central"
+remote = "http://127.0.0.1:8787/git/jeryu/redline-central.git"
+role = "shared-client-shim"
+profile = "custom"
+has_jeryu_std = true
+product_version = "4.1.0"
+tag_revision = 1
+current_tag = "redline-central-v4.1.0-jain.1"
+release_commit = "PENDING"
+release_checksum_sha256 = "PENDING"
+protection_policy = "immutable-main-v1"
+required_check = "redline-central/required"
+default_branch = "main"
+"#,
+        );
+        let manifest_path = control.join("repos.manifest.toml");
+        fs::create_dir_all(&control).unwrap();
+        fs::write(&manifest_path, manifest_text).unwrap();
+        let manifest = load_manifest(&manifest_path).unwrap();
+        let repo = manifest
+            .repos
+            .iter()
+            .find(|repo| repo.name == "redline-central")
+            .unwrap();
+        let governed = vec![
+            vec![
+                "bash".to_owned(),
+                "scripts/ci-local.sh".to_owned(),
+                "required".to_owned(),
+            ],
+            vec![
+                "bash".to_owned(),
+                "scripts/ci-local.sh".to_owned(),
+                "family-release".to_owned(),
+            ],
+        ];
+        assert_eq!(ci_commands(repo, &central).unwrap(), governed);
+        validate_family_commands(&json!({"commands": governed}), repo, &central).unwrap();
+
+        let missing_release = json!({
+            "commands": [["bash", "scripts/ci-local.sh", "required"]]
+        });
+        let failure = validate_family_commands(&missing_release, repo, &central)
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("command list differs from the governed lane"));
     }
 
     #[test]
@@ -7869,6 +8002,83 @@ mod tests {
         ])
         .unwrap_err();
         assert!(found.to_string().contains("path collision"));
+    }
+
+    #[test]
+    fn proof_refresh_initial_mirror_preflight_allows_transactional_creation() {
+        let fixture = TestDir::new_in_root("proof-refresh-initial-mirror");
+        let (authoritative, _, mirror) = ci_mirror_fixture(fixture.path());
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let mirror_sidecar = checksum_path(&mirror);
+
+        validate_proof_refresh_lock_inputs(&manifest, &authoritative, &mirror).unwrap();
+        assert!(!mirror.exists());
+        assert!(!mirror_sidecar.exists());
+
+        let lock_data = fs::read(&authoritative).unwrap();
+        let digest = sha256_bytes(&lock_data);
+        let sidecar = format!("{digest}  redline.lock.toml\n").into_bytes();
+        transactional_write(&[
+            (authoritative.clone(), lock_data.clone()),
+            (checksum_path(&authoritative), sidecar.clone()),
+            (mirror.clone(), lock_data),
+            (mirror_sidecar, sidecar),
+        ])
+        .unwrap();
+
+        require_physical_lock_set(&manifest, &authoritative, Some(&mirror)).unwrap();
+        assert_eq!(
+            verify_checksum(&authoritative).unwrap(),
+            verify_checksum(&mirror).unwrap()
+        );
+    }
+
+    #[test]
+    fn proof_refresh_initial_mirror_preflight_rejects_partial_pairs() {
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        for mirror_only in [true, false] {
+            let fixture = TestDir::new_in_root(if mirror_only {
+                "proof-refresh-partial-mirror"
+            } else {
+                "proof-refresh-partial-sidecar"
+            });
+            let (authoritative, _, mirror) = ci_mirror_fixture(fixture.path());
+            if mirror_only {
+                fs::write(&mirror, b"partial mirror\n").unwrap();
+            } else {
+                fs::write(checksum_path(&mirror), b"partial sidecar\n").unwrap();
+            }
+
+            let failure = validate_proof_refresh_lock_inputs(&manifest, &authoritative, &mirror)
+                .unwrap_err()
+                .to_string();
+            assert!(failure.contains("must either both be absent or both be physical files"));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn proof_refresh_initial_mirror_preflight_rejects_aliases() {
+        use std::os::unix::fs::symlink;
+
+        let manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let hardlink_fixture = TestDir::new_in_root("proof-refresh-hardlink-mirror");
+        let (authoritative, _, mirror) = ci_mirror_fixture(hardlink_fixture.path());
+        fs::hard_link(&authoritative, &mirror).unwrap();
+        fs::hard_link(checksum_path(&authoritative), checksum_path(&mirror)).unwrap();
+        let failure = validate_proof_refresh_lock_inputs(&manifest, &authoritative, &mirror)
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("exactly one physical directory entry"));
+
+        let symlink_fixture = TestDir::new_in_root("proof-refresh-symlink-mirror");
+        let (authoritative, _, mirror) = ci_mirror_fixture(symlink_fixture.path());
+        symlink(&authoritative, &mirror).unwrap();
+        symlink(checksum_path(&authoritative), checksum_path(&mirror)).unwrap();
+        let failure = validate_proof_refresh_lock_inputs(&manifest, &authoritative, &mirror)
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("symlinked path component"));
     }
 
     #[cfg(unix)]

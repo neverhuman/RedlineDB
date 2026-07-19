@@ -107,6 +107,10 @@ marker, never follows symlink targets, holds the root and marker identities,
 quarantines the root relative to its held parent, then traverses and removes
 only through held directory descriptors. A late entry at the original sandbox
 name is left untouched, and both held root and marker inodes must be unlinked.
+When the protected authority onboards `redline-central`, its governed command
+list contains both `scripts/ci-local.sh required` and the fail-closed
+`scripts/ci-local.sh family-release`. The latter consumes operator-supplied
+real Redline and Postgres DSNs; family CI never synthesizes or waives them.
 Child commands use each repository's pinned toolchain, never the control
 plane's `RUSTUP_TOOLCHAIN` override. Before Core CI, the runner builds the exact
 reviewed Redline Testing release package locally, verifies its commit, manifest,
