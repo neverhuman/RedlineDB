@@ -16,8 +16,40 @@ REPO_PATH="${4:?repo_path}"
 CHECK="${5:-$REPO/required}"
 OPS_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 split_root="$(realpath -e -- "${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}")" || exit 2
-control_commit="$("$OPS_ROOT/ops/ci/host-ci-integrity.sh" "$OPS_ROOT")" \
+control_ref=refs/heads/main
+control_local_ref=refs/remotes/origin/main
+if [[ -v JAIN_HOST_CI_BOOTSTRAP_REF ]]; then
+  control_ref="$JAIN_HOST_CI_BOOTSTRAP_REF"
+  unset JAIN_HOST_CI_BOOTSTRAP_REF
+  [[ "$control_ref" =~ ^refs/heads/[a-zA-Z0-9][a-zA-Z0-9._/-]*[a-zA-Z0-9]$ \
+    && "$control_ref" != refs/heads/main && "$control_ref" != *..* \
+    && "$control_ref" != *//* && "$control_ref" != *@\{* \
+    && "$control_ref" != *.lock ]] || {
+    printf '[split-host-ci] explicit bootstrap control ref is unsafe\n' >&2
+    exit 2
+  }
+  current_branch="$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -C "$OPS_ROOT" symbolic-ref --quiet --short HEAD 2>/dev/null)" || {
+    printf '[split-host-ci] bootstrap requires a named control branch\n' >&2
+    exit 2
+  }
+  [[ "refs/heads/$current_branch" == "$control_ref" ]] || {
+    printf '[split-host-ci] bootstrap ref differs from the checked-out control branch\n' >&2
+    exit 2
+  }
+  control_local_ref="refs/remotes/origin/${control_ref#refs/heads/}"
+fi
+control_commit="$("$OPS_ROOT/ops/ci/host-ci-integrity.sh" \
+  "$OPS_ROOT" --ref "$control_local_ref")" \
   || { printf '[split-host-ci] exact control-plane integrity check failed\n' >&2; exit 2; }
+if [[ "$control_ref" != refs/heads/main ]]; then
+  [[ "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -C "$OPS_ROOT" rev-parse --verify 'HEAD^{commit}' 2>/dev/null)" \
+      == "$control_commit" ]] || {
+    printf '[split-host-ci] bootstrap branch is unpublished or differs from its published ref\n' >&2
+    exit 2
+  }
+fi
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || exit 2
 
 bootstrap_parent="$split_root/target/host-ci-sandboxes"
@@ -77,13 +109,13 @@ child_environment="$(jq -c \
   '. + {JAIN_SPLIT_ROOT:$split_root,CARGO_TARGET_DIR:$target,
     JAIN_HOST_CI_WRITABLE_ROOT:$writable,JAIN_RELEASE_CI:"1"}' \
   <<<"$child_environment")" || exit 2
-jq -n --arg commit "$control_commit" \
+jq -n --arg commit "$control_commit" --arg control_ref "$control_ref" \
   --arg split_root "$split_root" \
   --arg owner "$OWNER" --arg repo "$REPO" --arg sha "$SHA" \
   --arg product "$staged_product" --arg check "$CHECK" \
   --argjson environment "$child_environment" \
-  '{schema_version:"jain.host-ci-sandbox-request/v4",
-    control_plane_commit:$commit,split_root:$split_root,
+  '{schema_version:"jain.host-ci-sandbox-request/v5",
+    control_plane_commit:$commit,control_ref:$control_ref,split_root:$split_root,
     arguments:[$owner,$repo,$sha,$product,$check],environment:$environment}' \
   >"$sandbox_request" || exit 2
 chmod 0600 "$sandbox_request"

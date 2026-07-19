@@ -86,6 +86,9 @@ pinned_advisory_commit="$(sed -n \
 [[ "$pinned_advisory_commit" =~ ^[0-9a-f]{40}$ ]]
 mkdir -p "$sandbox_family_root/target" "$sandbox_family_root/jain-core" \
   "$sandbox_family_root/jain-redline"
+mkdir -p "$sandbox_family_root/target/bare-mirrors"
+git init --quiet --bare \
+  "$sandbox_family_root/target/bare-mirrors/jain-core.git"
 redline_fixture_sources="$tmp/redline-fixture-sources"
 mkdir -p "$redline_fixture_sources"
 git init --quiet --initial-branch=main "$redline_fixture_sources/control"
@@ -302,6 +305,9 @@ control_commit="$(git -C "$control" rev-parse HEAD)"
 bootstrap_control_ref=refs/heads/codex/host-ci-bootstrap-test
 git -C "$control" push --quiet origin \
   "$control_commit:$bootstrap_control_ref"
+git -C "$control" switch --quiet -c codex/host-ci-bootstrap-test \
+  --track origin/codex/host-ci-bootstrap-test
+export JAIN_HOST_CI_BOOTSTRAP_REF="$bootstrap_control_ref"
 bootstrap_expires_at="$(( $(date +%s) + 3600 ))"
 sudo -n chown -R root:root "$control_remote"
 
@@ -315,6 +321,8 @@ sandbox_config="$publisher_root/host-ci-sandbox.config.json"
 splitctl="$publisher_root/splitctl"
 jankurai="$publisher_root/jankurai"
 security_tool_digest="$(sha256sum /usr/bin/true | cut -d' ' -f1)"
+git_lfs_path=/usr/bin/git-lfs
+git_lfs_digest="$(sha256sum "$git_lfs_path" | cut -d' ' -f1)"
 sudo -n install -d -o root -g root -m 0711 "$publisher_root"
 sudo -n install -d -o root -g root -m 0700 "$request_root"
 mkdir -p "$(dirname "$product_remote")"
@@ -413,6 +421,7 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   --arg family "$sandbox_family_root" --arg cache "$worker_cache" \
   --arg cargo_registry_cache "$cargo_registry_cache" \
   --arg cargo_bin "$HOME/.cargo/bin" --arg rustup "$HOME/.rustup" \
+  --arg git_lfs_path "$git_lfs_path" --arg git_lfs_digest "$git_lfs_digest" \
   --arg token_file "$publisher_token_file" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
@@ -424,7 +433,7 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   --arg grype_db_root "$grype_db_root" \
   --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
   --argjson parent_uid "$(id -u)" --argjson parent_gid "$(id -g)" \
-  '{schema_version:"jain.host-ci-sandbox-config/v5",
+  '{schema_version:"jain.host-ci-sandbox-config/v6",
     sandbox_sha256:$digest,publisher_sha256:$publisher_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
     security_tool_sha256:{actionlint:$security_tool_digest,
@@ -435,6 +444,7 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
     worker_user:"xbwork",worker_group:"xbwork",family_root:$family,
     worker_cache:$cache,cargo_registry_cache:$cargo_registry_cache,
     cargo_bin:$cargo_bin,rustup_home:$rustup,
+    git_lfs_path:$git_lfs_path,git_lfs_sha256:$git_lfs_digest,
     control_remote:$remote,control_ref:$control_ref,
     bootstrap_commit:$bootstrap_commit,
     bootstrap_expires_at:$bootstrap_expires_at,forge_git_base:$git_base,
@@ -469,6 +479,21 @@ fi
 grep -Fq 'installed Jankurai digest/version mismatch' \
   "$tmp/jankurai-tamper.log"
 sudo -n install -o root -g root -m 0555 "$fake_jankurai" "$jankurai"
+
+sudo -n cat "$sandbox_config" >"$tmp/git-lfs-valid-config.json"
+sudo -n jq '.git_lfs_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' \
+  "$sandbox_config" >"$tmp/git-lfs-tamper-config.json"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/git-lfs-tamper-config.json" "$sandbox_config"
+if sudo -n "$sandbox" "$tmp/nonexistent-git-lfs-request" \
+  >"$tmp/git-lfs-tamper.log" 2>&1; then
+  printf 'sandbox accepted an unpinned git-lfs executable\n' >&2
+  exit 1
+fi
+grep -Fq 'git-lfs executable digest, metadata, or version mismatch' \
+  "$tmp/git-lfs-tamper.log"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/git-lfs-valid-config.json" "$sandbox_config"
 
 sudo -n install -o root -g root -m 0444 \
   /usr/bin/false "$grype_db_root/6/vulnerability.db"
@@ -602,9 +627,37 @@ MONITOR
   rustsec_standalone=0
   if [[ "${JAIN_RUSTSEC_ADVISORY_SOURCE:-}" \
       == /opt/jain-ci/authority/advisory-db \
+    && "${JAIN_PINNED_ADVISORY_DB:-}" \
+      == /opt/jain-ci/authority/advisory-db \
+    && "${JAIN_ADVISORY_DB:-}" \
+      == /opt/jain-ci/authority/advisory-db \
     && -d "${JAIN_RUSTSEC_ADVISORY_SOURCE}/.git" \
     && ! -L "${JAIN_RUSTSEC_ADVISORY_SOURCE}/.git" ]]; then
     rustsec_standalone=1
+  fi
+  deny_db_physical=0
+  if [[ "${JAIN_CARGO_DENY_ADVISORY_DB:-}" \
+      == "$CARGO_HOME/advisory-dbs/advisory-db-3157b0e258782691" \
+    && -d "$JAIN_CARGO_DENY_ADVISORY_DB/.git" \
+    && ! -L "$JAIN_CARGO_DENY_ADVISORY_DB" \
+    && ! -L "$JAIN_CARGO_DENY_ADVISORY_DB/.git" ]]; then
+    deny_db_physical=1
+  fi
+  advisory_swap_blocked=0
+  if ! mv -- "$CARGO_HOME/advisory-dbs" \
+      "$CARGO_HOME/advisory-dbs.swap" 2>/dev/null; then
+    advisory_swap_blocked=1
+  else
+    mv -- "$CARGO_HOME/advisory-dbs.swap" "$CARGO_HOME/advisory-dbs"
+  fi
+  bare_mirror_safe=0
+  mapfile -t safe_directories < <(
+    git config --global --get-all safe.directory 2>/dev/null || true
+  )
+  if [[ "${#safe_directories[@]}" == 1 \
+    && "${safe_directories[0]}" \
+      == "$JAIN_SPLIT_ROOT/target/bare-mirrors/jain-core.git" ]]; then
+    bare_mirror_safe=1
   fi
   evidence_staging_bounded=0
   if [[ "${JAIN_NATIVE_EVIDENCE_STAGING_ROOT:-}" \
@@ -675,6 +728,10 @@ MONITOR
   printf 'boundary_sudo_attempt=%s\n' "$sudo_attempt" >>"$probe"
   printf 'boundary_release_ci=%s\n' "${JAIN_RELEASE_CI:-missing}" >>"$probe"
   printf 'boundary_rustsec_standalone=%s\n' "$rustsec_standalone" >>"$probe"
+  printf 'boundary_deny_db_physical=%s\n' "$deny_db_physical" >>"$probe"
+  printf 'boundary_advisory_swap_blocked=%s\n' \
+    "$advisory_swap_blocked" >>"$probe"
+  printf 'boundary_bare_mirror_safe=%s\n' "$bare_mirror_safe" >>"$probe"
   printf 'boundary_evidence_staging_bounded=%s\n' \
     "$evidence_staging_bounded" >>"$probe"
   # A malicious background descendant must die with namespace PID 1 before
@@ -702,6 +759,22 @@ git init --quiet --bare "$product_remote"
 git -C "$product" push --quiet "$product_remote" \
   "$product_sha:refs/heads/test-head"
 sudo -n chown -R root:root "$product_forge_root"
+
+# Bootstrap mode is explicit and accepts only the current named branch after
+# that exact branch has been published into its origin-tracking ref.
+git -C "$control" switch --quiet -c codex/host-ci-unpublished-test
+git -C "$control" commit --quiet --allow-empty -m 'unpublished bootstrap probe'
+if JAIN_HOST_CI_BOOTSTRAP_REF=refs/heads/codex/host-ci-unpublished-test \
+  JAIN_HOST_CI_SANDBOX="$sandbox" JAIN_SPLIT_ROOT="$sandbox_family_root" \
+    "$control/ops/ci/split-host-ci.sh" \
+      veox jain-report "$product_sha" "$product" jain-report/required \
+      >"$tmp/unpublished-bootstrap.log" 2>&1; then
+  printf 'parent accepted an unpublished bootstrap control branch\n' >&2
+  exit 1
+fi
+grep -Eq 'cannot resolve the published control-plane authority ref|exact control-plane integrity check failed' \
+  "$tmp/unpublished-bootstrap.log"
+git -C "$control" switch --quiet codex/host-ci-bootstrap-test
 
 # The root-only bootstrap authority is closed and short-lived. Missing,
 # mismatched, expired, or overlong fields fail before control materialization,
@@ -971,6 +1044,9 @@ grep -Fq 'boundary_forge_attempt=blocked' "$success_log"
 grep -Fq 'boundary_sudo_attempt=blocked' "$success_log"
 grep -Fq 'boundary_release_ci=1' "$success_log"
 grep -Fq 'boundary_rustsec_standalone=1' "$success_log"
+grep -Fq 'boundary_deny_db_physical=1' "$success_log"
+grep -Fq 'boundary_advisory_swap_blocked=1' "$success_log"
+grep -Fq 'boundary_bare_mirror_safe=1' "$success_log"
 grep -Fq 'boundary_evidence_staging_bounded=1' "$success_log"
 grep -Fq 'boundary_survivor_started=1' "$success_log"
 grep -Fq 'worker cgroup stopped before sealing' "$success_log"
@@ -1434,14 +1510,15 @@ chmod 0700 "$fd_attack_root"
 mkdir -m 0700 "$fd_attack_root/child-home" \
   "$fd_attack_root/writable" "$fd_attack_root/cargo-target"
 fd_attack_request="$fd_attack_root/sandbox-request.json"
-jq -cn --arg commit "$control_commit" --arg split_root "$sandbox_family_root" \
+jq -cn --arg commit "$control_commit" --arg control_ref "$bootstrap_control_ref" \
+  --arg split_root "$sandbox_family_root" \
   --arg owner veox --arg repo jain-report --arg head "$product_sha" \
   --arg product "$fd_attack_root/product-source" \
   --arg check jain-report/required \
   --arg cargo_target "$fd_attack_root/cargo-target" \
   --arg writable "$fd_attack_root/writable" \
-  '{schema_version:"jain.host-ci-sandbox-request/v4",
-    control_plane_commit:$commit,split_root:$split_root,
+  '{schema_version:"jain.host-ci-sandbox-request/v5",
+    control_plane_commit:$commit,control_ref:$control_ref,split_root:$split_root,
     arguments:[$owner,$repo,$head,$product,$check],
     environment:{CARGO_TARGET_DIR:$cargo_target,
       JAIN_HOST_CI_WRITABLE_ROOT:$writable,JAIN_SPLIT_ROOT:$split_root,
@@ -1450,7 +1527,7 @@ jq -cn --arg commit "$control_commit" --arg split_root "$sandbox_family_root" \
   >"$fd_attack_request"
 chmod 0600 "$fd_attack_request"
 # The other installed broker config is independently strict as well.
-sudo -n cp -- "$sandbox_config" "$tmp/sandbox-config.v4"
+sudo -n cp -- "$sandbox_config" "$tmp/sandbox-config.v6"
 sudo -n jq '.schema_version="jain.host-ci-sandbox-config/v3"' \
   "$sandbox_config" >"$tmp/sandbox-config.v3"
 sudo -n install -o root -g root -m 0600 \
@@ -1462,8 +1539,8 @@ if sudo -n "$sandbox" "$fd_attack_request" \
 fi
 grep -Fq 'invalid sandbox config schema' "$tmp/old-sandbox-config.log"
 sudo -n install -o root -g root -m 0600 \
-  "$tmp/sandbox-config.v4" "$sandbox_config"
-# The installed v4 broker rejects a structurally valid request carrying the
+  "$tmp/sandbox-config.v6" "$sandbox_config"
+# The installed v5 request broker rejects a structurally valid request carrying the
 # previous protocol before it creates a worker or reaches the forge.
 jq '.schema_version="jain.host-ci-sandbox-request/v3"' \
   "$fd_attack_request" >"$tmp/old-sandbox-request.json"
@@ -1472,7 +1549,7 @@ chmod 0600 "$fd_attack_request"
 old_request_offset="$(stat -c '%s' "$forge_log")"
 if sudo -n "$sandbox" "$fd_attack_request" \
   >"$tmp/old-sandbox-request.log" 2>&1; then
-  printf 'v4 sandbox accepted a v3 request protocol\n' >&2
+  printf 'v5 sandbox accepted a v3 request protocol\n' >&2
   exit 1
 fi
 grep -Fq 'invalid sandbox request schema' "$tmp/old-sandbox-request.log"
@@ -1480,9 +1557,9 @@ grep -Fq 'invalid sandbox request schema' "$tmp/old-sandbox-request.log"
   printf 'old sandbox request protocol reached the forge\n' >&2
   exit 1
 }
-jq '.schema_version="jain.host-ci-sandbox-request/v4"' \
-  "$fd_attack_request" >"$tmp/v4-sandbox-request.json"
-mv "$tmp/v4-sandbox-request.json" "$fd_attack_request"
+jq '.schema_version="jain.host-ci-sandbox-request/v5"' \
+  "$fd_attack_request" >"$tmp/v5-sandbox-request.json"
+mv "$tmp/v5-sandbox-request.json" "$fd_attack_request"
 chmod 0600 "$fd_attack_request"
 
 # Root-owned worker bindings cannot be replaced through a crafted parent
@@ -1490,7 +1567,8 @@ chmod 0600 "$fd_attack_request"
 # reaches the forge.
 cp -- "$fd_attack_request" "$tmp/fixed-worker-environment-base.json"
 for fixed_key in JAIN_SPLIT_OPS_ROOT JAIN_HOST_CI_REEXEC_STATE \
-  JAIN_HOST_CI_NETWORK_ISOLATED; do
+  JAIN_HOST_CI_NETWORK_ISOLATED JAIN_PINNED_ADVISORY_DB JAIN_ADVISORY_DB \
+  JAIN_CARGO_DENY_ADVISORY_DB; do
   fixed_log="$tmp/fixed-worker-environment-$fixed_key.log"
   fixed_forge_offset="$(stat -c '%s' "$forge_log")"
   jq --arg key "$fixed_key" \

@@ -105,6 +105,7 @@ jain_install_pinned_rustsec_tools() {
   local cargo_home="${3:?Cargo home is required}"
   local script_root="${4:?control-plane root is required}"
   local deny_db_root="$cargo_home/advisory-dbs"
+  local deny_db="$deny_db_root/$JAIN_CARGO_DENY_RUSTSEC_DIR"
 
   case "$tool_dir:$advisory_db:$cargo_home:$script_root" in
     /*:/*:/*:/*) ;;
@@ -113,15 +114,29 @@ jain_install_pinned_rustsec_tools() {
       return 1
       ;;
   esac
-  [[ -d "$advisory_db/.git" || -f "$advisory_db/.git" ]] || {
+  [[ -d "$advisory_db/.git" && ! -L "$advisory_db" \
+    && ! -L "$advisory_db/.git" ]] || {
     printf 'isolated RustSec database is unavailable: %s\n' "$advisory_db" >&2
     return 1
   }
   [[ -x "$script_root/ops/ci/pinned-cargo-audit.sh" ]] || return 1
   [[ -x "$script_root/ops/ci/pinned-cargo-deny.sh" ]] || return 1
 
-  mkdir -p "$tool_dir" "$deny_db_root"
+  [[ -d "$deny_db/.git" && ! -L "$deny_db_root" && ! -L "$deny_db" \
+    && ! -L "$deny_db/.git" ]] || {
+    printf 'physical cargo-deny RustSec database is unavailable: %s\n' \
+      "$deny_db" >&2
+    return 1
+  }
+  [[ "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+      -C "$advisory_db" rev-parse 'HEAD^{commit}')" \
+      == "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+        -C "$deny_db" rev-parse 'HEAD^{commit}')" ]] || {
+    printf 'cargo-audit and cargo-deny RustSec snapshots differ\n' >&2
+    return 1
+  }
+
+  mkdir -p "$tool_dir"
   ln -s "$script_root/ops/ci/pinned-cargo-audit.sh" "$tool_dir/cargo-audit"
   ln -s "$script_root/ops/ci/pinned-cargo-deny.sh" "$tool_dir/cargo-deny"
-  ln -s "$advisory_db" "$deny_db_root/$JAIN_CARGO_DENY_RUSTSEC_DIR"
 }

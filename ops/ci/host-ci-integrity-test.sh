@@ -40,6 +40,10 @@ git -C "$fixture" config user.email host-ci-fixture@example.invalid
 git -C "$fixture" add .
 git -C "$fixture" commit --quiet -m exact
 fixture_commit="$(git -C "$fixture" rev-parse HEAD)"
+remote="$tmp/control.git"
+git init --quiet --bare "$remote"
+git -C "$fixture" remote add origin "$remote"
+git -C "$fixture" push --quiet -u origin HEAD:main
 config_exec="$tmp/config-exec.sh"
 config_marker="$tmp/config-exec.marker"
 cat >"$config_exec" <<SCRIPT
@@ -65,6 +69,27 @@ if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" \
   printf 'host CI integrity accepted a different expected commit\n' >&2
   exit 1
 fi
+
+# Published-ref mode deliberately ignores the editable checkout's HEAD and
+# working bytes. Root authenticates this returned commit against the configured
+# forge ref before executing any control-plane code.
+git -C "$fixture" switch --quiet -c feature/ahead
+printf 'feature-only\n' >>"$fixture/ops/ci/native-runtime.sh"
+git -C "$fixture" add ops/ci/native-runtime.sh
+git -C "$fixture" commit --quiet -m feature
+printf 'uncommitted operator bytes\n' >>"$fixture/ops/ci/native-runtime.sh"
+[[ "$("$fixture/ops/ci/host-ci-integrity.sh" "$fixture" \
+  --ref refs/remotes/origin/main)" == "$fixture_commit" ]] || {
+  printf 'host CI did not resolve protected origin/main independently of checkout HEAD\n' >&2
+  exit 1
+}
+if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" \
+  --ref refs/remotes/origin/unpublished >/dev/null 2>&1; then
+  printf 'host CI accepted an unpublished bootstrap ref\n' >&2
+  exit 1
+fi
+git -C "$fixture" reset --quiet --hard
+git -C "$fixture" switch --quiet main
 
 printf 'dirty runtime\n' >>"$fixture/ops/ci/native-runtime.sh"
 if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null 2>&1; then

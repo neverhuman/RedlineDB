@@ -86,14 +86,18 @@ else
 fi
 
 tool_dir="$tmp/tools"
+deny_db="$tmp/cargo-home/advisory-dbs/$JAIN_CARGO_DENY_RUSTSEC_DIR"
+jain_materialize_pinned_advisory_db "$source_db" "$deny_db" "$expected"
 jain_install_pinned_rustsec_tools "$tool_dir" "$advisory_db" \
   "$tmp/cargo-home" "$repo_root"
-[[ -L "$tmp/cargo-home/advisory-dbs/$JAIN_CARGO_DENY_RUSTSEC_DIR" ]] || exit 1
+[[ -d "$deny_db/.git" && ! -L "$deny_db" && ! -L "$deny_db/.git" ]] || exit 1
 
 recorder="$repo_root/ops/ci/test-fixtures/rustsec-tool-recorder"
 export JAIN_REAL_CARGO_AUDIT="$recorder"
 export JAIN_REAL_CARGO_DENY="$recorder"
 export JAIN_PINNED_ADVISORY_DB="$advisory_db"
+export JAIN_ADVISORY_DB="$advisory_db"
+export JAIN_CARGO_DENY_ADVISORY_DB="$deny_db"
 export JAIN_PINNED_ADVISORY_COMMIT="$expected"
 export JAIN_TEST_TOOL_ARGS="$tmp/args"
 
@@ -110,6 +114,15 @@ mapfile -t args <"$JAIN_TEST_TOOL_ARGS"
   printf 'cargo-deny pin wrapper arguments drifted: %s\n' "${args[*]}" >&2
   exit 1
 }
+
+mv -- "$deny_db" "$deny_db.swap"
+ln -s "$deny_db.swap" "$deny_db"
+if "$tool_dir/cargo-deny" deny check advisories >/dev/null 2>&1; then
+  printf 'cargo-deny accepted a transient symlink database swap\n' >&2
+  exit 1
+fi
+rm -- "$deny_db"
+mv -- "$deny_db.swap" "$deny_db"
 
 printf 'tamper\n' >"$advisory_db/untracked-tamper"
 if "$tool_dir/cargo-audit" audit 2>/dev/null; then

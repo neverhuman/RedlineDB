@@ -56,6 +56,17 @@ validate_cargo_registry_cache() {
     || fail 'Cargo registry cache has unsafe nodes or incomplete roots'
 }
 
+validate_git_lfs() {
+  local configured="$1" expected_sha="$2" path
+  path="$(realpath -e -- "$configured")" || fail 'git-lfs executable missing'
+  [[ "$path" == /usr/bin/git-lfs && "$path" == "$configured" && ! -L "$path" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$path")" == '0:0:755:1' \
+    && "$(sha256sum -- "$path" | cut -d' ' -f1)" == "$expected_sha" \
+    && "$(/usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C HOME=/nonexistent \
+      "$path" version)" == 'git-lfs/3.4.1 (GitHub; linux amd64; go 1.22.2)' ]] \
+    || fail 'git-lfs executable digest, metadata, or version mismatch'
+}
+
 validate_grype_db() {
   local root="$1" expected="$2" relative path inventory_digest actual_nodes
   case "$root" in
@@ -126,11 +137,13 @@ token_file="$(jq -er '.token_file' "$publisher_config")"
   && "$(realpath -e -- "$token_file" 2>/dev/null)" == "$token_file" \
   && "$(stat -c '%u:%g:%a:%h' -- "$token_file" 2>/dev/null)" == '0:0:600:1' ]] \
   || fail 'publisher token file must be canonical root:root mode 0600 single-link'
-jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v5")
+jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v6")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
   | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
   | select(.cargo_registry_cache | type == "string" and startswith("/"))
+  | select(.git_lfs_path | type == "string" and startswith("/"))
+  | select(.git_lfs_sha256 | test("^[0-9a-f]{64}$"))
   | select(.grype_db_root | type == "string" and startswith("/"))
   | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
@@ -242,6 +255,8 @@ grype_db_root="$(realpath -e -- "$grype_db_config")" \
   || fail 'Grype database path contains a symlink or alias'
 validate_grype_db "$grype_db_root" \
   "$(jq -er '.grype_db_inventory_sha256' "$sandbox_config")"
+validate_git_lfs "$(jq -er '.git_lfs_path' "$sandbox_config")" \
+  "$(jq -er '.git_lfs_sha256' "$sandbox_config")"
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$sandbox_config")")" \
   || fail 'root request directory missing'
 [[ "$(stat -c '%u:%g:%a' -- "$request_root")" == '0:0:700' ]] \
