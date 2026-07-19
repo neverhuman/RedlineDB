@@ -4344,6 +4344,14 @@ fn create_or_verify_immutable_tag(
     apply: bool,
     report: &mut JsonValue,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if !is_full_sha(commit) || commit.chars().any(|ch| ch.is_ascii_uppercase()) {
+        return Err("immutable-tag --commit must be a lowercase full 40-character SHA".into());
+    }
+    if secure_git_output(Some(repo), &["remote"])? != "origin"
+        || secure_git_output(Some(repo), &["remote", "get-url", "origin"])? != remote
+    {
+        return Err("immutable-tag requires the sole exact canonical origin".into());
+    }
     let tag_ref = format!("refs/tags/{tag}");
     secure_git_output(Some(repo), &["check-ref-format", &tag_ref])?;
     let reviewed = secure_git_output(
@@ -4425,27 +4433,30 @@ fn create_or_verify_immutable_tag(
     let local_after = secure_local_ref_commit(repo, &tag_ref)?;
     let remote_after = secure_ls_remote_at(remote, &tag_ref, token_file)?;
     let remote_main_after = secure_ls_remote_at(remote, "refs/heads/main", token_file)?;
-    report["action"] = json!(if local_before.is_some() && remote_before.is_some() {
-        "verified-existing"
-    } else {
-        "created-and-verified"
-    });
     report["after"] = json!({
         "local": local_after,
         "remote": remote_after,
         "remote_main": remote_main_after,
     });
-    if local_after.as_deref() == Some(reviewed.as_str())
-        && remote_after.as_deref() == Some(reviewed.as_str())
-        && remote_main_after.as_deref() == Some(reviewed.as_str())
+    if local_after.as_deref() != Some(reviewed.as_str())
+        || remote_after.as_deref() != Some(reviewed.as_str())
     {
-        Ok(())
-    } else {
-        Err(
-            "immutable tag or final main verification did not resolve to the reviewed commit"
-                .into(),
-        )
+        return Err("immutable tag verification did not resolve to the reviewed commit".into());
     }
+    if remote_main_after.as_deref() != Some(reviewed.as_str()) {
+        report["action"] = json!("tag-retained-main-advanced");
+        report["requires_next_unused_tag"] = json!(true);
+        return Err(
+            "remote main advanced during immutable tag CAS; retain this tag and repeat with the next unused suffix"
+                .into(),
+        );
+    }
+    report["action"] = json!(if local_before.is_some() && remote_before.is_some() {
+        "verified-existing"
+    } else {
+        "created-and-verified"
+    });
+    Ok(())
 }
 
 fn verify_worktrees_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -6125,9 +6136,9 @@ fn fetch_authenticated_main(
         ],
     )?;
     let after = main_fetch_snapshot(repo)?;
-    validate_main_fetch_side_effects(&before, &after, expected_head)?;
     report["after"] = after.json();
     report["external_state_changed"] = json!(before.refs != after.refs);
+    validate_main_fetch_side_effects(&before, &after, expected_head)?;
     report["action"] = json!(if before.refs == after.refs {
         "verified-existing"
     } else {
@@ -10493,6 +10504,11 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let root = TestDir::new("immutable-tag");
         let (repo, reviewed) = init_source(root.path());
         let remote = init_bare(root.path());
+        run_git_strict(
+            &repo,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        )
+        .unwrap();
         let main_refspec = format!("{reviewed}:refs/heads/main");
         run_git_strict(&repo, &["push", remote.to_str().unwrap(), &main_refspec]).unwrap();
         let token_root = TestDir::new_private_temp("immutable-tag-token");
@@ -10500,6 +10516,29 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
         fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
         let mut report = receipt_header("test", "immutable-tag", false);
+        for invalid in ["HEAD", &reviewed[..12]] {
+            assert!(create_or_verify_immutable_tag(
+                &repo,
+                remote.to_str().unwrap(),
+                "example-v8.0.0-split.0",
+                invalid,
+                &token_file,
+                true,
+                &mut report,
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("lowercase full 40-character SHA"));
+        }
+        assert_eq!(
+            secure_ls_remote_at(
+                remote.to_str().unwrap(),
+                "refs/tags/example-v8.0.0-split.0",
+                &token_file,
+            )
+            .unwrap(),
+            None
+        );
         create_or_verify_immutable_tag(
             &repo,
             remote.to_str().unwrap(),
@@ -10551,6 +10590,72 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             )
             .unwrap(),
             Some(reviewed)
+        );
+    }
+
+    #[test]
+    fn immutable_tag_retains_prior_suffix_if_main_advances_during_cas() {
+        let root = TestDir::new("immutable-tag-main-race");
+        let (repo, reviewed) = init_source(root.path());
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &repo,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        )
+        .unwrap();
+        let main_refspec = format!("{reviewed}:refs/heads/main");
+        run_git_strict(&repo, &["push", remote.to_str().unwrap(), &main_refspec]).unwrap();
+        let successor = commit_next(&repo);
+        let successor_refspec = format!("{successor}:refs/heads/race-successor");
+        run_git_strict(
+            &repo,
+            &["push", remote.to_str().unwrap(), &successor_refspec],
+        )
+        .unwrap();
+
+        let hook = remote.join("hooks/pre-receive");
+        fs::write(
+            &hook,
+            format!(
+                "#!/bin/sh\nunset GIT_QUARANTINE_PATH\n/usr/bin/git update-ref refs/heads/main {successor} {reviewed}\n"
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).unwrap();
+
+        let token_root = TestDir::new_private_temp("immutable-tag-race-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let mut report = receipt_header("test", "immutable-tag", true);
+        let error = create_or_verify_immutable_tag(
+            &repo,
+            remote.to_str().unwrap(),
+            "example-v8.0.0-split.0",
+            &reviewed,
+            &token_file,
+            true,
+            &mut report,
+        )
+        .unwrap_err();
+        assert!(
+            error.to_string().contains("next unused suffix"),
+            "unexpected error: {error}"
+        );
+        assert_eq!(report["action"], "tag-retained-main-advanced");
+        assert_eq!(report["requires_next_unused_tag"], true);
+        assert_eq!(
+            secure_ls_remote_at(
+                remote.to_str().unwrap(),
+                "refs/tags/example-v8.0.0-split.0",
+                &token_file,
+            )
+            .unwrap(),
+            Some(reviewed)
+        );
+        assert_eq!(
+            secure_ls_remote_at(remote.to_str().unwrap(), "refs/heads/main", &token_file).unwrap(),
+            Some(successor)
         );
     }
 
