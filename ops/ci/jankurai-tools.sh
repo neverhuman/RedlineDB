@@ -24,7 +24,8 @@ tool="${1:?tool id required: audit-ci|proof-routing|security|contract-drift|auth
 LOG_DIR="target/jankurai"
 mkdir -p "$LOG_DIR/${tool}" "$LOG_DIR/security"
 
-# The exact governed binary is mandatory; no PATH fallback or source install.
+# The exact sandbox-selected governed binary is mandatory; there is no source
+# install or fallback after the library freezes and verifies PATH selection.
 ci_require_clean_head
 ci_require_governed_jankurai_logged "$LOG_DIR/${tool}/governed-jankurai.log"
 

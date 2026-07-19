@@ -48,10 +48,67 @@ mkdir -p "$tmp_dir/hostile-bin"
 printf '#!/usr/bin/env bash\nprintf "hostile PATH jankurai\\n"\n' \
     > "$tmp_dir/hostile-bin/jankurai"
 chmod 0755 "$tmp_dir/hostile-bin/jankurai"
+
+expect_rejected hostile-source-selection \
+    /usr/bin/env PATH="$tmp_dir/hostile-bin:/usr/bin:/bin" \
+    /usr/bin/bash -c \
+    'set -euo pipefail; . "$1"; ci_require_governed_jankurai' \
+    _ "$repo_root/ops/ci/lib.sh"
+
+mkdir -p "$tmp_dir/empty-bin"
+expect_rejected missing-source-selection \
+    /usr/bin/env PATH="$tmp_dir/empty-bin:/usr/bin:/bin" \
+    /usr/bin/bash -c \
+    'set -euo pipefail; . "$1"; ci_require_governed_jankurai' \
+    _ "$repo_root/ops/ci/lib.sh"
+
 PATH="$tmp_dir/hostile-bin:/usr/bin:/bin"
 export PATH
 ci_require_governed_jankurai >/dev/null
 [ "$(type -t jankurai)" = "function" ]
 [ "$(jankurai --version)" = "jankurai $CI_JANKURAI_VERSION" ]
+
+mkdir -p "$tmp_dir/dispatch-bin"
+cat > "$tmp_dir/dispatch-bin/bash" <<'DISPATCH_STUB'
+#!/usr/bin/bash
+printf '<%s>\n' "$@"
+DISPATCH_STUB
+chmod 0755 "$tmp_dir/dispatch-bin/bash"
+
+expect_dispatch() {
+    local lane="$1"
+    shift
+    local actual expected
+    actual="$(
+        PATH="$tmp_dir/dispatch-bin:/usr/bin:/bin" \
+            /usr/bin/bash "$repo_root/scripts/ci-local.sh" "$lane"
+    )"
+    expected="$(printf '<%s>\n' "$@")"
+    if [ "$actual" != "$expected" ]; then
+        printf 'ci-local dispatch mismatch for %s: expected %s, got %s\n' \
+            "$lane" "$expected" "$actual" >&2
+        return 1
+    fi
+}
+
+expect_dispatch security "$repo_root/tools/security-lane.sh"
+expect_dispatch score "$repo_root/scripts/just/run.sh" score
+expect_dispatch contract-drift \
+    "$repo_root/ops/ci/jankurai-tools.sh" contract-drift
+expect_dispatch artifact-support "$repo_root/ops/ci/artifact_support.sh"
+
+if PATH="$tmp_dir/dispatch-bin:/usr/bin:/bin" \
+    /usr/bin/bash "$repo_root/scripts/ci-local.sh" unknown \
+    >"$tmp_dir/unknown-dispatch.log" 2>&1
+then
+    printf 'ci-local accepted an unknown lane\n' >&2
+    exit 1
+fi
+grep -Fq 'contract-drift|artifact-support' "$tmp_dir/unknown-dispatch.log"
+
+if grep -Fq '/home/ubuntu/.jeryu/bin/jankurai' "$repo_root/ops/ci/lib.sh"; then
+    printf 'governed Jankurai selection still depends on the user home\n' >&2
+    exit 1
+fi
 
 printf 'governed Jankurai hostile probes passed\n'

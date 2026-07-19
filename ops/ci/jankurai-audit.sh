@@ -9,9 +9,9 @@
 # HLT-042 ci-local-parity.lib-missing,
 # HLT-034 ci-bad-behavior.
 #
-# Jankurai is a hard dependency for this lane. `ops/ci/lib.sh` binds the
-# fixed host binary by absolute path, exact version, and exact digest. This
-# lane never installs or fetches tool source.
+# Jankurai is a hard dependency for this lane. `ops/ci/lib.sh` freezes the
+# release sandbox's PATH selection, then binds it by physical path, exact
+# version, and exact digest. This lane never installs or fetches tool source.
 #
 # Usage:
 #   bash ops/ci/jankurai-audit.sh

@@ -36,13 +36,22 @@ CI_REDLINE_TESTING_VERSION="${CI_REDLINE_TESTING_VERSION:-latest}"
 CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256="${CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256:-}"
 CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256="${CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256:-}"
 readonly CI_REDLINE_TESTING_ATTESTATION_REPO="${CI_REDLINE_TESTING_ATTESTATION_REPO:-neverhuman/redline-testing}"
-readonly CI_JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
 readonly CI_JANKURAI_VERSION="1.6.11"
 readonly CI_JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
 
+# The release sandbox owns PATH. Freeze its selected executable before the
+# wrapper below shadows the command name; every use still has to pass the exact
+# physical-path, version, and digest checks in ci_validate_jankurai_binary.
+CI_JANKURAI_BIN="$(command -v jankurai 2>/dev/null || true)"
+readonly CI_JANKURAI_BIN
+
 # Keep literal `jankurai` commands visible to the tool-adoption auditor while
-# making PATH unable to select different bytes after this library is sourced.
+# making later PATH changes unable to select different bytes.
 jankurai() {
+    ci_validate_jankurai_binary \
+        "$CI_JANKURAI_BIN" \
+        "$CI_JANKURAI_VERSION" \
+        "$CI_JANKURAI_SHA256" || return 1
     "$CI_JANKURAI_BIN" "$@"
 }
 
@@ -759,7 +768,7 @@ ci_soft_gate() {
 }
 
 # Validate arbitrary bytes for hostile tests. Production callers use only the
-# fixed constants above; no environment or PATH override reaches this helper.
+# sandbox-selected path frozen above and the fixed identity constants.
 ci_validate_jankurai_binary() {
     local binary="${1:?jankurai binary path required}"
     local expected_version="${2:?jankurai version required}"
