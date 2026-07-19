@@ -5194,6 +5194,9 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     if command == "repo-create" {
         return jeryu_repo_create(args);
     }
+    if command == "repo-onboard-readback" {
+        return jeryu_repo_onboard_readback(args);
+    }
     if command == "main-fetch" {
         return jeryu_main_fetch(args);
     }
@@ -5357,6 +5360,165 @@ fn jeryu_repo_create(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>
         Ok(())
     })();
     finish_optional_evidence(evidence_out.as_deref(), &mut report, result)
+}
+
+fn jeryu_repo_onboard_readback(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repo = None;
+    let mut expected_commit = None;
+    let mut evidence_out = None;
+    let mut token_file = None;
+    let mut iter = args.into_iter();
+    if iter.next().as_deref() != Some("repo-onboard-readback") {
+        return Err("repo-onboard-readback command identity is invalid".into());
+    }
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repo" => repo = Some(iter.next().ok_or("--repo needs owner/name")?),
+            "--expected-commit" => {
+                expected_commit = Some(iter.next().ok_or("--expected-commit needs a SHA")?)
+            }
+            "--evidence-out" => {
+                evidence_out = Some(PathBuf::from(
+                    iter.next().ok_or("--evidence-out needs a path")?,
+                ))
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
+            }
+            value => return Err(format!("unknown repo-onboard-readback argument: {value}").into()),
+        }
+    }
+    let repo = repo.ok_or("repo-onboard-readback requires --repo veox/name")?;
+    validate_governed_repo_create_slug(&repo)?;
+    let expected_commit =
+        expected_commit.ok_or("repo-onboard-readback requires --expected-commit")?;
+    if !is_full_sha(&expected_commit)
+        || expected_commit
+            .chars()
+            .any(|character| character.is_ascii_uppercase())
+    {
+        return Err(
+            "repo-onboard-readback --expected-commit must be a lowercase full 40-character SHA"
+                .into(),
+        );
+    }
+    let token_file =
+        token_file.ok_or("repo-onboard-readback requires an explicit --token-file path")?;
+    let client = JeryuClient::from_token_file(&token_file)?;
+    let mut report = receipt_header(
+        "jain.jeryu-repository-onboarding-readback/v1",
+        "jeryu-local repo-onboard-readback",
+        false,
+    );
+    report["repository"] = json!(repo);
+    report["expected_commit"] = json!(expected_commit);
+    report["token_metadata_validated"] = json!(true);
+    report["external_state_changed"] = json!(false);
+    let result = (|| {
+        let repositories = client.execute(&JeryuRequest::repo_list()?)?;
+        let identity = match validate_repo_list_identity(&repositories, &repo) {
+            Ok(identity) => identity,
+            Err(identity_error) => {
+                validate_repo_absent(&repositories, &repo).map_err(|absence_error| {
+                    format!(
+                        "repository identity readback is ambiguous: {identity_error}; {absence_error}"
+                    )
+                })?;
+                report["state"] = json!("repository_absent");
+                report["repository_present"] = json!(false);
+                return Ok(());
+            }
+        };
+        report["repository_present"] = json!(true);
+        report["api_identity"] = identity;
+        let details = client.execute(&JeryuRequest::repo_details(&repo)?)?;
+        validate_repo_creation_response(&details, &repo)?;
+        report["details_readback"] = details;
+
+        let remote = fixed_jeryu_git_remote(&repo)?;
+        let advertised = secure_materialization_git_output(
+            &remote,
+            &token_file,
+            &["ls-remote", "--refs", &remote, "refs/heads/*"],
+        )?;
+        let heads = parse_onboarding_heads(&advertised)?;
+        report["head_refs"] = json!(heads
+            .iter()
+            .map(|(reference, commit)| json!({"ref": reference, "commit": commit}))
+            .collect::<Vec<_>>());
+        let matching_refs = heads
+            .iter()
+            .filter(|(_, commit)| *commit == &expected_commit)
+            .map(|(reference, _)| reference.clone())
+            .collect::<Vec<_>>();
+        report["matching_reviewed_refs"] = json!(matching_refs);
+        match onboarding_readback_state(&heads, &expected_commit) {
+            Ok(state) => {
+                report["state"] = json!(state);
+                Ok(())
+            }
+            Err(error) => {
+                report["state"] = json!("main_conflict");
+                Err(error)
+            }
+        }
+    })();
+    finish_optional_evidence(evidence_out.as_deref(), &mut report, result)
+}
+
+fn parse_onboarding_heads(
+    output: &str,
+) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
+    if output.len() > 1024 * 1024 {
+        return Err("repository onboarding ref advertisement is oversized".into());
+    }
+    let mut heads = BTreeMap::new();
+    for line in output.lines() {
+        let mut fields = line.split('\t');
+        let commit = fields.next().unwrap_or_default();
+        let reference = fields.next().unwrap_or_default();
+        if fields.next().is_some()
+            || !is_full_sha(commit)
+            || commit
+                .chars()
+                .any(|character| character.is_ascii_uppercase())
+        {
+            return Err("repository onboarding ref advertisement is malformed".into());
+        }
+        validate_heads_ref(reference)?;
+        if heads
+            .insert(reference.to_owned(), commit.to_owned())
+            .is_some()
+        {
+            return Err("repository onboarding ref advertisement contains a duplicate ref".into());
+        }
+    }
+    Ok(heads)
+}
+
+fn onboarding_readback_state(
+    heads: &BTreeMap<String, String>,
+    expected_commit: &str,
+) -> Result<&'static str, Box<dyn std::error::Error>> {
+    match heads.get("refs/heads/main") {
+        Some(main) if main == expected_commit => return Ok("main_bound"),
+        Some(main) => {
+            return Err(format!(
+                "repository main is bound to conflicting commit {main}, expected {expected_commit}"
+            )
+            .into())
+        }
+        None => {}
+    }
+    if heads.values().any(|commit| commit == expected_commit) {
+        Ok("reviewed_commit_in_custody")
+    } else if heads.is_empty() {
+        Ok("empty_repository")
+    } else {
+        Ok("reviewed_commit_absent")
+    }
 }
 
 fn validate_governed_repo_create_slug(repo: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -11787,6 +11949,102 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         ])
         .unwrap_err();
         assert!(error.to_string().contains("explicit --token-file"));
+    }
+
+    #[test]
+    fn repository_onboarding_head_readback_and_states_are_strict() {
+        let expected = "a".repeat(40);
+        let other = "b".repeat(40);
+        let advertised =
+            format!("{other}\trefs/heads/z-other\n{expected}\trefs/heads/reviewed/bootstrap\n");
+        let heads = parse_onboarding_heads(&advertised).unwrap();
+        assert_eq!(
+            heads.keys().cloned().collect::<Vec<_>>(),
+            vec![
+                "refs/heads/reviewed/bootstrap".to_owned(),
+                "refs/heads/z-other".to_owned(),
+            ]
+        );
+        assert_eq!(
+            onboarding_readback_state(&heads, &expected).unwrap(),
+            "reviewed_commit_in_custody"
+        );
+        assert_eq!(
+            onboarding_readback_state(&BTreeMap::new(), &expected).unwrap(),
+            "empty_repository"
+        );
+        assert_eq!(
+            onboarding_readback_state(
+                &BTreeMap::from([("refs/heads/other".to_owned(), other.clone())]),
+                &expected,
+            )
+            .unwrap(),
+            "reviewed_commit_absent"
+        );
+        assert_eq!(
+            onboarding_readback_state(
+                &BTreeMap::from([("refs/heads/main".to_owned(), expected.clone())]),
+                &expected,
+            )
+            .unwrap(),
+            "main_bound"
+        );
+        assert!(onboarding_readback_state(
+            &BTreeMap::from([("refs/heads/main".to_owned(), other.clone())]),
+            &expected,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("conflicting commit"));
+
+        for invalid in [
+            format!("{}\trefs/tags/not-a-head\n", expected),
+            format!(
+                "{}\trefs/heads/main\n{}\trefs/heads/main\n",
+                expected, other
+            ),
+            format!("{}\trefs/heads/main\textra\n", expected),
+            format!("{}\trefs/heads/main\n", expected.to_ascii_uppercase()),
+            "short\trefs/heads/main\n".to_owned(),
+        ] {
+            assert!(
+                parse_onboarding_heads(&invalid).is_err(),
+                "accepted {invalid:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn repository_onboarding_readback_rejects_unsafe_arguments_before_network() {
+        let base = |repo: &str, commit: &str| {
+            vec![
+                "repo-onboard-readback".to_owned(),
+                "--repo".to_owned(),
+                repo.to_owned(),
+                "--expected-commit".to_owned(),
+                commit.to_owned(),
+                "--token-file".to_owned(),
+                "/does/not/exist".to_owned(),
+            ]
+        };
+        assert!(
+            jeryu_repo_onboard_readback(base("jeryu/jain-fabric", &"a".repeat(40)))
+                .unwrap_err()
+                .to_string()
+                .contains("safe veox/name")
+        );
+        assert!(
+            jeryu_repo_onboard_readback(base("veox/jain-fabric", "short"))
+                .unwrap_err()
+                .to_string()
+                .contains("lowercase full 40-character SHA")
+        );
+        let mut apply = base("veox/jain-fabric", &"a".repeat(40));
+        apply.push("--apply".to_owned());
+        assert!(jeryu_repo_onboard_readback(apply)
+            .unwrap_err()
+            .to_string()
+            .contains("unknown repo-onboard-readback argument"));
     }
 
     #[test]
