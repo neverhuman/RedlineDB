@@ -113,6 +113,11 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
 fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
     let trimmed = sql.trim();
     let stmt = trimmed.trim_end_matches(';').trim();
+    if starts_with_create_virtual_table(stmt) {
+        return Err(Error::UnsupportedSql(
+            "CREATE VIRTUAL TABLE is not supported without module migration support".to_owned(),
+        ));
+    }
     let schema = conn.schema_snapshot();
     let schema_epoch = conn.schema_epoch();
 
@@ -260,6 +265,17 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     }
 
     templates::bind_statement(conn, schema, schema_epoch, trimmed, statements.remove(0))
+}
+
+fn starts_with_create_virtual_table(stmt: &str) -> bool {
+    let mut words = stmt.split_ascii_whitespace();
+    matches!(
+        (words.next(), words.next(), words.next()),
+        (Some(create), Some(virtual_kw), Some(table))
+            if create.eq_ignore_ascii_case("create")
+                && virtual_kw.eq_ignore_ascii_case("virtual")
+                && table.eq_ignore_ascii_case("table")
+    )
 }
 
 /// Allocation-free prefix check for the PRAGMA keyword. Mirrors

@@ -127,6 +127,21 @@ impl<'conn> Statement<'conn> {
         }
     }
 
+    /// Bind parameters and iterate mapped rows via an ordered `step()` loop.
+    /// Rows are fetched one-at-a-time and mapped in source order.
+    pub fn query_map<P, T, F>(
+        &mut self,
+        params: P,
+        f: F,
+    ) -> Result<crate::iter::QueryMap<'_, 'conn, T, F>>
+    where
+        P: crate::params::Params,
+        F: for<'row> FnMut(&Row<'row>) -> Result<T>,
+    {
+        self.bind_all(params)?;
+        Ok(crate::iter::QueryMap::new(self, f))
+    }
+
     pub fn is_readonly(&self) -> bool {
         self.inner.is_readonly()
     }

@@ -729,6 +729,18 @@ pub struct Statement {
     affected_rows: usize,
 }
 
+/// Iterator produced by [`Statement::query_map`]. It evaluates one mapped row
+/// at a time via a user callback and stops when the statement is done or
+/// stepping fails.
+pub struct QueryMap<'stmt, T, F>
+where
+    F: FnMut(&Statement) -> Result<T>,
+{
+    stmt: &'stmt mut Statement,
+    f: F,
+    done: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Step {
     Row,
@@ -808,6 +820,19 @@ impl Statement {
         self.current_row = None;
         self.affected_rows = 0;
         Ok(())
+    }
+
+    /// Iterate mapped rows lazily, matching the rusqlite ordering and stepping
+    /// semantics.
+    pub fn query_map<T, F>(&mut self, f: F) -> QueryMap<'_, T, F>
+    where
+        F: FnMut(&Statement) -> Result<T>,
+    {
+        QueryMap {
+            stmt: self,
+            f,
+            done: false,
+        }
     }
 
     pub fn step(&mut self) -> Result<Step> {
@@ -1005,6 +1030,31 @@ impl Statement {
         }
         self.bindings[index] = Some(value);
         Ok(())
+    }
+}
+
+impl<'stmt, T, F> Iterator for QueryMap<'stmt, T, F>
+where
+    F: FnMut(&Statement) -> Result<T>,
+{
+    type Item = Result<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done {
+            return None;
+        }
+
+        match self.stmt.step() {
+            Ok(Step::Row) => Some((self.f)(self.stmt)),
+            Ok(Step::Done) => {
+                self.done = true;
+                None
+            }
+            Err(err) => {
+                self.done = true;
+                Some(Err(err))
+            }
+        }
     }
 }
 

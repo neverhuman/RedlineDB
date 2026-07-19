@@ -33,7 +33,7 @@ pub use pool::{Pool, PoolBuilder, PooledConnection};
 pub use connection::{Connection, InterruptHandle, Transaction};
 pub use error::{Error, ErrorCode, Result};
 pub use handle::Database;
-pub use iter::{FromRow, FromValue, OwnedStep, Row, Step};
+pub use iter::{FromRow, FromValue, OwnedStep, QueryMap, Row, Step};
 pub use machine::{
     BinaryOp, ColumnRef, DeleteSpec, ExprSpec, InsertSpec, OrderSpec, QuerySpec, SchemaHandle,
     SelectSpec, TableRef, UnaryOp, UpdateSpec,
@@ -205,6 +205,84 @@ mod tests {
             }
             Step::Done => panic!("expected row"),
         }
+    }
+
+    #[test]
+    fn execute_batch_runs_script_in_order_without_row_counts() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("batch.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        conn.execute_batch(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, v INTEGER);\
+             INSERT INTO t(v) VALUES (10), (20);\
+             INSERT INTO t(v) VALUES (30)",
+        )
+        .expect("batch");
+
+        let mut stmt = conn
+            .prepare("SELECT COUNT(*) FROM t")
+            .expect("count prepared");
+        let count = match stmt.step().expect("count step") {
+            Step::Row(row) => row.get::<i64>(0).expect("row value"),
+            Step::Done => panic!("expected row"),
+        };
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn create_virtual_table_fails_closed_with_unsupported_code() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("virtual.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        let err = conn
+            .execute(
+                "create\nvirtual\ttable boxes USING rtree (id, x1, x2, y1, y2)",
+                (),
+            )
+            .expect_err("virtual table without a module must fail");
+        assert_eq!(
+            err.code(),
+            ErrorCode::Unsupported,
+            "unexpected virtual-table error: {err}"
+        );
+        assert!(err.message().contains("CREATE VIRTUAL TABLE"));
+
+        let count = conn
+            .query_row::<_, i64>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'boxes'",
+                (),
+            )
+            .expect("probe catalog");
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn borrowed_statement_query_map_maps_rows_with_order() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("query_map.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        conn.execute(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT NOT NULL)",
+            (),
+        )
+        .expect("create");
+        conn.execute("INSERT INTO t(name) VALUES (?)", params!["Ada"])
+            .expect("insert");
+        conn.execute("INSERT INTO t(name) VALUES (?)", params!["Lin"])
+            .expect("insert");
+
+        let mut stmt = conn
+            .prepare("SELECT name FROM t WHERE id > ? ORDER BY id")
+            .expect("prepare query");
+        let rows = stmt
+            .query_map(params![0_i64], |row| row.get::<String>(0))
+            .expect("bind query parameters")
+            .collect::<Result<Vec<_>>>()
+            .expect("map rows");
+        assert_eq!(rows, vec!["Ada".to_string(), "Lin".to_string()]);
     }
 
     #[test]

@@ -133,6 +133,14 @@ impl Connection {
         })
     }
 
+    /// Execute one or more SQL statements, discarding per-statement row counts.
+    ///
+    /// The order and transaction semantics follow the `Connection::execute`
+    /// behavior in this crate, and execution stops on first error.
+    pub fn execute_batch(&mut self, sql: &str) -> Result<()> {
+        Ok(self.inner.execute_batch(sql)?)
+    }
+
     pub fn execute_rql(&mut self, program: &redlinedb_sql::RqlProgram) -> Result<ExecuteSummary> {
         let mut rows_affected = 0_u64;
         let mut rows_returned = 0_u64;
