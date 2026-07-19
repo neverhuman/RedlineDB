@@ -273,6 +273,8 @@ sed -i \
   "$control/ops/ci/host-ci-proof-evidence.sh"
 install -D -m 0644 "$repo_root/tools/splitctl/src/main.rs" \
   "$control/tools/splitctl/src/main.rs"
+install -D -m 0644 "$repo_root/tools/splitctl/src/appliance_release.rs" \
+  "$control/tools/splitctl/src/appliance_release.rs"
 install -D -m 0644 "$repo_root/tools/splitctl/src/jeryu_client.rs" \
   "$control/tools/splitctl/src/jeryu_client.rs"
 git init --quiet --bare "$control_remote"

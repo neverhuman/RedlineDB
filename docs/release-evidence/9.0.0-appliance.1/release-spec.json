@@ -1,0 +1,85 @@
+{
+  "schema_version": "jain.appliance-release-spec/v1",
+  "release": "9.0.0-appliance.1",
+  "status": "production-hotfix",
+  "formal_ga": false,
+  "runtime_roster": "appliance-v9",
+  "public_host": "www.neverhuman.org",
+  "evidence_root": "docs/release-evidence/9.0.0-appliance.1",
+  "authority_sha256": "9b2380b305bf1bd420be3b9b2011a6fdf2f4b6729fda7bdc37b96684f2c772e9",
+  "release_index": {
+    "media_type": "application/vnd.jain.appliance.release.v1+json",
+    "reference": null
+  },
+  "runtime_roles": [
+    {
+      "role": "caddy",
+      "image_digest": null,
+      "source_commit": null
+    },
+    {
+      "role": "jainhub",
+      "image_digest": null,
+      "source_commit": null
+    },
+    {
+      "role": "jainnode",
+      "image_digest": null,
+      "source_commit": null
+    }
+  ],
+  "payloads": {
+    "web_assets": null,
+    "platform_adapter": null,
+    "jope_model_pack": null,
+    "typst_font_tool_pack": null
+  },
+  "configuration": {
+    "local_compose_sha256": null,
+    "production_compose_sha256": null,
+    "config_sha256": null
+  },
+  "source_freeze": {
+    "status": "pending",
+    "closure_sha256": null,
+    "entries": []
+  },
+  "rollback": {
+    "capture_status": "pending",
+    "capture_receipt": null,
+    "caddy_routes_sha256": null,
+    "non_jain_routes_sha256": null,
+    "configuration_sha256": null,
+    "source_tag": null,
+    "containers": []
+  },
+  "qualification": {
+    "minimum_stage_soak_seconds": 21600,
+    "minimum_canary_seconds": 3600,
+    "stage_soak_started_unix_seconds": null,
+    "stage_soak_ended_unix_seconds": null,
+    "canary_started_unix_seconds": null,
+    "canary_ended_unix_seconds": null,
+    "receipts": {
+      "build": null,
+      "publish": null,
+      "stage": null,
+      "qualify": null,
+      "canary": null,
+      "promote": null,
+      "rollback": null
+    }
+  },
+  "action_policy": {
+    "required_signatures": 2,
+    "signature_max_age_seconds": 900,
+    "nonce_root": "/var/lib/jain-split-ops/appliance-release/consumed-nonces",
+    "signature_scratch_root": "/var/lib/jain-split-ops/appliance-release/signature-scratch",
+    "owner_keys": []
+  },
+  "operator": {
+    "protocol": "jain.appliance-operator-stdin/v1",
+    "path": null,
+    "sha256": null
+  }
+}

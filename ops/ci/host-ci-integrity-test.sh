@@ -17,6 +17,7 @@ for path in \
   ops/ci/native-runtime.sh ops/ci/pinned-advisory.sh \
   ops/ci/pinned-cargo-audit.sh ops/ci/pinned-cargo-deny.sh \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh \
+  tools/splitctl/src/appliance_release.rs \
   tools/splitctl/src/jeryu_client.rs \
   tools/splitctl/src/main.rs; do
   mkdir -p "$fixture/$(dirname "$path")"
@@ -93,6 +94,14 @@ if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null 2>&1; then
   exit 1
 fi
 git -C "$fixture" restore tools/splitctl/src/jeryu_client.rs
+
+printf 'dirty appliance release authority\n' \
+  >>"$fixture/tools/splitctl/src/appliance_release.rs"
+if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null 2>&1; then
+  printf 'host CI integrity accepted dirty appliance release authority\n' >&2
+  exit 1
+fi
+git -C "$fixture" restore tools/splitctl/src/appliance_release.rs
 
 printf 'dirty proof evidence policy\n' >>"$fixture/ops/ci/host-ci-proof-evidence.sh"
 if "$fixture/ops/ci/host-ci-integrity.sh" "$fixture" >/dev/null 2>&1; then

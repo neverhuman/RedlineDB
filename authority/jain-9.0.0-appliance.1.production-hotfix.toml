@@ -1,0 +1,46 @@
+schema_version = "jain.appliance-production-hotfix-authority/v1"
+release = "9.0.0-appliance.1"
+status = "production-hotfix"
+formal_ga = false
+runtime_roster = "appliance-v9"
+runtime_roles = ["caddy", "jainhub", "jainnode"]
+public_host = "www.neverhuman.org"
+evidence_root = "docs/release-evidence/9.0.0-appliance.1"
+alpha6_authority = false
+
+[release_index]
+repository = "image.neverhuman.org/jain/appliance"
+media_type = "application/vnd.jain.appliance.release.v1+json"
+
+[installer]
+url = "https://www.neverhuman.org/install-jain.sh"
+release = "9.0.0-appliance.1"
+profile = "local"
+gpu = "auto"
+port = 4180
+
+[rollback]
+capture_status = "required-before-first-apply"
+caddy_container = "proxy-caddy-1"
+legacy_guest_upstream = "192.168.68.54:8082"
+landing_upstream = "jain-landing:80"
+legacy_matchers = ["/api/public/*", "/try", "/live/gNN/*", "fallback"]
+fresh_caddy_capture_required = true
+containers_required = true
+image_ids_required = true
+source_tag_required = true
+configuration_required = true
+
+[operation_policy]
+plan_only_without_apply = true
+apply_requires_action_envelope = true
+required_signatures = 2
+signature_max_age_seconds = 900
+nonce_root = "/var/lib/jain-split-ops/appliance-release/consumed-nonces"
+signature_scratch_root = "/var/lib/jain-split-ops/appliance-release/signature-scratch"
+single_use_nonce = true
+gated_operations = ["build", "publish", "stage", "qualify", "canary", "promote", "rollback"]
+
+[soak_policy]
+stage_seconds = 21600
+canary_seconds = 3600

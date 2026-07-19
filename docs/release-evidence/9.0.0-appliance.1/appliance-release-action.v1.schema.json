@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/appliance-release-action/v1",
+  "title": "Jain appliance release action envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "release",
+    "operation",
+    "authority_sha256",
+    "spec_sha256",
+    "plan_sha256",
+    "issued_unix_seconds",
+    "expires_unix_seconds",
+    "nonce",
+    "signatures"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.appliance-release-action/v1" },
+    "release": { "const": "9.0.0-appliance.1" },
+    "operation": {
+      "enum": ["build", "publish", "stage", "qualify", "canary", "promote", "rollback"]
+    },
+    "authority_sha256": { "$ref": "#/$defs/sha256" },
+    "spec_sha256": { "$ref": "#/$defs/sha256" },
+    "plan_sha256": { "$ref": "#/$defs/sha256" },
+    "issued_unix_seconds": { "type": "integer", "minimum": 1 },
+    "expires_unix_seconds": { "type": "integer", "minimum": 1 },
+    "nonce": { "type": "string", "pattern": "^[A-Za-z0-9._-]{16,128}$" },
+    "signatures": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["signer_fingerprint", "signature", "signed_over_sha256"],
+        "properties": {
+          "signer_fingerprint": { "type": "string", "pattern": "^sha256:[0-9a-f]{64}$" },
+          "signature": { "type": "string", "minLength": 1 },
+          "signed_over_sha256": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^(?!0{64}$)[0-9a-f]{64}$" }
+  }
+}
