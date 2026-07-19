@@ -280,7 +280,7 @@ sed -i \
   "s#/home/ubuntu/jain-split#$sandbox_family_root#g" \
   "$control/repos.manifest.toml"
 sed -i \
-  "s#remote = \"http://127.0.0.1:8787/git/jeryu/jain-split-ops.git\"#remote = \"$control_remote\"#" \
+  "s#remote = \"http://127.0.0.1:8787/git/veox/jain-split-ops.git\"#remote = \"$control_remote\"#" \
   "$control/repos.manifest.toml"
 # The production controller is intentionally fixed to the live local forge.
 # This standalone fixture compiles and validates against its own ephemeral

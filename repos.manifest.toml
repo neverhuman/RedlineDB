@@ -162,10 +162,11 @@ reason = "release database dependency"
 [control_plane]
 name = "jain-split-ops"
 path = "/home/ubuntu/jain-split/jain-split-ops"
-remote = "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git"
+remote = "http://127.0.0.1:8787/git/veox/jain-split-ops.git"
 branch = "main"
 role = "family-control-plane"
 required_check = "jain-split-ops/required"
+forge_owner = "veox"
 identity_status = "pending"
 
 [nested_families.redline]

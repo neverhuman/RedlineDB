@@ -10353,7 +10353,7 @@ engine_release_tree = "{engine_tree}"
         .unwrap();
 
         for (repo, owner) in [
-            ("jain-split-ops", "jeryu"),
+            ("jain-split-ops", "veox"),
             ("jain-report", "jeryu"),
             ("jain-smartcluster", "jain-split"),
             ("redline-core", "jeryu"),
