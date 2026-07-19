@@ -4311,10 +4311,7 @@ fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     let tag = tag.ok_or("immutable-tag requires --tag")?;
     let commit = commit.ok_or("immutable-tag requires --commit")?;
     let token_file = token_file.ok_or("immutable-tag requires --token-file")?;
-    let client = JeryuClient::from_token_file(&token_file)?;
-    let repository_readback = client.execute(&JeryuRequest::repo_list()?)?;
-    let identity = validate_repo_list_identity(&repository_readback, &repo_slug)?;
-    drop(client);
+    let identity = authenticated_repository_identity(&repo_slug, &token_file)?;
     let receipt = match receipt {
         Some(path) => path,
         None => release_evidence_path(&format!("immutable-tag-{}.json", receipt_component(&tag))),
@@ -6057,6 +6054,15 @@ fn validate_repo_list_identity(
     }))
 }
 
+fn authenticated_repository_identity(
+    repo: &str,
+    token_file: &Path,
+) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    let client = JeryuClient::from_token_file(token_file)?;
+    let repository_readback = client.execute(&JeryuRequest::repo_list()?)?;
+    validate_repo_list_identity(&repository_readback, repo)
+}
+
 fn fetch_authenticated_main(
     repo: &Path,
     remote: &str,
@@ -6176,10 +6182,7 @@ fn jeryu_main_fetch(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
         return Err("main-fetch --apply requires --expected-head".into());
     }
     let remote = fixed_jeryu_git_remote(&repo)?;
-    let client = JeryuClient::from_token_file(&token_file)?;
-    let repository_readback = client.execute(&JeryuRequest::repo_list()?)?;
-    let identity = validate_repo_list_identity(&repository_readback, &repo)?;
-    drop(client);
+    let identity = authenticated_repository_identity(&repo, &token_file)?;
 
     let mut report = receipt_header("jain.jeryu-main-fetch/v1", "jeryu-local main-fetch", apply);
     report["repository"] = json!(repo);
@@ -6286,6 +6289,11 @@ fn jeryu_branch_push_beneath(
     report["expected_head"] = json!(expected_head);
     report["remote"] = json!(remote);
     report["external_state_changed"] = json!(false);
+    report["token_metadata_validated"] = json!(false);
+    if let Some(token_file) = token_file.as_deref() {
+        report["api_identity"] = authenticated_repository_identity(&repo, token_file)?;
+        report["token_metadata_validated"] = json!(true);
+    }
     let result = (|| {
         if !apply {
             report["action"] = json!("would-push-and-read-back");
