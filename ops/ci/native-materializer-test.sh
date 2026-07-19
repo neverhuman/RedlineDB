@@ -265,28 +265,69 @@ jain_cleanup_native_source_worktrees "$authority" "$source_root" "$staged_source
 worker_uid="$(id -u)"
 worker_gid="$(id -g)"
 foreign_staged_source="$tmp/foreign-staged-source"
-sudo -n chown -R root:root "$source_root"
-source_root_foreign=1
-export GIT_CONFIG_COUNT=1
-export GIT_CONFIG_KEY_0=safe.directory
-export GIT_CONFIG_VALUE_0='*'
-jain_stage_native_source_worktrees \
-  "$authority" "$source_root" "$foreign_staged_source"
-unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
-for learner in catboost xgboost lightgbm; do
-  [[ "$(git -C "$foreign_staged_source/$learner" rev-parse HEAD)" == \
-      "$(jq -er --arg learner "$learner" \
-        '.learners[] | select(.name == $learner) | .revision' "$authority")" \
-    && -z "$(git -C "$foreign_staged_source/$learner" \
-      status --porcelain=v1 --untracked-files=all)" ]] || {
-    printf 'foreign-owner object staging drifted: %s\n' "$learner" >&2
+if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 ]]; then
+  # The isolated worker intentionally has NoNewPrivileges and no sudo path.
+  # Its root-owned control-plane mount is a stronger live foreign-owner
+  # fixture than changing ownership on worker-created bytes.
+  foreign_source="${JAIN_SPLIT_OPS_ROOT:?isolated control-plane root is required}"
+  [[ "$(stat -c '%u:%g' -- "$foreign_source")" == '0:0' ]] || {
+    printf 'isolated foreign-owner fixture is not root-owned\n' >&2
     exit 1
   }
-done
-jain_cleanup_native_source_worktrees \
-  "$authority" "$source_root" "$foreign_staged_source"
-sudo -n chown -R "$worker_uid:$worker_gid" "$source_root"
-source_root_foreign=0
+  export GIT_CONFIG_COUNT=1
+  export GIT_CONFIG_KEY_0=safe.directory
+  export GIT_CONFIG_VALUE_0='*'
+  foreign_object_database="$(
+    jain_native_physical_object_database "$foreign_source"
+  )"
+  foreign_commit="$(jain_native_git_object "$foreign_object_database" \
+    rev-parse --verify 'HEAD^{commit}')"
+  foreign_tree="$(jain_native_git_object "$foreign_object_database" \
+    rev-parse --verify 'HEAD^{tree}')"
+  jain_native_object_tree_is_symlink_free \
+    "$foreign_object_database" "$foreign_commit"
+  jain_clone_native_object_database \
+    "$foreign_object_database" "$foreign_staged_source"
+  unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+  git -C "$foreign_staged_source" checkout --quiet --detach "$foreign_commit"
+  [[ "$(git -C "$foreign_staged_source" rev-parse 'HEAD^{commit}')" \
+      == "$foreign_commit" \
+    && "$(git -C "$foreign_staged_source" rev-parse 'HEAD^{tree}')" \
+      == "$foreign_tree" \
+    && -z "$(git -C "$foreign_staged_source" \
+      status --porcelain=v1 --untracked-files=all)" \
+    && -z "$(find "$foreign_staged_source" -xdev -type l -print -quit)" ]] || {
+    printf 'isolated foreign-owner object staging drifted\n' >&2
+    exit 1
+  }
+  assert_independent_primary "$foreign_staged_source" || {
+    printf 'isolated foreign-owner staging is not an independent primary\n' >&2
+    exit 1
+  }
+else
+  sudo -n chown -R root:root "$source_root"
+  source_root_foreign=1
+  export GIT_CONFIG_COUNT=1
+  export GIT_CONFIG_KEY_0=safe.directory
+  export GIT_CONFIG_VALUE_0='*'
+  jain_stage_native_source_worktrees \
+    "$authority" "$source_root" "$foreign_staged_source"
+  unset GIT_CONFIG_COUNT GIT_CONFIG_KEY_0 GIT_CONFIG_VALUE_0
+  for learner in catboost xgboost lightgbm; do
+    [[ "$(git -C "$foreign_staged_source/$learner" rev-parse HEAD)" == \
+        "$(jq -er --arg learner "$learner" \
+          '.learners[] | select(.name == $learner) | .revision' "$authority")" \
+      && -z "$(git -C "$foreign_staged_source/$learner" \
+        status --porcelain=v1 --untracked-files=all)" ]] || {
+      printf 'foreign-owner object staging drifted: %s\n' "$learner" >&2
+      exit 1
+    }
+  done
+  jain_cleanup_native_source_worktrees \
+    "$authority" "$source_root" "$foreign_staged_source"
+  sudo -n chown -R "$worker_uid:$worker_gid" "$source_root"
+  source_root_foreign=0
+fi
 
 aliased_repository="$source_root/../source/catboost"
 if jain_native_physical_object_database "$aliased_repository" 2>/dev/null; then
