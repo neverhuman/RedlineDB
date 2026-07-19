@@ -376,7 +376,7 @@ if [[ "$control_ref" != refs/heads/main && "$bootstrap_commit" != "$control_comm
   fail 'bootstrap control commit differs from the exact request'
 fi
 "$splitctl_path" jeryu-local git-materialize \
-  --repo jeryu/jain-split-ops --remote "$control_remote" \
+  --repo veox/jain-split-ops --remote "$control_remote" \
   --ref "$control_ref" --expected-head "$control_commit" \
   --destination "$control_root" --token-file "$token_file" \
   --retain-origin >/dev/null \
