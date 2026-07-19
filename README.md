@@ -21,8 +21,9 @@ just required
 just score
 ```
 
-Operational remotes and internal Cargo Git dependencies use local Jeryu:
-`http://127.0.0.1:8787/git/jeryu/<repo>.git`.
+Operational remotes use the local Jeryu forge under the canonical `veox`
+owner: `http://127.0.0.1:8787/git/veox/<repo>.git`. Historical internal Cargo
+pins retain their existing owner spelling until an explicit dependency re-pin.
 
 Do not point agents at `~/jeryu-split`, public GitHub, or `target/bare-mirrors`
 for Jain development sources. `~/.jeryu` is only local credential/client state.
@@ -46,7 +47,7 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
   artifact, canary, promotion, and rollback workflow.
 
 SmartCluster is managed as required infrastructure under the declared
-`jain-split/jain-smartcluster` namespace. Redline ground truth lives only in the
+`veox/jain-smartcluster` namespace. Redline ground truth lives only in the
 local `jain-redline/` nested family and is validated as an immutable release
 dependency. The top-level legacy Redline paths are preservation inputs, not
 authority or release sources; a future copy-out is a separately authorized export.

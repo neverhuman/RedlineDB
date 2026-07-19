@@ -6,11 +6,11 @@ forge at `http://127.0.0.1:8787`.
 ## Ground Rules
 
 - The Jain workspace is `/home/ubuntu/jain-split`.
-- Local remotes use `http://127.0.0.1:8787/git/jeryu/<repo>.git`.
+- Local operational remotes use `http://127.0.0.1:8787/git/veox/<repo>.git`.
 - Do not use `~/jeryu-split` as an operational source for Jain work.
 - `~/.jeryu` is local credential/client state only, not a source checkout.
-- Normal `git fetch`, `git pull`, and `git push` use local Git/HTTP
-  credentials already configured for the loopback host.
+- Release lifecycle fetch/push operations use the typed `splitctl jeryu-local`
+  transport with an explicit token-file path.
 - GitHub.com mirrors are only for explicit mirror workflows.
 - Do not run `gh auth login` for `127.0.0.1:8787`.
 - Do not use generic GitHub connector or MCP tools for the local Jeryu host.
@@ -18,36 +18,32 @@ forge at `http://127.0.0.1:8787`.
 - If `jeryu.*` tools are not exposed, use `cargo run --locked -- jeryu-local` or the
   `just jeryu-*` recipes from this control-plane repo.
 
-## Git And Forge
+## Read-Only Git And Forge Inspection
 
-Use Git directly from any Jain repo:
+Inspect the claimed Jain checkout without mutating refs:
 
 ```bash
-git remote -v
-git ls-remote origin HEAD
-git fetch origin
+git remote get-url origin
+git status --porcelain=v1 --branch
+git rev-parse HEAD HEAD^{tree}
 ```
 
-If a checkout's remote is wrong, or Git is slow/failing, repair the whole Jain
-family with one control-plane command:
+Check the whole family and local forge without changing any checkout:
 
 ```bash
 cd /home/ubuntu/jain-split/jain-split-ops
 just jeryu-ready
 ```
 
-That command checks the local forge, canonicalizes each repo `origin`, removes
-extra remotes, registers Jain family metadata, and runs the local-source policy
-validator. Use the read-only form when you only need a status check:
-
-```bash
-just jeryu-doctor
-```
+`jeryu-ready` and `jeryu-doctor` are read-only aliases. If they report drift,
+claim the affected checkout and use the exact-head lifecycle below; do not
+rewrite every checkout in bulk.
 
 List local forge repositories:
 
 ```bash
-just jeryu-repos
+token_file=/home/ubuntu/.jeryu/secrets/veox-owner-token
+just jeryu-repos "$token_file"
 ```
 
 ## Pull Requests
@@ -55,28 +51,37 @@ just jeryu-repos
 List open PRs:
 
 ```bash
-repo=jain-core
-just jeryu-prs "$repo"
+repo=veox/jain-core
+token_file=/home/ubuntu/.jeryu/secrets/veox-owner-token
+just jeryu-prs "$repo" "$token_file"
 ```
 
 Create a draft PR:
 
 ```bash
-just jeryu-pr-open jain-core codex/local-jeryu-policy "split-ops: canonicalize local Jeryu"
+repo=veox/jain-core
+head=codex/local-jeryu-policy
+sha=<full-head-sha>
+token_file=/home/ubuntu/.jeryu/secrets/veox-owner-token
+just jeryu-pr-open-apply "$repo" "split-ops: canonicalize local Jeryu" \
+  "$head" "$sha" "$token_file"
 ```
 
 Check CI status for a commit:
 
 ```bash
 sha=<commit-sha>
-cargo run --locked -- jeryu-local checks --repo jain-core --sha "$sha"
+cargo run --locked -- jeryu-local checks --repo veox/jain-core --sha "$sha" \
+  --token-file /home/ubuntu/.jeryu/secrets/veox-owner-token
 ```
 
 Merge a PR after the required check is green:
 
 ```bash
 pr=<number>
-cargo run --locked -- jeryu-local pr-merge --repo jain-core --number "$pr"
+cargo run --locked -- jeryu-local pr-merge --repo veox/jain-core --number "$pr" \
+  --expected-head <full-head-sha> --apply \
+  --token-file /home/ubuntu/.jeryu/secrets/veox-owner-token
 ```
 
 ## Required CI
@@ -86,5 +91,5 @@ Run and post the split host required check through the Jain control plane:
 ```bash
 JAIN_SPLIT_ROOT=/home/ubuntu/jain-split \
   bash /home/ubuntu/jain-split/jain-split-ops/ops/ci/split-host-ci.sh \
-  jeryu jain-core <commit-sha> /home/ubuntu/jain-split/jain-core jain-core/required
+  veox jain-core <commit-sha> /home/ubuntu/jain-split/jain-core jain-core/required
 ```

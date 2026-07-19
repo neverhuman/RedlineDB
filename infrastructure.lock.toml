@@ -1,6 +1,6 @@
 schema_version = "jain.infrastructure.lock/v1"
 source_manifest = "repos.manifest.toml"
-source_manifest_sha256 = "50cd82292260e65f8892389ccb461e5880f2e33c9e94b31e5621f6f563d4adc0"
+source_manifest_sha256 = "1746981b3c8e2feff80cd3ab6f52400c843863039a84ab90fc27e5e91f0ae3a8"
 generation_tool = "splitctl 0.1.0"
 family_repo_count = 26
 infrastructure_repo_count = 1
@@ -8,9 +8,9 @@ infrastructure_repo_count = 1
 [[infrastructure_repo]]
 name = "jain-smartcluster"
 kind = "required-infrastructure"
-forge_owner = "jain-split"
-forge_slug = "jain-split/jain-smartcluster"
-remote = "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git"
+forge_owner = "veox"
+forge_slug = "veox/jain-smartcluster"
+remote = "http://127.0.0.1:8787/git/veox/jain-smartcluster.git"
 branch = "main"
 identity_status = "pending"
 required_check = "jain-smartcluster/required"

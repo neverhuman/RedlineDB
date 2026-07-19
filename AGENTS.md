@@ -27,13 +27,13 @@ The Jain workspace is `/home/ubuntu/jain-split`. Do not use `~/jeryu-split` as
 an operational source for Jain work; it is a precedent/product checkout, not a
 member of this family.
 
-Use normal Git commands against the local loopback Jeryu remote. Git credentials
-are already supplied by local Git/HTTP credential storage, so fetch/push should
-be fast and should not require agent-visible token handling.
+Use the typed `splitctl jeryu-local` transport against the local loopback Jeryu
+forge. Pass credentials only by an explicit token-file path; never rely on an
+ambient credential store for release lifecycle operations.
 
 Canonical family repo remote:
-`http://127.0.0.1:8787/git/jeryu/<repo>.git`; infrastructure remotes are
-declared explicitly in `repos.manifest.toml` and may use another forge owner.
+`http://127.0.0.1:8787/git/veox/<repo>.git`. Historical `jeryu/*` and
+`jain-split/*` spellings remain valid only inside pinned Cargo dependency URLs.
 
 For a quick check:
 
@@ -42,18 +42,18 @@ git remote -v
 git ls-remote origin HEAD
 ```
 
-If a repo remote is wrong or Git is slow/failing, run the Jain control-plane
-repair once:
+If a repo remote is wrong or Git is slow/failing, inspect the Jain control-plane
+authority without changing any checkout:
 
 ```bash
 cd /home/ubuntu/jain-split/jain-split-ops
 just jeryu-ready
 ```
 
-That command checks the local forge, removes extra remotes from every live
-checkout, sets `origin` to local Jeryu, registers Jain family metadata, and runs
-the family policy validator. Do not inspect `~/.jeryu`, run `gh auth login`, or
-copy source from Jeryu internals.
+That command is read-only: it checks the forge, remotes, family metadata, and
+local-source policy. Repair only the specifically claimed checkout through the
+reviewed `splitctl jeryu-local` lifecycle. Do not inspect `~/.jeryu`, run
+`gh auth login`, or copy source from Jeryu internals.
 
 For PRs, checks, and merges, use `jeryu.*` MCP tools when they are exposed. If
 they are not exposed, use

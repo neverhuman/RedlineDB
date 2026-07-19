@@ -135,7 +135,7 @@ git -C "$sandbox_family_root/target/advisory-db" checkout --quiet --detach \
 git -C "$sandbox_family_root/target/advisory-db" remote remove origin
 [[ -d "$sandbox_family_root/target/advisory-db/.git" ]]
 product="$split_root/jain-report"
-product_remote="$product_forge_root/jeryu/jain-report.git"
+product_remote="$product_forge_root/veox/jain-report.git"
 forge_log="$tmp/forge.log"
 forge_state="$tmp/forge-state.jsonl"
 forge_behavior="$tmp/forge-behavior"
@@ -509,7 +509,7 @@ sudo -n install -o root -g root -m 0600 \
 noexec_log="$tmp/noexec-request-root.log"
 if JAIN_HOST_CI_SANDBOX="$sandbox" JAIN_SPLIT_ROOT="$sandbox_family_root" \
   "$control/ops/ci/split-host-ci.sh" \
-    jeryu jain-report "$control_commit" "$control" \
+    veox jain-report "$control_commit" "$control" \
     jain-report/required >"$noexec_log" 2>&1; then
   printf 'sandbox accepted a noexec root request filesystem\n' >&2
   exit 1
@@ -738,7 +738,7 @@ for bootstrap_case in missing-commit wrong-commit expired overlong; do
   if JAIN_HOST_CI_SANDBOX="$sandbox" \
     JAIN_SPLIT_ROOT="$sandbox_family_root" \
       "$control/ops/ci/split-host-ci.sh" \
-        jeryu jain-report "$product_sha" "$product" \
+        veox jain-report "$product_sha" "$product" \
         jain-report/required >"$bootstrap_reject_log" 2>&1; then
     printf 'sandbox accepted %s bootstrap authority\n' "$bootstrap_case" >&2
     exit 1
@@ -774,7 +774,7 @@ if JAIN_HOST_CI_EXACT_ROOT="$control" \
   JAIN_HOST_CI_PUBLISHER="$publisher" \
   JAIN_SPLIT_ROOT="$split_root" \
     "$control/ops/ci/split-host-ci.sh" \
-      jeryu jain-report "$product_sha" "$tmp/not-a-repository" \
+      veox jain-report "$product_sha" "$tmp/not-a-repository" \
       jain-report/required >"$credential_reject_log" 2>&1; then
   printf 'host CI accepted caller credentials or preseeded mode markers\n' >&2
   exit 1
@@ -820,7 +820,7 @@ if JAIN_HOST_CI_REEXEC_STATE="$forged_root/reexec-state.json" \
   JAIN_SPLIT_ROOT="$split_root" \
   CARGO_TARGET_DIR="$repo_root/target" \
     bash "$forged_root/.split-host-ci-reviewed" \
-      jeryu jain-report "$product_sha" "$product" jain-report/required \
+      veox jain-report "$product_sha" "$product" jain-report/required \
       >/dev/null 2>&1; then
   printf 'reviewed child accepted a caller-owned legacy state/receipt\n' >&2
   exit 1
@@ -847,7 +847,7 @@ unadvertised_offset="$(stat -c '%s' "$forge_log")"
 if JAIN_HOST_CI_SANDBOX="$sandbox" \
   JAIN_SPLIT_ROOT="$sandbox_family_root" \
     "$control/ops/ci/split-host-ci.sh" \
-      jeryu jain-report "$unadvertised_sha" "$product" \
+      veox jain-report "$unadvertised_sha" "$product" \
       jain-report/required >"$tmp/unadvertised.log" 2>&1; then
   printf 'sandbox accepted a caller-only product commit\n' >&2
   exit 1
@@ -883,7 +883,7 @@ JAIN_TEST_ROOT_CONFIG_PATH="$publisher_config" \
 JAIN_TEST_ROOT_REQUEST_PATH="$request_root" \
 JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
   "$control/ops/ci/split-host-ci.sh" \
-    jeryu jain-report "$product_sha" "$product" jain-report/required \
+    veox jain-report "$product_sha" "$product" jain-report/required \
     >"$success_log" 2>&1 || {
   cat "$success_log" >&2
   printf 'validated parent could not publish success\n' >&2
@@ -905,18 +905,18 @@ grep -Fq '"name":"jankurai/proof"' <<<"$success_tail" \
 proof_post_line="$(grep -nF '"name":"jankurai/proof"' \
   <<<"$success_tail" | head -1 | cut -d: -f1)"
 proof_get_line="$(grep -nF \
-  "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+  "GET /repos/veox/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
   <<<"$success_tail" | head -1 | cut -d: -f1)"
 required_post_line="$(grep -nF '"name":"jain-report/required"' \
   <<<"$success_tail" | head -1 | cut -d: -f1)"
 required_get_line="$(grep -nF \
-  "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+  "GET /repos/veox/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
   <<<"$success_tail" | sed -n '2p' | cut -d: -f1)"
 status_post_line="$(grep -nF \
-  "POST /repos/jeryu/jain-report/statuses/$product_sha HTTP/1.1" \
+  "POST /repos/veox/jain-report/statuses/$product_sha HTTP/1.1" \
   <<<"$success_tail" | head -1 | cut -d: -f1)"
 status_get_line="$(grep -nF \
-  "GET /repos/jeryu/jain-report/commits/$product_sha/status HTTP/1.1" \
+  "GET /repos/veox/jain-report/commits/$product_sha/status HTTP/1.1" \
   <<<"$success_tail" | head -1 | cut -d: -f1)"
 [[ "$proof_post_line" =~ ^[0-9]+$ && "$proof_get_line" =~ ^[0-9]+$ \
   && "$required_post_line" =~ ^[0-9]+$ && "$required_get_line" =~ ^[0-9]+$ \
@@ -1184,7 +1184,7 @@ run_fixture_lane() {
     JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
     "$@" \
     "$control/ops/ci/split-host-ci.sh" \
-      jeryu jain-report "$product_sha" "$product" jain-report/required \
+      veox jain-report "$product_sha" "$product" jain-report/required \
       >"$log" 2>&1
 }
 
@@ -1217,10 +1217,10 @@ exercise_partial_publication() {
   }
   if (( stage >= 2 )); then
     grep -Fq \
-      "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+      "GET /repos/veox/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
       <<<"$tail"
   elif grep -Fq \
-      "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+      "GET /repos/veox/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
       <<<"$tail"; then
     printf '%s read back a failed proof POST\n' "$behavior" >&2
     exit 1
@@ -1233,30 +1233,30 @@ exercise_partial_publication() {
   fi
   if (( stage >= 4 )); then
     [[ "$(grep -Fc \
-      "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+      "GET /repos/veox/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
       <<<"$tail")" -ge 2 ]]
   elif [[ "$(grep -Fc \
-    "GET /repos/jeryu/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
+    "GET /repos/veox/jain-report/commits/$product_sha/check-runs HTTP/1.1" \
     <<<"$tail")" -ge 2 ]]; then
     printf '%s reached required-check readback too early\n' "$behavior" >&2
     exit 1
   fi
   if (( stage >= 5 )); then
     grep -Fq \
-      "POST /repos/jeryu/jain-report/statuses/$product_sha HTTP/1.1" \
+      "POST /repos/veox/jain-report/statuses/$product_sha HTTP/1.1" \
       <<<"$tail"
   elif grep -Fq \
-      "POST /repos/jeryu/jain-report/statuses/$product_sha HTTP/1.1" \
+      "POST /repos/veox/jain-report/statuses/$product_sha HTTP/1.1" \
       <<<"$tail"; then
     printf '%s reached commit-status publication too early\n' "$behavior" >&2
     exit 1
   fi
   if (( stage >= 6 )); then
     grep -Fq \
-      "GET /repos/jeryu/jain-report/commits/$product_sha/status HTTP/1.1" \
+      "GET /repos/veox/jain-report/commits/$product_sha/status HTTP/1.1" \
       <<<"$tail"
   elif grep -Fq \
-    "GET /repos/jeryu/jain-report/commits/$product_sha/status HTTP/1.1" \
+    "GET /repos/veox/jain-report/commits/$product_sha/status HTTP/1.1" \
     <<<"$tail"; then
     printf '%s reached commit-status readback too early\n' "$behavior" >&2
     exit 1
@@ -1302,7 +1302,7 @@ if JAIN_HOST_CI_SANDBOX="$sandbox" \
   JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
   JAIN_TEST_FORCE_FAILURE=1 \
     "$control/ops/ci/split-host-ci.sh" \
-      jeryu jain-report "$product_sha" "$product" jain-report/required \
+      veox jain-report "$product_sha" "$product" jain-report/required \
       >"$tmp/failure-run.log" 2>&1; then
   printf 'nonzero worker run returned publication success\n' >&2
   exit 1
@@ -1338,7 +1338,7 @@ if env \
   JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
   JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
   "$control/ops/ci/split-host-ci.sh" \
-    jeryu jain-report "$score_failure_sha" "$product" \
+    veox jain-report "$score_failure_sha" "$product" \
     jain-report/required >"$tmp/score-failure.log" 2>&1; then
   printf 'governed score failure returned publication success\n' >&2
   exit 1
@@ -1384,7 +1384,7 @@ env \
   JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
   JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
   "$control/ops/ci/split-host-ci.sh" \
-    jeryu jain-report "$floor_only_sha" "$product" \
+    veox jain-report "$floor_only_sha" "$product" \
     jain-report/required >"$tmp/floor-only.log" 2>&1
 floor_only_tail="$(tail -c "+$((floor_only_offset + 1))" "$forge_log")"
 grep -Fq 'proof_status=pass' <<<"$floor_only_tail"
@@ -1411,7 +1411,7 @@ if env \
   JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
   JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
   "$control/ops/ci/split-host-ci.sh" \
-    jeryu jain-report "$forged_report_sha" "$product" \
+    veox jain-report "$forged_report_sha" "$product" \
     jain-report/required >"$tmp/forged-report.log" 2>&1; then
   printf 'forged Jankurai report acquired publication authority\n' >&2
   exit 1
@@ -1435,7 +1435,7 @@ mkdir -m 0700 "$fd_attack_root/child-home" \
   "$fd_attack_root/writable" "$fd_attack_root/cargo-target"
 fd_attack_request="$fd_attack_root/sandbox-request.json"
 jq -cn --arg commit "$control_commit" --arg split_root "$sandbox_family_root" \
-  --arg owner jeryu --arg repo jain-report --arg head "$product_sha" \
+  --arg owner veox --arg repo jain-report --arg head "$product_sha" \
   --arg product "$fd_attack_root/product-source" \
   --arg check jain-report/required \
   --arg cargo_target "$fd_attack_root/cargo-target" \

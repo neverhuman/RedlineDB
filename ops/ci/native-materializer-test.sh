@@ -39,14 +39,14 @@ mkdir -p "$source_root" "$run_root"
 
 managed_inventory='{"repositories":[
   {"kind":"control-plane","name":"jain-split-ops",
-   "remote":"http://127.0.0.1:8787/git/jeryu/jain-split-ops.git",
+   "remote":"http://127.0.0.1:8787/git/veox/jain-split-ops.git",
    "required_check":"jain-split-ops/required"},
   {"kind":"family","name":"jain-core",
-   "remote":"http://127.0.0.1:8787/git/jeryu/jain-core.git",
+   "remote":"http://127.0.0.1:8787/git/veox/jain-core.git",
    "required_check":"jain-core/required"}
 ]}'
 [[ "$(jain_authoritative_control_plane_remote "$managed_inventory")" == \
-  'http://127.0.0.1:8787/git/jeryu/jain-split-ops.git' ]] || exit 1
+  'http://127.0.0.1:8787/git/veox/jain-split-ops.git' ]] || exit 1
 [[ "$(jain_authoritative_required_check "$managed_inventory" jain-core)" == \
   'jain-core/required' ]] || exit 1
 if jain_validate_native_check_mode jain-core jain-core/required \

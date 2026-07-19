@@ -23,8 +23,11 @@ const RELEASE_VERSION: &str = "8.0.1";
 const RELEASE_STATUS: &str = "candidate";
 const ROLLBACK_TARGET: &str = "7.0.6";
 const LOCAL_JERYU_ORIGIN: &str = "http://127.0.0.1:8787";
-const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
-const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
+const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/veox/";
+const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/veox/";
+const NESTED_REDLINE_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
+const LEGACY_FAMILY_PIN_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
+const LEGACY_INFRA_PIN_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
 const JERYU_ASKPASS_MODE: &str = "JAIN_SPLITCTL_JERYU_ASKPASS";
 const JERYU_ASKPASS_TOKEN_FILE: &str = "JAIN_SPLITCTL_JERYU_TOKEN_FILE";
 const JERYU_GIT_USERNAME: &str = "x-access-token";
@@ -1236,7 +1239,8 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
                    name_key: &str,
                    check_key: &str,
                    remote_key: &str,
-                   owner_key: &str|
+                   owner_key: &str,
+                   expected_owner: Option<&str>|
      -> Result<(), String> {
         let Some(name) = string(raw, name_key) else {
             return Ok(());
@@ -1244,7 +1248,14 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
         if name != repo_name {
             return Ok(());
         }
-        let owner = string(raw, owner_key).unwrap_or_else(|| "jeryu".to_owned());
+        let owner = string(raw, owner_key)
+            .or_else(|| expected_owner.map(str::to_owned))
+            .unwrap_or_else(|| "jeryu".to_owned());
+        if expected_owner.is_some_and(|expected| owner != expected) {
+            return Err(format!(
+                "host CI authority for {name} has non-canonical forge owner: {owner}"
+            ));
+        }
         let slug = format!("{owner}/{name}");
         validate_jeryu_repo_slug(&slug).map_err(|error| error.to_string())?;
         if string(raw, "jeryu_slug").is_some_and(|declared| declared != slug) {
@@ -1276,7 +1287,14 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
     };
 
     if let Some(control) = data.get("control_plane") {
-        add(control, "name", "required_check", "remote", "forge_owner")?;
+        add(
+            control,
+            "name",
+            "required_check",
+            "remote",
+            "forge_owner",
+            Some("veox"),
+        )?;
     }
     for key in ["repo", "infrastructure_repo"] {
         for raw in data
@@ -1285,7 +1303,14 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
             .into_iter()
             .flatten()
         {
-            add(raw, "name", "required_check", "remote", "forge_owner")?;
+            add(
+                raw,
+                "name",
+                "required_check",
+                "remote",
+                "forge_owner",
+                Some("veox"),
+            )?;
         }
     }
     if let Some(external) = data
@@ -1293,7 +1318,7 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
         .and_then(toml::Value::as_table)
     {
         for raw in external.values() {
-            add(raw, "repository", "required_check", "remote", "owner")?;
+            add(raw, "repository", "required_check", "remote", "owner", None)?;
         }
     }
     if let Some(nested) = data.get("nested_families").and_then(toml::Value::as_table) {
@@ -1304,6 +1329,7 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
                 "control_plane_required_check",
                 "control_plane_remote",
                 "forge_owner",
+                None,
             )?;
             for pending in raw
                 .get("pending_repository")
@@ -1311,7 +1337,14 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
                 .into_iter()
                 .flatten()
             {
-                add(pending, "name", "required_check", "remote", "forge_owner")?;
+                add(
+                    pending,
+                    "name",
+                    "required_check",
+                    "remote",
+                    "forge_owner",
+                    None,
+                )?;
             }
         }
     }
@@ -1956,9 +1989,11 @@ fn nested_engine_topology(data: &toml::Value) -> Result<NestedEngineTopology, St
             format!("{nested_key}.engine_repository must be one unaliased path component")
         })?;
     let engine_remote = string(nested, "engine_remote")
-        .filter(|remote| remote.starts_with(FAMILY_REMOTE_PREFIX) && remote.ends_with(".git"))
+        .filter(|remote| {
+            remote.starts_with(NESTED_REDLINE_REMOTE_PREFIX) && remote.ends_with(".git")
+        })
         .ok_or_else(|| format!("{nested_key}.engine_remote must be a local Jeryu Git remote"))?;
-    let expected_remote = format!("{FAMILY_REMOTE_PREFIX}{engine_repository}.git");
+    let expected_remote = format!("{NESTED_REDLINE_REMOTE_PREFIX}{engine_repository}.git");
     if engine_remote != expected_remote {
         return Err(format!(
             "{nested_key}.engine_remote must be {expected_remote}"
@@ -2173,7 +2208,7 @@ fn nested_engine_topology(data: &toml::Value) -> Result<NestedEngineTopology, St
         }
         let remote = optional_typed_string(raw, "remote", &format!("{row_key}.remote"))?
             .ok_or_else(|| format!("{row_key}.remote is required"))?;
-        let expected_remote = format!("{FAMILY_REMOTE_PREFIX}{name}.git");
+        let expected_remote = format!("{NESTED_REDLINE_REMOTE_PREFIX}{name}.git");
         if remote != expected_remote {
             return Err(format!("{row_key}.remote must be {expected_remote}"));
         }
@@ -3720,8 +3755,8 @@ fn validate_manifest_data(
     } else if let Some(raw) = smartcluster {
         for (key, expected) in [
             ("kind", "required-infrastructure"),
-            ("forge_owner", "jain-split"),
-            ("forge_slug", "jain-split/jain-smartcluster"),
+            ("forge_owner", "veox"),
+            ("forge_slug", "veox/jain-smartcluster"),
             ("required_check", "jain-smartcluster/required"),
             ("default_branch", "main"),
         ] {
@@ -3731,7 +3766,7 @@ fn validate_manifest_data(
         }
         let expected_infra_remote = format!("{INFRA_REMOTE_PREFIX}jain-smartcluster.git");
         if declared_remote(raw).as_deref() != Some(expected_infra_remote.as_str()) {
-            errors.push("jain-smartcluster: remote must use the jain-split namespace".to_owned());
+            errors.push("jain-smartcluster: remote must use the veox namespace".to_owned());
         }
         if raw.get("family_registered").and_then(toml::Value::as_bool) != Some(true) {
             errors.push("jain-smartcluster: family_registered must be true".to_owned());
@@ -3753,6 +3788,9 @@ fn validate_manifest_data(
     }
     if string(control, "required_check").as_deref() != Some("jain-split-ops/required") {
         errors.push("control_plane.required_check must be jain-split-ops/required".to_owned());
+    }
+    if string(control, "forge_owner").as_deref() != Some("veox") {
+        errors.push("control_plane.forge_owner must be veox".to_owned());
     }
     if let Err(error) =
         validate_managed_release_identity(control, "control_plane", "jain-split-ops", "current_tag")
@@ -7531,10 +7569,10 @@ fn preflight(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         }
 
         if raw.get("kind").and_then(toml::Value::as_str) == Some("required-infrastructure") {
-            if string(raw, "forge_owner").as_deref() != Some("jain-split") {
-                failures.push("infrastructure forge_owner must be jain-split".to_owned());
+            if string(raw, "forge_owner").as_deref() != Some("veox") {
+                failures.push("infrastructure forge_owner must be veox".to_owned());
             }
-            if string(raw, "forge_slug").as_deref() != Some("jain-split/jain-smartcluster") {
+            if string(raw, "forge_slug").as_deref() != Some("veox/jain-smartcluster") {
                 failures.push("infrastructure forge_slug does not match the manifest".to_owned());
             }
             if raw.get("family_registered").and_then(toml::Value::as_bool) != Some(true) {
@@ -8218,7 +8256,11 @@ fn check_cargo_sources(
             if !line.contains("git") {
                 continue;
             }
-            if line.contains(FAMILY_REMOTE_PREFIX) || line.contains(INFRA_REMOTE_PREFIX) {
+            if line.contains(FAMILY_REMOTE_PREFIX)
+                || line.contains(INFRA_REMOTE_PREFIX)
+                || line.contains(LEGACY_FAMILY_PIN_PREFIX)
+                || line.contains(LEGACY_INFRA_PIN_PREFIX)
+            {
                 continue;
             }
             if line.contains("git =") || line.starts_with("source = \"git+") {
@@ -10354,8 +10396,8 @@ engine_release_tree = "{engine_tree}"
 
         for (repo, owner) in [
             ("jain-split-ops", "veox"),
-            ("jain-report", "jeryu"),
-            ("jain-smartcluster", "jain-split"),
+            ("jain-report", "veox"),
+            ("jain-smartcluster", "veox"),
             ("redline-core", "jeryu"),
             ("redline-split-ops", "jeryu"),
             ("redline-central", "jeryu"),
@@ -10376,14 +10418,17 @@ engine_release_tree = "{engine_tree}"
         let manifest: toml::Value = r#"
 [control_plane]
 name = "jain-split-ops"
+forge_owner = "jeryu"
 remote = "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git"
 required_check = "jain-split-ops/required"
 [nested_families.redline]
+forge_owner = "jeryu"
 control_plane_name = "redline-split-ops"
 control_plane_remote = "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
 control_plane_required_check = "redline-split-ops/required"
 [[nested_families.redline.pending_repository]]
 name = "redline-central"
+forge_owner = "jeryu"
 remote = "http://127.0.0.1:8787/git/jeryu/redline-central.git"
 required_check = "redline-central/required"
 "#
@@ -10413,6 +10458,19 @@ required_check = "redline-central/required"
         assert!(host_ci_authority(&wrong_check, "redline-split-ops")
             .unwrap_err()
             .contains("must require exact"));
+
+        let stale_product: toml::Value = r#"
+[[repo]]
+name = "jain-report"
+forge_owner = "jeryu"
+jeryu_slug = "jeryu/jain-report"
+required_check = "jain-report/required"
+"#
+        .parse()
+        .unwrap();
+        assert!(host_ci_authority(&stale_product, "jain-report")
+            .unwrap_err()
+            .contains("non-canonical forge owner"));
     }
 
     #[test]
@@ -11522,6 +11580,14 @@ source_inventory_sha256 = "{}"
                 .to_string()
                 .contains(expected));
         }
+
+        let mut stale_control_owner = canonical.clone();
+        stale_control_owner["control_plane"]["forge_owner"] =
+            toml::Value::String("jeryu".to_owned());
+        assert!(validate_manifest_data(&stale_control_owner, &path, false)
+            .unwrap_err()
+            .to_string()
+            .contains("control_plane.forge_owner must be veox"));
     }
 
     #[test]
@@ -12117,7 +12183,7 @@ split_root = "{}"
 [control_plane]
 name = "jain-split-ops"
 path = "{}/jain-split-ops"
-remote = "http://127.0.0.1:8787/git/jeryu/jain-split-ops.git"
+remote = "http://127.0.0.1:8787/git/veox/jain-split-ops.git"
 required_check = "jain-split-ops/required"
 [external_dependencies.redline]
 repository = "redline-core"
@@ -12142,7 +12208,7 @@ engine_release_tree = "{engine_tree}"
 name = "jain-smartcluster"
 path = "{}/jain-smartcluster"
 profile = "rust-workspace"
-remote = "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git"
+remote = "http://127.0.0.1:8787/git/veox/jain-smartcluster.git"
 required_check = "jain-smartcluster/required"
 default_branch = "main"
 immutable_tag = "jain-smartcluster-v8.0.0-split.0"
@@ -12152,7 +12218,7 @@ family_registered = true
 name = "jain"
 path = "{}/jain"
 profile = "custom"
-jeryu_slug = "jeryu/jain"
+jeryu_slug = "veox/jain"
 required_check = "jain/required"
 default_branch = "main"
 current_tag = "jain-v8.0.0-split.0"
