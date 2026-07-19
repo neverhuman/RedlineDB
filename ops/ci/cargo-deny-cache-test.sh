@@ -371,11 +371,11 @@ expect_advisory_seed_rejected \
   'fixed cargo-deny advisory DB must be a physical checkout'
 expect_advisory_seed_rejected \
   wrong-head "$source_db" "$first_commit" "$advisory_tree" \
-  'fixed cargo-deny advisory DB HEAD/tree/FETCH_HEAD/clean identity mismatch'
+  'fixed cargo-deny advisory DB HEAD/tree/clean identity mismatch'
 expect_advisory_seed_rejected \
   wrong-tree "$source_db" "$advisory_commit" \
   0000000000000000000000000000000000000000 \
-  'fixed cargo-deny advisory DB HEAD/tree/FETCH_HEAD/clean identity mismatch'
+  'fixed cargo-deny advisory DB HEAD/tree/clean identity mismatch'
 
 confused_source="$advisory_root/advisory-db"
 git clone -q --no-local --no-tags --single-branch --branch main \
@@ -385,7 +385,66 @@ mkdir "$confused_source/advisory-db-3157b0e258782691"
 printf 'host lock confusion fixture\n' >"$confused_source/db.lock"
 expect_advisory_seed_rejected \
   singular-dirty-path "$confused_source" "$advisory_commit" "$advisory_tree" \
-  'fixed cargo-deny advisory DB HEAD/tree/FETCH_HEAD/clean identity mismatch'
+  'fixed cargo-deny advisory DB HEAD/tree/clean identity mismatch'
+
+detached_source="$advisory_root/detached-source"
+git clone -q --no-local --no-checkout "$source_db" "$detached_source"
+git -C "$detached_source" checkout -q --detach "$advisory_commit"
+new_advisory_home detached-source
+jain_seed_cargo_deny_advisory_db \
+  "$detached_source" "$advisory_home" "$advisory_commit" "$advisory_tree"
+jain_verify_isolated_cargo_deny_db \
+  "$advisory_home/advisory-dbs/advisory-db-3157b0e258782691" \
+  "$advisory_commit" "$advisory_tree"
+
+export JAIN_PINNED_ADVISORY_DB="$detached_source"
+export JAIN_ADVISORY_DB=
+[[ "$(jain_governed_advisory_db_path "$advisory_commit")" == "$detached_source" ]]
+export JAIN_PINNED_ADVISORY_DB=
+export JAIN_ADVISORY_DB="$detached_source"
+[[ "$(jain_governed_advisory_db_path "$advisory_commit")" == "$detached_source" ]]
+export JAIN_PINNED_ADVISORY_DB="$detached_source"
+jain_verify_governed_advisory_db \
+  "$detached_source" "$advisory_commit" "$advisory_tree"
+if jain_verify_governed_advisory_db \
+  "$advisory_root/missing" "$advisory_commit" "$advisory_tree" \
+  >/dev/null 2>&1; then
+  printf 'missing governed advisory database was accepted\n' >&2
+  exit 1
+fi
+if jain_verify_governed_advisory_db \
+  "$advisory_root/linked-db" "$advisory_commit" "$advisory_tree" \
+  >/dev/null 2>&1; then
+  printf 'symlinked governed advisory database was accepted\n' >&2
+  exit 1
+fi
+if jain_verify_governed_advisory_db \
+  "$detached_source" "$advisory_commit" \
+  0000000000000000000000000000000000000000 >/dev/null 2>&1; then
+  printf 'wrong-tree governed advisory database was accepted\n' >&2
+  exit 1
+fi
+
+export JAIN_ADVISORY_DB="$source_db"
+if jain_governed_advisory_db_path "$advisory_commit" >/dev/null 2>&1; then
+  printf 'conflicting governed advisory paths were accepted\n' >&2
+  exit 1
+fi
+export JAIN_ADVISORY_DB="$detached_source"
+export JAIN_PINNED_ADVISORY_COMMIT="$first_commit"
+if jain_governed_advisory_db_path "$advisory_commit" >/dev/null 2>&1; then
+  printf 'wrong governed advisory commit was accepted\n' >&2
+  exit 1
+fi
+unset JAIN_PINNED_ADVISORY_COMMIT
+
+grep -Fq 'JAIN_PINNED_ADVISORY_DB' "$ROOT_DIR/ops/ci/lib.sh"
+grep -Fq 'JAIN_ADVISORY_DB' "$ROOT_DIR/ops/ci/lib.sh"
+if grep -q '9f3e138091487e69144f536d36976e427a7a3307\|c33f1047906505cabcec7e21f2d99db5c6de8852' \
+  "$ROOT_DIR/ops/ci/lib.sh" "$ROOT_DIR/ops/ci/security.sh"; then
+  printf 'obsolete RustSec commit or tree remains in the active CI surface\n' >&2
+  exit 1
+fi
 
 new_advisory_home fetch-head
 jain_seed_cargo_deny_advisory_db \

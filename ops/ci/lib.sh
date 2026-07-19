@@ -13,8 +13,8 @@ ARTIFACT_DIR="${ROOT_DIR}/target/jankurai"
 # this on the runners that have the full toolchain installed.
 STRICT_TOOLS="${REDLINE_STRICT_TOOLS:-0}"
 
-# Governed auditor: caller environment and PATH never select release evidence.
-readonly JAIN_GOVERNED_JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
+# Governed auditor: the release sandbox owns PATH, and exact bytes still have
+# to pass the pinned version and digest checks below.
 readonly JAIN_GOVERNED_JANKURAI_VERSION="jankurai 1.6.11"
 readonly JAIN_GOVERNED_JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
 
@@ -680,8 +680,8 @@ jain_seed_cargo_deny_advisory_db() {
   local cargo_home="${2:?isolated Cargo home is required}"
   local expected_commit="${3:?commit is required}"
   local expected_tree="${4:?tree is required}"
-  local advisory_parent destination entry hook source_origin_main
-  local -a advisory_entries=() hook_entries=() source_fetch_lines=()
+  local advisory_parent destination entry hook
+  local -a advisory_entries=() hook_entries=()
 
   [[ -d "$source_db" && ! -L "$source_db" \
     && "$(realpath -e -- "$source_db")" == "$source_db" \
@@ -697,22 +697,10 @@ jain_seed_cargo_deny_advisory_db() {
     printf 'fixed cargo-deny advisory DB contains symlinks, alternates, or active hooks\n' >&2
     return 1
   }
-  source_origin_main="$(git -C "$source_db" rev-parse refs/remotes/origin/main 2>/dev/null)" \
-    || return 1
-  [[ -f "$source_db/.git/FETCH_HEAD" && ! -L "$source_db/.git/FETCH_HEAD" ]] || {
-    printf 'fixed cargo-deny advisory DB lacks physical FETCH_HEAD\n' >&2
-    return 1
-  }
-  mapfile -t source_fetch_lines <"$source_db/.git/FETCH_HEAD"
-  [[ "$(git -C "$source_db" symbolic-ref --short HEAD)" == "main" \
-    && "$(git -C "$source_db" rev-parse HEAD)" == "$expected_commit" \
-    && "$source_origin_main" == "$expected_commit" \
+  [[ "$(git -C "$source_db" rev-parse HEAD)" == "$expected_commit" \
     && "$(git -C "$source_db" rev-parse 'HEAD^{tree}')" == "$expected_tree" \
-    && -z "$(git -C "$source_db" status --porcelain=v1)" \
-    && "${#source_fetch_lines[@]}" -ge 1 \
-    && "${source_fetch_lines[0]%%$'\t'*}" == "$expected_commit" \
-    && "${source_fetch_lines[0]}" == "$expected_commit"$'\t\t'* ]] || {
-    printf 'fixed cargo-deny advisory DB HEAD/tree/FETCH_HEAD/clean identity mismatch\n' >&2
+    && -z "$(git -C "$source_db" status --porcelain=v1 --untracked-files=all)" ]] || {
+    printf 'fixed cargo-deny advisory DB HEAD/tree/clean identity mismatch\n' >&2
     return 1
   }
   git -C "$source_db" fsck --full --no-reflogs >/dev/null 2>&1 || {
@@ -748,14 +736,15 @@ jain_seed_cargo_deny_advisory_db() {
     return 1
   }
   git -c core.hooksPath=/dev/null clone \
-    --no-local --no-checkout --no-tags --single-branch --branch main \
+    --no-local --no-checkout --no-tags \
     "$source_db" "$destination" >/dev/null
-  git -C "$destination" fetch --no-tags "$source_db" refs/heads/main >/dev/null
+  git -C "$destination" fetch --no-tags "$source_db" "$expected_commit" >/dev/null
   git -c core.hooksPath=/dev/null -C "$destination" \
     checkout --detach "$expected_commit" >/dev/null
   git -C "$destination" remote remove origin
-  git -C "$destination" symbolic-ref -d refs/remotes/origin/HEAD >/dev/null 2>&1 || true
-  git -C "$destination" update-ref -d refs/heads/main
+  while IFS= read -r reference; do
+    [[ -z "$reference" ]] || git -C "$destination" update-ref -d "$reference"
+  done < <(git -C "$destination" for-each-ref --format='%(refname)')
 
   mapfile -t hook_entries < <(find "$destination/.git/hooks" -mindepth 1 -maxdepth 1 -print)
   for hook in "${hook_entries[@]}"; do
@@ -790,6 +779,63 @@ jain_verify_exact_executable() {
   }
 }
 
+jain_resolve_exact_executable() {
+  local label="${1:?label is required}" executable="${2:?executable is required}"
+  local expected_digest="${3:?digest is required}" selected
+
+  [[ "$executable" =~ ^[A-Za-z0-9._+-]+$ ]] || return 1
+  selected="$(command -v "$executable")" || return 1
+  [[ "$selected" == /* ]] || return 1
+  jain_verify_exact_executable "$label" "$selected" "$expected_digest" || return 1
+  printf '%s\n' "$selected"
+}
+
+jain_governed_advisory_db_path() {
+  local expected_commit="${1:?expected commit is required}"
+  local pinned="${JAIN_PINNED_ADVISORY_DB:-}"
+  local compatibility="${JAIN_ADVISORY_DB:-}"
+  local selected
+
+  if [[ -n "$pinned" && -n "$compatibility" && "$pinned" != "$compatibility" ]]; then
+    printf 'governed advisory database variables disagree\n' >&2
+    return 1
+  fi
+  if [[ -n "${JAIN_PINNED_ADVISORY_COMMIT:-}" \
+    && "$JAIN_PINNED_ADVISORY_COMMIT" != "$expected_commit" ]]; then
+    printf 'governed advisory commit disagrees with the repository pin\n' >&2
+    return 1
+  fi
+  selected="${pinned:-${compatibility:-${CARGO_HOME:-${HOME}/.cargo}/advisory-db}}"
+  [[ "$selected" == /* ]] || {
+    printf 'governed advisory database path must be absolute\n' >&2
+    return 1
+  }
+  printf '%s\n' "$selected"
+}
+
+jain_verify_governed_advisory_db() {
+  local repository="${1:?repository is required}"
+  local expected_commit="${2:?commit is required}"
+  local expected_tree="${3:?tree is required}"
+
+  [[ "$expected_commit" =~ ^[0-9a-f]{40}$ \
+    && "$expected_tree" =~ ^[0-9a-f]{40}$ \
+    && -d "$repository" && ! -L "$repository" \
+    && "$(realpath -e -- "$repository")" == "$repository" \
+    && -d "$repository/.git" && ! -L "$repository/.git" \
+    && -z "$(find "$repository" -type l -print -quit)" \
+    && ! -e "$repository/.git/objects/info/alternates" \
+    && -z "$(find "$repository/.git/hooks" -type f ! -name '*.sample' -print -quit)" \
+    && -z "$(git -C "$repository" config --get core.hooksPath || true)" \
+    && "$(git -C "$repository" rev-parse HEAD)" == "$expected_commit" \
+    && "$(git -C "$repository" rev-parse 'HEAD^{tree}')" == "$expected_tree" \
+    && -z "$(git -C "$repository" status --porcelain=v1 --untracked-files=all)" ]] || {
+    printf 'governed advisory database HEAD/tree/physical identity mismatch\n' >&2
+    return 1
+  }
+  git -C "$repository" fsck --full --no-reflogs >/dev/null 2>&1
+}
+
 jain_verify_governed_jankurai() {
   local path="${1:?path is required}" expected_version="${2:?version is required}"
   local expected_digest="${3:?digest is required}" actual
@@ -802,11 +848,14 @@ jain_verify_governed_jankurai() {
 }
 
 jankurai_bin() {
+  local selected
+  selected="$(command -v jankurai)" || return 1
+  [[ "$selected" == /* ]] || return 1
   jain_verify_governed_jankurai \
-    "$JAIN_GOVERNED_JANKURAI_BIN" \
+    "$selected" \
     "$JAIN_GOVERNED_JANKURAI_VERSION" \
     "$JAIN_GOVERNED_JANKURAI_SHA256" || return 1
-  printf '%s' "$JAIN_GOVERNED_JANKURAI_BIN"
+  printf '%s' "$selected"
 }
 
 ensure_artifacts() {

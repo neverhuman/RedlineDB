@@ -18,9 +18,10 @@ operations, release).
   `--target-bin` CLI).
 - **Stay independent.** No workspace spanning sibling repos. `ops/ci/pr-ci.sh` is
   the green gate.
-- **jankurai standard.** Audit only with regular non-symlink
-  `/home/ubuntu/.jeryu/bin/jankurai` at governed version 1.6.11 and its pinned
-  digest; caller environment and `PATH` never select evidence. `just score`.
+- **jankurai standard.** Audit only with the regular non-symlink `jankurai`
+  selected from the root-governed release `PATH`, at version 1.6.11 and its
+  pinned digest. A caller-selected substitute never becomes evidence merely
+  because it has the same name. `just score`.
 - **MR-only.** Land via a jeryu PR (`gh pr create` → `jeryu.propose_patch`);
   `main` advances on forge merge and mirrors to `github.com/neverhuman/redline-web`.
 

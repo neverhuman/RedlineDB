@@ -49,10 +49,23 @@ printf 'hostile PATH jankurai\n'
 exit 0
 HOSTILE
 chmod 0755 "$tmp/hostile-bin/jankurai"
-resolved="$(PATH="$tmp/hostile-bin:$PATH" jankurai_bin)"
-[[ "$resolved" == "$JAIN_GOVERNED_JANKURAI_BIN" ]] || {
-  printf 'hostile PATH selected Jankurai: %s\n' "$resolved" >&2
+resolved="$(jankurai_bin)"
+jain_verify_governed_jankurai \
+  "$resolved" "$JAIN_GOVERNED_JANKURAI_VERSION" "$JAIN_GOVERNED_JANKURAI_SHA256"
+if PATH="$tmp/hostile-bin:$PATH" jankurai_bin >/dev/null 2>&1; then
+  printf 'hostile PATH Jankurai passed governed identity verification\n' >&2
   exit 1
-}
+fi
+
+missing_path="$tmp/missing-bin:/usr/bin:/bin"
+if PATH="$missing_path" jankurai_bin >/dev/null 2>&1; then
+  printf 'missing PATH Jankurai passed governed identity verification\n' >&2
+  exit 1
+fi
+
+if grep -Fq '/home/ubuntu/.jeryu/bin/jankurai' "$ROOT_DIR/ops/ci/lib.sh"; then
+  printf 'governed Jankurai selection still depends on the user home\n' >&2
+  exit 1
+fi
 
 printf 'governed Jankurai hostile identity tests passed\n'
