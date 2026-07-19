@@ -49,18 +49,27 @@ jq -e --argjson lock_sha256s "$lock_sha256s" \
   | select(.package_count > 0)' \
   "$cargo_home/registry/stage-receipt.json" >/dev/null \
   || fail 'Cargo cache receipt is not bound to the exact lock'
-# A feature-branch control-plane check is driven once by the previously
-# installed protected-main broker. Its v2 receipt predates this additive field.
-# After this runner is installed, split-host-ci.sh requires the field before it
-# executes product code, and this branch verifies the resulting effective trust.
-if jq -e 'has("governed_git_repositories")' \
-  "$cargo_home/registry/stage-receipt.json" >/dev/null; then
-  jq -e '
-    select((.governed_git_repositories | type) == "array")
-    | select(.governed_git_repositories
-        == (.governed_git_repositories | sort | unique))' \
-    "$cargo_home/registry/stage-receipt.json" >/dev/null \
-    || fail 'Cargo cache receipt has an invalid governed Git trust set'
+# The staged receipt always names the complete lock-derived Git trust set.
+# Repositories with governed Git dependencies receive a bounded global config;
+# repositories with an empty set retain only the broker's three command-scoped
+# controls. Both states are closed and independently verified here.
+jq -e '
+  has("governed_git_repositories")
+  and ((.governed_git_repositories | type) == "array")
+  and (.governed_git_repositories
+    == (.governed_git_repositories | sort | unique))
+  and all(.governed_git_repositories[];
+    (type == "string")
+    and (length > 0 and length <= 128)
+    and test("^[A-Za-z0-9._+-]+$")
+    and (startswith(".") | not)
+    and (endswith(".") | not))' \
+  "$cargo_home/registry/stage-receipt.json" >/dev/null \
+  || fail 'Cargo cache receipt has an invalid governed Git trust set'
+governed_git_repository_count="$(jq -r \
+  '.governed_git_repositories | length' \
+  "$cargo_home/registry/stage-receipt.json")"
+if [[ "$governed_git_repository_count" -gt 0 ]]; then
   git_config_global="$(realpath -e -- "${GIT_CONFIG_GLOBAL:?}")" \
     || fail 'scoped release Git configuration is unavailable'
   [[ -f "$git_config_global" && ! -L "$git_config_global" \
@@ -92,6 +101,27 @@ if jq -e 'has("governed_git_repositories")' \
       && -d "$expected_safe_directory" && ! -L "$expected_safe_directory" \
       && "$(realpath -e -- "$expected_safe_directory")" == "$expected_safe_directory" ]] \
       || fail 'release Git trust is not an exact physical governed mirror path'
+  done
+else
+  [[ "${GIT_CONFIG_GLOBAL:-}" == /dev/null \
+    && "$(realpath -e -- "${GIT_CONFIG_GLOBAL:?}")" == /dev/null \
+    && "${GIT_CONFIG_NOSYSTEM:-}" == 1 \
+    && ! -v GIT_CONFIG_PARAMETERS && ! -v GIT_CONFIG_SYSTEM \
+    && "${GIT_CONFIG_COUNT:-}" == 3 \
+    && "${GIT_CONFIG_KEY_0:-}" == safe.directory \
+    && "${GIT_CONFIG_VALUE_0:-}" == /opt/jain-ci/authority/control-plane \
+    && "${GIT_CONFIG_KEY_1:-}" == core.fsmonitor \
+    && "${GIT_CONFIG_VALUE_1:-}" == false \
+    && "${GIT_CONFIG_KEY_2:-}" == core.hooksPath \
+    && "${GIT_CONFIG_VALUE_2:-}" == /dev/null ]] \
+    || fail 'empty governed Git trust escaped the exact broker controls'
+  for config_variable in \
+    "${!GIT_CONFIG_KEY_@}" "${!GIT_CONFIG_VALUE_@}"; do
+    case "$config_variable" in
+      GIT_CONFIG_KEY_0|GIT_CONFIG_KEY_1|GIT_CONFIG_KEY_2|\
+        GIT_CONFIG_VALUE_0|GIT_CONFIG_VALUE_1|GIT_CONFIG_VALUE_2) ;;
+      *) fail 'empty governed Git trust retained an extra command-scope control' ;;
+    esac
   done
 fi
 [[ -z "$(find "$cargo_home/registry" -xdev -type l -print -quit)" \
