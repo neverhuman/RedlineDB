@@ -1,8 +1,8 @@
 //! Authenticated loopback smart-HTTP Git fixture for the Split Ops transport test.
 //!
-//! The fixture never logs an Authorization value. It accepts only one synthetic
-//! Basic credential read from an explicit file and delegates accepted requests
-//! to Git's CGI `http-backend` over a fixture-only repository root.
+//! The fixture never logs an Authorization value. It accepts one synthetic
+//! Bearer API credential and its matching Basic smart-HTTP credential from an
+//! explicit file, then delegates accepted Git requests to CGI `http-backend`.
 use std::env;
 use std::fs::{self, OpenOptions};
 use std::io::{Read, Write};
@@ -53,6 +53,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "Basic {}",
         base64(format!("x-access-token:{token}").as_bytes())
     );
+    let expected_bearer = format!("Bearer {token}");
 
     let listener = TcpListener::bind("127.0.0.1:8787")?;
     fs::write(&ready_file, b"ready\n")?;
@@ -60,25 +61,38 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     for stream in listener.incoming() {
         let mut stream = stream?;
         let request = read_request(&mut stream)?;
+        let git_target = valid_git_target(&request.method, &request.target);
+        let api_target = valid_api_target(&request.method, &request.target);
         if header(&request.headers, "host") != Some("127.0.0.1:8787")
-            || !valid_git_target(&request.method, &request.target)
+            || (!git_target && !api_target)
         {
             return Err("request escaped the fixed fixture origin or repository".into());
         }
         let authorization = header(&request.headers, "authorization");
         let auth_state = if authorization.is_none() {
             "absent"
-        } else if authorization == Some(expected_authorization.as_str()) {
+        } else if (git_target && authorization == Some(expected_authorization.as_str()))
+            || (api_target && authorization == Some(expected_bearer.as_str()))
+        {
             "valid"
         } else {
             "invalid"
         };
+        let logged_target = if api_target {
+            "/api/v1/repos?host=jeryu"
+        } else {
+            &request.target
+        };
         append_log(
             Path::new(&log_file),
-            &format!("{} {} auth={auth_state}", request.method, request.target),
+            &format!("{} {logged_target} auth={auth_state}", request.method),
         )?;
         if auth_state != "valid" {
-            respond_unauthorized(&mut stream)?;
+            respond_unauthorized(&mut stream, if api_target { "Bearer" } else { "Basic" })?;
+            continue;
+        }
+        if api_target {
+            respond_repository_identity(&mut stream)?;
             continue;
         }
 
@@ -228,10 +242,32 @@ fn valid_git_target(method: &str, target: &str) -> bool {
     }
 }
 
-fn respond_unauthorized(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+fn valid_api_target(method: &str, target: &str) -> bool {
+    method == "GET" && target == "/api/v1/repos?host=jeryu"
+}
+
+fn respond_repository_identity(stream: &mut TcpStream) -> Result<(), Box<dyn std::error::Error>> {
+    let body = concat!(
+        "{\"repositories\":[{\"id\":{\"host\":\"jeryu\",",
+        "\"owner\":\"jeryu\",\"name\":\"example\"},",
+        "\"default_branch\":\"main\",",
+        "\"clone_http_url\":\"/git/jeryu/example.git\"}]}"
+    );
     write!(
         stream,
-        "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: Basic realm=\"jeryu\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+        body.len()
+    )?;
+    Ok(())
+}
+
+fn respond_unauthorized(
+    stream: &mut TcpStream,
+    scheme: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    write!(
+        stream,
+        "HTTP/1.1 401 Unauthorized\r\nWWW-Authenticate: {scheme} realm=\"jeryu\"\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
     )?;
     Ok(())
 }
