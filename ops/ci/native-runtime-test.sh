@@ -37,6 +37,8 @@ done
 printf 'fixture module\n' >"$fixture_stage/share/cmake-4.3/Fixture.cmake"
 printf 'space-bearing fixture\n' \
   >"$fixture_stage/share/cmake-4.3/Help/generator/Borland Makefiles.rst"
+printf 'else fixture\n' >"$fixture_stage/share/cmake-4.3/Help/else.rst"
+printf 'elseif fixture\n' >"$fixture_stage/share/cmake-4.3/Help/elseif.rst"
 find "$fixture_stage" -type d -exec chmod 0555 {} +
 find "$fixture_stage" -type f -exec chmod 0444 {} +
 chmod 0555 "$fixture_stage"/bin/*
@@ -73,6 +75,17 @@ for invalid_path in "${invalid_paths[@]}"; do
 done
 
 validate_fixture_under_pipefail "$fixture_authority" "$fixture_root"
+sort_guard="$tmp/sort-guard"
+mkdir -p "$sort_guard"
+printf '%s\n' '#!/usr/bin/env bash' \
+  '[[ "${LC_ALL-}" == C ]] || exit 97' \
+  'exec /usr/bin/sort "$@"' >"$sort_guard/sort"
+chmod 0555 "$sort_guard/sort"
+env -u LC_ALL LANG=en_US.UTF-8 PATH="$sort_guard:$PATH" \
+  bash -c 'set -euo pipefail
+source "$1"
+jain_validate_native_build_tools "$2" "$3" content' -- \
+    "$repo_root/ops/ci/native-runtime.sh" "$fixture_authority" "$fixture_root"
 private_result_marker="$tmp/private-result-directory"
 (
   mktemp() {

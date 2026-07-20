@@ -24,6 +24,7 @@ jain_write_native_build_tools_inventory() (
   local relative node_type mode size links uid gid absolute metadata_record
   local hash_record hash hashed_path extra previous='' count=0 complete=false
   local LC_ALL=C
+  export LC_ALL
   [[ "$ownership_mode" == root || "$ownership_mode" == content ]] || return 1
   [[ "$bundle_root" == /* && -d "$bundle_root" && ! -L "$bundle_root" \
     && "$(realpath -e -- "$bundle_root")" == "$bundle_root" \
