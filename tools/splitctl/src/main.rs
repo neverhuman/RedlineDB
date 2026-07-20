@@ -5,7 +5,7 @@ use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, Jery
 use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     env,
     ffi::OsStr,
     fs,
@@ -241,7 +241,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -2918,12 +2918,19 @@ fn sync_derived_manifests_command(args: Vec<String>) -> Result<(), Box<dyn std::
     let mut manifest = root.join("repos.manifest.toml");
     let mut receipt = None;
     let mut apply = false;
+    let mut selected_targets = BTreeSet::new();
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
             "--receipt" => {
                 receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
+            }
+            "--target" => {
+                let target = iter.next().ok_or("--target needs a name")?;
+                if !selected_targets.insert(target.clone()) {
+                    return Err(format!("duplicate derived manifest target: {target}").into());
+                }
             }
             "--apply" => apply = true,
             value => return Err(format!("unknown sync-derived-manifests argument: {value}").into()),
@@ -2944,7 +2951,21 @@ fn sync_derived_manifests_command(args: Vec<String>) -> Result<(), Box<dyn std::
         validate_manifest_data(&data, &manifest, false)?;
         let canonical_hash = manifest_sha256(&manifest)?;
         let mut rows = Vec::new();
-        let targets = derived_manifest_targets(&data, &manifest)?;
+        let mut targets = derived_manifest_targets(&data, &manifest)?;
+        if !selected_targets.is_empty() {
+            let known = targets
+                .iter()
+                .map(|(target, _)| target.clone())
+                .collect::<BTreeSet<_>>();
+            if !selected_targets.is_subset(&known) {
+                return Err(format!(
+                    "unknown derived manifest targets: {:?}",
+                    selected_targets.difference(&known).collect::<Vec<_>>()
+                )
+                .into());
+            }
+            targets.retain(|(target, _)| selected_targets.contains(target));
+        }
         if apply {
             for (target, _) in &targets {
                 if derived_manifest_is_pending(&data, target)? {
@@ -3070,6 +3091,10 @@ fn render_derived_manifest(
     table.insert(
         "manifest_authority".to_owned(),
         toml::Value::String(authority.display().to_string()),
+    );
+    table.insert(
+        "derived_manifest_target".to_owned(),
+        toml::Value::String(target.to_owned()),
     );
     let body = toml::to_string_pretty(&derived)?;
     Ok(format!(
@@ -13116,6 +13141,10 @@ name = "two"
             string(&derived, "canonical_manifest_sha256").as_deref(),
             Some("abc")
         );
+        assert_eq!(
+            string(&derived, "derived_manifest_target").as_deref(),
+            Some("portal")
+        );
 
         let subset: toml::Value = r#"
 schema_version = "1"
@@ -13209,6 +13238,60 @@ name = "two"
             string(&portal_data, "canonical_manifest_sha256"),
             Some(manifest_sha256(&manifest).unwrap())
         );
+
+        canonical["derived_manifests"]["portal"]
+            .as_table_mut()
+            .unwrap()
+            .insert(
+                "identity_status".to_owned(),
+                toml::Value::String("bound".to_owned()),
+            );
+        canonical["derived_manifests"]["deploy"]
+            .as_table_mut()
+            .unwrap()
+            .insert(
+                "identity_status".to_owned(),
+                toml::Value::String("pending".to_owned()),
+            );
+        fs::write(&manifest, toml::to_string_pretty(&canonical).unwrap()).unwrap();
+        fs::write(&deploy, b"pending deploy bytes must remain unchanged\n").unwrap();
+        let deploy_before = fs::read(&deploy).unwrap();
+        let targeted = vec![
+            "--manifest".to_owned(),
+            manifest.display().to_string(),
+            "--receipt".to_owned(),
+            receipt.display().to_string(),
+            "--target".to_owned(),
+            "portal".to_owned(),
+            "--apply".to_owned(),
+        ];
+        sync_derived_manifests_command(targeted).unwrap();
+        assert_eq!(fs::read(&deploy).unwrap(), deploy_before);
+        let rows = read_json(&receipt)["derived_manifests"]
+            .as_array()
+            .unwrap()
+            .clone();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["target"], "portal");
+        assert_eq!(rows[0]["action"], "updated");
+
+        let mut unknown = args();
+        unknown.extend(["--target".to_owned(), "unknown".to_owned()]);
+        assert!(sync_derived_manifests_command(unknown)
+            .unwrap_err()
+            .to_string()
+            .contains("unknown derived manifest targets"));
+        let mut duplicate = args();
+        duplicate.extend([
+            "--target".to_owned(),
+            "portal".to_owned(),
+            "--target".to_owned(),
+            "portal".to_owned(),
+        ]);
+        assert!(sync_derived_manifests_command(duplicate)
+            .unwrap_err()
+            .to_string()
+            .contains("duplicate derived manifest target"));
     }
 
     #[test]
