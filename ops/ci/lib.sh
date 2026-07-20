@@ -4,7 +4,6 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly repo_root
-readonly JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
 readonly JANKURAI_VERSION="1.6.11"
 readonly JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
 readonly JANKURAI_TAG="v1.6.11-deadlang-precision"
@@ -25,22 +24,36 @@ require_tool() {
 }
 
 require_jankurai() {
-  [[ -f "$JANKURAI_BIN" && ! -L "$JANKURAI_BIN" && -x "$JANKURAI_BIN" ]] || {
-    printf 'governed Jankurai must be an executable regular non-symlink: %s\n' \
-      "$JANKURAI_BIN" >&2
+  local candidate="${JANKURAI_BIN:-}" resolved
+  if [[ -z "$candidate" ]]; then
+    candidate="$(command -v jankurai || true)"
+  fi
+  [[ "$candidate" == /* ]] || {
+    printf 'governed Jankurai path must be absolute\n' >&2
     return 1
   }
-  [[ "$(realpath -e -- "$JANKURAI_BIN")" == "$JANKURAI_BIN" ]] || {
+  [[ -f "$candidate" && ! -L "$candidate" && -x "$candidate" ]] || {
+    printf 'governed Jankurai must be an executable regular non-symlink: %s\n' \
+      "$candidate" >&2
+    return 1
+  }
+  resolved="$(realpath -e -- "$candidate")"
+  [[ "$resolved" == "$candidate" ]] || {
     printf 'governed Jankurai resolved outside its exact path\n' >&2
     return 1
   }
-  [[ "$($JANKURAI_BIN --version)" == "jankurai $JANKURAI_VERSION" ]] || {
+  [[ "$(stat -c '%h' -- "$candidate")" == 1 ]] || {
+    printf 'governed Jankurai must have exactly one filesystem link\n' >&2
+    return 1
+  }
+  [[ "$("$candidate" --version)" == "jankurai $JANKURAI_VERSION" ]] || {
     printf 'governed Jankurai version mismatch: expected %s\n' "$JANKURAI_VERSION" >&2
     return 1
   }
-  [[ "$(sha256sum -- "$JANKURAI_BIN" | awk '{print $1}')" == "$JANKURAI_SHA256" ]] || {
+  [[ "$(sha256sum -- "$candidate" | awk '{print $1}')" == "$JANKURAI_SHA256" ]] || {
     printf 'governed Jankurai digest mismatch\n' >&2
     return 1
   }
+  JANKURAI_BIN="$candidate"
   export JANKURAI_BIN
 }
