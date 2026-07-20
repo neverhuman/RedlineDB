@@ -2,3 +2,28 @@
 set -euo pipefail
 : "${JAIN_TEST_TOOL_ARGS:?test tool argument output is required}"
 printf '%s\n' "$@" >"$JAIN_TEST_TOOL_ARGS"
+if [[ -n "${JAIN_TEST_TOOL_GIT_ENV:-}" ]]; then
+  mapfile -t git_config_names < <(
+    compgen -A variable GIT_CONFIG_KEY_
+    compgen -A variable GIT_CONFIG_VALUE_
+  )
+  {
+    printf 'GIT_CONFIG_GLOBAL=%s\n' "${GIT_CONFIG_GLOBAL:-}"
+    printf 'GIT_CONFIG_NOSYSTEM=%s\n' "${GIT_CONFIG_NOSYSTEM:-}"
+    printf 'GIT_CONFIG_COUNT=%s\n' "${GIT_CONFIG_COUNT:-}"
+    printf 'GIT_CONFIG_PARAMETERS_SET=%s\n' "${GIT_CONFIG_PARAMETERS+x}"
+    printf 'GIT_CONFIG_SYSTEM_SET=%s\n' "${GIT_CONFIG_SYSTEM+x}"
+    printf 'GIT_CONFIG_SET=%s\n' "${GIT_CONFIG+x}"
+    printf 'GIT_NO_LAZY_FETCH=%s\n' "${GIT_NO_LAZY_FETCH:-}"
+    printf 'GIT_OPTIONAL_LOCKS=%s\n' "${GIT_OPTIONAL_LOCKS:-}"
+    printf 'GIT_TERMINAL_PROMPT=%s\n' "${GIT_TERMINAL_PROMPT:-}"
+    for index in 0 1 2 3; do
+      key="GIT_CONFIG_KEY_$index"
+      value="GIT_CONFIG_VALUE_$index"
+      printf '%s=%s\n' "$key" "${!key:-}"
+      printf '%s=%s\n' "$value" "${!value:-}"
+    done
+    printf 'GIT_CONFIG_NAMES=%s\n' "$(printf '%s\n' \
+      "${git_config_names[@]}" | LC_ALL=C sort | tr '\n' ' ' | sed 's/ $//')"
+  } >"$JAIN_TEST_TOOL_GIT_ENV"
+fi
