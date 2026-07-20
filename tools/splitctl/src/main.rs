@@ -11697,12 +11697,18 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         command(init);
         run_git_strict(&source, &["config", "user.name", "LFS Fixture"]).unwrap();
         run_git_strict(&source, &["config", "user.email", "lfs@example.invalid"]).unwrap();
-        let mut install = Command::new(&git_lfs);
-        install.current_dir(&source).args(["install", "--local"]);
-        command(install);
-        let mut track = Command::new(&git_lfs);
-        track.current_dir(&source).args(["track", "*.bin"]);
-        command(track);
+        let process = format!("{} filter-process", git_lfs.display());
+        let clean = format!("{} clean -- %f", git_lfs.display());
+        let smudge = format!("{} smudge -- %f", git_lfs.display());
+        run_git_strict(&source, &["config", "filter.lfs.process", &process]).unwrap();
+        run_git_strict(&source, &["config", "filter.lfs.clean", &clean]).unwrap();
+        run_git_strict(&source, &["config", "filter.lfs.smudge", &smudge]).unwrap();
+        run_git_strict(&source, &["config", "filter.lfs.required", "true"]).unwrap();
+        fs::write(
+            source.join(".gitattributes"),
+            "*.bin filter=lfs diff=lfs merge=lfs -text\n",
+        )
+        .unwrap();
         let payload = b"real offline LFS payload\n";
         fs::write(source.join("artifact.bin"), payload).unwrap();
         run_git_strict(&source, &["add", ".gitattributes", "artifact.bin"]).unwrap();
