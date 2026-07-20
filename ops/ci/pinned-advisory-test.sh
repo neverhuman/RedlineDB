@@ -137,14 +137,30 @@ export JAIN_CARGO_DENY_ADVISORY_DB="$deny_db"
 export JAIN_PINNED_ADVISORY_COMMIT="$expected"
 export JAIN_TEST_TOOL_ARGS="$tmp/args"
 
-"$tool_dir/cargo-audit" audit --deny warnings --db /shared/user/db --no-fetch
+# The recorder databases are deliberately worker-owned fixtures. Prove the
+# production-isolated wrapper rejects that custody before running recorder-only
+# argument tests with production mode disabled for those subprocesses alone.
+rm -f -- "$JAIN_TEST_TOOL_ARGS"
+if JAIN_HOST_CI_NETWORK_ISOLATED=1 \
+  "$tool_dir/cargo-deny" deny check advisories >/dev/null 2>&1; then
+  printf 'cargo-deny production isolation accepted worker-owned fixture databases\n' >&2
+  exit 1
+fi
+[[ ! -e "$JAIN_TEST_TOOL_ARGS" ]] || {
+  printf 'cargo-deny production isolation executed the recorder fixture\n' >&2
+  exit 1
+}
+
+JAIN_HOST_CI_NETWORK_ISOLATED=0 \
+  "$tool_dir/cargo-audit" audit --deny warnings --db /shared/user/db --no-fetch
 mapfile -t args <"$JAIN_TEST_TOOL_ARGS"
 [[ "${args[*]}" == "audit --deny warnings --db $advisory_db --no-fetch" ]] || {
   printf 'cargo-audit pin wrapper arguments drifted: %s\n' "${args[*]}" >&2
   exit 1
 }
 
-"$tool_dir/cargo-deny" deny check advisories --disable-fetch
+JAIN_HOST_CI_NETWORK_ISOLATED=0 \
+  "$tool_dir/cargo-deny" deny check advisories --disable-fetch
 mapfile -t args <"$JAIN_TEST_TOOL_ARGS"
 [[ "${args[*]}" == "deny check --disable-fetch advisories" ]] || {
   printf 'cargo-deny pin wrapper arguments drifted: %s\n' "${args[*]}" >&2
@@ -152,14 +168,16 @@ mapfile -t args <"$JAIN_TEST_TOOL_ARGS"
 }
 
 export JAIN_CARGO_DENY_ADVISORY_DB="$deny_db/../$JAIN_CARGO_DENY_RUSTSEC_DIR"
-if "$tool_dir/cargo-deny" deny check advisories >/dev/null 2>&1; then
+if JAIN_HOST_CI_NETWORK_ISOLATED=0 \
+  "$tool_dir/cargo-deny" deny check advisories >/dev/null 2>&1; then
   printf 'cargo-deny accepted an aliased advisory database spelling\n' >&2
   exit 1
 fi
 export JAIN_CARGO_DENY_ADVISORY_DB="$deny_db"
 
 printf 'tamper\n' >"$advisory_db/untracked-tamper"
-if "$tool_dir/cargo-audit" audit 2>/dev/null; then
+if JAIN_HOST_CI_NETWORK_ISOLATED=0 \
+  "$tool_dir/cargo-audit" audit 2>/dev/null; then
   printf 'cargo-audit pin wrapper accepted a dirty database\n' >&2
   exit 1
 fi
