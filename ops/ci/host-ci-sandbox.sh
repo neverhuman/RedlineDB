@@ -604,13 +604,16 @@ chown root:root "$worker_authority/reexec-state.json"
 chmod -R a+rX,go-w "$control_root"
 chown -R root:root "$worker_authority"
 
-# This request's Cargo home is fresh and worker-writable, except for the whole
-# advisory-dbs mountpoint below. Binding the parent directory read-only makes
-# rename/swap/restore attacks fail even between wrapper validation and deny's
-# database open.
+# This request's Cargo home is fresh and worker-writable. Cargo-audit places a
+# bounded process lock beside its databases, so keep the advisory parent
+# writable while binding cargo-deny's exact pinned database child read-only.
+# The child remains a mountpoint, which prevents rename/swap/restore attacks
+# between wrapper validation and deny's database open.
 worker_cargo_home="$bootstrap_root/writable/cargo-home"
-worker_deny_mount="$worker_cargo_home/advisory-dbs"
+worker_deny_parent="$worker_cargo_home/advisory-dbs"
+worker_deny_mount="$worker_deny_parent/$JAIN_CARGO_DENY_RUSTSEC_DIR"
 mkdir -m 0700 "$worker_cargo_home"
+mkdir -m 0700 "$worker_deny_parent"
 mkdir -m 0755 "$worker_deny_mount"
 
 created_at="$(date +%s)"
@@ -707,7 +710,7 @@ systemd_args=(
   --property=TimeoutStopSec=5s
   --property="BindPaths=$bootstrap_root"
   --property="BindPaths=$worker_cache:/opt/jain-ci/cargo-home"
-  --property="BindReadOnlyPaths=$deny_db_root:$worker_deny_mount"
+  --property="BindReadOnlyPaths=$deny_rustsec_stage:$worker_deny_mount"
   --property="BindReadOnlyPaths=$cargo_registry_cache:/opt/jain-ci/cargo-registry"
   --property="BindReadOnlyPaths=$grype_db_root:/opt/jain-ci/grype-db"
   --property="BindReadOnlyPaths=$worker_authority:/opt/jain-ci/authority"
@@ -740,7 +743,7 @@ systemd_args=(
   --setenv=JAIN_RUSTSEC_ADVISORY_SOURCE=/opt/jain-ci/authority/advisory-db
   --setenv=JAIN_PINNED_ADVISORY_DB=/opt/jain-ci/authority/advisory-db
   --setenv=JAIN_ADVISORY_DB=/opt/jain-ci/authority/advisory-db
-  --setenv="JAIN_CARGO_DENY_ADVISORY_DB=$worker_deny_mount/$JAIN_CARGO_DENY_RUSTSEC_DIR"
+  --setenv="JAIN_CARGO_DENY_ADVISORY_DB=$worker_deny_mount"
   --setenv=JAIN_GRYPE_DB_ROOT=/opt/jain-ci/grype-db
   --setenv="JAIN_GRYPE_DB_INVENTORY_SHA256=$grype_db_inventory_sha256"
   --setenv=GRYPE_DB_CACHE_DIR=/opt/jain-ci/grype-db

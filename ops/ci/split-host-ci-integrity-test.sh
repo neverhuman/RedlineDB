@@ -654,12 +654,24 @@ MONITOR
     && ! -L "$JAIN_CARGO_DENY_ADVISORY_DB/.git" ]]; then
     deny_db_physical=1
   fi
-  advisory_swap_blocked=0
-  if ! mv -- "$CARGO_HOME/advisory-dbs" \
-      "$CARGO_HOME/advisory-dbs.swap" 2>/dev/null; then
-    advisory_swap_blocked=1
+  advisory_lock_writable=0
+  advisory_lock="$CARGO_HOME/advisory-dbs/db.lock"
+  if : >"$advisory_lock" && rm -- "$advisory_lock"; then
+    advisory_lock_writable=1
+  fi
+  advisory_db_swap_blocked=0
+  if ! mv -- "$JAIN_CARGO_DENY_ADVISORY_DB" \
+      "$CARGO_HOME/advisory-dbs/advisory-db.swap" 2>/dev/null; then
+    advisory_db_swap_blocked=1
   else
-    mv -- "$CARGO_HOME/advisory-dbs.swap" "$CARGO_HOME/advisory-dbs"
+    mv -- "$CARGO_HOME/advisory-dbs/advisory-db.swap" \
+      "$JAIN_CARGO_DENY_ADVISORY_DB"
+  fi
+  advisory_db_write_blocked=0
+  if ! : >"$JAIN_CARGO_DENY_ADVISORY_DB/.write-probe" 2>/dev/null; then
+    advisory_db_write_blocked=1
+  else
+    rm -- "$JAIN_CARGO_DENY_ADVISORY_DB/.write-probe"
   fi
   bare_mirror_safe=0
   mapfile -t safe_directories < <(
@@ -738,8 +750,12 @@ MONITOR
   printf 'boundary_release_ci=%s\n' "${JAIN_RELEASE_CI:-missing}" >>"$probe"
   printf 'boundary_rustsec_standalone=%s\n' "$rustsec_standalone" >>"$probe"
   printf 'boundary_deny_db_physical=%s\n' "$deny_db_physical" >>"$probe"
-  printf 'boundary_advisory_swap_blocked=%s\n' \
-    "$advisory_swap_blocked" >>"$probe"
+  printf 'boundary_advisory_lock_writable=%s\n' \
+    "$advisory_lock_writable" >>"$probe"
+  printf 'boundary_advisory_db_swap_blocked=%s\n' \
+    "$advisory_db_swap_blocked" >>"$probe"
+  printf 'boundary_advisory_db_write_blocked=%s\n' \
+    "$advisory_db_write_blocked" >>"$probe"
   printf 'boundary_bare_mirror_safe=%s\n' "$bare_mirror_safe" >>"$probe"
   printf 'boundary_evidence_staging_bounded=%s\n' \
     "$evidence_staging_bounded" >>"$probe"
@@ -1054,7 +1070,9 @@ grep -Fq 'boundary_sudo_attempt=blocked' "$success_log"
 grep -Fq 'boundary_release_ci=1' "$success_log"
 grep -Fq 'boundary_rustsec_standalone=1' "$success_log"
 grep -Fq 'boundary_deny_db_physical=1' "$success_log"
-grep -Fq 'boundary_advisory_swap_blocked=1' "$success_log"
+grep -Fq 'boundary_advisory_lock_writable=1' "$success_log"
+grep -Fq 'boundary_advisory_db_swap_blocked=1' "$success_log"
+grep -Fq 'boundary_advisory_db_write_blocked=1' "$success_log"
 grep -Fq 'boundary_bare_mirror_safe=1' "$success_log"
 grep -Fq 'boundary_evidence_staging_bounded=1' "$success_log"
 grep -Fq 'boundary_survivor_started=1' "$success_log"
