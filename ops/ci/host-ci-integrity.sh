@@ -80,6 +80,8 @@ paths=(
   ops/ci/host-ci-proof-evidence.sh
   ops/ci/native-build-tools.lock.json
   ops/ci/native-runtime.sh
+  ops/ci/pnpm-runtime.sh
+  ops/ci/pnpm-store.lock.json
   ops/ci/pinned-advisory.sh
   ops/ci/pinned-cargo-audit.sh
   ops/ci/pinned-cargo-deny.sh

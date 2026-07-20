@@ -1,8 +1,8 @@
 {
   "schema_version": "jain.native-build-tools/v1",
-  "bundle_root": "/var/lib/jain-host-ci/native-build-tools/f74c268261d278fb2c4100bdbdcd8af432da4856925a9f134ef364306b8e7100",
-  "inventory_sha256": "f74c268261d278fb2c4100bdbdcd8af432da4856925a9f134ef364306b8e7100",
-  "file_count": 4025,
+  "bundle_root": "/var/lib/jain-host-ci/native-build-tools/a7c7747d06bc949ebcb44b6aa4b988299a1a67fc945637b751399c5661de4dd1",
+  "inventory_sha256": "a7c7747d06bc949ebcb44b6aa4b988299a1a67fc945637b751399c5661de4dd1",
+  "file_count": 5076,
   "tools": {
     "cmake": {
       "path": "bin/cmake",
@@ -24,6 +24,20 @@
       "size": 372384,
       "sha256": "696f9628a79d9ce50314cf9556d7cd1a1d1ec52b8fd52828f6f9db1719565b67",
       "version": "1.13.0.git.kitware.jobserver-pipe-1"
+    },
+    "node": {
+      "path": "bin/node",
+      "mode": "555",
+      "size": 124835376,
+      "sha256": "93956de2e59480474a7b46571da1651180b1a050cdf32641ebec4ce6e478e068",
+      "version": "v22.23.1"
+    },
+    "pnpm": {
+      "path": "bin/pnpm",
+      "mode": "555",
+      "size": 139,
+      "sha256": "8c7e25247f54b8a395d8c2aa1488aa608112967af255c1981ca5d42906410d12",
+      "version": "10.18.3"
     },
     "ragel": {
       "path": "bin/ragel",

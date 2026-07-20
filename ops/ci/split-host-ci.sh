@@ -339,17 +339,23 @@ git -C "$wt" remote remove origin || exit 1
 validate_physical_checkout "$wt" "$SHA" \
   || { post_check failure; echo "physical checkout is not isolated" >&2; exit 1; }
 
+# Repositories that execute native build tools or the Web frontend activate the
+# exact validated tool root before product bytes. Unrelated release lanes do
+# not gain an unnecessary JavaScript/native tool dependency.
+if [[ "${JAIN_RELEASE_CI:-0}" == 1 \
+  && ( "$REPO" == jain-web || "${#native_learners[@]}" -gt 0 ) ]]; then
+  : "${JAIN_NATIVE_BUILD_TOOLS_ROOT:?release build-tool mount is required}"
+  jain_activate_native_build_tools \
+    "$OPS_ROOT/ops/ci/native-build-tools.lock.json" \
+    "$JAIN_NATIVE_BUILD_TOOLS_ROOT" \
+    || native_setup_failure "release CI build-tool activation failed" 1
+fi
+
 # Release Cargo policy may enable native learners even when the repository's
 # merge lane does not. Extract the materializer from the exact reviewed
 # control-plane commit, stage clean worktrees from authority-bound Git objects,
 # and preserve a checksummed receipt outside this disposable checkout.
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
-  : "${JAIN_NATIVE_BUILD_TOOLS_ROOT:?root native build-tool mount is required}"
-  jain_activate_native_build_tools \
-    "$OPS_ROOT/ops/ci/native-build-tools.lock.json" \
-    "$JAIN_NATIVE_BUILD_TOOLS_ROOT" \
-    || native_setup_failure \
-      "release CI native build-tool activation failed" 1
   jain_extract_native_materializer "$OPS_ROOT" "$native_bundle" \
     "$control_plane_remote" "$CONTROL_PLANE_COMMIT" "$authority_mode" \
     || native_setup_failure \
@@ -393,6 +399,11 @@ fi
 # committed [patch] points at ../<sibling>/crates/..., and JAIN_NEEDS_SIBLINGS lets
 # an integration lane opt in. Everything else stays sibling-free.
 if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
+  sibling_git_config="$tmp/sibling-safe-directory.config"
+  : >"$sibling_git_config" \
+    || native_setup_failure "cannot create bounded sibling Git config" 1
+  chmod 0600 "$sibling_git_config" \
+    || native_setup_failure "cannot secure bounded sibling Git config" 1
   for sib in \
     jain jain-docs jain-domain jain-math jain-contracts jain-catboost \
     jain-xgboost jain-lightgbm jain-jable jain-battle-gpu jain-starforge \
@@ -400,10 +411,23 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
     jain-research jain-report jain-tui jain-cli jain-web jain-python \
     jain-model-zoo jain-ops jain-smartcluster jain-deploy; do
     [ "$sib" = "$REPO" ] && continue
-    if [ -d "$SPLIT_ROOT/$sib/.git" ]; then
-      sib_sha="$(git -C "$SPLIT_ROOT/$sib" rev-parse --verify 'HEAD^{commit}')" \
+    sib_path="$SPLIT_ROOT/$sib"
+    if [ -d "$sib_path/.git" ]; then
+      git config --file "$sibling_git_config" \
+        --add safe.directory "$sib_path" \
+        || native_setup_failure "cannot trust exact sibling path $sib" 1
+      git config --file "$sibling_git_config" \
+        --add safe.directory "$sib_path/.git" \
+        || native_setup_failure "cannot trust exact sibling Git path $sib" 1
+      safe_sibling_git=(/usr/bin/env GIT_CONFIG_NOSYSTEM=1 \
+        GIT_CONFIG_GLOBAL="$sibling_git_config" git \
+        -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+        -c core.untrackedCache=false -c diff.external=)
+      sib_sha="$("${safe_sibling_git[@]}" -C "$sib_path" \
+        rev-parse --verify 'HEAD^{commit}')" \
         || native_setup_failure "cannot resolve sibling $sib" 1
-      git clone --quiet --no-local --no-checkout "$SPLIT_ROOT/$sib" "$tmp/$sib" \
+      "${safe_sibling_git[@]}" clone --quiet --no-local --no-checkout \
+        "$sib_path" "$tmp/$sib" \
         || native_setup_failure "cannot clone sibling $sib" 1
       jain_git_object_tree_is_symlink_free "$tmp/$sib" "$sib_sha" \
         || native_setup_failure "sibling $sib object tree contains a prohibited mode" 1

@@ -474,6 +474,8 @@ IFS=$'\t' read -r protected_owner protected_check cuda_required \
 # canonical path, metadata, and digest. CPU-only policies never execute it.
 # shellcheck source=ops/ci/native-runtime.sh
 source "$control_root/ops/ci/native-runtime.sh"
+# shellcheck source=ops/ci/pnpm-runtime.sh
+source "$control_root/ops/ci/pnpm-runtime.sh"
 jain_validate_nvidia_smi_detector "$nvidia_smi_path" "$nvidia_smi_sha256" \
   || fail 'root NVIDIA detector digest or metadata mismatch'
 cuda_capability_record=""
@@ -513,10 +515,8 @@ fi
 native_build_tools_root=""
 native_build_tools_mount=""
 native_build_tools_root="$({
-  # Keep native learner selection inside this validation subshell; the root
-  # publisher independently sources the same reviewed library later.
   mapfile -t native_learners < <(jain_native_learners_for_repo "$repo")
-  if [[ "${#native_learners[@]}" -gt 0 ]]; then
+  if [[ "$repo" == jain-web || "${#native_learners[@]}" -gt 0 ]]; then
     native_build_tools_authority="$control_root/ops/ci/native-build-tools.lock.json"
     resolved_native_build_tools_root="$(jq -er '.bundle_root' \
       "$native_build_tools_authority")" || exit 1
@@ -595,6 +595,26 @@ hydrate_local_lfs_checkout() {
 if [[ "$repo" == jain-starforge ]]; then
   hydrate_local_lfs_checkout \
     "${arguments[3]}" "$product_authority" "${arguments[2]}"
+fi
+
+pnpm_store_mount=""
+if [[ "$repo" == jain-web ]]; then
+  pnpm_authority="$control_root/ops/ci/pnpm-store.lock.json"
+  pnpm_store_root="$(jq -er '.store_root' "$pnpm_authority")" \
+    || fail 'pnpm store root authority is missing'
+  [[ "$(jq -er '.pnpm_version' "$pnpm_authority")" \
+      == "$(jq -er '.tools.pnpm.version' \
+        "$control_root/ops/ci/native-build-tools.lock.json")" ]] \
+    || fail 'pnpm store and executable authorities disagree'
+  jain_validate_pnpm_store "$pnpm_authority" "$pnpm_store_root" root \
+    || fail 'root pnpm store validation failed'
+  jain_pnpm_lockfile_matches "$pnpm_authority" "${arguments[3]}" \
+    || fail 'product pnpm lockfile differs from offline store authority'
+  pnpm_stage_parent="$bootstrap_root/writable/pnpm-store"
+  mkdir -m 0700 "$pnpm_stage_parent"
+  pnpm_store_mount="$(jain_stage_pnpm_store \
+    "$pnpm_authority" "$pnpm_store_root" "$pnpm_stage_parent")" \
+    || fail 'cannot stage authenticated pnpm store'
 fi
 
 # The proof auditor never reuses the product worker's mutable checkout. Root
@@ -839,6 +859,20 @@ if [[ -n "$native_build_tools_root" ]]; then
   systemd_args+=(
     --property="BindReadOnlyPaths=$native_build_tools_root:$native_build_tools_mount"
     --setenv="JAIN_NATIVE_BUILD_TOOLS_ROOT=$native_build_tools_mount"
+  )
+fi
+if [[ -n "$pnpm_store_mount" ]]; then
+  systemd_args+=(
+    --setenv="NPM_CONFIG_STORE_DIR=$pnpm_store_mount"
+    --setenv=NPM_CONFIG_OFFLINE=true
+    --setenv=NPM_CONFIG_FROZEN_LOCKFILE=true
+    --setenv=NPM_CONFIG_PACKAGE_IMPORT_METHOD=copy
+    --setenv=NPM_CONFIG_NODE_LINKER=hoisted
+    --setenv=NPM_CONFIG_PREFER_SYMLINKED_EXECUTABLES=false
+    --setenv=NPM_CONFIG_UPDATE_NOTIFIER=false
+    --setenv=NPM_CONFIG_VERIFY_STORE_INTEGRITY=true
+    --setenv=NPM_CONFIG_USERCONFIG=/dev/null
+    --setenv=NPM_CONFIG_GLOBALCONFIG=/dev/null
   )
 fi
 if [[ "$cuda_required" == true ]]; then

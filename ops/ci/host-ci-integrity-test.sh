@@ -15,7 +15,8 @@ for path in \
   ops/ci/host-ci-boundary-preflight.sh \
   ops/ci/host-ci-proof-evidence.sh \
   ops/ci/native-build-tools.lock.json \
-  ops/ci/native-runtime.sh ops/ci/pinned-advisory.sh \
+  ops/ci/native-runtime.sh ops/ci/pnpm-runtime.sh \
+  ops/ci/pnpm-store.lock.json ops/ci/pinned-advisory.sh \
   ops/ci/pinned-cargo-audit.sh ops/ci/pinned-cargo-deny.sh \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh \
   tools/splitctl/src/jeryu_client.rs \
@@ -39,6 +40,67 @@ grep -F 'jain_activate_native_build_tools' \
   printf 'reviewed worker does not activate validated native build tools\n' >&2
   exit 1
 }
+grep -F 'jain_validate_pnpm_store "$pnpm_authority"' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not validate sealed pnpm custody\n' >&2
+  exit 1
+}
+grep -F 'NPM_CONFIG_OFFLINE=true' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not force pnpm offline mode\n' >&2
+  exit 1
+}
+grep -F 'NPM_CONFIG_PREFER_SYMLINKED_EXECUTABLES=false' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not prohibit pnpm executable symlinks\n' >&2
+  exit 1
+}
+grep -F 'git config --file "$sibling_git_config"' \
+  "$repo_root/ops/ci/split-host-ci.sh" >/dev/null || {
+  printf 'reviewed worker lacks exact-path sibling ownership trust\n' >&2
+  exit 1
+}
+grep -F -- '--add safe.directory "$sib_path/.git"' \
+  "$repo_root/ops/ci/split-host-ci.sh" >/dev/null || {
+  printf 'reviewed worker lacks exact sibling Git-directory trust\n' >&2
+  exit 1
+}
+if grep -Eq 'safe\.directory=(\*|"?\$SPLIT_ROOT"?)' \
+  "$repo_root/ops/ci/split-host-ci.sh"; then
+  printf 'reviewed worker contains broad sibling ownership trust\n' >&2
+  exit 1
+fi
+ownership_fixture="$tmp/sibling-ownership"
+git init --quiet "$ownership_fixture"
+git -C "$ownership_fixture" config user.name 'Sibling Ownership Fixture'
+git -C "$ownership_fixture" config user.email sibling@example.invalid
+printf 'fixture\n' >"$ownership_fixture/input"
+git -C "$ownership_fixture" add input
+git -C "$ownership_fixture" commit --quiet -m exact
+if GIT_TEST_ASSUME_DIFFERENT_OWNER=1 \
+  git -C "$ownership_fixture" rev-parse --verify 'HEAD^{commit}' \
+    >/dev/null 2>&1; then
+  printf 'Git ownership regression fixture did not become dubious\n' >&2
+  exit 1
+fi
+ownership_head="$(GIT_TEST_ASSUME_DIFFERENT_OWNER=1 \
+  git -c safe.directory="$ownership_fixture" -C "$ownership_fixture" \
+    rev-parse --verify 'HEAD^{commit}')" || exit 1
+[[ "$ownership_head" == "$(git -C "$ownership_fixture" rev-parse HEAD)" ]] \
+  || exit 1
+ownership_config="$tmp/sibling-safe-directory.config"
+git config --file "$ownership_config" \
+  --add safe.directory "$ownership_fixture"
+git config --file "$ownership_config" \
+  --add safe.directory "$ownership_fixture/.git"
+chmod 0600 "$ownership_config"
+GIT_TEST_ASSUME_DIFFERENT_OWNER=1 GIT_CONFIG_NOSYSTEM=1 \
+  GIT_CONFIG_GLOBAL="$ownership_config" \
+  git clone --quiet --no-local --no-checkout \
+    "$ownership_fixture" "$tmp/sibling-ownership-clone"
+[[ "$(git -C "$tmp/sibling-ownership-clone" \
+  rev-parse --verify "$ownership_head^{commit}")" == "$ownership_head" ]] \
+  || exit 1
 grep -F 'jain_validate_nvidia_smi_detector "$nvidia_smi_path"' \
   "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
   printf 'root sandbox does not validate the NVIDIA detector\n' >&2

@@ -8,7 +8,7 @@ jain_native_relative_path_is_canonical() {
   local -a components=()
   [[ -n "$relative" && "$relative" != /* && "$relative" != */ \
     && "$relative" != *//* \
-    && "$relative" =~ ^[A-Za-z0-9._+\ /-]+$ ]] || return 1
+    && "$relative" =~ ^[A-Za-z0-9._+@\ /-]+$ ]] || return 1
   IFS=/ read -r -a components <<<"$relative"
   for component in "${components[@]}"; do
     [[ -n "$component" && "$component" != . && "$component" != .. \
@@ -134,7 +134,7 @@ jain_validate_native_build_tools() (
   local expected_inventory expected_count actual_inventory actual_count
   local inventory_scratch='' inventory_tmp=''
   local relative tool expected path version
-  local -a tools=(cmake lld ninja ragel yasm)
+  local -a tools=(cmake lld ninja node pnpm ragel yasm)
 
   cleanup_native_inventory_result() {
     [[ -z "$inventory_scratch" ]] || {
@@ -163,10 +163,14 @@ jain_validate_native_build_tools() (
         ("/var/lib/jain-host-ci/native-build-tools/" + .inventory_sha256))
     | select(.file_count | type == "number" and . > 0 and floor == .)
     | select((.tools | keys | sort) ==
-        ["cmake", "lld", "ninja", "ragel", "yasm"])
+        ["cmake", "lld", "ninja", "node", "pnpm", "ragel", "yasm"])
     | select(.tools.cmake.path == "bin/cmake")
     | select(.tools.lld.path == "bin/ld.lld")
     | select(.tools.ninja.path == "bin/ninja")
+    | select(.tools.node.path == "bin/node")
+    | select(.tools.pnpm.path == "bin/pnpm")
+    | select(.tools.node.version == "v22.23.1")
+    | select(.tools.pnpm.version == "10.18.3")
     | select(.tools.ragel.path == "bin/ragel")
     | select(.tools.yasm.path == "bin/yasm")
     | select(all(.tools[];
@@ -242,7 +246,8 @@ jain_validate_native_build_tools() (
     }
     expected="$(jq -er --arg tool "$tool" '.tools[$tool].version' \
       "$authority")" || return 1
-    version="$("$path" --version 2>&1)" || return 1
+    version="$(/usr/bin/env -i PATH="$bundle_root/bin:/usr/bin:/bin" \
+      LC_ALL=C HOME=/nonexistent "$path" --version 2>&1)" || return 1
     version="${version%%$'\n'*}"
     [[ "$version" == "$expected" ]] || {
       printf 'native build-tool version mismatch: %s\n' "$tool" >&2
@@ -258,9 +263,11 @@ jain_activate_native_build_tools() {
     || return 1
   CMAKE="$bundle_root/bin/cmake"
   NINJA="$bundle_root/bin/ninja"
+  NODE="$bundle_root/bin/node"
+  PNPM="$bundle_root/bin/pnpm"
   CMAKE_MAKE_PROGRAM="$bundle_root/bin/ninja"
   PATH="$bundle_root/bin:$PATH"
-  export CMAKE NINJA CMAKE_MAKE_PROGRAM PATH
+  export CMAKE NINJA NODE PNPM CMAKE_MAKE_PROGRAM PATH
 }
 
 JAIN_CUDA_DETECTOR_MAX_BYTES=65536

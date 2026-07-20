@@ -23,7 +23,7 @@ jain_write_native_build_tools_inventory \
 inventory_sha256="$(sha256sum -- "$inventory_file" | cut -d' ' -f1)"
 file_count="$(wc -l <"$inventory_file")"
 
-for tool in cmake lld ninja ragel yasm; do
+for tool in cmake lld ninja node pnpm ragel yasm; do
   relative="bin/$tool"
   [[ "$tool" != lld ]] || relative=bin/ld.lld
   path="$bundle_root/$relative"
@@ -34,23 +34,32 @@ for tool in cmake lld ninja ragel yasm; do
   }
   printf -v "${tool}_size" '%s' "$(stat -c %s -- "$path")"
   printf -v "${tool}_sha" '%s' "$(sha256sum -- "$path" | cut -d' ' -f1)"
-  version="$("$path" --version 2>&1)"
+  version="$(/usr/bin/env -i PATH="$bundle_root/bin:/usr/bin:/bin" \
+    LC_ALL=C HOME=/nonexistent "$path" --version 2>&1)"
   version="${version%%$'\n'*}"
   [[ -n "$version" && "$version" != *$'\r'* && "$version" != *$'\t'* ]] \
     || exit 1
   printf -v "${tool}_version" '%s' "$version"
 done
 
+[[ "$node_version" == v22.23.1 && "$pnpm_version" == 10.18.3 ]] || {
+  printf 'native JavaScript tool versions differ from product authority\n' >&2
+  exit 1
+}
+
 jq -n --arg inventory "$inventory_sha256" \
   --arg root "/var/lib/jain-host-ci/native-build-tools/$inventory_sha256" \
   --arg cmake_sha "$cmake_sha" --arg cmake_version "$cmake_version" \
   --arg lld_sha "$lld_sha" --arg lld_version "$lld_version" \
   --arg ninja_sha "$ninja_sha" --arg ninja_version "$ninja_version" \
+  --arg node_sha "$node_sha" --arg node_version "$node_version" \
+  --arg pnpm_sha "$pnpm_sha" --arg pnpm_version "$pnpm_version" \
   --arg ragel_sha "$ragel_sha" --arg ragel_version "$ragel_version" \
   --arg yasm_sha "$yasm_sha" --arg yasm_version "$yasm_version" \
   --argjson file_count "$file_count" \
   --argjson cmake_size "$cmake_size" --argjson lld_size "$lld_size" \
   --argjson ninja_size "$ninja_size" \
+  --argjson node_size "$node_size" --argjson pnpm_size "$pnpm_size" \
   --argjson ragel_size "$ragel_size" --argjson yasm_size "$yasm_size" \
   '{schema_version:"jain.native-build-tools/v1",bundle_root:$root,
     inventory_sha256:$inventory,file_count:$file_count,
@@ -61,6 +70,10 @@ jq -n --arg inventory "$inventory_sha256" \
         sha256:$lld_sha,version:$lld_version},
       ninja:{path:"bin/ninja",mode:"555",size:$ninja_size,
         sha256:$ninja_sha,version:$ninja_version},
+      node:{path:"bin/node",mode:"555",size:$node_size,
+        sha256:$node_sha,version:$node_version},
+      pnpm:{path:"bin/pnpm",mode:"555",size:$pnpm_size,
+        sha256:$pnpm_sha,version:$pnpm_version},
       ragel:{path:"bin/ragel",mode:"555",size:$ragel_size,
         sha256:$ragel_sha,version:$ragel_version},
       yasm:{path:"bin/yasm",mode:"555",size:$yasm_size,

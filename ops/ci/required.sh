@@ -19,6 +19,7 @@ mapfile -t sh_files < <(find ops -type f -name '*.sh' | sort)
 for f in "${sh_files[@]}"; do bash -n "$f"; done
 shellcheck -S error "${sh_files[@]}"
 bash ops/ci/native-runtime-test.sh
+bash ops/ci/pnpm-runtime-test.sh
 bash ops/ci/native-materializer-test.sh
 bash ops/ci/host-ci-integrity-test.sh
 if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 ]]; then

@@ -262,6 +262,7 @@ if find "$control_root" -xdev \( -type f -o -type d \) \
 fi
 for critical in repos.manifest.toml ops/ci/host-ci-publisher.sh \
   ops/ci/host-ci-sandbox.sh ops/ci/native-runtime.sh \
+  ops/ci/pnpm-runtime.sh ops/ci/pnpm-store.lock.json \
   ops/ci/host-ci-evidence.sh ops/ci/host-ci-proof-evidence.sh \
   tools/splitctl/src/main.rs tools/splitctl/src/jeryu_client.rs; do
   [[ -f "$control_root/$critical" && ! -L "$control_root/$critical" \

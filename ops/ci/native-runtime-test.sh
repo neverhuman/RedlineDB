@@ -24,7 +24,7 @@ trap cleanup EXIT
 fixture_stage="$tmp/native-build-tools-stage"
 mkdir -p "$fixture_stage/bin" \
   "$fixture_stage/share/cmake-4.3/Help/generator"
-for tool in cmake lld ninja ragel yasm; do
+for tool in cmake lld ninja node pnpm ragel yasm; do
   relative="$tool"
   case "$tool" in
     cmake) version='cmake version 4.3.2' ;;
@@ -33,6 +33,8 @@ for tool in cmake lld ninja ragel yasm; do
       version='Ubuntu LLD 21.1.8 (compatible with GNU linkers)'
       ;;
     ninja) version='1.13.0.git.kitware.jobserver-pipe-1' ;;
+    node) version='v22.23.1' ;;
+    pnpm) version='10.18.3' ;;
     ragel) version='Ragel State Machine Compiler version 6.10 March 2017' ;;
     yasm) version='yasm 1.3.0' ;;
   esac
@@ -138,6 +140,8 @@ PATH="$prior_path"
 jain_activate_native_build_tools "$fixture_authority" "$fixture_root"
 [[ "$CMAKE" == "$fixture_root/bin/cmake" \
   && "$NINJA" == "$fixture_root/bin/ninja" \
+  && "$NODE" == "$fixture_root/bin/node" \
+  && "$PNPM" == "$fixture_root/bin/pnpm" \
   && "$CMAKE_MAKE_PROGRAM" == "$fixture_root/bin/ninja" \
   && "$PATH" == "$fixture_root/bin:$prior_path" \
   && "$(command -v ld.lld)" == "$fixture_root/bin/ld.lld" \
@@ -224,7 +228,7 @@ large_stage="$tmp/native-build-tools-large-stage"
 mkdir -p "$large_stage/bin" \
   "$large_stage/share/cmake-4.3/Help/generator" \
   "$large_stage/share/cmake-4.3/Modules" "$large_stage/zzzz"
-for tool in cmake lld ninja ragel yasm; do
+for tool in cmake lld ninja node pnpm ragel yasm; do
   relative="$tool"
   case "$tool" in
     cmake) version='cmake version 4.3.2' ;;
@@ -233,6 +237,8 @@ for tool in cmake lld ninja ragel yasm; do
       version='Ubuntu LLD 21.1.8 (compatible with GNU linkers)'
       ;;
     ninja) version='1.13.0.git.kitware.jobserver-pipe-1' ;;
+    node) version='v22.23.1' ;;
+    pnpm) version='10.18.3' ;;
     ragel) version='Ragel State Machine Compiler version 6.10 March 2017' ;;
     yasm) version='yasm 1.3.0' ;;
   esac
@@ -257,13 +263,13 @@ mv -- "$large_stage" "$large_root"
 large_inventory="$tmp/native-build-tools-large.inventory.tsv"
 jain_write_native_build_tools_inventory \
   "$large_root" "$large_inventory" content
-[[ "$(wc -l <"$large_inventory")" == 4025 \
-  && "$(jq -er '.file_count' "$large_authority")" == 4025 \
+[[ "$(wc -l <"$large_inventory")" == 4027 \
+  && "$(jq -er '.file_count' "$large_authority")" == 4027 \
   && "$(sha256sum -- "$large_inventory" | cut -d' ' -f1)" \
     == "$large_inventory_sha" \
   && "$(awk -F '\t' 'index($1, " ") { print NR ":" $1; exit }' \
       "$large_inventory")" \
-    == '6:share/cmake-4.3/Help/generator/Borland Makefiles.rst' \
+    == '8:share/cmake-4.3/Help/generator/Borland Makefiles.rst' \
   && "$(tail -n 1 "$large_inventory" | cut -f1)" \
     == 'zzzz/LastFixture.txt' ]] || {
   printf 'large native inventory ordering or identity drifted\n' >&2
