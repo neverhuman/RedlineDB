@@ -1581,6 +1581,68 @@ fn release_cuda_compute_capability_required(raw: &toml::Value) -> Result<bool, S
     }
 }
 
+fn validate_python_parity_authority(
+    manifest: &toml::Value,
+    raw: &toml::Value,
+) -> Result<(), String> {
+    for (field, expected) in [("profile", "custom"), ("role", "frozen-parity-only")] {
+        if string(raw, field).as_deref() != Some(expected) {
+            return Err(format!("jain-python: {field} must be {expected}"));
+        }
+    }
+    if raw.get("authored").and_then(toml::Value::as_bool) != Some(true) {
+        return Err("jain-python: authored must be true".to_owned());
+    }
+    if raw.get("stdlib_only").and_then(toml::Value::as_bool) != Some(true) {
+        return Err("jain-python: stdlib_only must be true".to_owned());
+    }
+    for field in [
+        "executable",
+        "release_artifact",
+        "network",
+        "credentials",
+        "arbitrary_inputs",
+        "package_dependencies",
+    ] {
+        if raw.get(field).and_then(toml::Value::as_bool) != Some(false) {
+            return Err(format!("jain-python: {field} must be false"));
+        }
+    }
+    for field in [
+        "copy_paths",
+        "source_paths",
+        "cross_repo_deps",
+        "runtime_dependencies",
+    ] {
+        match raw.get(field).and_then(toml::Value::as_array) {
+            Some(values) if values.is_empty() => {}
+            _ => return Err(format!("jain-python: {field} must be an empty array")),
+        }
+    }
+    if strings(raw, "cargo_members") != ["tools/parity-guard"] {
+        return Err("jain-python: cargo_members must contain only tools/parity-guard".to_owned());
+    }
+    for (field, expected) in [
+        ("parity_manifest", "parity/manifest.json"),
+        ("parity_oracle", "parity/oracle.py"),
+        ("parity_guard", "tools/parity-guard"),
+    ] {
+        if string(raw, field).as_deref() != Some(expected) {
+            return Err(format!("jain-python: {field} must be {expected}"));
+        }
+    }
+    if raw.get("mirror_github_main").and_then(toml::Value::as_bool) != Some(false) {
+        return Err("jain-python: mirror_github_main must be false".to_owned());
+    }
+    if !strings(manifest, "retired_paths")
+        .iter()
+        .any(|path| path == "python/ai-service/**")
+    {
+        return Err("retired_paths must contain python/ai-service/**".to_owned());
+    }
+    Ok(())
+}
+
 fn release_cargo_command(label: &str, subcommand: &str, features: Option<&str>) -> JsonValue {
     let mut args = vec![subcommand.to_owned(), "--locked".to_owned()];
     if subcommand == "build" {
@@ -3848,6 +3910,11 @@ fn validate_manifest_data(
         }
         if let Err(error) = release_feature_matrix(raw) {
             errors.push(format!("{name}: {error}"));
+        }
+        if name == "jain-python" {
+            if let Err(error) = validate_python_parity_authority(data, raw) {
+                errors.push(error);
+            }
         }
         let expected_remote = format!("{FAMILY_REMOTE_PREFIX}{name}.git");
         if declared_remote(raw).as_deref() != Some(expected_remote.as_str()) {
@@ -7873,6 +7940,17 @@ fn python_scan_excluded_name(name: &str) -> bool {
     )
 }
 
+fn python_path_is_allowed(relative: &str) -> bool {
+    relative.starts_with("jain-model-zoo/ops/parity/")
+        || relative.starts_with("redline-split/")
+        || relative == "redline-split-ops/scripts/redline_proof.py"
+        || relative == "redline-split-ops/tests/test_redline_proof.py"
+        || relative.contains("/parity/")
+        || relative.contains("/oracle/")
+        || relative.starts_with("jain-deploy/ops/ci/testdata/")
+        || python_boundary_exception(relative).is_some()
+}
+
 fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
     let root = control_plane_root()
         .parent()
@@ -7888,17 +7966,7 @@ fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
             .unwrap_or(&path)
             .to_string_lossy()
             .replace('\\', "/");
-        let allowed = rel.starts_with("jain-model-zoo/ops/parity/")
-            || rel.starts_with("redline-split/")
-            || rel == "redline-split-ops/scripts/redline_proof.py"
-            || rel == "redline-split-ops/tests/test_redline_proof.py"
-            || rel.contains("/parity/")
-            || rel.contains("/oracle/")
-            || rel.starts_with("jain-deploy/ops/ci/testdata/")
-            || rel.starts_with("jain-python/python/ai-service/examples/")
-            || rel.starts_with("jain-python/python/ai-service/src/")
-            || rel.starts_with("jain-python/python/ai-service/tests/")
-            || python_boundary_exception(&rel).is_some();
+        let allowed = python_path_is_allowed(&rel);
         if allowed {
             declared.push(rel);
         } else {
@@ -7913,7 +7981,7 @@ fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
         .into());
     }
     println!(
-        "python boundary ok: {} declared files (customer SDK, parity, and nested Redline proof only)",
+        "python boundary ok: {} declared files (frozen parity and nested Redline proof only)",
         declared.len()
     );
     Ok(())
@@ -10164,6 +10232,123 @@ mod tests {
             "jain-smartcluster/jope/another.py",
         ] {
             assert_eq!(python_boundary_exception(near_miss), None, "{near_miss}");
+        }
+    }
+
+    #[test]
+    fn python_parity_authority_is_non_executable_and_dependency_free() {
+        let manifest: toml::Value = r#"
+retired_paths = ["python/ai-service/**"]
+[[repo]]
+name = "jain-python"
+profile = "custom"
+role = "frozen-parity-only"
+authored = true
+mirror_github_main = false
+executable = false
+release_artifact = false
+network = false
+credentials = false
+arbitrary_inputs = false
+package_dependencies = false
+stdlib_only = true
+runtime_dependencies = []
+parity_manifest = "parity/manifest.json"
+parity_oracle = "parity/oracle.py"
+parity_guard = "tools/parity-guard"
+cargo_members = ["tools/parity-guard"]
+copy_paths = []
+source_paths = []
+cross_repo_deps = []
+"#
+        .parse()
+        .unwrap();
+        let row = &manifest["repo"][0];
+        validate_python_parity_authority(&manifest, row).unwrap();
+
+        for field in [
+            "executable",
+            "release_artifact",
+            "network",
+            "credentials",
+            "arbitrary_inputs",
+            "package_dependencies",
+        ] {
+            let mut hostile = manifest.clone();
+            hostile["repo"][0][field] = toml::Value::Boolean(true);
+            assert!(
+                validate_python_parity_authority(&hostile, &hostile["repo"][0])
+                    .unwrap_err()
+                    .contains(&format!("{field} must be false"))
+            );
+        }
+        for field in [
+            "copy_paths",
+            "source_paths",
+            "cross_repo_deps",
+            "runtime_dependencies",
+        ] {
+            let mut hostile = manifest.clone();
+            hostile["repo"][0][field] =
+                toml::Value::Array(vec![toml::Value::String("outside".to_owned())]);
+            assert!(
+                validate_python_parity_authority(&hostile, &hostile["repo"][0])
+                    .unwrap_err()
+                    .contains(&format!("{field} must be an empty array"))
+            );
+        }
+        let mut active_profile = manifest.clone();
+        active_profile["repo"][0]["profile"] = toml::Value::String("python".to_owned());
+        assert!(
+            validate_python_parity_authority(&active_profile, &active_profile["repo"][0])
+                .unwrap_err()
+                .contains("profile must be custom")
+        );
+
+        let mut active_role = manifest.clone();
+        active_role["repo"][0]["role"] = toml::Value::String("python".to_owned());
+        assert!(
+            validate_python_parity_authority(&active_role, &active_role["repo"][0])
+                .unwrap_err()
+                .contains("role must be frozen-parity-only")
+        );
+
+        let mut non_stdlib = manifest.clone();
+        non_stdlib["repo"][0]["stdlib_only"] = toml::Value::Boolean(false);
+        assert!(
+            validate_python_parity_authority(&non_stdlib, &non_stdlib["repo"][0])
+                .unwrap_err()
+                .contains("stdlib_only must be true")
+        );
+
+        for field in ["parity_manifest", "parity_oracle", "parity_guard"] {
+            let mut hostile = manifest.clone();
+            hostile["repo"][0][field] = toml::Value::String("outside".to_owned());
+            assert!(
+                validate_python_parity_authority(&hostile, &hostile["repo"][0])
+                    .unwrap_err()
+                    .contains(&format!("{field} must be"))
+            );
+        }
+
+        let mut unretired = manifest.clone();
+        unretired["retired_paths"] = toml::Value::Array(Vec::new());
+        assert!(
+            validate_python_parity_authority(&unretired, &unretired["repo"][0])
+                .unwrap_err()
+                .contains("retired_paths must contain python/ai-service/**")
+        );
+    }
+
+    #[test]
+    fn python_boundary_rejects_retired_sdk_paths() {
+        assert!(python_path_is_allowed("jain-python/parity/oracle.py"));
+        for retired in [
+            "jain-python/python/ai-service/examples/demo.py",
+            "jain-python/python/ai-service/src/jain_sagemaker/client.py",
+            "jain-python/python/ai-service/tests/test_contract.py",
+        ] {
+            assert!(!python_path_is_allowed(retired), "{retired}");
         }
     }
 

@@ -82,6 +82,7 @@ retired_paths = [
   "ops/AGENTS.md",
   "ops/ci/**",
   "ops/git-hooks/pre-push",
+  "python/ai-service/**",
   "reference/vendor",
   "renovate.json",
   "rust-toolchain.toml",
@@ -716,20 +717,32 @@ path = "/home/ubuntu/jain-split/jain-python"
 name = "jain-python"
 github_slug = "neverhuman/jain-python"
 jeryu_slug = "veox/jain-python"
-profile = "python"
-role = "python"
+profile = "custom"
+role = "frozen-parity-only"
 default_branch = "main"
 rollout_wave = 6
 has_jeryu_std = true
 onboarded = false
-mirror_github_main = true
+mirror_github_main = false
+authored = true
 identity_status = "pending"
 required_check = "jain-python/required"
-note = "Transport-only Python SDK and SageMaker helpers."
-cargo_members = []
-copy_paths = ["python/ai-service", "contracts"]
-source_paths = ["python/ai-service/**"]
-cross_repo_deps = ["jain-contracts"]
+note = "Frozen local parity evidence only; no product runtime or release artifact."
+executable = false
+release_artifact = false
+network = false
+credentials = false
+arbitrary_inputs = false
+package_dependencies = false
+stdlib_only = true
+runtime_dependencies = []
+parity_manifest = "parity/manifest.json"
+parity_oracle = "parity/oracle.py"
+parity_guard = "tools/parity-guard"
+cargo_members = ["tools/parity-guard"]
+copy_paths = []
+source_paths = []
+cross_repo_deps = []
 
 [[repo]]
 path = "/home/ubuntu/jain-split/jain-model-zoo"
