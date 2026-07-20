@@ -1,4 +1,9 @@
-# Canonical nested-family manifest. Paths are relative to this file.
+# Canonical nested-family manifest. Paths are relative to this file, with one
+# deliberate exception: `manifest_authority` is the absolute physical path of
+# this file. splitctl compares it byte-for-byte against the resolved topology
+# manifest path (tools/splitctl/src/main.rs:2437), so a relative value fails
+# nested-family validation and takes every consumer's CI down with it. The
+# parent family declares it the same way (jain-split-ops/repos.manifest.toml:16).
 schema_version = "1"
 family = "redline-split"
 parent_family = "independent"
@@ -6,7 +11,7 @@ release_version = "8.0.1"
 status = "candidate"
 formal_ga = false
 sagemaker = "N/A"
-manifest_authority = "repos.manifest.toml"
+manifest_authority = "/home/ubuntu/jain-split/jain-redline/redline-split-ops/repos.manifest.toml"
 mirror_root = "../../target/bare-mirrors"
 release_evidence_root = "../../jain-split-ops/docs/release-evidence/8.0.1"
 container = ".."
