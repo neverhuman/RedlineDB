@@ -190,7 +190,7 @@ if jain_validate_native_build_tools \
   exit 1
 fi
 chmod 0755 "$fixture_root/share/cmake-4.3"
-rm -- "$fixture_root/share/cmake-4.3/hardlink.cmake"
+rm -f -- "$fixture_root/share/cmake-4.3/hardlink.cmake"
 chmod 0555 "$fixture_root/share/cmake-4.3"
 chmod 0644 "$fixture_root/share/cmake-4.3/Fixture.cmake"
 printf 'tampered module\n' >"$fixture_root/share/cmake-4.3/Fixture.cmake"
