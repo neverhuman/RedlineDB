@@ -366,6 +366,7 @@ for name in "${environment_names[@]}"; do
     && "$name" != JAIN_CARGO_DENY_ADVISORY_DB \
     && "$name" != JAIN_GRYPE_DB_ROOT \
     && "$name" != JAIN_GRYPE_DB_INVENTORY_SHA256 \
+    && "$name" != JAIN_NATIVE_BUILD_TOOLS_ROOT \
     && "$name" != JAIN_SPLIT_OPS_ROOT \
     && "$name" != JAIN_HOST_CI_REEXEC_STATE \
     && "$name" != JAIN_HOST_CI_NETWORK_ISOLATED \
@@ -460,6 +461,27 @@ IFS=$'\t' read -r protected_owner protected_check <<<"$repo_authority"
 [[ "${arguments[0]}" == "$protected_owner" \
   && "${arguments[4]}" == "$protected_check" ]] \
   || fail 'requested owner/check differs from manifest authority'
+
+native_build_tools_root=""
+native_build_tools_mount=""
+native_build_tools_root="$({
+  # Keep native-runtime's readonly evidence constants inside this validation
+  # subshell; the root publisher sources the same reviewed library later.
+  # shellcheck source=ops/ci/native-runtime.sh
+  source "$control_root/ops/ci/native-runtime.sh"
+  mapfile -t native_learners < <(jain_native_learners_for_repo "$repo")
+  if [[ "${#native_learners[@]}" -gt 0 ]]; then
+    native_build_tools_authority="$control_root/ops/ci/native-build-tools.lock.json"
+    resolved_native_build_tools_root="$(jq -er '.bundle_root' \
+      "$native_build_tools_authority")" || exit 1
+    jain_validate_native_build_tools "$native_build_tools_authority" \
+      "$resolved_native_build_tools_root" root || exit 1
+    printf '%s\n' "$resolved_native_build_tools_root"
+  fi
+})" || fail 'root native build-tool bundle validation failed'
+if [[ -n "$native_build_tools_root" ]]; then
+  native_build_tools_mount="/opt/jain-ci/native-build-tools/${native_build_tools_root##*/}"
+fi
 
 # Never run a caller-supplied product checkout. Resolve an advertised ref from
 # the configured forge Git root into root-owned storage, then stage an
@@ -749,6 +771,12 @@ systemd_args=(
   --setenv=GRYPE_DB_CACHE_DIR=/opt/jain-ci/grype-db
   --setenv="JAIN_NATIVE_EVIDENCE_STAGING_ROOT=$evidence_staging_root"
 )
+if [[ -n "$native_build_tools_root" ]]; then
+  systemd_args+=(
+    --property="BindReadOnlyPaths=$native_build_tools_root:$native_build_tools_mount"
+    --setenv="JAIN_NATIVE_BUILD_TOOLS_ROOT=$native_build_tools_mount"
+  )
+fi
 if [[ "$repo" == jain-starforge ]]; then
   systemd_args+=(
     --setenv=GIT_CONFIG_COUNT=7

@@ -14,6 +14,7 @@ for path in \
   ops/ci/host-ci-publisher.sh ops/ci/host-ci-sandbox.sh \
   ops/ci/host-ci-boundary-preflight.sh \
   ops/ci/host-ci-proof-evidence.sh \
+  ops/ci/native-build-tools.lock.json \
   ops/ci/native-runtime.sh ops/ci/pinned-advisory.sh \
   ops/ci/pinned-cargo-audit.sh ops/ci/pinned-cargo-deny.sh \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh \
@@ -23,6 +24,21 @@ for path in \
   printf 'fixture %s\n' "$path" >"$fixture/$path"
 done
 chmod +x "$fixture/ops/ci/host-ci-integrity.sh"
+grep -F 'jain_validate_native_build_tools "$native_build_tools_authority"' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not validate native build-tool custody\n' >&2
+  exit 1
+}
+grep -F 'BindReadOnlyPaths=$native_build_tools_root:$native_build_tools_mount' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not bind native build tools read-only\n' >&2
+  exit 1
+}
+grep -F 'jain_activate_native_build_tools' \
+  "$repo_root/ops/ci/split-host-ci.sh" >/dev/null || {
+  printf 'reviewed worker does not activate validated native build tools\n' >&2
+  exit 1
+}
 for boundary in host-ci-sandbox.sh host-ci-publisher.sh; do
   grep -F '"$splitctl_path" host-ci-authority' "$repo_root/ops/ci/$boundary" >/dev/null \
     || {

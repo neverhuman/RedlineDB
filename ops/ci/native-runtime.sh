@@ -2,6 +2,133 @@
 # Shared runtime-library contract for release Cargo commands that enable the
 # split family's native learners. This file is sourced by split-host-ci.sh.
 
+jain_validate_native_build_tools() {
+  local authority="${1:?native build-tool authority is required}"
+  local bundle_root="${2:?native build-tool root is required}"
+  local ownership_mode="${3:-content}"
+  local expected_inventory expected_count actual_inventory actual_count
+  local relative tool expected path version
+  local -a tools=(cmake ninja ragel yasm)
+
+  [[ "$ownership_mode" == root || "$ownership_mode" == content ]] || return 1
+  [[ -f "$authority" && ! -L "$authority" ]] || {
+    printf 'native build-tool authority is missing or linked: %s\n' \
+      "$authority" >&2
+    return 1
+  }
+  jq -e '
+    select(type == "object")
+    | select((keys | sort) ==
+        ["bundle_root", "file_count", "inventory_sha256",
+         "schema_version", "tools"])
+    | select(.schema_version == "jain.native-build-tools/v1")
+    | select(.bundle_root
+        | test("^/var/lib/jain-host-ci/native-build-tools/[0-9a-f]{64}$"))
+    | select(.inventory_sha256 | test("^[0-9a-f]{64}$"))
+    | select(.bundle_root ==
+        ("/var/lib/jain-host-ci/native-build-tools/" + .inventory_sha256))
+    | select(.file_count | type == "number" and . > 0 and floor == .)
+    | select((.tools | keys | sort) == ["cmake", "ninja", "ragel", "yasm"])
+    | select(all(.tools[];
+        type == "object"
+        and (keys | sort) == ["mode", "path", "sha256", "size", "version"]
+        and (.path | test("^bin/[a-z0-9-]+$"))
+        and .mode == "555"
+        and (.size | type == "number" and . > 0 and floor == .)
+        and (.sha256 | test("^[0-9a-f]{64}$"))
+        and (.version | type == "string" and length > 0)))' \
+    "$authority" >/dev/null || {
+    printf 'native build-tool authority is malformed\n' >&2
+    return 1
+  }
+
+  expected_inventory="$(jq -er '.inventory_sha256' "$authority")" || return 1
+  expected_count="$(jq -er '.file_count' "$authority")" || return 1
+  [[ "$bundle_root" == /* && -d "$bundle_root" && ! -L "$bundle_root" \
+    && "$(realpath -e -- "$bundle_root")" == "$bundle_root" \
+    && "${bundle_root##*/}" == "$expected_inventory" ]] || {
+    printf 'native build-tool bundle identity is invalid: %s\n' \
+      "$bundle_root" >&2
+    return 1
+  }
+  [[ -z "$(find "$bundle_root" -xdev ! -type d ! -type f -print -quit)" ]] || {
+    printf 'native build-tool bundle contains a non-regular object\n' >&2
+    return 1
+  }
+  [[ -z "$(find "$bundle_root" -xdev -type d ! -perm 0555 -print -quit)" \
+    && -z "$(find "$bundle_root" -xdev -type f \
+      ! \( -perm 0444 -o -perm 0555 \) -print -quit)" \
+    && -z "$(find "$bundle_root" -xdev -type f ! -links 1 -print -quit)" ]] || {
+    printf 'native build-tool bundle mode or link count is invalid\n' >&2
+    return 1
+  }
+  if [[ "$ownership_mode" == root ]]; then
+    [[ -z "$(find "$bundle_root" -xdev ! -uid 0 -print -quit)" \
+      && -z "$(find "$bundle_root" -xdev ! -gid 0 -print -quit)" ]] || {
+      printf 'native build-tool bundle is not root-owned\n' >&2
+      return 1
+    }
+  fi
+
+  actual_count="$(find "$bundle_root" -xdev -type f -printf '.\n' | wc -l)"
+  [[ "$actual_count" == "$expected_count" ]] || {
+    printf 'native build-tool file count mismatch: %s != %s\n' \
+      "$actual_count" "$expected_count" >&2
+    return 1
+  }
+  actual_inventory="$({
+    while IFS= read -r relative; do
+      [[ "$relative" =~ ^[A-Za-z0-9._+/-]+$ ]] || exit 1
+      path="$bundle_root/$relative"
+      printf '%s\t%s\t%s\t%s\n' "$relative" \
+        "$(stat -c %a -- "$path")" "$(stat -c %s -- "$path")" \
+        "$(sha256sum -- "$path" | cut -d' ' -f1)"
+    done < <(LC_ALL=C find "$bundle_root" -xdev -type f -printf '%P\n' \
+      | LC_ALL=C sort)
+  } | sha256sum | cut -d' ' -f1)" || return 1
+  [[ "$actual_inventory" == "$expected_inventory" ]] || {
+    printf 'native build-tool inventory mismatch: %s != %s\n' \
+      "$actual_inventory" "$expected_inventory" >&2
+    return 1
+  }
+
+  for tool in "${tools[@]}"; do
+    relative="$(jq -er --arg tool "$tool" '.tools[$tool].path' \
+      "$authority")" || return 1
+    path="$bundle_root/$relative"
+    [[ -f "$path" && ! -L "$path" \
+      && "$(stat -c %a -- "$path")" \
+        == "$(jq -er --arg tool "$tool" '.tools[$tool].mode' "$authority")" \
+      && "$(stat -c %s -- "$path")" \
+        == "$(jq -er --arg tool "$tool" '.tools[$tool].size' "$authority")" \
+      && "$(sha256sum -- "$path" | cut -d' ' -f1)" \
+        == "$(jq -er --arg tool "$tool" '.tools[$tool].sha256' "$authority")" ]] \
+      || {
+      printf 'native build-tool digest/metadata mismatch: %s\n' "$tool" >&2
+      return 1
+    }
+    expected="$(jq -er --arg tool "$tool" '.tools[$tool].version' \
+      "$authority")" || return 1
+    version="$("$path" --version 2>&1 | head -n 1)" || return 1
+    [[ "$version" == "$expected" ]] || {
+      printf 'native build-tool version mismatch: %s\n' "$tool" >&2
+      return 1
+    }
+  done
+}
+
+jain_activate_native_build_tools() {
+  local authority="${1:?native build-tool authority is required}"
+  local bundle_root="${2:?native build-tool root is required}"
+  jain_validate_native_build_tools "$authority" "$bundle_root" content \
+    || return 1
+  CMAKE="$bundle_root/bin/cmake"
+  NINJA="$bundle_root/bin/ninja"
+  CMAKE_MAKE_PROGRAM="$bundle_root/bin/ninja"
+  PATH="$bundle_root/bin:$PATH"
+  export CMAKE NINJA CMAKE_MAKE_PROGRAM PATH
+}
+
 jain_native_learners_for_repo() {
   local repo="${1:?repository name is required}"
   case "$repo" in

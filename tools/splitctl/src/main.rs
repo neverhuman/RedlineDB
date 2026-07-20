@@ -7820,6 +7820,13 @@ fn python_boundary_exception(relative: &str) -> Option<&'static str> {
     }
 }
 
+fn python_scan_excluded_name(name: &str) -> bool {
+    matches!(
+        name,
+        ".bundles" | ".git" | "target" | ".stage" | ".venv" | "vendor" | "node_modules"
+    )
+}
+
 fn python_boundary() -> Result<(), Box<dyn std::error::Error>> {
     let root = control_plane_root()
         .parent()
@@ -8353,12 +8360,7 @@ fn collect_python(root: &Path, out: &mut Vec<PathBuf>) -> io::Result<()> {
         if path
             .file_name()
             .and_then(|name| name.to_str())
-            .is_some_and(|name| {
-                matches!(
-                    name,
-                    ".git" | "target" | ".stage" | ".venv" | "vendor" | "node_modules"
-                )
-            })
+            .is_some_and(python_scan_excluded_name)
         {
             continue;
         }
@@ -10116,6 +10118,24 @@ mod tests {
             "jain-smartcluster/jope/another.py",
         ] {
             assert_eq!(python_boundary_exception(near_miss), None, "{near_miss}");
+        }
+    }
+
+    #[test]
+    fn python_boundary_excludes_preservation_and_generated_trees() {
+        for excluded in [
+            ".bundles",
+            ".git",
+            "target",
+            ".stage",
+            ".venv",
+            "vendor",
+            "node_modules",
+        ] {
+            assert!(python_scan_excluded_name(excluded), "{excluded}");
+        }
+        for source_name in ["bundles", ".bundle", "src", "python"] {
+            assert!(!python_scan_excluded_name(source_name), "{source_name}");
         }
     }
 

@@ -294,6 +294,12 @@ validate_physical_checkout "$wt" "$SHA" \
 # control-plane commit, stage clean worktrees from authority-bound Git objects,
 # and preserve a checksummed receipt outside this disposable checkout.
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
+  : "${JAIN_NATIVE_BUILD_TOOLS_ROOT:?root native build-tool mount is required}"
+  jain_activate_native_build_tools \
+    "$OPS_ROOT/ops/ci/native-build-tools.lock.json" \
+    "$JAIN_NATIVE_BUILD_TOOLS_ROOT" \
+    || native_setup_failure \
+      "release CI native build-tool activation failed" 1
   jain_extract_native_materializer "$OPS_ROOT" "$native_bundle" \
     "$control_plane_remote" "$CONTROL_PLANE_COMMIT" "$authority_mode" \
     || native_setup_failure \

@@ -279,6 +279,8 @@ for boundary_file in \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh; do
   install -D -m 0755 "$repo_root/$boundary_file" "$control/$boundary_file"
 done
+install -D -m 0644 "$repo_root/ops/ci/native-build-tools.lock.json" \
+  "$control/ops/ci/native-build-tools.lock.json"
 # The adversarial matrix deliberately creates more than the production
 # retention window before its final inode-tamper variants. Keep those fixture
 # receipts long enough to exercise the original sealed success authority.
