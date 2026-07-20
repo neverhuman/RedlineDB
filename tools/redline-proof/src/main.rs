@@ -948,7 +948,6 @@ impl HeldDirectory {
 
     fn create_directory_fd(&self, name: &OsStr, mode: u32, context: &str) -> Result<Self> {
         self.validate_descriptor(context)?;
-        self.require_absent_fd(name, context)?;
         let name_value = descriptor_name(name, context)?;
         if unsafe {
             libc::mkdirat(
@@ -1038,9 +1037,39 @@ impl HeldDirectory {
         create_mode: u32,
         context: &str,
     ) -> Result<Self> {
+        self.open_or_create_directory_fd_after_absent(name, create_mode, context, || {})
+    }
+
+    fn open_or_create_directory_fd_after_absent(
+        &self,
+        name: &OsStr,
+        create_mode: u32,
+        context: &str,
+        after_absent: impl FnOnce(),
+    ) -> Result<Self> {
         self.validate_descriptor(context)?;
         match self.stat_entry(name, context)? {
-            None => self.create_directory_fd(name, create_mode, context),
+            None => {
+                after_absent();
+                match self.create_directory_fd(name, create_mode, context) {
+                    Ok(directory) => Ok(directory),
+                    Err(failure)
+                        if failure
+                            .downcast_ref::<io::Error>()
+                            .is_some_and(|value| value.kind() == io::ErrorKind::AlreadyExists) =>
+                    {
+                        let directory = self.open_directory_fd(name, context)?;
+                        if directory.identity.mode != create_mode {
+                            return Err(error(format!(
+                                "{context} concurrently created directory has mode {:04o}, expected {create_mode:04o}",
+                                directory.identity.mode
+                            )));
+                        }
+                        Ok(directory)
+                    }
+                    Err(failure) => Err(failure),
+                }
+            }
             Some(value) if value.st_mode & libc::S_IFMT == libc::S_IFDIR => {
                 self.open_directory_fd(name, context)
             }
@@ -7092,6 +7121,75 @@ mod tests {
             fs::read(victim.path().join("must-survive")).unwrap(),
             b"preserved"
         );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn descriptor_directory_open_or_create_is_parallel_race_stable() {
+        use std::os::unix::fs::PermissionsExt;
+        use std::sync::{Arc, Barrier};
+        use std::thread;
+
+        let fixture = TestDir::new_in_root("descriptor-directory-create-race");
+        let parent = HeldDirectory::open(fixture.path(), "parallel create parent").unwrap();
+        let barrier = Arc::new(Barrier::new(2));
+        let mut creators = Vec::new();
+        for _ in 0..2 {
+            let parent = parent.duplicate().unwrap();
+            let barrier = Arc::clone(&barrier);
+            creators.push(thread::spawn(move || {
+                parent
+                    .open_or_create_directory_fd_after_absent(
+                        OsStr::new("shared"),
+                        0o700,
+                        "parallel shared directory",
+                        || {
+                            barrier.wait();
+                        },
+                    )
+                    .unwrap()
+                    .identity
+            }));
+        }
+
+        let first = creators.remove(0).join().unwrap();
+        let second = creators.remove(0).join().unwrap();
+        assert_eq!(first, second);
+        assert_eq!(first.mode, 0o700);
+        assert_eq!(
+            first,
+            directory_identity_from_metadata(
+                &fs::symlink_metadata(fixture.path().join("shared")).unwrap()
+            )
+        );
+
+        let foreign_file = fixture.path().join("foreign-file");
+        let failure = parent
+            .open_or_create_directory_fd_after_absent(
+                OsStr::new("foreign-file"),
+                0o700,
+                "raced foreign file",
+                || fs::write(&foreign_file, b"foreign\n").unwrap(),
+            )
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("not a descriptor-relative physical directory"));
+        assert_eq!(fs::read(&foreign_file).unwrap(), b"foreign\n");
+
+        let wrong_mode = fixture.path().join("wrong-mode");
+        let failure = parent
+            .open_or_create_directory_fd_after_absent(
+                OsStr::new("wrong-mode"),
+                0o700,
+                "raced wrong-mode directory",
+                || {
+                    fs::create_dir(&wrong_mode).unwrap();
+                    fs::set_permissions(&wrong_mode, fs::Permissions::from_mode(0o755)).unwrap();
+                },
+            )
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("concurrently created directory has mode 0755, expected 0700"));
     }
 
     #[cfg(unix)]
