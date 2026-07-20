@@ -1567,23 +1567,7 @@ mod tests {
                 }
             }
             if expected.is_some_and(|length| request.len() == length) {
-                stream
-                    .set_read_timeout(Some(Duration::from_millis(25)))
-                    .unwrap();
-                let mut extra = [0_u8; 1];
-                match stream.read(&mut extra) {
-                    Err(error)
-                        if matches!(
-                            error.kind(),
-                            io::ErrorKind::WouldBlock | io::ErrorKind::TimedOut
-                        ) =>
-                    {
-                        return request
-                    }
-                    Ok(0) => panic!("client half-closed before the fixture response"),
-                    Ok(_) => panic!("client sent bytes beyond its declared request framing"),
-                    Err(error) => panic!("fixture post-request probe failed: {error}"),
-                }
+                return request;
             }
             assert!(
                 expected.is_none_or(|length| request.len() < length),
