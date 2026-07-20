@@ -73,6 +73,30 @@ for invalid_path in "${invalid_paths[@]}"; do
 done
 
 validate_fixture_under_pipefail "$fixture_authority" "$fixture_root"
+private_result_marker="$tmp/private-result-directory"
+(
+  mktemp() {
+    local directory
+    if [[ "$#" == 2 && "$1" == -d \
+      && "$2" == /tmp/jain-native-inventory-result.XXXXXX ]]; then
+      directory="$(command mktemp "$@")" || return 1
+      printf '%s\n' "$directory" >"$private_result_marker"
+      printf '%s\n' "$directory"
+      return
+    fi
+    command mktemp "$@"
+  }
+  jain_validate_native_build_tools \
+    "$fixture_authority" "$fixture_root" content
+)
+private_result_directory="$(<"$private_result_marker")"
+[[ "$private_result_directory" \
+    == /tmp/jain-native-inventory-result.?????? \
+  && ! -e "$private_result_directory" ]] || {
+  printf 'native validator did not use and remove a private result directory\n' \
+    >&2
+  exit 1
+}
 if jain_validate_native_build_tools \
   "$fixture_authority" "$fixture_root" root 2>/dev/null; then
   printf 'native build-tool validator accepted non-root fixture ownership\n' >&2

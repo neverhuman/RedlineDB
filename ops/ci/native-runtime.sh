@@ -126,13 +126,22 @@ jain_write_native_build_tools_inventory() (
   complete=true
 )
 
-jain_validate_native_build_tools() {
+jain_validate_native_build_tools() (
   local authority="${1:?native build-tool authority is required}"
   local bundle_root="${2:?native build-tool root is required}"
   local ownership_mode="${3:-content}"
-  local expected_inventory expected_count actual_inventory actual_count inventory_tmp
+  local expected_inventory expected_count actual_inventory actual_count
+  local inventory_scratch='' inventory_tmp=''
   local relative tool expected path version
   local -a tools=(cmake ninja ragel yasm)
+
+  cleanup_native_inventory_result() {
+    [[ -z "$inventory_scratch" ]] || {
+      rm -f -- "$inventory_tmp"
+      rmdir -- "$inventory_scratch"
+    }
+  }
+  trap cleanup_native_inventory_result EXIT
 
   [[ "$ownership_mode" == root || "$ownership_mode" == content ]] || return 1
   [[ -f "$authority" && ! -L "$authority" ]] || {
@@ -174,30 +183,36 @@ jain_validate_native_build_tools() {
       "$bundle_root" >&2
     return 1
   }
-  inventory_tmp="$(mktemp /tmp/jain-native-inventory-result.XXXXXX)" \
+  inventory_scratch="$(
+    mktemp -d /tmp/jain-native-inventory-result.XXXXXX
+  )" \
     || return 1
-  rm -f -- "$inventory_tmp"
+  [[ ! -L "$inventory_scratch" \
+    && "$(realpath -e -- "$inventory_scratch")" == "$inventory_scratch" \
+    && "$(stat -c '%F:%a:%u' -- "$inventory_scratch")" \
+      == "directory:700:$(id -u)" ]] || return 1
+  inventory_tmp="$inventory_scratch/inventory.tsv"
   jain_write_native_build_tools_inventory \
     "$bundle_root" "$inventory_tmp" "$ownership_mode" || {
     printf 'native build-tool tree or inventory is invalid\n' >&2
-    rm -f -- "$inventory_tmp"
     return 1
   }
   actual_count="$(wc -l <"$inventory_tmp")" || {
-    rm -f -- "$inventory_tmp"
     return 1
   }
   [[ "$actual_count" == "$expected_count" ]] || {
     printf 'native build-tool file count mismatch: %s != %s\n' \
       "$actual_count" "$expected_count" >&2
-    rm -f -- "$inventory_tmp"
     return 1
   }
   actual_inventory="$(sha256sum -- "$inventory_tmp" | cut -d' ' -f1)" || {
-    rm -f -- "$inventory_tmp"
     return 1
   }
-  rm -f -- "$inventory_tmp"
+  rm -f -- "$inventory_tmp" || return 1
+  rmdir -- "$inventory_scratch" || return 1
+  inventory_scratch=''
+  inventory_tmp=''
+  trap - EXIT
   [[ "$actual_inventory" == "$expected_inventory" ]] || {
     printf 'native build-tool inventory mismatch: %s != %s\n' \
       "$actual_inventory" "$expected_inventory" >&2
@@ -228,7 +243,7 @@ jain_validate_native_build_tools() {
       return 1
     }
   done
-}
+)
 
 jain_activate_native_build_tools() {
   local authority="${1:?native build-tool authority is required}"
