@@ -431,15 +431,24 @@ fn volatile_root_from_candidate(candidate: &Path) -> PathBuf {
     }
 }
 
-/// Probe whether `root` is usable as our shared-memory ephemeral
-/// store. `create_dir_all` is idempotent (zero net syscalls if the
-/// directory already exists with correct mode) and fails the same way
-/// the heavy create+write+unlink probe did when permissions are wrong
-/// — the eventual `tempfile::Builder::tempdir_in` call will surface
-/// real errors for the rare exotic case the lighter probe doesn't
-/// catch.
+/// Probe whether `root` is usable as our shared-memory ephemeral store.
+/// `create_dir_all` alone is insufficient: it succeeds when an existing
+/// directory is searchable but not writable by the current identity. The
+/// cached caller pays one create/remove pair so a later session directory
+/// cannot fail after we have selected this root.
 fn ensure_writable_volatile_root(root: &Path) -> bool {
-    fs::create_dir_all(root).is_ok()
+    if fs::create_dir_all(root).is_err() {
+        return false;
+    }
+    let probe_id = EPHEMERAL_SESSION_COUNTER.fetch_add(1, Ordering::Relaxed);
+    let probe = root.join(format!(
+        ".redlinedb-volatile-probe-{}-{probe_id}",
+        std::process::id()
+    ));
+    if fs::create_dir(&probe).is_err() {
+        return false;
+    }
+    fs::remove_dir(&probe).is_ok()
 }
 
 fn ephemeral_session_path(temp_dir: Option<&Path>, session_name: &str) -> PathBuf {
