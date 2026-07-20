@@ -136,7 +136,6 @@ export JAIN_ADVISORY_DB="$advisory_db"
 export JAIN_CARGO_DENY_ADVISORY_DB="$deny_db"
 export JAIN_PINNED_ADVISORY_COMMIT="$expected"
 export JAIN_TEST_TOOL_ARGS="$tmp/args"
-export JAIN_TEST_TOOL_GIT_ENV="$tmp/git-env"
 
 # The recorder databases are deliberately worker-owned fixtures. Prove the
 # production-isolated wrapper rejects that custody before running recorder-only
@@ -152,12 +151,6 @@ fi
   exit 1
 }
 
-GIT_CONFIG_COUNT=6 \
-GIT_CONFIG_KEY_4=safe.directory \
-GIT_CONFIG_VALUE_4=/hostile/second-safe-directory \
-GIT_CONFIG_KEY_5=protocol.allow \
-GIT_CONFIG_VALUE_5=always \
-GIT_CONFIG_PARAMETERS="'safe.directory'='/hostile/parameter-safe-directory'" \
 JAIN_HOST_CI_NETWORK_ISOLATED=0 \
   "$tool_dir/cargo-audit" audit --deny warnings --db /shared/user/db --no-fetch
 mapfile -t args <"$JAIN_TEST_TOOL_ARGS"
@@ -165,7 +158,22 @@ mapfile -t args <"$JAIN_TEST_TOOL_ARGS"
   printf 'cargo-audit pin wrapper arguments drifted: %s\n' "${args[*]}" >&2
   exit 1
 }
-mapfile -t git_env <"$JAIN_TEST_TOOL_GIT_ENV"
+
+GIT_CONFIG_COUNT=6 \
+GIT_CONFIG_KEY_4=safe.directory \
+GIT_CONFIG_VALUE_4=/hostile/second-safe-directory \
+GIT_CONFIG_KEY_5=protocol.allow \
+GIT_CONFIG_VALUE_5=always \
+GIT_CONFIG_PARAMETERS="'safe.directory'='/hostile/parameter-safe-directory'" \
+JAIN_TEST_TOOL_GIT_ENV="$tmp/git-env" \
+JAIN_HOST_CI_NETWORK_ISOLATED=0 \
+  "$tool_dir/cargo-deny" deny check advisories --disable-fetch
+mapfile -t args <"$JAIN_TEST_TOOL_ARGS"
+[[ "${args[*]}" == "deny check --disable-fetch advisories" ]] || {
+  printf 'cargo-deny pin wrapper arguments drifted: %s\n' "${args[*]}" >&2
+  exit 1
+}
+mapfile -t git_env <"$tmp/git-env"
 expected_git_env=(
   "GIT_CONFIG_GLOBAL=/dev/null"
   "GIT_CONFIG_NOSYSTEM=1"
@@ -177,7 +185,7 @@ expected_git_env=(
   "GIT_OPTIONAL_LOCKS=0"
   "GIT_TERMINAL_PROMPT=0"
   "GIT_CONFIG_KEY_0=safe.directory"
-  "GIT_CONFIG_VALUE_0=$advisory_db"
+  "GIT_CONFIG_VALUE_0=$deny_db"
   "GIT_CONFIG_KEY_1=core.fsmonitor"
   "GIT_CONFIG_VALUE_1=false"
   "GIT_CONFIG_KEY_2=core.hooksPath"
@@ -187,17 +195,8 @@ expected_git_env=(
   "GIT_CONFIG_NAMES=GIT_CONFIG_KEY_0 GIT_CONFIG_KEY_1 GIT_CONFIG_KEY_2 GIT_CONFIG_KEY_3 GIT_CONFIG_VALUE_0 GIT_CONFIG_VALUE_1 GIT_CONFIG_VALUE_2 GIT_CONFIG_VALUE_3"
 )
 [[ "${git_env[*]}" == "${expected_git_env[*]}" ]] || {
-  printf 'cargo-audit pin wrapper Git environment drifted: %s\n' \
+  printf 'cargo-deny pin wrapper Git environment drifted: %s\n' \
     "${git_env[*]}" >&2
-  exit 1
-}
-unset JAIN_TEST_TOOL_GIT_ENV
-
-JAIN_HOST_CI_NETWORK_ISOLATED=0 \
-  "$tool_dir/cargo-deny" deny check advisories --disable-fetch
-mapfile -t args <"$JAIN_TEST_TOOL_ARGS"
-[[ "${args[*]}" == "deny check --disable-fetch advisories" ]] || {
-  printf 'cargo-deny pin wrapper arguments drifted: %s\n' "${args[*]}" >&2
   exit 1
 }
 

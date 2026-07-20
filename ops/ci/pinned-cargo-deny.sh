@@ -85,10 +85,33 @@ if [[ "${args[0]:-}" == deny ]]; then
   prefix=(deny)
   args=("${args[@]:1}")
 fi
+
+# cargo-deny invokes Git internally to inspect FETCH_HEAD metadata in its
+# hashed advisory database. That exact child is deliberately root-owned in
+# release CI, so admit only the already-validated physical path and strip all
+# caller Git configuration before entering the real tool.
+git_config_variables=("${!GIT_CONFIG_KEY_@}" "${!GIT_CONFIG_VALUE_@}")
+for variable in "${git_config_variables[@]}"; do
+  [[ -z "$variable" ]] || unset "$variable"
+done
+deny_environment=(
+  /usr/bin/env
+  -u GIT_CONFIG -u GIT_CONFIG_PARAMETERS -u GIT_CONFIG_SYSTEM
+  GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1
+  GIT_CONFIG_COUNT=4
+  GIT_CONFIG_KEY_0=safe.directory
+  GIT_CONFIG_VALUE_0="$JAIN_CARGO_DENY_ADVISORY_DB"
+  GIT_CONFIG_KEY_1=core.fsmonitor GIT_CONFIG_VALUE_1=false
+  GIT_CONFIG_KEY_2=core.hooksPath GIT_CONFIG_VALUE_2=/dev/null
+  GIT_CONFIG_KEY_3=protocol.allow GIT_CONFIG_VALUE_3=never
+  GIT_NO_LAZY_FETCH=1 GIT_OPTIONAL_LOCKS=0 GIT_TERMINAL_PROMPT=0
+)
 for ((index = 0; index < ${#args[@]}; index++)); do
   if [[ "${args[$index]}" == check ]]; then
-    exec "$JAIN_REAL_CARGO_DENY" "${prefix[@]}" "${args[@]:0:$((index + 1))}" \
-      --disable-fetch "${args[@]:$((index + 1))}"
+    exec "${deny_environment[@]}" "$JAIN_REAL_CARGO_DENY" \
+      "${prefix[@]}" "${args[@]:0:$((index + 1))}" --disable-fetch \
+      "${args[@]:$((index + 1))}"
   fi
 done
-exec "$JAIN_REAL_CARGO_DENY" "${prefix[@]}" "${args[@]}"
+exec "${deny_environment[@]}" "$JAIN_REAL_CARGO_DENY" \
+  "${prefix[@]}" "${args[@]}"
