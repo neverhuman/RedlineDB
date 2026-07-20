@@ -120,6 +120,42 @@ impl JeryuRequest {
         Self::new(Method::Get, "/api/v1/repos?host=jeryu".to_owned(), None)
     }
 
+    pub fn repo_create(repo: &str, description: Option<&str>) -> Result<Self> {
+        validate_repo_slug(repo)?;
+        let (owner, name) = repo
+            .split_once('/')
+            .ok_or_else(|| JeryuError::new("repository must contain owner/name"))?;
+        if owner != "veox" {
+            return Err(JeryuError::new(
+                "governed repository creation is restricted to veox ownership",
+            ));
+        }
+        if let Some(description) = description {
+            if description.len() > 1024 || description.chars().any(char::is_control) {
+                return Err(JeryuError::new("repository description is unsafe"));
+            }
+        }
+        Self::new(
+            Method::Post,
+            "/repos".to_owned(),
+            Some(
+                json!({
+                    "owner": owner,
+                    "name": name,
+                    "private": true,
+                    "default_branch": "main",
+                    "description": description,
+                })
+                .to_string(),
+            ),
+        )
+    }
+
+    pub fn repo_details(repo: &str) -> Result<Self> {
+        validate_repo_slug(repo)?;
+        Self::new(Method::Get, format!("/repos/{repo}"), None)
+    }
+
     pub fn pr_list(repo: &str, state: &str) -> Result<Self> {
         validate_repo_slug(repo)?;
         if !matches!(state, "open" | "closed" | "all") {
@@ -367,10 +403,19 @@ impl JeryuClient {
     }
 
     pub fn execute(&self, request: &JeryuRequest) -> Result<JsonValue> {
-        self.execute_with_timeout(request, IO_TIMEOUT)
+        self.execute_with_timeout(request, IO_TIMEOUT, None)
     }
 
-    fn execute_with_timeout(&self, request: &JeryuRequest, timeout: Duration) -> Result<JsonValue> {
+    pub fn execute_created(&self, request: &JeryuRequest) -> Result<JsonValue> {
+        self.execute_with_timeout(request, IO_TIMEOUT, Some(201))
+    }
+
+    fn execute_with_timeout(
+        &self,
+        request: &JeryuRequest,
+        timeout: Duration,
+        expected_status: Option<u16>,
+    ) -> Result<JsonValue> {
         validate_request_path(&request.path)?;
         let deadline = Instant::now() + timeout;
         let mut stream =
@@ -414,6 +459,14 @@ impl JeryuClient {
                 "local Jeryu returned HTTP {}: {}",
                 response.status, message
             )));
+        }
+        if let Some(expected) = expected_status {
+            if response.status != expected {
+                return Err(JeryuError::new(format!(
+                    "local Jeryu returned HTTP {} instead of required HTTP {expected}",
+                    response.status
+                )));
+            }
         }
         if contains_bytes(&response.body, self.token.as_slice()) {
             return Err(JeryuError::new(
@@ -1708,6 +1761,47 @@ mod tests {
         let failure = client.publish_host_ci(&publication).unwrap_err();
         assert!(failure.publication_started());
         assert_eq!(server.join().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn governed_repository_creation_request_is_private_veox_main_only() {
+        let request =
+            JeryuRequest::repo_create("veox/jain-fabric", Some("Canonical Jain contracts"))
+                .unwrap();
+        assert_eq!(request.method(), "POST");
+        assert_eq!(request.path(), "/repos");
+        assert_eq!(
+            serde_json::from_str::<JsonValue>(request.body().unwrap()).unwrap(),
+            json!({
+                "owner": "veox",
+                "name": "jain-fabric",
+                "private": true,
+                "default_branch": "main",
+                "description": "Canonical Jain contracts",
+            })
+        );
+        let details = JeryuRequest::repo_details("veox/jain-fabric").unwrap();
+        assert_eq!(details.method(), "GET");
+        assert_eq!(details.path(), "/repos/veox/jain-fabric");
+        assert!(JeryuRequest::repo_create("jeryu/jain-fabric", None).is_err());
+        assert!(JeryuRequest::repo_create("veox/../jain-fabric", None).is_err());
+        assert!(JeryuRequest::repo_create("veox/jain-fabric", Some("bad\ntext")).is_err());
+    }
+
+    #[test]
+    fn repository_creation_requires_http_created() {
+        let request = JeryuRequest::repo_create("veox/jain-fabric", None).unwrap();
+        let body = json!({"full_name": "veox/jain-fabric"});
+        let (address, server) = serve_sequence(vec![json_response("200 OK", body.clone())]);
+        let client = JeryuClient::for_test(token_value(), address);
+        let error = client.execute_created(&request).unwrap_err();
+        assert!(error.to_string().contains("required HTTP 201"));
+        assert_eq!(server.join().unwrap(), vec!["POST /repos HTTP/1.1"]);
+
+        let (address, server) = serve_sequence(vec![json_response("201 Created", body.clone())]);
+        let client = JeryuClient::for_test(token_value(), address);
+        assert_eq!(client.execute_created(&request).unwrap(), body);
+        assert_eq!(server.join().unwrap(), vec!["POST /repos HTTP/1.1"]);
     }
 
     #[test]
