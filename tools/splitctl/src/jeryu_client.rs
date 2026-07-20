@@ -463,6 +463,10 @@ impl JeryuClient {
                 "head_sha": publication.head_sha,
                 "status": "completed",
                 "conclusion": publication.conclusion,
+                "output": {
+                    "title": "Root-sealed required check",
+                    "summary": publication.proof_summary,
+                }
             }),
         )
         .map_err(PublishFailure::after)?;
@@ -614,6 +618,11 @@ fn validate_required_readback(response: &JsonValue, publication: &HostCiPublicat
                 && run.get("status").and_then(JsonValue::as_str) == Some("completed")
                 && run.get("conclusion").and_then(JsonValue::as_str)
                     == Some(publication.conclusion.as_str())
+                && run
+                    .get("output")
+                    .and_then(|output| output.get("summary"))
+                    .and_then(JsonValue::as_str)
+                    == Some(publication.proof_summary.as_str())
         })
         .count();
     if matches == 1 {
@@ -1656,6 +1665,7 @@ mod tests {
                         "head_sha": publication.head_sha,
                         "status": "completed",
                         "conclusion": publication.conclusion,
+                        "output": {"summary": publication.proof_summary},
                     }
                 ]}),
             ),

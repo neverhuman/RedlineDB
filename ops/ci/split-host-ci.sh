@@ -45,11 +45,16 @@ SPLIT_ROOT="${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}"
   && ! -L "$RUNNER_PATH" \
   && "$(stat -c '%a:%h' -- "$RUNNER_PATH")" == '555:1' ]] || exit 2
 jq -e '
-  select(.schema_version == "jain.host-ci-reexec/v4")
+  select(.schema_version == "jain.host-ci-reexec/v5")
   | select(.source_root == "/opt/jain-ci/authority/control-plane")
   | select(.exact_root == "/opt/jain-ci/authority/control-plane")
   | select(.result_path | type == "string" and startswith("/"))
   | select(.splitctl_path == "/opt/jain-ci/authority/splitctl")
+  | select(.request_id | test("^[0-9a-f]{64}$"))
+  | select(.cuda_compute_capability_required | type == "boolean")
+  | select(.cuda_capability_record_path | type == "string")
+  | select(.cuda_capability_record_sha256 | type == "string")
+  | select(.cuda_compute_capability | type == "string")
   | select(.commit | test("^[0-9a-f]{40}$"))' "$REEXEC_STATE" >/dev/null \
   || exit 2
 SOURCE_OPS_ROOT="$(realpath -e -- "$(jq -er '.source_root' "$REEXEC_STATE")")" \
@@ -60,6 +65,19 @@ CONTROL_PLANE_COMMIT="$(jq -er '.commit' "$REEXEC_STATE")" || exit 2
 CHILD_RESULT_PATH="$(jq -er '.result_path' "$REEXEC_STATE")" || exit 2
 SPLITCTL_BIN="$(realpath -e -- "$(jq -er '.splitctl_path' "$REEXEC_STATE")")" \
   || exit 2
+JAIN_HOST_CI_REQUEST_ID="$(jq -er '.request_id' "$REEXEC_STATE")" || exit 2
+JAIN_RELEASE_CUDA_COMPUTE_CAPABILITY_REQUIRED="$(
+  jq -r '.cuda_compute_capability_required' "$REEXEC_STATE"
+)" || exit 2
+JAIN_CUDA_CAPABILITY_RECORD_PATH="$(
+  jq -er '.cuda_capability_record_path' "$REEXEC_STATE"
+)" || exit 2
+JAIN_CUDA_CAPABILITY_RECORD_SHA256="$(
+  jq -er '.cuda_capability_record_sha256' "$REEXEC_STATE"
+)" || exit 2
+JAIN_CUDA_COMPUTE_CAPABILITY="$(
+  jq -er '.cuda_compute_capability' "$REEXEC_STATE"
+)" || exit 2
 [[ "$SOURCE_OPS_ROOT" == "$OPS_ROOT" \
   && "$OPS_ROOT" == /opt/jain-ci/authority/control-plane \
   && -d "$OPS_ROOT/.git" && ! -L "$OPS_ROOT" \
@@ -96,6 +114,27 @@ CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
 source "$OPS_ROOT/ops/ci/native-runtime.sh"
 # shellcheck source=ops/ci/pinned-advisory.sh
 source "$OPS_ROOT/ops/ci/pinned-advisory.sh"
+if [[ "$JAIN_RELEASE_CUDA_COMPUTE_CAPABILITY_REQUIRED" == true ]]; then
+  [[ "$JAIN_CUDA_CAPABILITY_RECORD_PATH" \
+      == /opt/jain-ci/authority/cuda-capability.json \
+    && "$JAIN_CUDA_CAPABILITY_RECORD_SHA256" =~ ^[0-9a-f]{64}$ \
+    && "$JAIN_CUDA_COMPUTE_CAPABILITY" =~ ^[1-9][0-9]{1,2}$ \
+    && "${CUDA_COMPUTE_CAP:-}" == "$JAIN_CUDA_COMPUTE_CAPABILITY" ]] \
+    || exit 2
+  jain_verify_cuda_capability_record \
+    "$JAIN_CUDA_CAPABILITY_RECORD_PATH" \
+    "$JAIN_CUDA_CAPABILITY_RECORD_SHA256" \
+    "$JAIN_HOST_CI_REQUEST_ID" \
+    "$CONTROL_PLANE_COMMIT" "$OWNER" "$REPO" "$SHA" "$CHECK" \
+    "$(jq -er '.detector.sha256' "$JAIN_CUDA_CAPABILITY_RECORD_PATH")" \
+    "$JAIN_CUDA_COMPUTE_CAPABILITY" 0 || exit 2
+else
+  [[ "$JAIN_RELEASE_CUDA_COMPUTE_CAPABILITY_REQUIRED" == false \
+    && -z "$JAIN_CUDA_CAPABILITY_RECORD_PATH" \
+    && -z "$JAIN_CUDA_CAPABILITY_RECORD_SHA256" \
+    && -z "$JAIN_CUDA_COMPUTE_CAPABILITY" \
+    && ! -v CUDA_COMPUTE_CAP ]] || exit 2
+fi
 # The split family root (where the sibling repos + target/bare-mirrors live) is an
 # EXPLICIT parameter, not derived from this script's location: this control-plane
 # now lives in its own repo (jain-split-ops/), a sibling of the family members, so
@@ -115,11 +154,17 @@ post_check() {
     --arg check "$CHECK" --arg commit "$CONTROL_PLANE_COMMIT" \
     --arg evidence_dir "${JAIN_NATIVE_EVIDENCE_DIR:-}" \
     --arg evidence_sha "${JAIN_NATIVE_EVIDENCE_SHA256:-}" \
-    '{schema_version:"jain.host-ci-worker-evidence/v4",
+    --arg cuda_cap "$JAIN_CUDA_COMPUTE_CAPABILITY" \
+    --arg cuda_record_sha "$JAIN_CUDA_CAPABILITY_RECORD_SHA256" \
+    --argjson cuda_required "$JAIN_RELEASE_CUDA_COMPUTE_CAPABILITY_REQUIRED" \
+    '{schema_version:"jain.host-ci-worker-evidence/v5",
       owner:$owner,repository:$repo,head_sha:$head_sha,required_check:$check,
       control_plane_commit:$commit,
       native_evidence_dir:$evidence_dir,
-      native_evidence_sha256:$evidence_sha}' >"$result_tmp" || return 1
+      native_evidence_sha256:$evidence_sha,
+      cuda_compute_capability_required:$cuda_required,
+      cuda_compute_capability:$cuda_cap,
+      cuda_capability_record_sha256:$cuda_record_sha}' >"$result_tmp" || return 1
   chmod 0600 "$result_tmp" || return 1
   mv -- "$result_tmp" "$CHILD_RESULT_PATH" || return 1
   say 'recorded worker evidence for root policy validation'
@@ -226,6 +271,11 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
       --manifest "$CANONICAL_MANIFEST" --repo "$REPO"
   )" || native_setup_failure \
     "failed to derive canonical release Cargo policy for $REPO" 2
+  [[ "$(jq -r '.release_cuda_compute_capability_required' \
+      <<<"$release_cargo_policy")" \
+      == "$JAIN_RELEASE_CUDA_COMPUTE_CAPABILITY_REQUIRED" ]] \
+    || native_setup_failure \
+      "release CUDA capability policy differs from root authority for $REPO" 2
 fi
 
 git -C "$REPO_PATH" cat-file -e "$SHA^{commit}" 2>/dev/null || {

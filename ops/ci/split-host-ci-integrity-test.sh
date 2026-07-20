@@ -172,6 +172,7 @@ for _ in $(seq 1 500); do
   kill -0 "$forge_pid" 2>/dev/null || break
   sleep 0.01
 done
+
 [[ -s "$forge_address_file" ]] || {
   cat "$tmp/forge.stderr" >&2
   printf 'fake forge did not start\n' >&2
@@ -336,6 +337,8 @@ jankurai="$publisher_root/jankurai"
 security_tool_digest="$(sha256sum /usr/bin/true | cut -d' ' -f1)"
 git_lfs_path=/usr/bin/git-lfs
 git_lfs_digest="$(sha256sum "$git_lfs_path" | cut -d' ' -f1)"
+nvidia_smi_path=/usr/bin/nvidia-smi
+nvidia_smi_digest="$(sha256sum "$nvidia_smi_path" | cut -d' ' -f1)"
 sudo -n install -d -o root -g root -m 0711 "$publisher_root"
 sudo -n install -d -o root -g root -m 0700 "$request_root"
 mkdir -p "$(dirname "$product_remote")"
@@ -435,6 +438,8 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   --arg cargo_registry_cache "$cargo_registry_cache" \
   --arg cargo_bin "$HOME/.cargo/bin" --arg rustup "$HOME/.rustup" \
   --arg git_lfs_path "$git_lfs_path" --arg git_lfs_digest "$git_lfs_digest" \
+  --arg nvidia_smi_path "$nvidia_smi_path" \
+  --arg nvidia_smi_digest "$nvidia_smi_digest" \
   --arg token_file "$publisher_token_file" \
   --arg git_base "$product_forge_root" \
   --arg remote "$control_remote" --arg requests "$request_root" \
@@ -446,7 +451,7 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   --arg grype_db_root "$grype_db_root" \
   --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
   --argjson parent_uid "$(id -u)" --argjson parent_gid "$(id -g)" \
-  '{schema_version:"jain.host-ci-sandbox-config/v6",
+  '{schema_version:"jain.host-ci-sandbox-config/v7",
     sandbox_sha256:$digest,publisher_sha256:$publisher_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
     security_tool_sha256:{actionlint:$security_tool_digest,
@@ -458,6 +463,7 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
     worker_cache:$cache,cargo_registry_cache:$cargo_registry_cache,
     cargo_bin:$cargo_bin,rustup_home:$rustup,
     git_lfs_path:$git_lfs_path,git_lfs_sha256:$git_lfs_digest,
+    nvidia_smi_path:$nvidia_smi_path,nvidia_smi_sha256:$nvidia_smi_digest,
     control_remote:$remote,control_ref:$control_ref,
     bootstrap_commit:$bootstrap_commit,
     bootstrap_expires_at:$bootstrap_expires_at,forge_git_base:$git_base,
@@ -468,6 +474,34 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
     device_allow:[]}' | sudo -n tee "$sandbox_config" >/dev/null
 sudo -n chown root:root "$sandbox_config"
 sudo -n chmod 0600 "$sandbox_config"
+
+# Sandbox v7 requires an exact detector identity and cannot turn inventory
+# authority into worker device access.
+valid_detector_config="$tmp/valid-detector-config.json"
+sudo -n cat "$sandbox_config" >"$valid_detector_config"
+for detector_case in missing-digest device-allow; do
+  case "$detector_case" in
+    missing-digest)
+      jq 'del(.nvidia_smi_sha256)' "$valid_detector_config" \
+        >"$tmp/detector-reject.json"
+      ;;
+    device-allow)
+      jq '.device_allow=["/dev/nvidia0 rwm"]' "$valid_detector_config" \
+        >"$tmp/detector-reject.json"
+      ;;
+  esac
+  sudo -n install -o root -g root -m 0600 \
+    "$tmp/detector-reject.json" "$sandbox_config"
+  if sudo -n "$sandbox" "$tmp/nonexistent-detector-request" \
+    >"$tmp/detector-$detector_case.log" 2>&1; then
+    printf 'sandbox accepted hostile detector config: %s\n' "$detector_case" >&2
+    exit 1
+  fi
+  grep -Fq 'invalid sandbox config schema' \
+    "$tmp/detector-$detector_case.log"
+done
+sudo -n install -o root -g root -m 0600 \
+  "$valid_detector_config" "$sandbox_config"
 
 # Root-installed security tools are part of the sealed broker authority. A
 # replaced binary must fail before the caller request or forge can be touched.
@@ -808,7 +842,8 @@ git -C "$control" switch --quiet codex/host-ci-bootstrap-test
 # worker startup, or publication.
 valid_sandbox_config="$tmp/valid-sandbox-config.json"
 sudo -n cat "$sandbox_config" >"$valid_sandbox_config"
-for bootstrap_case in missing-commit wrong-commit expired overlong; do
+for bootstrap_case in missing-commit wrong-commit expired overlong \
+  bad-detector-digest; do
   case "$bootstrap_case" in
     missing-commit)
       sudo -n jq 'del(.bootstrap_commit)' "$sandbox_config" \
@@ -830,6 +865,11 @@ for bootstrap_case in missing-commit wrong-commit expired overlong; do
         '.bootstrap_expires_at = $expires' "$valid_sandbox_config" \
         >"$tmp/bootstrap-reject.json"
       expected_bootstrap_failure='bootstrap control authority is expired or exceeds two hours'
+      ;;
+    bad-detector-digest)
+      jq '.nvidia_smi_sha256 = ("0" * 64)' "$valid_sandbox_config" \
+        >"$tmp/bootstrap-reject.json"
+      expected_bootstrap_failure='root NVIDIA detector digest or metadata mismatch'
       ;;
   esac
   sudo -n install -o root -g root -m 0600 \
@@ -866,6 +906,16 @@ victim="$tmp/codex-preseed-victim"
 mkdir -p "$victim"
 printf 'preserve\n' >"$victim/sentinel"
 credential_reject_log="$tmp/credential-reject.log"
+if CUDA_COMPUTE_CAP=90 JAIN_HOST_CI_SANDBOX="$sandbox" \
+  JAIN_SPLIT_ROOT="$split_root" \
+    "$control/ops/ci/split-host-ci.sh" \
+      veox jain-report "$product_sha" "$product" \
+      jain-report/required >"$tmp/cuda-injection.log" 2>&1; then
+  printf 'host CI accepted caller CUDA_COMPUTE_CAP\n' >&2
+  exit 1
+fi
+grep -Fq 'caller-provided CUDA_COMPUTE_CAP is forbidden' \
+  "$tmp/cuda-injection.log"
 if JAIN_HOST_CI_EXACT_ROOT="$control" \
   JAIN_HOST_CI_SOURCE_ROOT="$control" \
   JAIN_HOST_CI_CONTROL_COMMIT="$control_commit" \
@@ -1259,8 +1309,8 @@ grep -Fq 'invalid root result schema' "$tmp/old-root-result.log"
 # whose reviewed native policy requires it.
 downgrade_id="$(printf 'b%.0s' {1..64})"
 make_sealed_variant "$downgrade_id" \
-  '.request_id=$request_id | .repository="jain-core"
-   | .required_check="jain-core/required"
+  '.request_id=$request_id | .repository="jain-deploy"
+   | .required_check="jain-deploy/required"
    | .native_evidence_required=false' "$(date +%s)"
 if sudo -n "$publisher" "$request_root/$downgrade_id" \
   >"$tmp/downgrade.log" 2>&1; then
@@ -1268,6 +1318,17 @@ if sudo -n "$publisher" "$request_root/$downgrade_id" \
   exit 1
 fi
 grep -Fq 'native evidence policy downgrade' "$tmp/downgrade.log"
+
+cuda_mismatch_id="$(printf '7%.0s' {1..64})"
+make_sealed_variant "$cuda_mismatch_id" \
+  '.request_id=$request_id | .cuda_compute_capability="86"' "$(date +%s)"
+if sudo -n "$publisher" "$request_root/$cuda_mismatch_id" \
+  >"$tmp/cuda-mismatch.log" 2>&1; then
+  printf 'publisher accepted CUDA evidence for a CPU-only policy\n' >&2
+  exit 1
+fi
+grep -Fq 'CUDA capability binding differs across root artifacts' \
+  "$tmp/cuda-mismatch.log"
 [[ "$(stat -c '%s' "$forge_log")" == "$forge_offset" ]] || {
   printf 'replay/stale/downgrade rejection reached the forge\n' >&2
   exit 1
@@ -1556,7 +1617,7 @@ jq -cn --arg commit "$control_commit" --arg control_ref "$bootstrap_control_ref"
   >"$fd_attack_request"
 chmod 0600 "$fd_attack_request"
 # The other installed broker config is independently strict as well.
-sudo -n cp -- "$sandbox_config" "$tmp/sandbox-config.v6"
+sudo -n cp -- "$sandbox_config" "$tmp/sandbox-config.v7"
 sudo -n jq '.schema_version="jain.host-ci-sandbox-config/v3"' \
   "$sandbox_config" >"$tmp/sandbox-config.v3"
 sudo -n install -o root -g root -m 0600 \
@@ -1568,7 +1629,7 @@ if sudo -n "$sandbox" "$fd_attack_request" \
 fi
 grep -Fq 'invalid sandbox config schema' "$tmp/old-sandbox-config.log"
 sudo -n install -o root -g root -m 0600 \
-  "$tmp/sandbox-config.v6" "$sandbox_config"
+  "$tmp/sandbox-config.v7" "$sandbox_config"
 # The installed v5 request broker rejects a structurally valid request carrying the
 # previous protocol before it creates a worker or reaches the forge.
 jq '.schema_version="jain.host-ci-sandbox-request/v3"' \
@@ -1597,7 +1658,7 @@ chmod 0600 "$fd_attack_request"
 cp -- "$fd_attack_request" "$tmp/fixed-worker-environment-base.json"
 for fixed_key in JAIN_SPLIT_OPS_ROOT JAIN_HOST_CI_REEXEC_STATE \
   JAIN_HOST_CI_NETWORK_ISOLATED JAIN_PINNED_ADVISORY_DB JAIN_ADVISORY_DB \
-  JAIN_CARGO_DENY_ADVISORY_DB; do
+  JAIN_CARGO_DENY_ADVISORY_DB CUDA_COMPUTE_CAP; do
   fixed_log="$tmp/fixed-worker-environment-$fixed_key.log"
   fixed_forge_offset="$(stat -c '%s' "$forge_log")"
   jq --arg key "$fixed_key" \
@@ -1763,6 +1824,99 @@ for proof_mutation in missing hardlink tamper; do
     exit 1
   }
 done
+
+# A real reviewed CUDA policy derives the host's exact capability through the
+# root detector, carries it through worker/root evidence, and publishes it in
+# both proof and required summaries without exposing a DeviceAllow entry.
+cuda_product="$split_root/jain-starforge"
+git clone --quiet --no-local --no-checkout "$product" "$cuda_product"
+git -C "$cuda_product" checkout --quiet --detach "$product_sha"
+git -C "$cuda_product" remote remove origin
+cuda_product_remote="$product_forge_root/veox/jain-starforge.git"
+sudo -n git init --quiet --bare "$cuda_product_remote"
+sudo -n git -c safe.directory="$cuda_product" -C "$cuda_product" push --quiet \
+  "$cuda_product_remote" "$product_sha:refs/heads/cuda-fixture"
+printf '' >"$forge_state"
+printf '%s\n' ok >"$forge_behavior"
+cuda_forge_offset="$(stat -c '%s' "$forge_log")"
+env JAIN_HOST_CI_SANDBOX="$sandbox" \
+  JAIN_SPLIT_ROOT="$sandbox_family_root" \
+  JAIN_TEST_ATTACK_URL="$forge_base" \
+  JAIN_TEST_REQUIRE_ISOLATION=1 \
+  JAIN_TEST_HOST_PID_NAMESPACE="$host_pid_namespace" \
+  JAIN_TEST_HOST_USER_NAMESPACE="$host_user_namespace" \
+  JAIN_TEST_ROOT_CONFIG_PATH="$publisher_config" \
+  JAIN_TEST_ROOT_REQUEST_PATH="$request_root" \
+  JAIN_TEST_FS_MONITOR_PATH=/opt/jain-ci/cargo-home/fsmonitor-attack.sh \
+  "$control/ops/ci/split-host-ci.sh" \
+    veox jain-starforge "$product_sha" "$cuda_product" \
+    jain-starforge/required >"$tmp/cuda-success.log" 2>&1
+cuda_request="$(latest_root_request)"
+cuda_record="$(sudo -n jq -er '.cuda_capability_record_path' \
+  "$cuda_request/root-result.json")"
+cuda_record_sha="$(sudo -n jq -er '.cuda_capability_record_sha256' \
+  "$cuda_request/root-result.json")"
+sudo -n jq -e --arg request "${cuda_request##*/}" \
+  --arg head "$product_sha" '
+  select(.schema_version == "jain.host-ci-cuda-capability/v1")
+  | select(.request_id == $request and .repository == "jain-starforge")
+  | select(.head_sha == $head and .required_check == "jain-starforge/required")
+  | select(.normalized_compute_cap == "86")
+  | select(.inventory | length >= 1)
+  | select(all(.inventory[]; .normalized_compute_cap == "86"))' \
+  "$cuda_record" >/dev/null
+[[ "$(sudo -n stat -c '%u:%g:%a:%h' "$cuda_record")" == '0:0:444:1' \
+  && "$(sudo -n sha256sum "$cuda_record" | cut -d' ' -f1)" \
+    == "$cuda_record_sha" ]] || {
+  printf 'root CUDA record lacks exact immutable identity\n' >&2
+  exit 1
+}
+cuda_forge_tail="$(tail -c "+$((cuda_forge_offset + 1))" "$forge_log")"
+[[ "$(grep -Fc 'cuda_compute_capability=86' <<<"$cuda_forge_tail")" \
+    -ge 2 \
+  && "$(grep -Fc "cuda_capability_record_sha256=$cuda_record_sha" \
+    <<<"$cuda_forge_tail")" -ge 2 ]] || {
+  printf 'CUDA capability was not bound into proof and required summaries\n' >&2
+  exit 1
+}
+
+# Reopening the consumed request as a fresh sealed fixture cannot bless a
+# detector record changed after sealing, even when all other root bytes agree.
+sudo -n rm -rf -- "$cuda_request/publish.lock"
+sudo -n chmod 0600 "$cuda_record"
+sudo -n jq '.inventory[0].uuid="GPU-ffffffff-ffff-ffff-ffff-ffffffffffff"' \
+  "$cuda_record" >"$tmp/cuda-record-tampered.json"
+sudo -n install -o root -g root -m 0444 \
+  "$tmp/cuda-record-tampered.json" "$cuda_record"
+cuda_result_sha="$(sudo -n sha256sum "$cuda_request/root-result.json" \
+  | cut -d' ' -f1)"
+cuda_proof_sha="$(sudo -n jq -er '.proof_receipt_sha256' \
+  "$cuda_request/root-result.json")"
+cuda_nonce="$(sudo -n jq -er '.nonce' "$cuda_request/root-state.json")"
+cuda_sealed_at="$(date +%s)"
+cuda_root_seal="$({
+  printf '%s\n%s\n%s\n%s\n%s\n' "$cuda_nonce" "$cuda_result_sha" \
+    "$cuda_proof_sha" "$cuda_sealed_at" "${cuda_request##*/}"
+} | sha256sum | cut -d' ' -f1)"
+sudo -n jq --arg status sealed --arg result_sha "$cuda_result_sha" \
+  --arg root_seal "$cuda_root_seal" --argjson sealed_at "$cuda_sealed_at" \
+  '.status=$status | .result_sha256=$result_sha | .root_seal=$root_seal
+    | .sealed_at=$sealed_at' "$cuda_request/root-state.json" \
+  >"$tmp/cuda-record-tampered.state.json"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/cuda-record-tampered.state.json" "$cuda_request/root-state.json"
+cuda_tamper_offset="$(stat -c '%s' "$forge_log")"
+if sudo -n "$publisher" "$cuda_request" \
+  >"$tmp/cuda-record-tampered.log" 2>&1; then
+  printf 'publisher accepted a tampered CUDA capability record\n' >&2
+  exit 1
+fi
+grep -Fq 'root CUDA capability record validation failed' \
+  "$tmp/cuda-record-tampered.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$cuda_tamper_offset" ]] || {
+  printf 'tampered CUDA record reached the forge\n' >&2
+  exit 1
+}
 
 # Production uses retain_requests=false. Exercise a complete successful broker
 # path with that exact value and prove the consumed root request is removed.

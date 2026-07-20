@@ -27,6 +27,17 @@ configured non-root source owner. That child has empty global/system Git
 configuration, lazy promisor fetches disabled, and all Git transports denied;
 root imports only its object pack into a new repository with clean config.
 
+For a repository whose reviewed manifest policy requires Candle CUDA, root
+executes only the canonical digest-pinned `/usr/bin/nvidia-smi` with a clean
+environment, bounded output, and a hard timeout. It accepts only a complete,
+nonempty `index,uuid,compute_cap` inventory with unique device identities and
+one homogeneous capability, normalizes values such as `8.6` to `86`, and seals
+the full inventory in a request-scoped root-owned record. The worker receives
+`CUDA_COMPUTE_CAP` only from that record. Caller injection, missing or malformed
+devices, heterogeneous capabilities, detector failure, or disagreement among
+the record, worker, native receipt, root result, and publisher fails closed.
+This does not grant GPU devices: `device_allow` remains exactly empty.
+
 Native evidence is written first to a unique per-request `tmpfs` capped at
 32 MiB and 64 inodes. The ledger is exactly 16 regular, single-link files,
 capped at 8 MiB per file and 16 MiB total. After the worker cgroup is dead, root
@@ -106,7 +117,7 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
 
 ```json
 {
-  "schema_version": "jain.host-ci-sandbox-config/v6",
+  "schema_version": "jain.host-ci-sandbox-config/v7",
   "sandbox_sha256": "<64 lowercase hex>",
   "publisher_sha256": "<64 lowercase hex>",
   "splitctl_sha256": "<64 lowercase hex>",
@@ -122,6 +133,8 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
   "rustup_home": "/home/ubuntu/.rustup",
   "git_lfs_path": "/usr/bin/git-lfs",
   "git_lfs_sha256": "<64 lowercase hex for physical git-lfs 3.4.1>",
+  "nvidia_smi_path": "/usr/bin/nvidia-smi",
+  "nvidia_smi_sha256": "<sha256sum /usr/bin/nvidia-smi>",
   "control_remote": "http://127.0.0.1:8787/git/veox/jain-split-ops.git",
   "forge_git_base": "http://127.0.0.1:8787/git",
   "request_root": "/var/lib/jain-host-ci/requests",
@@ -159,6 +172,12 @@ networkless worker begins, then transferred into each standalone checkout from
 the root materialization with no network. System/global Git configuration and
 tracked `.lfsconfig` are disabled; the worker receives only the exact pinned
 `filter.lfs.{process,clean,smudge,required}` values.
+
+The v7 sandbox config also requires the canonical root-owned, mode-0755,
+single-link `/usr/bin/nvidia-smi` and its exact digest. Root invokes it only for
+the four reviewed CUDA release policies. Keep `device_allow` empty; detector
+visibility is inventory authority, not permission to expose a device to the
+worker.
 
 Create `/usr/local/libexec/jain/jeryu-merge-token` as a canonical root-owned,
 single-link regular file at exact mode `0600`. Supply the token through a

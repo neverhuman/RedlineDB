@@ -90,9 +90,13 @@ checkouts created
 from the authority-bound commit, Git-tree, SHA-256 tree-manifest, submodule, and content identities.
 It never executes a canonical product checkout's vendor script.
 
-After the product cgroup is dead, the v4 host boundary runs the governed, root-owned Jankurai
+For reviewed Candle CUDA release policies, root first derives one homogeneous compute capability
+from the digest-pinned canonical NVIDIA detector and seals the complete device inventory. Caller
+`CUDA_COMPUTE_CAP`, detector failure, malformed or heterogeneous inventory, and any record/evidence
+disagreement fail closed; `device_allow` remains empty. After the product cgroup is dead, the host
+boundary runs the governed, root-owned Jankurai
 1.6.11 in a second network-isolated unit, with its re-derived provisioning digest bound identically
-in both root-owned v4 configs. It audits a separate clean, read-only exact-head checkout. Root
+in both root-owned configs. It audits a separate clean, read-only exact-head checkout. Root
 validates and persists the report plus `jain.jankurai-exact-sha-evidence/v1` receipt in the configured proof
 evidence store. The root result seal binds the receipt digest. The publisher must POST and read
 back the exact `jankurai/proof` check before it can POST `<repo>/required` and its commit status.

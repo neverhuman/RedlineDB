@@ -1354,7 +1354,14 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
                 "host CI authority for {name} has non-canonical remote: {remote}"
             ));
         }
-        matches.push((owner, required_check, remote));
+        let release_cuda_compute_capability_required =
+            release_cuda_compute_capability_required(raw)?;
+        matches.push((
+            owner,
+            required_check,
+            remote,
+            release_cuda_compute_capability_required,
+        ));
         Ok(())
     };
 
@@ -1426,13 +1433,15 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
             "host CI repository authority for {repo_name} is absent or ambiguous"
         ));
     }
-    let (forge_owner, required_check, remote) = matches.pop().unwrap();
+    let (forge_owner, required_check, remote, release_cuda_compute_capability_required) =
+        matches.pop().unwrap();
     Ok(json!({
         "schema_version": "jain.host-ci-repository-authority/v1",
         "repository": repo_name,
         "forge_owner": forge_owner,
         "required_check": required_check,
         "remote": remote,
+        "release_cuda_compute_capability_required": release_cuda_compute_capability_required,
     }))
 }
 
@@ -1514,11 +1523,13 @@ fn release_repo_entry<'a>(
 }
 
 fn release_cargo_policy(repo_name: &str, raw: &toml::Value) -> Result<JsonValue, String> {
+    let release_cuda_compute_capability_required = release_cuda_compute_capability_required(raw)?;
     let Some(matrix) = release_feature_matrix(raw)? else {
         return Ok(json!({
             "schema_version": "jain.split.release-cargo-commands/v1",
             "repo": repo_name,
             "mode": "all-features",
+            "release_cuda_compute_capability_required": release_cuda_compute_capability_required,
             "commands": [
                 release_cargo_command("build-all-features", "build", None),
                 release_cargo_command("test-all-features", "test", None),
@@ -1554,10 +1565,20 @@ fn release_cargo_policy(repo_name: &str, raw: &toml::Value) -> Result<JsonValue,
         "schema_version": "jain.split.release-cargo-commands/v1",
         "repo": repo_name,
         "mode": "feature-matrix",
+        "release_cuda_compute_capability_required": release_cuda_compute_capability_required,
         "release_package": matrix.package,
         "release_feature_sets": matrix.feature_sets,
         "commands": commands,
     }))
+}
+
+fn release_cuda_compute_capability_required(raw: &toml::Value) -> Result<bool, String> {
+    match raw.get("release_cuda_compute_capability_required") {
+        None => Ok(false),
+        Some(value) => value
+            .as_bool()
+            .ok_or_else(|| "release_cuda_compute_capability_required must be a boolean".to_owned()),
+    }
 }
 
 fn release_cargo_command(label: &str, subcommand: &str, features: Option<&str>) -> JsonValue {
@@ -10770,6 +10791,7 @@ engine_release_tree = "{engine_tree}"
         )
         .unwrap();
         assert_eq!(battle["mode"], "feature-matrix");
+        assert_eq!(battle["release_cuda_compute_capability_required"], false);
         assert_eq!(
             battle["commands"][0]["args"],
             json!([
@@ -10827,6 +10849,7 @@ engine_release_tree = "{engine_tree}"
         )
         .unwrap();
         assert_eq!(core["mode"], "feature-matrix");
+        assert_eq!(core["release_cuda_compute_capability_required"], true);
         assert_eq!(
             core["commands"][0]["args"],
             json!([
@@ -10916,6 +10939,7 @@ engine_release_tree = "{engine_tree}"
         let generic: toml::Value = "name = \"example\"".parse().unwrap();
         let generic = release_cargo_policy("example", &generic).unwrap();
         assert_eq!(generic["mode"], "all-features");
+        assert_eq!(generic["release_cuda_compute_capability_required"], false);
         assert_eq!(
             generic["commands"][0]["args"],
             json!([
@@ -10957,6 +10981,15 @@ engine_release_tree = "{engine_tree}"
                 authority["remote"],
                 format!("http://127.0.0.1:8787/git/{owner}/{repo}.git")
             );
+            assert_eq!(authority["release_cuda_compute_capability_required"], false);
+        }
+
+        for repo in ["jain-starforge", "jain-core", "jain-cli", "jain-web"] {
+            let authority = host_ci_authority(&manifest, repo).unwrap();
+            assert_eq!(authority["release_cuda_compute_capability_required"], true);
+            let release =
+                release_cargo_policy(repo, release_repo_entry(&manifest, repo).unwrap()).unwrap();
+            assert_eq!(release["release_cuda_compute_capability_required"], true);
         }
     }
 
@@ -11018,6 +11051,20 @@ required_check = "jain-report/required"
         assert!(host_ci_authority(&stale_product, "jain-report")
             .unwrap_err()
             .contains("non-canonical forge owner"));
+
+        let bad_cuda_policy: toml::Value = r#"
+[[repo]]
+name = "jain-report"
+forge_owner = "veox"
+jeryu_slug = "veox/jain-report"
+required_check = "jain-report/required"
+release_cuda_compute_capability_required = "yes"
+"#
+        .parse()
+        .unwrap();
+        assert!(host_ci_authority(&bad_cuda_policy, "jain-report")
+            .unwrap_err()
+            .contains("must be a boolean"));
     }
 
     #[test]

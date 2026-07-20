@@ -166,7 +166,7 @@ mkdir -m 0700 "$request_dir/publish.lock" 2>/dev/null \
   || fail 'request was already used or is being published'
 
 jq -e --arg request_id "$request_id" \
-  'select(.schema_version == "jain.host-ci-root-state/v4")
+  'select(.schema_version == "jain.host-ci-root-state/v5")
    | select(.request_id == $request_id and .status == "sealed")
    | select(.nonce | test("^[0-9a-f]{64}$"))
    | select(.result_sha256 | test("^[0-9a-f]{64}$"))
@@ -184,7 +184,11 @@ jq -e --arg request_id "$request_id" \
    | select(.grype_db_root | type == "string" and startswith("/"))
    | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
    | select(.native_evidence_root | type == "string")
-   | select(.proof_evidence_root | type == "string")' "$state" >/dev/null \
+   | select(.proof_evidence_root | type == "string")
+   | select(.cuda_compute_capability_required | type == "boolean")
+   | select(.cuda_capability_record_path | type == "string")
+   | select(.cuda_capability_record_sha256 | type == "string")
+   | select(.cuda_compute_capability | type == "string")' "$state" >/dev/null \
   || fail 'root request is not sealed for one-shot publication'
 nonce="$(jq -er '.nonce' "$state")"
 result_sha="$(sha256sum -- "$result" | cut -d' ' -f1)"
@@ -220,7 +224,7 @@ expected_seal="$({
   || fail 'root request broker binding mismatch'
 
 jq -e --arg request_id "$request_id" \
-  'select(.schema_version == "jain.host-ci-root-result/v4")
+  'select(.schema_version == "jain.host-ci-root-result/v5")
    | select(.request_id == $request_id)
    | select(.control_plane_commit | test("^[0-9a-f]{40}$"))
    | select(.owner | test("^[a-z0-9][a-z0-9-]*$"))
@@ -232,6 +236,10 @@ jq -e --arg request_id "$request_id" \
    | select(.native_evidence_required | type == "boolean")
    | select(.native_evidence_dir | type == "string")
    | select(.native_evidence_sha256 | type == "string")
+   | select(.cuda_compute_capability_required | type == "boolean")
+   | select(.cuda_capability_record_path | type == "string")
+   | select(.cuda_capability_record_sha256 | type == "string")
+   | select(.cuda_compute_capability | type == "string")
    | select(.proof_evidence_required == true)
    | select(.proof_evidence_dir | type == "string" and startswith("/"))
    | select(.proof_receipt_path | type == "string" and startswith("/"))
@@ -291,9 +299,12 @@ repo_authority="$(jq -er --arg repo "$repo" '
   | select(.forge_owner | test("^[A-Za-z0-9._-]+$"))
   | select(.required_check == ($repo + "/required"))
   | select(.remote | type == "string")
-  | [.forge_owner, .required_check] | @tsv
+  | select(.release_cuda_compute_capability_required | type == "boolean")
+  | [.forge_owner, .required_check,
+      (.release_cuda_compute_capability_required | tostring)] | @tsv
 ' <<<"$repo_authority_json")" || fail 'invalid repository authority result'
-IFS=$'\t' read -r protected_owner protected_check <<<"$repo_authority"
+IFS=$'\t' read -r protected_owner protected_check cuda_required \
+  <<<"$repo_authority"
 owner="$(jq -er '.owner' "$result")"
 required_check="$(jq -er '.required_check' "$result")"
 [[ "$owner" == "$protected_owner" && "$required_check" == "$protected_check" ]] \
@@ -307,6 +318,41 @@ source "$control_root/ops/ci/native-runtime.sh"
 source "$control_root/ops/ci/host-ci-evidence.sh"
 # shellcheck source=ops/ci/host-ci-proof-evidence.sh
 source "$control_root/ops/ci/host-ci-proof-evidence.sh"
+release_cargo_policy="$("$splitctl_path" release-cargo-commands \
+  --manifest "$manifest" --repo "$repo")" \
+  || fail 'release Cargo policy is absent or invalid'
+[[ "$(jq -r '.release_cuda_compute_capability_required' \
+    <<<"$release_cargo_policy")" == "$cuda_required" ]] \
+  || fail 'release CUDA capability policy disagrees across authorities'
+for field in cuda_compute_capability_required cuda_capability_record_path \
+  cuda_capability_record_sha256 cuda_compute_capability; do
+  [[ "$(jq -r ".$field" "$state")" == "$(jq -r ".$field" "$result")" ]] \
+    || fail "CUDA capability binding differs across root artifacts: $field"
+done
+cuda_record="$(jq -er '.cuda_capability_record_path' "$result")"
+cuda_record_sha="$(jq -er '.cuda_capability_record_sha256' "$result")"
+cuda_cap="$(jq -er '.cuda_compute_capability' "$result")"
+if [[ "$cuda_required" == true ]]; then
+  [[ "$(jq -r '.cuda_compute_capability_required' "$result")" == true \
+    && "$cuda_record" == "$request_dir/worker-authority/cuda-capability.json" \
+    && "$cuda_record_sha" =~ ^[0-9a-f]{64}$ \
+    && "$cuda_cap" =~ ^[1-9][0-9]{1,2}$ ]] \
+    || fail 'required CUDA capability binding is missing or malformed'
+  detector_sha="$(jq -er '.detector.sha256' "$cuda_record")" \
+    || fail 'CUDA capability record lacks detector identity'
+  jain_verify_cuda_capability_record "$cuda_record" "$cuda_record_sha" \
+    "$request_id" "$(jq -er '.control_plane_commit' "$result")" \
+    "$(jq -er '.owner' "$result")" "$repo" \
+    "$(jq -er '.head_sha' "$result")" \
+    "$(jq -er '.required_check' "$result")" \
+    "$detector_sha" "$cuda_cap" 0 \
+    || fail 'root CUDA capability record validation failed'
+else
+  [[ "$cuda_required" == false \
+    && "$(jq -r '.cuda_compute_capability_required' "$result")" == false \
+    && -z "$cuda_record" && -z "$cuda_record_sha" && -z "$cuda_cap" ]] \
+    || fail 'CPU-only policy carried CUDA capability authority'
+fi
 derived_required=false
 if jain_native_check_requires_evidence "$repo" "$required_check" "$protected_check"; then
   derived_required=true
@@ -361,6 +407,15 @@ if [[ "$conclusion" == success ]]; then
     "$evidence_dir" "$evidence_sha" "$head_sha" "$required_check" \
     "$control_root" "$control_commit" \
     || fail 'root result native evidence validation failed'
+  if [[ "$derived_required" == true ]]; then
+    [[ "$(jq -r '.cuda_compute_capability_required' \
+        "$evidence_resolved/receipt.json")" == "$cuda_required" \
+      && "$(jq -er '.cuda_compute_capability' \
+        "$evidence_resolved/receipt.json")" == "$cuda_cap" \
+      && "$(jq -er '.cuda_capability_record_sha256' \
+        "$evidence_resolved/receipt.json")" == "$cuda_record_sha" ]] \
+      || fail 'native evidence disagrees with root CUDA capability authority'
+  fi
 else
   [[ "$proof_status" == fail && "$proof_validator_rc" != 0 ]] \
     || fail 'failure result lacks a failed exact-SHA Jankurai receipt'
@@ -395,8 +450,8 @@ proof_run_id="$(jq -er '.run_id' "$proof_evidence_resolved/receipt.json")"
 proof_score="$(jq -er '.score' "$proof_evidence_resolved/receipt.json")"
 proof_hard="$(jq -er '.hard_findings' "$proof_evidence_resolved/receipt.json")"
 proof_caps="$(jq -er '.caps_applied' "$proof_evidence_resolved/receipt.json")"
-proof_summary="receipt_sha256=$proof_receipt_sha attempt_id=$proof_attempt_id run_id=$proof_run_id auditor_sha256=$jankurai_sha proof_status=$proof_status score=$proof_score hard_findings=$proof_hard caps_applied=$proof_caps root_seal=$(jq -er '.root_seal' "$state")"
-description="$required_check root-seal=$(jq -er '.root_seal' "$state" | cut -c1-16)"
+proof_summary="receipt_sha256=$proof_receipt_sha attempt_id=$proof_attempt_id run_id=$proof_run_id auditor_sha256=$jankurai_sha proof_status=$proof_status score=$proof_score hard_findings=$proof_hard caps_applied=$proof_caps cuda_compute_capability=${cuda_cap:-none} cuda_capability_record_sha256=${cuda_record_sha:-none} root_seal=$(jq -er '.root_seal' "$state")"
+description="$required_check cuda-sm=${cuda_cap:-none} record=${cuda_record_sha:0:12} root-seal=$(jq -er '.root_seal' "$state" | cut -c1-16)"
 publish_rc=0
 "$splitctl_path" jeryu-publish-host-ci \
   --token-file "$token_file" --repo "$owner/$repo" --head-sha "$head_sha" \

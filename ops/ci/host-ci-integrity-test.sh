@@ -39,6 +39,31 @@ grep -F 'jain_activate_native_build_tools' \
   printf 'reviewed worker does not activate validated native build tools\n' >&2
   exit 1
 }
+grep -F 'jain_validate_nvidia_smi_detector "$nvidia_smi_path"' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not validate the NVIDIA detector\n' >&2
+  exit 1
+}
+grep -F 'jain_run_nvidia_smi_detector "$nvidia_smi_path"' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not derive CUDA capability itself\n' >&2
+  exit 1
+}
+grep -F 'select(.device_allow == [])' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox permits GPU device allowance\n' >&2
+  exit 1
+}
+grep -F 'caller-provided CUDA_COMPUTE_CAP is forbidden' \
+  "$repo_root/ops/ci/split-host-ci-parent.sh" >/dev/null || {
+  printf 'host-CI parent does not reject ambient CUDA capability\n' >&2
+  exit 1
+}
+if sed -n '/safe_child_vars=(/,/^)/p' \
+  "$repo_root/ops/ci/split-host-ci-parent.sh" | grep -Fq CUDA_COMPUTE_CAP; then
+  printf 'host-CI parent serializes caller CUDA capability\n' >&2
+  exit 1
+fi
 for boundary in host-ci-sandbox.sh host-ci-publisher.sh; do
   grep -F '"$splitctl_path" host-ci-authority' "$repo_root/ops/ci/$boundary" >/dev/null \
     || {

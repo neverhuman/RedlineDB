@@ -35,7 +35,7 @@ independent review. Any released artifact additionally requires checksums,
 SBOM/provenance evidence, and a rollback target. Bare mirrors are disposable CI
 caches; they are never release sources.
 
-The protected v4 host boundary accepts only a clean exact-head product checkout
+The protected host boundary accepts only a clean exact-head product checkout
 and the governed Jankurai binary named by its protected installation receipt.
 It seals the auditor report and validated
 `jain.jankurai-exact-sha-evidence/v1` receipt under root-owned storage.
@@ -50,7 +50,7 @@ mismatches fail closed.
 Publisher installation is a separate post-merge authority action. It must use
 the clean protected-merged source and the procedure in
 [`HOST_CI_BOUNDARY.md`](../ops/ci/HOST_CI_BOUNDARY.md), then verify the
-installed configuration/result protocol is v4 and run the boundary preflight.
+installed sandbox configuration protocol is v7 and run the boundary preflight.
 A source or PR lane must not install or execute the unmerged publisher, migrate
 the forge credential, or publish product checks.
 

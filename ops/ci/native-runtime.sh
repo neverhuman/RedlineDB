@@ -129,6 +129,203 @@ jain_activate_native_build_tools() {
   export CMAKE NINJA CMAKE_MAKE_PROGRAM PATH
 }
 
+JAIN_CUDA_DETECTOR_MAX_BYTES=65536
+JAIN_CUDA_DETECTOR_MAX_GPUS=64
+readonly JAIN_CUDA_DETECTOR_MAX_BYTES JAIN_CUDA_DETECTOR_MAX_GPUS
+
+jain_validate_nvidia_smi_detector() {
+  local configured="${1:?nvidia-smi path is required}"
+  local expected_sha="${2:?nvidia-smi digest is required}"
+  local path
+  [[ "$configured" == /usr/bin/nvidia-smi \
+    && "$expected_sha" =~ ^[0-9a-f]{64}$ ]] || return 1
+  path="$(realpath -e -- "$configured" 2>/dev/null)" || return 1
+  [[ "$path" == "$configured" && ! -L "$path" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$path" 2>/dev/null)" == '0:0:755:1' \
+    && "$(sha256sum -- "$path" | cut -d' ' -f1)" == "$expected_sha" ]]
+}
+
+jain_run_nvidia_smi_detector() (
+  local detector="${1:?nvidia-smi detector is required}"
+  local output="${2:?nvidia-smi output path is required}"
+  local timeout_seconds="${3:-5}" rc=0 size
+  [[ "$detector" = /* && "$output" = /* \
+    && "$timeout_seconds" =~ ^[1-9][0-9]?$ && ! -e "$output" ]] || return 1
+  umask 077
+  (
+    ulimit -f 128
+    exec /usr/bin/timeout --foreground --signal=TERM --kill-after=1s \
+      "${timeout_seconds}s" /usr/bin/env -i PATH=/usr/bin:/bin LC_ALL=C \
+      HOME=/nonexistent "$detector" \
+      --query-gpu=index,uuid,compute_cap --format=csv,noheader,nounits
+  ) >"$output" 2>/dev/null || rc=$?
+  [[ "$rc" == 0 && -f "$output" && ! -L "$output" \
+    && "$(stat -c '%h' -- "$output" 2>/dev/null)" == 1 ]] || {
+    rm -f -- "$output"
+    return 1
+  }
+  size="$(stat -c '%s' -- "$output")" || return 1
+  (( size > 0 && size <= JAIN_CUDA_DETECTOR_MAX_BYTES )) || {
+    rm -f -- "$output"
+    return 1
+  }
+)
+
+jain_parse_nvidia_compute_capability() (
+  local output="${1:?nvidia-smi output is required}"
+  local rows="${2:?parsed inventory destination is required}"
+  local line index uuid compute_cap extra major minor normalized count=0
+  local row_file
+  local -A seen_indexes=() seen_uuids=() seen_caps=()
+  [[ -f "$output" && ! -L "$output" \
+    && "$(stat -c '%h' -- "$output" 2>/dev/null)" == 1 \
+    && "$(stat -c '%s' -- "$output" 2>/dev/null)" -gt 0 \
+    && "$(stat -c '%s' -- "$output" 2>/dev/null)" \
+      -le "$JAIN_CUDA_DETECTOR_MAX_BYTES" \
+    && ! -e "$rows" ]] || return 1
+  row_file="$rows.rows"
+  [[ ! -e "$row_file" ]] || return 1
+  umask 077
+  : >"$row_file"
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    count=$((count + 1))
+    (( count <= JAIN_CUDA_DETECTOR_MAX_GPUS )) || {
+      rm -f -- "$row_file"
+      return 1
+    }
+    [[ -n "$line" && "$line" != *$'\r'* && "$line" != *$'\t'* \
+      && "${line//[^,]/}" == ',,' ]] || {
+      rm -f -- "$row_file"
+      return 1
+    }
+    IFS=, read -r index uuid compute_cap extra <<<"$line"
+    [[ -z "$extra" ]] || {
+      rm -f -- "$row_file"
+      return 1
+    }
+    index="${index#"${index%%[! ]*}"}"
+    index="${index%"${index##*[! ]}"}"
+    uuid="${uuid#"${uuid%%[! ]*}"}"
+    uuid="${uuid%"${uuid##*[! ]}"}"
+    compute_cap="${compute_cap#"${compute_cap%%[! ]*}"}"
+    compute_cap="${compute_cap%"${compute_cap##*[! ]}"}"
+    [[ "$index" =~ ^(0|[1-9][0-9]{0,3})$ \
+      && "$uuid" =~ ^GPU-[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}$ \
+      && "$compute_cap" =~ ^([1-9]|[1-9][0-9])[.][0-9]$ ]] || {
+      rm -f -- "$row_file"
+      return 1
+    }
+    [[ ! -v "seen_indexes[$index]" && ! -v "seen_uuids[$uuid]" ]] || {
+      rm -f -- "$row_file"
+      return 1
+    }
+    seen_indexes[$index]=1
+    seen_uuids[$uuid]=1
+    major="${compute_cap%.*}"
+    minor="${compute_cap#*.}"
+    normalized="$major$minor"
+    seen_caps[$normalized]=1
+    jq -cn --argjson index "$index" --arg uuid "$uuid" \
+      --arg compute_cap "$compute_cap" --arg normalized "$normalized" \
+      '{index:$index,uuid:$uuid,compute_cap:$compute_cap,
+        normalized_compute_cap:$normalized}' >>"$row_file" || {
+      rm -f -- "$row_file"
+      return 1
+    }
+  done <"$output"
+  [[ "$count" -gt 0 && "${#seen_caps[@]}" == 1 ]] || {
+    rm -f -- "$row_file"
+    return 1
+  }
+  jq -c -s 'sort_by(.index)' "$row_file" >"$rows" || {
+    rm -f -- "$row_file" "$rows"
+    return 1
+  }
+  rm -f -- "$row_file"
+)
+
+jain_write_cuda_capability_record() {
+  local inventory="${1:?CUDA inventory is required}"
+  local destination="${2:?CUDA record destination is required}"
+  local request_id="${3:?request ID is required}"
+  local control_commit="${4:?control commit is required}"
+  local owner="${5:?owner is required}" repo="${6:?repository is required}"
+  local head_sha="${7:?head SHA is required}" check="${8:?check is required}"
+  local detector_path="${9:?detector path is required}"
+  local detector_sha="${10:?detector digest is required}" normalized
+  [[ -f "$inventory" && ! -L "$inventory" && ! -e "$destination" \
+    && "$request_id" =~ ^[0-9a-f]{64}$ \
+    && "$control_commit" =~ ^[0-9a-f]{40}$ \
+    && "$head_sha" =~ ^[0-9a-f]{40}$ \
+    && "$owner" =~ ^[A-Za-z0-9_.-]+$ \
+    && "$repo" =~ ^[A-Za-z0-9_.-]+$ \
+    && "$check" =~ ^[A-Za-z0-9_.-]+/required$ \
+    && "$detector_path" == /usr/bin/nvidia-smi \
+    && "$detector_sha" =~ ^[0-9a-f]{64}$ ]] || return 1
+  normalized="$(jq -er '.[0].normalized_compute_cap' "$inventory")" || return 1
+  jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
+    --arg owner "$owner" --arg repo "$repo" --arg head "$head_sha" \
+    --arg check "$check" --arg detector_path "$detector_path" \
+    --arg detector_sha "$detector_sha" --arg normalized "$normalized" \
+    --slurpfile inventory "$inventory" \
+    '{schema_version:"jain.host-ci-cuda-capability/v1",
+      request_id:$request_id,control_plane_commit:$commit,owner:$owner,
+      repository:$repo,head_sha:$head,required_check:$check,
+      detector:{path:$detector_path,sha256:$detector_sha},
+      inventory:$inventory[0],normalized_compute_cap:$normalized}' \
+    >"$destination"
+}
+
+jain_verify_cuda_capability_record() {
+  local record="${1:?CUDA capability record is required}"
+  local expected_sha="${2:?CUDA capability record digest is required}"
+  local expected_request="${3:?request ID is required}"
+  local expected_commit="${4:?control commit is required}"
+  local expected_owner="${5:?owner is required}"
+  local expected_repo="${6:?repository is required}"
+  local expected_head="${7:?head SHA is required}"
+  local expected_check="${8:?required check is required}"
+  local expected_detector_sha="${9:?detector digest is required}"
+  local expected_cap="${10:?normalized capability is required}"
+  local expected_uid="${11:-0}"
+  local expected_gid="${12:-$expected_uid}"
+  [[ "$expected_sha" =~ ^[0-9a-f]{64}$ \
+    && "$expected_detector_sha" =~ ^[0-9a-f]{64}$ \
+    && "$expected_cap" =~ ^[1-9][0-9]{1,2}$ \
+    && -f "$record" && ! -L "$record" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$record" 2>/dev/null)" \
+      == "$expected_uid:$expected_gid:444:1" \
+    && "$(stat -c '%s' -- "$record" 2>/dev/null)" \
+      -le "$JAIN_CUDA_DETECTOR_MAX_BYTES" \
+    && "$(sha256sum -- "$record" | cut -d' ' -f1)" == "$expected_sha" ]] \
+    || return 1
+  jq -e --arg request "$expected_request" --arg commit "$expected_commit" \
+    --arg owner "$expected_owner" --arg repo "$expected_repo" \
+    --arg head "$expected_head" --arg check "$expected_check" \
+    --arg detector_sha "$expected_detector_sha" --arg cap "$expected_cap" '
+    (keys == ["control_plane_commit","detector","head_sha","inventory","normalized_compute_cap","owner","repository","request_id","required_check","schema_version"])
+    and (.schema_version == "jain.host-ci-cuda-capability/v1")
+    and (.request_id == $request and .control_plane_commit == $commit)
+    and (.owner == $owner and .repository == $repo and .head_sha == $head)
+    and (.required_check == $check)
+    and (.detector | keys == ["path","sha256"])
+    and (.detector.path == "/usr/bin/nvidia-smi")
+    and (.detector.sha256 == $detector_sha)
+    and (.normalized_compute_cap == $cap)
+    and (.inventory | type == "array" and length > 0 and length <= 64)
+    and (.inventory == (.inventory | sort_by(.index)))
+    and ((.inventory | map(.index) | unique | length) == (.inventory | length))
+    and ((.inventory | map(.uuid) | unique | length) == (.inventory | length))
+    and all(.inventory[];
+      (keys == ["compute_cap","index","normalized_compute_cap","uuid"])
+      and (.index | type == "number" and . >= 0 and . <= 9999 and floor == .)
+      and (.uuid | test("^GPU-[A-Fa-f0-9]{8}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{4}-[A-Fa-f0-9]{12}$"))
+      and (.compute_cap | test("^([1-9]|[1-9][0-9])[.][0-9]$"))
+      and (.normalized_compute_cap == $cap)
+      and ((.compute_cap | split(".") | join("")) == $cap))' \
+    "$record" >/dev/null
+}
+
 jain_native_learners_for_repo() {
   local repo="${1:?repository name is required}"
   case "$repo" in
@@ -867,7 +1064,17 @@ jain_verify_native_evidence() {
        and ($expected_check == "" or .required_check == $expected_check))
      | select(.head_sha | test("^[0-9a-f]{40}$"))
      | select(.control_plane_commit == $expected_control_commit)
-     | select(.status == "pass")' "$evidence_dir/receipt.json" >/dev/null || return 1
+     | select(.status == "pass")
+     | select(.cuda_compute_capability_required | type == "boolean")
+     | select(.cuda_compute_capability | type == "string")
+     | select(.cuda_capability_record_sha256 | type == "string")
+     | select(if .cuda_compute_capability_required then
+         (.cuda_compute_capability | test("^[1-9][0-9]{1,2}$"))
+         and (.cuda_capability_record_sha256 | test("^[0-9a-f]{64}$"))
+       else
+         (.cuda_compute_capability == ""
+           and .cuda_capability_record_sha256 == "")
+       end)' "$evidence_dir/receipt.json" >/dev/null || return 1
   jain_verify_evidence_control_plane_files \
     "$evidence_dir" "$control_root" "$expected_control_commit" || return 1
   jq -e \
@@ -990,6 +1197,7 @@ jain_persist_native_evidence() {
   local control_commit="${9:?control-plane commit is required}"
   local control_root="${10:?control-plane root is required}"
   local check_slug attempt parent staging destination recorded_at file
+  local cuda_required cuda_capability cuda_record_sha
 
   [[ "$head_sha" =~ ^[0-9a-f]{40}$ && "$control_commit" =~ ^[0-9a-f]{40}$ ]] || return 1
   [[ "$owner" =~ ^[A-Za-z0-9_.-]+$ && "$repo" =~ ^[A-Za-z0-9_.-]+$ ]] || return 1
@@ -1022,6 +1230,10 @@ jain_persist_native_evidence() {
   jain_copy_control_plane_file "$control_root" "$control_commit" \
     ops/ci/host-ci-integrity.sh "$staging/host-ci-integrity.sh" || return 1
   recorded_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  cuda_required="${JAIN_RELEASE_CUDA_COMPUTE_CAPABILITY_REQUIRED:-false}"
+  cuda_capability="${JAIN_CUDA_COMPUTE_CAPABILITY:-}"
+  cuda_record_sha="${JAIN_CUDA_CAPABILITY_RECORD_SHA256:-}"
+  [[ "$cuda_required" == true || "$cuda_required" == false ]] || return 1
   jq -n --arg owner "$owner" --arg repo "$repo" --arg head_sha "$head_sha" \
     --arg required_check "$check" --arg recorded_at "$recorded_at" \
     --arg control_commit "$control_commit" \
@@ -1032,10 +1244,16 @@ jain_persist_native_evidence() {
     --arg native_runtime_sha256 "$(sha256sum -- "$staging/native-runtime.sh" | cut -d' ' -f1)" \
     --arg split_host_ci_sha256 "$(sha256sum -- "$staging/split-host-ci.sh" | cut -d' ' -f1)" \
     --arg host_ci_integrity_sha256 "$(sha256sum -- "$staging/host-ci-integrity.sh" | cut -d' ' -f1)" \
+    --argjson cuda_required "$cuda_required" \
+    --arg cuda_capability "$cuda_capability" \
+    --arg cuda_record_sha "$cuda_record_sha" \
     --slurpfile manifest "$staging/native-vendor-manifest.json" \
     '{schema_version:"jain.host-native-materialization/v1",recorded_at:$recorded_at,
       owner:$owner,repository:$repo,head_sha:$head_sha,required_check:$required_check,
       status:"pass",control_plane_commit:$control_commit,
+      cuda_compute_capability_required:$cuda_required,
+      cuda_compute_capability:$cuda_capability,
+      cuda_capability_record_sha256:$cuda_record_sha,
       authority:{file:"native-sources.lock.json",sha256:$authority_sha256},
       materializer:{file:"native-materializer.sh",sha256:$materializer_sha256},
       orchestration:{native_runtime_file:"native-runtime.sh",

@@ -67,6 +67,17 @@ validate_git_lfs() {
     || fail 'git-lfs executable digest, metadata, or version mismatch'
 }
 
+validate_nvidia_smi() {
+  local configured="$1" expected_sha="$2" path
+  path="$(realpath -e -- "$configured")" || fail 'nvidia-smi detector missing'
+  [[ "$configured" == /usr/bin/nvidia-smi && "$path" == "$configured" \
+    && ! -L "$path" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$path")" == '0:0:755:1' \
+    && "$expected_sha" =~ ^[0-9a-f]{64}$ \
+    && "$(sha256sum -- "$path" | cut -d' ' -f1)" == "$expected_sha" ]] \
+    || fail 'nvidia-smi detector digest or metadata mismatch'
+}
+
 validate_grype_db() {
   local root="$1" expected="$2" relative path inventory_digest actual_nodes
   case "$root" in
@@ -137,13 +148,15 @@ token_file="$(jq -er '.token_file' "$publisher_config")"
   && "$(realpath -e -- "$token_file" 2>/dev/null)" == "$token_file" \
   && "$(stat -c '%u:%g:%a:%h' -- "$token_file" 2>/dev/null)" == '0:0:600:1' ]] \
   || fail 'publisher token file must be canonical root:root mode 0600 single-link'
-jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v6")
+jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v7")
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
   | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
   | select(.cargo_registry_cache | type == "string" and startswith("/"))
   | select(.git_lfs_path | type == "string" and startswith("/"))
   | select(.git_lfs_sha256 | test("^[0-9a-f]{64}$"))
+  | select(.nvidia_smi_path == "/usr/bin/nvidia-smi")
+  | select(.nvidia_smi_sha256 | test("^[0-9a-f]{64}$"))
   | select(.grype_db_root | type == "string" and startswith("/"))
   | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.proof_evidence_root | type == "string" and startswith("/"))
@@ -151,6 +164,7 @@ jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v6")
   | select((.control_ref // "refs/heads/main") | type == "string")
   | select((.bootstrap_commit // "") | type == "string")
   | select((.bootstrap_expires_at // "") | type == "string")
+  | select(.device_allow == [])
   | select(has("token") | not)
   | select(.retain_requests == false)' "$sandbox_config" >/dev/null \
   || fail 'invalid or test-only sandbox config'
@@ -257,6 +271,8 @@ validate_grype_db "$grype_db_root" \
   "$(jq -er '.grype_db_inventory_sha256' "$sandbox_config")"
 validate_git_lfs "$(jq -er '.git_lfs_path' "$sandbox_config")" \
   "$(jq -er '.git_lfs_sha256' "$sandbox_config")"
+validate_nvidia_smi "$(jq -er '.nvidia_smi_path' "$sandbox_config")" \
+  "$(jq -er '.nvidia_smi_sha256' "$sandbox_config")"
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$sandbox_config")")" \
   || fail 'root request directory missing'
 [[ "$(stat -c '%u:%g:%a' -- "$request_root")" == '0:0:700' ]] \

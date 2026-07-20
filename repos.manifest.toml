@@ -459,6 +459,7 @@ cross_repo_deps = ["jain-math"]
 [[repo]]
 path = "/home/ubuntu/jain-split/jain-starforge"
 name = "jain-starforge"
+release_cuda_compute_capability_required = true
 github_slug = "neverhuman/jain-starforge"
 jeryu_slug = "veox/jain-starforge"
 profile = "rust-workspace-lfs"
@@ -479,6 +480,7 @@ cross_repo_deps = []
 [[repo]]
 path = "/home/ubuntu/jain-split/jain-core"
 name = "jain-core"
+release_cuda_compute_capability_required = true
 github_slug = "neverhuman/jain-core"
 jeryu_slug = "veox/jain-core"
 profile = "rust-workspace"
@@ -670,6 +672,7 @@ cross_repo_deps = ["jain-core"]
 [[repo]]
 path = "/home/ubuntu/jain-split/jain-cli"
 name = "jain-cli"
+release_cuda_compute_capability_required = true
 github_slug = "neverhuman/jain-cli"
 jeryu_slug = "veox/jain-cli"
 profile = "rust-workspace"
@@ -690,6 +693,7 @@ cross_repo_deps = ["jain-core", "jain-math", "jain-report", "jain-tui", "jain-ba
 [[repo]]
 path = "/home/ubuntu/jain-split/jain-web"
 name = "jain-web"
+release_cuda_compute_capability_required = true
 github_slug = "neverhuman/jain-web"
 jeryu_slug = "veox/jain-web"
 profile = "rust-node-hybrid"

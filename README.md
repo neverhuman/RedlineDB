@@ -39,7 +39,7 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
 - `cargo run --locked -- jeryu-local`: local PR/check REST wrapper for agents.
 - `cargo run --locked -- validate-local-jeryu`: local-source policy validator.
 - `ops/ci/split-host-ci.sh`: local Jeryu required-check runner.
-- `ops/ci/HOST_CI_BOUNDARY.md`: root-owned v4 sandbox, proof-evidence, result-seal,
+- `ops/ci/HOST_CI_BOUNDARY.md`: root-owned sandbox, proof-evidence, result-seal,
   and publication contract.
 - `docs/local-jeryu-forge-agent-workflow.md`: PR and status workflow.
 - `docs/release.md`: control-plane version, integrity, installation, and rollback policy.
@@ -55,7 +55,7 @@ authority or release sources; a future copy-out is a separately authorized expor
 ## Protected host-CI authority
 
 Required-check publication is a protected-host operation, not a capability of
-an ordinary source checkout. The v4 boundary runs the product gate and governed
+an ordinary source checkout. The protected boundary runs the product gate and governed
 Jankurai audit in separate network-isolated units, validates exact-SHA evidence
 under root-owned storage, and publishes and reads back `jankurai/proof` before
 publishing and reading back `<repo>/required`, then publishing and reading back

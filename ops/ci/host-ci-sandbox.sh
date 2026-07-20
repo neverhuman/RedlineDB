@@ -133,7 +133,7 @@ security_tool_names=(actionlint grype syft)
   && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
   || fail 'unsafe root sandbox config'
 jq -e '
-  select(.schema_version == "jain.host-ci-sandbox-config/v6")
+  select(.schema_version == "jain.host-ci-sandbox-config/v7")
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
@@ -153,6 +153,8 @@ jq -e '
   | select(.rustup_home | type == "string" and startswith("/"))
   | select(.git_lfs_path | type == "string" and startswith("/"))
   | select(.git_lfs_sha256 | test("^[0-9a-f]{64}$"))
+  | select(.nvidia_smi_path == "/usr/bin/nvidia-smi")
+  | select(.nvidia_smi_sha256 | test("^[0-9a-f]{64}$"))
   | select(.control_remote | type == "string" and length > 0)
   | select(.forge_git_base | type == "string" and length > 0)
   | select(.request_root | type == "string" and startswith("/"))
@@ -163,7 +165,7 @@ jq -e '
   | select((.control_ref // "refs/heads/main") | type == "string")
   | select((.bootstrap_commit // "") | type == "string")
   | select((.bootstrap_expires_at // "") | type == "string")
-  | select(.device_allow | type == "array")' "$config" >/dev/null \
+  | select(.device_allow == [])' "$config" >/dev/null \
   || fail 'invalid sandbox config schema'
 
 sandbox_sha="$(sha256sum -- "$sandbox_path" | cut -d' ' -f1)"
@@ -232,6 +234,8 @@ rustup_home="$(realpath -e -- "$(jq -er '.rustup_home' "$config")")" \
   || fail 'rustup home unavailable'
 git_lfs_path="$(validate_git_lfs "$(jq -er '.git_lfs_path' "$config")" \
   "$(jq -er '.git_lfs_sha256' "$config")")"
+nvidia_smi_path="$(jq -er '.nvidia_smi_path' "$config")"
+nvidia_smi_sha256="$(jq -er '.nvidia_smi_sha256' "$config")"
 request_root="$(realpath -e -- "$(jq -er '.request_root' "$config")")" \
   || fail 'root request directory unavailable'
 request_root_options="$(/usr/bin/findmnt -rn -o OPTIONS --target "$request_root")" \
@@ -367,6 +371,7 @@ for name in "${environment_names[@]}"; do
     && "$name" != JAIN_GRYPE_DB_ROOT \
     && "$name" != JAIN_GRYPE_DB_INVENTORY_SHA256 \
     && "$name" != JAIN_NATIVE_BUILD_TOOLS_ROOT \
+    && "$name" != CUDA_COMPUTE_CAP \
     && "$name" != JAIN_SPLIT_OPS_ROOT \
     && "$name" != JAIN_HOST_CI_REEXEC_STATE \
     && "$name" != JAIN_HOST_CI_NETWORK_ISOLATED \
@@ -455,20 +460,61 @@ repo_authority="$(jq -er --arg repo "$repo" '
   | select(.forge_owner | test("^[A-Za-z0-9._-]+$"))
   | select(.required_check == ($repo + "/required"))
   | select(.remote | type == "string")
-  | [.forge_owner, .required_check] | @tsv
+  | select(.release_cuda_compute_capability_required | type == "boolean")
+  | [.forge_owner, .required_check,
+      (.release_cuda_compute_capability_required | tostring)] | @tsv
 ' <<<"$repo_authority_json")" || fail 'invalid repository authority result'
-IFS=$'\t' read -r protected_owner protected_check <<<"$repo_authority"
+IFS=$'\t' read -r protected_owner protected_check cuda_required \
+  <<<"$repo_authority"
 [[ "${arguments[0]}" == "$protected_owner" \
   && "${arguments[4]}" == "$protected_check" ]] \
   || fail 'requested owner/check differs from manifest authority'
 
+# Root alone may derive release CUDA capability. The detector is pinned by
+# canonical path, metadata, and digest. CPU-only policies never execute it.
+# shellcheck source=ops/ci/native-runtime.sh
+source "$control_root/ops/ci/native-runtime.sh"
+jain_validate_nvidia_smi_detector "$nvidia_smi_path" "$nvidia_smi_sha256" \
+  || fail 'root NVIDIA detector digest or metadata mismatch'
+cuda_capability_record=""
+cuda_capability_record_sha256=""
+cuda_compute_capability=""
+if [[ "$cuda_required" == true ]]; then
+  cuda_detector_output="$root_request/nvidia-smi-output.csv"
+  cuda_inventory="$root_request/nvidia-inventory.json"
+  cuda_capability_record="$worker_authority/cuda-capability.json"
+  jain_run_nvidia_smi_detector "$nvidia_smi_path" "$cuda_detector_output" 5 \
+    || fail 'root NVIDIA compute-capability detection failed'
+  jain_parse_nvidia_compute_capability "$cuda_detector_output" "$cuda_inventory" \
+    || fail 'root NVIDIA compute-capability inventory is invalid'
+  cuda_compute_capability="$(
+    jq -er '.[0].normalized_compute_cap' "$cuda_inventory"
+  )" || fail 'root NVIDIA normalized capability is missing'
+  jain_write_cuda_capability_record "$cuda_inventory" \
+    "$cuda_capability_record" "$request_id" "$control_commit" \
+    "${arguments[0]}" "$repo" "${arguments[2]}" "${arguments[4]}" \
+    "$nvidia_smi_path" "$nvidia_smi_sha256" \
+    || fail 'cannot write root CUDA capability record'
+  chmod 0444 "$cuda_capability_record"
+  chown root:root "$cuda_capability_record"
+  cuda_capability_record_sha256="$(
+    sha256sum -- "$cuda_capability_record" | cut -d' ' -f1
+  )"
+  jain_verify_cuda_capability_record "$cuda_capability_record" \
+    "$cuda_capability_record_sha256" "$request_id" "$control_commit" \
+    "${arguments[0]}" "$repo" "${arguments[2]}" "${arguments[4]}" \
+    "$nvidia_smi_sha256" "$cuda_compute_capability" 0 \
+    || fail 'root CUDA capability record verification failed'
+  rm -f -- "$cuda_detector_output" "$cuda_inventory"
+elif [[ "$cuda_required" != false ]]; then
+  fail 'repository CUDA capability policy is not a boolean'
+fi
+
 native_build_tools_root=""
 native_build_tools_mount=""
 native_build_tools_root="$({
-  # Keep native-runtime's readonly evidence constants inside this validation
-  # subshell; the root publisher sources the same reviewed library later.
-  # shellcheck source=ops/ci/native-runtime.sh
-  source "$control_root/ops/ci/native-runtime.sh"
+  # Keep native learner selection inside this validation subshell; the root
+  # publisher independently sources the same reviewed library later.
   mapfile -t native_learners < <(jain_native_learners_for_repo "$repo")
   if [[ "${#native_learners[@]}" -gt 0 ]]; then
     native_build_tools_authority="$control_root/ops/ci/native-build-tools.lock.json"
@@ -612,10 +658,20 @@ install -o root -g root -m 0555 \
   "$worker_authority/.split-host-ci-reviewed"
 worker_result="$bootstrap_root/writable/worker-evidence.json"
 jq -n --arg commit "$control_commit" --arg result "$worker_result" \
-  '{schema_version:"jain.host-ci-reexec/v4",
+  --arg request_id "$request_id" \
+  --arg cuda_record_path "$([[ "$cuda_required" == true ]] \
+    && printf /opt/jain-ci/authority/cuda-capability.json || true)" \
+  --arg cuda_record_sha "$cuda_capability_record_sha256" \
+  --arg cuda_cap "$cuda_compute_capability" \
+  --argjson cuda_required "$cuda_required" \
+  '{schema_version:"jain.host-ci-reexec/v5",
     source_root:"/opt/jain-ci/authority/control-plane",
     exact_root:"/opt/jain-ci/authority/control-plane",
-    commit:$commit,result_path:$result,
+    request_id:$request_id,commit:$commit,result_path:$result,
+    cuda_compute_capability_required:$cuda_required,
+    cuda_capability_record_path:$cuda_record_path,
+    cuda_capability_record_sha256:$cuda_record_sha,
+    cuda_compute_capability:$cuda_cap,
     splitctl_path:"/opt/jain-ci/authority/splitctl"}' \
   >"$worker_authority/reexec-state.json"
 chmod 0444 "$worker_authority/reexec-state.json"
@@ -652,8 +708,12 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
+  --arg cuda_record_path "$cuda_capability_record" \
+  --arg cuda_record_sha "$cuda_capability_record_sha256" \
+  --arg cuda_cap "$cuda_compute_capability" \
+  --argjson cuda_required "$cuda_required" \
   --argjson created_at "$created_at" \
-  '{schema_version:"jain.host-ci-root-state/v4",status:"running",
+  '{schema_version:"jain.host-ci-root-state/v5",status:"running",
     request_id:$request_id,nonce:$nonce,created_at:$created_at,
     control_plane_commit:$commit,control_remote:$remote,control_ref:$control_ref,
     bootstrap_expires_at:$bootstrap_expires_at,
@@ -663,7 +723,11 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
     grype_db_root:$grype_db_root,
     grype_db_inventory_sha256:$grype_db_inventory_sha256,
     native_evidence_root:$native_evidence_root,
-    proof_evidence_root:$proof_evidence_root}' >"$root_state"
+    proof_evidence_root:$proof_evidence_root,
+    cuda_compute_capability_required:$cuda_required,
+    cuda_capability_record_path:$cuda_record_path,
+    cuda_capability_record_sha256:$cuda_record_sha,
+    cuda_compute_capability:$cuda_cap}' >"$root_state"
 chmod 0600 "$root_state"
 chown root:root "$root_state"
 
@@ -776,6 +840,9 @@ if [[ -n "$native_build_tools_root" ]]; then
     --property="BindReadOnlyPaths=$native_build_tools_root:$native_build_tools_mount"
     --setenv="JAIN_NATIVE_BUILD_TOOLS_ROOT=$native_build_tools_mount"
   )
+fi
+if [[ "$cuda_required" == true ]]; then
+  systemd_args+=(--setenv="CUDA_COMPUTE_CAP=$cuda_compute_capability")
 fi
 if [[ "$repo" == jain-starforge ]]; then
   systemd_args+=(
@@ -911,20 +978,28 @@ if [[ "$runner_rc" == 0 && -f "$worker_result" && ! -L "$worker_result" \
   && jq -e --arg owner "${arguments[0]}" --arg repo "$repo" \
     --arg head "${arguments[2]}" --arg check "${arguments[4]}" \
     --arg commit "$control_commit" \
-    'select(.schema_version == "jain.host-ci-worker-evidence/v4")
+    'select(.schema_version == "jain.host-ci-worker-evidence/v5")
      | select(.owner == $owner and .repository == $repo)
      | select(.head_sha == $head and .required_check == $check)
      | select(.control_plane_commit == $commit)
      | select(.native_evidence_dir | type == "string")
-     | select(.native_evidence_sha256 | type == "string")' \
+     | select(.native_evidence_sha256 | type == "string")
+     | select(.cuda_compute_capability_required | type == "boolean")
+     | select(.cuda_compute_capability | type == "string")
+     | select(.cuda_capability_record_sha256 | type == "string")' \
     "$worker_result" >/dev/null; then
   evidence_dir="$(jq -er '.native_evidence_dir' "$worker_result")"
   evidence_sha="$(jq -er '.native_evidence_sha256' "$worker_result")"
-  conclusion=success
+  if [[ "$(jq -r '.cuda_compute_capability_required' "$worker_result")" \
+      == "$cuda_required" \
+    && "$(jq -er '.cuda_compute_capability' "$worker_result")" \
+      == "$cuda_compute_capability" \
+    && "$(jq -er '.cuda_capability_record_sha256' "$worker_result")" \
+      == "$cuda_capability_record_sha256" ]]; then
+    conclusion=success
+  fi
 fi
 
-# shellcheck source=ops/ci/native-runtime.sh
-source "$control_root/ops/ci/native-runtime.sh"
 # shellcheck source=ops/ci/host-ci-evidence.sh
 source "$control_root/ops/ci/host-ci-evidence.sh"
 derived_required=false
@@ -943,6 +1018,13 @@ if [[ "$conclusion" == success ]]; then
     }
     if [[ "$conclusion" == success ]]; then
       evidence_dir="$promoted_evidence_dir"
+      [[ "$(jq -r '.cuda_compute_capability_required' \
+          "$evidence_dir/receipt.json")" == "$cuda_required" \
+        && "$(jq -er '.cuda_compute_capability' \
+          "$evidence_dir/receipt.json")" == "$cuda_compute_capability" \
+        && "$(jq -er '.cuda_capability_record_sha256' \
+          "$evidence_dir/receipt.json")" == "$cuda_capability_record_sha256" ]] \
+        || conclusion=failure
     fi
   elif [[ -n "$evidence_dir" || -n "$evidence_sha" ]] \
     || ! jain_host_ci_staging_is_empty "$evidence_staging_root"; then
@@ -1024,11 +1106,19 @@ jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
   --argjson audit_rc "$audit_rc" \
   --argjson proof_validator_rc "$proof_validator_rc" \
   --argjson evidence_required "$derived_required" \
-  '{schema_version:"jain.host-ci-root-result/v4",request_id:$request_id,
+  --arg cuda_record_path "$cuda_capability_record" \
+  --arg cuda_record_sha "$cuda_capability_record_sha256" \
+  --arg cuda_cap "$cuda_compute_capability" \
+  --argjson cuda_required "$cuda_required" \
+  '{schema_version:"jain.host-ci-root-result/v5",request_id:$request_id,
     control_plane_commit:$commit,owner:$owner,repository:$repo,head_sha:$head,
     required_check:$check,conclusion:$conclusion,runner_exit_code:$rc,
     native_evidence_required:$evidence_required,
     native_evidence_dir:$evidence_dir,native_evidence_sha256:$evidence_sha,
+    cuda_compute_capability_required:$cuda_required,
+    cuda_capability_record_path:$cuda_record_path,
+    cuda_capability_record_sha256:$cuda_record_sha,
+    cuda_compute_capability:$cuda_cap,
     proof_evidence_required:true,proof_evidence_dir:$proof_dir,
     proof_receipt_path:$proof_receipt,
     proof_receipt_sha256:$proof_receipt_sha,
