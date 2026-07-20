@@ -23,8 +23,10 @@ jain_write_native_build_tools_inventory \
 inventory_sha256="$(sha256sum -- "$inventory_file" | cut -d' ' -f1)"
 file_count="$(wc -l <"$inventory_file")"
 
-for tool in cmake ninja ragel yasm; do
-  path="$bundle_root/bin/$tool"
+for tool in cmake lld ninja ragel yasm; do
+  relative="bin/$tool"
+  [[ "$tool" != lld ]] || relative=bin/ld.lld
+  path="$bundle_root/$relative"
   [[ -f "$path" && ! -L "$path" \
     && "$(stat -c '%a:%h' -- "$path")" == '555:1' ]] || {
     printf 'invalid native build tool: %s\n' "$tool" >&2
@@ -42,17 +44,21 @@ done
 jq -n --arg inventory "$inventory_sha256" \
   --arg root "/var/lib/jain-host-ci/native-build-tools/$inventory_sha256" \
   --arg cmake_sha "$cmake_sha" --arg cmake_version "$cmake_version" \
+  --arg lld_sha "$lld_sha" --arg lld_version "$lld_version" \
   --arg ninja_sha "$ninja_sha" --arg ninja_version "$ninja_version" \
   --arg ragel_sha "$ragel_sha" --arg ragel_version "$ragel_version" \
   --arg yasm_sha "$yasm_sha" --arg yasm_version "$yasm_version" \
   --argjson file_count "$file_count" \
-  --argjson cmake_size "$cmake_size" --argjson ninja_size "$ninja_size" \
+  --argjson cmake_size "$cmake_size" --argjson lld_size "$lld_size" \
+  --argjson ninja_size "$ninja_size" \
   --argjson ragel_size "$ragel_size" --argjson yasm_size "$yasm_size" \
   '{schema_version:"jain.native-build-tools/v1",bundle_root:$root,
     inventory_sha256:$inventory,file_count:$file_count,
     tools:{
       cmake:{path:"bin/cmake",mode:"555",size:$cmake_size,
         sha256:$cmake_sha,version:$cmake_version},
+      lld:{path:"bin/ld.lld",mode:"555",size:$lld_size,
+        sha256:$lld_sha,version:$lld_version},
       ninja:{path:"bin/ninja",mode:"555",size:$ninja_size,
         sha256:$ninja_sha,version:$ninja_version},
       ragel:{path:"bin/ragel",mode:"555",size:$ragel_size,

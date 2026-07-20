@@ -1,8 +1,8 @@
 {
   "schema_version": "jain.native-build-tools/v1",
-  "bundle_root": "/var/lib/jain-host-ci/native-build-tools/49b9147c351bcf283d16fef813fdd93be51d2df3fb1491e5e276445c85a9e0e0",
-  "inventory_sha256": "49b9147c351bcf283d16fef813fdd93be51d2df3fb1491e5e276445c85a9e0e0",
-  "file_count": 4024,
+  "bundle_root": "/var/lib/jain-host-ci/native-build-tools/f74c268261d278fb2c4100bdbdcd8af432da4856925a9f134ef364306b8e7100",
+  "inventory_sha256": "f74c268261d278fb2c4100bdbdcd8af432da4856925a9f134ef364306b8e7100",
+  "file_count": 4025,
   "tools": {
     "cmake": {
       "path": "bin/cmake",
@@ -10,6 +10,13 @@
       "size": 20779288,
       "sha256": "2cb2b2ed8a79eb5612bd611d010c882bf467feb51ad69dac288a245519080408",
       "version": "cmake version 4.3.2"
+    },
+    "lld": {
+      "path": "bin/ld.lld",
+      "mode": "555",
+      "size": 5868136,
+      "sha256": "dbf1a9db834a83954221bff446c35f5b39dd04f09aede3f963a095dd2b718f73",
+      "version": "Ubuntu LLD 21.1.8 (compatible with GNU linkers)"
     },
     "ninja": {
       "path": "bin/ninja",

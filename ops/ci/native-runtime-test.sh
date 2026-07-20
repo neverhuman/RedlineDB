@@ -24,15 +24,29 @@ trap cleanup EXIT
 fixture_stage="$tmp/native-build-tools-stage"
 mkdir -p "$fixture_stage/bin" \
   "$fixture_stage/share/cmake-4.3/Help/generator"
-for tool in cmake ninja ragel yasm; do
+for tool in cmake lld ninja ragel yasm; do
+  relative="$tool"
   case "$tool" in
     cmake) version='cmake version 4.3.2' ;;
+    lld)
+      relative=ld.lld
+      version='Ubuntu LLD 21.1.8 (compatible with GNU linkers)'
+      ;;
     ninja) version='1.13.0.git.kitware.jobserver-pipe-1' ;;
     ragel) version='Ragel State Machine Compiler version 6.10 March 2017' ;;
     yasm) version='yasm 1.3.0' ;;
   esac
-  printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s"\n' "$version" \
-    >"$fixture_stage/bin/$tool"
+  if [[ "$tool" == lld ]]; then
+    printf '%s\n' '#!/usr/bin/env bash' \
+      'if [[ "${1-}" == --version ]]; then' \
+      "  printf '%s\\n' '$version'" \
+      '  exit 0' \
+      'fi' \
+      'exec /usr/bin/ld "$@"' >"$fixture_stage/bin/$relative"
+  else
+    printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s"\n' "$version" \
+      >"$fixture_stage/bin/$relative"
+  fi
 done
 printf 'fixture module\n' >"$fixture_stage/share/cmake-4.3/Fixture.cmake"
 printf 'space-bearing fixture\n' \
@@ -115,13 +129,36 @@ if jain_validate_native_build_tools \
   printf 'native build-tool validator accepted non-root fixture ownership\n' >&2
   exit 1
 fi
-prior_path="$PATH"
+ambient_bin="$tmp/ambient-bin"
+mkdir -p "$ambient_bin"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 97' >"$ambient_bin/ld.lld"
+chmod 0555 "$ambient_bin" "$ambient_bin/ld.lld"
+prior_path="$ambient_bin:$PATH"
+PATH="$prior_path"
 jain_activate_native_build_tools "$fixture_authority" "$fixture_root"
 [[ "$CMAKE" == "$fixture_root/bin/cmake" \
   && "$NINJA" == "$fixture_root/bin/ninja" \
   && "$CMAKE_MAKE_PROGRAM" == "$fixture_root/bin/ninja" \
-  && "$PATH" == "$fixture_root/bin:$prior_path" ]] || exit 1
-PATH="$prior_path"
+  && "$PATH" == "$fixture_root/bin:$prior_path" \
+  && "$(command -v ld.lld)" == "$fixture_root/bin/ld.lld" \
+  && "$(ld.lld --version)" \
+    == 'Ubuntu LLD 21.1.8 (compatible with GNU linkers)' ]] || exit 1
+printf 'int main(void) { return 0; }\n' >"$tmp/lld-probe.c"
+/usr/bin/clang -fuse-ld=lld "$tmp/lld-probe.c" -o "$tmp/lld-probe"
+"$tmp/lld-probe"
+PATH="${prior_path#"$ambient_bin:"}"
+
+chmod 0755 "$fixture_root/bin"
+mv -- "$fixture_root/bin/ld.lld" "$tmp/ld.lld.saved"
+chmod 0555 "$fixture_root/bin"
+if validate_fixture_under_pipefail \
+  "$fixture_authority" "$fixture_root" 2>/dev/null; then
+  printf 'native build-tool validator accepted a missing LLD\n' >&2
+  exit 1
+fi
+chmod 0755 "$fixture_root/bin"
+mv -- "$tmp/ld.lld.saved" "$fixture_root/bin/ld.lld"
+chmod 0555 "$fixture_root/bin"
 
 chmod 0644 "$fixture_root/bin/ninja"
 if validate_fixture_under_pipefail \
@@ -162,11 +199,18 @@ fi
 chmod 0644 "$fixture_root/share/cmake-4.3/Fixture.cmake"
 printf 'fixture module\n' >"$fixture_root/share/cmake-4.3/Fixture.cmake"
 chmod 0444 "$fixture_root/share/cmake-4.3/Fixture.cmake"
-jq '.tools.cmake.version = "cmake version 0.0.0"' "$fixture_authority" \
+jq '.tools.lld.version = "Ubuntu LLD 0.0.0"' "$fixture_authority" \
   >"$tmp/wrong-version.json"
 if jain_validate_native_build_tools \
   "$tmp/wrong-version.json" "$fixture_root" content 2>/dev/null; then
   printf 'native build-tool validator accepted a wrong version\n' >&2
+  exit 1
+fi
+jq '.tools.lld.path = "bin/ninja"' "$fixture_authority" \
+  >"$tmp/wrong-lld-path.json"
+if jain_validate_native_build_tools \
+  "$tmp/wrong-lld-path.json" "$fixture_root" content 2>/dev/null; then
+  printf 'native build-tool validator accepted a substituted LLD path\n' >&2
   exit 1
 fi
 jq '.unreviewed = true' "$fixture_authority" >"$tmp/unknown-key.json"
@@ -180,15 +224,20 @@ large_stage="$tmp/native-build-tools-large-stage"
 mkdir -p "$large_stage/bin" \
   "$large_stage/share/cmake-4.3/Help/generator" \
   "$large_stage/share/cmake-4.3/Modules" "$large_stage/zzzz"
-for tool in cmake ninja ragel yasm; do
+for tool in cmake lld ninja ragel yasm; do
+  relative="$tool"
   case "$tool" in
     cmake) version='cmake version 4.3.2' ;;
+    lld)
+      relative=ld.lld
+      version='Ubuntu LLD 21.1.8 (compatible with GNU linkers)'
+      ;;
     ninja) version='1.13.0.git.kitware.jobserver-pipe-1' ;;
     ragel) version='Ragel State Machine Compiler version 6.10 March 2017' ;;
     yasm) version='yasm 1.3.0' ;;
   esac
   printf '#!/usr/bin/env bash\nprintf "%%s\\n" "%s"\n' "$version" \
-    >"$large_stage/bin/$tool"
+    >"$large_stage/bin/$relative"
 done
 printf 'space-bearing fixture\n' \
   >"$large_stage/share/cmake-4.3/Help/generator/Borland Makefiles.rst"
@@ -208,13 +257,13 @@ mv -- "$large_stage" "$large_root"
 large_inventory="$tmp/native-build-tools-large.inventory.tsv"
 jain_write_native_build_tools_inventory \
   "$large_root" "$large_inventory" content
-[[ "$(wc -l <"$large_inventory")" == 4024 \
-  && "$(jq -er '.file_count' "$large_authority")" == 4024 \
+[[ "$(wc -l <"$large_inventory")" == 4025 \
+  && "$(jq -er '.file_count' "$large_authority")" == 4025 \
   && "$(sha256sum -- "$large_inventory" | cut -d' ' -f1)" \
     == "$large_inventory_sha" \
   && "$(awk -F '\t' 'index($1, " ") { print NR ":" $1; exit }' \
       "$large_inventory")" \
-    == '5:share/cmake-4.3/Help/generator/Borland Makefiles.rst' \
+    == '6:share/cmake-4.3/Help/generator/Borland Makefiles.rst' \
   && "$(tail -n 1 "$large_inventory" | cut -f1)" \
     == 'zzzz/LastFixture.txt' ]] || {
   printf 'large native inventory ordering or identity drifted\n' >&2

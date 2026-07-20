@@ -134,7 +134,7 @@ jain_validate_native_build_tools() (
   local expected_inventory expected_count actual_inventory actual_count
   local inventory_scratch='' inventory_tmp=''
   local relative tool expected path version
-  local -a tools=(cmake ninja ragel yasm)
+  local -a tools=(cmake lld ninja ragel yasm)
 
   cleanup_native_inventory_result() {
     [[ -z "$inventory_scratch" ]] || {
@@ -162,11 +162,16 @@ jain_validate_native_build_tools() (
     | select(.bundle_root ==
         ("/var/lib/jain-host-ci/native-build-tools/" + .inventory_sha256))
     | select(.file_count | type == "number" and . > 0 and floor == .)
-    | select((.tools | keys | sort) == ["cmake", "ninja", "ragel", "yasm"])
+    | select((.tools | keys | sort) ==
+        ["cmake", "lld", "ninja", "ragel", "yasm"])
+    | select(.tools.cmake.path == "bin/cmake")
+    | select(.tools.lld.path == "bin/ld.lld")
+    | select(.tools.ninja.path == "bin/ninja")
+    | select(.tools.ragel.path == "bin/ragel")
+    | select(.tools.yasm.path == "bin/yasm")
     | select(all(.tools[];
         type == "object"
         and (keys | sort) == ["mode", "path", "sha256", "size", "version"]
-        and (.path | test("^bin/[a-z0-9-]+$"))
         and .mode == "555"
         and (.size | type == "number" and . > 0 and floor == .)
         and (.sha256 | test("^[0-9a-f]{64}$"))
