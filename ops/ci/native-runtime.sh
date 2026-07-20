@@ -2,11 +2,135 @@
 # Shared runtime-library contract for release Cargo commands that enable the
 # split family's native learners. This file is sourced by split-host-ci.sh.
 
+jain_native_relative_path_is_canonical() {
+  local relative="${1-}" component
+  local LC_ALL=C
+  local -a components=()
+  [[ -n "$relative" && "$relative" != /* && "$relative" != */ \
+    && "$relative" != *//* \
+    && "$relative" =~ ^[A-Za-z0-9._+\ /-]+$ ]] || return 1
+  IFS=/ read -r -a components <<<"$relative"
+  for component in "${components[@]}"; do
+    [[ -n "$component" && "$component" != . && "$component" != .. \
+      && "$component" != ' '* && "$component" != *' ' ]] || return 1
+  done
+}
+
+jain_write_native_build_tools_inventory() (
+  local bundle_root="${1:?native build-tool root is required}"
+  local destination="${2:?native inventory destination is required}"
+  local ownership_mode="${3:-content}"
+  local scratch nodes files sorted_files absolute_files metadata hashes
+  local relative node_type mode size links uid gid absolute metadata_record
+  local hash_record hash hashed_path extra previous='' count=0 complete=false
+  local LC_ALL=C
+  [[ "$ownership_mode" == root || "$ownership_mode" == content ]] || return 1
+  [[ "$bundle_root" == /* && -d "$bundle_root" && ! -L "$bundle_root" \
+    && "$(realpath -e -- "$bundle_root")" == "$bundle_root" \
+    && "$destination" == /* && ! -e "$destination" \
+    && ! -L "$destination" ]] || return 1
+  [[ "$(stat -c '%F:%a' -- "$bundle_root" 2>/dev/null)" \
+      == 'directory:555' ]] || return 1
+  if [[ "$ownership_mode" == root ]]; then
+    [[ "$(stat -c '%u:%g' -- "$bundle_root" 2>/dev/null)" == '0:0' ]] \
+      || return 1
+  fi
+
+  scratch="$(mktemp -d /tmp/jain-native-inventory.XXXXXX)" || return 1
+  nodes="$scratch/nodes"
+  files="$scratch/files"
+  sorted_files="$scratch/files.sorted"
+  absolute_files="$scratch/files.absolute"
+  metadata="$scratch/metadata"
+  hashes="$scratch/hashes"
+  cleanup_native_inventory() {
+    rm -rf -- "$scratch"
+    if [[ "$complete" != true ]]; then
+      rm -f -- "$destination"
+    fi
+  }
+  trap cleanup_native_inventory EXIT
+  umask 077
+
+  find "$bundle_root" -xdev -mindepth 1 \
+    -printf '%P\0%y\0%m\0%n\0%U\0%G\0' >"$nodes" || return 1
+  : >"$files" || return 1
+  exec 3<"$nodes"
+  while IFS= read -r -d '' relative <&3; do
+    IFS= read -r -d '' node_type <&3 || return 1
+    IFS= read -r -d '' mode <&3 || return 1
+    IFS= read -r -d '' links <&3 || return 1
+    IFS= read -r -d '' uid <&3 || return 1
+    IFS= read -r -d '' gid <&3 || return 1
+    jain_native_relative_path_is_canonical "$relative" || return 1
+    if [[ "$ownership_mode" == root ]]; then
+      [[ "$uid:$gid" == '0:0' ]] || return 1
+    fi
+    case "$node_type" in
+      d) [[ "$mode" == 555 ]] || return 1 ;;
+      f)
+        [[ "$mode" == 444 || "$mode" == 555 ]] || return 1
+        [[ "$links" == 1 ]] || return 1
+        printf '%s\0' "$relative" >>"$files" || return 1
+        ;;
+      *) return 1 ;;
+    esac
+  done
+  sort -z "$files" >"$sorted_files" || return 1
+  : >"$absolute_files" || return 1
+  exec 3<"$sorted_files"
+  while IFS= read -r -d '' relative <&3; do
+    if (( count > 0 )); then
+      [[ "$relative" > "$previous" ]] || return 1
+    fi
+    previous="$relative"
+    absolute="$bundle_root/$relative"
+    printf '%s\0' "$absolute" >>"$absolute_files" || return 1
+    count=$((count + 1))
+  done
+  (( count > 0 )) || return 1
+
+  xargs -0 -r stat --printf='%F\t%a\t%s\t%h\t%u\t%g\0' -- \
+    <"$absolute_files" >"$metadata" || return 1
+  xargs -0 -r sha256sum -z -- <"$absolute_files" >"$hashes" || return 1
+  : >"$destination" || return 1
+  exec 3<"$sorted_files" 4<"$metadata" 5<"$hashes"
+  count=0
+  while IFS= read -r -d '' relative <&3; do
+    IFS= read -r -d '' metadata_record <&4 || return 1
+    IFS= read -r -d '' hash_record <&5 || return 1
+    IFS=$'\t' read -r node_type mode size links uid gid extra \
+      <<<"$metadata_record"
+    [[ ( "$node_type" == 'regular file' \
+        || "$node_type" == 'regular empty file' ) \
+      && ( "$mode" == 444 || "$mode" == 555 ) \
+      && "$size" =~ ^[0-9]+$ && "$links" == 1 \
+      && "$uid" =~ ^[0-9]+$ && "$gid" =~ ^[0-9]+$ \
+      && -z "$extra" ]] || return 1
+    if [[ "$ownership_mode" == root ]]; then
+      [[ "$uid:$gid" == '0:0' ]] || return 1
+    fi
+    hash="${hash_record:0:64}"
+    hashed_path="${hash_record:66}"
+    [[ "$hash" =~ ^[0-9a-f]{64}$ \
+      && "${hash_record:64:2}" == '  ' \
+      && "$hashed_path" == "$bundle_root/$relative" ]] || return 1
+    printf '%s\t%s\t%s\t%s\n' "$relative" "$mode" \
+      "$size" "$hash" >>"$destination" || return 1
+    count=$((count + 1))
+  done
+  if IFS= read -r -d '' extra <&4 || IFS= read -r -d '' extra <&5; then
+    return 1
+  fi
+  [[ "$count" -gt 0 ]] || return 1
+  complete=true
+)
+
 jain_validate_native_build_tools() {
   local authority="${1:?native build-tool authority is required}"
   local bundle_root="${2:?native build-tool root is required}"
   local ownership_mode="${3:-content}"
-  local expected_inventory expected_count actual_inventory actual_count
+  local expected_inventory expected_count actual_inventory actual_count inventory_tmp
   local relative tool expected path version
   local -a tools=(cmake ninja ragel yasm)
 
@@ -44,48 +168,36 @@ jain_validate_native_build_tools() {
 
   expected_inventory="$(jq -er '.inventory_sha256' "$authority")" || return 1
   expected_count="$(jq -er '.file_count' "$authority")" || return 1
-  [[ "$bundle_root" == /* && -d "$bundle_root" && ! -L "$bundle_root" \
-    && "$(realpath -e -- "$bundle_root")" == "$bundle_root" \
-    && "${bundle_root##*/}" == "$expected_inventory" ]] || {
+  [[ "$bundle_root" == /* && "${bundle_root##*/}" == "$expected_inventory" ]] \
+    || {
     printf 'native build-tool bundle identity is invalid: %s\n' \
       "$bundle_root" >&2
     return 1
   }
-  [[ -z "$(find "$bundle_root" -xdev ! -type d ! -type f -print -quit)" ]] || {
-    printf 'native build-tool bundle contains a non-regular object\n' >&2
+  inventory_tmp="$(mktemp /tmp/jain-native-inventory-result.XXXXXX)" \
+    || return 1
+  rm -f -- "$inventory_tmp"
+  jain_write_native_build_tools_inventory \
+    "$bundle_root" "$inventory_tmp" "$ownership_mode" || {
+    printf 'native build-tool tree or inventory is invalid\n' >&2
+    rm -f -- "$inventory_tmp"
     return 1
   }
-  [[ -z "$(find "$bundle_root" -xdev -type d ! -perm 0555 -print -quit)" \
-    && -z "$(find "$bundle_root" -xdev -type f \
-      ! \( -perm 0444 -o -perm 0555 \) -print -quit)" \
-    && -z "$(find "$bundle_root" -xdev -type f ! -links 1 -print -quit)" ]] || {
-    printf 'native build-tool bundle mode or link count is invalid\n' >&2
+  actual_count="$(wc -l <"$inventory_tmp")" || {
+    rm -f -- "$inventory_tmp"
     return 1
   }
-  if [[ "$ownership_mode" == root ]]; then
-    [[ -z "$(find "$bundle_root" -xdev ! -uid 0 -print -quit)" \
-      && -z "$(find "$bundle_root" -xdev ! -gid 0 -print -quit)" ]] || {
-      printf 'native build-tool bundle is not root-owned\n' >&2
-      return 1
-    }
-  fi
-
-  actual_count="$(find "$bundle_root" -xdev -type f -printf '.\n' | wc -l)"
   [[ "$actual_count" == "$expected_count" ]] || {
     printf 'native build-tool file count mismatch: %s != %s\n' \
       "$actual_count" "$expected_count" >&2
+    rm -f -- "$inventory_tmp"
     return 1
   }
-  actual_inventory="$({
-    while IFS= read -r relative; do
-      [[ "$relative" =~ ^[A-Za-z0-9._+/-]+$ ]] || exit 1
-      path="$bundle_root/$relative"
-      printf '%s\t%s\t%s\t%s\n' "$relative" \
-        "$(stat -c %a -- "$path")" "$(stat -c %s -- "$path")" \
-        "$(sha256sum -- "$path" | cut -d' ' -f1)"
-    done < <(LC_ALL=C find "$bundle_root" -xdev -type f -printf '%P\n' \
-      | LC_ALL=C sort)
-  } | sha256sum | cut -d' ' -f1)" || return 1
+  actual_inventory="$(sha256sum -- "$inventory_tmp" | cut -d' ' -f1)" || {
+    rm -f -- "$inventory_tmp"
+    return 1
+  }
+  rm -f -- "$inventory_tmp"
   [[ "$actual_inventory" == "$expected_inventory" ]] || {
     printf 'native build-tool inventory mismatch: %s != %s\n' \
       "$actual_inventory" "$expected_inventory" >&2
@@ -109,7 +221,8 @@ jain_validate_native_build_tools() {
     }
     expected="$(jq -er --arg tool "$tool" '.tools[$tool].version' \
       "$authority")" || return 1
-    version="$("$path" --version 2>&1 | head -n 1)" || return 1
+    version="$("$path" --version 2>&1)" || return 1
+    version="${version%%$'\n'*}"
     [[ "$version" == "$expected" ]] || {
       printf 'native build-tool version mismatch: %s\n' "$tool" >&2
       return 1

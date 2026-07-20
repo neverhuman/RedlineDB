@@ -1,7 +1,7 @@
 {
   "schema_version": "jain.native-build-tools/v1",
-  "bundle_root": "/var/lib/jain-host-ci/native-build-tools/f1bd259e7febe2c336376a08ecbda5b374184c7b605025af03424451b5cab6f7",
-  "inventory_sha256": "f1bd259e7febe2c336376a08ecbda5b374184c7b605025af03424451b5cab6f7",
+  "bundle_root": "/var/lib/jain-host-ci/native-build-tools/49b9147c351bcf283d16fef813fdd93be51d2df3fb1491e5e276445c85a9e0e0",
+  "inventory_sha256": "49b9147c351bcf283d16fef813fdd93be51d2df3fb1491e5e276445c85a9e0e0",
   "file_count": 4024,
   "tools": {
     "cmake": {
