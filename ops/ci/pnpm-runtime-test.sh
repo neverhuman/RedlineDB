@@ -65,7 +65,7 @@ if jain_validate_pnpm_store "$authority" "$root" content 2>/dev/null; then
   printf 'pnpm store validator accepted a hardlink\n' >&2; exit 1
 fi
 chmod 0755 "$root/v10/files/aa"
-rm -- "$root/v10/files/aa/hardlink"
+rm -f -- "$root/v10/files/aa/hardlink"
 chmod 0555 "$root/v10/files/aa"
 chmod 0644 "$tmp/product/apps/web/pnpm-lock.yaml"
 printf 'changed\n' >>"$tmp/product/apps/web/pnpm-lock.yaml"
