@@ -3,6 +3,7 @@ mod jeryu_client;
 mod release_candidate;
 
 use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, JeryuRequest};
+use serde::Deserialize;
 use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
@@ -247,13 +248,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("release-snapshot") => release_snapshot(args.collect())?,
         Some("release-candidate") => release_candidate::command(args.collect())?,
         Some("release-status") => release_status(args.collect())?,
+        Some("validate-appliance-promotion") => validate_appliance_promotion(args.collect())?,
         Some("bootstrap-main") => bootstrap_main_command(args.collect())?,
         Some("immutable-tag") => immutable_tag_command(args.collect())?,
         Some("verify-worktrees") => verify_worktrees_command(args.collect())?,
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--sealed-outer-projection] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-candidate [--manifest PATH] [--repo NAME]... [--journal PATH --token-file PATH --apply] [--receipt PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--sealed-outer-projection] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-candidate [--manifest PATH] [--repo NAME]... [--journal PATH --token-file PATH --apply] [--receipt PATH] | release-status [--manifest PATH] [--appliance-canary-aggregate PATH] [--json PATH] | validate-appliance-promotion --aggregate PATH [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -5016,20 +5018,440 @@ fn release_snapshot(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
     }
 }
 
+const MAX_APPLIANCE_AGGREGATE_BYTES: u64 = 1024 * 1024;
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApplianceCanaryMatrix {
+    schema_version: String,
+    qualification: bool,
+    fixture: bool,
+    release: String,
+    release_tag: String,
+    source_commit: String,
+    status: String,
+    formal_ga: bool,
+    rollback_release: String,
+    release_job: ApplianceReleaseJob,
+    manifest_sha256: String,
+    public_key_sha256: String,
+    artifact_identities: ApplianceArtifactIdentities,
+    artifact_set_sha256: String,
+    oci: ApplianceOciIdentity,
+    lanes: ApplianceCanaryLanes,
+    created_at: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApplianceReleaseJob {
+    id: String,
+    attestation_url: String,
+    attestation_sha256: String,
+    signature_url: String,
+    verified: bool,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApplianceArtifactIdentities {
+    installer: String,
+    manager: String,
+    cli: String,
+    compose: String,
+    compose_gpu: String,
+    provenance: String,
+    browser_suite: String,
+    training_data: String,
+    scoring_data: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApplianceOciIdentity {
+    index: String,
+    index_digest: String,
+    platform: String,
+    platform_digest: String,
+    runtime_image_id: String,
+    runtime_repo_digest: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApplianceCanaryLanes {
+    cpu: ApplianceCanaryLane,
+    gpu: ApplianceCanaryLane,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ApplianceCanaryLane {
+    receipt_sha256: String,
+    qualification: bool,
+}
+
+#[derive(Debug)]
+struct QualifiedApplianceCanary {
+    matrix: ApplianceCanaryMatrix,
+    aggregate_sha256: String,
+}
+
+fn valid_nonzero_lower_hex(value: &str, length: usize) -> bool {
+    value.len() == length
+        && value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        && value.bytes().any(|byte| byte != b'0')
+}
+
+fn valid_sha256(value: &str) -> bool {
+    valid_nonzero_lower_hex(value, 64)
+}
+
+fn valid_digest(value: &str) -> bool {
+    value.strip_prefix("sha256:").is_some_and(valid_sha256)
+}
+
+fn valid_https_url(value: &str) -> bool {
+    value
+        .strip_prefix("https://")
+        .is_some_and(|rest| !rest.is_empty() && !value.chars().any(char::is_whitespace))
+}
+
+fn valid_repo_digest(value: &str, expected_digest: &str) -> bool {
+    value.rsplit_once('@').is_some_and(|(repository, digest)| {
+        !repository.is_empty()
+            && !value.chars().any(char::is_whitespace)
+            && digest == expected_digest
+            && valid_digest(digest)
+    })
+}
+
+fn appliance_artifact_set_sha256(artifacts: &ApplianceArtifactIdentities) -> String {
+    let rows = [
+        ("browser_suite", artifacts.browser_suite.as_str()),
+        ("cli", artifacts.cli.as_str()),
+        ("compose", artifacts.compose.as_str()),
+        ("compose_gpu", artifacts.compose_gpu.as_str()),
+        ("installer", artifacts.installer.as_str()),
+        ("manager", artifacts.manager.as_str()),
+        ("provenance", artifacts.provenance.as_str()),
+        ("scoring_data", artifacts.scoring_data.as_str()),
+        ("training_data", artifacts.training_data.as_str()),
+    ]
+    .into_iter()
+    .map(|(name, digest)| format!("{name}\t{digest}\n"))
+    .collect::<String>();
+    sha256_bytes(rows.as_bytes())
+}
+
+fn valid_utc_second_timestamp(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.len() != 20
+        || bytes[4] != b'-'
+        || bytes[7] != b'-'
+        || bytes[10] != b'T'
+        || bytes[13] != b':'
+        || bytes[16] != b':'
+        || bytes[19] != b'Z'
+        || bytes
+            .iter()
+            .enumerate()
+            .any(|(index, byte)| ![4, 7, 10, 13, 16, 19].contains(&index) && !byte.is_ascii_digit())
+    {
+        return false;
+    }
+    let number = |start: usize, end: usize| {
+        value[start..end]
+            .parse::<u32>()
+            .expect("timestamp digits were validated")
+    };
+    let year = number(0, 4);
+    let month = number(5, 7);
+    let day = number(8, 10);
+    let hour = number(11, 13);
+    let minute = number(14, 16);
+    let second = number(17, 19);
+    let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
+    let days = match month {
+        1 | 3 | 5 | 7 | 8 | 10 | 12 => 31,
+        4 | 6 | 9 | 11 => 30,
+        2 if leap => 29,
+        2 => 28,
+        _ => return false,
+    };
+    year > 0 && day > 0 && day <= days && hour < 24 && minute < 60 && second < 60
+}
+
+fn secret_like_json(value: &JsonValue) -> bool {
+    match value {
+        JsonValue::Object(object) => object.iter().any(|(key, value)| {
+            let key = key.to_ascii_lowercase();
+            let forbidden_key = matches!(
+                key.as_str(),
+                "password" | "passwd" | "token" | "secret" | "private_key" | "credential"
+            ) || key
+                .split(|character: char| !character.is_ascii_alphanumeric())
+                .any(|part| {
+                    matches!(
+                        part,
+                        "password" | "passwd" | "token" | "secret" | "credential"
+                    )
+                });
+            forbidden_key || secret_like_json(value)
+        }),
+        JsonValue::Array(values) => values.iter().any(secret_like_json),
+        JsonValue::String(value) => {
+            let value = value.to_ascii_lowercase();
+            let bearer = ["bearer ", "bearer\t", "bearer\n", "bearer\r"]
+                .iter()
+                .any(|marker| value.contains(marker));
+            let query_secret = [
+                "?token=",
+                "&token=",
+                "?password=",
+                "&password=",
+                "?secret=",
+                "&secret=",
+                "?api_key=",
+                "&api_key=",
+                "?api-key=",
+                "&api-key=",
+                "?apikey=",
+                "&apikey=",
+            ]
+            .iter()
+            .any(|marker| value.contains(marker));
+            bearer
+                || query_secret
+                || (value.contains("-----begin ") && value.contains("private key-----"))
+        }
+        _ => false,
+    }
+}
+
+fn read_qualified_appliance_canary(
+    path: &Path,
+) -> Result<QualifiedApplianceCanary, Box<dyn std::error::Error>> {
+    let mut file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(path)
+        .map_err(|error| format!("cannot open physical appliance aggregate: {error}"))?;
+    let metadata = file.metadata()?;
+    if !metadata.file_type().is_file()
+        || metadata.nlink() != 1
+        || metadata.len() == 0
+        || metadata.len() > MAX_APPLIANCE_AGGREGATE_BYTES
+        || metadata.mode() & 0o222 != 0
+    {
+        return Err("appliance aggregate must be a nonempty, non-writable, single-link regular file no larger than 1 MiB".into());
+    }
+    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    (&mut file)
+        .take(MAX_APPLIANCE_AGGREGATE_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 != metadata.len() {
+        return Err("appliance aggregate changed while it was read".into());
+    }
+    let raw: JsonValue = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("appliance aggregate is not valid JSON: {error}"))?;
+    if secret_like_json(&raw) {
+        return Err("appliance aggregate contains secret-like evidence".into());
+    }
+    let matrix: ApplianceCanaryMatrix = serde_json::from_slice(&bytes)
+        .map_err(|error| format!("appliance aggregate violates its closed shape: {error}"))?;
+    validate_qualified_appliance_canary(&matrix)?;
+    Ok(QualifiedApplianceCanary {
+        matrix,
+        aggregate_sha256: sha256_bytes(&bytes),
+    })
+}
+
+fn validate_qualified_appliance_canary(
+    matrix: &ApplianceCanaryMatrix,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if matrix.schema_version != "jain.local-appliance-canary-matrix/v1" {
+        return Err("unsupported appliance aggregate schema".into());
+    }
+    if !matrix.qualification || matrix.fixture {
+        return Err("appliance promotion requires a non-fixture qualified aggregate".into());
+    }
+    if matrix.release != RELEASE_VERSION {
+        return Err(format!(
+            "appliance aggregate release is {}, expected {RELEASE_VERSION}",
+            matrix.release
+        )
+        .into());
+    }
+    if !matrix
+        .release_tag
+        .starts_with(&format!("jain-deploy-v{RELEASE_VERSION}-"))
+        || matrix.release_tag.len() > 160
+        || matrix.release_tag.chars().any(char::is_whitespace)
+        || !valid_nonzero_lower_hex(&matrix.source_commit, 40)
+    {
+        return Err("appliance aggregate has an invalid release tag or source commit".into());
+    }
+    if matrix.status != RELEASE_STATUS
+        || matrix.formal_ga
+        || matrix.rollback_release != ROLLBACK_TARGET
+    {
+        return Err("appliance aggregate violates candidate/GA/rollback policy".into());
+    }
+    if !matrix.release_job.verified
+        || !valid_sha256(&matrix.release_job.id)
+        || !valid_sha256(&matrix.release_job.attestation_sha256)
+        || !valid_https_url(&matrix.release_job.attestation_url)
+        || !valid_https_url(&matrix.release_job.signature_url)
+    {
+        return Err(
+            "appliance aggregate lacks a verified signed HTTPS release-job identity".into(),
+        );
+    }
+    if !valid_sha256(&matrix.manifest_sha256)
+        || !valid_sha256(&matrix.public_key_sha256)
+        || !valid_sha256(&matrix.artifact_set_sha256)
+    {
+        return Err(
+            "appliance aggregate has an invalid manifest, key, or artifact-set digest".into(),
+        );
+    }
+    let artifacts = &matrix.artifact_identities;
+    if [
+        &artifacts.installer,
+        &artifacts.manager,
+        &artifacts.cli,
+        &artifacts.compose,
+        &artifacts.compose_gpu,
+        &artifacts.provenance,
+        &artifacts.browser_suite,
+        &artifacts.training_data,
+        &artifacts.scoring_data,
+    ]
+    .into_iter()
+    .any(|digest| !valid_sha256(digest))
+    {
+        return Err("appliance aggregate has an invalid artifact identity".into());
+    }
+    if matrix.artifact_set_sha256 != appliance_artifact_set_sha256(artifacts) {
+        return Err("appliance aggregate artifact-set digest does not bind its identities".into());
+    }
+    let oci = &matrix.oci;
+    if oci.platform != "linux/amd64"
+        || !valid_digest(&oci.index_digest)
+        || !valid_digest(&oci.platform_digest)
+        || !valid_digest(&oci.runtime_image_id)
+        || !valid_repo_digest(&oci.index, &oci.index_digest)
+        || !valid_repo_digest(&oci.runtime_repo_digest, &oci.index_digest)
+    {
+        return Err("appliance aggregate has a mismatched or invalid OCI identity".into());
+    }
+    if !matrix.lanes.cpu.qualification
+        || !matrix.lanes.gpu.qualification
+        || !valid_sha256(&matrix.lanes.cpu.receipt_sha256)
+        || !valid_sha256(&matrix.lanes.gpu.receipt_sha256)
+        || matrix.lanes.cpu.receipt_sha256 == matrix.lanes.gpu.receipt_sha256
+    {
+        return Err("appliance aggregate requires distinct qualified CPU and GPU receipts".into());
+    }
+    if !valid_utc_second_timestamp(&matrix.created_at) {
+        return Err("appliance aggregate created_at is not a valid UTC second timestamp".into());
+    }
+    Ok(())
+}
+
+fn appliance_canary_summary(qualification: &QualifiedApplianceCanary) -> JsonValue {
+    let matrix = &qualification.matrix;
+    json!({
+        "status": "pass",
+        "qualification": true,
+        "fixture": false,
+        "aggregate_sha256": qualification.aggregate_sha256,
+        "release": matrix.release,
+        "release_tag": matrix.release_tag,
+        "source_commit": matrix.source_commit,
+        "release_job_id": matrix.release_job.id,
+        "manifest_sha256": matrix.manifest_sha256,
+        "public_key_sha256": matrix.public_key_sha256,
+        "artifact_set_sha256": matrix.artifact_set_sha256,
+        "oci_index_digest": matrix.oci.index_digest,
+        "oci_platform_digest": matrix.oci.platform_digest,
+        "cpu_receipt_sha256": matrix.lanes.cpu.receipt_sha256,
+        "gpu_receipt_sha256": matrix.lanes.gpu.receipt_sha256,
+        "created_at": matrix.created_at,
+    })
+}
+
+fn write_or_print_json_report(
+    output: Option<&Path>,
+    report: &JsonValue,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(path) = output {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        fs::write(path, serde_json::to_vec_pretty(report)?)?;
+        println!("wrote {}", path.display());
+    } else {
+        println!("{}", serde_json::to_string_pretty(report)?);
+    }
+    Ok(())
+}
+
 fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut output = None;
+    let mut appliance_canary_aggregate = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--manifest" => manifest = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
             "--json" => output = Some(PathBuf::from(iter.next().ok_or("--json needs a path")?)),
+            "--appliance-canary-aggregate" => {
+                appliance_canary_aggregate = Some(PathBuf::from(
+                    iter.next()
+                        .ok_or("--appliance-canary-aggregate needs a path")?,
+                ))
+            }
             value => return Err(format!("unknown release-status argument: {value}").into()),
         }
     }
     let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
     validate_manifest_data(&data, &manifest, false)?;
+    let qualification = appliance_canary_aggregate
+        .as_deref()
+        .map(read_qualified_appliance_canary)
+        .transpose();
+    let (appliance_canary, blocked_reason) = match qualification {
+        Ok(Some(qualification)) => (appliance_canary_summary(&qualification), None),
+        Ok(None) => (
+            json!({
+                "status": "blocked",
+                "qualification": false,
+                "fixture": null,
+                "aggregate_sha256": null,
+                "reason": "a qualified non-fixture CPU+GPU appliance aggregate is required",
+            }),
+            Some("a qualified non-fixture CPU+GPU appliance aggregate is required".to_owned()),
+        ),
+        Err(error) => {
+            let reason = format!("appliance aggregate rejected: {error}");
+            (
+                json!({
+                    "status": "blocked",
+                    "qualification": false,
+                    "fixture": null,
+                    "aggregate_sha256": null,
+                    "reason": reason,
+                }),
+                Some(reason),
+            )
+        }
+    };
+    let promotion_evidence_ready = blocked_reason.is_none();
     let report = json!({
         "schema_version": "jain.release.status/v1",
         "release": RELEASE_VERSION,
@@ -5040,18 +5462,58 @@ fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         "manifest_sha256": manifest_sha256(&manifest)?,
         "family_repo_count": family_repos(&data)?.len(),
         "infrastructure_repo_count": data.get("infrastructure_repo").and_then(toml::Value::as_array).map_or(0, Vec::len),
-        "reason": "GA requires a clean reviewed snapshot, immutable tags, green CI, artifact evidence, and production promotion receipts",
+        "appliance_canary": appliance_canary,
+        "promotion_evidence_ready": promotion_evidence_ready,
+        "production_promotion_authorized": false,
+        "reason": if promotion_evidence_ready {
+            "appliance qualification evidence is ready; status remains candidate and production activation still requires explicit owner authorization and all remaining release gates"
+        } else {
+            "promotion is blocked until a genuine qualified CPU+GPU appliance aggregate is supplied"
+        },
     });
-    if let Some(path) = output {
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        fs::write(&path, serde_json::to_vec_pretty(&report)?)?;
-        println!("wrote {}", path.display());
-    } else {
-        println!("{}", serde_json::to_string_pretty(&report)?);
+    write_or_print_json_report(output.as_deref(), &report)?;
+    if let Some(reason) = blocked_reason {
+        return Err(format!("release status blocked: {reason}").into());
     }
     Ok(())
+}
+
+fn validate_appliance_promotion(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut aggregate = None;
+    let mut output = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--aggregate" => {
+                aggregate = Some(PathBuf::from(
+                    iter.next().ok_or("--aggregate needs a path")?,
+                ))
+            }
+            "--json" => output = Some(PathBuf::from(iter.next().ok_or("--json needs a path")?)),
+            value => {
+                return Err(
+                    format!("unknown validate-appliance-promotion argument: {value}").into(),
+                )
+            }
+        }
+    }
+    let qualification = read_qualified_appliance_canary(
+        aggregate
+            .as_deref()
+            .ok_or("--aggregate is required for appliance promotion validation")?,
+    )?;
+    let report = json!({
+        "schema_version": "jain.appliance-promotion-validation/v1",
+        "release": RELEASE_VERSION,
+        "status": RELEASE_STATUS,
+        "formal_ga": false,
+        "rollback_target": ROLLBACK_TARGET,
+        "appliance_canary": appliance_canary_summary(&qualification),
+        "promotion_evidence_ready": true,
+        "production_promotion_authorized": false,
+        "reason": "qualified appliance evidence is valid; this validation does not authorize publication, promotion, routing, or activation",
+    });
+    write_or_print_json_report(output.as_deref(), &report)
 }
 
 fn snapshot_rows(data: &toml::Value) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
@@ -10557,7 +11019,7 @@ fn render_ci_local() -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::os::unix::fs::PermissionsExt;
+    use std::os::unix::fs::{symlink, PermissionsExt};
     use std::sync::atomic::{AtomicU64, Ordering};
 
     static NEXT_TEMP: AtomicU64 = AtomicU64::new(0);
@@ -10622,6 +11084,265 @@ mod tests {
             make_removable(&self.0);
             let _ = fs::remove_dir_all(&self.0);
         }
+    }
+
+    fn qualified_appliance_matrix() -> JsonValue {
+        let sha = |character: char| character.to_string().repeat(64);
+        let index_digest = format!("sha256:{}", sha('a'));
+        let mut matrix = json!({
+            "schema_version": "jain.local-appliance-canary-matrix/v1",
+            "qualification": true,
+            "fixture": false,
+            "release": RELEASE_VERSION,
+            "release_tag": "jain-deploy-v8.0.1-candidate.1",
+            "source_commit": "1".repeat(40),
+            "status": "candidate",
+            "formal_ga": false,
+            "rollback_release": "7.0.6",
+            "release_job": {
+                "id": sha('2'),
+                "attestation_url": "https://release.jain.local/jobs/job-1.json",
+                "attestation_sha256": sha('3'),
+                "signature_url": "https://release.jain.local/jobs/job-1.json.sig",
+                "verified": true
+            },
+            "manifest_sha256": sha('4'),
+            "public_key_sha256": sha('5'),
+            "artifact_identities": {
+                "installer": sha('6'),
+                "manager": sha('7'),
+                "cli": sha('8'),
+                "compose": sha('9'),
+                "compose_gpu": sha('a'),
+                "provenance": sha('b'),
+                "browser_suite": sha('c'),
+                "training_data": sha('d'),
+                "scoring_data": sha('e')
+            },
+            "artifact_set_sha256": sha('f'),
+            "oci": {
+                "index": format!("registry.jain.local/appliance@{index_digest}"),
+                "index_digest": index_digest,
+                "platform": "linux/amd64",
+                "platform_digest": format!("sha256:{}", sha('b')),
+                "runtime_image_id": format!("sha256:{}", sha('c')),
+                "runtime_repo_digest": format!("registry.jain.local/appliance@sha256:{}", sha('a'))
+            },
+            "lanes": {
+                "cpu": {"receipt_sha256": sha('d'), "qualification": true},
+                "gpu": {"receipt_sha256": sha('e'), "qualification": true}
+            },
+            "created_at": "2026-07-21T23:00:00Z"
+        });
+        let artifacts: ApplianceArtifactIdentities =
+            serde_json::from_value(matrix["artifact_identities"].clone()).unwrap();
+        matrix["artifact_set_sha256"] = json!(appliance_artifact_set_sha256(&artifacts));
+        matrix
+    }
+
+    fn write_immutable_json(root: &Path, name: &str, value: &JsonValue) -> PathBuf {
+        let path = root.join(name);
+        fs::write(&path, serde_json::to_vec_pretty(value).unwrap()).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o444)).unwrap();
+        path
+    }
+
+    #[test]
+    fn appliance_promotion_accepts_only_real_same_release_cpu_gpu_aggregate() {
+        let temp = TestDir::new("appliance-promotion-valid");
+        let aggregate =
+            write_immutable_json(temp.path(), "aggregate.json", &qualified_appliance_matrix());
+        let qualification = read_qualified_appliance_canary(&aggregate).unwrap();
+        assert_eq!(qualification.matrix.release, RELEASE_VERSION);
+        assert!(qualification.matrix.lanes.cpu.qualification);
+        assert!(qualification.matrix.lanes.gpu.qualification);
+        assert!(valid_sha256(&qualification.aggregate_sha256));
+
+        let report = temp.path().join("promotion.json");
+        validate_appliance_promotion(vec![
+            "--aggregate".to_owned(),
+            aggregate.display().to_string(),
+            "--json".to_owned(),
+            report.display().to_string(),
+        ])
+        .unwrap();
+        let report: JsonValue = serde_json::from_slice(&fs::read(report).unwrap()).unwrap();
+        assert_eq!(report["promotion_evidence_ready"], true);
+        assert_eq!(report["production_promotion_authorized"], false);
+        assert_eq!(report["status"], "candidate");
+    }
+
+    #[test]
+    fn appliance_promotion_rejects_fixture_false_green_mismatch_and_secrets() {
+        let temp = TestDir::new("appliance-promotion-hostile");
+        let mut cases = Vec::new();
+
+        let mut value = qualified_appliance_matrix();
+        value["qualification"] = json!(false);
+        cases.push(("false-qualification", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["fixture"] = json!(true);
+        value["qualification"] = json!(false);
+        value["release_job"]["verified"] = json!(false);
+        value["lanes"]["cpu"]["qualification"] = json!(false);
+        value["lanes"]["gpu"]["qualification"] = json!(false);
+        cases.push(("fixture", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release"] = json!("8.0.2");
+        cases.push(("wrong-release", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["lanes"]["gpu"]["qualification"] = json!(false);
+        cases.push(("gpu-fallback", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["lanes"]["gpu"]["receipt_sha256"] = value["lanes"]["cpu"]["receipt_sha256"].clone();
+        cases.push(("duplicate-lane", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["oci"]["index"] = json!(format!(
+            "registry.jain.local/appliance@sha256:{}",
+            "f".repeat(64)
+        ));
+        cases.push(("index-mismatch", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["oci"]["runtime_repo_digest"] = json!(format!(
+            "registry.jain.local/appliance@sha256:{}",
+            "f".repeat(64)
+        ));
+        cases.push(("runtime-mismatch", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["manifest_sha256"] = json!("0".repeat(64));
+        cases.push(("zero-digest", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["artifact_set_sha256"] = json!("f".repeat(64));
+        cases.push(("artifact-set-mismatch", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release_job"]["verified"] = json!(false);
+        cases.push(("unverified-job", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release_job"]["attestation_url"] = json!("http://127.0.0.1/job.json");
+        cases.push(("fixture-url", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release_job"]["attestation_url"] =
+            json!("https://release.jain.local/job.json?token=exposed");
+        cases.push(("secret-value", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["created_at"] = json!("2026-02-30T23:00:00Z");
+        cases.push(("invalid-time", value));
+
+        let mut value = qualified_appliance_matrix();
+        value
+            .as_object_mut()
+            .unwrap()
+            .insert("unknown".to_owned(), json!(true));
+        cases.push(("unknown-field", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release_job"]
+            .as_object_mut()
+            .unwrap()
+            .insert("unknown".to_owned(), json!(true));
+        cases.push(("unknown-nested-field", value));
+
+        let mut value = qualified_appliance_matrix();
+        value.as_object_mut().unwrap().remove("artifact_set_sha256");
+        cases.push(("missing-field", value));
+
+        for (name, value) in cases {
+            let path = write_immutable_json(temp.path(), &format!("{name}.json"), &value);
+            assert!(
+                read_qualified_appliance_canary(&path).is_err(),
+                "accepted hostile aggregate {name}"
+            );
+        }
+    }
+
+    #[test]
+    fn appliance_promotion_rejects_ambiguous_or_unsafe_files() {
+        let temp = TestDir::new("appliance-promotion-files");
+        let value = qualified_appliance_matrix();
+
+        let writable = temp.path().join("writable.json");
+        fs::write(&writable, serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(read_qualified_appliance_canary(&writable).is_err());
+
+        let original = write_immutable_json(temp.path(), "linked.json", &value);
+        let linked = temp.path().join("linked-copy.json");
+        fs::hard_link(&original, &linked).unwrap();
+        assert!(read_qualified_appliance_canary(&original).is_err());
+        assert!(read_qualified_appliance_canary(&linked).is_err());
+
+        let symlink_path = temp.path().join("symlink.json");
+        symlink(&original, &symlink_path).unwrap();
+        assert!(read_qualified_appliance_canary(&symlink_path).is_err());
+
+        let duplicate = temp.path().join("duplicate.json");
+        let bytes = serde_json::to_string(&value).unwrap().replacen(
+            "\"qualification\":true",
+            "\"qualification\":true,\"qualification\":true",
+            1,
+        );
+        fs::write(&duplicate, bytes).unwrap();
+        fs::set_permissions(&duplicate, fs::Permissions::from_mode(0o444)).unwrap();
+        assert!(read_qualified_appliance_canary(&duplicate).is_err());
+    }
+
+    #[test]
+    fn release_status_writes_blocked_evidence_without_aggregate() {
+        let temp = TestDir::new("release-status-appliance-blocked");
+        let output = temp.path().join("release-status.json");
+        let error = release_status(vec![
+            "--manifest".to_owned(),
+            control_plane_root()
+                .join("repos.manifest.toml")
+                .display()
+                .to_string(),
+            "--json".to_owned(),
+            output.display().to_string(),
+        ])
+        .unwrap_err();
+        assert!(error.to_string().contains("release status blocked"));
+        let report: JsonValue = serde_json::from_slice(&fs::read(output).unwrap()).unwrap();
+        assert_eq!(report["appliance_canary"]["status"], "blocked");
+        assert_eq!(report["promotion_evidence_ready"], false);
+        assert_eq!(report["production_promotion_authorized"], false);
+        assert_eq!(report["formal_ga"], false);
+    }
+
+    #[test]
+    fn release_status_accepts_qualified_aggregate_without_authorizing_activation() {
+        let temp = TestDir::new("release-status-appliance-qualified");
+        let aggregate =
+            write_immutable_json(temp.path(), "aggregate.json", &qualified_appliance_matrix());
+        let output = temp.path().join("release-status.json");
+        release_status(vec![
+            "--manifest".to_owned(),
+            control_plane_root()
+                .join("repos.manifest.toml")
+                .display()
+                .to_string(),
+            "--appliance-canary-aggregate".to_owned(),
+            aggregate.display().to_string(),
+            "--json".to_owned(),
+            output.display().to_string(),
+        ])
+        .unwrap();
+        let report: JsonValue = serde_json::from_slice(&fs::read(output).unwrap()).unwrap();
+        assert_eq!(report["appliance_canary"]["status"], "pass");
+        assert_eq!(report["appliance_canary"]["qualification"], true);
+        assert_eq!(report["promotion_evidence_ready"], true);
+        assert_eq!(report["production_promotion_authorized"], false);
+        assert_eq!(report["formal_ga"], false);
     }
 
     struct CargoCacheFixture {

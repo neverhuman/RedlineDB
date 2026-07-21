@@ -35,6 +35,15 @@ independent review. Any released artifact additionally requires checksums,
 SBOM/provenance evidence, and a rollback target. Bare mirrors are disposable CI
 caches; they are never release sources.
 
+Appliance promotion evidence is fail-closed. `release-status` requires a
+physical, single-link, non-writable `jain.local-appliance-canary-matrix/v1`
+aggregate for the exact release. The aggregate must bind distinct qualified CPU
+and GPU receipts, the same signed release job, manifest, artifact set, and OCI
+index/platform identities. Fixture, unqualified, unknown-field, secret-like,
+mutable, linked, mismatched, or non-HTTPS evidence is rejected. Passing this
+evidence gate does not authorize publication, routing, promotion, or activation;
+candidate metadata remains `formal_ga = false` until a separate owner action.
+
 The protected host boundary accepts only a clean exact-head product checkout
 and the governed Jankurai binary named by its protected installation receipt.
 It seals the auditor report and validated

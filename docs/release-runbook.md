@@ -259,15 +259,19 @@ Regenerate `release-worktree-verification.json` and the release status only afte
 ```bash
 just verify-worktrees
 just release-snapshot
-just release-status
+just validate-appliance-promotion /absolute/path/to/aggregate.json
+just release-status /absolute/path/to/aggregate.json
 ```
 
 Accept the candidate only when every active managed checkout is clean `main`, tracks forge main,
 has the one declared origin, required checks and independent reviews are green, immutable tags and
 locks match, Redline reports `cutover_eligible = true`, SmartCluster has no required proof failure,
-artifact/security gates have no hard findings, and the dry-run rollout receipts prove no external
-state change. Because production promotion is not authorized, the expected final state is still
-`candidate`, `formal_ga = false`, SageMaker `N/A`.
+artifact/security gates have no hard findings, the strict appliance aggregate binds real qualified
+CPU and GPU lanes for the same signed release artifacts, and the dry-run rollout receipts prove no
+external state change. A PR fixture aggregate always has `qualification = false` and is rejected.
+Until signed release artifacts and both hardware lanes exist, both commands fail closed and
+promotion remains blocked. Even after evidence validation, production promotion is not authorized:
+the expected final state is still `candidate`, `formal_ga = false`, SageMaker `N/A`.
 
 ## Failure signatures, ownership, and rollback
 
