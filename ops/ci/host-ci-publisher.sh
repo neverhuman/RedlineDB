@@ -426,16 +426,17 @@ control_remote="$(jq -er '.control_remote' "$config")"
 [[ "$(jq -er '.control_remote' "$state")" == "$control_remote" ]] \
   || fail 'root request control remote binding mismatch'
 if [[ "$conclusion" == success ]]; then
-  reviewed_commit="$("${safe_git[@]}" ls-remote --exit-code \
-    "$control_remote" "$control_ref" 2>/dev/null | cut -f1)" \
-    || fail 'cannot read configured control-plane authority'
-  [[ "$reviewed_commit" == "$control_commit" ]] \
+  "$splitctl_path" jeryu-local ref-readback \
+    --repo veox/jain-split-ops --remote "$control_remote" \
+    --ref "$control_ref" --expected-head "$control_commit" \
+    --token-file "$token_file" >/dev/null \
     || fail 'success authority no longer equals the sealed control commit'
 fi
 forge_git_base="$(jq -er '.forge_git_base' "$config")"
 product_remote="${forge_git_base%/}/$owner/$repo.git"
-"${safe_git[@]}" ls-remote --exit-code "$product_remote" 2>/dev/null \
-  | awk -v head="$head_sha" '$1 == head { found=1 } END { exit !found }' \
+"$splitctl_path" jeryu-local ref-readback \
+  --repo "$owner/$repo" --remote "$product_remote" \
+  --expected-head "$head_sha" --token-file "$token_file" >/dev/null \
   || fail 'head is not an advertised authoritative product ref'
 
 write_status() {

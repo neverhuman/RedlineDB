@@ -48,6 +48,8 @@ command_stderr="$inner/command.stderr"
 materialize_stdout="$inner/materialize.stdout"
 materialize_stderr="$inner/materialize.stderr"
 materialized="$inner/materialized"
+readback_stdout="$inner/readback.stdout"
+readback_stderr="$inner/readback.stderr"
 fetch_failure_stdout="$inner/fetch-failure.stdout"
 fetch_failure_stderr="$inner/fetch-failure.stderr"
 ref_move_stdout="$inner/ref-move.stdout"
@@ -206,6 +208,29 @@ stage='authenticated exact-head materialization'
 [[ -z "$(/usr/bin/git -C "$materialized" remote)" ]]
 [[ -z "$(/usr/bin/git -C "$materialized" status --porcelain=v1 \
   --untracked-files=all)" ]]
+
+stage='authenticated exact-head ref readback'
+"$splitctl" jeryu-local ref-readback \
+  --repo jeryu/example \
+  --remote http://127.0.0.1:8787/git/jeryu/example.git \
+  --ref refs/heads/codex/jeryu-smart-http-integration \
+  --expected-head "$head_sha" \
+  --token-file "$token_file" >"$readback_stdout" 2>"$readback_stderr"
+jq -e --arg head "$head_sha" '
+  .schema_version == "jain.jeryu-ref-readback/v1" and
+  .status == "pass" and
+  .expected_head == $head and
+  .advertised_refs == ["refs/heads/codex/jeryu-smart-http-integration"]
+' "$readback_stdout" >/dev/null
+if "$splitctl" jeryu-local ref-readback \
+  --repo jeryu/example \
+  --remote http://127.0.0.1:8787/git/jeryu/example.git \
+  --expected-head 0000000000000000000000000000000000000000 \
+  --token-file "$token_file" >/dev/null 2>"$readback_stderr"; then
+  printf 'authenticated ref readback accepted an unadvertised head\n' >&2
+  exit 1
+fi
+grep -Fq 'requested head is not an advertised product ref' "$readback_stderr"
 
 stage='authenticated fetch failure cleanup'
 printf 'fail-upload-pack\n' >"$behavior_file"

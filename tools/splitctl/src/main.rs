@@ -5163,6 +5163,9 @@ fn jeryu_local(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     if command == "git-materialize" {
         return jeryu_git_materialize(args);
     }
+    if command == "ref-readback" {
+        return jeryu_ref_readback(args);
+    }
     let json_output = args.iter().any(|arg| arg == "--json");
     let apply = args.iter().any(|arg| arg == "--apply");
     let value = |flag: &str| -> Result<String, Box<dyn std::error::Error>> {
@@ -5781,6 +5784,70 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             "origin_retained": retain_origin,
             "lfs_hydrated": git_lfs.is_some(),
             "status": "pass"
+        }))?
+    );
+    Ok(())
+}
+
+fn jeryu_ref_readback(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut repo = None;
+    let mut remote = None;
+    let mut reference = None;
+    let mut expected_head = None;
+    let mut token_file = None;
+    let mut iter = args.into_iter().skip(1);
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--repo" => repo = Some(iter.next().ok_or("--repo needs owner/name")?),
+            "--remote" => remote = Some(iter.next().ok_or("--remote needs a value")?),
+            "--ref" => reference = Some(iter.next().ok_or("--ref needs a value")?),
+            "--expected-head" => {
+                expected_head = Some(iter.next().ok_or("--expected-head needs a SHA")?)
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
+            }
+            value => return Err(format!("unknown ref-readback argument: {value}").into()),
+        }
+    }
+    let repo = repo.ok_or("ref-readback requires --repo")?;
+    let remote = remote.ok_or("ref-readback requires --remote")?;
+    let expected_head = expected_head.ok_or("ref-readback requires --expected-head")?;
+    let token_file = token_file.ok_or("ref-readback requires --token-file")?;
+    validate_jeryu_repo_slug(&repo)?;
+    validate_materialization_remote(&repo, &remote)?;
+    drop(JeryuClient::from_token_file(&token_file)?);
+    if !is_full_sha(&expected_head) || expected_head.chars().any(|ch| ch.is_ascii_uppercase()) {
+        return Err("--expected-head must be a lowercase full 40-character commit SHA".into());
+    }
+
+    let advertised_refs = if let Some(reference) = reference {
+        validate_heads_ref(&reference)?;
+        if secure_ls_remote_at(&remote, &reference, &token_file)?.as_deref()
+            != Some(expected_head.as_str())
+        {
+            return Err("advertised ref does not equal the expected head".into());
+        }
+        vec![reference]
+    } else {
+        let advertised = secure_materialization_git_output(
+            &remote,
+            &token_file,
+            &["ls-remote", "--refs", &remote, "refs/heads/*"],
+        )?;
+        parse_advertised_heads(&advertised, &expected_head)?
+    };
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&json!({
+            "schema_version": "jain.jeryu-ref-readback/v1",
+            "status": "pass",
+            "repository": repo,
+            "remote": remote,
+            "expected_head": expected_head,
+            "advertised_refs": advertised_refs,
         }))?
     );
     Ok(())
@@ -11654,6 +11721,54 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             parse_advertised_heads(&format!("{}\trefs/heads/other\n", "b".repeat(40)), &head)
                 .is_err()
         );
+    }
+
+    #[test]
+    fn authenticated_ref_readback_requires_exact_advertised_authority() {
+        let root = TestDir::new("ref-readback");
+        let (source, head) = init_source(root.path());
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!("{head}:refs/heads/main"),
+            ],
+        )
+        .unwrap();
+        let token_root = TestDir::new_private_temp("ref-readback-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let args = |expected: &str, token: &Path, reference: Option<&str>| {
+            let mut args = vec![
+                "ref-readback".to_owned(),
+                "--repo".to_owned(),
+                "jeryu/example".to_owned(),
+                "--remote".to_owned(),
+                remote.display().to_string(),
+                "--expected-head".to_owned(),
+                expected.to_owned(),
+                "--token-file".to_owned(),
+                token.display().to_string(),
+            ];
+            if let Some(reference) = reference {
+                args.extend(["--ref".to_owned(), reference.to_owned()]);
+            }
+            args
+        };
+
+        jeryu_ref_readback(args(&head, &token_file, None)).unwrap();
+        jeryu_ref_readback(args(&head, &token_file, Some("refs/heads/main"))).unwrap();
+        assert!(jeryu_ref_readback(args(&"b".repeat(40), &token_file, None)).is_err());
+        assert!(jeryu_ref_readback(args(
+            &head,
+            &root.path().join("missing-token"),
+            Some("refs/heads/main")
+        ))
+        .is_err());
+        assert!(jeryu_ref_readback(args(&head, &token_file, Some("refs/tags/main"))).is_err());
     }
 
     #[test]
