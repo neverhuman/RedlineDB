@@ -136,7 +136,7 @@ pub(super) fn command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error
     } else {
         initialize_journal(&plan, &manifest)?
     };
-    validate_journal(&journal, &data, &manifest, &selected)?;
+    validate_journal(&mut journal, &data, &manifest, &selected)?;
     write_journal(&journal_path, &journal)?;
 
     let (index, action) = next_action(&journal)?;
@@ -512,13 +512,13 @@ fn inspect_repository_git(
         };
         row["release_checksum_sha256"] = json!(actual_checksum);
         row["binding_bound"] = json!(binding_exact);
-        if binding_exact {
-            "bound"
-        } else if row["tag"].is_string() {
-            "tagged"
-        } else {
-            "merged"
+        if !binding_exact {
+            return Err(
+                "protected main lacks an exact release authority binding; refusing to infer prior PR, review, and check evidence"
+                    .into(),
+            );
         }
+        "bound"
     } else {
         validate_release_branch(&branch)?;
         if head == main
@@ -791,19 +791,19 @@ fn journal_identity(
 }
 
 fn validate_journal(
-    journal: &JsonValue,
+    journal: &mut JsonValue,
     data: &toml::Value,
     manifest: &Path,
     selected: &[String],
 ) -> Result<(), Box<dyn std::error::Error>> {
     require_exact_keys(journal, &JOURNAL_KEYS, "release-candidate journal")?;
+    let current_manifest_sha = manifest_sha256(manifest)?;
     if journal["schema_version"] != JOURNAL_SCHEMA
         || journal["release"] != RELEASE_VERSION
         || journal["release_status"] != RELEASE_STATUS
         || journal["formal_ga"] != false
         || journal["rollback_target"] != ROLLBACK_TARGET
         || journal["manifest"] != json!(manifest)
-        || journal["manifest_sha256"] != manifest_sha256(manifest)?
         || journal["fleet_jobs"] != required_job_count(data, "fleet_jobs")?
         || journal["ci_jobs"] != required_job_count(data, "ci_jobs")?
     {
@@ -856,6 +856,7 @@ fn validate_journal(
     {
         return Err("release-candidate journal repository order or uniqueness drift".into());
     }
+    let mut externally_bound = BTreeSet::new();
     for row in rows {
         require_exact_keys(row, &JOURNAL_ROW_KEYS, "release-candidate journal row")?;
         let name = row["name"].as_str().ok_or("journal row has no name")?;
@@ -894,7 +895,9 @@ fn validate_journal(
                         && row["release_checksum_sha256"].as_str() == Some(digest)
                 })
         });
-        if row["binding_bound"] != expected_binding {
+        if row["state"] == "binding-required" && expected_binding {
+            externally_bound.insert(name.to_owned());
+        } else if row["binding_bound"] != expected_binding {
             return Err(format!("{name}: release binding authority drift").into());
         }
         match (row["source_head"].as_str(), row["source_tree"].as_str()) {
@@ -932,6 +935,43 @@ fn validate_journal(
     }
     if journal["journal_id"] != journal_identity(&journal["manifest_sha256"], rows)? {
         return Err("release-candidate journal identity mismatch".into());
+    }
+    if journal["manifest_sha256"] != current_manifest_sha && externally_bound.is_empty() {
+        return Err("release-candidate journal authority drift".into());
+    }
+    if !externally_bound.is_empty() {
+        let rows = journal["repositories"]
+            .as_array_mut()
+            .ok_or("journal repositories is not an array")?;
+        for row in rows.iter_mut().filter(|row| {
+            row["name"]
+                .as_str()
+                .is_some_and(|name| externally_bound.contains(name))
+        }) {
+            row["state"] = json!("bound");
+            row["binding_bound"] = json!(true);
+            row["pending_action"] = JsonValue::Null;
+            row["transition_count"] = json!(row["transition_count"]
+                .as_u64()
+                .ok_or("journal transition count is invalid")?
+                .checked_add(1)
+                .ok_or("journal transition count overflow")?);
+        }
+        journal["manifest_sha256"] = json!(current_manifest_sha);
+        journal["journal_id"] = json!(journal_identity(
+            &journal["manifest_sha256"],
+            journal["repositories"]
+                .as_array()
+                .ok_or("journal repositories is not an array")?,
+        )?);
+        let complete = journal["repositories"]
+            .as_array()
+            .ok_or("journal repositories is not an array")?
+            .iter()
+            .filter(|row| row["selected"] == true)
+            .all(|row| row["state"] == "bound");
+        journal["lifecycle_status"] = json!(if complete { "complete" } else { "active" });
+        bump_generation(journal)?;
     }
     Ok(())
 }
