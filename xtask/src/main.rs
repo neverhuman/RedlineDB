@@ -131,6 +131,8 @@ enum Command {
         #[arg(long)]
         source_cargo_home: PathBuf,
         #[arg(long)]
+        source_custody_sha256: String,
+        #[arg(long)]
         cargo_home: PathBuf,
         #[arg(long)]
         sqlite_bin: PathBuf,
@@ -210,6 +212,7 @@ fn main() -> Result<()> {
         ),
         Command::DockerStage {
             source_cargo_home,
+            source_custody_sha256,
             cargo_home,
             sqlite_bin,
             psql_bin,
@@ -222,6 +225,7 @@ fn main() -> Result<()> {
         } => docker_stage::stage(
             &repo_root,
             &source_cargo_home,
+            &source_custody_sha256,
             &cargo_home,
             &sqlite_bin,
             &psql_bin,

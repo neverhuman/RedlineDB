@@ -38,6 +38,7 @@ struct RuntimeArtifact {
 pub fn stage(
     repo_root: &Path,
     source_cargo_home: &Path,
+    source_custody_sha256: &str,
     cargo_home: &Path,
     sqlite_bin: &Path,
     psql_bin: &Path,
@@ -50,6 +51,13 @@ pub fn stage(
 ) -> Result<()> {
     validate_sha1(core_commit, "Core commit")?;
     validate_sha1(core_tree, "Core tree")?;
+    ensure!(
+        source_custody_sha256.len() == 64
+            && source_custody_sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()),
+        "source Cargo custody SHA-256 is malformed"
+    );
     ensure!(
         !out_dir.exists(),
         "Docker stage output must not already exist"
@@ -195,6 +203,7 @@ pub fn stage(
             "dependency_closure_sha256": cargo_receipt_value.get("dependency_closure_sha256"),
             "rustc": cargo_receipt_value.get("rustc"),
             "cargo": cargo_receipt_value.get("cargo"),
+            "source_cargo_custody_sha256": source_custody_sha256,
         },
         "contracts": contracts,
         "runtime_artifacts": artifacts,
