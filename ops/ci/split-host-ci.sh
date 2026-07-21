@@ -622,7 +622,8 @@ fi
 
 # Release CI uses a fresh Cargo home and target. The root broker exposes only a
 # read-only registry archive/index cache; splitctl stages the exact crates.io
-# inputs named by Cargo.lock after verifying every archive checksum.
+# inputs named by the exact product and sealed sibling Cargo locks after
+# verifying every archive checksum.
 governed_git_repositories=()
 if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
   [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 \
@@ -637,19 +638,47 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
     || native_setup_failure "cannot create fresh release Cargo configuration" 1
   chmod 0600 "$CARGO_HOME/config.toml" \
     || native_setup_failure "cannot secure fresh release Cargo configuration" 1
-  mapfile -d '' -t cargo_lock_paths < <(
+  mapfile -d '' -t product_cargo_lock_paths < <(
     git -C "$wt" ls-files -z -- Cargo.lock ':(glob)**/Cargo.lock' | LC_ALL=C sort -z
   )
   root_lock_tracked=false
   cargo_lock_args=()
-  for cargo_lock_path in "${cargo_lock_paths[@]}"; do
+  for cargo_lock_path in "${product_cargo_lock_paths[@]}"; do
     [[ "$cargo_lock_path" == Cargo.lock ]] && root_lock_tracked=true
     cargo_lock_args+=(--lock "$wt/$cargo_lock_path")
   done
   if [ -f "$wt/Cargo.toml" ] && [ "$root_lock_tracked" != true ]; then
     native_setup_failure "release Rust repository has no tracked root Cargo.lock" 1
   fi
-  if [ "${#cargo_lock_paths[@]}" -gt 0 ]; then
+  if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
+    sealed_sibling_count="$(
+      jq -er '.sources | length | select(. > 0)' "$JAIN_SIBLING_SOURCES_PATH"
+    )" || native_setup_failure \
+      "cannot count sealed sibling Cargo lock authority" 1
+    mapfile -t sealed_sibling_repositories < <(
+      jq -er '.sources[].repository' "$JAIN_SIBLING_SOURCES_PATH"
+    )
+    [[ "${#sealed_sibling_repositories[@]}" == "$sealed_sibling_count" ]] \
+      || native_setup_failure \
+        "cannot enumerate sealed sibling Cargo lock authority" 1
+    for sibling_lock_repository in "${sealed_sibling_repositories[@]}"; do
+      sibling_lock_checkout="$tmp/$sibling_lock_repository"
+      [[ -d "$sibling_lock_checkout/.git" && ! -L "$sibling_lock_checkout" \
+        && ! -L "$sibling_lock_checkout/.git" ]] \
+        || native_setup_failure \
+          "sealed sibling Cargo lock checkout is unavailable: $sibling_lock_repository" 1
+      mapfile -d '' -t sibling_cargo_lock_paths < <(
+        git -C "$sibling_lock_checkout" ls-files -z -- \
+          Cargo.lock ':(glob)**/Cargo.lock' | LC_ALL=C sort -z
+      )
+      for sibling_cargo_lock_path in "${sibling_cargo_lock_paths[@]}"; do
+        cargo_lock_args+=(
+          --lock "$sibling_lock_checkout/$sibling_cargo_lock_path"
+        )
+      done
+    done
+  fi
+  if [ "${#cargo_lock_args[@]}" -gt 0 ]; then
     "$SPLITCTL_BIN" cargo-cache-stage \
       "${cargo_lock_args[@]}" \
       --source /opt/jain-ci/cargo-registry \

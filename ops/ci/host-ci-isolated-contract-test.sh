@@ -33,12 +33,34 @@ esac
   && -f "$cargo_home/registry/stage-receipt.json" \
   && ! -L "$cargo_home/registry/stage-receipt.json" ]] \
   || fail 'isolated Cargo cache is not the governed locked offline cache'
-mapfile -d '' -t tracked_cargo_locks < <(
+mapfile -d '' -t product_cargo_locks < <(
   git -C "$repo_root" ls-files -z -- Cargo.lock ':(glob)**/Cargo.lock' | LC_ALL=C sort -z
 )
+tracked_cargo_locks=()
+for product_cargo_lock in "${product_cargo_locks[@]}"; do
+  tracked_cargo_locks+=("$repo_root/$product_cargo_lock")
+done
+if [[ "${JAIN_SIBLING_SOURCES_REQUIRED:-false}" == true ]]; then
+  while IFS=$'\t' read -r sibling_repository sibling_mount_path; do
+    [[ "$sibling_mount_path" == "$JAIN_SPLIT_ROOT/$sibling_repository" \
+      && -d "$sibling_mount_path/.git" && ! -L "$sibling_mount_path" \
+      && ! -L "$sibling_mount_path/.git" ]] \
+      || fail 'sealed sibling lock authority is not an exact checkout'
+    mapfile -d '' -t sibling_cargo_locks < <(
+      git -C "$sibling_mount_path" ls-files -z -- \
+        Cargo.lock ':(glob)**/Cargo.lock' | LC_ALL=C sort -z
+    )
+    for sibling_cargo_lock in "${sibling_cargo_locks[@]}"; do
+      tracked_cargo_locks+=("$sibling_mount_path/$sibling_cargo_lock")
+    done
+  done < <(
+    jq -er '.sources[] | [.repository,.mount_path] | @tsv' \
+      "$JAIN_SIBLING_SOURCES_PATH"
+  )
+fi
 lock_sha256s="$({
   for cargo_lock in "${tracked_cargo_locks[@]}"; do
-    sha256sum -- "$repo_root/$cargo_lock" | cut -d' ' -f1
+    sha256sum -- "$cargo_lock" | cut -d' ' -f1
   done
 } | jq -Rsc 'split("\n")[:-1] | sort')"
 jq -e --argjson lock_sha256s "$lock_sha256s" \
@@ -48,7 +70,7 @@ jq -e --argjson lock_sha256s "$lock_sha256s" \
   | select(.lock_sha256s == $lock_sha256s)
   | select(.package_count > 0)' \
   "$cargo_home/registry/stage-receipt.json" >/dev/null \
-  || fail 'Cargo cache receipt is not bound to the exact lock'
+  || fail 'Cargo cache receipt is not bound to the exact product/sibling lock closure'
 # A feature-branch control-plane check is driven once by the previously
 # installed protected-main broker. Its v2 receipt predates this additive field.
 # After this runner is installed, split-host-ci.sh requires the field before it

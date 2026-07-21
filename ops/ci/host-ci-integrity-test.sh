@@ -87,6 +87,22 @@ grep -F 'missing sealed sibling authority' \
   printf 'reviewed worker does not fail closed on absent sibling authority\n' >&2
   exit 1
 }
+for sibling_lock_binding in \
+  'sealed_sibling_repositories' \
+  'git -C "$sibling_lock_checkout" ls-files -z --' \
+  '--lock "$sibling_lock_checkout/$sibling_cargo_lock_path"'; do
+  grep -F -- "$sibling_lock_binding" \
+    "$repo_root/ops/ci/split-host-ci.sh" >/dev/null || {
+    printf 'reviewed worker omits sealed sibling Cargo lock closure: %s\n' \
+      "$sibling_lock_binding" >&2
+    exit 1
+  }
+done
+grep -F 'Cargo cache receipt is not bound to the exact product/sibling lock closure' \
+  "$repo_root/ops/ci/host-ci-isolated-contract-test.sh" >/dev/null || {
+  printf 'isolated worker does not verify the sibling Cargo lock closure\n' >&2
+  exit 1
+}
 grep -F 'sibling protected main moved before publication' \
   "$repo_root/ops/ci/host-ci-publisher.sh" >/dev/null || {
   printf 'root publisher does not reject protected sibling ref drift\n' >&2
