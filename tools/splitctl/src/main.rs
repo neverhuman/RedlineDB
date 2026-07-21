@@ -6482,21 +6482,34 @@ fn optional_file_sha256(path: &Path) -> Result<Option<String>, Box<dyn std::erro
 fn exact_ref_snapshot(repo: &Path) -> Result<BTreeMap<String, String>, Box<dyn std::error::Error>> {
     let output = secure_git_output(
         Some(repo),
-        &["for-each-ref", "--format=%(refname)%09%(objectname)"],
+        &[
+            "for-each-ref",
+            "--format=%(refname)%09%(objectname)%09symref=%(symref)",
+        ],
     )?;
     let mut refs = BTreeMap::new();
     for line in output.lines() {
-        let (reference, object) = line
-            .split_once('\t')
+        let mut fields = line.splitn(3, '\t');
+        let reference = fields.next().ok_or("local ref snapshot is malformed")?;
+        let object = fields.next().ok_or("local ref snapshot is malformed")?;
+        let symbolic_target = fields
+            .next()
+            .and_then(|field| field.strip_prefix("symref="))
             .ok_or("local ref snapshot is malformed")?;
         if reference.is_empty()
             || !is_full_sha(object)
             || object.chars().any(|ch| ch.is_ascii_uppercase())
-            || refs
-                .insert(reference.to_owned(), object.to_owned())
-                .is_some()
         {
-            return Err("local ref snapshot contains an invalid or duplicate ref".into());
+            return Err("local ref snapshot contains an invalid ref or object".into());
+        }
+        let identity = if symbolic_target.is_empty() {
+            object.to_owned()
+        } else {
+            secure_git_output(None, &["check-ref-format", symbolic_target])?;
+            format!("symref:{symbolic_target}")
+        };
+        if refs.insert(reference.to_owned(), identity).is_some() {
+            return Err("local ref snapshot contains a duplicate ref".into());
         }
     }
     Ok(refs)
@@ -12126,6 +12139,15 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             ],
         )
         .unwrap();
+        run_git_strict(
+            &repo,
+            &[
+                "symbolic-ref",
+                "refs/remotes/origin/HEAD",
+                "refs/remotes/origin/main",
+            ],
+        )
+        .unwrap();
 
         let remote_head = commit_next(&repo);
         let remote_refspec = format!("{remote_head}:refs/heads/main");
@@ -12152,6 +12174,13 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
 
         let before = main_fetch_snapshot(&repo).unwrap();
+        assert_eq!(
+            before
+                .refs
+                .get("refs/remotes/origin/HEAD")
+                .map(String::as_str),
+            Some("symref:refs/remotes/origin/main")
+        );
         let mut report = receipt_header("test", "main-fetch", false);
         fetch_authenticated_main(
             &repo,
@@ -12181,8 +12210,19 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         );
         assert_eq!(after.head, before.head);
         assert_eq!(after.tree, before.tree);
+        assert_eq!(
+            after.refs.get("refs/remotes/origin/HEAD"),
+            before.refs.get("refs/remotes/origin/HEAD")
+        );
         assert!(!after.refs.contains_key("refs/tags/remote-only"));
         assert_eq!(report["action"], "fetched-and-verified");
+
+        let mut changed_target = after.clone();
+        changed_target.refs.insert(
+            "refs/remotes/origin/HEAD".to_owned(),
+            "symref:refs/remotes/origin/other".to_owned(),
+        );
+        assert!(validate_main_fetch_side_effects(&after, &changed_target, &remote_head).is_err());
     }
 
     #[test]
