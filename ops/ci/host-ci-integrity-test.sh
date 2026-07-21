@@ -70,6 +70,34 @@ if grep -Eq 'safe\.directory=(\*|"?\$SPLIT_ROOT"?)' \
   printf 'reviewed worker contains broad sibling ownership trust\n' >&2
   exit 1
 fi
+for required_source_binding in \
+  '--ref refs/heads/main --resolve-ref-head' \
+  'BindReadOnlyPaths=$sibling_checkout:$family_root/$sibling' \
+  'sibling_sources_sha256' \
+  'jain.host-ci-sibling-sources/v1'; do
+  grep -F -- "$required_source_binding" \
+    "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+    printf 'root sandbox lacks protected sibling source binding: %s\n' \
+      "$required_source_binding" >&2
+    exit 1
+  }
+done
+grep -F 'missing sealed sibling authority' \
+  "$repo_root/ops/ci/split-host-ci.sh" >/dev/null || {
+  printf 'reviewed worker does not fail closed on absent sibling authority\n' >&2
+  exit 1
+}
+grep -F 'sibling protected main moved before publication' \
+  "$repo_root/ops/ci/host-ci-publisher.sh" >/dev/null || {
+  printf 'root publisher does not reject protected sibling ref drift\n' >&2
+  exit 1
+}
+for boundary in host-ci-sandbox.sh split-host-ci.sh host-ci-publisher.sh; do
+  grep -F 'sibling_sources_sha256' "$repo_root/ops/ci/$boundary" >/dev/null || {
+    printf '%s does not carry the sibling source digest\n' "$boundary" >&2
+    exit 1
+  }
+done
 ownership_fixture="$tmp/sibling-ownership"
 git init --quiet "$ownership_fixture"
 git -C "$ownership_fixture" config user.name 'Sibling Ownership Fixture'

@@ -5639,6 +5639,7 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     let mut remote = None;
     let mut reference = None;
     let mut expected_head = None;
+    let mut resolve_ref_head = false;
     let mut destination = None;
     let mut token_file = None;
     let mut retain_origin = false;
@@ -5653,6 +5654,7 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             "--expected-head" => {
                 expected_head = Some(iter.next().ok_or("--expected-head needs a SHA")?)
             }
+            "--resolve-ref-head" => resolve_ref_head = true,
             "--destination" => {
                 destination = Some(PathBuf::from(
                     iter.next().ok_or("--destination needs a path")?,
@@ -5677,12 +5679,25 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     }
     let repo = repo.ok_or("git-materialize requires --repo")?;
     let remote = remote.ok_or("git-materialize requires --remote")?;
-    let expected_head = expected_head.ok_or("git-materialize requires --expected-head")?;
     let destination = destination.ok_or("git-materialize requires --destination")?;
     let token_file = token_file.ok_or("git-materialize requires --token-file")?;
     validate_jeryu_repo_slug(&repo)?;
     validate_materialization_remote(&repo, &remote)?;
     drop(JeryuClient::from_token_file(&token_file)?);
+    if resolve_ref_head && expected_head.is_some() {
+        return Err("git-materialize accepts only one head authority mode".into());
+    }
+    if resolve_ref_head && reference.is_none() {
+        return Err("--resolve-ref-head requires an exact --ref".into());
+    }
+    let expected_head = if resolve_ref_head {
+        let exact_ref = reference.as_deref().expect("validated exact ref");
+        validate_heads_ref(exact_ref)?;
+        secure_ls_remote_at(&remote, exact_ref, &token_file)?
+            .ok_or("authenticated Git materialization ref is absent")?
+    } else {
+        expected_head.ok_or("git-materialize requires --expected-head or --resolve-ref-head")?
+    };
     if !is_full_sha(&expected_head) || expected_head.chars().any(|ch| ch.is_ascii_uppercase()) {
         return Err("--expected-head must be a lowercase full 40-character commit SHA".into());
     }
@@ -11817,6 +11832,12 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let remote = init_bare(root.path());
         let refspec = format!("{head}:refs/heads/main");
         run_git_strict(&source, &["push", remote.to_str().unwrap(), &refspec]).unwrap();
+        fs::write(source.join("feature-only"), b"ambient feature bytes\n").unwrap();
+        run_git_strict(&source, &["add", "feature-only"]).unwrap();
+        run_git_strict(&source, &["commit", "-m", "ambient feature head"]).unwrap();
+        let ambient_head = resolve_commit(&source, "HEAD").unwrap();
+        assert_ne!(ambient_head, head);
+        fs::write(source.join("dirty-only"), b"ambient dirty bytes\n").unwrap();
         let token_root = TestDir::new_private_temp("git-materialization-token");
         let token_file = token_root.path().join("token");
         fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
@@ -11860,6 +11881,58 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let second = root.path().join("second");
         fs::create_dir(&second).unwrap();
         assert!(jeryu_git_materialize(args(&token_file, &second)).is_err());
+
+        let resolved = root.path().join("resolved-main");
+        jeryu_git_materialize(vec![
+            "git-materialize".to_owned(),
+            "--repo".to_owned(),
+            "jeryu/example".to_owned(),
+            "--remote".to_owned(),
+            remote.display().to_string(),
+            "--ref".to_owned(),
+            "refs/heads/main".to_owned(),
+            "--resolve-ref-head".to_owned(),
+            "--destination".to_owned(),
+            resolved.display().to_string(),
+            "--token-file".to_owned(),
+            token_file.display().to_string(),
+        ])
+        .unwrap();
+        assert_eq!(resolve_commit(&resolved, "HEAD").unwrap(), head);
+        assert!(strict_git_output(&resolved, &["remote"])
+            .unwrap()
+            .trim()
+            .is_empty());
+
+        let ambiguous = root.path().join("ambiguous-head-authority");
+        let mut ambiguous_args = args(&token_file, &ambiguous);
+        ambiguous_args.push("--resolve-ref-head".to_owned());
+        assert!(jeryu_git_materialize(ambiguous_args).is_err());
+        assert!(!ambiguous.exists());
+
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!("{ambient_head}:refs/heads/main"),
+            ],
+        )
+        .unwrap();
+        assert!(jeryu_ref_readback(vec![
+            "ref-readback".to_owned(),
+            "--repo".to_owned(),
+            "jeryu/example".to_owned(),
+            "--remote".to_owned(),
+            remote.display().to_string(),
+            "--ref".to_owned(),
+            "refs/heads/main".to_owned(),
+            "--expected-head".to_owned(),
+            head,
+            "--token-file".to_owned(),
+            token_file.display().to_string(),
+        ])
+        .is_err());
     }
 
     #[test]

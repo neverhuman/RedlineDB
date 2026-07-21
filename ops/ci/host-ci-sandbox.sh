@@ -469,6 +469,13 @@ IFS=$'\t' read -r protected_owner protected_check cuda_required \
 [[ "${arguments[0]}" == "$protected_owner" \
   && "${arguments[4]}" == "$protected_check" ]] \
   || fail 'requested owner/check differs from manifest authority'
+sibling_request="$(jq -r '.environment.JAIN_NEEDS_SIBLINGS // "0"' "$request")"
+[[ "$sibling_request" == 0 || "$sibling_request" == 1 ]] \
+  || fail 'JAIN_NEEDS_SIBLINGS must be exactly 0 or 1'
+sibling_sources_required=false
+if [[ "$repo" == jain-deploy || "$sibling_request" == 1 ]]; then
+  sibling_sources_required=true
+fi
 
 # Root alone may derive release CUDA capability. The detector is pinned by
 # canonical path, metadata, and digest. CPU-only policies never execute it.
@@ -617,6 +624,102 @@ if [[ "$repo" == jain-web ]]; then
     || fail 'cannot stage authenticated pnpm store'
 fi
 
+# Sibling source is release authority, not ambient developer state. Root
+# resolves each opted-in sibling's protected main through the authenticated
+# forge, materializes it independently, and later bind-overrides the canonical
+# path inside the worker. The worker therefore retains the established
+# ../jain-*/ Cargo layout without observing a feature branch or dirty checkout.
+sibling_sources_path=""
+sibling_sources_sha256=""
+sibling_bind_args=()
+if [[ "$sibling_sources_required" == true ]]; then
+  sibling_stage_root="$worker_authority/sibling-checkouts"
+  sibling_entries="$root_request/sibling-sources.jsonl"
+  mkdir -m 0700 "$sibling_stage_root"
+  : >"$sibling_entries"
+  sibling_names=(
+    jain jain-docs jain-domain jain-math jain-contracts jain-catboost
+    jain-xgboost jain-lightgbm jain-jable jain-battle-gpu jain-starforge
+    jain-core jain-llm jain-agent jain-jnoccio jain-zyal jain-jailgun
+    jain-research jain-report jain-tui jain-cli jain-web jain-python
+    jain-model-zoo jain-ops jain-smartcluster jain-deploy
+  )
+  for sibling in "${sibling_names[@]}"; do
+    [[ "$sibling" == "$repo" ]] && continue
+    sibling_authority_json="$("$splitctl_path" host-ci-authority \
+      --manifest "$control_root/repos.manifest.toml" --repo "$sibling")" \
+      || fail "sibling authority is absent or ambiguous: $sibling"
+    sibling_authority="$(jq -er --arg sibling "$sibling" '
+      select(.schema_version == "jain.host-ci-repository-authority/v1")
+      | select(.repository == $sibling and .forge_owner == "veox")
+      | select(.required_check == ($sibling + "/required"))
+      | select(.remote | type == "string")
+      | [.forge_owner, .remote] | @tsv
+    ' <<<"$sibling_authority_json")" \
+      || fail "invalid sibling authority: $sibling"
+    IFS=$'\t' read -r sibling_owner sibling_remote <<<"$sibling_authority"
+    sibling_checkout="$sibling_stage_root/$sibling"
+    sibling_materialization="$("$splitctl_path" jeryu-local git-materialize \
+      --repo "$sibling_owner/$sibling" --remote "$sibling_remote" \
+      --ref refs/heads/main --resolve-ref-head \
+      --destination "$sibling_checkout" --token-file "$token_file")" \
+      || fail "cannot materialize authenticated sibling main: $sibling"
+    sibling_commit="$(jq -er --arg sibling "$sibling" \
+      'select(.schema_version == "jain.jeryu-git-materialization/v1")
+       | select(.repository == ("veox/" + $sibling))
+       | select(.reference == "refs/heads/main" and .status == "pass")
+       | .commit | select(test("^[0-9a-f]{40}$"))' \
+      <<<"$sibling_materialization")" \
+      || fail "invalid sibling materialization receipt: $sibling"
+    sibling_tree="$("${safe_git[@]}" -C "$sibling_checkout" \
+      rev-parse --verify "$sibling_commit^{tree}")" \
+      || fail "cannot resolve sibling tree: $sibling"
+    sibling_inventory_sha256="$({
+      LC_ALL=C "${safe_git[@]}" -C "$sibling_checkout" \
+        ls-tree -r --full-tree "$sibling_commit"
+    } | sha256sum | cut -d' ' -f1)" \
+      || fail "cannot inventory sibling tree: $sibling"
+    sibling_entry_count="$("${safe_git[@]}" -C "$sibling_checkout" \
+      ls-tree -r --full-tree "$sibling_commit" | wc -l | awk '{print $1}')" \
+      || fail "cannot count sibling inventory: $sibling"
+    [[ "$sibling_tree" =~ ^[0-9a-f]{40}$ \
+      && "$sibling_inventory_sha256" =~ ^[0-9a-f]{64}$ \
+      && "$sibling_entry_count" =~ ^[0-9]+$ \
+      && -z "$("${safe_git[@]}" -C "$sibling_checkout" remote)" ]] \
+      || fail "sibling source is not isolated authority: $sibling"
+    jq -nc --arg repository "$sibling" --arg owner "$sibling_owner" \
+      --arg remote "$sibling_remote" --arg reference refs/heads/main \
+      --arg commit "$sibling_commit" --arg tree "$sibling_tree" \
+      --arg inventory "$sibling_inventory_sha256" \
+      --arg mount_path "$family_root/$sibling" \
+      --argjson entry_count "$sibling_entry_count" \
+      '{repository:$repository,owner:$owner,remote:$remote,
+        reference:$reference,commit:$commit,tree:$tree,
+        inventory_sha256:$inventory,entry_count:$entry_count,
+        mount_path:$mount_path}' >>"$sibling_entries" \
+      || fail "cannot record sibling source authority: $sibling"
+    sibling_bind_args+=(
+      --property="BindReadOnlyPaths=$sibling_checkout:$family_root/$sibling"
+    )
+  done
+  sibling_sources_path="$worker_authority/sibling-sources.json"
+  jq -s --arg request_id "$request_id" --arg control "$control_commit" \
+    --arg owner "${arguments[0]}" --arg repository "$repo" \
+    --arg head "${arguments[2]}" --arg check "${arguments[4]}" \
+    '{schema_version:"jain.host-ci-sibling-sources/v1",
+      request_id:$request_id,control_plane_commit:$control,
+      owner:$owner,repository:$repository,head_sha:$head,required_check:$check,
+      reference:"refs/heads/main",sources:(sort_by(.repository))}' \
+    "$sibling_entries" >"$sibling_sources_path" \
+    || fail 'cannot seal sibling source inventory'
+  chmod 0444 "$sibling_sources_path"
+  chmod -R a+rX,go-w "$sibling_stage_root"
+  chown -R root:root "$sibling_stage_root" "$sibling_sources_path"
+  sibling_sources_sha256="$(sha256sum -- "$sibling_sources_path" | cut -d' ' -f1)"
+  [[ "$sibling_sources_sha256" =~ ^[0-9a-f]{64}$ ]] \
+    || fail 'sibling source inventory digest is malformed'
+fi
+
 # The proof auditor never reuses the product worker's mutable checkout. Root
 # creates a second standalone exact-head checkout, strips its remote, verifies
 # a clean tracked tree, and exposes it read-only only after the product cgroup
@@ -677,8 +780,15 @@ install -o root -g root -m 0555 \
   "$control_root/ops/ci/split-host-ci.sh" \
   "$worker_authority/.split-host-ci-reviewed"
 worker_result="$bootstrap_root/writable/worker-evidence.json"
+worker_sibling_sources_path=""
+if [[ "$sibling_sources_required" == true ]]; then
+  worker_sibling_sources_path=/opt/jain-ci/authority/sibling-sources.json
+fi
 jq -n --arg commit "$control_commit" --arg result "$worker_result" \
   --arg request_id "$request_id" \
+  --arg sibling_sources_path "$worker_sibling_sources_path" \
+  --arg sibling_sources_sha "$sibling_sources_sha256" \
+  --argjson sibling_sources_required "$sibling_sources_required" \
   --arg cuda_record_path "$([[ "$cuda_required" == true ]] \
     && printf /opt/jain-ci/authority/cuda-capability.json || true)" \
   --arg cuda_record_sha "$cuda_capability_record_sha256" \
@@ -688,6 +798,9 @@ jq -n --arg commit "$control_commit" --arg result "$worker_result" \
     source_root:"/opt/jain-ci/authority/control-plane",
     exact_root:"/opt/jain-ci/authority/control-plane",
     request_id:$request_id,commit:$commit,result_path:$result,
+    sibling_sources_required:$sibling_sources_required,
+    sibling_sources_path:$sibling_sources_path,
+    sibling_sources_sha256:$sibling_sources_sha,
     cuda_compute_capability_required:$cuda_required,
     cuda_capability_record_path:$cuda_record_path,
     cuda_capability_record_sha256:$cuda_record_sha,
@@ -728,6 +841,8 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
+  --arg sibling_sources_sha "$sibling_sources_sha256" \
+  --argjson sibling_sources_required "$sibling_sources_required" \
   --arg cuda_record_path "$cuda_capability_record" \
   --arg cuda_record_sha "$cuda_capability_record_sha256" \
   --arg cuda_cap "$cuda_compute_capability" \
@@ -744,6 +859,8 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
     grype_db_inventory_sha256:$grype_db_inventory_sha256,
     native_evidence_root:$native_evidence_root,
     proof_evidence_root:$proof_evidence_root,
+    sibling_sources_required:$sibling_sources_required,
+    sibling_sources_sha256:$sibling_sources_sha,
     cuda_compute_capability_required:$cuda_required,
     cuda_capability_record_path:$cuda_record_path,
     cuda_capability_record_sha256:$cuda_record_sha,
@@ -855,6 +972,9 @@ systemd_args=(
   --setenv=GRYPE_DB_CACHE_DIR=/opt/jain-ci/grype-db
   --setenv="JAIN_NATIVE_EVIDENCE_STAGING_ROOT=$evidence_staging_root"
 )
+if [[ "$sibling_sources_required" == true ]]; then
+  systemd_args+=("${sibling_bind_args[@]}")
+fi
 if [[ -n "$native_build_tools_root" ]]; then
   systemd_args+=(
     --property="BindReadOnlyPaths=$native_build_tools_root:$native_build_tools_mount"
@@ -1018,13 +1138,19 @@ if [[ "$runner_rc" == 0 && -f "$worker_result" && ! -L "$worker_result" \
      | select(.control_plane_commit == $commit)
      | select(.native_evidence_dir | type == "string")
      | select(.native_evidence_sha256 | type == "string")
+     | select(.sibling_sources_required | type == "boolean")
+     | select(.sibling_sources_sha256 | type == "string")
      | select(.cuda_compute_capability_required | type == "boolean")
      | select(.cuda_compute_capability | type == "string")
      | select(.cuda_capability_record_sha256 | type == "string")' \
     "$worker_result" >/dev/null; then
   evidence_dir="$(jq -er '.native_evidence_dir' "$worker_result")"
   evidence_sha="$(jq -er '.native_evidence_sha256' "$worker_result")"
-  if [[ "$(jq -r '.cuda_compute_capability_required' "$worker_result")" \
+  if [[ "$(jq -r '.sibling_sources_required' "$worker_result")" \
+      == "$sibling_sources_required" \
+    && "$(jq -er '.sibling_sources_sha256' "$worker_result")" \
+      == "$sibling_sources_sha256" \
+    && "$(jq -r '.cuda_compute_capability_required' "$worker_result")" \
       == "$cuda_required" \
     && "$(jq -er '.cuda_compute_capability' "$worker_result")" \
       == "$cuda_compute_capability" \
@@ -1140,6 +1266,8 @@ jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
   --argjson audit_rc "$audit_rc" \
   --argjson proof_validator_rc "$proof_validator_rc" \
   --argjson evidence_required "$derived_required" \
+  --arg sibling_sources_sha "$sibling_sources_sha256" \
+  --argjson sibling_sources_required "$sibling_sources_required" \
   --arg cuda_record_path "$cuda_capability_record" \
   --arg cuda_record_sha "$cuda_capability_record_sha256" \
   --arg cuda_cap "$cuda_compute_capability" \
@@ -1149,6 +1277,8 @@ jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
     required_check:$check,conclusion:$conclusion,runner_exit_code:$rc,
     native_evidence_required:$evidence_required,
     native_evidence_dir:$evidence_dir,native_evidence_sha256:$evidence_sha,
+    sibling_sources_required:$sibling_sources_required,
+    sibling_sources_sha256:$sibling_sources_sha,
     cuda_compute_capability_required:$cuda_required,
     cuda_capability_record_path:$cuda_record_path,
     cuda_capability_record_sha256:$cuda_record_sha,

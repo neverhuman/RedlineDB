@@ -7,12 +7,12 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1784578511`
-- Started at: `1784578511`
-- Elapsed: `3872` ms
+- Run ID: `1784630130`
+- Started at: `1784630130`
+- Elapsed: `4152` ms
 - Scope: `full`
-- Raw score: `92`
-- Final score: `92`
+- Raw score: `94`
+- Final score: `94`
 - Decision: `advisory`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -70,9 +70,9 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`11` files=`4`
+- Status: `review` hard=`0` warning=`15` files=`5`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`13` tokens=`41` bytes=`443`
+- Duplicate volume: lines=`20` tokens=`64` bytes=`660`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
@@ -83,22 +83,26 @@
 | --- | --- | --- | ---: | ---: | --- | --- |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `tools/splitctl/src/jeryu_client.rs:123-124, tools/splitctl/src/jeryu_client.rs:169-170, tools/splitctl/src/jeryu_client.rs:179-180, tools/splitctl/src/jeryu_client.rs:189-190, tools/splitctl/src/jeryu_client.rs:199-200, tools/splitctl/src/jeryu_client.rs:233-234, tools/splitctl/src/jeryu_client.rs:244-245, tools/splitctl/src/jeryu_client.rs:258-259, tools/splitctl/src/jeryu_client.rs:267-268, tools/splitctl/src/jeryu_client.rs:277-278` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/splitctl/src/jeryu_client.rs:1395-1396, tools/splitctl/src/jeryu_client.rs:1416-1417, tools/splitctl/src/jeryu_client.rs:1430-1431, tools/splitctl/src/jeryu_client.rs:1440-1441, tools/splitctl/src/jeryu_client.rs:1457-1458, tools/splitctl/src/jeryu_client.rs:1496-1497, tools/splitctl/src/jeryu_client.rs:1510-1511` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 7 | `tools/splitctl/src/main.rs:2658-2661, tools/splitctl/src/main.rs:2674-2677` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 13 | `tools/splitctl/src/release_candidate.rs:1229-1233, tools/splitctl/src/release_candidate.rs:1245-1249` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 7 | `tools/splitctl/src/main.rs:2666-2669, tools/splitctl/src/main.rs:2682-2685` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `tools/splitctl/src/jeryu_client.rs:509-510, tools/splitctl/src/jeryu_client.rs:550-551, tools/splitctl/src/jeryu_client.rs:557-558, tools/splitctl/src/jeryu_client.rs:773-774` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 8 | `tools/splitctl/src/jeryu_client.rs:1531-1532, tools/splitctl/src/jeryu_client.rs:1602-1603` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/splitctl/src/main.rs:2358-2359, tools/splitctl/src/main.rs:2366-2367` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/splitctl/src/main.rs:2366-2367, tools/splitctl/src/main.rs:2374-2375` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/splitctl/src/release_candidate.rs:1708-1709, tools/splitctl/src/release_candidate.rs:1786-1787` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/splitctl/src/release_candidate.rs:1133-1134, tools/splitctl/src/release_candidate.rs:1194-1195` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/jeryu_client.rs:1646-1647, tools/splitctl/src/jeryu_client.rs:1702-1703` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/jeryu_client.rs:1797-1798, tools/splitctl/src/jeryu_client.rs:1812-1813` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/jeryu_client.rs:577-578, tools/splitctl/src/jeryu_client.rs:607-608` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/jeryu_client.rs:565-566, tools/splitctl/src/jeryu_client.rs:692-693` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `tools/splitctl/src/jeryu_client.rs:681-682, tools/splitctl/src/main.rs:1676-1677` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `tools/splitctl/src/jeryu_client.rs:681-682, tools/splitctl/src/main.rs:1684-1685` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `tools/splitctl/src/release_candidate.rs:1840-1841, tools/splitctl/src/release_candidate.rs:1847-1848` | `same body appears under different names across files` |
 
 ## Dimensions
 
 | Dimension | Weight | Score | Weighted | Evidence |
 | --- | ---: | ---: | ---: | --- |
 | Ownership and navigation surface | 13 | 100 | 13.00 | root `AGENTS.md` present; owner map present |
-| Contract and boundary integrity | 13 | 75 | 9.75 | generated contract artifacts found; boundary manifest present |
+| Contract and boundary integrity | 13 | 95 | 12.35 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 96 | 11.52 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 86 | 10.32 | lockfile present; secret or dependency scan tooling found |
 | Code shape and semantic surface | 12 | 90 | 10.80 | no authored adopter product code files in scope |
@@ -111,7 +115,7 @@
 
 ## Reference Profile Structure
 
-- Applicable cells: `2` canonical=`2` noncanonical=`0` guidance missing=`0`
+- Applicable cells: `3` canonical=`3` noncanonical=`0` guidance missing=`0`
 
 | Cell | Status | Canonical | Detected | Aliases | Guidance | Owner | Proof lane | Agent fix |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -121,7 +125,7 @@
 | `application` | `not_applicable` | `crates/application/` | `-` | `application/, usecases/, use-cases/` | `not_required` | `crates/application` | `use-case / authz tests` | `no action` |
 | `adapters` | `not_applicable` | `crates/adapters/` | `-` | `adapters/, infra/, integrations/` | `not_required` | `crates/adapters` | `adapter integration tests` | `no action` |
 | `workers` | `not_applicable` | `crates/workers/` | `-` | `workers/, jobs/, scheduler/, queue/` | `not_required` | `crates/workers` | `workflow / replay tests` | `no action` |
-| `contracts` | `not_applicable` | `contracts/` | `-` | `openapi/, protobuf/, json-schema/, generated/` | `not_required` | `contracts` | `generation / drift checks` | `no action` |
+| `contracts` | `canonical` | `contracts/` | `contracts` | `openapi/, protobuf/, json-schema/, generated/` | `present` | `contracts` | `generation / drift checks` | `keep `contracts/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
 | `db` | `canonical` | `db/` | `db` | `migrations/, constraints/, sql/` | `present` | `db` | `migration / constraint tests` | `keep `db/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
 | `python-ai` | `not_applicable` | `python/ai-service/` | `-` | `python/, ai-service/, evals/, embeddings/, model/` | `not_required` | `python/ai-service` | `eval / contract tests` | `no action` |
 | `ops` | `canonical` | `ops/` | `.github, .github/workflows, ops` | `.github/, .github/workflows/, ci/, release/, observability/, security/` | `present` | `ops` | `security lane / workflow lint` | `keep `ops/AGENTS.md` aligned with owns / forbidden / proof lane guidance` |
@@ -172,9 +176,9 @@ No audited runtime boundary reclassifications declared.
 ## Coverage Evidence
 
 - Artifact: `target/jankurai/coverage/coverage-audit.json`
-- Status: `missing`
-- Sources: total=`0` present=`0`
-- Findings: hard=`0` soft=`1`
+- Status: `pass`
+- Sources: total=`2` present=`2`
+- Findings: hard=`0` soft=`0`
 
 ## Findings
 
@@ -188,27 +192,6 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a256a7390d4b91a5b0a95d6f092e524c8f4080f27fe2b62e28cf0801343d0fef`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-2. `medium` `boundary` `agent/boundaries.toml`
-   Rule: `HLT-007-HANDWRITTEN-CONTRACT`
-   Check: `HLT-007-HANDWRITTEN-CONTRACT:boundary` `soft` confidence `0.76`
-   Route: TLR `Contracts/data`, lane `contract`, owner `agent`
-   Docs: `docs/audit-rubric.md#known-vibe-coding-insults`
-   Reason: `Contract and boundary integrity` scored 75 below the standard floor of 85
-   Fix: add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams
-   Rerun: `just fast`
-   Fingerprint: `sha256:993eec07ffbd3370fe6126f0b1f95bf9e6c57a5c7133dc00526a401f4e344e42`
-   Evidence: generated contract artifacts found, boundary manifest present, machine-readable schemas present, schema/tooling contract posture is clean
-3. `medium` `test` `agent/coverage-sources.toml`
-   Rule: `HLT-008-FALSE-GREEN-RISK`
-   Check: `HLT-008-FALSE-GREEN-RISK:coverage-evidence` `soft` confidence `0.76`
-   Route: TLR `Verification`, lane `coverage-audit`, owner `agent`
-   Docs: `docs/testing.md`
-   Matched term: `coverage-evidence`
-   Reason: coverage evidence artifact `target/jankurai/coverage/coverage-audit.json`
-   Fix: run `cargo run -p jankurai -- coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md`
-   Rerun: `cargo run -p jankurai -- coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md`
-   Fingerprint: `sha256:d80fbd966029c39ef6dde3a73b2f46834e117ee6c16c85385ccf415d0d3719b5`
-   Evidence: agent/coverage-sources.toml exists
 
 ## Policy
 
@@ -218,9 +201,5 @@ No audited runtime boundary reclassifications declared.
 
 ## Agent Fix Queue
 
-1. `medium` `HLT-007-HANDWRITTEN-CONTRACT` `agent/boundaries.toml` - add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams
-   Route: `Contracts/data`/`contract`
-2. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
+1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-3. `medium` `HLT-008-FALSE-GREEN-RISK` `agent/coverage-sources.toml` - run `cargo run -p jankurai -- coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md`
-   Route: `Verification`/`coverage-audit`

@@ -185,6 +185,8 @@ jq -e --arg request_id "$request_id" \
    | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
    | select(.native_evidence_root | type == "string")
    | select(.proof_evidence_root | type == "string")
+   | select(.sibling_sources_required | type == "boolean")
+   | select(.sibling_sources_sha256 | type == "string")
    | select(.cuda_compute_capability_required | type == "boolean")
    | select(.cuda_capability_record_path | type == "string")
    | select(.cuda_capability_record_sha256 | type == "string")
@@ -236,6 +238,8 @@ jq -e --arg request_id "$request_id" \
    | select(.native_evidence_required | type == "boolean")
    | select(.native_evidence_dir | type == "string")
    | select(.native_evidence_sha256 | type == "string")
+   | select(.sibling_sources_required | type == "boolean")
+   | select(.sibling_sources_sha256 | type == "string")
    | select(.cuda_compute_capability_required | type == "boolean")
    | select(.cuda_capability_record_path | type == "string")
    | select(.cuda_capability_record_sha256 | type == "string")
@@ -310,6 +314,65 @@ owner="$(jq -er '.owner' "$result")"
 required_check="$(jq -er '.required_check' "$result")"
 [[ "$owner" == "$protected_owner" && "$required_check" == "$protected_check" ]] \
   || fail 'root result owner/check differs from manifest authority'
+
+family_root="$(realpath -e -- "$(jq -er '.split_root' \
+  "$request_dir/caller-request.json")")" \
+  || fail 'cannot resolve sealed family root'
+sibling_request="$(jq -r '.environment.JAIN_NEEDS_SIBLINGS // "0"' \
+  "$request_dir/caller-request.json")" \
+  || fail 'cannot read sealed sibling request policy'
+[[ "$sibling_request" == 0 || "$sibling_request" == 1 ]] \
+  || fail 'sealed sibling request policy is invalid'
+expected_sibling_sources=false
+if [[ "$repo" == jain-deploy || "$sibling_request" == 1 ]]; then
+  expected_sibling_sources=true
+fi
+sibling_sources_required="$(jq -r '.sibling_sources_required' "$result")"
+sibling_sources_sha="$(jq -er '.sibling_sources_sha256' "$result")"
+[[ "$sibling_sources_required" == "$expected_sibling_sources" \
+  && "$(jq -r '.sibling_sources_required' "$state")" \
+    == "$expected_sibling_sources" \
+  && "$(jq -er '.sibling_sources_sha256' "$state")" \
+    == "$sibling_sources_sha" ]] \
+  || fail 'sibling source binding differs across sealed authority'
+sibling_sources_path="$request_dir/worker-authority/sibling-sources.json"
+if [[ "$sibling_sources_required" == true ]]; then
+  [[ "$sibling_sources_sha" =~ ^[0-9a-f]{64}$ \
+    && -f "$sibling_sources_path" && ! -L "$sibling_sources_path" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$sibling_sources_path")" \
+      == '0:0:444:1' \
+    && "$(sha256sum -- "$sibling_sources_path" | cut -d' ' -f1)" \
+      == "$sibling_sources_sha" ]] \
+    || fail 'sealed sibling source inventory is missing or changed'
+  jq -e --arg request_id "$request_id" --arg control "$control_commit" \
+    --arg owner "$owner" --arg repository "$repo" \
+    --arg head "$(jq -er '.head_sha' "$result")" \
+    --arg check "$required_check" --arg family_root "$family_root" '
+    select(.schema_version == "jain.host-ci-sibling-sources/v1")
+    | select(.request_id == $request_id and .control_plane_commit == $control)
+    | select(.owner == $owner and .repository == $repository)
+    | select(.head_sha == $head and .required_check == $check)
+    | select(.reference == "refs/heads/main")
+    | select((.sources | type) == "array" and (.sources | length) > 0)
+    | select(.sources == (.sources | sort_by(.repository)))
+    | select((.sources | map(.repository) | unique | length)
+        == (.sources | length))
+    | select(all(.sources[];
+        (.repository | test("^[a-z0-9][a-z0-9-]*$"))
+        and .owner == "veox"
+        and .remote == ("http://127.0.0.1:8787/git/veox/" + .repository + ".git")
+        and .reference == "refs/heads/main"
+        and (.commit | test("^[0-9a-f]{40}$"))
+        and (.tree | test("^[0-9a-f]{40}$"))
+        and (.inventory_sha256 | test("^[0-9a-f]{64}$"))
+        and (.entry_count | type) == "number" and .entry_count >= 0
+        and .mount_path == ($family_root + "/" + .repository)))' \
+    "$sibling_sources_path" >/dev/null \
+    || fail 'sealed sibling source inventory has invalid identities'
+else
+  [[ -z "$sibling_sources_sha" && ! -e "$sibling_sources_path" ]] \
+    || fail 'sibling-free request carried unexpected source authority'
+fi
 
 # Derive native evidence policy from the root-owned reviewed policy code. A
 # worker-supplied boolean is never an authorization input.
@@ -431,6 +494,42 @@ if [[ "$conclusion" == success ]]; then
     --ref "$control_ref" --expected-head "$control_commit" \
     --token-file "$token_file" >/dev/null \
     || fail 'success authority no longer equals the sealed control commit'
+  if [[ "$sibling_sources_required" == true ]]; then
+    while IFS=$'\t' read -r sibling sibling_owner sibling_remote \
+      sibling_commit sibling_tree sibling_inventory sibling_count; do
+      sibling_stage="$request_dir/worker-authority/sibling-checkouts/$sibling"
+      sibling_authority_json="$("$splitctl_path" host-ci-authority \
+        --manifest "$manifest" --repo "$sibling")" \
+        || fail "cannot re-read sibling manifest authority: $sibling"
+      [[ "$(jq -er '[.forge_owner,.remote] | @tsv' \
+          <<<"$sibling_authority_json")" \
+          == "$sibling_owner"$'\t'"$sibling_remote" \
+        && -d "$sibling_stage/.git" && ! -L "$sibling_stage" \
+        && ! -L "$sibling_stage/.git" \
+        && "$("${safe_git[@]}" -C "$sibling_stage" \
+          rev-parse --verify 'HEAD^{commit}')" == "$sibling_commit" \
+        && "$("${safe_git[@]}" -C "$sibling_stage" \
+          rev-parse --verify 'HEAD^{tree}')" == "$sibling_tree" \
+        && "$({ LC_ALL=C "${safe_git[@]}" -C "$sibling_stage" \
+          ls-tree -r --full-tree "$sibling_commit"; } \
+          | sha256sum | cut -d' ' -f1)" == "$sibling_inventory" \
+        && "$("${safe_git[@]}" -C "$sibling_stage" \
+          ls-tree -r --full-tree "$sibling_commit" | wc -l \
+            | awk '{print $1}')" \
+          == "$sibling_count" \
+        && -z "$("${safe_git[@]}" -C "$sibling_stage" remote)" \
+        && -z "$("${safe_git[@]}" -C "$sibling_stage" \
+          status --porcelain=v1 --untracked-files=all)" ]] \
+        || fail "sealed sibling source changed before publication: $sibling"
+      "$splitctl_path" jeryu-local ref-readback \
+        --repo "$sibling_owner/$sibling" --remote "$sibling_remote" \
+        --ref refs/heads/main --expected-head "$sibling_commit" \
+        --token-file "$token_file" >/dev/null \
+        || fail "sibling protected main moved before publication: $sibling"
+    done < <(jq -r '.sources[]
+      | [.repository,.owner,.remote,.commit,.tree,.inventory_sha256,
+          (.entry_count | tostring)] | @tsv' "$sibling_sources_path")
+  fi
 fi
 forge_git_base="$(jq -er '.forge_git_base' "$config")"
 product_remote="${forge_git_base%/}/$owner/$repo.git"
@@ -452,7 +551,7 @@ proof_run_id="$(jq -er '.run_id' "$proof_evidence_resolved/receipt.json")"
 proof_score="$(jq -er '.score' "$proof_evidence_resolved/receipt.json")"
 proof_hard="$(jq -er '.hard_findings' "$proof_evidence_resolved/receipt.json")"
 proof_caps="$(jq -er '.caps_applied' "$proof_evidence_resolved/receipt.json")"
-proof_summary="receipt_sha256=$proof_receipt_sha attempt_id=$proof_attempt_id run_id=$proof_run_id auditor_sha256=$jankurai_sha proof_status=$proof_status score=$proof_score hard_findings=$proof_hard caps_applied=$proof_caps cuda_compute_capability=${cuda_cap:-none} cuda_capability_record_sha256=${cuda_record_sha:-none} root_seal=$(jq -er '.root_seal' "$state")"
+proof_summary="receipt_sha256=$proof_receipt_sha attempt_id=$proof_attempt_id run_id=$proof_run_id auditor_sha256=$jankurai_sha proof_status=$proof_status score=$proof_score hard_findings=$proof_hard caps_applied=$proof_caps sibling_sources_sha256=${sibling_sources_sha:-none} cuda_compute_capability=${cuda_cap:-none} cuda_capability_record_sha256=${cuda_record_sha:-none} root_seal=$(jq -er '.root_seal' "$state")"
 description="$required_check cuda-sm=${cuda_cap:-none} record=${cuda_record_sha:0:12} root-seal=$(jq -er '.root_seal' "$state" | cut -c1-16)"
 publish_rc=0
 "$splitctl_path" jeryu-publish-host-ci \

@@ -51,6 +51,9 @@ jq -e '
   | select(.result_path | type == "string" and startswith("/"))
   | select(.splitctl_path == "/opt/jain-ci/authority/splitctl")
   | select(.request_id | test("^[0-9a-f]{64}$"))
+  | select(.sibling_sources_required | type == "boolean")
+  | select(.sibling_sources_path | type == "string")
+  | select(.sibling_sources_sha256 | type == "string")
   | select(.cuda_compute_capability_required | type == "boolean")
   | select(.cuda_capability_record_path | type == "string")
   | select(.cuda_capability_record_sha256 | type == "string")
@@ -66,6 +69,15 @@ CHILD_RESULT_PATH="$(jq -er '.result_path' "$REEXEC_STATE")" || exit 2
 SPLITCTL_BIN="$(realpath -e -- "$(jq -er '.splitctl_path' "$REEXEC_STATE")")" \
   || exit 2
 JAIN_HOST_CI_REQUEST_ID="$(jq -er '.request_id' "$REEXEC_STATE")" || exit 2
+JAIN_SIBLING_SOURCES_REQUIRED="$(
+  jq -r '.sibling_sources_required' "$REEXEC_STATE"
+)" || exit 2
+JAIN_SIBLING_SOURCES_PATH="$(
+  jq -er '.sibling_sources_path' "$REEXEC_STATE"
+)" || exit 2
+JAIN_SIBLING_SOURCES_SHA256="$(
+  jq -er '.sibling_sources_sha256' "$REEXEC_STATE"
+)" || exit 2
 JAIN_RELEASE_CUDA_COMPUTE_CAPABILITY_REQUIRED="$(
   jq -r '.cuda_compute_capability_required' "$REEXEC_STATE"
 )" || exit 2
@@ -94,6 +106,19 @@ JAIN_CUDA_COMPUTE_CAPABILITY="$(
   && "$(sha256sum -- "$RUNNER_PATH" | cut -d' ' -f1)" \
     == "$(sha256sum -- "$OPS_ROOT/ops/ci/split-host-ci.sh" | cut -d' ' -f1)" ]] \
   || exit 2
+if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
+  [[ "$JAIN_SIBLING_SOURCES_PATH" \
+      == /opt/jain-ci/authority/sibling-sources.json \
+    && -f "$JAIN_SIBLING_SOURCES_PATH" && ! -L "$JAIN_SIBLING_SOURCES_PATH" \
+    && "$(stat -c '%a:%h' -- "$JAIN_SIBLING_SOURCES_PATH")" == '444:1' \
+    && "$JAIN_SIBLING_SOURCES_SHA256" =~ ^[0-9a-f]{64}$ \
+    && "$(sha256sum -- "$JAIN_SIBLING_SOURCES_PATH" | cut -d' ' -f1)" \
+      == "$JAIN_SIBLING_SOURCES_SHA256" ]] || exit 2
+else
+  [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == false \
+    && -z "$JAIN_SIBLING_SOURCES_PATH" \
+    && -z "$JAIN_SIBLING_SOURCES_SHA256" ]] || exit 2
+fi
 unset JAIN_HOST_CI_REEXEC_STATE
 
 verify_exact_control_plane_integrity() {
@@ -141,6 +166,41 @@ fi
 # a location-derived root would be wrong. Callers (rollout-pr-flow.sh) pass it;
 # default to the conventional root and assert it is really a family root.
 [ -d "$SPLIT_ROOT/jain-core" ] || { printf '[split-host-ci] JAIN_SPLIT_ROOT=%s is not a split family root (no jain-core/)\n' "$SPLIT_ROOT" >&2; exit 2; }
+worker_sibling_request="${JAIN_NEEDS_SIBLINGS:-0}"
+[[ "$worker_sibling_request" == 0 || "$worker_sibling_request" == 1 ]] \
+  || exit 2
+worker_sibling_sources_required=false
+if [[ "$REPO" == jain-deploy || "$worker_sibling_request" == 1 ]]; then
+  worker_sibling_sources_required=true
+fi
+[[ "$worker_sibling_sources_required" == "$JAIN_SIBLING_SOURCES_REQUIRED" ]] \
+  || exit 2
+if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
+  jq -e --arg request_id "$JAIN_HOST_CI_REQUEST_ID" \
+    --arg control "$CONTROL_PLANE_COMMIT" --arg owner "$OWNER" \
+    --arg repository "$REPO" --arg head "$SHA" --arg check "$CHECK" \
+    --arg split_root "$SPLIT_ROOT" '
+    select(.schema_version == "jain.host-ci-sibling-sources/v1")
+    | select(.request_id == $request_id and .control_plane_commit == $control)
+    | select(.owner == $owner and .repository == $repository)
+    | select(.head_sha == $head and .required_check == $check)
+    | select(.reference == "refs/heads/main")
+    | select((.sources | type) == "array" and (.sources | length) > 0)
+    | select(.sources == (.sources | sort_by(.repository)))
+    | select((.sources | map(.repository) | unique | length)
+        == (.sources | length))
+    | select(all(.sources[];
+        (.repository | test("^[a-z0-9][a-z0-9-]*$"))
+        and .owner == "veox"
+        and .remote == ("http://127.0.0.1:8787/git/veox/" + .repository + ".git")
+        and .reference == "refs/heads/main"
+        and (.commit | test("^[0-9a-f]{40}$"))
+        and (.tree | test("^[0-9a-f]{40}$"))
+        and (.inventory_sha256 | test("^[0-9a-f]{64}$"))
+        and (.entry_count | type) == "number" and .entry_count >= 0
+        and .mount_path == ($split_root + "/" + .repository)))' \
+    "$JAIN_SIBLING_SOURCES_PATH" >/dev/null || exit 2
+fi
 
 say() { printf '[split-host-ci] %s\n' "$*" >&2; }
 # The reviewed worker has no status credential and never performs a forge
@@ -154,6 +214,8 @@ post_check() {
     --arg check "$CHECK" --arg commit "$CONTROL_PLANE_COMMIT" \
     --arg evidence_dir "${JAIN_NATIVE_EVIDENCE_DIR:-}" \
     --arg evidence_sha "${JAIN_NATIVE_EVIDENCE_SHA256:-}" \
+    --arg sibling_sources_sha "$JAIN_SIBLING_SOURCES_SHA256" \
+    --argjson sibling_sources_required "$JAIN_SIBLING_SOURCES_REQUIRED" \
     --arg cuda_cap "$JAIN_CUDA_COMPUTE_CAPABILITY" \
     --arg cuda_record_sha "$JAIN_CUDA_CAPABILITY_RECORD_SHA256" \
     --argjson cuda_required "$JAIN_RELEASE_CUDA_COMPUTE_CAPABILITY_REQUIRED" \
@@ -162,6 +224,8 @@ post_check() {
       control_plane_commit:$commit,
       native_evidence_dir:$evidence_dir,
       native_evidence_sha256:$evidence_sha,
+      sibling_sources_required:$sibling_sources_required,
+      sibling_sources_sha256:$sibling_sources_sha,
       cuda_compute_capability_required:$cuda_required,
       cuda_compute_capability:$cuda_cap,
       cuda_capability_record_sha256:$cuda_record_sha}' >"$result_tmp" || return 1
@@ -419,16 +483,17 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
 fi
 
 # Independence by default: NO sibling repos are linked, so a repo's required lane
-# must resolve cross-repo deps from its committed vendor-crates/ (offline). Only
-# link siblings when a fleet/integration lane explicitly asks — jain-deploy's
-# committed [patch] points at ../<sibling>/crates/..., and JAIN_NEEDS_SIBLINGS lets
-# an integration lane opt in. Everything else stays sibling-free.
+# must resolve cross-repo deps from its committed vendor-crates/ (offline). An
+# opted-in lane may clone only the root-provisioned protected-main mounts bound by
+# the sealed sibling receipt. Ambient canonical HEAD and working-tree state are
+# never source authority.
 if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
   sibling_git_config="$tmp/sibling-safe-directory.config"
   : >"$sibling_git_config" \
     || native_setup_failure "cannot create bounded sibling Git config" 1
   chmod 0600 "$sibling_git_config" \
     || native_setup_failure "cannot secure bounded sibling Git config" 1
+  sibling_seen=0
   for sib in \
     jain jain-docs jain-domain jain-math jain-contracts jain-catboost \
     jain-xgboost jain-lightgbm jain-jable jain-battle-gpu jain-starforge \
@@ -437,33 +502,66 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
     jain-model-zoo jain-ops jain-smartcluster jain-deploy; do
     [ "$sib" = "$REPO" ] && continue
     sib_path="$SPLIT_ROOT/$sib"
-    if [ -d "$sib_path/.git" ]; then
-      git config --file "$sibling_git_config" \
-        --add safe.directory "$sib_path" \
-        || native_setup_failure "cannot trust exact sibling path $sib" 1
-      git config --file "$sibling_git_config" \
-        --add safe.directory "$sib_path/.git" \
-        || native_setup_failure "cannot trust exact sibling Git path $sib" 1
-      safe_sibling_git=(/usr/bin/env GIT_CONFIG_NOSYSTEM=1 \
-        GIT_CONFIG_GLOBAL="$sibling_git_config" git \
-        -c core.fsmonitor=false -c core.hooksPath=/dev/null \
-        -c core.untrackedCache=false -c diff.external=)
-      sib_sha="$("${safe_sibling_git[@]}" -C "$sib_path" \
-        rev-parse --verify 'HEAD^{commit}')" \
-        || native_setup_failure "cannot resolve sibling $sib" 1
-      "${safe_sibling_git[@]}" clone --quiet --no-local --no-checkout \
-        "$sib_path" "$tmp/$sib" \
-        || native_setup_failure "cannot clone sibling $sib" 1
-      jain_git_object_tree_is_symlink_free "$tmp/$sib" "$sib_sha" \
-        || native_setup_failure "sibling $sib object tree contains a prohibited mode" 1
-      git -C "$tmp/$sib" checkout --quiet --detach "$sib_sha" \
-        || native_setup_failure "cannot checkout sibling $sib" 1
-      git -C "$tmp/$sib" remote remove origin \
-        || native_setup_failure "cannot isolate sibling $sib" 1
-      validate_physical_checkout "$tmp/$sib" "$sib_sha" \
-        || native_setup_failure "sibling $sib is not a physical isolated checkout" 1
-    fi
+    sibling_binding="$(jq -er --arg sibling "$sib" '
+      [.sources[] | select(.repository == $sibling)]
+      | select(length == 1) | .[0]
+      | [.commit,.tree,.inventory_sha256,(.entry_count | tostring),.mount_path]
+      | @tsv' "$JAIN_SIBLING_SOURCES_PATH")" \
+      || native_setup_failure "missing sealed sibling authority: $sib" 1
+    IFS=$'\t' read -r sib_sha sib_tree sib_inventory_sha \
+      sib_entry_count sib_mount_path <<<"$sibling_binding"
+    [[ "$sib_mount_path" == "$sib_path" \
+      && "$(realpath -e -- "$sib_path")" == "$sib_path" \
+      && -d "$sib_path/.git" && ! -L "$sib_path" && ! -L "$sib_path/.git" ]] \
+      || native_setup_failure "sibling mount is not exact physical authority: $sib" 1
+    git config --file "$sibling_git_config" \
+      --add safe.directory "$sib_path" \
+      || native_setup_failure "cannot trust exact sibling path $sib" 1
+    git config --file "$sibling_git_config" \
+      --add safe.directory "$sib_path/.git" \
+      || native_setup_failure "cannot trust exact sibling Git path $sib" 1
+    safe_sibling_git=(/usr/bin/env GIT_CONFIG_NOSYSTEM=1 \
+      GIT_CONFIG_GLOBAL="$sibling_git_config" git \
+      -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+      -c core.untrackedCache=false -c diff.external=)
+    actual_sib_sha="$("${safe_sibling_git[@]}" -C "$sib_path" \
+      rev-parse --verify 'HEAD^{commit}')" \
+      || native_setup_failure "cannot resolve sibling $sib" 1
+    actual_sib_tree="$("${safe_sibling_git[@]}" -C "$sib_path" \
+      rev-parse --verify 'HEAD^{tree}')" \
+      || native_setup_failure "cannot resolve sibling tree $sib" 1
+    actual_sib_inventory="$({
+      LC_ALL=C "${safe_sibling_git[@]}" -C "$sib_path" \
+        ls-tree -r --full-tree "$sib_sha"
+    } | sha256sum | cut -d' ' -f1)" \
+      || native_setup_failure "cannot inventory sibling $sib" 1
+    actual_sib_count="$("${safe_sibling_git[@]}" -C "$sib_path" \
+      ls-tree -r --full-tree "$sib_sha" | wc -l | awk '{print $1}')" \
+      || native_setup_failure "cannot count sibling inventory $sib" 1
+    [[ "$actual_sib_sha" == "$sib_sha" \
+      && "$actual_sib_tree" == "$sib_tree" \
+      && "$actual_sib_inventory" == "$sib_inventory_sha" \
+      && "$actual_sib_count" == "$sib_entry_count" \
+      && -z "$("${safe_sibling_git[@]}" -C "$sib_path" remote)" \
+      && -z "$("${safe_sibling_git[@]}" -C "$sib_path" \
+        status --porcelain=v1 --untracked-files=all)" ]] \
+      || native_setup_failure "sibling mount differs from sealed authority: $sib" 1
+    "${safe_sibling_git[@]}" clone --quiet --no-local --no-checkout \
+      "$sib_path" "$tmp/$sib" \
+      || native_setup_failure "cannot clone sibling $sib" 1
+    jain_git_object_tree_is_symlink_free "$tmp/$sib" "$sib_sha" \
+      || native_setup_failure "sibling $sib object tree contains a prohibited mode" 1
+    git -C "$tmp/$sib" checkout --quiet --detach "$sib_sha" \
+      || native_setup_failure "cannot checkout sibling $sib" 1
+    git -C "$tmp/$sib" remote remove origin \
+      || native_setup_failure "cannot isolate sibling $sib" 1
+    validate_physical_checkout "$tmp/$sib" "$sib_sha" \
+      || native_setup_failure "sibling $sib is not a physical isolated checkout" 1
+    sibling_seen=$((sibling_seen + 1))
   done
+  [[ "$sibling_seen" \
+      == "$(jq -er '.sources | length' "$JAIN_SIBLING_SOURCES_PATH")" ]] \
+    || native_setup_failure 'sealed sibling authority has an unexpected repository' 1
 fi
 
 # Weight-hungry lanes (feat-core foundation/hyperion tests, starforge golden

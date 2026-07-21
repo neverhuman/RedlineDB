@@ -1,17 +1,17 @@
 {
-  "report_fingerprint": "sha256:dc4911dfe498d358c44f791137cbb699112b43c7d03821d2344a0ba87988b9b2",
-  "input_fingerprint": "sha256:bcc837f412f8e65c7f6a82f1e2bf62e13e3d463849d9c0292d41745e9d89565e",
+  "report_fingerprint": "sha256:aa35f1ca8136f7d7152e7e2ede4d3ff32bb8e69bc83aae4864ffaa2b6749adf1",
+  "input_fingerprint": "sha256:e94cc6b44237c101ea97e0d10d5ee90dcf9e6e344468809493d3a0a07c715bbb",
   "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
   "manifest_fingerprints": {
-    "owner_map": "sha256:4d4f78e32cf6f78fc77cb03ed13d3ec781d4d35da4db1ffc56bbb48f403dcfed",
-    "test_map": "sha256:e633a68e8079bfa45ed440322202229b99fac5701640f207feffc9890cceccff",
-    "generated_zones": "sha256:181a3c8bde077065f25d058071b4de7491c273904ede10ece21e2061e3090cc4",
+    "owner_map": "sha256:8906e7de840f5494a011115f1c570db3ddbfee3d9a8e6fbe11e94ca6cf6adc56",
+    "test_map": "sha256:93ce0b3a7e8f851dbeb1d19e1b197ea51b53481b6a3b1ca6bc6b273600b52805",
+    "generated_zones": "sha256:053465efb40f9e8e4291e346a7565334c70c3a7567825366f9d67e7cf5686e99",
     "boundaries": "sha256:393fdb5254b2798a5bc0cbfd5dccd1e25f3882de77b12c126be494167206dc5a",
     "proof_lanes": "sha256:9bfff9225b803a4599f4025ef64ed1915704ed049033f61c86bec94af60e9402",
     "standard_version": "sha256:f33b9715b6109208b44f6931c43f37e8da642dd67ff6faaad77be486954243a4"
   },
   "dirty_worktree": true,
-  "generated_at": "1784578511",
+  "generated_at": "1784630130",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,23 +25,23 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784578511",
-  "started_at": "1784578511",
-  "elapsed_ms": 3872,
+  "run_id": "1784630130",
+  "started_at": "1784630130",
+  "elapsed_ms": 4152,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 92,
-  "raw_score": 92,
+  "score": 94,
+  "raw_score": 94,
   "decision": {
     "status": "advisory",
     "minimum_score": 85,
     "passed": true,
     "hard_findings": 0,
-    "soft_findings": 3,
+    "soft_findings": 1,
     "ratchet": {
-      "baseline_score": 92,
+      "baseline_score": 94,
       "allowed_drop": 0,
       "passed": true,
       "score_delta": 0,
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "a76199c",
+    "head": "8549587",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -270,6 +270,8 @@
         "owner map present",
         "test/proof routing map present",
         "local `AGENTS.md` file(s)",
+        "reference-profile cell `contracts` is canonical",
+        "reference-profile cell `contracts` has local AGENTS.md guidance",
         "reference-profile cell `db` is canonical",
         "reference-profile cell `db` has local AGENTS.md guidance",
         "reference-profile cell `ops` is canonical",
@@ -283,12 +285,14 @@
     {
       "name": "Contract and boundary integrity",
       "weight": 13,
-      "score": 75,
-      "weighted_points": 9.75,
+      "score": 95,
+      "weighted_points": 12.35,
       "evidence": [
+        "contract surface found",
         "generated contract artifacts found",
         "boundary manifest present",
         "machine-readable schemas present",
+        "all contract sources have generated zone entries",
         "schema/tooling contract posture is clean"
       ],
       "notes": []
@@ -1010,7 +1014,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-20T20:15:07.269740634+00:00",
+    "generated_at": "2026-07-21T10:35:25.938454671+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1048,20 +1052,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 272,
-      "files_considered": 4,
-      "active_files": 4,
+      "files_scanned": 275,
+      "files_considered": 5,
+      "active_files": 5,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 11,
+      "warning_classes": 15,
       "hard_instances": 0,
-      "warning_instances": 37,
-      "duplicate_lines": 13,
-      "duplicate_tokens": 41,
-      "duplicate_bytes": 443,
-      "total_redundant_lines": 28,
-      "total_redundant_tokens": 79,
-      "total_redundant_bytes": 913
+      "warning_instances": 45,
+      "duplicate_lines": 20,
+      "duplicate_tokens": 64,
+      "duplicate_bytes": 660,
+      "total_redundant_lines": 35,
+      "total_redundant_tokens": 102,
+      "total_redundant_bytes": 1130
     },
     "classes": [
       {
@@ -1226,6 +1230,41 @@
         ]
       },
       {
+        "id": "copy-code-body-rust-22340daee992db18",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 4,
+        "duplicate_tokens": 13,
+        "duplicate_bytes": 110,
+        "instance_count": 2,
+        "total_redundant_lines": 4,
+        "total_redundant_tokens": 13,
+        "total_redundant_bytes": 110,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "9fdb43ad859f0287",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "tools/splitctl/src/release_candidate.rs",
+            "language": "rust",
+            "start_line": 1229,
+            "end_line": 1233,
+            "unit_name": "mark_pending"
+          },
+          {
+            "path": "tools/splitctl/src/release_candidate.rs",
+            "language": "rust",
+            "start_line": 1245,
+            "end_line": 1249,
+            "unit_name": "complete_transition"
+          }
+        ]
+      },
+      {
         "id": "copy-code-body-rust-6fc1cf0f26cfbe6e",
         "kind": "exact_unit_different_name",
         "severity": "warning",
@@ -1247,15 +1286,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2658,
-            "end_line": 2661,
+            "start_line": 2666,
+            "end_line": 2669,
             "unit_name": "validate_child_family_authority"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2674,
-            "end_line": 2677,
+            "start_line": 2682,
+            "end_line": 2685,
             "unit_name": "validate_child_engine_authority"
           }
         ]
@@ -1366,16 +1405,86 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2358,
-            "end_line": 2359,
+            "start_line": 2366,
+            "end_line": 2367,
             "unit_name": "physical_directory"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2366,
-            "end_line": 2367,
+            "start_line": 2374,
+            "end_line": 2375,
             "unit_name": "physical_regular_file"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-1b225797f79bd267",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 48,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 4,
+        "total_redundant_bytes": 48,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "f7ae1232bbfe2fb4",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "tools/splitctl/src/release_candidate.rs",
+            "language": "rust",
+            "start_line": 1708,
+            "end_line": 1709,
+            "unit_name": "lock_journal"
+          },
+          {
+            "path": "tools/splitctl/src/release_candidate.rs",
+            "language": "rust",
+            "start_line": 1786,
+            "end_line": 1787,
+            "unit_name": "write_journal"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-7fa631b79fdb97f5",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 4,
+        "duplicate_bytes": 38,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 4,
+        "total_redundant_bytes": 38,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "f7ae1232bbfe2fb4",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "tools/splitctl/src/release_candidate.rs",
+            "language": "rust",
+            "start_line": 1133,
+            "end_line": 1134,
+            "unit_name": "next_action"
+          },
+          {
+            "path": "tools/splitctl/src/release_candidate.rs",
+            "language": "rust",
+            "start_line": 1194,
+            "end_line": 1195,
+            "unit_name": "campaign_complete"
           }
         ]
       },
@@ -1548,9 +1657,44 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1676,
-            "end_line": 1677,
+            "start_line": 1684,
+            "end_line": 1685,
             "unit_name": "valid_cargo_token"
+          }
+        ]
+      },
+      {
+        "id": "copy-code-body-rust-c8f97f62a8612c51",
+        "kind": "exact_unit_different_name",
+        "severity": "warning",
+        "confidence": "medium",
+        "language": "rust",
+        "duplicate_lines": 1,
+        "duplicate_tokens": 2,
+        "duplicate_bytes": 21,
+        "instance_count": 2,
+        "total_redundant_lines": 1,
+        "total_redundant_tokens": 2,
+        "total_redundant_bytes": 21,
+        "effective_severity": "warning",
+        "hard_fail": false,
+        "fingerprint": "f7ae1232bbfe2fb4",
+        "reason": "same body appears under different names across files",
+        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
+        "instances": [
+          {
+            "path": "tools/splitctl/src/release_candidate.rs",
+            "language": "rust",
+            "start_line": 1840,
+            "end_line": 1841,
+            "unit_name": "unix_time"
+          },
+          {
+            "path": "tools/splitctl/src/release_candidate.rs",
+            "language": "rust",
+            "start_line": 1847,
+            "end_line": 1848,
+            "unit_name": "unix_nanos"
           }
         ]
       }
@@ -1562,8 +1706,8 @@
     ]
   },
   "profile_structure": {
-    "applicable_count": 2,
-    "canonical_count": 2,
+    "applicable_count": 3,
+    "canonical_count": 3,
     "noncanonical_count": 0,
     "guidance_missing_count": 0,
     "cells": [
@@ -1666,20 +1810,22 @@
       },
       {
         "id": "contracts",
-        "applicable": false,
-        "status": "not_applicable",
+        "applicable": true,
+        "status": "canonical",
         "canonical_path": "contracts/",
-        "detected_paths": [],
+        "detected_paths": [
+          "contracts"
+        ],
         "aliases": [
           "openapi/",
           "protobuf/",
           "json-schema/",
           "generated/"
         ],
-        "guidance_status": "not_required",
+        "guidance_status": "present",
         "owner": "contracts",
         "proof_lane": "generation / drift checks",
-        "agent_fix": "no action"
+        "agent_fix": "keep `contracts/AGENTS.md` aligned with owns / forbidden / proof lane guidance"
       },
       {
         "id": "db",
@@ -1742,9 +1888,18 @@
       }
     ],
     "evidence": {
-      "applicable_count": 2,
-      "canonical_count": 2,
+      "applicable_count": 3,
+      "canonical_count": 3,
       "detected_cells": [
+        {
+          "canonical_path": "contracts/",
+          "detected_paths": [
+            "contracts"
+          ],
+          "guidance_status": "present",
+          "id": "contracts",
+          "status": "canonical"
+        },
         {
           "canonical_path": "db/",
           "detected_paths": [
@@ -1772,11 +1927,11 @@
   },
   "coverage_evidence": {
     "artifact": "target/jankurai/coverage/coverage-audit.json",
-    "status": "missing",
-    "sources_total": 0,
-    "sources_present": 0,
+    "status": "pass",
+    "sources_total": 2,
+    "sources_present": 2,
     "hard_findings": 0,
-    "soft_findings": 1
+    "soft_findings": 0
   },
   "findings": [
     {
@@ -1802,66 +1957,9 @@
       "lane": "fast",
       "docs_url": "docs/testing.md",
       "owner": "workspace"
-    },
-    {
-      "severity": "medium",
-      "category": "boundary",
-      "path": "agent/boundaries.toml",
-      "problem": "`Contract and boundary integrity` scored 75 below the standard floor of 85",
-      "agent_fix": "add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams",
-      "evidence": [
-        "generated contract artifacts found",
-        "boundary manifest present",
-        "machine-readable schemas present",
-        "schema/tooling contract posture is clean"
-      ],
-      "check_id": "HLT-007-HANDWRITTEN-CONTRACT:boundary",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "contract-manifest",
-      "rerun_command": "just fast",
-      "fingerprint": "sha256:993eec07ffbd3370fe6126f0b1f95bf9e6c57a5c7133dc00526a401f4e344e42",
-      "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "docs_url": "docs/audit-rubric.md#known-vibe-coding-insults",
-      "owner": "agent"
-    },
-    {
-      "severity": "medium",
-      "category": "test",
-      "path": "agent/coverage-sources.toml",
-      "problem": "coverage evidence lane is configured but has not been run",
-      "agent_fix": "run `cargo run -p jankurai -- coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md`",
-      "evidence": [
-        "agent/coverage-sources.toml exists"
-      ],
-      "check_id": "HLT-008-FALSE-GREEN-RISK:coverage-evidence",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "test",
-      "rerun_command": "cargo run -p jankurai -- coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md",
-      "fingerprint": "sha256:d80fbd966029c39ef6dde3a73b2f46834e117ee6c16c85385ccf415d0d3719b5",
-      "rule_id": "HLT-008-FALSE-GREEN-RISK",
-      "tlr": "Verification",
-      "lane": "coverage-audit",
-      "docs_url": "docs/testing.md",
-      "owner": "agent",
-      "matched_term": "coverage-evidence",
-      "reason": "coverage evidence artifact `target/jankurai/coverage/coverage-audit.json`"
     }
   ],
   "agent_fix_queue": [
-    {
-      "path": "agent/boundaries.toml",
-      "priority": "medium",
-      "rule_id": "HLT-007-HANDWRITTEN-CONTRACT",
-      "tlr": "Contracts/data",
-      "lane": "contract",
-      "owner": "agent",
-      "task": "add generated contracts and boundary checks for public APIs, data access, and cross-runtime seams",
-      "why": "`Contract and boundary integrity` scored 75 below the standard floor of 85"
-    },
     {
       "path": "Justfile",
       "priority": "medium",
@@ -1871,16 +1969,6 @@
       "owner": "workspace",
       "task": "add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration",
       "why": "`Build speed signals` scored 70 below the standard floor of 85"
-    },
-    {
-      "path": "agent/coverage-sources.toml",
-      "priority": "medium",
-      "rule_id": "HLT-008-FALSE-GREEN-RISK",
-      "tlr": "Verification",
-      "lane": "coverage-audit",
-      "owner": "agent",
-      "task": "run `cargo run -p jankurai -- coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md`",
-      "why": "coverage evidence lane is configured but has not been run"
     }
   ]
 }

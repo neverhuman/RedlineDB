@@ -1315,6 +1315,23 @@ grep -Fq 'bootstrap expiry differs across root artifacts' \
   exit 1
 }
 
+sibling_digest_mismatch_id="$(printf '6%.0s' {1..64})"
+make_sealed_variant "$sibling_digest_mismatch_id" \
+  '.request_id=$request_id
+   | .sibling_sources_sha256="aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
+  "$(date +%s)"
+if sudo -n "$publisher" "$request_root/$sibling_digest_mismatch_id" \
+  >"$tmp/sibling-digest-mismatch.log" 2>&1; then
+  printf 'publisher accepted a mismatched sibling source digest\n' >&2
+  exit 1
+fi
+grep -Fq 'sibling source binding differs across sealed authority' \
+  "$tmp/sibling-digest-mismatch.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$expiry_mismatch_offset" ]] || {
+  printf 'sibling source digest mismatch reached the forge\n' >&2
+  exit 1
+}
+
 old_result_id="$(printf 'c%.0s' {1..64})"
 make_sealed_variant "$old_result_id" \
   '.request_id=$request_id
@@ -1330,8 +1347,8 @@ grep -Fq 'invalid root result schema' "$tmp/old-root-result.log"
 # whose reviewed native policy requires it.
 downgrade_id="$(printf 'b%.0s' {1..64})"
 make_sealed_variant "$downgrade_id" \
-  '.request_id=$request_id | .repository="jain-deploy"
-   | .required_check="jain-deploy/required"
+  '.request_id=$request_id | .repository="jain-catboost"
+   | .required_check="jain-catboost/required"
    | .native_evidence_required=false' "$(date +%s)"
 if sudo -n "$publisher" "$request_root/$downgrade_id" \
   >"$tmp/downgrade.log" 2>&1; then
