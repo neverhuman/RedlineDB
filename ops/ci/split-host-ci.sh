@@ -29,6 +29,57 @@ jain_contract_source_object() {
   printf '%s\n' "${BASH_REMATCH[1]}"
 }
 
+jain_sibling_sources_filter() {
+  cat <<'JQ'
+select((keys | sort) == ([
+  "control_plane_commit", "head_sha", "owner", "reference", "repository",
+  "request_id", "required_check", "schema_version", "sources"
+] | sort))
+| select(.schema_version == "jain.host-ci-sibling-sources/v1")
+| select(.request_id == $request_id and .control_plane_commit == $control)
+| select(.owner == $owner and .repository == $repository)
+| select(.head_sha == $head and .required_check == $check)
+| select(.reference == "refs/heads/main")
+| select((.sources | type) == "array" and (.sources | length) > 0)
+| select(.sources == (.sources | sort_by(.repository)))
+| select((.sources | map(.repository) | unique | length)
+    == (.sources | length))
+| select(all(.sources[];
+    (keys | sort) == ([
+      "commit", "contract_tag_commit", "contract_tag_object",
+      "contract_tag_ref", "entry_count", "inventory_sha256", "mount_path",
+      "owner", "reference", "remote", "repository", "tree"
+    ] | sort)
+    and (.repository | test("^[a-z0-9][a-z0-9-]*$"))
+    and .owner == "veox"
+    and .remote == ("http://127.0.0.1:8787/git/veox/" + .repository + ".git")
+    and .reference == "refs/heads/main"
+    and (.commit | test("^[0-9a-f]{40}$"))
+    and (.tree | test("^[0-9a-f]{40}$"))
+    and (.inventory_sha256 | test("^[0-9a-f]{64}$"))
+    and (.entry_count | type) == "number" and .entry_count >= 0
+    and .mount_path == ($split_root + "/" + .repository)
+    and (.contract_tag_ref | type == "string")
+    and (.contract_tag_object | type == "string")
+    and (.contract_tag_commit | type == "string")
+    and (
+      (
+        .contract_tag_ref == ""
+        and .contract_tag_object == ""
+        and .contract_tag_commit == ""
+      )
+      or
+      (
+        (.contract_tag_ref
+          | test("^refs/tags/[a-z0-9][a-z0-9-]*-v[0-9A-Za-z.-]+-split\\.[0-9]+$"))
+        and (.contract_tag_object | test("^[0-9a-f]{40}$"))
+        and (.contract_tag_commit | test("^[0-9a-f]{40}$"))
+      )
+    )
+  ))
+JQ
+}
+
 OWNER="${1:?owner}"; REPO="${2:?repo}"; SHA="${3:?sha}"; REPO_PATH="${4:?repo_path}"
 CHECK="${5:-$REPO/required}"
 RUNNER_PATH="$(realpath -e -- "${BASH_SOURCE[0]}")" || exit 2
@@ -225,35 +276,7 @@ if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
   jq -e --arg request_id "$JAIN_HOST_CI_REQUEST_ID" \
     --arg control "$CONTROL_PLANE_COMMIT" --arg owner "$OWNER" \
     --arg repository "$REPO" --arg head "$SHA" --arg check "$CHECK" \
-    --arg split_root "$SPLIT_ROOT" '
-    select(.schema_version == "jain.host-ci-sibling-sources/v1")
-    | select(.request_id == $request_id and .control_plane_commit == $control)
-    | select(.owner == $owner and .repository == $repository)
-    | select(.head_sha == $head and .required_check == $check)
-    | select(.reference == "refs/heads/main")
-    | select((.sources | type) == "array" and (.sources | length) > 0)
-    | select(.sources == (.sources | sort_by(.repository)))
-    | select((.sources | map(.repository) | unique | length)
-        == (.sources | length))
-    | select(all(.sources[];
-        (.repository | test("^[a-z0-9][a-z0-9-]*$"))
-        and .owner == "veox"
-        and .remote == ("http://127.0.0.1:8787/git/veox/" + .repository + ".git")
-        and .reference == "refs/heads/main"
-        and (.commit | test("^[0-9a-f]{40}$"))
-        and (.tree | test("^[0-9a-f]{40}$"))
-        and (.inventory_sha256 | test("^[0-9a-f]{64}$"))
-        and (.entry_count | type) == "number" and .entry_count >= 0
-        and .mount_path == ($split_root + "/" + .repository)
-        and (.contract_tag_ref | type == "string")
-        and (.contract_tag_object | type == "string")
-        and (.contract_tag_commit | type == "string")
-        and (((.contract_tag_ref == "") and (.contract_tag_object == "")
-              and (.contract_tag_commit == ""))
-          or ((.contract_tag_ref
-                | test("^refs/tags/[a-z0-9][a-z0-9-]*-v[0-9A-Za-z.-]+-split\\.[0-9]+$"))
-              and (.contract_tag_object | test("^[0-9a-f]{40}$"))
-              and (.contract_tag_commit | test("^[0-9a-f]{40}$")))))' \
+    --arg split_root "$SPLIT_ROOT" "$(jain_sibling_sources_filter)" \
     "$JAIN_SIBLING_SOURCES_PATH" >/dev/null || exit 2
 fi
 

@@ -14,6 +14,14 @@ extract_contract_parser() {
     '/^jain_contract_source_object() {$/,/^}$/p' "$script"
 }
 
+extract_sibling_sources_filter() {
+  local script="$1" function_body
+  function_body="$(sed -n \
+    '/^jain_sibling_sources_filter() {$/,/^}$/p' "$script")"
+  [[ -n "$function_body" ]] || return 1
+  bash -c "$function_body; jain_sibling_sources_filter"
+}
+
 parser_fixture="$tmp/contract-mirror"
 valid_object="$(printf 'a%.0s' {1..40})"
 for boundary in host-ci-sandbox.sh split-host-ci.sh; do
@@ -48,6 +56,60 @@ done
   printf 'root and worker contract source parsers differ\n' >&2
   exit 1
 }
+
+sibling_filter="$(
+  extract_sibling_sources_filter "$repo_root/ops/ci/split-host-ci.sh"
+)" || {
+  printf 'cannot extract the production sibling-source jq filter\n' >&2
+  exit 1
+}
+sibling_sha40="$(printf 'b%.0s' {1..40})"
+sibling_sha64="$(printf 'c%.0s' {1..64})"
+sibling_fixture="$tmp/sibling-sources.json"
+jq -n --arg request_id "$sibling_sha64" --arg control "$sibling_sha40" \
+  --arg head "$valid_object" --arg commit "$sibling_sha40" \
+  --arg tree "$valid_object" --arg inventory "$sibling_sha64" '
+  {schema_version:"jain.host-ci-sibling-sources/v1",
+   request_id:$request_id,control_plane_commit:$control,
+   owner:"veox",repository:"jain-deploy",head_sha:$head,
+   required_check:"jain-deploy/required",reference:"refs/heads/main",
+   sources:[{repository:"jain-core",owner:"veox",
+     remote:"http://127.0.0.1:8787/git/veox/jain-core.git",
+     reference:"refs/heads/main",commit:$commit,tree:$tree,
+     inventory_sha256:$inventory,entry_count:1,mount_path:"/family/jain-core",
+     contract_tag_ref:"",contract_tag_object:"",contract_tag_commit:""}]}' \
+  >"$sibling_fixture"
+filter_args=(--arg request_id "$sibling_sha64" --arg control "$sibling_sha40" \
+  --arg owner veox --arg repository jain-deploy --arg head "$valid_object" \
+  --arg check jain-deploy/required --arg split_root /family)
+jq -e "${filter_args[@]}" "$sibling_filter" "$sibling_fixture" >/dev/null || {
+  printf 'production sibling-source filter rejected an exact empty contract tuple\n' >&2
+  exit 1
+}
+jq --arg object "$valid_object" '
+  .sources[0].contract_tag_ref="refs/tags/jain-core-v7.0.1-split.5"
+  | .sources[0].contract_tag_object=$object
+  | .sources[0].contract_tag_commit=$object' \
+  "$sibling_fixture" >"$sibling_fixture.valid-contract"
+jq -e "${filter_args[@]}" "$sibling_filter" \
+  "$sibling_fixture.valid-contract" >/dev/null || {
+  printf 'production sibling-source filter rejected an exact contract tuple\n' >&2
+  exit 1
+}
+for mutation in \
+  '.unexpected=true' \
+  '.sources[0].unexpected=true' \
+  '.sources[0].mount_path="/family/jain-deploy"' \
+  '.sources[0].contract_tag_ref="refs/tags/jain-core-v7.0.1-split.5"' \
+  '.sources[0].contract_tag_ref="refs/tags/jain-core-v7.0.1-split.5" | .sources[0].contract_tag_object="short" | .sources[0].contract_tag_commit="short"'; do
+  jq "$mutation" "$sibling_fixture" >"$sibling_fixture.hostile"
+  if jq -e "${filter_args[@]}" "$sibling_filter" \
+    "$sibling_fixture.hostile" >/dev/null 2>&1; then
+    printf 'production sibling-source filter accepted hostile mutation: %s\n' \
+      "$mutation" >&2
+    exit 1
+  fi
+done
 
 cp -- "$repo_root/ops/ci/host-ci-integrity.sh" "$fixture/ops/ci/host-ci-integrity.sh"
 for path in \
