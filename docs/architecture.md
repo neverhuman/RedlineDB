@@ -23,3 +23,8 @@ writes only the authoritative ineligible lock; reconciliation copies those
 exact reviewed bytes to the compatibility mirror and records a checksummed
 receipt. Neither state permits cutover. Family CI, the immutable tag, and two
 independent consumer proofs remain separate downstream authorities.
+
+Docker parity is a Testing-owned compatibility harness orchestrated by this
+control plane; it is not a server deployment surface. In particular,
+`redline-central/docker/` packages the separate 6033 Central service and is
+outside the SQLite/PostgreSQL compatibility contract.

@@ -20,6 +20,8 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+mod docker_parity;
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 const FAMILY: &str = "redline-split";
@@ -6571,6 +6573,7 @@ fn dispatch(paths: &Paths, command: &str, mut args: Vec<String>) -> Result<()> {
             | "control-review-lock-verify"
             | "family-ci"
             | "offline-containment"
+            | "docker-parity"
             | "ci"
             | "proof-refresh"
             | "cutover-verify"
@@ -6629,6 +6632,80 @@ fn dispatch(paths: &Paths, command: &str, mut args: Vec<String>) -> Result<()> {
                 return Err(error("offline-containment accepts only --repo, --cargo-home, and --receipt"));
             }
             offline_containment(&paths.manifest, &repo, &cargo_home, &receipt)
+        }
+        "docker-parity" => {
+            let source_cargo_home = PathBuf::from(
+                take_option(&mut args, "--source-cargo-home")?
+                    .ok_or_else(|| error("docker-parity requires --source-cargo-home PATH"))?,
+            );
+            let mut additional_cargo_homes = Vec::new();
+            while let Some(index) = args
+                .iter()
+                .position(|value| value == "--additional-cargo-home")
+            {
+                if index + 1 >= args.len() {
+                    return Err(error("--additional-cargo-home requires a path"));
+                }
+                additional_cargo_homes.push(PathBuf::from(args.remove(index + 1)));
+                args.remove(index);
+            }
+            let evidence_dir = PathBuf::from(
+                take_option(&mut args, "--evidence-dir")?.unwrap_or_else(|| {
+                    paths
+                        .root
+                        .join("target/docker-parity-evidence")
+                        .display()
+                        .to_string()
+                }),
+            );
+            let mode = take_option(&mut args, "--mode")?.unwrap_or_else(|| "release".to_owned());
+            let core_commit = take_option(&mut args, "--core-commit")?;
+            let testing_commit = take_option(&mut args, "--testing-commit")?;
+            let sqlite_bin = PathBuf::from(
+                take_option(&mut args, "--sqlite-bin")?
+                    .unwrap_or_else(|| "/usr/bin/sqlite3".to_owned()),
+            );
+            let psql_bin = PathBuf::from(
+                take_option(&mut args, "--psql-bin")?
+                    .unwrap_or_else(|| "/usr/lib/postgresql/16/bin/psql".to_owned()),
+            );
+            let postgres_bin = PathBuf::from(
+                take_option(&mut args, "--postgres-bin")?
+                    .unwrap_or_else(|| "/usr/lib/postgresql/16/bin/postgres".to_owned()),
+            );
+            let mut target_args = Vec::new();
+            while let Some(index) = args.iter().position(|value| value == "--target-arg") {
+                if index + 1 >= args.len() {
+                    return Err(error("--target-arg requires a value"));
+                }
+                target_args.push(args.remove(index + 1));
+                args.remove(index);
+            }
+            let smoke = if let Some(index) = args.iter().position(|value| value == "--smoke") {
+                args.remove(index);
+                true
+            } else {
+                false
+            };
+            if !args.is_empty() {
+                return Err(error("docker-parity accepts only --source-cargo-home, repeated --additional-cargo-home, --evidence-dir, --mode, --core-commit, --testing-commit, --sqlite-bin, --psql-bin, --postgres-bin, repeated --target-arg, and --smoke"));
+            }
+            docker_parity::run(
+                &load_manifest(&paths.manifest)?,
+                docker_parity::Options {
+                    source_cargo_home,
+                    additional_cargo_homes,
+                    evidence_dir,
+                    mode,
+                    core_commit,
+                    testing_commit,
+                    sqlite_bin,
+                    psql_bin,
+                    postgres_bin,
+                    target_args,
+                    smoke,
+                },
+            )
         }
         "proof-refresh" => {
             let receipt = take_option(&mut args, "--receipt")?.map(PathBuf::from)
@@ -6734,7 +6811,7 @@ fn dispatch(paths: &Paths, command: &str, mut args: Vec<String>) -> Result<()> {
         }
         "update" => { if !args.is_empty() { return Err(error("update accepts no arguments")); } clone_or_update(&paths.manifest, false) }
         "--version" | "version" => { println!("redline-proof 0.1.0"); Ok(()) }
-        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|ci-required|control-validate|control-review-lock-verify|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|offline-containment --repo NAME --cargo-home PATH [--receipt PATH]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
+        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|ci-required|control-validate|control-review-lock-verify|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|offline-containment --repo NAME --cargo-home PATH [--receipt PATH]|docker-parity --source-cargo-home PATH [--additional-cargo-home PATH] [--evidence-dir PATH] [--mode release|diagnostic] [--core-commit SHA] [--testing-commit SHA] [--target-arg ARG] [--smoke]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
     }
 }
 
@@ -6754,6 +6831,7 @@ fn real_main() -> Result<()> {
             | "ci"
             | "ci-required"
             | "offline-containment"
+            | "docker-parity"
             | "proof-refresh"
     ) {
         Some(GlobalFamilyLock::acquire(paths.root.parent().ok_or_else(

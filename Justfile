@@ -4,6 +4,9 @@ redlinectl := invocation_directory() / "redlinectl"
 
 default: check
 
+docker-parity *args:
+  {{redlinectl}} docker-parity {{args}}
+
 fast:
   cargo check --locked
   cargo test --locked

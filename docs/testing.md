@@ -124,6 +124,19 @@ nodes, hashes custody/lock identities, and runs locked offline tests under
 systemd network denial. A failed or unavailable forge clone is a real red
 result; it never falls back to the canonical source checkout or emits evidence.
 
+`./redlinectl docker-parity --source-cargo-home <physical-in-tree-custody>` is
+the only container-parity lifecycle. It validates the authority manifest,
+clones exact Core and Testing commits with automatically removed standalone
+`git clone --no-local` sandboxes, builds both artifacts locked and offline,
+requires the Testing-owned digest manifest to resolve from the local Docker
+store, and builds the runner with `--network=none --pull=false`. Compose starts
+only its descriptor-bound PostgreSQL service and internal network, publishes no
+host port, and passes no checkout, Git metadata, Docker socket, or dependency
+cache to the runner. The runner emits only a candidate; `redlinectl` seals
+`redline.docker-parity-evidence/v1` after campaign, containers, volumes, unique
+runner image, and standalone-clone cleanup all succeed. `--mode diagnostic
+--smoke` runs one case in each lane and can never create release evidence.
+
 Common repair signatures:
 
 - `existing immutable tag ... points to ...`: do not move it; correct the
