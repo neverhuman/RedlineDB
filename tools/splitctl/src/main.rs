@@ -3,7 +3,7 @@ mod jeryu_client;
 mod release_candidate;
 
 use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, JeryuRequest};
-use serde::Deserialize;
+use serde::de::{self, DeserializeSeed, MapAccess, SeqAccess, Visitor};
 use serde_json::{json, Map, Value as JsonValue};
 use sha2::{Digest, Sha256};
 use std::{
@@ -5020,81 +5020,105 @@ fn release_snapshot(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
 
 const MAX_APPLIANCE_AGGREGATE_BYTES: u64 = 1024 * 1024;
 
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ApplianceCanaryMatrix {
-    schema_version: String,
-    qualification: bool,
-    fixture: bool,
-    release: String,
-    release_tag: String,
-    source_commit: String,
-    status: String,
-    formal_ga: bool,
-    rollback_release: String,
-    release_job: ApplianceReleaseJob,
-    manifest_sha256: String,
-    public_key_sha256: String,
-    artifact_identities: ApplianceArtifactIdentities,
-    artifact_set_sha256: String,
-    oci: ApplianceOciIdentity,
-    lanes: ApplianceCanaryLanes,
-    created_at: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ApplianceReleaseJob {
-    id: String,
-    attestation_url: String,
-    attestation_sha256: String,
-    signature_url: String,
-    verified: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ApplianceArtifactIdentities {
-    installer: String,
-    manager: String,
-    cli: String,
-    compose: String,
-    compose_gpu: String,
-    provenance: String,
-    browser_suite: String,
-    training_data: String,
-    scoring_data: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ApplianceOciIdentity {
-    index: String,
-    index_digest: String,
-    platform: String,
-    platform_digest: String,
-    runtime_image_id: String,
-    runtime_repo_digest: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ApplianceCanaryLanes {
-    cpu: ApplianceCanaryLane,
-    gpu: ApplianceCanaryLane,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(deny_unknown_fields)]
-struct ApplianceCanaryLane {
-    receipt_sha256: String,
-    qualification: bool,
-}
-
 #[derive(Debug)]
 struct QualifiedApplianceCanary {
-    matrix: ApplianceCanaryMatrix,
+    matrix: JsonValue,
     aggregate_sha256: String,
+}
+
+#[derive(Clone, Copy)]
+struct StrictJsonSeed;
+
+struct StrictJsonVisitor;
+
+impl<'de> DeserializeSeed<'de> for StrictJsonSeed {
+    type Value = JsonValue;
+
+    fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        deserializer.deserialize_any(StrictJsonVisitor)
+    }
+}
+
+impl<'de> Visitor<'de> for StrictJsonVisitor {
+    type Value = JsonValue;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str("an unambiguous JSON value")
+    }
+
+    fn visit_bool<E>(self, value: bool) -> Result<Self::Value, E> {
+        Ok(JsonValue::Bool(value))
+    }
+
+    fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E> {
+        Ok(JsonValue::Number(value.into()))
+    }
+
+    fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E> {
+        Ok(JsonValue::Number(value.into()))
+    }
+
+    fn visit_f64<E>(self, value: f64) -> Result<Self::Value, E>
+    where
+        E: de::Error,
+    {
+        serde_json::Number::from_f64(value)
+            .map(JsonValue::Number)
+            .ok_or_else(|| E::custom("non-finite JSON number"))
+    }
+
+    fn visit_str<E>(self, value: &str) -> Result<Self::Value, E> {
+        Ok(JsonValue::String(value.to_owned()))
+    }
+
+    fn visit_string<E>(self, value: String) -> Result<Self::Value, E> {
+        Ok(JsonValue::String(value))
+    }
+
+    fn visit_none<E>(self) -> Result<Self::Value, E> {
+        Ok(JsonValue::Null)
+    }
+
+    fn visit_unit<E>(self) -> Result<Self::Value, E> {
+        Ok(JsonValue::Null)
+    }
+
+    fn visit_seq<A>(self, mut sequence: A) -> Result<Self::Value, A::Error>
+    where
+        A: SeqAccess<'de>,
+    {
+        let mut values = Vec::new();
+        while let Some(value) = sequence.next_element_seed(StrictJsonSeed)? {
+            values.push(value);
+        }
+        Ok(JsonValue::Array(values))
+    }
+
+    fn visit_map<A>(self, mut entries: A) -> Result<Self::Value, A::Error>
+    where
+        A: MapAccess<'de>,
+    {
+        let mut object = Map::new();
+        while let Some(key) = entries.next_key::<String>()? {
+            if object.contains_key(&key) {
+                return Err(de::Error::custom(format!("duplicate JSON field: {key}")));
+            }
+            object.insert(key, entries.next_value_seed(StrictJsonSeed)?);
+        }
+        Ok(JsonValue::Object(object))
+    }
+}
+
+fn exact_json_object<'a>(
+    value: &'a JsonValue,
+    keys: &[&str],
+) -> Option<&'a Map<String, JsonValue>> {
+    value.as_object().filter(|object| {
+        object.len() == keys.len() && keys.iter().all(|key| object.contains_key(*key))
+    })
 }
 
 fn valid_nonzero_lower_hex(value: &str, length: usize) -> bool {
@@ -5128,22 +5152,36 @@ fn valid_repo_digest(value: &str, expected_digest: &str) -> bool {
     })
 }
 
-fn appliance_artifact_set_sha256(artifacts: &ApplianceArtifactIdentities) -> String {
+fn appliance_artifact_set_sha256(artifacts: &JsonValue) -> Option<String> {
+    let artifacts = exact_json_object(
+        artifacts,
+        &[
+            "installer",
+            "manager",
+            "cli",
+            "compose",
+            "compose_gpu",
+            "provenance",
+            "browser_suite",
+            "training_data",
+            "scoring_data",
+        ],
+    )?;
     let rows = [
-        ("browser_suite", artifacts.browser_suite.as_str()),
-        ("cli", artifacts.cli.as_str()),
-        ("compose", artifacts.compose.as_str()),
-        ("compose_gpu", artifacts.compose_gpu.as_str()),
-        ("installer", artifacts.installer.as_str()),
-        ("manager", artifacts.manager.as_str()),
-        ("provenance", artifacts.provenance.as_str()),
-        ("scoring_data", artifacts.scoring_data.as_str()),
-        ("training_data", artifacts.training_data.as_str()),
+        ("browser_suite", artifacts["browser_suite"].as_str()?),
+        ("cli", artifacts["cli"].as_str()?),
+        ("compose", artifacts["compose"].as_str()?),
+        ("compose_gpu", artifacts["compose_gpu"].as_str()?),
+        ("installer", artifacts["installer"].as_str()?),
+        ("manager", artifacts["manager"].as_str()?),
+        ("provenance", artifacts["provenance"].as_str()?),
+        ("scoring_data", artifacts["scoring_data"].as_str()?),
+        ("training_data", artifacts["training_data"].as_str()?),
     ]
     .into_iter()
     .map(|(name, digest)| format!("{name}\t{digest}\n"))
     .collect::<String>();
-    sha256_bytes(rows.as_bytes())
+    Some(sha256_bytes(rows.as_bytes()))
 }
 
 fn valid_utc_second_timestamp(value: &str) -> bool {
@@ -5255,108 +5293,190 @@ fn read_qualified_appliance_canary(
     if bytes.len() as u64 != metadata.len() {
         return Err("appliance aggregate changed while it was read".into());
     }
-    let raw: JsonValue = serde_json::from_slice(&bytes)
-        .map_err(|error| format!("appliance aggregate is not valid JSON: {error}"))?;
+    let mut deserializer = serde_json::Deserializer::from_slice(&bytes);
+    let raw = StrictJsonSeed
+        .deserialize(&mut deserializer)
+        .map_err(|error| format!("appliance aggregate is not unambiguous JSON: {error}"))?;
+    deserializer
+        .end()
+        .map_err(|error| format!("appliance aggregate has trailing JSON data: {error}"))?;
     if secret_like_json(&raw) {
         return Err("appliance aggregate contains secret-like evidence".into());
     }
-    let matrix: ApplianceCanaryMatrix = serde_json::from_slice(&bytes)
-        .map_err(|error| format!("appliance aggregate violates its closed shape: {error}"))?;
-    validate_qualified_appliance_canary(&matrix)?;
+    validate_qualified_appliance_canary(&raw)?;
     Ok(QualifiedApplianceCanary {
-        matrix,
+        matrix: raw,
         aggregate_sha256: sha256_bytes(&bytes),
     })
 }
 
 fn validate_qualified_appliance_canary(
-    matrix: &ApplianceCanaryMatrix,
+    matrix: &JsonValue,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    if matrix.schema_version != "jain.local-appliance-canary-matrix/v1" {
+    let matrix = exact_json_object(
+        matrix,
+        &[
+            "schema_version",
+            "qualification",
+            "fixture",
+            "release",
+            "release_tag",
+            "source_commit",
+            "status",
+            "formal_ga",
+            "rollback_release",
+            "release_job",
+            "manifest_sha256",
+            "public_key_sha256",
+            "artifact_identities",
+            "artifact_set_sha256",
+            "oci",
+            "lanes",
+            "created_at",
+        ],
+    )
+    .ok_or("appliance aggregate violates its closed top-level shape")?;
+    if matrix["schema_version"].as_str() != Some("jain.local-appliance-canary-matrix/v1") {
         return Err("unsupported appliance aggregate schema".into());
     }
-    if !matrix.qualification || matrix.fixture {
+    if matrix["qualification"].as_bool() != Some(true) || matrix["fixture"].as_bool() != Some(false)
+    {
         return Err("appliance promotion requires a non-fixture qualified aggregate".into());
     }
-    if matrix.release != RELEASE_VERSION {
+    let release = matrix["release"]
+        .as_str()
+        .ok_or("appliance aggregate release is not a string")?;
+    if release != RELEASE_VERSION {
         return Err(format!(
             "appliance aggregate release is {}, expected {RELEASE_VERSION}",
-            matrix.release
+            release
         )
         .into());
     }
-    if !matrix
-        .release_tag
-        .starts_with(&format!("jain-deploy-v{RELEASE_VERSION}-"))
-        || matrix.release_tag.len() > 160
-        || matrix.release_tag.chars().any(char::is_whitespace)
-        || !valid_nonzero_lower_hex(&matrix.source_commit, 40)
+    let release_tag = matrix["release_tag"].as_str().unwrap_or_default();
+    let source_commit = matrix["source_commit"].as_str().unwrap_or_default();
+    if !release_tag.starts_with(&format!("jain-deploy-v{RELEASE_VERSION}-"))
+        || release_tag.len() > 160
+        || release_tag.chars().any(char::is_whitespace)
+        || !valid_nonzero_lower_hex(source_commit, 40)
     {
         return Err("appliance aggregate has an invalid release tag or source commit".into());
     }
-    if matrix.status != RELEASE_STATUS
-        || matrix.formal_ga
-        || matrix.rollback_release != ROLLBACK_TARGET
+    if matrix["status"].as_str() != Some(RELEASE_STATUS)
+        || matrix["formal_ga"].as_bool() != Some(false)
+        || matrix["rollback_release"].as_str() != Some(ROLLBACK_TARGET)
     {
         return Err("appliance aggregate violates candidate/GA/rollback policy".into());
     }
-    if !matrix.release_job.verified
-        || !valid_sha256(&matrix.release_job.id)
-        || !valid_sha256(&matrix.release_job.attestation_sha256)
-        || !valid_https_url(&matrix.release_job.attestation_url)
-        || !valid_https_url(&matrix.release_job.signature_url)
+    let release_job = exact_json_object(
+        &matrix["release_job"],
+        &[
+            "id",
+            "attestation_url",
+            "attestation_sha256",
+            "signature_url",
+            "verified",
+        ],
+    )
+    .ok_or("appliance aggregate release job violates its closed shape")?;
+    if release_job["verified"].as_bool() != Some(true)
+        || !release_job["id"].as_str().is_some_and(valid_sha256)
+        || !release_job["attestation_sha256"]
+            .as_str()
+            .is_some_and(valid_sha256)
+        || !release_job["attestation_url"]
+            .as_str()
+            .is_some_and(valid_https_url)
+        || !release_job["signature_url"]
+            .as_str()
+            .is_some_and(valid_https_url)
     {
         return Err(
             "appliance aggregate lacks a verified signed HTTPS release-job identity".into(),
         );
     }
-    if !valid_sha256(&matrix.manifest_sha256)
-        || !valid_sha256(&matrix.public_key_sha256)
-        || !valid_sha256(&matrix.artifact_set_sha256)
+    if !matrix["manifest_sha256"].as_str().is_some_and(valid_sha256)
+        || !matrix["public_key_sha256"]
+            .as_str()
+            .is_some_and(valid_sha256)
+        || !matrix["artifact_set_sha256"]
+            .as_str()
+            .is_some_and(valid_sha256)
     {
         return Err(
             "appliance aggregate has an invalid manifest, key, or artifact-set digest".into(),
         );
     }
-    let artifacts = &matrix.artifact_identities;
-    if [
-        &artifacts.installer,
-        &artifacts.manager,
-        &artifacts.cli,
-        &artifacts.compose,
-        &artifacts.compose_gpu,
-        &artifacts.provenance,
-        &artifacts.browser_suite,
-        &artifacts.training_data,
-        &artifacts.scoring_data,
-    ]
-    .into_iter()
-    .any(|digest| !valid_sha256(digest))
+    let artifacts = &matrix["artifact_identities"];
+    let artifact_names = [
+        "installer",
+        "manager",
+        "cli",
+        "compose",
+        "compose_gpu",
+        "provenance",
+        "browser_suite",
+        "training_data",
+        "scoring_data",
+    ];
+    let artifact_object = exact_json_object(artifacts, &artifact_names)
+        .ok_or("appliance aggregate artifacts violate their closed shape")?;
+    if artifact_names
+        .iter()
+        .any(|name| !artifact_object[*name].as_str().is_some_and(valid_sha256))
     {
         return Err("appliance aggregate has an invalid artifact identity".into());
     }
-    if matrix.artifact_set_sha256 != appliance_artifact_set_sha256(artifacts) {
+    if matrix["artifact_set_sha256"].as_str() != appliance_artifact_set_sha256(artifacts).as_deref()
+    {
         return Err("appliance aggregate artifact-set digest does not bind its identities".into());
     }
-    let oci = &matrix.oci;
-    if oci.platform != "linux/amd64"
-        || !valid_digest(&oci.index_digest)
-        || !valid_digest(&oci.platform_digest)
-        || !valid_digest(&oci.runtime_image_id)
-        || !valid_repo_digest(&oci.index, &oci.index_digest)
-        || !valid_repo_digest(&oci.runtime_repo_digest, &oci.index_digest)
+    let oci = exact_json_object(
+        &matrix["oci"],
+        &[
+            "index",
+            "index_digest",
+            "platform",
+            "platform_digest",
+            "runtime_image_id",
+            "runtime_repo_digest",
+        ],
+    )
+    .ok_or("appliance aggregate OCI identity violates its closed shape")?;
+    let index_digest = oci["index_digest"].as_str().unwrap_or_default();
+    if oci["platform"].as_str() != Some("linux/amd64")
+        || !valid_digest(index_digest)
+        || !oci["platform_digest"].as_str().is_some_and(valid_digest)
+        || !oci["runtime_image_id"].as_str().is_some_and(valid_digest)
+        || !oci["index"]
+            .as_str()
+            .is_some_and(|value| valid_repo_digest(value, index_digest))
+        || !oci["runtime_repo_digest"]
+            .as_str()
+            .is_some_and(|value| valid_repo_digest(value, index_digest))
     {
         return Err("appliance aggregate has a mismatched or invalid OCI identity".into());
     }
-    if !matrix.lanes.cpu.qualification
-        || !matrix.lanes.gpu.qualification
-        || !valid_sha256(&matrix.lanes.cpu.receipt_sha256)
-        || !valid_sha256(&matrix.lanes.gpu.receipt_sha256)
-        || matrix.lanes.cpu.receipt_sha256 == matrix.lanes.gpu.receipt_sha256
+    let lanes = exact_json_object(&matrix["lanes"], &["cpu", "gpu"])
+        .ok_or("appliance aggregate lanes violate their closed shape")?;
+    let cpu = exact_json_object(&lanes["cpu"], &["receipt_sha256", "qualification"])
+        .ok_or("appliance CPU lane violates its closed shape")?;
+    let gpu = exact_json_object(&lanes["gpu"], &["receipt_sha256", "qualification"])
+        .ok_or("appliance GPU lane violates its closed shape")?;
+    let cpu_receipt = cpu["receipt_sha256"].as_str().unwrap_or_default();
+    let gpu_receipt = gpu["receipt_sha256"].as_str().unwrap_or_default();
+    if cpu["qualification"].as_bool() != Some(true)
+        || gpu["qualification"].as_bool() != Some(true)
+        || !valid_sha256(cpu_receipt)
+        || !valid_sha256(gpu_receipt)
+        || cpu_receipt == gpu_receipt
     {
         return Err("appliance aggregate requires distinct qualified CPU and GPU receipts".into());
     }
-    if !valid_utc_second_timestamp(&matrix.created_at) {
+    if !matrix["created_at"]
+        .as_str()
+        .is_some_and(valid_utc_second_timestamp)
+    {
         return Err("appliance aggregate created_at is not a valid UTC second timestamp".into());
     }
     Ok(())
@@ -5369,18 +5489,18 @@ fn appliance_canary_summary(qualification: &QualifiedApplianceCanary) -> JsonVal
         "qualification": true,
         "fixture": false,
         "aggregate_sha256": qualification.aggregate_sha256,
-        "release": matrix.release,
-        "release_tag": matrix.release_tag,
-        "source_commit": matrix.source_commit,
-        "release_job_id": matrix.release_job.id,
-        "manifest_sha256": matrix.manifest_sha256,
-        "public_key_sha256": matrix.public_key_sha256,
-        "artifact_set_sha256": matrix.artifact_set_sha256,
-        "oci_index_digest": matrix.oci.index_digest,
-        "oci_platform_digest": matrix.oci.platform_digest,
-        "cpu_receipt_sha256": matrix.lanes.cpu.receipt_sha256,
-        "gpu_receipt_sha256": matrix.lanes.gpu.receipt_sha256,
-        "created_at": matrix.created_at,
+        "release": matrix["release"],
+        "release_tag": matrix["release_tag"],
+        "source_commit": matrix["source_commit"],
+        "release_job_id": matrix["release_job"]["id"],
+        "manifest_sha256": matrix["manifest_sha256"],
+        "public_key_sha256": matrix["public_key_sha256"],
+        "artifact_set_sha256": matrix["artifact_set_sha256"],
+        "oci_index_digest": matrix["oci"]["index_digest"],
+        "oci_platform_digest": matrix["oci"]["platform_digest"],
+        "cpu_receipt_sha256": matrix["lanes"]["cpu"]["receipt_sha256"],
+        "gpu_receipt_sha256": matrix["lanes"]["gpu"]["receipt_sha256"],
+        "created_at": matrix["created_at"],
     })
 }
 
@@ -11134,9 +11254,8 @@ mod tests {
             },
             "created_at": "2026-07-21T23:00:00Z"
         });
-        let artifacts: ApplianceArtifactIdentities =
-            serde_json::from_value(matrix["artifact_identities"].clone()).unwrap();
-        matrix["artifact_set_sha256"] = json!(appliance_artifact_set_sha256(&artifacts));
+        matrix["artifact_set_sha256"] =
+            json!(appliance_artifact_set_sha256(&matrix["artifact_identities"]).unwrap());
         matrix
     }
 
@@ -11153,9 +11272,9 @@ mod tests {
         let aggregate =
             write_immutable_json(temp.path(), "aggregate.json", &qualified_appliance_matrix());
         let qualification = read_qualified_appliance_canary(&aggregate).unwrap();
-        assert_eq!(qualification.matrix.release, RELEASE_VERSION);
-        assert!(qualification.matrix.lanes.cpu.qualification);
-        assert!(qualification.matrix.lanes.gpu.qualification);
+        assert_eq!(qualification.matrix["release"], RELEASE_VERSION);
+        assert_eq!(qualification.matrix["lanes"]["cpu"]["qualification"], true);
+        assert_eq!(qualification.matrix["lanes"]["gpu"]["qualification"], true);
         assert!(valid_sha256(&qualification.aggregate_sha256));
 
         let report = temp.path().join("promotion.json");
