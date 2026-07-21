@@ -5,6 +5,7 @@ COPY rootfs /
 ENV LANG=C \
     LC_ALL=C \
     TZ=UTC \
+    LD_LIBRARY_PATH=/opt/redline/lib \
     PATH=/opt/redline/bin:/usr/bin:/bin
 
 WORKDIR /evidence

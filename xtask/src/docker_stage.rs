@@ -1,4 +1,5 @@
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::ffi::OsString;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
@@ -110,9 +111,11 @@ pub fn stage(
     let context = out_dir.join("context");
     let rootfs = context.join("rootfs");
     let bin_dir = rootfs.join("opt/redline/bin");
+    let lib_dir = rootfs.join("opt/redline/lib");
     let share_dir = rootfs.join("opt/redline/share");
     let custody_dir = share_dir.join("custody");
     fs::create_dir_all(&bin_dir)?;
+    fs::create_dir_all(&lib_dir)?;
     fs::create_dir_all(&custody_dir)?;
 
     let runner_source = repo_root.join("target/release/redline-testing");
@@ -129,11 +132,25 @@ pub fn stage(
     for binary in [&runner_source, target_bin, sqlite_bin, psql_bin] {
         libraries.extend(ldd_closure(binary)?);
     }
+    let mut staged_libraries = BTreeMap::<OsString, (PathBuf, String)>::new();
     for library in libraries {
-        let relative = library
-            .strip_prefix("/")
-            .with_context(|| format!("ELF dependency is not absolute: {}", library.display()))?;
-        copy_physical(&library, &rootfs.join(relative))?;
+        let name = library
+            .file_name()
+            .with_context(|| format!("ELF dependency has no file name: {}", library.display()))?
+            .to_owned();
+        let sha256 = sha256_file(&library)?;
+        if let Some((existing, existing_sha256)) = staged_libraries.get(&name) {
+            ensure!(
+                existing_sha256 == &sha256,
+                "ELF closure contains conflicting libraries named {}: {} and {}",
+                name.to_string_lossy(),
+                existing.display(),
+                library.display()
+            );
+            continue;
+        }
+        copy_physical(&library, &lib_dir.join(&name))?;
+        staged_libraries.insert(name, (library, sha256));
     }
 
     for (source, relative) in [
