@@ -935,7 +935,7 @@ fn extract_semver(version: &str) -> Option<String> {
 }
 
 fn corpus_hash(contract: &Contract) -> Result<String> {
-    let root = repo_root();
+    let root = runtime_data_root()?;
     let mut paths = Vec::new();
     collect_regular_files(&root.join(&contract.corpus_path), &mut paths)?;
     if let Some(exclusions) = &contract.exclusions_path {
@@ -944,7 +944,7 @@ fn corpus_hash(contract: &Contract) -> Result<String> {
     paths.sort();
     let mut hasher = Sha256::new();
     for path in paths {
-        let relative = path.strip_prefix(root).unwrap_or(&path);
+        let relative = path.strip_prefix(&root).unwrap_or(&path);
         hasher.update(relative.to_string_lossy().as_bytes());
         hasher.update([0]);
         hasher.update(fs::read(&path)?);
@@ -1066,6 +1066,26 @@ fn run_mode(mode: RunMode) -> &'static str {
 
 fn repo_root() -> &'static Path {
     Path::new(env!("CARGO_MANIFEST_DIR"))
+}
+
+fn runtime_data_root() -> Result<PathBuf> {
+    let Some(raw) = env::var_os("REDLINE_TESTING_RUNTIME_ROOT") else {
+        return Ok(repo_root().to_path_buf());
+    };
+    let path = PathBuf::from(raw);
+    if !path.is_absolute() {
+        bail!("REDLINE_TESTING_RUNTIME_ROOT must be absolute");
+    }
+    let metadata = fs::symlink_metadata(&path)
+        .with_context(|| format!("inspect REDLINE_TESTING_RUNTIME_ROOT at {}", path.display()))?;
+    if !metadata.is_dir() || metadata.file_type().is_symlink() {
+        bail!(
+            "REDLINE_TESTING_RUNTIME_ROOT is not a physical directory: {}",
+            path.display()
+        );
+    }
+    fs::canonicalize(&path)
+        .with_context(|| format!("resolve REDLINE_TESTING_RUNTIME_ROOT at {}", path.display()))
 }
 
 fn canonical_display(path: &Path) -> String {

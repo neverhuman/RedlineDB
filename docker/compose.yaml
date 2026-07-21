@@ -40,6 +40,7 @@ services:
       LANG: C
       LC_ALL: C
       TZ: UTC
+      REDLINE_TESTING_RUNTIME_ROOT: /opt/redline/share
       REDLINE_TESTING_POSTGRES_URL: postgresql://redline_parity:redline-local-parity@postgres:5432/redline_parity
     networks:
       - parity

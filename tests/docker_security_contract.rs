@@ -16,6 +16,7 @@ fn docker_topology_is_internal_pinned_and_socket_free() {
     assert!(compose.contains("internal: true"));
     assert!(compose.contains("pull_policy: never"));
     assert!(compose.contains("read_only: true"));
+    assert!(compose.contains("REDLINE_TESTING_RUNTIME_ROOT: /opt/redline/share"));
     assert!(compose.contains("cap_drop:"));
     assert!(!compose.contains("network_mode: host"));
     assert!(!compose.contains("docker.sock"));
