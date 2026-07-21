@@ -1,8 +1,8 @@
 # Release process
 
 `redline-testing` ships as a single tarball that RedlineDB CI consumes as a
-pinned artifact. GitHub Actions is the pre-merge validation and release
-surface; GitHub Releases is the public download host. The release workflow is:
+pinned artifact. The authoritative validation and release path is entirely
+local through Jeryu and physical custody under `/home/ubuntu/jain-split`.
 
 1. **Version source.** `Cargo.toml` `[package].version` is the canonical
    version. `CHANGELOG.md` is the human-facing log of what changed.
@@ -21,21 +21,18 @@ surface; GitHub Releases is the public download host. The release workflow is:
    recomputes every bundled file's SHA-256 against the manifest. If a file is
    in the tarball but missing from `artifact_hashes` (or vice versa), this
    test fails loudly. It runs as part of `just pr-ci`.
-4. **Tag the release.** The Redline family controller creates the manifest-bound
-   immutable tag with compare-and-swap semantics. The authorized corrective
-   identity for this candidate is `redline-testing-v1.0.1-jain.1`; the older
-   `.0` tag is never moved. The GitHub release workflow validates that the
-   tagged commit's `Cargo.toml` product version matches the tag before it builds
-   and can also be started manually against an existing tag ref.
-5. **CI build + attestation.** The GitHub release workflow re-runs `pr-ci`,
-   rebuilds the tarball via `just release-local`, requests
-   `actions/attest-build-provenance` for the tarball + `.sha256` +
-   `release-manifest.json`, and publishes the assets with `gh release create
-   --verify-tag`.
+4. **Custody.** `xtask custody-stage` validates every registry package checksum
+   in `Cargo.lock`, stages physical SQLite/PostgreSQL oracle artifacts in-tree,
+   performs `cargo build --workspace --locked --offline`, and records compiler,
+   dependency-closure, oracle version, and SHA-256 identities.
+5. **Tag the release.** After protected merge, the Redline family controller
+   creates the next unused manifest-bound immutable
+   `redline-testing-v<version>-jain.<revision>` tag with compare-and-swap
+   semantics. Existing tags never move.
 
 ## Verifying a release locally
 
-After downloading the release assets (`*.tar.gz`, `*.tar.gz.sha256`,
+From the locally preserved release assets (`*.tar.gz`, `*.tar.gz.sha256`,
 `release-manifest.json`):
 
 ```bash
@@ -48,13 +45,6 @@ jq -r '.artifact_hashes | to_entries[] | "\(.value)  \(.key)"' \
   release-manifest.json | sha256sum -c
 ```
 
-You can also verify the Sigstore attestation:
-
-```bash
-gh attestation verify redline-testing-<version>-linux-x86_64.tar.gz \
-  --repo neverhuman/redline-testing
-```
-
 ## Launch-gate readiness
 
 Before a release tag is published, the launch gate proves every control is in
@@ -64,8 +54,8 @@ place (see also [`docs/operations.md`](operations.md) and
 - **security**: `bash ops/ci/security.sh` runs gitleaks, `cargo audit`,
   `cargo deny`, zizmor, and an SBOM; the CI `security` job is blocking.
 - **provenance / integrity**: every artifact is SHA-256 hashed in
-  `release-manifest.json` and the tarball carries a Sigstore/SLSA build
-  **provenance** attestation.
+  `release-manifest.json`; custody and family-CI **provenance** receipts bind
+  compiler, dependency, oracle, commit, tag, and tarball identities.
 - **backup**: the content-addressed tarball + `.sha256` sidecar + manifest are
   the immutable **backups** of every shipped artifact; old tags never move.
 - **monitoring**: the `release_manifest_integrity` test plus RedlineDB CI
@@ -83,9 +73,9 @@ so downstream consumers that pinned it keep working. RedlineDB's pin lives
 in `redlineDB/scripts/ci_install_redline_testing.sh` (or equivalent); ask the
 RedlineDB team to bump the pin to the desired version.
 
-## Jain local-forge corrective lifecycle
+## Local-forge corrective lifecycle
 
-The Jain release path is 100% local and does not publish through GitHub. From
+The release path is 100% local. From
 an ordinary branch based directly on protected local-Jeryu `main`, run the
 same `bash ops/ci/pr-ci.sh`, governed Jankurai proof, security, package, and
 manifest-integrity lanes. The forge must independently publish a successful
@@ -109,11 +99,12 @@ Downstream RedlineDB CI consumes:
 - `corpus/sqlite_parity/generated_manifest.json` — pinned upstream cases.
 - `corpus/sqlite_parity/cases/*.json` — extended hand + generated shards.
 - `corpus/beyond_sqlite/generated_manifest.json` — beyond-SQLite oracle cases.
+- `contracts/*.toml` — versioned compatibility requirements and exclusions.
 - `metadata/beyond_sqlite/features.json` — the 12-entry rank/owner taxonomy.
 - `schemas/*.json` — raw-record + release-manifest schemas.
 - `templates/*.md` — report-generation README templates.
 
 Adding files to the tarball: drop them into the appropriate source directory;
 `scripts/release-package.sh` picks them up automatically and they appear in
-`artifact_hashes`. The Sigstore attestation covers the tarball as a whole, so
-the new file is signed in transit.
+`artifact_hashes`. The manifest and family-CI receipt bind the tarball as a
+whole.

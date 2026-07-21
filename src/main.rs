@@ -1,5 +1,6 @@
 mod beyond_sqlite;
 mod cli;
+mod compat;
 mod evidence;
 mod exceptions;
 mod report;

@@ -29,17 +29,10 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 repo_slug_from_remote() {
-  local url slug
-  url="$(git remote get-url github 2>/dev/null || git remote get-url gh 2>/dev/null || git remote get-url origin 2>/dev/null || true)"
-  slug="$(printf '%s' "$url" | sed -E 's#^git@github.com:##; s#^https://github.com/##; s#^ssh://git@github.com/##; s#\.git$##')"
-  if [[ "$slug" == */* && "$slug" != http:* && "$slug" != ssh:* ]]; then
-    printf '%s' "$slug"
-  else
-    printf 'neverhuman/%s' "$(basename "$repo_root")"
-  fi
+  printf 'veox/redline-testing'
 }
 
-slug="${GITHUB_REPOSITORY:-$(repo_slug_from_remote)}"
+slug="$(repo_slug_from_remote)"
 store_root="${SIGNRAIL_STORE_ROOT:-${HOME}/.local/share/jeryu/signrail}"
 
 cargo run --locked --quiet -p xtask -- telemetry \

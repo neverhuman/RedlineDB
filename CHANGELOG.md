@@ -2,16 +2,23 @@
 
 This project follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html). The
-release surface is the signed runner tarball; see [docs/release.md](docs/release.md)
-for the publish + attestation flow.
+release surface is the locally attested runner tarball; see
+[docs/release.md](docs/release.md) for the protected Jeryu flow.
 
 ## [Unreleased]
+
+### Added
+
+- Versioned SQLite/PostgreSQL compatibility contracts, deterministic selectors,
+  strict release evidence, and the compatibility major gate.
+- Offline dependency/oracle custody receipts for the local release path.
 
 ### Changed
 
 - Bound Jain release packaging to the Cargo product version through the Rust
-  `xtask validate-release-tag` gate and the authorized immutable corrective tag
-  `redline-testing-v1.0.1-jain.1`; the existing `.0` tag remains unchanged.
+  `xtask validate-release-tag` gate and immutable corrective tag scheme.
+- Removed GitHub release/download/attestation dependencies from the
+  authoritative build and release path.
 - Removed the remaining Python CI helper in favor of the tested Rust xtask
   implementation.
 

@@ -17,7 +17,8 @@ bash ops/ci/pr-ci.sh         # the single validate command (fmt, check, test, pa
 | fast / validate | `bash ops/ci/pr-ci.sh` | fmt, `cargo check`, `cargo test --locked`, release packaging |
 | security | `bash ops/ci/security.sh` | offline gitleaks, pinned local RustSec `cargo audit --no-fetch`, `cargo deny`, blocking zizmor, and no-update SBOM |
 | jankurai | `bash ops/ci/jankurai.sh` | fail-closed audit/proof using exact regular non-symlink Jankurai 1.6.11 bytes at `/home/ubuntu/.jeryu/bin/jankurai`; target-only copy-code, rust-witness, security, cost, and release evidence |
-| ship-gate | `cargo run -p xtask -- ship-gate` | each SQLite-parity shard self-compares against `sqlite3` |
+| ship-gate | `cargo run -p xtask -- ship-gate` | prospective SQLite cases self-compare; required contract cases cannot be removed |
+| compatibility | `cargo run --locked -- run --contract <id> --cases <selector> --mode diagnostic\|release` | deterministic selection and strict fail-closed evidence |
 | beyond-postgres | `cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact` | every published case passes the `psql` ↔ `psql` oracle self-compare with zero skips |
 
 ### Forge proof parity
@@ -83,7 +84,7 @@ proven by `bash ops/ci/release-readiness.sh` (writes
 launch-gate evidence is present before a tag is published:
 
 - **security**: `bash ops/ci/security.sh` (gitleaks, cargo-audit, cargo-deny,
-  zizmor, SBOM) plus Sigstore **provenance** attestation of the tarball.
+  zizmor, SBOM) plus local custody and family-CI **provenance** receipts.
 - **backups**: the corpus + manifest are content-addressed (SHA-256) and the
   release tarball is the immutable backup of every shipped artifact.
 - **monitoring**: RedlineDB CI consumes the pinned tarball and reports

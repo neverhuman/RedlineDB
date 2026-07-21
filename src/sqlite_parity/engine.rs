@@ -433,10 +433,16 @@ impl EngineSpec {
     }
 
     pub fn binary_identity(&self) -> Result<BinaryIdentity> {
-        match self
-            .identity
-            .get_or_init(|| binary_identity(&self.bin).map_err(|err| err.to_string()))
-        {
+        match self.identity.get_or_init(|| {
+            let mut identity = binary_identity(&self.bin).map_err(|err| err.to_string())?;
+            if self.name.eq_ignore_ascii_case("redlinedb")
+                && !identity.version.to_ascii_lowercase().contains("redlinedb")
+            {
+                identity.version = probe_product_version(Path::new(&identity.executable_path))
+                    .map_err(|err| err.to_string())?;
+            }
+            Ok(identity)
+        }) {
             Ok(identity) => Ok(identity.clone()),
             Err(message) => bail!("{message}"),
         }
@@ -634,12 +640,39 @@ fn probe_version(bin: &Path) -> Result<String> {
         .stderr(Stdio::piped())
         .output()
         .with_context(|| format!("run {} --version", bin.display()))?;
-    let version = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    let stream = if output.stdout.is_empty() {
+        &output.stderr
+    } else {
+        &output.stdout
+    };
+    let version = String::from_utf8_lossy(stream).trim().to_owned();
     if version.is_empty() {
         Ok(String::from("<unknown>"))
     } else {
         Ok(version)
     }
+}
+
+fn probe_product_version(bin: &Path) -> Result<String> {
+    let output = Command::new(bin)
+        .arg("version")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .with_context(|| format!("run {} version", bin.display()))?;
+    let stream = if output.stdout.is_empty() {
+        &output.stderr
+    } else {
+        &output.stdout
+    };
+    let version = String::from_utf8_lossy(stream).trim().to_owned();
+    if !output.status.success() || !version.to_ascii_lowercase().contains("redlinedb") {
+        bail!(
+            "{} version did not return a canonical RedlineDB identity: {version:?}",
+            bin.display()
+        );
+    }
+    Ok(version)
 }
 
 fn run_sql_script(bin: &Path, db_path: &Path, script: &str, extra_args: &[&str]) -> Result<bool> {

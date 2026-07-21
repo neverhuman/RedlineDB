@@ -4,7 +4,13 @@ use crate::beyond_sqlite;
 use crate::report::{self, JankuraiCompareOptions, ReportOptions, SentinelOptions};
 use crate::sqlite_parity;
 
-use super::args::{JankuraiCompareArgs, ListArgs, ListFormat, ReportArgs, SentinelArgs, Suite};
+use super::args::{
+    JankuraiCompareArgs, ListArgs, ListFormat, MajorGateArgs, ReportArgs, SentinelArgs, Suite,
+};
+
+pub(crate) fn major_gate(args: MajorGateArgs) -> Result<()> {
+    crate::compat::major_gate(&args.baseline, &args.candidate)
+}
 
 pub(crate) fn report(args: ReportArgs) -> Result<()> {
     report::generate(ReportOptions {

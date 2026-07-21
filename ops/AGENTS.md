@@ -11,10 +11,9 @@
 ## Forbidden
 
 - Do not put suite/runtime/report behavior under `ops/`; that lives in `src/`.
-- Do not inline CI commands in `.github/workflows/*`. Workflows stay thin and
-  delegate to `bash ops/ci/<lane>.sh` so local runs == CI.
-- Do not weaken a security scan to non-blocking, echo secrets, or unpin a
-  GitHub Action from its 40-hex commit SHA.
+- Do not add an external release workflow. Jeryu host CI delegates to
+  `bash ops/ci/<lane>.sh` so local runs equal CI.
+- Do not weaken a security scan to non-blocking or echo secrets.
 
 ## Proof lane
 

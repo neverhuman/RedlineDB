@@ -37,6 +37,7 @@ pub fn compare_cases(
     sqlite_version: Option<String>,
     progress: bool,
     memory_samples: bool,
+    fail_on_failure: bool,
 ) -> Result<RunSummary> {
     let tmp_root = tmp_root.as_ref();
     let started = Instant::now();
@@ -84,7 +85,7 @@ pub fn compare_cases(
         }
     }
     summary.elapsed = started.elapsed();
-    finish_summary(summary, progress)
+    finish_summary(summary, progress, fail_on_failure)
 }
 
 struct CaseRun {
@@ -338,7 +339,11 @@ pub fn validate_compare_engines(reference: &EngineSpec, target: &EngineSpec) -> 
     Ok(())
 }
 
-fn finish_summary(mut summary: RunSummary, progress: bool) -> Result<RunSummary> {
+fn finish_summary(
+    mut summary: RunSummary,
+    progress: bool,
+    fail_on_failure: bool,
+) -> Result<RunSummary> {
     summary.slowest.sort_by(|left, right| right.1.cmp(&left.1));
     summary.slowest.truncate(10);
     if progress {
@@ -352,7 +357,7 @@ fn finish_summary(mut summary: RunSummary, progress: bool) -> Result<RunSummary>
         );
         eprintln!("sqlite_parity slowest={:?}", summary.slowest);
     }
-    if summary.failed > 0 {
+    if fail_on_failure && summary.failed > 0 {
         bail!(
             "sqlite parity failed {} of {} cases",
             summary.failed,

@@ -100,14 +100,7 @@ run_ci() {
 }
 
 repo_slug_from_remote() {
-  local url slug
-  url="$(git remote get-url github 2>/dev/null || git remote get-url gh 2>/dev/null || git remote get-url origin 2>/dev/null || true)"
-  slug="$(printf '%s' "$url" | sed -E 's#^git@github.com:##; s#^https://github.com/##; s#^ssh://git@github.com/##; s#\.git$##')"
-  if [[ "$slug" == */* && "$slug" != http:* && "$slug" != ssh:* ]]; then
-    printf '%s' "$slug"
-  else
-    printf 'neverhuman/%s' "$(basename "$repo_root")"
-  fi
+  printf 'veox/redline-testing'
 }
 
 write_json_files() {
@@ -136,11 +129,9 @@ run_signrail() {
     jeryu-signrail "$@"
   elif command -v jeryu_signrail >/dev/null 2>&1; then
     jeryu_signrail "$@"
-  elif [[ -f /home/ubuntu/jeryu/crates/jeryu-signrail/Cargo.toml ]]; then
-    cargo run -q --manifest-path /home/ubuntu/jeryu/crates/jeryu-signrail/Cargo.toml -- "$@"
   else
-    cargo install --locked --git https://github.com/neverhuman/jeryu jeryu-signrail
-    jeryu-signrail "$@"
+    say "physical local jeryu-signrail binary is required; downloads are forbidden"
+    return 1
   fi
 }
 
@@ -152,7 +143,7 @@ sign_bundle() {
     say "JERYU_SIGNRAIL_ED25519_SEED or SIGNRAIL_ED25519_SEED is required"
     return 1
   }
-  repo_slug="${GITHUB_REPOSITORY:-$(repo_slug_from_remote)}"
+  repo_slug="$(repo_slug_from_remote)"
   sha="$(current_sha)"
   version="${SIGNRAIL_RELEASE_VERSION:-$sha}"
   rollback_target="${SIGNRAIL_ROLLBACK_TARGET:-$(git rev-parse HEAD^ 2>/dev/null || printf '%s' "$sha")}"

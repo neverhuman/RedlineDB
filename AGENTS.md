@@ -27,8 +27,12 @@ Rules:
 - Preserve JSONL field compatibility for RedlineDB report parsing.
 - Treat `rtk cargo fmt --check`, `rtk cargo check --locked`,
   `rtk cargo test --locked`, and `rtk just release-local` as the local proof.
-- The ship contract: a SQLite-parity case ships iff `sqlite3 ↔ sqlite3`
-  self-compare passes (`cargo run -p xtask -- ship-gate`); a beyond-SQLite
-  case ships iff `psql ↔ psql` self-compare passes. Failing cases are cut
-  from the shard, not demoted. RedlineDB reacts on its own to the published
-  corpus.
+- The ship contract is versioned by `contracts/compatibility-v1.toml`. A new
+  case first proves `sqlite3 ↔ sqlite3` or `psql ↔ psql` self-comparison.
+  Once required by a published contract it may not be cut, skipped, or
+  weakened without a compatibility-contract major change. Release mode fails
+  closed on unavailable oracles, skips, count drift, missing/duplicate cases,
+  malformed output, or any non-pass result.
+- Release builds and evidence use only the local Jeryu forge and physical,
+  recursively symlink-free custody under `/home/ubuntu/jain-split`; never add
+  a GitHub release, download, external checkout, or symlink dependency.

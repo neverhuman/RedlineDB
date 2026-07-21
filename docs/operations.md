@@ -31,9 +31,8 @@ restores prior behavior and ask the RedlineDB team to bump their pin (see
   the target CLI) with bounded `Duration` timeouts.
 - No untrusted network input is accepted; inputs are developer-controlled
   corpus shards validated by `xtask ship-gate`.
-- CI tokens are least-privilege: the default job is `contents: read`; only the
-  badge job takes `contents: write`, only the release job takes attestation
-  scopes. Every GitHub Action is pinned to a 40-hex commit SHA.
+- The authoritative release lane receives only a local token-file path; it
+  neither downloads dependencies nor publishes to an external service.
 
 ## Kill switch
 

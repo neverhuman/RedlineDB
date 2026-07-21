@@ -11,6 +11,9 @@ use crate::sqlite_parity;
 use super::args::{ProgressMode, RunArgs, Suite};
 
 pub(crate) fn run_suite(args: RunArgs) -> Result<()> {
+    if args.contract.is_some() {
+        return crate::compat::run_contract(args);
+    }
     let workers = resolve_workers(&args.workers)?;
     validate_samples(args.repetitions, args.warmup)?;
     let tmp_root = resolve_tmp_root(&args.tmp_root)?;
@@ -219,6 +222,7 @@ fn run_sqlite_like_suite(
             warmup: args.warmup,
             progress: progress_enabled(args.progress),
             memory_samples,
+            fail_on_failure: true,
         })?
     };
     evidence::write_sqlite_parity_evidence(EvidenceConfig {
@@ -299,7 +303,7 @@ pub(crate) fn resolve_workers(value: &str) -> Result<usize> {
     Ok(workers)
 }
 
-fn validate_samples(repetitions: usize, warmup: usize) -> Result<()> {
+pub(crate) fn validate_samples(repetitions: usize, warmup: usize) -> Result<()> {
     if repetitions == 0 {
         bail!("--repetitions must be positive");
     }
@@ -319,7 +323,7 @@ pub(crate) fn prepare_output(output: &Path) -> Result<()> {
     fs::write(output, "").with_context(|| format!("truncate output {}", output.display()))
 }
 
-fn resolve_tmp_root(raw: &str) -> Result<PathBuf> {
+pub(crate) fn resolve_tmp_root(raw: &str) -> Result<PathBuf> {
     if raw != "auto" {
         return Ok(PathBuf::from(raw));
     }
@@ -335,7 +339,7 @@ fn resolve_tmp_root(raw: &str) -> Result<PathBuf> {
     Ok(std::env::temp_dir().join("redline-testing"))
 }
 
-fn resolve_sqlite_bin(raw: &str) -> PathBuf {
+pub(crate) fn resolve_sqlite_bin(raw: &str) -> PathBuf {
     if raw == "auto" {
         PathBuf::from(sqlite_parity::REFERENCE_CLI_BIN)
     } else {

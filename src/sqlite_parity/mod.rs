@@ -27,10 +27,15 @@ pub struct RunConfig {
     pub warmup: usize,
     pub progress: bool,
     pub memory_samples: bool,
+    pub fail_on_failure: bool,
 }
 
 pub fn run(config: RunConfig) -> Result<RunSummary> {
     let cases = catalog::selected_official_cases()?;
+    run_selected(config, cases)
+}
+
+pub fn run_selected(config: RunConfig, cases: Vec<case::Case>) -> Result<RunSummary> {
     let reference = engine::EngineSpec::new(engine::REFERENCE_CLI_BIN, config.reference_bin);
     let target = engine::EngineSpec::new("redlinedb", config.target_bin);
     runner::validate_compare_engines(&reference, &target)?;
@@ -59,6 +64,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
         sqlite_version,
         config.progress,
         config.memory_samples,
+        config.fail_on_failure,
     )
 }
 

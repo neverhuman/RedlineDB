@@ -1,7 +1,7 @@
 # redline-testing
 
-Primary CI runs on GitHub via [.github/workflows/ci.yml](.github/workflows/ci.yml).
-Public release artifacts are published on GitHub via [.github/workflows/release.yml](.github/workflows/release.yml).
+Authoritative CI and releases run locally through the Jeryu forge. The release
+path requires no GitHub service, download, external checkout, or network access.
 <!-- jankurai-score-badge:begin -->
 [![Jankurai score: 38/100 advisory](https://img.shields.io/badge/jankurai-38%2F100%20advisory-red)](agent/repo-score.json)
 <!-- jankurai-score-badge:end -->
@@ -21,29 +21,23 @@ Suites:
 
 ---
 
-## Install
+## Build from local custody
 
-Download the pre-built binary from [GitHub Releases](https://github.com/neverhuman/redline-testing/releases/latest):
+The canonical checkout builds only from the in-tree Cargo custody:
 
 ```bash
-curl -fsSL \
-  https://github.com/neverhuman/redline-testing/releases/latest/download/redline-testing-1.0.1-linux-x86_64.tar.gz \
-  | tar -xz
-./redline-testing-1.0.1-linux-x86_64/bin/redline-testing --version
+REDLINE_CARGO_HOME=/home/ubuntu/jain-split/target/redline-testing-cargo-home \
+  bash scripts/setup.sh
+target/debug/redline-testing --version
 ```
 
-Each release ships a `.sha256` sidecar and a Sigstore/SLSA build-provenance
-attestation. Verify the tarball hash before you run:
+Each local release ships a `.sha256` sidecar and content manifest. Verify both
+before use:
 
 ```bash
-sha256sum -c redline-testing-1.0.1-linux-x86_64.tar.gz.sha256
-```
-
-You can also verify the attestation with GitHub CLI:
-
-```bash
-gh attestation verify redline-testing-1.0.1-linux-x86_64.tar.gz \
-  --repo neverhuman/redline-testing
+sha256sum -c redline-testing-<version>-linux-x86_64.tar.gz.sha256
+jq -r '.artifact_hashes | to_entries[] | "\(.value)  \(.key)"' \
+  release-manifest.json | sha256sum -c
 ```
 
 ---
@@ -217,12 +211,10 @@ schemas/release-manifest.schema.json
 templates/README.sqlite-parity.md
 ```
 
-Tagged GitHub releases are built by [.github/workflows/release.yml](.github/workflows/release.yml),
-which reruns `pr-ci`, packages the tarball via `just release-local`, attests
-the tarball + `.sha256` + `release-manifest.json`, and publishes the assets
-with `gh release create --verify-tag`. Jain corrective tags use the immutable
-`redline-testing-v<product-version>-jain.<revision>` identity; this release
-candidate is `redline-testing-v1.0.1-jain.1`.
+Protected local Jeryu merges are packaged with `just release-local`. The family
+controller binds the content manifest and creates the next unused immutable
+`redline-testing-v<product-version>-jain.<revision>` tag. Existing tags never
+move.
 
 ---
 
@@ -240,6 +232,15 @@ just release-local
 
 # Validate every corpus case against sqlite3 (ship-gate)
 cargo run -p xtask --release -- ship-gate
+
+# Stage/hash oracle artifacts and prove the locked dependency closure offline
+cargo run --locked -p xtask -- custody-stage \
+  --source-cargo-home /home/ubuntu/.cargo \
+  --cargo-home /home/ubuntu/jain-split/target/redline-testing-cargo-home \
+  --sqlite-bin /usr/bin/sqlite3 \
+  --postgres-client-bin /usr/lib/postgresql/16/bin/psql \
+  --postgres-server-bin /usr/lib/postgresql/16/bin/postgres \
+  --out-dir /home/ubuntu/jain-split/target/redline-custody
 
 # Detect drift in matrix-generated shards
 cargo run -p xtask --release -- generate --check

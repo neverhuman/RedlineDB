@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
-# One-command setup for redline-testing. Installs the pinned Rust toolchain,
-# fetches dependencies, and builds the workspace so that `bash ops/ci/pr-ci.sh`
+# One-command setup for redline-testing. Uses the already-pinned Rust toolchain
+# and in-tree Cargo custody, and builds the workspace so `bash ops/ci/pr-ci.sh`
 # (the single validate command) is ready to run.
 
 set -euo pipefail
@@ -12,19 +12,20 @@ cd "$repo_root"
 say() { printf '[setup] %s\n' "$*"; }
 
 if ! command -v cargo >/dev/null 2>&1; then
-    say "cargo not found — install Rust via https://rustup.rs and re-run"
+    say "cargo not found; provision the pinned toolchain into local custody"
     exit 1
 fi
 
-# rust-toolchain.toml pins the channel; this materializes it.
-say "resolving pinned toolchain"
-rustup show active-toolchain >/dev/null 2>&1 || true
+custody_home="${REDLINE_CARGO_HOME:-$repo_root/../../target/redline-testing-cargo-home}"
+[[ -d "$custody_home" && ! -L "$custody_home" ]] || {
+    say "physical in-tree Cargo custody is missing: $custody_home"
+    exit 1
+}
+export CARGO_HOME="$custody_home"
+export CARGO_NET_OFFLINE=true
 
-say "fetching dependencies"
-cargo fetch --locked
-
-say "building workspace"
-cargo build --workspace --locked
+say "building workspace from offline custody"
+cargo build --workspace --locked --offline
 
 cat <<'NEXT'
 [setup] done.

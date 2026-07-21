@@ -4,8 +4,8 @@
 #
 # Refactored from the prior single-line `just release-local` recipe to a
 # glob-driven loop so new bundled files are automatically hashed and recorded
-# in release-manifest.json (which the Sigstore attestation covers via the
-# `actions/attest-build-provenance` step on the GitHub release workflow).
+# in release-manifest.json. Local Jeryu evidence binds that manifest and the
+# immutable tag; no external release or attestation service is involved.
 
 set -euo pipefail
 
@@ -14,7 +14,7 @@ cd "$repo_root"
 
 version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
 test -n "$version"
-tag="${GITHUB_REF_NAME:-${REDLINE_TESTING_RELEASE_TAG:-redline-testing-v${version}-jain.1}}"
+tag="${REDLINE_TESTING_RELEASE_TAG:-redline-testing-v${version}-jain.1}"
 cargo run --locked --quiet -p xtask -- validate-release-tag --tag "$tag"
 cargo build --release --locked
 
@@ -26,6 +26,7 @@ rm -rf "${pkg_dir}"
 mkdir -p "${pkg_dir}/bin"
 mkdir -p "${pkg_dir}/corpus/sqlite_parity/cases"
 mkdir -p "${pkg_dir}/corpus/beyond_sqlite"
+mkdir -p "${pkg_dir}/contracts"
 mkdir -p "${pkg_dir}/metadata/beyond_sqlite"
 mkdir -p "${pkg_dir}/schemas"
 mkdir -p "${pkg_dir}/templates"
@@ -41,6 +42,7 @@ for shard in corpus/sqlite_parity/cases/*.json; do
   cp "$shard" "${pkg_dir}/corpus/sqlite_parity/cases/$(basename "$shard")"
 done
 cp corpus/beyond_sqlite/generated_manifest.json "${pkg_dir}/corpus/beyond_sqlite/generated_manifest.json"
+cp contracts/*.toml "${pkg_dir}/contracts/"
 cp metadata/beyond_sqlite/features.json "${pkg_dir}/metadata/beyond_sqlite/features.json"
 cp schemas/*.json "${pkg_dir}/schemas/"
 cp templates/*.md "${pkg_dir}/templates/"

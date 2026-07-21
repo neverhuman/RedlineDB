@@ -524,7 +524,7 @@ dependencies = [
 
 [[package]]
 name = "redline-testing"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -533,6 +533,7 @@ dependencies = [
  "serde_json",
  "sha2",
  "sqlparser",
+ "toml",
 ]
 
 [[package]]
@@ -952,12 +953,13 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "1.0.1"
+version = "1.1.0"
 dependencies = [
  "anyhow",
  "clap",
  "serde",
  "serde_json",
+ "sha2",
  "toml",
 ]
 

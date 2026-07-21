@@ -14,6 +14,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub(crate) enum CommandKind {
     Run(RunArgs),
+    MajorGate(MajorGateArgs),
     Report(ReportArgs),
     List(ListArgs),
     JankuraiCompare(JankuraiCompareArgs),
@@ -23,6 +24,16 @@ pub(crate) enum CommandKind {
 
 #[derive(Debug, Args)]
 pub(crate) struct RunArgs {
+    /// Versioned compatibility contract. When present, `--suite` is ignored
+    /// and the selected contract is the sole execution authority.
+    #[arg(long)]
+    pub(crate) contract: Option<String>,
+    /// Deterministic selector: `all`, `id:<id>[,<id>...]`,
+    /// `category:<name>`, or `priority:<P0..P4>`.
+    #[arg(long, default_value = "all")]
+    pub(crate) cases: String,
+    #[arg(long, value_enum, default_value = "diagnostic")]
+    pub(crate) mode: RunMode,
     #[arg(long, value_enum, default_value = "all")]
     pub(crate) suite: Suite,
     #[arg(long)]
@@ -43,6 +54,14 @@ pub(crate) struct RunArgs {
     pub(crate) progress: ProgressMode,
     #[arg(long)]
     pub(crate) memory_samples: bool,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct MajorGateArgs {
+    #[arg(long)]
+    pub(crate) baseline: String,
+    #[arg(long)]
+    pub(crate) candidate: String,
 }
 
 #[derive(Debug, Args)]
@@ -157,6 +176,12 @@ pub(crate) enum ProgressMode {
     Auto,
     Always,
     Never,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, ValueEnum)]
+pub(crate) enum RunMode {
+    Diagnostic,
+    Release,
 }
 
 #[derive(Debug, Clone, Copy, ValueEnum)]

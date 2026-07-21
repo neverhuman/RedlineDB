@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local release dispatcher that mirrors the tagged GitHub release job.
+# Authoritative local release dispatcher used by the protected Jeryu lifecycle.
 
 set -euo pipefail
 

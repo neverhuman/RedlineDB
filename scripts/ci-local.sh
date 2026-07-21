@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Local CI dispatcher for the same proof surface used by GitHub CI.
+# Authoritative local CI dispatcher used by Jeryu host CI.
 
 set -euo pipefail
 

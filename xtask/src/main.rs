@@ -24,6 +24,7 @@
 //!     readiness, artifact-support, and canary-telemetry JSON contracts.
 
 mod badge;
+mod custody;
 mod generators;
 mod repo_ops;
 mod sqlite_runner;
@@ -106,6 +107,23 @@ enum Command {
         #[arg(long, default_value = "sqlite3")]
         sqlite_bin: String,
     },
+    /// Stage frozen oracle artifacts, validate the locked Cargo closure, build
+    /// offline, and emit a content-addressed in-tree custody receipt.
+    CustodyStage {
+        /// Existing local cache used only to bootstrap exact custody bytes.
+        #[arg(long)]
+        source_cargo_home: PathBuf,
+        #[arg(long)]
+        cargo_home: PathBuf,
+        #[arg(long)]
+        sqlite_bin: PathBuf,
+        #[arg(long)]
+        postgres_client_bin: PathBuf,
+        #[arg(long)]
+        postgres_server_bin: PathBuf,
+        #[arg(long)]
+        out_dir: PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
@@ -149,6 +167,22 @@ fn main() -> Result<()> {
                 .unwrap_or_else(|| repo_root.join("corpus").join("sqlite_parity").join("cases"));
             ship_gate(&target, &sqlite_bin)
         }
+        Command::CustodyStage {
+            source_cargo_home,
+            cargo_home,
+            sqlite_bin,
+            postgres_client_bin,
+            postgres_server_bin,
+            out_dir,
+        } => custody::stage(
+            &repo_root,
+            &source_cargo_home,
+            &cargo_home,
+            &sqlite_bin,
+            &postgres_client_bin,
+            &postgres_server_bin,
+            &out_dir,
+        ),
     }
 }
 

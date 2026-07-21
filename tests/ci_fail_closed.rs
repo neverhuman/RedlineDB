@@ -56,14 +56,17 @@ fn security_workflow_is_blocking_and_delegates_to_the_local_lane() {
 }
 
 #[test]
-fn release_workflow_delegates_to_the_canonical_ops_lanes() {
-    let workflow = repo_file(".github/workflows/release.yml");
-
-    assert!(workflow.contains("redline-testing-v*-jain.*"));
-    assert!(!workflow.contains("- \"v*\""));
-    assert!(workflow.contains("validate-release-tag --tag \"$GITHUB_REF_NAME\""));
-    assert!(workflow.contains("run: bash ops/ci/pr-ci.sh"));
-    assert!(workflow.contains("run: bash ops/ci/release.sh"));
+fn release_path_is_local_only_and_requires_custody() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    assert!(!root.join(".github/workflows/release.yml").exists());
+    let doctor = repo_file("scripts/ci-doctor.sh");
+    let release = repo_file("scripts/release-package.sh");
+    let docs = repo_file("docs/release.md");
+    assert!(doctor.contains("authoritative release workflow must not publish through GitHub"));
+    assert!(doctor.contains("custody-stage"));
+    assert!(!release.contains("GITHUB_REF_NAME"));
+    assert!(docs.contains("xtask custody-stage"));
+    assert!(!docs.contains("gh release create"));
 }
 
 #[test]

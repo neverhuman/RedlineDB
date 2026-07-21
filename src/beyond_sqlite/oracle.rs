@@ -83,6 +83,13 @@ pub fn run_cases() -> Result<(OracleSummary, Vec<CaseOutcome>)> {
 
 pub fn run_cases_with(options: RunCasesOptions) -> Result<(OracleSummary, Vec<CaseOutcome>)> {
     let cases = load_cases()?;
+    run_selected_cases_with(cases, options)
+}
+
+pub fn run_selected_cases_with(
+    cases: Vec<BeyondCase>,
+    options: RunCasesOptions,
+) -> Result<(OracleSummary, Vec<CaseOutcome>)> {
     let reference = resolve();
     let mut summary = OracleSummary {
         total: cases.len(),

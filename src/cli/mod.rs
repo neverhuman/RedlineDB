@@ -1,6 +1,6 @@
-mod args;
+pub(crate) mod args;
 mod cmds;
-mod run;
+pub(crate) mod run;
 
 pub use args::Cli;
 
@@ -10,6 +10,7 @@ use args::CommandKind;
 pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         CommandKind::Run(args) => run::run_suite(args),
+        CommandKind::MajorGate(args) => cmds::major_gate(args),
         CommandKind::Report(args) => cmds::report(args),
         CommandKind::List(args) => cmds::list(args),
         CommandKind::JankuraiCompare(args) => cmds::jankurai_compare(args),

@@ -1,0 +1,90 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "redline.compat-evidence/v1",
+  "title": "Redline compatibility evidence v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "mode",
+    "engine",
+    "storage_format_version",
+    "compatibility_mode",
+    "contract",
+    "selection",
+    "results",
+    "release_failures",
+    "runner",
+    "oracles",
+    "oracle_custody",
+    "host",
+    "performance_baseline_id",
+    "command_line"
+  ],
+  "properties": {
+    "schema_version": { "const": "redline.compat-evidence/v1" },
+    "status": { "enum": ["pass", "fail", "diagnostic"] },
+    "mode": { "enum": ["diagnostic", "release"] },
+    "engine": { "$ref": "#/$defs/engine" },
+    "storage_format_version": { "type": "string", "minLength": 1 },
+    "compatibility_mode": { "enum": ["sqlite", "postgres"] },
+    "contract": { "$ref": "#/$defs/contract" },
+    "selection": { "$ref": "#/$defs/selection" },
+    "results": { "type": "object" },
+    "release_failures": { "type": "array", "items": { "type": "string" } },
+    "runner": { "type": "object", "required": ["version", "commit", "binary"] },
+    "oracles": { "type": "array", "minItems": 1 },
+    "oracle_custody": { "type": ["object", "null"] },
+    "host": { "type": "object" },
+    "performance_baseline_id": { "type": "string", "minLength": 1 },
+    "command_line": { "type": "array", "items": { "type": "string" } }
+  },
+  "$defs": {
+    "binary": {
+      "type": "object",
+      "required": ["path", "sha256", "version"],
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "version": { "type": "string", "minLength": 1 }
+      }
+    },
+    "engine": {
+      "type": "object",
+      "required": ["commit", "tag", "semver", "binary"],
+      "properties": {
+        "commit": { "type": "string", "minLength": 1 },
+        "tag": { "type": "string", "minLength": 1 },
+        "semver": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
+        "binary": { "$ref": "#/$defs/binary" }
+      }
+    },
+    "contract": {
+      "type": "object",
+      "required": ["id", "manifest_path", "manifest_sha256", "corpus_path", "corpus_sha256", "total_case_count", "required_case_count", "exclusion_count"],
+      "properties": {
+        "id": { "enum": ["redline-sqlite-contract/v1", "redline-postgres-contract/v1"] },
+        "manifest_path": { "const": "contracts/compatibility-v1.toml" },
+        "manifest_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "corpus_path": { "type": "string", "minLength": 1 },
+        "corpus_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "total_case_count": { "type": "integer", "minimum": 1 },
+        "required_case_count": { "type": "integer", "minimum": 1 },
+        "exclusion_count": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "required": ["selector", "explanation", "selected_case_count", "expected_case_count", "selected_case_ids", "selected_case_ids_sha256"],
+      "properties": {
+        "selector": { "type": "string", "minLength": 1 },
+        "explanation": { "type": "string", "minLength": 1 },
+        "selected_case_count": { "type": "integer", "minimum": 1 },
+        "expected_case_count": { "type": "integer", "minimum": 1 },
+        "selected_case_ids": { "type": "array", "minItems": 1, "items": { "type": "integer", "minimum": 1 }, "uniqueItems": true },
+        "selected_case_ids_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+      }
+    }
+  }
+}
