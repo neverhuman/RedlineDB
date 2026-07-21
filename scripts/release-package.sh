@@ -27,6 +27,7 @@ mkdir -p "${pkg_dir}/bin"
 mkdir -p "${pkg_dir}/corpus/sqlite_parity/cases"
 mkdir -p "${pkg_dir}/corpus/beyond_sqlite"
 mkdir -p "${pkg_dir}/contracts"
+mkdir -p "${pkg_dir}/docker"
 mkdir -p "${pkg_dir}/metadata/beyond_sqlite"
 mkdir -p "${pkg_dir}/schemas"
 mkdir -p "${pkg_dir}/templates"
@@ -43,7 +44,9 @@ for shard in corpus/sqlite_parity/cases/*.json; do
 done
 cp corpus/beyond_sqlite/generated_manifest.json "${pkg_dir}/corpus/beyond_sqlite/generated_manifest.json"
 cp contracts/*.toml "${pkg_dir}/contracts/"
+cp docker/Dockerfile docker/compose.yaml docker/images.lock.toml "${pkg_dir}/docker/"
 cp metadata/beyond_sqlite/features.json "${pkg_dir}/metadata/beyond_sqlite/features.json"
+cp metadata/beyond_sqlite/skip-list.toml "${pkg_dir}/metadata/beyond_sqlite/skip-list.toml"
 cp schemas/*.json "${pkg_dir}/schemas/"
 cp templates/*.md "${pkg_dir}/templates/"
 shopt -u nullglob

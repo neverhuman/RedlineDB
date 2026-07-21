@@ -1,0 +1,59 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "redline.docker-custody-receipt/v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "status",
+    "provenance_source",
+    "testing",
+    "core",
+    "images",
+    "docker_engine",
+    "docker_inputs",
+    "cargo_custody",
+    "contracts",
+    "runtime_artifacts",
+    "network_policy"
+  ],
+  "properties": {
+    "schema_version": { "const": "redline.docker-custody-receipt/v1" },
+    "status": { "const": "pass" },
+    "provenance_source": { "const": "local-jeryu" },
+    "testing": { "$ref": "#/$defs/source" },
+    "core": { "$ref": "#/$defs/source" },
+    "images": { "type": "object" },
+    "docker_engine": { "type": "object" },
+    "docker_inputs": { "type": "object" },
+    "cargo_custody": { "type": "object" },
+    "contracts": { "type": "object" },
+    "runtime_artifacts": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["kind", "path", "sha256"],
+        "properties": {
+          "kind": { "enum": ["binary", "custody-input", "elf-library"] },
+          "path": { "type": "string", "pattern": "^/" },
+          "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+        }
+      }
+    },
+    "network_policy": { "type": "string" }
+  },
+  "$defs": {
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["commit", "tree", "binary"],
+      "properties": {
+        "commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "tree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+        "binary": { "type": "object" }
+      }
+    }
+  }
+}

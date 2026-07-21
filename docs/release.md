@@ -100,6 +100,8 @@ Downstream RedlineDB CI consumes:
 - `corpus/sqlite_parity/cases/*.json` — extended hand + generated shards.
 - `corpus/beyond_sqlite/generated_manifest.json` — beyond-SQLite oracle cases.
 - `contracts/*.toml` — versioned compatibility requirements and exclusions.
+- `docker/{Dockerfile,compose.yaml,images.lock.toml}` — pinned local Docker parity topology, separate from Redline Central packaging.
+- `schemas/docker-*.schema.json` — Docker custody and parity evidence contracts.
 - `metadata/beyond_sqlite/features.json` — the 12-entry rank/owner taxonomy.
 - `schemas/*.json` — raw-record + release-manifest schemas.
 - `templates/*.md` — report-generation README templates.

@@ -19,7 +19,22 @@ bash ops/ci/pr-ci.sh         # the single validate command (fmt, check, test, pa
 | jankurai | `bash ops/ci/jankurai.sh` | fail-closed audit/proof using exact regular non-symlink Jankurai 1.6.11 bytes at `/home/ubuntu/.jeryu/bin/jankurai`; target-only copy-code, rust-witness, security, cost, and release evidence |
 | ship-gate | `cargo run -p xtask -- ship-gate` | prospective SQLite cases self-compare; required contract cases cannot be removed |
 | compatibility | `cargo run --locked -- run --contract <id> --cases <selector> --mode diagnostic\|release` | deterministic selection and strict fail-closed evidence |
+| Docker parity | `just docker-parity --source-cargo-home <in-tree-custody>` | delegates to `redlinectl docker-parity`; uses pinned local images and seals evidence only after isolated campaign cleanup |
 | beyond-postgres | `cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact` | every published case passes the `psql` ↔ `psql` oracle self-compare with zero skips |
+
+The Docker topology is owned by `docker/`. `xtask docker-stage` creates a
+physical, symlink-free runtime context containing the exact runner, reviewed
+target, SQLite and PostgreSQL clients, ELF closure, contracts, corpus, schemas,
+and checksummed Cargo/Docker custody. Image inspection is local-only: a missing
+digest is a red result and must never trigger a registry pull. Diagnostic smoke
+runs may select one case per lane but write only diagnostic evidence. Release
+mode requires 2,445 SQLite target passes, 265 PostgreSQL oracle passes, 151
+governed PostgreSQL target passes, the exact 114 exclusion identities, and zero
+skips or unavailable services.
+
+GitHub workflows are not a PostgreSQL or parity evidence authority. The former
+workflow service container was removed; local and release Docker campaigns
+enter through `redlinectl docker-parity`.
 
 ### Forge proof parity
 

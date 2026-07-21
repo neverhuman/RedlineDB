@@ -3,6 +3,13 @@ set shell := ["bash", "-eu", "-o", "pipefail", "-c"]
 # Canonical root command surface; the default recipe runs the same lane CI runs.
 default: pr-ci
 
+docker-stage *args:
+    cargo run --locked --offline -p xtask -- docker-stage {{args}}
+
+# The Redline control plane owns container lifecycle and final evidence sealing.
+docker-parity *args:
+    ../redline-split-ops/redlinectl docker-parity {{args}}
+
 # One-command setup: install/build everything needed to validate.
 setup:
     bash scripts/setup.sh

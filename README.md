@@ -2,6 +2,14 @@
 
 Authoritative CI and releases run locally through the Jeryu forge. The release
 path requires no GitHub service, download, external checkout, or network access.
+
+Full container parity is local-only. `just docker-parity
+--source-cargo-home <physical-in-tree-custody>` delegates container lifecycle to
+the Redline control plane. It uses only digest-pinned images already present in
+local custody, an internal Compose network, and an explicitly supplied evidence
+directory. Until PostgreSQL compatibility work closes the current target gaps,
+the infrastructure reports those target failures and emits no passing release
+receipt.
 <!-- jankurai-score-badge:begin -->
 [![Jankurai score: 38/100 advisory](https://img.shields.io/badge/jankurai-38%2F100%20advisory-red)](agent/repo-score.json)
 <!-- jankurai-score-badge:end -->

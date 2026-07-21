@@ -14,6 +14,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub(crate) enum CommandKind {
     Run(RunArgs),
+    DockerParity(Box<DockerParityArgs>),
     MajorGate(MajorGateArgs),
     Report(ReportArgs),
     List(ListArgs),
@@ -38,6 +39,10 @@ pub(crate) struct RunArgs {
     pub(crate) suite: Suite,
     #[arg(long)]
     pub(crate) target_bin: PathBuf,
+    /// Argument passed to the target before the harness-owned shell arguments.
+    /// Repeat the option to preserve argument ordering.
+    #[arg(long = "target-arg", allow_hyphen_values = true)]
+    pub(crate) target_args: Vec<String>,
     #[arg(long, default_value = "auto")]
     pub(crate) sqlite_bin: String,
     #[arg(long, default_value = "auto")]
@@ -54,6 +59,33 @@ pub(crate) struct RunArgs {
     pub(crate) progress: ProgressMode,
     #[arg(long)]
     pub(crate) memory_samples: bool,
+}
+
+#[derive(Debug, Args)]
+pub(crate) struct DockerParityArgs {
+    #[arg(long, value_enum, default_value = "release")]
+    pub(crate) mode: RunMode,
+    #[arg(long)]
+    pub(crate) target_bin: PathBuf,
+    #[arg(long = "target-arg", allow_hyphen_values = true)]
+    pub(crate) target_args: Vec<String>,
+    #[arg(long, default_value = "/opt/redline/bin/sqlite3")]
+    pub(crate) sqlite_bin: PathBuf,
+    #[arg(long)]
+    pub(crate) evidence_dir: PathBuf,
+    #[arg(
+        long,
+        default_value = "/opt/redline/share/custody/docker-custody-receipt.json"
+    )]
+    pub(crate) custody_receipt: PathBuf,
+    #[arg(long, default_value = "all")]
+    pub(crate) sqlite_cases: String,
+    #[arg(long, default_value = "all")]
+    pub(crate) postgres_oracle_cases: String,
+    #[arg(long, default_value = "all")]
+    pub(crate) postgres_target_cases: String,
+    #[arg(long, default_value = "auto")]
+    pub(crate) workers: String,
 }
 
 #[derive(Debug, Args)]
@@ -200,5 +232,31 @@ impl Suite {
             Self::RqlPhase1 => "rql_phase1",
             Self::BeyondSqlite => "beyond_sqlite",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn repeated_target_arguments_preserve_order_and_hyphen_values() {
+        let cli = Cli::try_parse_from([
+            "redline-testing",
+            "docker-parity",
+            "--target-bin",
+            "/opt/redline/bin/redlinedb",
+            "--evidence-dir",
+            "/evidence",
+            "--target-arg",
+            "--compatibility",
+            "--target-arg",
+            "postgres",
+        ])
+        .unwrap();
+        let CommandKind::DockerParity(args) = cli.command else {
+            panic!("expected docker-parity command")
+        };
+        assert_eq!(args.target_args, ["--compatibility", "postgres"]);
     }
 }

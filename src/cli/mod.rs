@@ -10,6 +10,7 @@ use args::CommandKind;
 pub fn run(cli: Cli) -> Result<()> {
     match cli.command {
         CommandKind::Run(args) => run::run_suite(args),
+        CommandKind::DockerParity(args) => crate::docker_parity::run(*args),
         CommandKind::MajorGate(args) => cmds::major_gate(args),
         CommandKind::Report(args) => cmds::report(args),
         CommandKind::List(args) => cmds::list(args),

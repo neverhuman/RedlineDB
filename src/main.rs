@@ -1,6 +1,7 @@
 mod beyond_sqlite;
 mod cli;
 mod compat;
+mod docker_parity;
 mod evidence;
 mod exceptions;
 mod report;

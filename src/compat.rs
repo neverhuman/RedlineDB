@@ -44,13 +44,13 @@ struct Contract {
     exclusion_count: usize,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct ExclusionManifest {
     #[serde(default)]
     skip: Vec<Exclusion>,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct Exclusion {
     case_id: String,
     name: String,
@@ -517,6 +517,7 @@ fn run_postgres_contract(args: &RunArgs, contract: &Contract) -> Result<Contract
         selected,
         RunCasesOptions {
             target_bin: Some(args.target_bin.clone()),
+            target_args: args.target_args.clone(),
         },
     )?;
     write_postgres_outcomes(&args.output, &outcomes)?;
@@ -976,12 +977,53 @@ fn collect_regular_files(path: &Path, output: &mut Vec<PathBuf>) -> Result<()> {
     Ok(())
 }
 
-fn compatibility_evidence_path(output: &Path) -> Result<PathBuf> {
+pub(crate) fn compatibility_evidence_path(output: &Path) -> Result<PathBuf> {
     let name = output
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| anyhow::anyhow!("--output must have a UTF-8 filename"))?;
     Ok(output.with_file_name(format!("{name}.compat-evidence.json")))
+}
+
+pub(crate) fn select_postgres_oracle_cases(selector: &str) -> Result<Vec<BeyondCase>> {
+    let all = beyond_sqlite::oracle::load_cases()?;
+    validate_unique_ids(
+        all.iter().map(|case| case.id),
+        "PostgreSQL oracle compatibility corpus",
+    )?;
+    let contract = Contract {
+        id: POSTGRES_CONTRACT.to_owned(),
+        compatibility_mode: "postgres-oracle".to_owned(),
+        oracle: "postgres".to_owned(),
+        corpus_path: "corpus/beyond_sqlite/generated_manifest.json".to_owned(),
+        exclusions_path: None,
+        expected_case_count: all.len(),
+        required_case_count: all.len(),
+        exclusion_count: 0,
+    };
+    let descriptors = all.iter().map(postgres_descriptor).collect::<Vec<_>>();
+    let selection = select_cases(selector, &descriptors, &contract)?;
+    Ok(all
+        .into_iter()
+        .filter(|case| selection.ids.contains(&case.id))
+        .collect())
+}
+
+pub(crate) fn postgres_exclusions_json() -> Result<Vec<serde_json::Value>> {
+    let manifest = load_and_validate_manifest()?;
+    let contract = manifest
+        .contract
+        .iter()
+        .find(|contract| contract.id == POSTGRES_CONTRACT)
+        .context("PostgreSQL contract is missing")?;
+    let cases = beyond_sqlite::oracle::load_cases()?;
+    load_and_validate_exclusions(&cases, contract)?;
+    let exclusions: ExclusionManifest = toml::from_str(POSTGRES_EXCLUSIONS)?;
+    Ok(exclusions
+        .skip
+        .into_iter()
+        .map(|exclusion| serde_json::to_value(exclusion).expect("serialize exclusion"))
+        .collect())
 }
 
 fn write_postgres_outcomes(path: &Path, outcomes: &[CaseOutcome]) -> Result<()> {

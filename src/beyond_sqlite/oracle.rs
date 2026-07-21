@@ -54,6 +54,9 @@ pub struct RunCasesOptions {
     /// Target binary to validate against the psql reference. When `None` the
     /// oracle only runs the psql self-compare ship gate.
     pub target_bin: Option<PathBuf>,
+    /// Ordered arguments inserted before the harness-owned target shell
+    /// arguments. This is the explicit compatibility-mode selection seam.
+    pub target_args: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -132,7 +135,8 @@ pub fn run_selected_cases_with(
         if outcome.status == "passed"
             && let Some(target_bin) = options.target_bin.as_deref()
         {
-            let target_outcome = run_one_case_against_target(case, &pg, target_bin);
+            let target_outcome =
+                run_one_case_against_target(case, &pg, target_bin, &options.target_args);
             outcome.target = Some(target_outcome);
         }
         match outcome.status.as_str() {
@@ -276,6 +280,7 @@ fn run_one_case_against_target(
     case: &BeyondCase,
     pg: &PostgresReference,
     target_bin: &Path,
+    target_args: &[String],
 ) -> TargetOutcome {
     let timeout = Duration::from_millis(case.timeout_ms().into());
     let stdin = assembled_stdin(case);
@@ -301,7 +306,7 @@ fn run_one_case_against_target(
 
     let target_stdin = format!("{SQLITE_FORMATTING_PREAMBLE}{stdin}");
     let target_started = Instant::now();
-    let target = match invoke_target(target_bin, &target_stdin, timeout) {
+    let target = match invoke_target(target_bin, target_args, &target_stdin, timeout) {
         Ok(out) => out,
         Err(err) => {
             return TargetOutcome {
@@ -379,8 +384,14 @@ struct TargetOutput {
     exit_code: i32,
 }
 
-fn invoke_target(target_bin: &Path, stdin: &str, timeout: Duration) -> Result<TargetOutput> {
+fn invoke_target(
+    target_bin: &Path,
+    target_args: &[String],
+    stdin: &str,
+    timeout: Duration,
+) -> Result<TargetOutput> {
     let mut command = Command::new(target_bin);
+    command.args(target_args);
     command.arg("-batch").arg("-bail").arg(":memory:");
     command
         .stdin(Stdio::piped())

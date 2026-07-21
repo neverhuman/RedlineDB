@@ -25,6 +25,7 @@
 
 mod badge;
 mod custody;
+mod docker_stage;
 mod generators;
 mod repo_ops;
 mod sqlite_runner;
@@ -124,6 +125,30 @@ enum Command {
         #[arg(long)]
         out_dir: PathBuf,
     },
+    /// Build a symlink-free, content-addressed Docker runtime context from
+    /// exact local custody. This command never pulls or builds an image.
+    DockerStage {
+        #[arg(long)]
+        source_cargo_home: PathBuf,
+        #[arg(long)]
+        cargo_home: PathBuf,
+        #[arg(long)]
+        sqlite_bin: PathBuf,
+        #[arg(long)]
+        psql_bin: PathBuf,
+        #[arg(long)]
+        postgres_bin: PathBuf,
+        #[arg(long)]
+        target_bin: PathBuf,
+        #[arg(long)]
+        core_commit: String,
+        #[arg(long)]
+        core_tree: String,
+        #[arg(long, default_value = "docker/images.lock.toml")]
+        image_manifest: PathBuf,
+        #[arg(long)]
+        out_dir: PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
@@ -181,6 +206,30 @@ fn main() -> Result<()> {
             &sqlite_bin,
             &postgres_client_bin,
             &postgres_server_bin,
+            &out_dir,
+        ),
+        Command::DockerStage {
+            source_cargo_home,
+            cargo_home,
+            sqlite_bin,
+            psql_bin,
+            postgres_bin,
+            target_bin,
+            core_commit,
+            core_tree,
+            image_manifest,
+            out_dir,
+        } => docker_stage::stage(
+            &repo_root,
+            &source_cargo_home,
+            &cargo_home,
+            &sqlite_bin,
+            &psql_bin,
+            &postgres_bin,
+            &target_bin,
+            &core_commit,
+            &core_tree,
+            &image_manifest,
             &out_dir,
         ),
     }

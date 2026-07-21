@@ -196,6 +196,7 @@ pub fn run(config: RunConfig) -> Result<RunSummary> {
     let (oracle_summary, oracle_outcomes) =
         super::oracle::run_cases_with(super::oracle::RunCasesOptions {
             target_bin: Some(config.target_bin.clone()),
+            target_args: Vec::new(),
         })
         .unwrap_or((
             super::oracle::OracleSummary {

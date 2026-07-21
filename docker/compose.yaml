@@ -1,0 +1,64 @@
+name: ${REDLINE_DOCKER_COMPOSE_PROJECT:?set REDLINE_DOCKER_COMPOSE_PROJECT}
+
+services:
+  postgres:
+    image: ${REDLINE_DOCKER_POSTGRES_IMAGE:?set REDLINE_DOCKER_POSTGRES_IMAGE}
+    pull_policy: never
+    environment:
+      LANG: C
+      LC_ALL: C
+      PGTZ: UTC
+      POSTGRES_DB: redline_parity
+      POSTGRES_USER: redline_parity
+      POSTGRES_PASSWORD: redline-local-parity
+      POSTGRES_INITDB_ARGS: --locale=C --encoding=UTF8 --auth-host=scram-sha-256 --auth-local=trust
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U redline_parity -d redline_parity"]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+      start_period: 2s
+    networks:
+      - parity
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec
+      - /run/postgresql:rw,nosuid,nodev,noexec,uid=70,gid=70
+    security_opt:
+      - no-new-privileges:true
+
+  runner:
+    image: ${REDLINE_DOCKER_RUNNER_IMAGE:?set REDLINE_DOCKER_RUNNER_IMAGE}
+    pull_policy: never
+    read_only: true
+    user: ${REDLINE_DOCKER_UID:?set REDLINE_DOCKER_UID}:${REDLINE_DOCKER_GID:?set REDLINE_DOCKER_GID}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      LANG: C
+      LC_ALL: C
+      TZ: UTC
+      REDLINE_TESTING_POSTGRES_URL: postgresql://redline_parity:redline-local-parity@postgres:5432/redline_parity
+    networks:
+      - parity
+    volumes:
+      - type: bind
+        source: ${REDLINE_DOCKER_EVIDENCE_DIR:?set REDLINE_DOCKER_EVIDENCE_DIR}
+        target: /evidence
+        read_only: false
+    tmpfs:
+      - /tmp:rw,nosuid,nodev,noexec,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  parity:
+    internal: true
+    driver: bridge
+
+volumes:
+  postgres_data:
