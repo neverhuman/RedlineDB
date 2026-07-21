@@ -5576,6 +5576,58 @@ fn validate_materialization_object_tree(
     Ok(())
 }
 
+fn declared_standard_version_tag(
+    repo: &str,
+    destination: &Path,
+) -> Result<Option<String>, Box<dyn std::error::Error>> {
+    let repo_name = repo
+        .split_once('/')
+        .map(|(_, name)| name)
+        .ok_or("declared release-tag repository has no owner")?;
+    let path = destination.join("agent/standard-version.toml");
+    let metadata = match fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    if !metadata.file_type().is_file()
+        || metadata.file_type().is_symlink()
+        || metadata.len() > 16 * 1024
+        || metadata.nlink() != 1
+    {
+        return Err("declared release-tag metadata is not a bounded regular file".into());
+    }
+    let data: toml::Value = fs::read_to_string(&path)?.parse()?;
+    if data.get("workspace").and_then(toml::Value::as_str) != Some(repo_name) {
+        return Err("declared release-tag workspace differs from the repository".into());
+    }
+    let Some(tag) = data.get("version").and_then(toml::Value::as_str) else {
+        return Err("declared release-tag metadata has no version".into());
+    };
+    let prefix = format!("{repo_name}-v");
+    let Some(release) = tag.strip_prefix(&prefix) else {
+        // Developer-only repositories may use a package version rather than an
+        // immutable family tag. They receive no retained tag authority.
+        return Ok(None);
+    };
+    let Some((version, suffix)) = release.rsplit_once("-split.") else {
+        return Err("declared release tag has no immutable split suffix".into());
+    };
+    if version.is_empty()
+        || suffix.is_empty()
+        || !suffix.bytes().all(|byte| byte.is_ascii_digit())
+        || !version
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
+        || !valid_cargo_cache_component(tag)
+    {
+        return Err("declared release tag is not a governed immutable tag".into());
+    }
+    let tag_ref = format!("refs/tags/{tag}");
+    secure_git_output(None, &["check-ref-format", &tag_ref])?;
+    Ok(Some(tag.to_owned()))
+}
+
 struct MaterializationDirectory {
     path: PathBuf,
     device: u64,
@@ -5643,6 +5695,7 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     let mut destination = None;
     let mut token_file = None;
     let mut retain_origin = false;
+    let mut retain_declared_release_tag = false;
     let mut git_lfs_path = None;
     let mut git_lfs_sha256 = None;
     let mut iter = args.into_iter().skip(1);
@@ -5674,6 +5727,7 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
                 git_lfs_sha256 = Some(iter.next().ok_or("--git-lfs-sha256 needs a digest")?)
             }
             "--retain-origin" => retain_origin = true,
+            "--retain-declared-release-tag" => retain_declared_release_tag = true,
             value => return Err(format!("unknown git-materialize argument: {value}").into()),
         }
     }
@@ -5765,6 +5819,54 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     {
         return Err("Git materialization fetched a different commit".into());
     }
+    let mut release_tag_ref = String::new();
+    let mut release_tag_commit = String::new();
+    if retain_declared_release_tag {
+        if let Some(tag) = declared_standard_version_tag(&repo, &destination)? {
+            let tag_ref = format!("refs/tags/{tag}");
+            if let Some(advertised_tag) = secure_ls_remote_at(&remote, &tag_ref, &token_file)? {
+                let tag_refspec = format!("{tag_ref}:{tag_ref}");
+                secure_materialization_git_status(
+                    &destination,
+                    &remote,
+                    &token_file,
+                    &["fetch", "--quiet", "--no-tags", &remote, &tag_refspec],
+                )?;
+                let local_tag =
+                    secure_git_output(Some(&destination), &["rev-parse", "--verify", &tag_ref])?;
+                let local_commit = secure_git_output(
+                    Some(&destination),
+                    &["rev-parse", "--verify", &format!("{tag_ref}^{{commit}}")],
+                )?;
+                if local_tag != advertised_tag || local_commit != advertised_tag {
+                    return Err(
+                        "declared release tag is not an exact lightweight commit tag".into(),
+                    );
+                }
+                validate_materialization_object_tree(&destination, &tag_ref)?;
+                if !secure_git_status(
+                    Some(&destination),
+                    &["merge-base", "--is-ancestor", &local_commit, &expected_head],
+                )? {
+                    return Err("declared release tag is not an ancestor of product head".into());
+                }
+                if secure_ls_remote_at(&remote, &tag_ref, &token_file)?.as_deref()
+                    != Some(advertised_tag.as_str())
+                {
+                    return Err("declared release tag moved during fetch".into());
+                }
+                release_tag_ref = tag_ref;
+                release_tag_commit = local_commit;
+            }
+        }
+    }
+    let retained_tags = secure_git_output(
+        Some(&destination),
+        &["for-each-ref", "--format=%(refname)", "refs/tags"],
+    )?;
+    if retained_tags != release_tag_ref {
+        return Err("Git materialization retained unexpected tag refs".into());
+    }
     if let Some(git_lfs) = git_lfs.as_deref() {
         if !secure_git_status(Some(&destination), &["remote", "add", "origin", &remote])? {
             return Err("Git materialization could not configure its exact LFS origin".into());
@@ -5820,6 +5922,8 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             "destination": destination,
             "origin_retained": retain_origin,
             "lfs_hydrated": git_lfs.is_some(),
+            "release_tag_ref": release_tag_ref,
+            "release_tag_commit": release_tag_commit,
             "status": "pass"
         }))?
     );
@@ -5861,7 +5965,13 @@ fn jeryu_ref_readback(args: Vec<String>) -> Result<(), Box<dyn std::error::Error
     }
 
     let advertised_refs = if let Some(reference) = reference {
-        validate_heads_ref(&reference)?;
+        if reference.starts_with("refs/heads/") {
+            validate_heads_ref(&reference)?;
+        } else if reference.starts_with("refs/tags/") {
+            secure_git_output(None, &["check-ref-format", &reference])?;
+        } else {
+            return Err("remote readback requires an exact heads or tags ref".into());
+        }
         if secure_ls_remote_at(&remote, &reference, &token_file)?.as_deref()
             != Some(expected_head.as_str())
         {
@@ -6101,7 +6211,7 @@ fn hydrate_authenticated_lfs(
         let filter_process = format!("{} filter-process", git_lfs.display());
         let filter_clean = format!("{} clean -- %f", git_lfs.display());
         let filter_smudge = format!("{} smudge -- %f", git_lfs.display());
-        let status = Command::new(git_lfs)
+        let output = Command::new(git_lfs)
             .env_clear()
             .env("PATH", "/usr/bin:/bin")
             .env("LC_ALL", "C")
@@ -6121,8 +6231,8 @@ fn hydrate_authenticated_lfs(
             .env("GIT_CONFIG_VALUE_3", "true")
             .current_dir(repo)
             .args(args)
-            .status()?;
-        if !status.success() {
+            .output()?;
+        if !output.status.success() {
             return Err(format!("offline git-lfs {} failed", args[0]).into());
         }
     }
@@ -11933,6 +12043,150 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             token_file.display().to_string(),
         ])
         .is_err());
+    }
+
+    #[test]
+    fn git_materialization_retains_only_the_authenticated_declared_ancestor_tag() {
+        let root = TestDir::new("git-materialization-release-tag");
+        let (source, _) = init_source(root.path());
+        fs::create_dir_all(source.join("agent")).unwrap();
+        let tag = "example-v8.0.1-split.1";
+        fs::write(
+            source.join("agent/standard-version.toml"),
+            format!(
+                "schema_version = \"1.0.0\"\nworkspace = \"example\"\nversion = \"{tag}\"\nrelease_authority = \"jain-deploy\"\n"
+            ),
+        )
+        .unwrap();
+        run_git_strict(&source, &["add", "agent/standard-version.toml"]).unwrap();
+        run_git_strict(&source, &["commit", "-m", "declare release baseline"]).unwrap();
+        let baseline = resolve_commit(&source, "HEAD").unwrap();
+        run_git_strict(
+            &source,
+            &["update-ref", &format!("refs/tags/{tag}"), &baseline],
+        )
+        .unwrap();
+        fs::write(source.join("successor"), b"reviewed successor\n").unwrap();
+        run_git_strict(&source, &["add", "successor"]).unwrap();
+        run_git_strict(&source, &["commit", "-m", "reviewed successor"]).unwrap();
+        let head = resolve_commit(&source, "HEAD").unwrap();
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!("{head}:refs/heads/main"),
+                &format!("refs/tags/{tag}:refs/tags/{tag}"),
+            ],
+        )
+        .unwrap();
+        let token_root = TestDir::new_private_temp("git-materialization-release-tag-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let args = |destination: &Path| {
+            vec![
+                "git-materialize".to_owned(),
+                "--repo".to_owned(),
+                "jeryu/example".to_owned(),
+                "--remote".to_owned(),
+                remote.display().to_string(),
+                "--ref".to_owned(),
+                "refs/heads/main".to_owned(),
+                "--expected-head".to_owned(),
+                head.clone(),
+                "--destination".to_owned(),
+                destination.display().to_string(),
+                "--token-file".to_owned(),
+                token_file.display().to_string(),
+                "--retain-declared-release-tag".to_owned(),
+            ]
+        };
+
+        let retained = root.path().join("retained");
+        jeryu_git_materialize(args(&retained)).unwrap();
+        assert_eq!(
+            resolve_commit(&retained, &format!("refs/tags/{tag}")).unwrap(),
+            baseline
+        );
+        assert_eq!(
+            strict_git_output(
+                &retained,
+                &["for-each-ref", "--format=%(refname)", "refs/tags"]
+            )
+            .unwrap(),
+            format!("refs/tags/{tag}")
+        );
+
+        run_git_strict(&source, &["update-ref", &format!("refs/tags/{tag}"), &head]).unwrap();
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                "--force",
+                remote.to_str().unwrap(),
+                &format!("refs/tags/{tag}:refs/tags/{tag}"),
+            ],
+        )
+        .unwrap();
+        assert!(jeryu_ref_readback(vec![
+            "ref-readback".to_owned(),
+            "--repo".to_owned(),
+            "jeryu/example".to_owned(),
+            "--remote".to_owned(),
+            remote.display().to_string(),
+            "--ref".to_owned(),
+            format!("refs/tags/{tag}"),
+            "--expected-head".to_owned(),
+            baseline.clone(),
+            "--token-file".to_owned(),
+            token_file.display().to_string(),
+        ])
+        .is_err());
+
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!(":refs/tags/{tag}"),
+            ],
+        )
+        .unwrap();
+        let absent = root.path().join("absent");
+        jeryu_git_materialize(args(&absent)).unwrap();
+        assert!(strict_git_output(
+            &absent,
+            &["for-each-ref", "--format=%(refname)", "refs/tags"]
+        )
+        .unwrap()
+        .is_empty());
+
+        let tree = strict_git_output(&source, &["rev-parse", "HEAD^{tree}"]).unwrap();
+        let unrelated = strict_git_output(
+            &source,
+            &["commit-tree", &tree, "-m", "unrelated tag target"],
+        )
+        .unwrap();
+        run_git_strict(
+            &source,
+            &["update-ref", &format!("refs/tags/{tag}"), &unrelated],
+        )
+        .unwrap();
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!("refs/tags/{tag}:refs/tags/{tag}"),
+            ],
+        )
+        .unwrap();
+        let rejected = root.path().join("non-ancestor");
+        let error = jeryu_git_materialize(args(&rejected)).unwrap_err();
+        assert!(error.to_string().contains("not an ancestor"));
+        assert!(!rejected.exists());
     }
 
     #[test]

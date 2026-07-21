@@ -51,6 +51,8 @@ jq -e '
   | select(.result_path | type == "string" and startswith("/"))
   | select(.splitctl_path == "/opt/jain-ci/authority/splitctl")
   | select(.request_id | test("^[0-9a-f]{64}$"))
+  | select(.product_release_tag_ref | type == "string")
+  | select(.product_release_tag_commit | type == "string")
   | select(.sibling_sources_required | type == "boolean")
   | select(.sibling_sources_path | type == "string")
   | select(.sibling_sources_sha256 | type == "string")
@@ -69,6 +71,12 @@ CHILD_RESULT_PATH="$(jq -er '.result_path' "$REEXEC_STATE")" || exit 2
 SPLITCTL_BIN="$(realpath -e -- "$(jq -er '.splitctl_path' "$REEXEC_STATE")")" \
   || exit 2
 JAIN_HOST_CI_REQUEST_ID="$(jq -er '.request_id' "$REEXEC_STATE")" || exit 2
+JAIN_PRODUCT_RELEASE_TAG_REF="$(
+  jq -er '.product_release_tag_ref' "$REEXEC_STATE"
+)" || exit 2
+JAIN_PRODUCT_RELEASE_TAG_COMMIT="$(
+  jq -er '.product_release_tag_commit' "$REEXEC_STATE"
+)" || exit 2
 JAIN_SIBLING_SOURCES_REQUIRED="$(
   jq -r '.sibling_sources_required' "$REEXEC_STATE"
 )" || exit 2
@@ -120,6 +128,32 @@ else
     && -z "$JAIN_SIBLING_SOURCES_SHA256" ]] || exit 2
 fi
 unset JAIN_HOST_CI_REEXEC_STATE
+
+verify_product_release_tag() {
+  local checkout="${1:?checkout required}" retained
+  retained="$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+    -c core.untrackedCache=false -c diff.external= -C "$checkout" \
+    for-each-ref --format='%(refname)' refs/tags)" || return 1
+  if [[ -z "$JAIN_PRODUCT_RELEASE_TAG_REF" ]]; then
+    [[ -z "$JAIN_PRODUCT_RELEASE_TAG_COMMIT" && -z "$retained" ]]
+    return
+  fi
+  [[ "$JAIN_PRODUCT_RELEASE_TAG_REF" \
+      =~ ^refs/tags/${REPO}-v[0-9A-Za-z.-]+-split\.[0-9]+$ \
+    && "$JAIN_PRODUCT_RELEASE_TAG_COMMIT" =~ ^[0-9a-f]{40}$ \
+    && "$retained" == "$JAIN_PRODUCT_RELEASE_TAG_REF" \
+    && "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+      -c core.untrackedCache=false -c diff.external= -C "$checkout" \
+      rev-parse --verify "$JAIN_PRODUCT_RELEASE_TAG_REF")" \
+      == "$JAIN_PRODUCT_RELEASE_TAG_COMMIT" \
+    && "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+      -c core.untrackedCache=false -c diff.external= -C "$checkout" \
+      rev-parse --verify "$JAIN_PRODUCT_RELEASE_TAG_REF^{commit}")" \
+      == "$JAIN_PRODUCT_RELEASE_TAG_COMMIT" ]] \
+    && git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+      -c core.untrackedCache=false -c diff.external= -C "$checkout" \
+      merge-base --is-ancestor "$JAIN_PRODUCT_RELEASE_TAG_COMMIT" "$SHA"
+}
 
 verify_exact_control_plane_integrity() {
   local verified
@@ -209,11 +243,16 @@ say() { printf '[split-host-ci] %s\n' "$*" >&2; }
 post_check() {
   local conclusion="${1:?conclusion is required}" result_tmp
   [[ "$conclusion" == success ]] || return 0
+  verify_product_release_tag "$REPO_PATH" \
+    && verify_product_release_tag "$wt" \
+    || return 1
   result_tmp="$CHILD_RESULT_PATH.tmp.$$"
   jq -n --arg owner "$OWNER" --arg repo "$REPO" --arg head_sha "$SHA" \
     --arg check "$CHECK" --arg commit "$CONTROL_PLANE_COMMIT" \
     --arg evidence_dir "${JAIN_NATIVE_EVIDENCE_DIR:-}" \
     --arg evidence_sha "${JAIN_NATIVE_EVIDENCE_SHA256:-}" \
+    --arg product_release_tag_ref "$JAIN_PRODUCT_RELEASE_TAG_REF" \
+    --arg product_release_tag_commit "$JAIN_PRODUCT_RELEASE_TAG_COMMIT" \
     --arg sibling_sources_sha "$JAIN_SIBLING_SOURCES_SHA256" \
     --argjson sibling_sources_required "$JAIN_SIBLING_SOURCES_REQUIRED" \
     --arg cuda_cap "$JAIN_CUDA_COMPUTE_CAPABILITY" \
@@ -224,6 +263,8 @@ post_check() {
       control_plane_commit:$commit,
       native_evidence_dir:$evidence_dir,
       native_evidence_sha256:$evidence_sha,
+      product_release_tag_ref:$product_release_tag_ref,
+      product_release_tag_commit:$product_release_tag_commit,
       sibling_sources_required:$sibling_sources_required,
       sibling_sources_sha256:$sibling_sources_sha,
       cuda_compute_capability_required:$cuda_required,
@@ -278,6 +319,8 @@ run_release_cargo_commands() {
 }
 
 [ -e "$REPO_PATH/.git" ] || { echo "not a git repo: $REPO_PATH" >&2; exit 2; }
+verify_product_release_tag "$REPO_PATH" \
+  || { echo "sealed product release tag is missing or mismatched" >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || { echo "host CI requires jq" >&2; exit 2; }
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "host CI requires a full 40-hex SHA" >&2; exit 2; }
 
@@ -427,6 +470,8 @@ git -C "$wt" checkout --quiet --detach "$SHA" \
 git -C "$wt" remote remove origin || exit 1
 validate_physical_checkout "$wt" "$SHA" \
   || { post_check failure; echo "physical checkout is not isolated" >&2; exit 1; }
+verify_product_release_tag "$wt" \
+  || { post_check failure; echo "physical checkout release tag mismatch" >&2; exit 1; }
 
 # Repositories that execute native build tools or the Web frontend activate the
 # exact validated tool root before product bytes. Unrelated release lanes do

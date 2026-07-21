@@ -1332,6 +1332,42 @@ grep -Fq 'sibling source binding differs across sealed authority' \
   exit 1
 }
 
+product_tag_mismatch_id="$(printf '5%.0s' {1..64})"
+make_sealed_variant "$product_tag_mismatch_id" \
+  '.request_id=$request_id
+   | .product_release_tag_ref="refs/tags/jain-report-v8.0.1-split.1"
+   | .product_release_tag_commit="0000000000000000000000000000000000000001"' \
+  "$(date +%s)"
+if sudo -n "$publisher" "$request_root/$product_tag_mismatch_id" \
+  >"$tmp/product-tag-mismatch.log" 2>&1; then
+  printf 'publisher accepted a mismatched product release tag\n' >&2
+  exit 1
+fi
+grep -Fq 'product release-tag binding differs across sealed authority' \
+  "$tmp/product-tag-mismatch.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$expiry_mismatch_offset" ]] || {
+  printf 'product release-tag mismatch reached the forge\n' >&2
+  exit 1
+}
+
+product_tag_tamper_id="$(printf '4%.0s' {1..64})"
+make_sealed_variant "$product_tag_tamper_id" '.request_id=$request_id' \
+  "$(date +%s)"
+sudo -n git -c safe.directory="$request_root/$product_tag_tamper_id/product-authority" \
+  -C "$request_root/$product_tag_tamper_id/product-authority" update-ref \
+  refs/tags/unsealed-local-tag "$product_sha"
+if sudo -n "$publisher" "$request_root/$product_tag_tamper_id" \
+  >"$tmp/product-tag-tamper.log" 2>&1; then
+  printf 'publisher accepted an unsealed local product tag\n' >&2
+  exit 1
+fi
+grep -Fq 'tag-free product authority retained unexpected tags' \
+  "$tmp/product-tag-tamper.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$expiry_mismatch_offset" ]] || {
+  printf 'unsealed local product tag reached the forge\n' >&2
+  exit 1
+}
+
 old_result_id="$(printf 'c%.0s' {1..64})"
 make_sealed_variant "$old_result_id" \
   '.request_id=$request_id

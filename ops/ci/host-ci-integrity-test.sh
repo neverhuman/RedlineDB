@@ -98,6 +98,30 @@ for boundary in host-ci-sandbox.sh split-host-ci.sh host-ci-publisher.sh; do
     exit 1
   }
 done
+for required_tag_binding in \
+  '--retain-declared-release-tag' \
+  'product_release_tag_ref' \
+  'product_release_tag_commit'; do
+  grep -F -- "$required_tag_binding" \
+    "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+    printf 'root sandbox lacks sealed product release-tag binding: %s\n' \
+      "$required_tag_binding" >&2
+    exit 1
+  }
+done
+for boundary in host-ci-sandbox.sh split-host-ci.sh host-ci-publisher.sh; do
+  grep -F 'product_release_tag_commit' \
+    "$repo_root/ops/ci/$boundary" >/dev/null || {
+    printf '%s does not carry the product release-tag identity\n' \
+      "$boundary" >&2
+    exit 1
+  }
+done
+grep -F 'product release tag moved before success publication' \
+  "$repo_root/ops/ci/host-ci-publisher.sh" >/dev/null || {
+  printf 'root publisher does not reject product release-tag drift\n' >&2
+  exit 1
+}
 ownership_fixture="$tmp/sibling-ownership"
 git init --quiet "$ownership_fixture"
 git -C "$ownership_fixture" config user.name 'Sibling Ownership Fixture'
