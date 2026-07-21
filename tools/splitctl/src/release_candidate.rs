@@ -61,6 +61,20 @@ pub(super) fn command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error
     if env::var_os("ATOMICSOUL_PUSH").is_some_and(|value| value != "0") {
         return Err("release-candidate requires ATOMICSOUL_PUSH to be unset or exactly 0".into());
     }
+    // Deployment entrypoints may export JAIN_RELEASE_VERSION.  Treat a
+    // disagreement as a hard failure so a candidate cannot be journaled with
+    // an image/installer version different from the manifest authority.
+    if let Some(value) = env::var_os("JAIN_RELEASE_VERSION") {
+        let value = value
+            .into_string()
+            .map_err(|_| "JAIN_RELEASE_VERSION must be valid UTF-8")?;
+        if value != RELEASE_VERSION {
+            return Err(format!(
+                "JAIN_RELEASE_VERSION must match release-candidate authority {RELEASE_VERSION}"
+            )
+            .into());
+        }
+    }
 
     let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
