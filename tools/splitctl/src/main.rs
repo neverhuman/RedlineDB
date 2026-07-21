@@ -1,5 +1,6 @@
 // Repository-local release and Jeryu control-plane CLI.
 mod jeryu_client;
+mod release_candidate;
 
 use jeryu_client::{write_token_for_askpass, HostCiPublication, JeryuClient, JeryuRequest};
 use serde_json::{json, Map, Value as JsonValue};
@@ -15,7 +16,7 @@ use std::{
         unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt},
     },
     path::{Component, Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -234,6 +235,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("regenerate-lock") => regenerate_lock(args.collect())?,
         Some("release-preflight") => release_preflight(args.collect())?,
         Some("release-snapshot") => release_snapshot(args.collect())?,
+        Some("release-candidate") => release_candidate::command(args.collect())?,
         Some("release-status") => release_status(args.collect())?,
         Some("bootstrap-main") => bootstrap_main_command(args.collect())?,
         Some("immutable-tag") => immutable_tag_command(args.collect())?,
@@ -241,7 +243,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-candidate [--manifest PATH] [--repo NAME]... [--journal PATH --token-file PATH --apply] [--receipt PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -1222,6 +1224,12 @@ fn manifest_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>>
                 "repo": repos,
                 "control_plane": data.get("control_plane"),
                 "infrastructure_repo": data.get("infrastructure_repo"),
+                "release_version": data.get("release_version"),
+                "release_status": data.get("status"),
+                "formal_ga": data.get("formal_ga"),
+                "rollback_target": data.get("rollback_target"),
+                "fleet_jobs": data.get("fleet_jobs"),
+                "ci_jobs": data.get("ci_jobs"),
                 "family_repo_count": repos.len(),
                 "canonical_manifest_sha256": manifest_sha256(&path)?,
                 "manifest_authority": "jain-split-ops/repos.manifest.toml",
@@ -3752,6 +3760,20 @@ fn validate_manifest_data(
     if string(data, "rollback_target").as_deref() != Some(ROLLBACK_TARGET) {
         errors.push(format!("rollback_target must be {ROLLBACK_TARGET}"));
     }
+    if data.get("workers").is_some() {
+        errors.push(
+            "workers is retired; fleet_jobs and ci_jobs are the sole job authorities".to_owned(),
+        );
+    }
+    for key in ["fleet_jobs", "ci_jobs"] {
+        if !data
+            .get(key)
+            .and_then(toml::Value::as_integer)
+            .is_some_and(|jobs| (1..=64).contains(&jobs))
+        {
+            errors.push(format!("{key} must be an integer from 1 through 64"));
+        }
+    }
     if let Err(error) = validate_source_inventory_declaration(data, manifest, check_paths) {
         errors.push(error);
     }
@@ -5965,6 +5987,10 @@ fn secure_git_authenticated_command(
         "http.followRedirects=false",
         "-c",
         "http.maxRequests=1",
+        "-c",
+        "http.lowSpeedLimit=1",
+        "-c",
+        "http.lowSpeedTime=15",
     ]);
     Ok(AuthenticatedGitCommand {
         command,

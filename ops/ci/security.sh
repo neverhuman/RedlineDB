@@ -69,7 +69,16 @@ jq -n \
   --arg grype_db_status_sha256 "$grype_db_status_sha" \
   --argjson package_count "$package_count" \
   --argjson high_or_critical "$high_or_critical" \
-  '{schema:"jain-split-ops.security/v1",status:"pass",scans:["actionlint","zizmor","gitleaks","cargo-audit","cargo-deny","syft","grype"],fallbacks:false,sbom:{format:"spdx-json",sha256:$sbom_sha256,packages:$package_count},vulnerabilities:{grype_sha256:$grype_sha256,fail_on:"high",high_or_critical:$high_or_critical,database_inventory_sha256:$grype_db_inventory_sha256,database_status_sha256:$grype_db_status_sha256}}' \
+  '{schema:"jain-split-ops.security/v1",status:"pass",scans:["actionlint","zizmor","gitleaks","cargo-audit","cargo-deny","syft","grype"],fallbacks:false,metrics:{scans_completed:7,packages:$package_count,high_or_critical:$high_or_critical},findings:[],sbom:{format:"spdx-json",sha256:$sbom_sha256,packages:$package_count},vulnerabilities:{grype_sha256:$grype_sha256,fail_on:"high",high_or_critical:$high_or_critical,database_inventory_sha256:$grype_db_inventory_sha256,database_status_sha256:$grype_db_status_sha256}}' \
   > target/jankurai/security/evidence.json
+jq -e '
+  .schema == "jain-split-ops.security/v1" and
+  .status == "pass" and .fallbacks == false and
+  .metrics.scans_completed == 7 and
+  .metrics.packages == .sbom.packages and
+  .metrics.high_or_critical == .vulnerabilities.high_or_critical and
+  .metrics.high_or_critical == 0 and
+  .findings == []
+' target/jankurai/security/evidence.json >/dev/null
 cp target/jankurai/security/evidence.json target/security/evidence.json
 printf 'security ok: jain-split-ops\n'

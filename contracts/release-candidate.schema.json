@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.invalid/contracts/release-candidate.schema.json",
+  "title": "Jain release-candidate control contracts",
+  "oneOf": [
+    { "$ref": "#/$defs/plan" },
+    { "$ref": "#/$defs/journal" }
+  ],
+  "$defs": {
+    "sha1": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "nullableSha1": {
+      "oneOf": [
+        { "$ref": "#/$defs/sha1" },
+        { "type": "null" }
+      ]
+    },
+    "nullableSha256": {
+      "oneOf": [
+        { "$ref": "#/$defs/sha256" },
+        { "type": "null" }
+      ]
+    },
+    "nullableString": {
+      "type": ["string", "null"]
+    },
+    "state": {
+      "enum": [
+        "unavailable",
+        "source-ready",
+        "branch-published",
+        "pr-open",
+        "protected",
+        "checks-green",
+        "reviewed",
+        "merged",
+        "main-reconciled",
+        "tagged",
+        "binding-required",
+        "bound"
+      ]
+    },
+    "action": {
+      "type": ["string", "null"],
+      "enum": [
+        null,
+        "branch-push",
+        "pr-open",
+        "protection-apply",
+        "checks-readback",
+        "approval-readback",
+        "pr-merge",
+        "main-reconcile",
+        "immutable-tag",
+        "authority-binding"
+      ]
+    },
+    "planRepository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding_bound",
+        "blocked_reasons",
+        "family",
+        "identity_status",
+        "kind",
+        "name",
+        "path",
+        "phase",
+        "remote",
+        "repo_slug",
+        "required_check",
+        "selected",
+        "state",
+        "status",
+        "tag",
+        "tag_prefix",
+        "wave"
+      ],
+      "properties": {
+        "binding_bound": { "type": "boolean" },
+        "blocked_reasons": {
+          "type": "array",
+          "items": { "type": "string" },
+          "maxItems": 16
+        },
+        "family": { "type": "string", "minLength": 1 },
+        "identity_status": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "path": { "type": "string", "pattern": "^/" },
+        "phase": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "remote": { "type": "string", "pattern": "^http://127\\.0\\.0\\.1:8787/git/" },
+        "repo_slug": { "type": "string", "pattern": "^[a-z0-9-]+/[A-Za-z0-9][A-Za-z0-9-]*$" },
+        "required_check": { "type": "string", "minLength": 3 },
+        "selected": { "type": "boolean" },
+        "state": { "$ref": "#/$defs/state" },
+        "status": { "enum": ["pass", "blocked"] },
+        "tag": { "$ref": "#/$defs/nullableString" },
+        "tag_prefix": { "$ref": "#/$defs/nullableString" },
+        "wave": { "type": "integer", "minimum": 0 },
+        "protected_main": { "$ref": "#/$defs/sha1" },
+        "release_checksum_sha256": { "$ref": "#/$defs/nullableSha256" },
+        "release_tree": { "$ref": "#/$defs/nullableSha1" },
+        "source_branch": { "type": "string", "minLength": 1 },
+        "source_head": { "$ref": "#/$defs/sha1" },
+        "source_tree": { "$ref": "#/$defs/sha1" }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ci_jobs",
+        "fleet_jobs",
+        "formal_ga",
+        "manifest",
+        "manifest_sha256",
+        "release",
+        "release_status",
+        "repositories",
+        "rollback_target",
+        "schema_version",
+        "selected_repositories",
+        "status"
+      ],
+      "properties": {
+        "schema_version": { "const": "jain.release-candidate-plan/v1" },
+        "release": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "release_status": { "const": "candidate" },
+        "formal_ga": { "const": false },
+        "rollback_target": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "manifest": { "type": "string", "pattern": "^/" },
+        "manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "fleet_jobs": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "ci_jobs": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "selected_repositories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "maxItems": 64
+        },
+        "repositories": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/planRepository" },
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "status": { "enum": ["pass", "blocked"] }
+      }
+    },
+    "journalRepository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "binding_bound",
+        "name",
+        "path",
+        "pending_action",
+        "phase",
+        "pr_number",
+        "release_checksum_sha256",
+        "release_tree",
+        "remote",
+        "repo_slug",
+        "required_check",
+        "selected",
+        "source_branch",
+        "source_head",
+        "source_tree",
+        "state",
+        "tag",
+        "tag_prefix",
+        "transition_count",
+        "wave"
+      ],
+      "properties": {
+        "binding_bound": { "type": "boolean" },
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "path": { "type": "string", "pattern": "^/" },
+        "pending_action": { "$ref": "#/$defs/action" },
+        "phase": { "type": "integer", "minimum": 0, "maximum": 2 },
+        "pr_number": { "type": ["integer", "null"], "minimum": 1 },
+        "release_checksum_sha256": { "$ref": "#/$defs/nullableSha256" },
+        "release_tree": { "$ref": "#/$defs/nullableSha1" },
+        "remote": { "type": "string", "pattern": "^http://127\\.0\\.0\\.1:8787/git/" },
+        "repo_slug": { "type": "string", "pattern": "^[a-z0-9-]+/[A-Za-z0-9][A-Za-z0-9-]*$" },
+        "required_check": { "type": "string", "minLength": 3 },
+        "selected": { "type": "boolean" },
+        "source_branch": { "$ref": "#/$defs/nullableString" },
+        "source_head": { "$ref": "#/$defs/nullableSha1" },
+        "source_tree": { "$ref": "#/$defs/nullableSha1" },
+        "state": { "$ref": "#/$defs/state" },
+        "tag": { "$ref": "#/$defs/nullableString" },
+        "tag_prefix": { "$ref": "#/$defs/nullableString" },
+        "transition_count": { "type": "integer", "minimum": 0, "maximum": 16 },
+        "wave": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "journal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ci_jobs",
+        "created_at_unix",
+        "fleet_jobs",
+        "formal_ga",
+        "generation",
+        "journal_id",
+        "lifecycle_status",
+        "manifest",
+        "manifest_sha256",
+        "release",
+        "release_status",
+        "repositories",
+        "rollback_target",
+        "schema_version",
+        "selected_repositories",
+        "updated_at_unix"
+      ],
+      "properties": {
+        "schema_version": { "const": "jain.release-candidate-journal/v1" },
+        "journal_id": { "$ref": "#/$defs/sha256" },
+        "release": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "release_status": { "const": "candidate" },
+        "formal_ga": { "const": false },
+        "rollback_target": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+        "manifest": { "type": "string", "pattern": "^/" },
+        "manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "fleet_jobs": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "ci_jobs": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "selected_repositories": {
+          "type": "array",
+          "items": { "type": "string" },
+          "uniqueItems": true,
+          "minItems": 1,
+          "maxItems": 64
+        },
+        "generation": { "type": "integer", "minimum": 0 },
+        "created_at_unix": { "type": "integer", "minimum": 1 },
+        "updated_at_unix": { "type": "integer", "minimum": 1 },
+        "lifecycle_status": { "enum": ["active", "binding-required", "complete"] },
+        "repositories": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/journalRepository" },
+          "minItems": 1,
+          "maxItems": 64
+        }
+      }
+    }
+  }
+}

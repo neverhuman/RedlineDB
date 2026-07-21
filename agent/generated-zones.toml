@@ -25,3 +25,10 @@ source = "immutable source commit cc27936eb45006bda0cae85b0f578f4d5985991d"
 command = "cargo run --locked --quiet -- seal-source-inventory --manifest repos.manifest.toml --source-root SOURCE_ROOT --apply"
 read_only = false
 write_policy = "reviewed_manual"
+
+[[zone]]
+path = "target/jankurai/release-candidate-contract.json"
+source = "contracts/release-candidate.schema.json"
+command = "cargo test --locked release_candidate::tests::published_contract_matches_the_runtime_journal_shape"
+read_only = true
+write_policy = "auditor_output"

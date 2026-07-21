@@ -294,6 +294,10 @@ install -D -m 0644 "$repo_root/tools/splitctl/src/main.rs" \
   "$control/tools/splitctl/src/main.rs"
 install -D -m 0644 "$repo_root/tools/splitctl/src/jeryu_client.rs" \
   "$control/tools/splitctl/src/jeryu_client.rs"
+install -D -m 0644 "$repo_root/tools/splitctl/src/release_candidate.rs" \
+  "$control/tools/splitctl/src/release_candidate.rs"
+install -D -m 0644 "$repo_root/contracts/release-candidate.schema.json" \
+  "$control/contracts/release-candidate.schema.json"
 git init --quiet --bare "$control_remote"
 sed -i \
   "s#/home/ubuntu/jain-split#$sandbox_family_root#g" \
@@ -312,7 +316,7 @@ sed -i \
 sed -i \
   "s#8787#$forge_port#g" \
   "$control/tools/splitctl/src/jeryu_client.rs"
-git -C "$control" add authority/source-paths.txt repos.manifest.toml ops/ci tools/splitctl/src
+git -C "$control" add authority/source-paths.txt contracts repos.manifest.toml ops/ci tools/splitctl/src
 git -C "$control" commit --quiet -m 'fixture reviewed host-CI boundary'
 git -C "$control" switch -C main --quiet
 git -C "$control" remote set-url origin "$control_remote"

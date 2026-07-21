@@ -217,11 +217,36 @@ run_release_cargo_commands() {
 command -v jq >/dev/null 2>&1 || { echo "host CI requires jq" >&2; exit 2; }
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "host CI requires a full 40-hex SHA" >&2; exit 2; }
 
-# Governed worker count (load-aware; never default high).
+# Governed worker count (manifest-defaulted and load-aware; never default high).
+manifest_ci_jobs="$(
+  "$SPLITCTL_BIN" manifest --manifest "$CANONICAL_MANIFEST" --json \
+    | jq -er '.ci_jobs | select(type == "number" and floor == . and . >= 1 and . <= 64)'
+)" || {
+  post_check failure || true
+  echo "canonical manifest has no valid ci_jobs authority" >&2
+  exit 2
+}
+JOBS="${JAIN_CI_JOBS:-$manifest_ci_jobs}"
+[[ "$JOBS" =~ ^[1-9][0-9]*$ && "$JOBS" -le 64 ]] || {
+  post_check failure || true
+  echo "JAIN_CI_JOBS must be an integer from 1 through 64" >&2
+  exit 2
+}
+if ((JOBS > manifest_ci_jobs)); then
+  post_check failure || true
+  echo "JAIN_CI_JOBS cannot exceed the canonical manifest authority" >&2
+  exit 2
+fi
 if command -v jain-ci-governor >/dev/null 2>&1; then
-  JOBS="$(jain-ci-governor 2>/dev/null || echo 8)"
-else
-  JOBS="${JAIN_CI_JOBS:-8}"
+  governed_jobs="$(jain-ci-governor 2>/dev/null || true)"
+  [[ "$governed_jobs" =~ ^[1-9][0-9]*$ && "$governed_jobs" -le 64 ]] || {
+    post_check failure || true
+    echo "jain-ci-governor did not return a bounded positive integer" >&2
+    exit 2
+  }
+  if ((governed_jobs < JOBS)); then
+    JOBS="$governed_jobs"
+  fi
 fi
 export JAIN_CI_JOBS="$JOBS" CARGO_BUILD_JOBS="$JOBS" WORKERS="$JOBS"
 say "governed jobs=$JOBS"

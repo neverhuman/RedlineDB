@@ -30,6 +30,8 @@
     "agent/**": "agent",
     "authority/": "split",
     "authority/**": "split",
+    "contracts/": "split",
+    "contracts/**": "split",
     "deny.toml": "workspace",
     "db/": "data",
     "db/**": "data",

@@ -150,6 +150,16 @@
       "lane": "required",
       "purpose": "verify the immutable source inventory remains normalized, count-bound, and digest-bound"
     },
+    "contracts/": {
+      "command": "cargo test --locked release_candidate::tests::published_contract_matches_the_runtime_journal_shape && just contract-drift",
+      "lane": "contract",
+      "purpose": "verify release-candidate schemas remain synchronized with their closed Rust runtime contracts"
+    },
+    "contracts/**": {
+      "command": "cargo test --locked release_candidate::tests::published_contract_matches_the_runtime_journal_shape && just contract-drift",
+      "lane": "contract",
+      "purpose": "verify release-candidate schemas remain synchronized with their closed Rust runtime contracts"
+    },
     "deny.toml": {
       "command": "just security",
       "lane": "security",

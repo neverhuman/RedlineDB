@@ -140,20 +140,23 @@ release-ci:
 release:
   just release-ci
 
-release-artifacts version="8.0.1":
-  ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="{{version}}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- build-local --version "{{version}}" --gate-dir "target/release-evidence/{{version}}"
+_release-version:
+  @cargo run --locked --quiet --bin splitctl -- manifest --manifest repos.manifest.toml --json | jq -er '.release_version | select(type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$"))'
 
-release-canary-dry-run version="8.0.1":
-  ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="{{version}}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- canary-e2e --version "{{version}}" --slot jain-a --dry-run --gate-dir "target/release-evidence/{{version}}"
+release-artifacts:
+  version="$(just _release-version)"; ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="${version}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- build-local --version "${version}" --gate-dir "target/release-evidence/${version}"
 
-release-promote-dry-run digest version="8.0.1":
-  ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="{{version}}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- promote-prod --version "{{version}}" --digest "{{digest}}" --dry-run --gate-dir "target/release-evidence/{{version}}"
+release-canary-dry-run:
+  version="$(just _release-version)"; ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="${version}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- canary-e2e --version "${version}" --slot jain-a --dry-run --gate-dir "target/release-evidence/${version}"
+
+release-promote-dry-run digest:
+  version="$(just _release-version)"; ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="${version}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- promote-prod --version "${version}" --digest "{{digest}}" --dry-run --gate-dir "target/release-evidence/${version}"
 
 release-rollback-dry-run to="7.0.6":
-  version="$(awk -F'\"' '/^release_version = / {print $2; exit}' repos.manifest.toml)"; ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="${version}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- rollback --to "{{to}}" --dry-run
+  version="$(just _release-version)"; ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="${version}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- rollback --to "{{to}}" --dry-run
 
 release-status:
-  version="$(awk -F'\"' '/^release_version = / {print $2; exit}' repos.manifest.toml)"; cargo run --locked --quiet -- release-status --manifest repos.manifest.toml --json "docs/release-evidence/${version}/release-status.json"
+  version="$(just _release-version)"; cargo run --locked --quiet -- release-status --manifest repos.manifest.toml --json "docs/release-evidence/${version}/release-status.json"
 
 refresh-authored:
   cargo run --locked --quiet -- refresh-ci-contract --authored
