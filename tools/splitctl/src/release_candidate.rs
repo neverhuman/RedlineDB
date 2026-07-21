@@ -1786,8 +1786,8 @@ mod tests {
 
     impl TestDirectory {
         fn new() -> Self {
-            let path = control_plane_root().join(format!(
-                "target/release-candidate-test-{}-{}",
+            let path = env::temp_dir().join(format!(
+                "jain-split-ops-release-candidate-test-{}-{}",
                 std::process::id(),
                 unix_nanos()
             ));
