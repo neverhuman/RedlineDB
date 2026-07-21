@@ -32,6 +32,12 @@ const LEGACY_INFRA_PIN_PREFIX: &str = "http://127.0.0.1:8787/git/jain-split/";
 const JERYU_ASKPASS_MODE: &str = "JAIN_SPLITCTL_JERYU_ASKPASS";
 const JERYU_ASKPASS_TOKEN_FILE: &str = "JAIN_SPLITCTL_JERYU_TOKEN_FILE";
 const JERYU_GIT_USERNAME: &str = "x-access-token";
+// The authenticated family closure currently contains 516 locks / 4,812,548
+// bytes (487 locks from protected jain-model-zoo; largest lock 113,831 bytes).
+// Keep finite headroom without allowing count to multiply parser memory use.
+const MAX_CARGO_LOCKS: usize = 1024;
+const MAX_CARGO_LOCK_BYTES: u64 = 1024 * 1024;
+const MAX_CARGO_LOCK_BYTES_TOTAL: u64 = 64 * 1024 * 1024;
 
 /// Resolve the control-plane checkout at runtime so release binaries do not
 /// embed the physical path of the checkout that compiled them. Commands are
@@ -261,6 +267,13 @@ struct LockedCargoInputs {
     governed_git_repositories: Vec<String>,
 }
 
+#[derive(Debug)]
+struct BoundedCargoLock {
+    contents: String,
+    digest: String,
+    bytes: u64,
+}
+
 fn cargo_cache_stage_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let mut locks = Vec::new();
     let mut source = None;
@@ -308,9 +321,103 @@ fn cargo_cache_stage_command(args: Vec<String>) -> Result<(), Box<dyn std::error
     )
 }
 
-fn locked_cargo_inputs(lock_path: &Path) -> Result<LockedCargoInputs, Box<dyn std::error::Error>> {
-    physical_regular_file(lock_path, "Cargo lock")?;
-    let lock: toml::Value = fs::read_to_string(lock_path)?.parse()?;
+fn same_file_metadata(left: &fs::Metadata, right: &fs::Metadata) -> bool {
+    left.file_type().is_file()
+        && right.file_type().is_file()
+        && left.dev() == right.dev()
+        && left.ino() == right.ino()
+        && left.mode() == right.mode()
+        && left.nlink() == right.nlink()
+        && left.uid() == right.uid()
+        && left.gid() == right.gid()
+        && left.len() == right.len()
+        && left.mtime() == right.mtime()
+        && left.mtime_nsec() == right.mtime_nsec()
+        && left.ctime() == right.ctime()
+        && left.ctime_nsec() == right.ctime_nsec()
+}
+
+fn read_bounded_cargo_lock(
+    lock_path: &Path,
+    max_bytes: u64,
+) -> Result<BoundedCargoLock, Box<dyn std::error::Error>> {
+    const O_NONBLOCK: i32 = 0o4000;
+    const O_NOFOLLOW: i32 = 0o400000;
+    let mut input = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(O_NONBLOCK | O_NOFOLLOW)
+        .open(lock_path)?;
+    let before = input.metadata()?;
+    if !before.file_type().is_file() || before.nlink() != 1 || before.len() > max_bytes {
+        return Err(format!(
+            "unsafe Cargo lock inode or per-file limit ({max_bytes} bytes) exceeded: {}",
+            lock_path.display()
+        )
+        .into());
+    }
+    let mut bytes = Vec::with_capacity(before.len() as usize);
+    (&mut input).take(max_bytes + 1).read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(format!(
+            "Cargo lock exceeded its {max_bytes}-byte per-file limit while reading: {}",
+            lock_path.display()
+        )
+        .into());
+    }
+    let after = input.metadata()?;
+    let path_after = fs::symlink_metadata(lock_path)?;
+    if bytes.len() as u64 != before.len()
+        || !same_file_metadata(&before, &after)
+        || !same_file_metadata(&before, &path_after)
+    {
+        return Err(format!("Cargo lock changed while reading: {}", lock_path.display()).into());
+    }
+    let digest = format!("{:x}", Sha256::digest(&bytes));
+    let contents = String::from_utf8(bytes)
+        .map_err(|_| format!("Cargo lock is not UTF-8: {}", lock_path.display()))?;
+    Ok(BoundedCargoLock {
+        contents,
+        digest,
+        bytes: before.len(),
+    })
+}
+
+fn read_bounded_cargo_locks_with_limits(
+    lock_paths: &[PathBuf],
+    max_lock_bytes: u64,
+    max_total_bytes: u64,
+) -> Result<Vec<BoundedCargoLock>, Box<dyn std::error::Error>> {
+    let mut total = 0_u64;
+    let mut locks = Vec::with_capacity(lock_paths.len());
+    for lock_path in lock_paths {
+        let lock = read_bounded_cargo_lock(lock_path, max_lock_bytes)?;
+        total = total
+            .checked_add(lock.bytes)
+            .ok_or("Cargo lock aggregate byte count overflowed")?;
+        if total > max_total_bytes {
+            return Err(
+                format!("Cargo locks exceed the {max_total_bytes}-byte aggregate limit").into(),
+            );
+        }
+        locks.push(lock);
+    }
+    Ok(locks)
+}
+
+fn read_bounded_cargo_locks(
+    lock_paths: &[PathBuf],
+) -> Result<Vec<BoundedCargoLock>, Box<dyn std::error::Error>> {
+    read_bounded_cargo_locks_with_limits(
+        lock_paths,
+        MAX_CARGO_LOCK_BYTES,
+        MAX_CARGO_LOCK_BYTES_TOTAL,
+    )
+}
+
+fn locked_cargo_inputs_from_contents(
+    contents: &str,
+) -> Result<LockedCargoInputs, Box<dyn std::error::Error>> {
+    let lock: toml::Value = contents.parse()?;
     let root = lock.as_table().ok_or("Cargo lock root is not a table")?;
     if root
         .keys()
@@ -408,6 +515,12 @@ fn locked_cargo_inputs(lock_path: &Path) -> Result<LockedCargoInputs, Box<dyn st
         registry_packages: locked,
         governed_git_repositories,
     })
+}
+
+#[cfg(test)]
+fn locked_cargo_inputs(lock_path: &Path) -> Result<LockedCargoInputs, Box<dyn std::error::Error>> {
+    let lock = read_bounded_cargo_lock(lock_path, MAX_CARGO_LOCK_BYTES)?;
+    locked_cargo_inputs_from_contents(&lock.contents)
 }
 
 fn governed_locked_git_repository(source: &str) -> Option<&str> {
@@ -764,12 +877,11 @@ fn stage_locked_cargo_caches(
     const MAX_CONFIG_BYTES: u64 = 1024 * 1024;
     const MAX_ARCHIVE_BYTES: u64 = 512 * 1024 * 1024;
     const MAX_INDEX_RECORD_BYTES: u64 = 16 * 1024 * 1024;
-    const MAX_LOCKS: usize = 64;
     if lock_paths.is_empty() {
         return Err("at least one --lock is required".into());
     }
-    if lock_paths.len() > MAX_LOCKS {
-        return Err(format!("at most {MAX_LOCKS} Cargo locks may be staged").into());
+    if lock_paths.len() > MAX_CARGO_LOCKS {
+        return Err(format!("at most {MAX_CARGO_LOCKS} Cargo locks may be staged").into());
     }
     let mut unique_locks = std::collections::BTreeSet::new();
     for lock_path in lock_paths {
@@ -819,18 +931,12 @@ fn stage_locked_cargo_caches(
     let mut packages = Vec::new();
     let mut governed_git_repositories = Vec::new();
     let mut lock_digests = Vec::with_capacity(lock_paths.len());
-    for lock_path in lock_paths {
-        let digest_before = sha256_regular_file(lock_path, "Cargo lock")?;
-        let inputs = locked_cargo_inputs(lock_path)?;
+    let bounded_locks = read_bounded_cargo_locks(lock_paths)?;
+    for lock in &bounded_locks {
+        let inputs = locked_cargo_inputs_from_contents(&lock.contents)?;
         packages.extend(inputs.registry_packages);
         governed_git_repositories.extend(inputs.governed_git_repositories);
-        let digest_after = sha256_regular_file(lock_path, "Cargo lock")?;
-        if digest_before != digest_after {
-            return Err(
-                format!("Cargo lock changed while reading: {}", lock_path.display()).into(),
-            );
-        }
-        lock_digests.push(digest_before);
+        lock_digests.push(lock.digest.clone());
     }
     packages.sort_by(|left, right| {
         (&left.name, &left.version, &left.checksum).cmp(&(
@@ -1022,10 +1128,10 @@ fn stage_locked_cargo_caches(
             "checksum": package.checksum,
         }));
     }
-    let mut final_lock_digests = lock_paths
-        .iter()
-        .map(|lock_path| sha256_regular_file(lock_path, "Cargo lock"))
-        .collect::<Result<Vec<_>, _>>()?;
+    let mut final_lock_digests = read_bounded_cargo_locks(lock_paths)?
+        .into_iter()
+        .map(|lock| lock.digest)
+        .collect::<Vec<_>>();
     final_lock_digests.sort();
     if final_lock_digests != lock_digests {
         return Err("a Cargo lock changed while staging the registry cache".into());
@@ -9749,6 +9855,93 @@ mod tests {
             source_uid: source_metadata.uid(),
             source_gid: source_metadata.gid(),
         }
+    }
+
+    fn zero_package_locks(root: &Path, count: usize) -> Vec<PathBuf> {
+        let lock_root = root.join("closure-locks");
+        fs::create_dir(&lock_root).unwrap();
+        (0..count)
+            .map(|index| {
+                let lock = lock_root.join(format!("Cargo-{index:04}.lock"));
+                fs::write(&lock, "version = 4\n").unwrap();
+                lock
+            })
+            .collect()
+    }
+
+    #[test]
+    fn locked_cargo_cache_accepts_authenticated_closure_scale_and_finite_maximum() {
+        for count in [516, MAX_CARGO_LOCKS] {
+            let temp = TestDir::new(&format!("cargo-cache-stage-lock-count-{count}"));
+            let fixture = cargo_cache_fixture(temp.path(), b"unused archive");
+            let locks = zero_package_locks(temp.path(), count);
+            stage_locked_cargo_caches(
+                &locks,
+                &fixture.source,
+                &fixture.destination,
+                &fixture.receipt,
+                fixture.source_uid,
+                fixture.source_gid,
+            )
+            .unwrap();
+            let receipt: JsonValue =
+                serde_json::from_slice(&fs::read(&fixture.receipt).unwrap()).unwrap();
+            assert_eq!(receipt["lock_count"], count);
+            assert_eq!(receipt["package_count"], 0);
+        }
+    }
+
+    #[test]
+    fn locked_cargo_cache_rejects_count_above_finite_maximum_before_staging() {
+        let temp = TestDir::new("cargo-cache-stage-lock-count-overflow");
+        let fixture = cargo_cache_fixture(temp.path(), b"unused archive");
+        let locks = vec![fixture.lock.clone(); MAX_CARGO_LOCKS + 1];
+        let error = stage_locked_cargo_caches(
+            &locks,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap_err();
+        assert!(error
+            .to_string()
+            .contains(&format!("at most {MAX_CARGO_LOCKS} Cargo locks")));
+        assert!(!fixture.destination.exists());
+    }
+
+    #[test]
+    fn locked_cargo_cache_rejects_per_file_and_aggregate_byte_overflow() {
+        let single = TestDir::new("cargo-cache-stage-oversized-lock");
+        let fixture = cargo_cache_fixture(single.path(), b"unused archive");
+        fs::write(&fixture.lock, vec![b'x'; MAX_CARGO_LOCK_BYTES as usize + 1]).unwrap();
+        let error = stage_locked_cargo_cache(
+            &fixture.lock,
+            &fixture.source,
+            &fixture.destination,
+            &fixture.receipt,
+            fixture.source_uid,
+            fixture.source_gid,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("per-file limit"));
+        assert!(!fixture.destination.exists());
+
+        let aggregate = TestDir::new("cargo-cache-stage-aggregate-overflow");
+        let first = aggregate.path().join("first.lock");
+        let second = aggregate.path().join("second.lock");
+        fs::write(&first, "version = 4\n").unwrap();
+        fs::write(&second, "version = 4\n").unwrap();
+        let paths = vec![first, second];
+        let total = paths
+            .iter()
+            .map(|path| fs::metadata(path).unwrap().len())
+            .sum::<u64>();
+        let error = read_bounded_cargo_locks_with_limits(&paths, MAX_CARGO_LOCK_BYTES, total - 1)
+            .unwrap_err();
+        assert!(error.to_string().contains("aggregate limit"));
+        assert!(!aggregate.path().join("staged-registry").exists());
     }
 
     #[test]

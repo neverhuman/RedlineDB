@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1784643428`
-- Started at: `1784643428`
-- Elapsed: `4173` ms
+- Run ID: `1784648571`
+- Started at: `1784648571`
+- Elapsed: `4021` ms
 - Scope: `full`
 - Raw score: `94`
 - Final score: `94`
@@ -84,17 +84,17 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `tools/splitctl/src/jeryu_client.rs:123-124, tools/splitctl/src/jeryu_client.rs:169-170, tools/splitctl/src/jeryu_client.rs:179-180, tools/splitctl/src/jeryu_client.rs:189-190, tools/splitctl/src/jeryu_client.rs:199-200, tools/splitctl/src/jeryu_client.rs:233-234, tools/splitctl/src/jeryu_client.rs:244-245, tools/splitctl/src/jeryu_client.rs:258-259, tools/splitctl/src/jeryu_client.rs:267-268, tools/splitctl/src/jeryu_client.rs:277-278` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/splitctl/src/jeryu_client.rs:1395-1396, tools/splitctl/src/jeryu_client.rs:1416-1417, tools/splitctl/src/jeryu_client.rs:1430-1431, tools/splitctl/src/jeryu_client.rs:1440-1441, tools/splitctl/src/jeryu_client.rs:1457-1458, tools/splitctl/src/jeryu_client.rs:1496-1497, tools/splitctl/src/jeryu_client.rs:1510-1511` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 13 | `tools/splitctl/src/release_candidate.rs:1229-1233, tools/splitctl/src/release_candidate.rs:1245-1249` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 7 | `tools/splitctl/src/main.rs:2666-2669, tools/splitctl/src/main.rs:2682-2685` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 7 | `tools/splitctl/src/main.rs:2772-2775, tools/splitctl/src/main.rs:2788-2791` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `tools/splitctl/src/jeryu_client.rs:509-510, tools/splitctl/src/jeryu_client.rs:550-551, tools/splitctl/src/jeryu_client.rs:557-558, tools/splitctl/src/jeryu_client.rs:773-774` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 8 | `tools/splitctl/src/jeryu_client.rs:1531-1532, tools/splitctl/src/jeryu_client.rs:1602-1603` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/splitctl/src/main.rs:2366-2367, tools/splitctl/src/main.rs:2374-2375` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `tools/splitctl/src/main.rs:2472-2473, tools/splitctl/src/main.rs:2480-2481` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/splitctl/src/release_candidate.rs:1708-1709, tools/splitctl/src/release_candidate.rs:1786-1787` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/splitctl/src/release_candidate.rs:1133-1134, tools/splitctl/src/release_candidate.rs:1194-1195` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/jeryu_client.rs:1646-1647, tools/splitctl/src/jeryu_client.rs:1702-1703` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/jeryu_client.rs:1797-1798, tools/splitctl/src/jeryu_client.rs:1812-1813` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/jeryu_client.rs:577-578, tools/splitctl/src/jeryu_client.rs:607-608` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/jeryu_client.rs:565-566, tools/splitctl/src/jeryu_client.rs:692-693` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `tools/splitctl/src/jeryu_client.rs:681-682, tools/splitctl/src/main.rs:1684-1685` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `tools/splitctl/src/jeryu_client.rs:681-682, tools/splitctl/src/main.rs:1790-1791` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `tools/splitctl/src/release_candidate.rs:1840-1841, tools/splitctl/src/release_candidate.rs:1847-1848` | `same body appears under different names across files` |
 
 ## Dimensions

@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:f5ee8093cb7b63ec000c75b17e46cf520fc262939e618b2ae05f01a1dee58da8",
-  "input_fingerprint": "sha256:d9974aa878caae6ec9d42bcc1e4333345765a2a925a0aad1c10c30118e6199e0",
+  "report_fingerprint": "sha256:5d13009d68dfd182aa6ff128ef44f972ee209e94c9b4be27b9edae017282034d",
+  "input_fingerprint": "sha256:8b8f4471b1604cc1cfef008964914ded15956f4783ae3d944cb1730ede89d22d",
   "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
   "manifest_fingerprints": {
     "owner_map": "sha256:8906e7de840f5494a011115f1c570db3ddbfee3d9a8e6fbe11e94ca6cf6adc56",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:f33b9715b6109208b44f6931c43f37e8da642dd67ff6faaad77be486954243a4"
   },
   "dirty_worktree": true,
-  "generated_at": "1784643428",
+  "generated_at": "1784648571",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784643428",
-  "started_at": "1784643428",
-  "elapsed_ms": 4173,
+  "run_id": "1784648571",
+  "started_at": "1784648571",
+  "elapsed_ms": 4021,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "1580023",
+    "head": "3b58d9e",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1014,7 +1014,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-21T14:17:04.053596569+00:00",
+    "generated_at": "2026-07-21T15:42:47.357484896+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1286,15 +1286,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2666,
-            "end_line": 2669,
+            "start_line": 2772,
+            "end_line": 2775,
             "unit_name": "validate_child_family_authority"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2682,
-            "end_line": 2685,
+            "start_line": 2788,
+            "end_line": 2791,
             "unit_name": "validate_child_engine_authority"
           }
         ]
@@ -1405,15 +1405,15 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2366,
-            "end_line": 2367,
+            "start_line": 2472,
+            "end_line": 2473,
             "unit_name": "physical_directory"
           },
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 2374,
-            "end_line": 2375,
+            "start_line": 2480,
+            "end_line": 2481,
             "unit_name": "physical_regular_file"
           }
         ]
@@ -1657,8 +1657,8 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1684,
-            "end_line": 1685,
+            "start_line": 1790,
+            "end_line": 1791,
             "unit_name": "valid_cargo_token"
           }
         ]
