@@ -173,14 +173,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("validate-local-jeryu") => {
             let mut manifest = None;
             let mut skip_remotes = false;
+            let mut sealed_outer_projection = false;
             while let Some(arg) = args.next() {
                 match arg.as_str() {
                     "--manifest" => manifest = Some(PathBuf::from(args.next().ok_or("--manifest needs a path")?)),
                     "--skip-remotes" => skip_remotes = true,
+                    "--sealed-outer-projection" => sealed_outer_projection = true,
                     value => return Err(format!("unknown argument: {value}").into()),
                 }
             }
-            validate_local_jeryu(manifest, skip_remotes)?;
+            validate_local_jeryu(manifest, skip_remotes, sealed_outer_projection)?;
         }
         Some("preflight") => preflight(args.collect())?,
         Some("source-coverage") => {
@@ -222,7 +224,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if install_hooks {
                 install_worktree_ban_hooks(manifest.clone())?;
             }
-            validate_local_jeryu(manifest, skip_remotes)?;
+            validate_local_jeryu(manifest, skip_remotes, false)?;
         }
         Some("jeryu-local") => jeryu_local(args.collect())?,
         Some("jeryu-publish-host-ci") => {
@@ -251,7 +253,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-candidate [--manifest PATH] [--repo NAME]... [--journal PATH --token-file PATH --apply] [--receipt PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--sealed-outer-projection] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-candidate [--manifest PATH] [--repo NAME]... [--journal PATH --token-file PATH --apply] [--receipt PATH] | release-status [--manifest PATH] [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -1873,9 +1875,7 @@ fn registered_nested_families(data: &toml::Value) -> Vec<(&str, &toml::Value)> {
         .collect()
 }
 
-fn registered_nested_projection<'a>(
-    family: &'a toml::Value,
-) -> impl Iterator<Item = &'a toml::Value> {
+fn registered_nested_projection(family: &toml::Value) -> impl Iterator<Item = &toml::Value> {
     family
         .get("repository")
         .and_then(toml::Value::as_array)
@@ -9484,7 +9484,13 @@ fn path_matches(path: &str, pattern: &str) -> bool {
 fn validate_local_jeryu(
     manifest: Option<PathBuf>,
     skip_remotes: bool,
+    sealed_outer_projection: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if sealed_outer_projection && env::var("JAIN_HOST_CI_NETWORK_ISOLATED").as_deref() != Ok("1") {
+        return Err(
+            "--sealed-outer-projection is reserved for root-sealed isolated host CI".into(),
+        );
+    }
     let root = control_plane_root();
     let manifest_path = manifest.unwrap_or_else(|| root.join("repos.manifest.toml"));
     let data: toml::Value = fs::read_to_string(&manifest_path)?.parse()?;
@@ -9530,6 +9536,20 @@ fn validate_local_jeryu(
         check_cargo_sources(&repo, &mut errors)?;
     }
     validate_nested_family_local(&data, skip_remotes, &mut errors)?;
+    let split_root = exact_absolute_path(
+        &string(&data, "split_root").ok_or("manifest is missing split_root")?,
+        "split_root",
+    )?;
+    for (key, registration) in registered_nested_families(&data) {
+        let result = if sealed_outer_projection {
+            validate_registered_nested_family_declaration(key, registration, &split_root)
+        } else {
+            validate_registered_nested_family_local(key, registration, &split_root, true)
+        };
+        if let Err(error) = result {
+            errors.push(error);
+        }
+    }
     if !skip_remotes {
         let split_root = repos
             .first()
