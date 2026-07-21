@@ -10,7 +10,7 @@ for job_count in 1 4 64; do
     exit 1
   }
 done
-for job_count in 0 00 65 18446744073709551617 18446744073709551620 \
+for job_count in 0 00 01 04 65 18446744073709551617 18446744073709551620 \
   999999999999999999999999999999999999999999; do
   if jain_ci_job_count_is_bounded "$job_count"; then
     printf 'hostile CI job count was accepted: %s\n' "$job_count" >&2

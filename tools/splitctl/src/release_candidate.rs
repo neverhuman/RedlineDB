@@ -763,6 +763,7 @@ fn initialize_journal(
             })
         })
         .collect::<Vec<_>>();
+    let lifecycle_status = lifecycle_status_for_rows(&repositories);
     let journal_id = journal_identity(&plan["manifest_sha256"], &repositories)?;
     Ok(json!({
         "schema_version": JOURNAL_SCHEMA,
@@ -779,9 +780,26 @@ fn initialize_journal(
         "generation": 0,
         "created_at_unix": now,
         "updated_at_unix": now,
-        "lifecycle_status": "active",
+        "lifecycle_status": lifecycle_status,
         "repositories": repositories,
     }))
+}
+
+fn lifecycle_status_for_rows(rows: &[JsonValue]) -> &'static str {
+    let selected = rows
+        .iter()
+        .filter(|row| row["selected"] == true)
+        .collect::<Vec<_>>();
+    if !selected.is_empty() && selected.iter().all(|row| row["state"] == "bound") {
+        "complete"
+    } else if selected
+        .iter()
+        .any(|row| row["state"] == "binding-required")
+    {
+        "binding-required"
+    } else {
+        "active"
+    }
 }
 
 fn journal_identity(
@@ -977,13 +995,11 @@ fn validate_journal(
                 .as_array()
                 .ok_or("journal repositories is not an array")?,
         )?);
-        let complete = journal["repositories"]
-            .as_array()
-            .ok_or("journal repositories is not an array")?
-            .iter()
-            .filter(|row| row["selected"] == true)
-            .all(|row| row["state"] == "bound");
-        journal["lifecycle_status"] = json!(if complete { "complete" } else { "active" });
+        journal["lifecycle_status"] = json!(lifecycle_status_for_rows(
+            journal["repositories"]
+                .as_array()
+                .ok_or("journal repositories is not an array")?,
+        ));
         bump_generation(journal)?;
     }
     Ok(())
@@ -1253,22 +1269,11 @@ fn complete_transition(
     journal["repositories"][index]["state"] = json!(next);
     journal["repositories"][index]["pending_action"] = JsonValue::Null;
     journal["repositories"][index]["transition_count"] = json!(transitions);
-    let selected = journal["repositories"]
-        .as_array()
-        .ok_or("journal repositories is not an array")?
-        .iter()
-        .filter(|row| row["selected"] == true)
-        .collect::<Vec<_>>();
-    journal["lifecycle_status"] = json!(if selected.iter().all(|row| row["state"] == "bound") {
-        "complete"
-    } else if selected
-        .iter()
-        .any(|row| row["state"] == "binding-required")
-    {
-        "binding-required"
-    } else {
-        "active"
-    });
+    journal["lifecycle_status"] = json!(lifecycle_status_for_rows(
+        journal["repositories"]
+            .as_array()
+            .ok_or("journal repositories is not an array")?,
+    ));
     bump_generation(journal)
 }
 
@@ -1901,10 +1906,27 @@ mod tests {
 
     #[test]
     fn completed_campaign_returns_success_without_deriving_another_action() {
-        let journal = json!({
-            "lifecycle_status": "complete",
-            "repositories": [row("jain-domain", 1, 1, "bound", true)],
+        let manifest = control_plane_root().join("repos.manifest.toml");
+        let plan = json!({
+            "status": "pass",
+            "manifest_sha256": "a".repeat(64),
+            "fleet_jobs": 4,
+            "ci_jobs": 4,
+            "selected_repositories": ["jain-domain"],
+            "repositories": [{
+                "name":"jain-domain", "repo_slug":"veox/jain-domain", "path":"/jain-domain",
+                "remote":"http://127.0.0.1:8787/git/veox/jain-domain.git",
+                "required_check":"jain-domain/required", "phase":1, "wave":1,
+                "selected":true, "source_branch":"release/jain-domain",
+                "source_head":"b".repeat(40), "source_tree":"c".repeat(40),
+                "release_checksum_sha256":"d".repeat(64), "release_tree":"c".repeat(40),
+                "tag":format!("jain-domain-v{RELEASE_VERSION}-split.1"),
+                "tag_prefix":format!("jain-domain-v{RELEASE_VERSION}-split."),
+                "binding_bound":true, "state":"bound"
+            }]
         });
+        let journal = initialize_journal(&plan, &manifest).unwrap();
+        assert_eq!(journal["lifecycle_status"], "complete");
         assert!(campaign_complete(&journal).unwrap());
         assert!(next_action(&journal).is_err());
 
