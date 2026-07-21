@@ -234,7 +234,16 @@ if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
         and (.tree | test("^[0-9a-f]{40}$"))
         and (.inventory_sha256 | test("^[0-9a-f]{64}$"))
         and (.entry_count | type) == "number" and .entry_count >= 0
-        and .mount_path == ($split_root + "/" + .repository)))' \
+        and .mount_path == ($split_root + "/" + .repository)
+        and (.contract_tag_ref | type == "string")
+        and (.contract_tag_object | type == "string")
+        and (.contract_tag_commit | type == "string")
+        and (((.contract_tag_ref == "") and (.contract_tag_object == "")
+              and (.contract_tag_commit == ""))
+          or ((.contract_tag_ref
+                | test("^refs/tags/[a-z0-9][a-z0-9-]*-v[0-9A-Za-z.-]+-split\\.[0-9]+$"))
+              and (.contract_tag_object | test("^[0-9a-f]{40}$"))
+              and (.contract_tag_commit | test("^[0-9a-f]{40}$")))))' \
     "$JAIN_SIBLING_SOURCES_PATH" >/dev/null || exit 2
 fi
 
@@ -535,6 +544,34 @@ fi
 # the sealed sibling receipt. Ambient canonical HEAD and working-tree state are
 # never source authority.
 if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
+  worker_contract_ancestor_object=""
+  worker_contract_mirror="$wt/contracts/MIRROR.md"
+  if [[ -e "$worker_contract_mirror" ]]; then
+    [[ -f "$worker_contract_mirror" && ! -L "$worker_contract_mirror" \
+      && "$(stat -c '%u:%g:%a:%h' -- "$worker_contract_mirror" 2>/dev/null)" \
+        == "$(id -u):$(id -g):644:1" \
+      && "$(stat -c '%s' -- "$worker_contract_mirror")" -le 16384 ]] \
+      || native_setup_failure \
+        'worker contract mirror is not a bounded physical regular file' 1
+    worker_mirror_blob="$(git -C "$wt" rev-parse --verify \
+      "$SHA:contracts/MIRROR.md")" \
+      || native_setup_failure \
+        'worker contract mirror is not tracked at the exact product head' 1
+    [[ "$worker_mirror_blob" =~ ^[0-9a-f]{40}$ \
+      && "$(git -C "$wt" hash-object --no-filters -- \
+        "$worker_contract_mirror")" == "$worker_mirror_blob" ]] \
+      || native_setup_failure \
+        'worker contract mirror differs from the exact product object' 1
+    mapfile -t worker_contract_objects < <(
+      sed -n 's/^Source-commit: \([0-9a-f]\{40\}\)$/\1/p' \
+        "$worker_contract_mirror"
+    )
+    [[ "${#worker_contract_objects[@]}" == 1 \
+      && "${worker_contract_objects[0]}" =~ ^[0-9a-f]{40}$ ]] \
+      || native_setup_failure \
+        'worker contract mirror must declare exactly one source object' 1
+    worker_contract_ancestor_object="${worker_contract_objects[0]}"
+  fi
   sibling_git_config="$tmp/sibling-safe-directory.config"
   : >"$sibling_git_config" \
     || native_setup_failure "cannot create bounded sibling Git config" 1
@@ -552,11 +589,13 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
     sibling_binding="$(jq -er --arg sibling "$sib" '
       [.sources[] | select(.repository == $sibling)]
       | select(length == 1) | .[0]
-      | [.commit,.tree,.inventory_sha256,(.entry_count | tostring),.mount_path]
+      | [.commit,.tree,.inventory_sha256,(.entry_count | tostring),.mount_path,
+         .contract_tag_ref,.contract_tag_object,.contract_tag_commit]
       | @tsv' "$JAIN_SIBLING_SOURCES_PATH")" \
       || native_setup_failure "missing sealed sibling authority: $sib" 1
     IFS=$'\t' read -r sib_sha sib_tree sib_inventory_sha \
-      sib_entry_count sib_mount_path <<<"$sibling_binding"
+      sib_entry_count sib_mount_path sib_contract_tag_ref \
+      sib_contract_tag_object sib_contract_tag_commit <<<"$sibling_binding"
     [[ "$sib_mount_path" == "$sib_path" \
       && "$(realpath -e -- "$sib_path")" == "$sib_path" \
       && -d "$sib_path/.git" && ! -L "$sib_path" && ! -L "$sib_path/.git" ]] \
@@ -585,6 +624,31 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
     actual_sib_count="$("${safe_sibling_git[@]}" -C "$sib_path" \
       ls-tree -r --full-tree "$sib_sha" | wc -l | awk '{print $1}')" \
       || native_setup_failure "cannot count sibling inventory $sib" 1
+    actual_sib_tags="$("${safe_sibling_git[@]}" -C "$sib_path" \
+      for-each-ref --format='%(refname)' refs/tags)" \
+      || native_setup_failure "cannot enumerate sibling tags $sib" 1
+    if [[ "$sib" == jain-core && -n "$worker_contract_ancestor_object" ]]; then
+      [[ "$sib_contract_tag_ref" \
+          =~ ^refs/tags/jain-core-v[0-9A-Za-z.-]+-split\.[0-9]+$ \
+        && "$sib_contract_tag_object" == "$worker_contract_ancestor_object" \
+        && "$sib_contract_tag_commit" =~ ^[0-9a-f]{40}$ \
+        && "$actual_sib_tags" == "$sib_contract_tag_ref" \
+        && "$("${safe_sibling_git[@]}" -C "$sib_path" rev-parse --verify \
+          "$sib_contract_tag_ref")" == "$sib_contract_tag_object" \
+        && "$("${safe_sibling_git[@]}" -C "$sib_path" cat-file -t \
+          "$sib_contract_tag_object")" == tag \
+        && "$("${safe_sibling_git[@]}" -C "$sib_path" rev-parse --verify \
+          "$sib_contract_tag_ref^{commit}")" == "$sib_contract_tag_commit" ]] \
+        && "${safe_sibling_git[@]}" -C "$sib_path" merge-base --is-ancestor \
+          "$sib_contract_tag_commit" "$sib_sha" \
+        || native_setup_failure \
+          'sealed Core contract tag differs from product authority' 1
+    else
+      [[ -z "$sib_contract_tag_ref" && -z "$sib_contract_tag_object" \
+        && -z "$sib_contract_tag_commit" && -z "$actual_sib_tags" ]] \
+        || native_setup_failure \
+          "sibling retained an undeclared contract tag: $sib" 1
+    fi
     [[ "$actual_sib_sha" == "$sib_sha" \
       && "$actual_sib_tree" == "$sib_tree" \
       && "$actual_sib_inventory" == "$sib_inventory_sha" \
@@ -604,6 +668,10 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
       || native_setup_failure "cannot isolate sibling $sib" 1
     validate_physical_checkout "$tmp/$sib" "$sib_sha" \
       || native_setup_failure "sibling $sib is not a physical isolated checkout" 1
+    [[ "$(git -C "$tmp/$sib" for-each-ref --format='%(refname)' refs/tags)" \
+      == "$actual_sib_tags" ]] \
+      || native_setup_failure \
+        "isolated sibling contract tags differ from sealed source: $sib" 1
     sibling_seen=$((sibling_seen + 1))
   done
   [[ "$sibling_seen" \

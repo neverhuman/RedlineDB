@@ -604,6 +604,36 @@ git -C "${arguments[3]}" -c filter.lfs.process= -c filter.lfs.clean= \
 validate_product_release_tag_checkout "${arguments[3]}" \
   || fail 'product worker checkout release-tag mismatch'
 
+# A product contract mirror may deliberately bind an older producer object.
+# Root reads the exact tracked MIRROR.md from the authenticated product checkout
+# and later asks only the jain-core materializer to retain that exact object via
+# its uniquely advertised immutable annotated tag. The object is evidence, not
+# an ambient ref or caller-selected revision.
+contract_ancestor_object=""
+product_contract_mirror="${arguments[3]}/contracts/MIRROR.md"
+if [[ -e "$product_contract_mirror" ]]; then
+  [[ -f "$product_contract_mirror" && ! -L "$product_contract_mirror" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$product_contract_mirror" 2>/dev/null)" \
+      == '0:0:644:1' \
+    && "$(stat -c '%s' -- "$product_contract_mirror")" -le 16384 ]] \
+    || fail 'product contract mirror authority is not a bounded regular file'
+  mirror_blob="$("${safe_git[@]}" -C "${arguments[3]}" \
+    rev-parse --verify "${arguments[2]}:contracts/MIRROR.md")" \
+    || fail 'product contract mirror is not tracked at the exact head'
+  [[ "$mirror_blob" =~ ^[0-9a-f]{40}$ \
+    && "$("${safe_git[@]}" -C "${arguments[3]}" \
+      hash-object --no-filters -- "$product_contract_mirror")" == "$mirror_blob" ]] \
+    || fail 'physical product contract mirror differs from the exact product object'
+  mapfile -t declared_contract_objects < <(
+    sed -n 's/^Source-commit: \([0-9a-f]\{40\}\)$/\1/p' \
+      "$product_contract_mirror"
+  )
+  [[ "${#declared_contract_objects[@]}" == 1 \
+    && "${declared_contract_objects[0]}" =~ ^[0-9a-f]{40}$ ]] \
+    || fail 'product contract mirror must declare exactly one lowercase source object'
+  contract_ancestor_object="${declared_contract_objects[0]}"
+fi
+
 hydrate_local_lfs_checkout() {
   local checkout="$1" source="$2" commit="$3" operation
   git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
@@ -696,18 +726,44 @@ if [[ "$sibling_sources_required" == true ]]; then
       || fail "invalid sibling authority: $sibling"
     IFS=$'\t' read -r sibling_owner sibling_remote <<<"$sibling_authority"
     sibling_checkout="$sibling_stage_root/$sibling"
-    sibling_materialization="$("$splitctl_path" jeryu-local git-materialize \
+    sibling_materialize_args=(jeryu-local git-materialize \
       --repo "$sibling_owner/$sibling" --remote "$sibling_remote" \
       --ref refs/heads/main --resolve-ref-head \
-      --destination "$sibling_checkout" --token-file "$token_file")" \
+      --destination "$sibling_checkout" --token-file "$token_file")
+    if [[ "$sibling" == jain-core && -n "$contract_ancestor_object" ]]; then
+      sibling_materialize_args+=(
+        --retain-ancestor-tag-object "$contract_ancestor_object"
+      )
+    fi
+    sibling_materialization="$("$splitctl_path" "${sibling_materialize_args[@]}")" \
       || fail "cannot materialize authenticated sibling main: $sibling"
-    sibling_commit="$(jq -er --arg sibling "$sibling" \
+    sibling_binding="$(jq -er --arg sibling "$sibling" \
       'select(.schema_version == "jain.jeryu-git-materialization/v1")
        | select(.repository == ("veox/" + $sibling))
        | select(.reference == "refs/heads/main" and .status == "pass")
-       | .commit | select(test("^[0-9a-f]{40}$"))' \
+       | select(.commit | test("^[0-9a-f]{40}$"))
+       | select(.ancestor_tag_ref | type == "string")
+       | select(.ancestor_tag_object | type == "string")
+       | select(.ancestor_tag_commit | type == "string")
+       | [.commit,.ancestor_tag_ref,.ancestor_tag_object,.ancestor_tag_commit]
+       | @tsv' \
       <<<"$sibling_materialization")" \
       || fail "invalid sibling materialization receipt: $sibling"
+    IFS=$'\t' read -r sibling_commit sibling_contract_tag_ref \
+      sibling_contract_tag_object sibling_contract_tag_commit \
+      <<<"$sibling_binding"
+    if [[ "$sibling" == jain-core && -n "$contract_ancestor_object" ]]; then
+      [[ "$sibling_contract_tag_ref" \
+          =~ ^refs/tags/jain-core-v[0-9A-Za-z.-]+-split\.[0-9]+$ \
+        && "$sibling_contract_tag_object" == "$contract_ancestor_object" \
+        && "$sibling_contract_tag_commit" =~ ^[0-9a-f]{40}$ ]] \
+        || fail 'Core materialization did not bind the declared contract object'
+    else
+      [[ -z "$sibling_contract_tag_ref" \
+        && -z "$sibling_contract_tag_object" \
+        && -z "$sibling_contract_tag_commit" ]] \
+        || fail "sibling retained an undeclared contract tag: $sibling"
+    fi
     sibling_tree="$("${safe_git[@]}" -C "$sibling_checkout" \
       rev-parse --verify "$sibling_commit^{tree}")" \
       || fail "cannot resolve sibling tree: $sibling"
@@ -729,11 +785,16 @@ if [[ "$sibling_sources_required" == true ]]; then
       --arg commit "$sibling_commit" --arg tree "$sibling_tree" \
       --arg inventory "$sibling_inventory_sha256" \
       --arg mount_path "$family_root/$sibling" \
+      --arg contract_tag_ref "$sibling_contract_tag_ref" \
+      --arg contract_tag_object "$sibling_contract_tag_object" \
+      --arg contract_tag_commit "$sibling_contract_tag_commit" \
       --argjson entry_count "$sibling_entry_count" \
       '{repository:$repository,owner:$owner,remote:$remote,
         reference:$reference,commit:$commit,tree:$tree,
         inventory_sha256:$inventory,entry_count:$entry_count,
-        mount_path:$mount_path}' >>"$sibling_entries" \
+        mount_path:$mount_path,contract_tag_ref:$contract_tag_ref,
+        contract_tag_object:$contract_tag_object,
+        contract_tag_commit:$contract_tag_commit}' >>"$sibling_entries" \
       || fail "cannot record sibling source authority: $sibling"
     sibling_bind_args+=(
       --property="BindReadOnlyPaths=$sibling_checkout:$family_root/$sibling"
