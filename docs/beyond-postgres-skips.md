@@ -5,7 +5,7 @@ do NOT attempt to close against RedlineDB, and why.
 
 The full skip set lives in [`metadata/beyond_sqlite/skip-list.toml`](../metadata/beyond_sqlite/skip-list.toml).
 The list of cases we DO intend to close lives at
-`/home/ubuntu/redlineDB/target/redline-testing/closable-beyond-pg.txt` after each
+`/home/ubuntu/jain-split/target/redline-testing/closable-beyond-pg.txt` after each
 target-vs-reference triage pass.
 
 ## When to add a skip entry
@@ -194,7 +194,7 @@ for `?` / `?|` / `?&` operators (they currently parse-error).
 ## Closable work tracks
 
 The 119 closable failures are listed in
-`/home/ubuntu/redlineDB/target/redline-testing/closable-beyond-pg.txt` so
+`/home/ubuntu/jain-split/target/redline-testing/closable-beyond-pg.txt` so
 future agents can pick up specific tracks. The natural parallel tracks are:
 
 1. **BEYOND_PORTABILITY_SYNTAX (32)** -- parser-level work: MERGE, LATERAL,

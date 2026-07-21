@@ -57,7 +57,7 @@ readable repair receipts.
 | `phase11-sql-contracts`              | Phase-11 SQL contract tests (temp roots, queue, xdoug-compat).                                        |
 | `security`                           | `cargo audit` + `cargo deny check` + `gitleaks detect`.                                               |
 | `security-local`                     | Same as `security`; pinned for local-only invocation.                                                 |
-| `release-binary-smoke`               | Builds and verifies the pinned RedlineDB `v2.0.6` Linux release package, then runs a CLI smoke query. |
+| `release-binary-smoke`               | Builds and verifies the local RedlineDB `v4.2.0` Linux package, then runs a CLI smoke query. |
 | `release`                            | `cargo build --workspace --release --locked`.                                                         |
 | `jankurai-tools`                     | Local mirror for every `.github/workflows/jankurai-tools.yml` matrix job. Run with `scripts/ci-local.sh jankurai-tools`. |
 | `pr-gate`                            | Local mirror for PR branch freshness plus `jankurai staged-gate` against `origin/main`. Run with `scripts/ci-local.sh pr-gate`. |

@@ -6,15 +6,15 @@ harness. RedlineDB-side parity tests are local regression checks only; they do
 not produce SQLite parity coverage, benchmark, report, sentinel, or proof
 evidence artifacts.
 
-The official corpus and gate now live in `neverhuman/redline-testing`; that
-runner is the sole official source for parity evidence. The ledger below is the
-RedlineDB-side compatibility snapshot that consumes that external suite.
-Official README metrics and charts are accepted only from the verified external
-release artifact. The report generator requires
+The official corpus and gate live in the canonical in-tree `redline-testing`
+repository; that Rust runner is the sole parity authority. The ledger below is
+the RedlineDB-side compatibility snapshot that consumes its versioned contract.
+Official README metrics and charts are accepted only from strict local evidence.
+The report generator requires
 `benchmark-results/sqlite-parity/latest/provenance.json` before regenerating
 README/chart outputs, and CI verifies the release tarball SHA-256 from the
-sidecar, binary SHA-256, release manifest, and GitHub artifact attestation
-before any official suite runs.
+sidecar, binary SHA-256, release manifest, and custody receipt before any
+official suite runs.
 
 The provenance schema accepted by the RedlineDB report gate is deliberately
 small and hash-first:
@@ -115,8 +115,8 @@ Status values are deliberately narrow:
 
 ## Evidence Boundary
 
-For any official SQLite parity evidence change, use the pinned
-`neverhuman/redline-testing` release artifact through
+For any official SQLite parity evidence change, use the reviewed local
+`redline-testing` artifact through
 `redline-testing-official` or `sqlite-parity-report-update`. Do not create
 local RedlineDB receipts or public lanes for SQLite parity coverage, benchmark,
 report, sentinel, or proof data; legacy receipt scripts, local parity bundle

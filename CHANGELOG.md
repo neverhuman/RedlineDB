@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## [4.2.0] - 2026-07-21
+
+### Added
+
+- `TransactionOptions` and `Connection::begin_with_options`; the existing
+  `begin` API remains the compatible deferred/repeatable-read wrapper.
+- A monotonic public storage-format identity independent of package SemVer.
+- Deterministic isolation schedules and stable unsupported-Serializable errors.
+
+### Changed
+
+- `READ COMMITTED` now refreshes the kernel snapshot at statement boundaries;
+  `REPEATABLE READ` selects the existing transaction snapshot; `SERIALIZABLE`
+  fails immediately until SSI is implemented.
+- `SET TRANSACTION` now changes the active kernel transaction instead of only
+  remembering a display label.
+- The authoritative parity and release path consumes only local Jeryu and
+  in-tree, hash-pinned dependency/oracle custody.
+
 ## [4.1.0] - 2026-05-29
 
 W7 startup optimization — eliminate cgroup walk from the volatile (in-memory)

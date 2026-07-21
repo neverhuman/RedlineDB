@@ -97,6 +97,9 @@ impl From<redlinedb_sql::Error> for Error {
     fn from(value: redlinedb_sql::Error) -> Self {
         use redlinedb_sql::Error as SqlError;
         match value {
+            SqlError::Kernel(kernel_error::Error::UnsupportedIsolation) => {
+                Self::new(ErrorCode::Unsupported, "unsupported isolation level")
+            }
             SqlError::Kernel(kernel_error::Error::LockTimeout) => {
                 Self::new(ErrorCode::Busy, "lock timeout")
             }

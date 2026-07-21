@@ -30,6 +30,15 @@ pub struct RqlStats {
     pub sql_route_shape: u64,
 }
 
+fn kernel_isolation(level: crate::statement::TransactionIsolationLevel) -> Isolation {
+    match level {
+        crate::statement::TransactionIsolationLevel::ReadUncommitted
+        | crate::statement::TransactionIsolationLevel::ReadCommitted => Isolation::ReadCommitted,
+        crate::statement::TransactionIsolationLevel::RepeatableRead => Isolation::Snapshot,
+        crate::statement::TransactionIsolationLevel::Serializable => Isolation::Serializable,
+    }
+}
+
 /// Reason a query was routed through the SQL engine rather than native path.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum RqlRouteReason {
@@ -466,7 +475,10 @@ impl Connection {
         // Phase 2: open a fresh tx and replay the journal prefix.
         {
             let mut session = self.session.lock().expect("session poisoned");
-            let tx = self.db.engine.begin(Isolation::Snapshot)?;
+            let tx = self
+                .db
+                .engine
+                .begin(kernel_isolation(session.transaction_isolation))?;
             session.tx = Some(tx);
             session.replay_in_progress = true;
         }
@@ -499,16 +511,23 @@ impl Connection {
     }
 
     pub fn begin(&self, mode: BeginMode) -> Result<()> {
+        self.begin_with_isolation(
+            mode,
+            crate::statement::TransactionIsolationLevel::RepeatableRead,
+        )
+    }
+
+    pub fn begin_with_isolation(
+        &self,
+        mode: BeginMode,
+        isolation: crate::statement::TransactionIsolationLevel,
+    ) -> Result<()> {
         let committed_sqlite_sequences = self.db.sqlite_sequence_snapshot();
         let mut session = self.session.lock().expect("session poisoned");
         if session.tx.is_some() {
             return Err(Error::TransactionState("transaction already active"));
         }
-        let mut tx = self.db.engine.begin(match mode {
-            BeginMode::Deferred | BeginMode::Immediate | BeginMode::Exclusive => {
-                Isolation::Snapshot
-            }
-        })?;
+        let mut tx = self.db.engine.begin(kernel_isolation(isolation))?;
         if matches!(mode, BeginMode::Immediate | BeginMode::Exclusive) {
             self.db.engine.reserve_begin_lock(&mut tx)?;
         }
@@ -517,9 +536,26 @@ impl Connection {
         session.sqlite_sequences_dirty.clear();
         session.tx = Some(tx);
         session.failed = false;
+        session.transaction_isolation = isolation;
         // A fresh tx can never replay — drop any leftover journal/savepoint
         // state from a prior rolled-back tx.
         session.clear_savepoints();
+        Ok(())
+    }
+
+    pub fn set_transaction_isolation(
+        &self,
+        isolation: crate::statement::TransactionIsolationLevel,
+    ) -> Result<()> {
+        let mut session = self.session.lock().expect("session poisoned");
+        let tx = session
+            .tx
+            .as_mut()
+            .ok_or(Error::TransactionState("no active transaction"))?;
+        self.db
+            .engine
+            .set_transaction_isolation(tx, kernel_isolation(isolation))?;
+        session.transaction_isolation = isolation;
         Ok(())
     }
 

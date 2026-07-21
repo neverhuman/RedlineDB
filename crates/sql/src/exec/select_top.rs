@@ -8,7 +8,8 @@ pub(super) fn begin_select_tx(conn: &Connection) -> Result<(SelectRuntimeTx, boo
         return Ok((SelectRuntimeTx::Borrowed(tx_ptr), false));
     }
     conn.with_session(|session| {
-        if let Some(tx) = session.tx.take() {
+        if let Some(mut tx) = session.tx.take() {
+            conn.engine().refresh_statement_snapshot(&mut tx);
             return Ok((SelectRuntimeTx::Owned(tx), true));
         }
         let tx = conn.engine().begin(Isolation::Snapshot)?;

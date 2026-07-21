@@ -3,6 +3,42 @@ use std::time::Duration;
 use redlinedb_kernel::telemetry::Phase11CountersSnapshot;
 use serde::Serialize;
 
+use redlinedb_sql::{BeginMode, TransactionIsolationLevel};
+
+/// Options for an explicit transaction.
+///
+/// The default deliberately preserves the pre-4.2 `begin` behavior: a
+/// deferred transaction with one repeatable snapshot. Callers that need
+/// statement-refresh semantics select [`TransactionIsolationLevel::ReadCommitted`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TransactionOptions {
+    pub mode: BeginMode,
+    pub isolation: TransactionIsolationLevel,
+}
+
+impl Default for TransactionOptions {
+    fn default() -> Self {
+        Self {
+            mode: BeginMode::Deferred,
+            isolation: TransactionIsolationLevel::RepeatableRead,
+        }
+    }
+}
+
+impl TransactionOptions {
+    #[must_use]
+    pub fn with_mode(mut self, mode: BeginMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
+    #[must_use]
+    pub fn with_isolation(mut self, isolation: TransactionIsolationLevel) -> Self {
+        self.isolation = isolation;
+        self
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct MemoryOptions {
     pub cache_bytes: usize,

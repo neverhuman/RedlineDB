@@ -1,158 +1,55 @@
-# Release process
+# Local release process
 
-Authoritative release control surface for the redlinedb workspace.
-Cross-referenced from `CHANGELOG.md`, `.github/workflows/jankurai.yml`,
-and the security lane in `justfile`. Audit reference: HLT-025
-release-readiness, HLT-016 supply-chain drift.
+The authoritative RedlineDB release path is 100% local. It uses the Jeryu
+forge, physical custody below `/home/ubuntu/jain-split`, and immutable
+`redline-core-v<semver>-jain.<revision>` tags. GitHub, crates.io, downloads,
+external checkouts, symlink staging, and registered Git worktrees are not
+release inputs.
 
-## Version source
+## Version identities
 
-The release crates are published as a five-crate chain pinned at the
-same version. The rest of the workspace stays version-aligned, but it
-is not part of the crates.io release gate. Each crate carries its own
-`version = "X.Y.Z"` in `crates/<crate>/Cargo.toml` (the workspace
-itself does not yet pin a `[workspace.package].version`). To bump:
+- Package/runtime SemVer is declared by every active crate. The compatible
+  hardening release is `4.2.0`.
+- `redlinedb::STORAGE_FORMAT_VERSION` is monotonic and independent of SemVer.
+  Version 4.2.0 retains storage generation 1.
+- Testing and control tools have independent SemVer; evidence binds their exact
+  commits and binary hashes.
 
-```
-cargo install cargo-edit
-cargo set-version --workspace 0.2.0
-```
+## Protected lifecycle
 
-`cargo set-version` rewrites every member's `version` and any
-`path = "..."` workspace dependency that references the bumped crate.
-Commit the manifest churn in a single commit titled
-`chore(release): vX.Y.Z`.
+1. Begin from protected local-Jeryu `main` in the sole canonical checkout.
+2. Run formatting, locked/offline unit and integration tests, deterministic
+   isolation schedules, affected compatibility shards, security, the
+   full-graph dependency review, and package gates. Every gate is required;
+   none is advisory or soft-gated.
+3. Run `redline-testing run --contract ... --mode release`. Evidence is valid
+   only when the engine, runner, corpus, contract, dependency custody, oracle,
+   and performance-baseline hashes still match.
+4. Run `redlinectl offline-containment` against the exact Jeryu commit. Its
+   automatically removed `git clone --no-local` has no remote during tests,
+   receives only in-tree Cargo/oracle custody, and runs under
+   `IPAddressDeny=any` with `cargo test --locked --offline`.
+5. Publish the branch, required check, independent approval, and fast-forward
+   merge through the reviewed local lifecycle. Never waive a consumer, weaken
+   protection, force-push, or bypass review.
+6. Read the next unused `-jain.N` suffix from Jeryu and create that immutable
+   tag once. Existing tags never move.
+7. Bind the merged commit and tree checksum through the protected Redline
+   authority change. Produce fresh Jain and Jeryu consumer receipts, then let
+   `redlinectl proof-refresh` write both lock copies transactionally.
 
-## Changelog discipline
+Candidate metadata remains fail-closed (`status=candidate`, `formal_ga=false`,
+push disabled, rollback `7.0.6`). Production activation requires separate
+owner authorization.
 
-`CHANGELOG.md` follows the
-[Keep a Changelog](https://keepachangelog.com/en/1.1.0/) format.
-Every release MUST land a new section in the form
-`## [X.Y.Z] - YYYY-MM-DD` *before* the tag is pushed. The
-`Unreleased` section at the top stays empty between releases; PRs add
-entries under `Unreleased` and the release commit promotes them.
+## Compatibility and rollback
 
-## Release process
+Release claims must name either `redline-sqlite-contract/v1` or
+`redline-postgres-contract/v1`; unqualified full-product parity is forbidden.
+SQLite file/C-API identity and PostgreSQL wire/server/extensions are outside
+those contracts.
 
-Ordered steps. Each step is gated by the previous one passing.
-
-1. **Pre-flight**: `just required`, the exact protected PR lane (fast tests,
-   security, full-graph dependency review, and Jankurai ratchet), followed by
-   `just check` (fast + score + security + rust-map + rust-witness +
-   rust-diagnose). Every command must exit zero; none is advisory or soft-gated.
-2. **Bump**: `cargo set-version --workspace X.Y.Z` + edit
-   `CHANGELOG.md` (`Unreleased` → `## [X.Y.Z] - YYYY-MM-DD`).
-3. **Commit + push the bump**:
-   ```
-   git commit -am "chore(release): vX.Y.Z"
-   git push origin main
-   ```
-4. **Publish the crates.io chain**:
-   ```
-   ./scripts/release/publish-chain.sh X.Y.Z
-   ```
-   The helper publishes `redlinedb-domain` first, waits for the new
-   version to appear in the crates.io index, then continues through
-   `redlinedb-kernel`, `redlinedb-sql`, `redlinedb-ffi`, and
-   `redlinedb`. That wait is required: the next crate can 404 until the
-   previous publish is indexed. The helper also records a
-   machine-readable release witness at
-   `target/release/release-witness.jsonl` and requires the release
-   integrity artifacts to exist before the chain starts:
-   `target/release/SHA256SUMS`, `target/release/sbom.cdx.json`,
-   `target/release/provenance.intoto.jsonl`,
-   `target/release/tag.sig`, and
-   `target/release/attestation.intoto.jsonl`.
-
-   Optional sanity check once `redlinedb-domain` is indexed:
-   ```
-   cargo publish --dry-run -p redlinedb-kernel
-   cargo publish --dry-run -p redlinedb-sql
-   cargo publish --dry-run -p redlinedb-ffi
-   cargo publish --dry-run -p redlinedb
-   ```
-5. **Signed tag, after the publish chain is confirmed**:
-   ```
-   git tag -s vX.Y.Z -m "redlinedb vX.Y.Z"
-   git push origin vX.Y.Z
-   ```
-   The `release-build` workflow also runs on `v*` tag pushes. If a release
-   does not exist yet, it creates one with generated notes and uploads the
-   binary assets.
-6. **Cut or verify the GitHub release**:
-   ```
-   gh release create vX.Y.Z --title "redlinedb vX.Y.Z" \
-     --notes-file CHANGELOG-vX.Y.Z.md
-   ```
-   If the release already exists, the workflow uploads missing immutable
-   assets:
-   `redlinedb-vX.Y.Z-linux-x86_64.tar.gz`,
-   `redlinedb-vX.Y.Z-macos-arm64.tar.gz`,
-   `redlinedb-vX.Y.Z-macos-x86_64.tar.gz`, and each matching `.sha256`.
-   To backfill assets for an existing tag, run the `release-build` workflow
-   manually with `tag = vX.Y.Z`. The workflow checks out that tag as the
-   source tree but uses the current release-packaging script, so old tags can
-   be backfilled when packaging logic needed a fix. Existing release assets
-   are never overwritten; publish a replacement version if an uploaded asset
-   needs to change.
-
-## CI evidence
-
-The audit/security gate lives in
-[`.github/workflows/jankurai.yml`](../.github/workflows/jankurai.yml).
-The protected `required` lane runs `cargo audit`, `cargo deny check`,
-`gitleaks detect`, Syft SBOM generation, actionlint, full-graph dependency
-review, and the Jankurai ratchet; every stage is a hard gate. The reproducible
-dependency-review script validates advisories, bans, licenses, and sources
-against the complete locked Cargo graph. The audit job uploads
-`.jankurai/repo-score.json` + the SARIF security feed. Sample runs are
-linked from the Actions tab of the repository — pick any green run on
-a release tag for permalink evidence.
-
-## Integrity / provenance
-
-Release artifacts MUST ship:
-
-- **SHA-256 manifests** — `.github/workflows/release-build.yml` runs
-  `ops/ci/release-build.sh` for Linux x86_64, macOS Apple Silicon, and
-  macOS Intel. Each tarball receives a sibling `.sha256` file. Installers
-  must fail closed when the checksum asset is missing; CI can additionally
-  pin `REDLINEDB_SHA256=<digest>`.
-- **SBOM** — `cargo install cargo-cyclonedx` once, then
-  `cargo cyclonedx --format json --output-pattern bom --all`.
-  Attach the generated `bom.cdx.json` (renamed `sbom.cdx.json`) to
-  the release.
-- **Signed tag** — `git tag -s vX.Y.Z` (gpg or sigstore-style). The
-  repo `SECURITY.md` lists the maintainer key fingerprint; verifiers
-  run `git tag -v vX.Y.Z`.
-- **Dependency review** — `ops/ci/dependency-review.sh` runs cargo-deny over
-  advisories, bans, licenses, and sources for the full locked dependency graph.
-  A policy violation fails the protected lane.
-
-## Rollback runbook
-
-A bad release recovers in three moves:
-
-1. **Yank crates** (each, in reverse dependency order):
-   ```
-   cargo yank --vers X.Y.Z -p redlinedb
-   cargo yank --vers X.Y.Z -p redlinedb-ffi
-   cargo yank --vers X.Y.Z -p redlinedb-sql
-   cargo yank --vers X.Y.Z -p redlinedb-kernel
-   cargo yank --vers X.Y.Z -p redlinedb-domain
-   ```
-   `cargo yank --undo` reverses the operation if the issue turns out
-   to be benign.
-2. **Delete the GitHub release** (keep the tag for forensics):
-   ```
-   gh release delete vX.Y.Z --cleanup-tag=false
-   ```
-3. **Ship a superseding patch**: bump to `X.Y.Z+1` via the full
-   release process above. The changelog entry MUST cite the yanked
-   `X.Y.Z` and the CVE / issue that motivated the supersede.
-
-For pre-tag rollbacks (the release fails between `cargo publish` of
-crate N and crate N+1), file a `redlinedb-<failed-crate>` GitHub issue
-and re-attempt the same `X.Y.Z` after fixing the underlying problem;
-do not bump until the user-visible crates (`redlinedb`,
-`redlinedb-ffi`) are all on the same version.
+Every major release proves backward reads, any required migration, rejection
+of unsupported future storage generations, and rollback behavior. Rollback is
+a reviewed source/pin change to the prior known-good immutable tag. If corrected
+bytes are needed, cut the next unused tag; never delete or move old evidence.

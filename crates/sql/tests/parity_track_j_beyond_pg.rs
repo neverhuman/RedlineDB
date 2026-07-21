@@ -6,7 +6,9 @@
 //! `unsupported sql` from RedlineDB. Recall-only operations (CREATE
 //! SCHEMA, SET TRANSACTION ISOLATION) verify the session round-trip;
 //! catalog mutations (ALTER COLUMN, ALTER INDEX, sequences) verify the
-//! post-change behaviour with a follow-up query.
+//! post-change behaviour with a follow-up query. Transaction isolation is
+//! behavioral: read committed and repeatable read select kernel semantics,
+//! while Serializable is rejected until SSI exists.
 
 use redlinedb_sql::{Connection, Database, DbOptions, SqlValue, Step};
 use std::sync::Arc;
@@ -46,11 +48,16 @@ fn q1(conn: &Arc<Connection>, sql: &str) -> SqlValue {
 fn set_transaction_isolation_round_trips_via_show() {
     let (_d, c) = open();
     c.execute("BEGIN").expect("begin");
-    c.execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
-        .expect("set serializable");
+    let error = c
+        .execute("SET TRANSACTION ISOLATION LEVEL SERIALIZABLE")
+        .expect_err("serializable must fail until SSI exists");
+    assert_eq!(
+        error.to_string(),
+        "kernel error: unsupported isolation level"
+    );
     assert_eq!(
         q1(&c, "SHOW transaction_isolation"),
-        SqlValue::Text(Arc::from("serializable"))
+        SqlValue::Text(Arc::from("repeatable read"))
     );
     c.execute("COMMIT").expect("commit");
 

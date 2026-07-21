@@ -85,6 +85,10 @@ impl Txn {
         self.isolation
     }
 
+    pub(crate) fn set_isolation(&mut self, isolation: Isolation) {
+        self.isolation = isolation;
+    }
+
     pub fn snapshot(&self) -> &Snapshot {
         &self.snapshot
     }

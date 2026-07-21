@@ -154,11 +154,15 @@ pub enum PreparedKind {
         name: Arc<str>,
         if_exists: bool,
     },
-    /// Track J — `SET TRANSACTION ISOLATION LEVEL <level>`. Recall-only
-    /// store on the session.
+    /// `SET TRANSACTION ISOLATION LEVEL <level>`. The executor applies the
+    /// selected behavior to the active kernel transaction before updating
+    /// session-visible state.
     SetTransactionIsolation {
         level: TransactionIsolationLevel,
     },
+    /// Accepted connection/session variable whose value does not affect the
+    /// embedded execution kernel (for example `application_name`).
+    SetSessionVariable,
     /// Track J — `SHOW <name>` for session-state introspection. Today
     /// returns the recalled `transaction_isolation`; other names return
     /// empty string.
@@ -176,10 +180,10 @@ pub enum PreparedKind {
     Merge(MergePlan),
 }
 
-/// Track J — SQL-standard transaction isolation levels accepted via
-/// `SET TRANSACTION ISOLATION LEVEL ...`. The recorded value survives
-/// `SHOW transaction_isolation`; RedlineDB's engine continues to use its
-/// fixed snapshot isolation for reads and read-committed for writes.
+/// SQL-standard transaction isolation levels accepted via
+/// `SET TRANSACTION ISOLATION LEVEL ...` and the public Rust transaction
+/// options. Serializable remains a stable, immediately rejected value until
+/// SSI is available.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransactionIsolationLevel {
     ReadUncommitted,

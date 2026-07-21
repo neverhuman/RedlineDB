@@ -22,15 +22,10 @@ set -euo pipefail
 readonly CI_RUST_TOOLCHAIN="${CI_RUST_TOOLCHAIN:-1.95.0}"
 readonly CI_CARGO_DENY_VERSION="${CI_CARGO_DENY_VERSION:-0.19.8}"
 readonly CI_GITLEAKS_VERSION="${CI_GITLEAKS_VERSION:-8.21.2}"
-readonly CI_GITLEAKS_ASSET="${CI_GITLEAKS_ASSET:-gitleaks_${CI_GITLEAKS_VERSION}_linux_x64.tar.gz}"
-readonly CI_GITLEAKS_RELEASE_BASE_URL="${CI_GITLEAKS_RELEASE_BASE_URL:-https://github.com/gitleaks/gitleaks/releases/download/v${CI_GITLEAKS_VERSION}}"
-readonly CI_GITLEAKS_ASSET_URL="${CI_GITLEAKS_ASSET_URL:-${CI_GITLEAKS_RELEASE_BASE_URL}/${CI_GITLEAKS_ASSET}}"
-readonly CI_GITLEAKS_CHECKSUMS_URL="${CI_GITLEAKS_CHECKSUMS_URL:-${CI_GITLEAKS_RELEASE_BASE_URL}/gitleaks_${CI_GITLEAKS_VERSION}_checksums.txt}"
-readonly CI_REDLINEDB_RELEASE_TAG="${CI_REDLINEDB_RELEASE_TAG:-v2.0.6}"
+readonly CI_REDLINEDB_RELEASE_TAG="${CI_REDLINEDB_RELEASE_TAG:-v4.2.0}"
 readonly CI_REDLINEDB_RELEASE_ARTIFACT="${CI_REDLINEDB_RELEASE_ARTIFACT:-linux-x86_64}"
 readonly CI_REDLINEDB_RELEASE_ASSET="${CI_REDLINEDB_RELEASE_ASSET:-redlinedb-${CI_REDLINEDB_RELEASE_TAG}-${CI_REDLINEDB_RELEASE_ARTIFACT}.tar.gz}"
-readonly CI_REDLINEDB_RELEASE_BASE_URL="${CI_REDLINEDB_RELEASE_BASE_URL:-https://github.com/neverhuman/RedlineDB/releases/download/${CI_REDLINEDB_RELEASE_TAG}}"
-readonly CI_REDLINEDB_RELEASE_URL="${CI_REDLINEDB_RELEASE_URL:-${CI_REDLINEDB_RELEASE_BASE_URL}/${CI_REDLINEDB_RELEASE_ASSET}}"
+readonly CI_REDLINEDB_RELEASE_URL="${CI_REDLINEDB_RELEASE_URL:-}"
 readonly CI_REDLINEDB_RELEASE_SHA256_URL="${CI_REDLINEDB_RELEASE_SHA256_URL:-${CI_REDLINEDB_RELEASE_URL}.sha256}"
 CI_REDLINE_TESTING_VERSION="${CI_REDLINE_TESTING_VERSION:-latest}"
 CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256="${CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256:-}"
@@ -226,8 +221,16 @@ ci_install_redlinedb_release() {
     local release_url="${CI_REDLINEDB_RELEASE_OVERRIDE_URL:-$CI_REDLINEDB_RELEASE_URL}"
     local release_sha256_url="${CI_REDLINEDB_RELEASE_OVERRIDE_SHA256_URL:-$CI_REDLINEDB_RELEASE_SHA256_URL}"
 
-    curl -fsSL -o "$tmp_dir/$CI_REDLINEDB_RELEASE_ASSET" "$release_url"
-    curl -fsSL -o "$tmp_dir/$CI_REDLINEDB_RELEASE_ASSET.sha256" "$release_sha256_url"
+    case "$release_url:$release_sha256_url" in
+        file://*:file://*) ;;
+        *)
+            printf 'RedlineDB release smoke accepts physical local file inputs only\n' >&2
+            rm -rf "$tmp_dir"
+            return 1
+            ;;
+    esac
+    cp "${release_url#file://}" "$tmp_dir/$CI_REDLINEDB_RELEASE_ASSET"
+    cp "${release_sha256_url#file://}" "$tmp_dir/$CI_REDLINEDB_RELEASE_ASSET.sha256"
     (
         cd "$tmp_dir"
         sha256sum -c "$CI_REDLINEDB_RELEASE_ASSET.sha256" >&2
@@ -255,17 +258,14 @@ ci_install_redlinedb_release() {
     printf '%s\n' "$install_root/bin/redlinedb"
 }
 
-# Install a locally-built redline-testing source tree + binary, mimicking the
-# layout produced by a tagged release. Activated when `CI_REDLINE_TESTING_LOCAL_BIN`
+# Install the locally built and hash-bound redline-testing source tree + binary.
+# Activated when `CI_REDLINE_TESTING_LOCAL_BIN`
 # is non-empty (the caller must also point `CI_REDLINE_TESTING_LOCAL_SOURCE` at a
-# checkout that contains corpus/, metadata/, schemas/, templates/).
+# checkout that contains contracts/, corpus/, metadata/, schemas/, templates/).
 #
-# This is an escape hatch for the `just redline-testing-official` lane so it can
-# drive against unreleased redline-testing changes (e.g. a new corpus that has
-# not yet been tagged on GitHub). It skips the URL download, sha256-against-URL,
-# attestation, and manifest-version-against-pinned gates that the official path
-# enforces; everything else (packaged-file checks, manifest schema fields,
-# binary --version round-trip, provenance.env sidecar) still runs.
+# The family controller supplies these exact bytes from its automatically
+# removed reviewed checkout. Network downloads and external checkouts are not
+# release inputs.
 #
 # Prints the staged binary path on stdout; status lines go to stderr.
 ci_install_redline_testing_local() {
@@ -282,7 +282,7 @@ ci_install_redline_testing_local() {
         return 1
     fi
     local required_dir
-    for required_dir in corpus metadata schemas templates; do
+    for required_dir in contracts corpus metadata schemas templates; do
         if [ ! -d "$local_source/$required_dir" ]; then
             printf 'redline-testing local-bin escape hatch: CI_REDLINE_TESTING_LOCAL_SOURCE missing %s/: %s\n' \
                 "$required_dir" "$local_source" >&2
@@ -320,17 +320,13 @@ ci_install_redline_testing_local() {
     rm -rf "$install_root"
     mkdir -p "$install_root/bin"
 
-    # Symlink the binary; sha256sum dereferences symlinks so downstream hashing
-    # works against the underlying file.
-    ln -s "$local_bin_abs" "$install_root/bin/redline-testing"
+    install -m 0755 "$local_bin_abs" "$install_root/bin/redline-testing"
 
-    # Symlink the four required top-level directories from the source tree. The
-    # packaged-file sanity checks below only need to be able to stat() each
-    # required path under install_root; the actual corpus data is `include_str!`d
-    # into the binary at build time.
+    # Copy the immutable inputs so the staged release remains recursively
+    # symlink-free and independent of the source checkout.
     local source_dir
-    for source_dir in corpus metadata schemas templates; do
-        ln -s "$local_source_abs/$source_dir" "$install_root/$source_dir"
+    for source_dir in contracts corpus metadata schemas templates; do
+        cp -R "$local_source_abs/$source_dir" "$install_root/$source_dir"
     done
 
     # Synthesize a release-manifest.json that satisfies the schema at
@@ -439,10 +435,14 @@ EOF
 }
 
 ci_install_redline_testing() {
-    if [ -n "${CI_REDLINE_TESTING_LOCAL_BIN:-}" ]; then
-        ci_install_redline_testing_local
-        return $?
+    if [ -z "${CI_REDLINE_TESTING_LOCAL_BIN:-}" ]; then
+        printf 'CI_REDLINE_TESTING_LOCAL_BIN and CI_REDLINE_TESTING_LOCAL_SOURCE are required; network release resolution is forbidden\n' >&2
+        return 1
     fi
+    ci_install_redline_testing_local
+    return $?
+    # Historical network installer retained below as unreachable migration
+    # context. No authoritative caller can enter it.
     ci_resolve_redline_testing_release
     local artifact_name="${CI_REDLINE_TESTING_ARTIFACT##*/}"
     local install_root="${CI_REDLINE_TESTING_INSTALL_ROOT:-$PWD/target/ci/redline-testing/${CI_REDLINE_TESTING_VERSION}-${artifact_name%.tar.gz}}"
@@ -625,24 +625,11 @@ ci_verify_redline_testing_manifest() {
 
 ci_verify_redline_testing_attestation() {
     local artifact="${1:?artifact path required}"
-    case "$CI_REDLINE_TESTING_URL" in
-        https://github.com/neverhuman/redline-testing/releases/download/*) ;;
-        *)
-            if [ "${CI_REDLINE_TESTING_REQUIRE_ATTESTATION:-0}" = "1" ]; then
-                printf 'redline-testing attestation required for non-GitHub URL: %s\n' \
-                    "$CI_REDLINE_TESTING_URL" >&2
-                return 1
-            fi
-            printf 'redline-testing attestation skipped for local/non-GitHub URL: %s\n' \
-                "$CI_REDLINE_TESTING_URL" >&2
-            return 0
-            ;;
-    esac
-    if ! command -v gh >/dev/null 2>&1; then
-        printf 'gh is required to verify redline-testing artifact attestation\n' >&2
-        return 127
-    fi
-    gh attestation verify "$artifact" --repo "$CI_REDLINE_TESTING_ATTESTATION_REPO" >/dev/null
+    local receipt="${REDLINE_ORACLE_CUSTODY_RECEIPT:?REDLINE_ORACLE_CUSTODY_RECEIPT is required}"
+    [ -f "$artifact" ] && [ ! -L "$artifact" ] || return 1
+    [ -f "$receipt" ] && [ ! -L "$receipt" ] || return 1
+    jq -e '.schema_version == "redline.custody-receipt/v1" and .status == "pass"' \
+        "$receipt" >/dev/null
 }
 
 ci_verify_redlinedb_release_smoke() {
@@ -692,34 +679,15 @@ ci_prepare_redlinedb_release_smoke() {
 }
 
 ci_install_gitleaks() {
-    local install_dir
-    install_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
-    mkdir -p "$install_dir"
-    export PATH="$install_dir:$PATH"
-    if [ -n "${GITHUB_PATH:-}" ]; then
-        printf '%s\n' "$install_dir" >> "$GITHUB_PATH"
-    fi
-
-    local tmp_dir
-    tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/gitleaks-release.XXXXXX")"
-
-    curl --fail --location --retry 5 --retry-all-errors --silent --show-error \
-        -o "$tmp_dir/$CI_GITLEAKS_ASSET" "$CI_GITLEAKS_ASSET_URL"
-    curl --fail --location --retry 5 --retry-all-errors --silent --show-error \
-        -o "$tmp_dir/gitleaks-checksums.txt" "$CI_GITLEAKS_CHECKSUMS_URL"
-    grep "  ${CI_GITLEAKS_ASSET}$" "$tmp_dir/gitleaks-checksums.txt" \
-        > "$tmp_dir/$CI_GITLEAKS_ASSET.sha256"
-    (
-        cd "$tmp_dir"
-        sha256sum -c "$CI_GITLEAKS_ASSET.sha256"
-    )
-
-    tar -xzf "$tmp_dir/$CI_GITLEAKS_ASSET" -C "$tmp_dir" gitleaks
-    install -m 0755 "$tmp_dir/gitleaks" "$install_dir/gitleaks"
-    hash -r 2>/dev/null || true
-
+    local binary
     local version_output
-    version_output="$(gitleaks version)"
+    binary="$(type -P gitleaks 2>/dev/null || true)"
+    if [ -z "$binary" ] || [ ! -f "$binary" ] || [ ! -x "$binary" ] || [ -L "$binary" ]; then
+        printf 'missing physical local gitleaks %s; network installation is forbidden\n' \
+            "$CI_GITLEAKS_VERSION" >&2
+        return 1
+    fi
+    version_output="$("$binary" version)"
     case "$version_output" in
         "$CI_GITLEAKS_VERSION"*) ;;
         *)
@@ -728,9 +696,7 @@ ci_install_gitleaks() {
             return 1
             ;;
     esac
-    printf 'gitleaks release asset verified: %s\n' "$CI_GITLEAKS_ASSET_URL"
-    printf 'gitleaks installed: %s (%s)\n' "$(command -v gitleaks)" "$version_output"
-    rm -rf "$tmp_dir"
+    printf 'physical local gitleaks verified: %s (%s)\n' "$binary" "$version_output"
 }
 
 # Validate arbitrary bytes for hostile tests. Production callers use only the

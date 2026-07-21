@@ -194,8 +194,8 @@ if ! grep -n 'CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256="${CI_REDLINE_TESTING_EX
     report_error "redline-testing resolver must keep optional binary SHA override support in ops/ci/lib.sh"
 fi
 
-if ! grep -n 'gh attestation verify' ops/ci/lib.sh >/dev/null; then
-    report_error "redline-testing release attestation verification is missing"
+if grep -n 'gh attestation verify' ops/ci/lib.sh >/dev/null; then
+    report_error "redline-testing release path must not depend on GitHub attestation"
 fi
 
 exit "$fail"

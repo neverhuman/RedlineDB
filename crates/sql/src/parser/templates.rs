@@ -356,9 +356,7 @@ fn bind_set_statement(
                 sql,
                 schema_epoch,
                 false,
-                PreparedKind::SetTransactionIsolation {
-                    level: crate::statement::TransactionIsolationLevel::ReadCommitted,
-                },
+                PreparedKind::SetSessionVariable,
             ));
         }
     }

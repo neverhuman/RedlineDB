@@ -36,6 +36,27 @@ impl Engine {
         Ok(self.txs.begin_txn(isolation))
     }
 
+    /// Select the isolation behavior for an already-open transaction.
+    ///
+    /// SQL `SET TRANSACTION` reaches this method before it updates any
+    /// session-visible label, so unsupported isolation never becomes a
+    /// false promise. Switching to read committed also refreshes the
+    /// statement snapshot immediately; later statements refresh again at
+    /// their execution boundary.
+    pub fn set_transaction_isolation(&self, tx: &mut Txn, isolation: Isolation) -> Result<()> {
+        if isolation == Isolation::Serializable {
+            return Err(Error::UnsupportedIsolation);
+        }
+        tx.set_isolation(isolation);
+        self.refresh_statement_snapshot(tx);
+        Ok(())
+    }
+
+    /// Refresh visibility at a statement boundary for read committed.
+    pub fn refresh_statement_snapshot(&self, tx: &mut Txn) {
+        self.refresh_read_committed(tx);
+    }
+
     pub fn reserve_begin_lock(&self, tx: &mut Txn) -> Result<()> {
         if tx.has_row_lock(BEGIN_LOCK_KEY) {
             return Ok(());

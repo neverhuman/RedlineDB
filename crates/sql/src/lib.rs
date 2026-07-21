@@ -29,7 +29,7 @@ pub use rql::{
 pub use session::BeginMode;
 pub use statement::{
     AnalyzePlan, ExplainFormat, ExplainPlan, PreparedTemplate, SelectPlan, SelectSource, Statement,
-    Step,
+    Step, TransactionIsolationLevel,
 };
 pub use value::{SqlValue, SqlValueRef};
 

@@ -18,6 +18,7 @@ mod pool;
 mod registry;
 mod snapshot;
 mod statement;
+mod storage_format;
 mod value;
 
 pub mod metrics;
@@ -42,8 +43,8 @@ pub use options::{
     AnalyzeOptions, BackupOptions, BackupStats, BenchmarkStats, BufferStats, CheckpointBenchStats,
     CheckpointStats, CommitStats, ConnectionStats, DatabaseStats, Durability, ExecuteSummary,
     FunctionArity, FunctionFlags, LEAN_BUFFER_POOL_PAGES, LEAN_STATEMENT_CACHE_CAPACITY,
-    MemoryOptions, OpenOptions, OptimizerOptions, QueryMemoryOptions, TxBenchStats, VacuumStats,
-    WalBenchStats,
+    MemoryOptions, OpenOptions, OptimizerOptions, QueryMemoryOptions, TransactionOptions,
+    TxBenchStats, VacuumStats, WalBenchStats,
 };
 pub use params::Params;
 pub use phase8::{
@@ -54,6 +55,7 @@ pub use redlinedb_kernel::engine::CommitDurability;
 pub use redlinedb_kernel::format::{BackupId, Csn, DbId, Lsn, TimelineId, WalSegmentNo};
 pub use redlinedb_sql::BeginMode;
 pub use redlinedb_sql::RecoveryTarget;
+pub use redlinedb_sql::TransactionIsolationLevel;
 pub use redlinedb_sql::{
     RqlBeginMode, RqlBinaryOp, RqlColumnDef, RqlColumnRef, RqlCreateIndex, RqlCreateTable,
     RqlDelete, RqlDropIndex, RqlDropTable, RqlExpr, RqlIndexColumn, RqlInsert, RqlJoin,
@@ -65,6 +67,9 @@ pub use redlinedb_sql::{
 // uses internally — required for sqlite-parity on math-function output.
 pub use redlinedb_sql::format_real_sqlite;
 pub use statement::{OwnedStatement, Prepared, Rows, Statement};
+pub use storage_format::{
+    MIN_READABLE_STORAGE_FORMAT_VERSION, STORAGE_FORMAT_VERSION, supports_storage_format,
+};
 pub use value::{Value, ValueRef};
 
 // `registry::open_database` and friends call `crate::sql_options`; keep the

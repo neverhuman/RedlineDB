@@ -787,17 +787,20 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
-        // Track J: SET TRANSACTION ISOLATION LEVEL — recall-only stash.
+        // SET TRANSACTION changes the active kernel transaction before SHOW
+        // can expose the selected level. Unsupported Serializable therefore
+        // fails immediately and never becomes a recalled-only false promise.
         PreparedKind::SetTransactionIsolation { level } => {
-            with_session_reentrant(conn, |session| {
-                session.transaction_isolation = *level;
-                Ok(())
-            })?;
+            conn.set_transaction_isolation(*level)?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 0,
             })
         }
+        PreparedKind::SetSessionVariable => Ok(ExecutionResult {
+            runtime: RuntimeState::Done,
+            affected_rows: 0,
+        }),
         // Track J: SHOW <name>. Returns a single-row result with the recalled
         // session value for `transaction_isolation`; other names yield "".
         PreparedKind::ShowVariable { name } => {
@@ -972,6 +975,7 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Select(_)
         | PreparedKind::Attach(_)
         | PreparedKind::SetTransactionIsolation { .. }
+        | PreparedKind::SetSessionVariable
         | PreparedKind::ShowVariable { .. } => false,
         PreparedKind::CreateTable(_)
         | PreparedKind::CreateTempTable(_)
@@ -1396,6 +1400,7 @@ fn with_write_tx<T>(
         let session_ptr: *mut SessionState = session;
         if session.tx.is_some() {
             let mut tx = session.tx.take().expect("checked some");
+            conn.engine().refresh_statement_snapshot(&mut tx);
             let tx_ptr: *mut Txn = &mut tx;
             let sqlite_sequence_snapshot = session.sqlite_sequences.clone();
             let sqlite_sequence_dirty_snapshot = session.sqlite_sequences_dirty.clone();

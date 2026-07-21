@@ -11,7 +11,9 @@ use redlinedb_sql::BeginMode;
 
 use crate::error::{Error, ErrorCode, Result};
 use crate::iter::{FromRow, OwnedStep, Step};
-use crate::options::{CommitStats, ConnectionStats, ExecuteSummary, FunctionArity, FunctionFlags};
+use crate::options::{
+    CommitStats, ConnectionStats, ExecuteSummary, FunctionArity, FunctionFlags, TransactionOptions,
+};
 use crate::params::Params;
 use crate::statement::{OwnedStatement, Rows, Statement};
 use crate::value::{Value, ValueRef};
@@ -198,8 +200,13 @@ impl Connection {
     }
 
     pub fn begin(&mut self, mode: BeginMode) -> Result<()> {
+        self.begin_with_options(TransactionOptions::default().with_mode(mode))
+    }
+
+    pub fn begin_with_options(&mut self, options: TransactionOptions) -> Result<()> {
         self.check_interrupt()?;
-        self.inner.begin(mode)?;
+        self.inner
+            .begin_with_isolation(options.mode, options.isolation)?;
         Ok(())
     }
 

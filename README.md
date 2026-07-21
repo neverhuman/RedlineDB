@@ -13,7 +13,7 @@
   <a href="#whats-new-in-v400"><img src="https://img.shields.io/badge/corpus%20cases-2445-blue" alt="corpus cases"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-blue" alt="license"></a>
   <a href="rust-toolchain.toml"><img src="https://img.shields.io/badge/rust-1.95-orange" alt="rust"></a>
-  <img src="https://img.shields.io/badge/version-4.1.0-blue" alt="version">
+  <img src="https://img.shields.io/badge/version-4.2.0-blue" alt="version">
   <!-- jankurai-score-badge:begin -->
   <a href=".jankurai/repo-score.md"><img src="https://img.shields.io/badge/jankurai-85%2F100%20advisory-green" alt="jankurai score: 85/100 advisory"></a>
   <!-- jankurai-score-badge:end -->
@@ -74,7 +74,7 @@ Updated SQLite-parity-corpus numbers will appear in the auto-generated `## Engin
 
 ## What's new in v4.0.0
 
-**Phase 0-4 SQLite-parity speed-gap closure.** Fourteen named optimizations across the build profile, parser, scalar fast paths, and CTE/aggregate/window hot paths, measured against the external [`redline-testing v1.0.0`](https://github.com/neverhuman/redline-testing) parity harness on the full 2445-case `sqlite_parity` suite. Median per-case latency ratio against SQLite improved from **1.837× → 1.738×** with **zero parity regressions** (identical 2374/2445 pass set in v3.0.0 and v4.0.0; the 67 failures are pre-existing edge cases in `typeof()` reporting, IEEE-754 last-digit precision, fullwidth Unicode case-folding, BLOB hex encoding, and `AUTOINCREMENT` semantics). Jankurai code-health score holds at **85/100 (pass)**.
+**Phase 0-4 SQLite-parity speed-gap closure.** Fourteen named optimizations across the build profile, parser, scalar fast paths, and CTE/aggregate/window hot paths, measured against the canonical local `redline-testing` parity harness on the full 2445-case `sqlite_parity` suite. Median per-case latency ratio against SQLite improved from **1.837× → 1.738×** with **zero parity regressions** (identical 2374/2445 pass set in v3.0.0 and v4.0.0; the 67 failures are pre-existing edge cases in `typeof()` reporting, IEEE-754 last-digit precision, fullwidth Unicode case-folding, BLOB hex encoding, and `AUTOINCREMENT` semantics). Jankurai code-health score holds at **85/100 (pass)**.
 
 > **Note on corpus size.** The redline-testing official corpus has grown from 1127 cases (prior CI snapshot) to **2445 cases** in v1.0.0. The v4.0.0 numbers in this section are measured against the larger current corpus. The auto-generated `## Engine Metrics` block below still reflects the previous 1127-case CI snapshot and will be refreshed by the next CI parity report.
 
@@ -113,7 +113,7 @@ Updated SQLite-parity-corpus numbers will appear in the auto-generated `## Engin
 
 ### Benchmark provenance
 
-- **Harness:** [`redline-testing v1.0.0`](https://github.com/neverhuman/redline-testing) — external repository, not in-tree fixtures.
+- **Harness:** canonical local `redline-testing`, bound by commit, corpus, contract, binary, oracle, and custody hashes.
 - **SQLite reference:** `sqlite3 3.53.1` (release build, SHA-256 `fd3bdd25217a849f8f4fa295fb78199cfd69b0c4d47ba8d8c32a1aa328bd147e`).
 - **Workload:** full `sqlite_parity` suite — 2445 cases × 3 measured reps + 1 warmup, **`--workers 30`** on a 128-core Linux x86_64 host, no CPU pinning.
 - **Target binary (v4.0.0):** SHA-256 `7ae60cb513e866b4a94996968b0c6b9f01b0071776bc842f526702be33f05e56` (release profile, fat LTO, `target-cpu=native`).
@@ -240,51 +240,15 @@ Pin the release in `Cargo.toml`:
 For libraries, `redlinedb = "1"` is usually fine. For binaries, keep the exact
 pin and commit `Cargo.lock`.
 
-### CLI binary
-
-Install the published shell on Linux or macOS:
+### Build from local custody
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
+CARGO_HOME=/home/ubuntu/jain-split/target/redline-family-cargo-home \
+  cargo build --release --locked --offline -p redlinedb-cli
 ```
 
-Pin a specific release when you need reproducible installs:
-
-```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v4.0.8 bash
-```
-
-Lock the exact tarball digest in CI or release automation:
-
-```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | \
-  VERSION=v4.1.0 REDLINEDB_SHA256=<sha256> bash
-```
-
-### Build from source
-
-```bash
-cargo install redlinedb-cli --version 4.1.0 --locked
-```
-
-Or install from the tagged repository release:
-
-```bash
-cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v4.1.0 --package redlinedb-cli --locked
-```
-
-### Direct download
-
-Release tarballs are published on the [releases page](https://github.com/neverhuman/RedlineDB/releases):
-
-| Platform | File |
-|---|---|
-| Linux x86_64 | `redlinedb-v4.1.0-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `redlinedb-v4.1.0-macos-arm64.tar.gz` |
-| macOS Intel | `redlinedb-v4.1.0-macos-x86_64.tar.gz` |
-
-Each tarball ships with a matching `.sha256` checksum and contains the CLI,
-shared libraries, and public headers.
+Release artifacts and SHA-256 receipts are produced only by the protected local
+Jeryu lifecycle documented in [`docs/release.md`](docs/release.md).
 
 ## Quick Start
 
@@ -325,15 +289,15 @@ rtk just sqlite-parity-report-check
 
 ## SQLite Parity Status
 
-The official parity lane is sourced only from the verified external
-`neverhuman/redline-testing` release artifact, which is the sole official
-evidence source. Missing, skipped, failed, or unmeasured cases are hard
+The official parity lane is sourced only from the reviewed in-tree
+`redline-testing` runner and versioned compatibility contracts. Missing,
+skipped, failed, duplicated, malformed, or unmeasured cases are hard
 report-check failures rather than excluded from the denominator. The live report
 below is generated only from `benchmark-results/sqlite-parity/latest/` after
 `official-evidence.processed.json` validates `raw.jsonl` against the
-hash-bound upstream official evidence chain, including the verified release
-tarball SHA-256, the `redline-testing` binary SHA-256, the release manifest, and
-the GitHub artifact attestation.
+hash-bound local evidence chain, including the runner, contract, corpus,
+dependency custody, oracle, engine, storage-format, and performance-baseline
+identities.
 
 <!-- sqlite-parity-report:begin -->
 **SQLite parity coverage:** **1123 / 1127** cases passed in CI. Failed: **0**. Skipped: **4**. Updated 2026-05-26.
