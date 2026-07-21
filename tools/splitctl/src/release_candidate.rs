@@ -138,6 +138,19 @@ pub(super) fn command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error
     };
     validate_journal(&mut journal, &data, &manifest, &selected)?;
     write_journal(&journal_path, &journal)?;
+    if campaign_complete(&journal)? {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json!({
+                "schema_version": "jain.release-candidate-transition/v1",
+                "status": "pass",
+                "journal": journal_path,
+                "generation": journal["generation"],
+                "lifecycle_status": "complete",
+            }))?
+        );
+        return Ok(());
+    }
 
     let (index, action) = next_action(&journal)?;
     prepare_action(&mut journal, index, &action, &token_file)?;
@@ -1162,6 +1175,21 @@ fn next_action(journal: &JsonValue) -> Result<(usize, String), Box<dyn std::erro
     Err("release-candidate has no remaining selected source lifecycle action".into())
 }
 
+fn campaign_complete(journal: &JsonValue) -> Result<bool, Box<dyn std::error::Error>> {
+    let rows = journal["repositories"]
+        .as_array()
+        .ok_or("journal repositories is not an array")?;
+    let selected = rows
+        .iter()
+        .filter(|row| row["selected"] == true)
+        .collect::<Vec<_>>();
+    let all_bound = !selected.is_empty() && selected.iter().all(|row| row["state"] == "bound");
+    if (journal["lifecycle_status"] == "complete") != all_bound {
+        return Err("release-candidate lifecycle status disagrees with selected rows".into());
+    }
+    Ok(all_bound)
+}
+
 fn prepare_action(
     journal: &mut JsonValue,
     index: usize,
@@ -1869,6 +1897,22 @@ mod tests {
         );
         journal["repositories"][1]["pending_action"] = json!("pr-open");
         assert_eq!(next_action(&journal).unwrap(), (1, "pr-open".to_owned()));
+    }
+
+    #[test]
+    fn completed_campaign_returns_success_without_deriving_another_action() {
+        let journal = json!({
+            "lifecycle_status": "complete",
+            "repositories": [row("jain-domain", 1, 1, "bound", true)],
+        });
+        assert!(campaign_complete(&journal).unwrap());
+        assert!(next_action(&journal).is_err());
+
+        let inconsistent = json!({
+            "lifecycle_status": "complete",
+            "repositories": [row("jain-domain", 1, 1, "source-ready", true)],
+        });
+        assert!(campaign_complete(&inconsistent).is_err());
     }
 
     #[test]

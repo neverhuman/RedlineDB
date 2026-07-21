@@ -227,8 +227,7 @@ manifest_ci_jobs="$(
   exit 2
 }
 JOBS="${JAIN_CI_JOBS:-$manifest_ci_jobs}"
-[[ "$JOBS" =~ ^[1-9][0-9]*$ && ${#JOBS} -le 2 ]] \
-  && ((10#$JOBS <= 64)) || {
+jain_ci_job_count_is_bounded "$JOBS" || {
   post_check failure || true
   echo "JAIN_CI_JOBS must be an integer from 1 through 64" >&2
   exit 2
@@ -240,8 +239,7 @@ if ((10#$JOBS > manifest_ci_jobs)); then
 fi
 if command -v jain-ci-governor >/dev/null 2>&1; then
   governed_jobs="$(jain-ci-governor 2>/dev/null || true)"
-  [[ "$governed_jobs" =~ ^[1-9][0-9]*$ && ${#governed_jobs} -le 2 ]] \
-    && ((10#$governed_jobs <= 64)) || {
+  jain_ci_job_count_is_bounded "$governed_jobs" || {
     post_check failure || true
     echo "jain-ci-governor did not return a bounded positive integer" >&2
     exit 2

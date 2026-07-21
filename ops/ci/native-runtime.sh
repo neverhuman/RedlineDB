@@ -2,6 +2,12 @@
 # Shared runtime-library contract for release Cargo commands that enable the
 # split family's native learners. This file is sourced by split-host-ci.sh.
 
+jain_ci_job_count_is_bounded() {
+  local value="${1-}"
+  [[ "$value" =~ ^[1-9][0-9]*$ && ${#value} -le 2 ]] \
+    && ((10#$value <= 64))
+}
+
 jain_native_relative_path_is_canonical() {
   local relative="${1-}" component
   local LC_ALL=C

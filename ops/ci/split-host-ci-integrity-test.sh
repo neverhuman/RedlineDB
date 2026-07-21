@@ -2,6 +2,21 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=ops/ci/native-runtime.sh
+source "$repo_root/ops/ci/native-runtime.sh"
+for job_count in 1 4 64; do
+  jain_ci_job_count_is_bounded "$job_count" || {
+    printf 'valid CI job count was rejected: %s\n' "$job_count" >&2
+    exit 1
+  }
+done
+for job_count in 0 00 65 18446744073709551617 18446744073709551620 \
+  999999999999999999999999999999999999999999; do
+  if jain_ci_job_count_is_bounded "$job_count"; then
+    printf 'hostile CI job count was accepted: %s\n' "$job_count" >&2
+    exit 1
+  fi
+done
 bounded_git_setup="$(sed -n \
   '/^# Cross-repo dependency resolution/,/^# cargo-cache-stage/p' \
   "$repo_root/ops/ci/split-host-ci.sh")"
