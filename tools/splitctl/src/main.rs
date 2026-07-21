@@ -5572,6 +5572,79 @@ fn parse_advertised_heads(
     Ok(matches)
 }
 
+fn validate_ancestor_tag_ref(
+    repo: &str,
+    reference: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let repo_name = repo
+        .split_once('/')
+        .map(|(_, name)| name)
+        .ok_or("ancestor-tag repository has no owner")?;
+    let tag = reference
+        .strip_prefix("refs/tags/")
+        .ok_or("declared ancestor object must resolve through an exact tag ref")?;
+    let release = tag
+        .strip_prefix(&format!("{repo_name}-v"))
+        .ok_or("declared ancestor tag does not belong to the repository")?;
+    let Some((version, split)) = release.rsplit_once("-split.") else {
+        return Err("declared ancestor tag is not an immutable split release".into());
+    };
+    if version.is_empty()
+        || split.is_empty()
+        || !split.bytes().all(|byte| byte.is_ascii_digit())
+        || !version
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'-'))
+    {
+        return Err("declared ancestor tag has an invalid immutable release identity".into());
+    }
+    secure_git_output(None, &["check-ref-format", reference])?;
+    Ok(())
+}
+
+fn resolve_unique_advertised_ancestor_tag(
+    repo: &str,
+    output: &str,
+    expected_object: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    if output.len() > 1024 * 1024 {
+        return Err("ancestor-tag advertisement is oversized".into());
+    }
+    if !is_full_sha(expected_object) || expected_object.chars().any(|ch| ch.is_ascii_uppercase()) {
+        return Err("declared ancestor tag object must be a lowercase full SHA".into());
+    }
+    let mut matches = Vec::new();
+    let mut count = 0usize;
+    for line in output.lines() {
+        count = count
+            .checked_add(1)
+            .ok_or("ancestor-tag advertisement count overflow")?;
+        if count > 4096 {
+            return Err("ancestor-tag advertisement has too many refs".into());
+        }
+        let mut fields = line.split('\t');
+        let object = fields.next().unwrap_or_default();
+        let reference = fields.next().unwrap_or_default();
+        if fields.next().is_some()
+            || !is_full_sha(object)
+            || object.chars().any(|ch| ch.is_ascii_uppercase())
+        {
+            return Err("ancestor-tag advertisement is malformed".into());
+        }
+        validate_ancestor_tag_ref(repo, reference)?;
+        if object == expected_object {
+            matches.push(reference.to_owned());
+        }
+    }
+    matches.sort_unstable();
+    matches.dedup();
+    match matches.as_slice() {
+        [reference] => Ok(reference.clone()),
+        [] => Err("declared ancestor object is not an advertised immutable tag".into()),
+        _ => Err("declared ancestor object resolves through multiple tag refs".into()),
+    }
+}
+
 fn secure_ls_remote_at(
     remote: &str,
     reference: &str,
@@ -5802,6 +5875,7 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     let mut token_file = None;
     let mut retain_origin = false;
     let mut retain_declared_release_tag = false;
+    let mut retain_ancestor_tag_object = None;
     let mut git_lfs_path = None;
     let mut git_lfs_sha256 = None;
     let mut iter = args.into_iter().skip(1);
@@ -5834,6 +5908,15 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             }
             "--retain-origin" => retain_origin = true,
             "--retain-declared-release-tag" => retain_declared_release_tag = true,
+            "--retain-ancestor-tag-object" => {
+                if retain_ancestor_tag_object.is_some() {
+                    return Err("git-materialize accepts one ancestor tag object".into());
+                }
+                retain_ancestor_tag_object = Some(
+                    iter.next()
+                        .ok_or("--retain-ancestor-tag-object needs a SHA")?,
+                );
+            }
             value => return Err(format!("unknown git-materialize argument: {value}").into()),
         }
     }
@@ -5966,11 +6049,68 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             }
         }
     }
+    let mut ancestor_tag_ref = String::new();
+    let mut ancestor_tag_object = String::new();
+    let mut ancestor_tag_commit = String::new();
+    if let Some(requested_object) = retain_ancestor_tag_object.as_deref() {
+        if !is_full_sha(requested_object)
+            || requested_object.chars().any(|ch| ch.is_ascii_uppercase())
+        {
+            return Err("--retain-ancestor-tag-object must be a lowercase full SHA".into());
+        }
+        let advertised = secure_materialization_git_output(
+            &remote,
+            &token_file,
+            &["ls-remote", "--refs", &remote, "refs/tags/*"],
+        )?;
+        let tag_ref = resolve_unique_advertised_ancestor_tag(&repo, &advertised, requested_object)?;
+        let tag_refspec = format!("{tag_ref}:{tag_ref}");
+        secure_materialization_git_status(
+            &destination,
+            &remote,
+            &token_file,
+            &["fetch", "--quiet", "--no-tags", &remote, &tag_refspec],
+        )?;
+        let local_object =
+            secure_git_output(Some(&destination), &["rev-parse", "--verify", &tag_ref])?;
+        if local_object != requested_object
+            || secure_git_output(Some(&destination), &["cat-file", "-t", requested_object])?
+                != "tag"
+        {
+            return Err("declared ancestor tag object changed during materialization".into());
+        }
+        let local_commit = secure_git_output(
+            Some(&destination),
+            &["rev-parse", "--verify", &format!("{tag_ref}^{{commit}}")],
+        )?;
+        if !secure_git_status(
+            Some(&destination),
+            &["merge-base", "--is-ancestor", &local_commit, &expected_head],
+        )? {
+            return Err(
+                "declared ancestor tag does not peel to an ancestor of product head".into(),
+            );
+        }
+        validate_materialization_object_tree(&destination, &local_commit)?;
+        if secure_ls_remote_at(&remote, &tag_ref, &token_file)?.as_deref() != Some(requested_object)
+        {
+            return Err("declared ancestor tag moved during fetch".into());
+        }
+        ancestor_tag_ref = tag_ref;
+        ancestor_tag_object = local_object;
+        ancestor_tag_commit = local_commit;
+    }
     let retained_tags = secure_git_output(
         Some(&destination),
         &["for-each-ref", "--format=%(refname)", "refs/tags"],
     )?;
-    if retained_tags != release_tag_ref {
+    let mut expected_tags = [release_tag_ref.as_str(), ancestor_tag_ref.as_str()]
+        .into_iter()
+        .filter(|reference| !reference.is_empty())
+        .collect::<Vec<_>>();
+    expected_tags.sort_unstable();
+    expected_tags.dedup();
+    if retained_tags.lines().collect::<Vec<_>>() != expected_tags {
         return Err("Git materialization retained unexpected tag refs".into());
     }
     if let Some(git_lfs) = git_lfs.as_deref() {
@@ -6030,6 +6170,9 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             "lfs_hydrated": git_lfs.is_some(),
             "release_tag_ref": release_tag_ref,
             "release_tag_commit": release_tag_commit,
+            "ancestor_tag_ref": ancestor_tag_ref,
+            "ancestor_tag_object": ancestor_tag_object,
+            "ancestor_tag_commit": ancestor_tag_commit,
             "status": "pass"
         }))?
     );
@@ -12081,6 +12224,57 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     }
 
     #[test]
+    fn advertised_ancestor_tag_selection_is_unique_bounded_and_repository_scoped() {
+        let object = "a".repeat(40);
+        let valid = format!("{object}\trefs/tags/example-v7.0.1-split.5\n");
+        assert_eq!(
+            resolve_unique_advertised_ancestor_tag("jeryu/example", &valid, &object).unwrap(),
+            "refs/tags/example-v7.0.1-split.5"
+        );
+        assert!(resolve_unique_advertised_ancestor_tag(
+            "jeryu/example",
+            &format!(
+                "{object}\trefs/tags/example-v7.0.1-split.5\n{object}\trefs/tags/example-v7.0.1-split.6\n"
+            ),
+            &object,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("multiple"));
+        assert!(resolve_unique_advertised_ancestor_tag(
+            "jeryu/example",
+            &format!("{object}\trefs/tags/other-v7.0.1-split.5\n"),
+            &object,
+        )
+        .is_err());
+        assert!(
+            resolve_unique_advertised_ancestor_tag("jeryu/example", "malformed", &object,).is_err()
+        );
+        assert!(resolve_unique_advertised_ancestor_tag(
+            "jeryu/example",
+            &format!("{}\trefs/tags/example-v7.0.1-split.5\n", "b".repeat(40)),
+            &object,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("not an advertised"));
+        let overbound = (0..4097)
+            .map(|index| {
+                format!(
+                    "{}\trefs/tags/example-v7.0.1-split.{index}\n",
+                    "b".repeat(40)
+                )
+            })
+            .collect::<String>();
+        assert!(
+            resolve_unique_advertised_ancestor_tag("jeryu/example", &overbound, &object,)
+                .unwrap_err()
+                .to_string()
+                .contains("too many")
+        );
+    }
+
+    #[test]
     fn authenticated_ref_readback_requires_exact_advertised_authority() {
         let root = TestDir::new("ref-readback");
         let (source, head) = init_source(root.path());
@@ -12380,6 +12574,130 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         let error = jeryu_git_materialize(args(&rejected)).unwrap_err();
         assert!(error.to_string().contains("not an ancestor"));
         assert!(!rejected.exists());
+    }
+
+    #[test]
+    fn git_materialization_retains_only_the_requested_annotated_ancestor_object() {
+        let root = TestDir::new("git-materialization-ancestor-object");
+        let (source, baseline) = init_source(root.path());
+        let tag = "example-v7.0.1-split.5";
+        run_git_strict(
+            &source,
+            &["tag", "-a", tag, "-m", "contract baseline", &baseline],
+        )
+        .unwrap();
+        let tag_object = strict_git_output(&source, &["rev-parse", tag]).unwrap();
+        assert_ne!(tag_object, baseline);
+        fs::write(source.join("successor"), b"protected successor\n").unwrap();
+        run_git_strict(&source, &["add", "successor"]).unwrap();
+        run_git_strict(&source, &["commit", "-m", "protected successor"]).unwrap();
+        let head = resolve_commit(&source, "HEAD").unwrap();
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!("{head}:refs/heads/main"),
+                &format!("refs/tags/{tag}:refs/tags/{tag}"),
+            ],
+        )
+        .unwrap();
+        let token_root = TestDir::new_private_temp("git-materialization-ancestor-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let args = |destination: &Path, object: &str| {
+            vec![
+                "git-materialize".to_owned(),
+                "--repo".to_owned(),
+                "jeryu/example".to_owned(),
+                "--remote".to_owned(),
+                remote.display().to_string(),
+                "--ref".to_owned(),
+                "refs/heads/main".to_owned(),
+                "--expected-head".to_owned(),
+                head.clone(),
+                "--destination".to_owned(),
+                destination.display().to_string(),
+                "--token-file".to_owned(),
+                token_file.display().to_string(),
+                "--retain-ancestor-tag-object".to_owned(),
+                object.to_owned(),
+            ]
+        };
+
+        let retained = root.path().join("retained");
+        jeryu_git_materialize(args(&retained, &tag_object)).unwrap();
+        assert_eq!(
+            strict_git_output(&retained, &["rev-parse", tag]).unwrap(),
+            tag_object
+        );
+        assert_eq!(resolve_commit(&retained, tag).unwrap(), baseline);
+        assert_eq!(
+            strict_git_output(
+                &retained,
+                &["for-each-ref", "--format=%(refname)", "refs/tags"]
+            )
+            .unwrap(),
+            format!("refs/tags/{tag}")
+        );
+        assert!(strict_git_output(&retained, &["remote"])
+            .unwrap()
+            .is_empty());
+
+        let missing = root.path().join("missing");
+        assert!(jeryu_git_materialize(args(&missing, &"f".repeat(40))).is_err());
+        assert!(!missing.exists());
+        let malformed = root.path().join("malformed");
+        assert!(jeryu_git_materialize(args(&malformed, "short")).is_err());
+        assert!(!malformed.exists());
+
+        let lightweight = "example-v7.0.1-split.6";
+        run_git_strict(&source, &["tag", lightweight, &baseline]).unwrap();
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!("refs/tags/{lightweight}:refs/tags/{lightweight}"),
+            ],
+        )
+        .unwrap();
+        let lightweight_rejected = root.path().join("lightweight");
+        assert!(jeryu_git_materialize(args(&lightweight_rejected, &baseline)).is_err());
+        assert!(!lightweight_rejected.exists());
+
+        let tree = strict_git_output(&source, &["rev-parse", "HEAD^{tree}"]).unwrap();
+        let unrelated =
+            strict_git_output(&source, &["commit-tree", &tree, "-m", "unrelated"]).unwrap();
+        let unrelated_tag = "example-v7.0.1-split.7";
+        run_git_strict(
+            &source,
+            &[
+                "tag",
+                "-a",
+                unrelated_tag,
+                "-m",
+                "unrelated contract source",
+                &unrelated,
+            ],
+        )
+        .unwrap();
+        let unrelated_object = strict_git_output(&source, &["rev-parse", unrelated_tag]).unwrap();
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!("refs/tags/{unrelated_tag}:refs/tags/{unrelated_tag}"),
+            ],
+        )
+        .unwrap();
+        let non_ancestor = root.path().join("non-ancestor-object");
+        let error = jeryu_git_materialize(args(&non_ancestor, &unrelated_object)).unwrap_err();
+        assert!(error.to_string().contains("ancestor"));
+        assert!(!non_ancestor.exists());
     }
 
     #[test]
