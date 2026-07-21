@@ -23,9 +23,13 @@ remote; this repo only orchestrates them.
 
 ## Local Jeryu Forge Workflow
 
-The Jain workspace is `/home/ubuntu/jain-split`. Do not use `~/jeryu-split` as
-an operational source for Jain work; it is a precedent/product checkout, not a
-member of this family.
+The Jain workspace is `/home/ubuntu/jain-split`. The independently released
+Jeryu family is physically nested at `/home/ubuntu/jain-split/jeryu-split` and
+is governed by `jeryu-release-ops/repos.manifest.toml`; preserve its `jeryu/*`
+namespace and v5 lineage. `/home/ubuntu/jeryu-split`,
+`/home/ubuntu/jain-split/jeryu`, copied source roots, symlink shims, and a
+duplicate `jeryu-redline` container are forbidden. Jeryu consumes Redline
+evidence from the canonical `/home/ubuntu/jain-split/jain-redline` family.
 
 Use the typed `splitctl jeryu-local` transport against the local loopback Jeryu
 forge. Pass credentials only by an explicit token-file path; never rely on an

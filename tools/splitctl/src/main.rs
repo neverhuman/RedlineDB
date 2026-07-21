@@ -96,6 +96,8 @@ struct ManagedRepo {
     kind: String,
     family: String,
     family_registered: bool,
+    inventory_status: String,
+    runtime_authority: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -1370,6 +1372,30 @@ fn managed_repos_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     }
     let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
     let repos = managed_repositories(&data, &manifest)?;
+    let mut family_counts = std::collections::BTreeMap::new();
+    for repo in &repos {
+        *family_counts.entry(repo.family.clone()).or_insert(0usize) += 1;
+    }
+    let nested_family_gates = registered_nested_families(&data)
+        .into_iter()
+        .map(|(key, family)| {
+            json!({
+                "registration": key,
+                "family": string(family, "family"),
+                "release_identity": string(family, "release_identity"),
+                "symlink_policy": string(family, "symlink_policy"),
+                "redline_source_policy": string(family, "redline_source_policy"),
+                "retirement_pending": registered_nested_projection(family)
+                    .filter_map(|repo| {
+                        (string(repo, "runtime_authority").as_deref()
+                            == Some("retirement-pending"))
+                            .then(|| string(repo, "name"))
+                            .flatten()
+                    })
+                    .collect::<Vec<_>>(),
+            })
+        })
+        .collect::<Vec<_>>();
     println!(
         "{}",
         serde_json::to_string_pretty(&json!({
@@ -1377,6 +1403,11 @@ fn managed_repos_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             "manifest": manifest,
             "repositories": repos.iter().map(managed_repo_json).collect::<Vec<_>>(),
             "repository_count": repos.len(),
+            "active_repository_count": repos.iter()
+                .filter(|repo| repo.inventory_status == "active")
+                .count(),
+            "family_counts": family_counts,
+            "nested_family_gates": nested_family_gates,
         }))?
     );
     Ok(())
@@ -1393,6 +1424,8 @@ fn managed_repo_json(repo: &ManagedRepo) -> JsonValue {
         "kind": repo.kind,
         "family": repo.family,
         "family_registered": repo.family_registered,
+        "inventory_status": repo.inventory_status,
+        "runtime_authority": repo.runtime_authority,
     })
 }
 
@@ -1539,6 +1572,21 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
                     None,
                 )?;
             }
+            for repository in raw
+                .get("repository")
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                add(
+                    repository,
+                    "name",
+                    "required_check",
+                    "remote",
+                    "forge_owner",
+                    string(raw, "forge_owner").as_deref(),
+                )?;
+            }
         }
     }
 
@@ -1628,6 +1676,15 @@ fn release_repo_entry<'a>(
                 .find(|pending| string(pending, "name").as_deref() == Some(repo_name))
             {
                 return Ok(pending);
+            }
+            if let Some(repository) = raw
+                .get("repository")
+                .and_then(toml::Value::as_array)
+                .into_iter()
+                .flatten()
+                .find(|repository| string(repository, "name").as_deref() == Some(repo_name))
+            {
+                return Ok(repository);
             }
         }
     }
@@ -1798,6 +1855,493 @@ fn declared_release_tag(value: &toml::Value) -> Option<String> {
     string(value, "immutable_tag").or_else(|| string(value, "current_tag"))
 }
 
+fn inventory_status(value: &toml::Value) -> String {
+    string(value, "inventory_status").unwrap_or_else(|| "active".to_owned())
+}
+
+fn runtime_authority(value: &toml::Value, fallback: &str) -> String {
+    string(value, "runtime_authority").unwrap_or_else(|| fallback.to_owned())
+}
+
+fn registered_nested_families(data: &toml::Value) -> Vec<(&str, &toml::Value)> {
+    data.get("nested_families")
+        .and_then(toml::Value::as_table)
+        .into_iter()
+        .flat_map(|families| families.iter())
+        .filter(|(_, family)| family.get("engine_repository").is_none())
+        .map(|(name, family)| (name.as_str(), family))
+        .collect()
+}
+
+fn registered_nested_projection<'a>(
+    family: &'a toml::Value,
+) -> impl Iterator<Item = &'a toml::Value> {
+    family
+        .get("repository")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+}
+
+fn validate_registered_nested_family_declaration(
+    key: &str,
+    family: &toml::Value,
+    split_root: &Path,
+) -> Result<(), String> {
+    let qualified = format!("nested_families.{key}");
+    if family.get("required").and_then(toml::Value::as_bool) != Some(true) {
+        return Err(format!("{qualified}.required must be true"));
+    }
+    let identity = string(family, "family")
+        .filter(|value| valid_cargo_token(value))
+        .ok_or_else(|| format!("{qualified}.family must be one unaliased family token"))?;
+    if string(family, "release_identity").as_deref() != Some(identity.as_str()) {
+        return Err(format!(
+            "{qualified}.release_identity must equal its independent family identity {identity}"
+        ));
+    }
+    let lineage = string(family, "release_lineage")
+        .ok_or_else(|| format!("{qualified}.release_lineage is required"))?;
+    if !lineage
+        .strip_prefix('v')
+        .is_some_and(|version| !version.is_empty() && version.chars().all(|ch| ch.is_ascii_digit()))
+    {
+        return Err(format!(
+            "{qualified}.release_lineage must be v followed by digits"
+        ));
+    }
+    let owner = string(family, "forge_owner")
+        .filter(|value| valid_cargo_token(value))
+        .ok_or_else(|| format!("{qualified}.forge_owner is required"))?;
+    if string(family, "inventory_mode").as_deref() != Some("recursive-authority") {
+        return Err(format!(
+            "{qualified}.inventory_mode must be recursive-authority"
+        ));
+    }
+    let redline_source_policy = string(family, "redline_source_policy")
+        .ok_or_else(|| format!("{qualified}.redline_source_policy is required"))?;
+    if !matches!(
+        redline_source_policy.as_str(),
+        "enforced" | "retirement-pending"
+    ) {
+        return Err(format!(
+            "{qualified}.redline_source_policy must be enforced or retirement-pending"
+        ));
+    }
+    let symlink_policy = string(family, "symlink_policy")
+        .ok_or_else(|| format!("{qualified}.symlink_policy is required"))?;
+    if !matches!(symlink_policy.as_str(), "enforced" | "retirement-pending") {
+        return Err(format!(
+            "{qualified}.symlink_policy must be enforced or retirement-pending"
+        ));
+    }
+    let container = exact_absolute_path(
+        &string(family, "container_path")
+            .ok_or_else(|| format!("{qualified}.container_path is required"))?,
+        &format!("{qualified}.container_path"),
+    )?;
+    if container == split_root || container.parent() != Some(split_root) {
+        return Err(format!(
+            "{qualified}.container_path must be a direct child of split_root"
+        ));
+    }
+    let control = exact_absolute_path(
+        &string(family, "control_plane")
+            .ok_or_else(|| format!("{qualified}.control_plane is required"))?,
+        &format!("{qualified}.control_plane"),
+    )?;
+    let control_name = string(family, "control_plane_name")
+        .filter(|value| valid_cargo_token(value))
+        .ok_or_else(|| format!("{qualified}.control_plane_name is required"))?;
+    if control != container.join(&control_name) {
+        return Err(format!(
+            "{qualified}.control_plane must be {}/{}",
+            container.display(),
+            control_name
+        ));
+    }
+    let manifest = exact_absolute_path(
+        &string(family, "manifest_path")
+            .ok_or_else(|| format!("{qualified}.manifest_path is required"))?,
+        &format!("{qualified}.manifest_path"),
+    )?;
+    if manifest != control.join("repos.manifest.toml") {
+        return Err(format!(
+            "{qualified}.manifest_path must be {}/repos.manifest.toml",
+            control.display()
+        ));
+    }
+    let control_remote = format!("{LOCAL_JERYU_ORIGIN}/git/{owner}/{control_name}.git");
+    if string(family, "control_plane_remote").as_deref() != Some(control_remote.as_str()) {
+        return Err(format!(
+            "{qualified}.control_plane_remote must be {control_remote}"
+        ));
+    }
+    if string(family, "control_plane_required_check").as_deref()
+        != Some(format!("{control_name}/required").as_str())
+    {
+        return Err(format!(
+            "{qualified}.control_plane_required_check must be {control_name}/required"
+        ));
+    }
+    let canonical_redline = split_root.join("jain-redline");
+    if string(family, "redline_authority").as_deref()
+        != Some(canonical_redline.to_string_lossy().as_ref())
+    {
+        return Err(format!(
+            "{qualified}.redline_authority must be {}",
+            canonical_redline.display()
+        ));
+    }
+
+    let mut names = std::collections::BTreeSet::new();
+    let mut paths = std::collections::BTreeSet::new();
+    let mut remotes = std::collections::BTreeSet::new();
+    let mut retirement_pending = Vec::new();
+    for repository in registered_nested_projection(family) {
+        let name = string(repository, "name")
+            .filter(|value| valid_cargo_token(value))
+            .ok_or_else(|| format!("{qualified}.repository name is required"))?;
+        if !names.insert(name.clone()) {
+            return Err(format!("{qualified} has duplicate repository name {name}"));
+        }
+        if name == control_name {
+            return Err(format!(
+                "{qualified} must declare its control plane separately from repository projections"
+            ));
+        }
+        let path = exact_absolute_path(
+            &string(repository, "path")
+                .ok_or_else(|| format!("{qualified}.repository[{name}].path is required"))?,
+            &format!("{qualified}.repository[{name}].path"),
+        )?;
+        if path != container.join(&name) {
+            return Err(format!(
+                "{qualified}.repository[{name}].path must be {}/{}",
+                container.display(),
+                name
+            ));
+        }
+        if !paths.insert(path) {
+            return Err(format!("{qualified} has a duplicate repository path"));
+        }
+        let slug = format!("{owner}/{name}");
+        if string(repository, "jeryu_slug").as_deref() != Some(slug.as_str()) {
+            return Err(format!(
+                "{qualified}.repository[{name}].jeryu_slug must be {slug}"
+            ));
+        }
+        let remote = format!("{LOCAL_JERYU_ORIGIN}/git/{slug}.git");
+        if string(repository, "remote").as_deref() != Some(remote.as_str()) {
+            return Err(format!(
+                "{qualified}.repository[{name}].remote must be {remote}"
+            ));
+        }
+        if !remotes.insert(remote) {
+            return Err(format!("{qualified} has a duplicate repository remote"));
+        }
+        if string(repository, "required_check").as_deref()
+            != Some(format!("{name}/required").as_str())
+        {
+            return Err(format!(
+                "{qualified}.repository[{name}].required_check must be {name}/required"
+            ));
+        }
+        if string(repository, "default_branch").as_deref() != Some("main") {
+            return Err(format!(
+                "{qualified}.repository[{name}].default_branch must be main"
+            ));
+        }
+        let tag = string(repository, "current_tag")
+            .ok_or_else(|| format!("{qualified}.repository[{name}].current_tag is required"))?;
+        if !tag.starts_with(&format!("{name}-{lineage}.")) || !tag.contains("-split.") {
+            return Err(format!(
+                "{qualified}.repository[{name}].current_tag must preserve {lineage} split lineage"
+            ));
+        }
+        if string(repository, "inventory_status").as_deref() != Some("active") {
+            return Err(format!(
+                "{qualified}.repository[{name}].inventory_status must be active while projected"
+            ));
+        }
+        let runtime = string(repository, "runtime_authority").ok_or_else(|| {
+            format!("{qualified}.repository[{name}].runtime_authority is required")
+        })?;
+        if !matches!(
+            runtime.as_str(),
+            "library" | "shadow-only" | "retirement-pending"
+        ) {
+            return Err(format!(
+                "{qualified}.repository[{name}].runtime_authority is invalid"
+            ));
+        }
+        if runtime == "retirement-pending" {
+            retirement_pending.push(name);
+        }
+    }
+    if names.is_empty() {
+        return Err(format!("{qualified} must project at least one repository"));
+    }
+    match symlink_policy.as_str() {
+        "enforced" if !retirement_pending.is_empty() => {
+            return Err(format!(
+                "{qualified}.symlink_policy cannot be enforced while a repository is retirement-pending"
+            ));
+        }
+        "retirement-pending" if retirement_pending.is_empty() => {
+            return Err(format!(
+                "{qualified}.symlink_policy must be enforced when no repository is retirement-pending"
+            ));
+        }
+        _ => {}
+    }
+
+    if identity == "jeryu-split" {
+        let expected_container = split_root.join("jeryu-split");
+        if container != expected_container {
+            return Err(format!(
+                "{qualified}.container_path must be {}",
+                expected_container.display()
+            ));
+        }
+        if owner != "jeryu" || lineage != "v5" || control_name != "jeryu-release-ops" {
+            return Err(format!(
+                "{qualified} must preserve the jeryu owner, v5 lineage, and jeryu-release-ops control plane"
+            ));
+        }
+        if symlink_policy == "retirement-pending" && retirement_pending.as_slice() != ["jeryu-web"]
+        {
+            return Err(format!(
+                "{qualified} retirement-pending gate must be owned only by jeryu-web"
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn compare_registered_nested_family_child(
+    key: &str,
+    outer: &toml::Value,
+    child: &toml::Value,
+) -> Result<(), String> {
+    let qualified = format!("nested_families.{key}");
+    let family = string(outer, "family").unwrap_or_default();
+    for (field, child_field) in [
+        ("family", "repo_family"),
+        ("release_identity", "release_identity"),
+        ("release_lineage", "release_lineage"),
+    ] {
+        if string(outer, field) != string(child, child_field) {
+            return Err(format!(
+                "{qualified}.{field} differs from child {child_field}"
+            ));
+        }
+    }
+    let child_root = string(child, "split_root").unwrap_or_default();
+    if string(outer, "container_path").as_deref() != Some(child_root.as_str()) {
+        return Err(format!(
+            "{qualified}.container_path differs from child split_root"
+        ));
+    }
+    if string(child, "manifest_authority") != string(outer, "manifest_path") {
+        return Err(format!(
+            "{qualified}.manifest_path differs from child manifest_authority"
+        ));
+    }
+    let child_control = child
+        .get("control_plane")
+        .ok_or_else(|| format!("{qualified} child is missing control_plane"))?;
+    for (outer_field, child_field) in [
+        ("control_plane_name", "name"),
+        ("control_plane", "path"),
+        ("control_plane_remote", "remote"),
+        ("control_plane_required_check", "required_check"),
+    ] {
+        if string(outer, outer_field) != string(child_control, child_field) {
+            return Err(format!(
+                "{qualified}.{outer_field} differs from child control_plane.{child_field}"
+            ));
+        }
+    }
+    let child_redline = child
+        .get("nested_families")
+        .and_then(|nested| nested.get("redline"))
+        .ok_or_else(|| format!("{qualified} child is missing canonical Redline authority"))?;
+    if string(child_redline, "container_path") != string(outer, "redline_authority")
+        || string(child_redline, "source_authority").as_deref() != Some("jain-redline")
+    {
+        return Err(format!(
+            "{qualified} child must resolve Redline from the canonical Jain authority"
+        ));
+    }
+
+    let projected = registered_nested_projection(outer)
+        .map(|repo| (string(repo, "name").unwrap_or_default(), repo))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    let child_repos = child
+        .get("repo")
+        .and_then(toml::Value::as_array)
+        .into_iter()
+        .flatten()
+        .map(|repo| (string(repo, "name").unwrap_or_default(), repo))
+        .collect::<std::collections::BTreeMap<_, _>>();
+    if projected.keys().collect::<Vec<_>>() != child_repos.keys().collect::<Vec<_>>() {
+        return Err(format!(
+            "{qualified}.repository names differ from child {family} authority"
+        ));
+    }
+    for (name, projection) in projected {
+        let child_repo = child_repos[&name];
+        for field in [
+            "path",
+            "jeryu_slug",
+            "remote",
+            "required_check",
+            "default_branch",
+            "current_tag",
+            "inventory_status",
+            "runtime_authority",
+        ] {
+            if projection.get(field) != child_repo.get(field) {
+                return Err(format!(
+                    "{qualified}.repository[{name}].{field} differs from child authority"
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn first_symlink(root: &Path) -> Result<Option<PathBuf>, String> {
+    for entry in fs::read_dir(root)
+        .map_err(|error| format!("cannot scan {} for symlinks: {error}", root.display()))?
+    {
+        let entry = entry.map_err(|error| {
+            format!(
+                "cannot inspect directory entry beneath {}: {error}",
+                root.display()
+            )
+        })?;
+        let path = entry.path();
+        let metadata = fs::symlink_metadata(&path)
+            .map_err(|error| format!("cannot inspect {}: {error}", path.display()))?;
+        if metadata.file_type().is_symlink() {
+            return Ok(Some(path));
+        }
+        if metadata.is_dir() {
+            if let Some(found) = first_symlink(&path)? {
+                return Ok(Some(found));
+            }
+        }
+    }
+    Ok(None)
+}
+
+fn validate_registered_nested_family_local(
+    key: &str,
+    family: &toml::Value,
+    split_root: &Path,
+) -> Result<toml::Value, String> {
+    validate_registered_nested_family_declaration(key, family, split_root)?;
+    let qualified = format!("nested_families.{key}");
+    let container = PathBuf::from(string(family, "container_path").unwrap());
+    let control = PathBuf::from(string(family, "control_plane").unwrap());
+    let manifest = PathBuf::from(string(family, "manifest_path").unwrap());
+    let container_metadata = physical_directory(&container, "registered family container")?;
+    let control_metadata = physical_directory(&control, "registered family control plane")?;
+    physical_regular_file(&manifest, "registered family manifest")?;
+    let manifest_parent = physical_directory(
+        manifest
+            .parent()
+            .ok_or_else(|| format!("{qualified}.manifest_path has no parent"))?,
+        "registered family manifest parent",
+    )?;
+    if physical_identity(&manifest_parent) != physical_identity(&control_metadata) {
+        return Err(format!(
+            "{qualified}.manifest_path is not physically inside the declared control plane"
+        ));
+    }
+    physical_directory(
+        &control.join(".git"),
+        "registered family control-plane Git directory",
+    )?;
+    for old in [
+        Path::new("/home/ubuntu/jeryu-split"),
+        Path::new("/home/ubuntu/jain-split/jeryu"),
+    ] {
+        if old.exists() {
+            return Err(format!(
+                "forbidden legacy Jeryu source root exists: {}",
+                old.display()
+            ));
+        }
+    }
+    let duplicate_redline_exists = container.join("jeryu-redline").exists();
+    match (
+        string(family, "redline_source_policy").as_deref(),
+        duplicate_redline_exists,
+    ) {
+        (Some("enforced"), true) => {
+            return Err(format!(
+                "duplicate Jeryu Redline source container exists beneath {}",
+                container.display()
+            ));
+        }
+        (Some("retirement-pending"), false) => {
+            return Err(format!(
+                "{qualified}.redline_source_policy must be enforced after duplicate Redline retirement"
+            ));
+        }
+        _ => {}
+    }
+    let container_identity = physical_identity(&container_metadata);
+    let mut physical_repositories = std::collections::BTreeMap::from([(
+        physical_identity(&control_metadata),
+        string(family, "control_plane_name").unwrap_or_else(|| "control-plane".to_owned()),
+    )]);
+    for repository in registered_nested_projection(family) {
+        let name = string(repository, "name").unwrap();
+        let path = PathBuf::from(string(repository, "path").unwrap());
+        let metadata = physical_directory(&path, "registered nested repository")?;
+        let parent = physical_directory(
+            path.parent()
+                .ok_or_else(|| format!("{name}: repository path has no parent"))?,
+            "registered nested repository parent",
+        )?;
+        if physical_identity(&parent) != container_identity {
+            return Err(format!(
+                "{name}: repository is not a direct physical child of {}",
+                container.display()
+            ));
+        }
+        physical_directory(
+            &path.join(".git"),
+            "registered nested repository Git directory",
+        )?;
+        if let Some(existing) =
+            physical_repositories.insert(physical_identity(&metadata), name.clone())
+        {
+            return Err(format!(
+                "registered family repositories {existing} and {name} share one physical identity"
+            ));
+        }
+    }
+    if string(family, "symlink_policy").as_deref() == Some("enforced") {
+        if let Some(path) = first_symlink(&container)? {
+            return Err(format!(
+                "{qualified} contains a forbidden symlink: {}",
+                path.display()
+            ));
+        }
+    }
+    let child: toml::Value = fs::read_to_string(&manifest)
+        .map_err(|error| format!("cannot read {}: {error}", manifest.display()))?
+        .parse()
+        .map_err(|error| format!("cannot parse {}: {error}", manifest.display()))?;
+    compare_registered_nested_family_child(key, family, &child)?;
+    Ok(child)
+}
+
 fn managed_repositories(
     data: &toml::Value,
     _manifest: &Path,
@@ -1829,6 +2373,15 @@ fn managed_repositories(
             } else {
                 true
             },
+            inventory_status: inventory_status(raw),
+            runtime_authority: runtime_authority(
+                raw,
+                if infrastructure {
+                    "infrastructure"
+                } else {
+                    "product"
+                },
+            ),
         });
     }
 
@@ -1847,6 +2400,8 @@ fn managed_repositories(
         kind: "control-plane".to_owned(),
         family: family.clone(),
         family_registered: true,
+        inventory_status: inventory_status(control),
+        runtime_authority: runtime_authority(control, "control-plane"),
     });
 
     if data.get("nested_families").is_some() {
@@ -1879,6 +2434,8 @@ fn managed_repositories(
                 kind: "nested-family".to_owned(),
                 family: nested_family.clone(),
                 family_registered: true,
+                inventory_status: inventory_status(raw),
+                runtime_authority: runtime_authority(raw, "nested-library"),
             });
         }
         for pending in &topology.pending_repositories {
@@ -1898,6 +2455,8 @@ fn managed_repositories(
                 kind: "nested-family".to_owned(),
                 family: nested_family.clone(),
                 family_registered: true,
+                inventory_status: "active".to_owned(),
+                runtime_authority: "pending-nested-library".to_owned(),
             });
         }
         let nested_control = nested
@@ -1917,11 +2476,72 @@ fn managed_repositories(
             kind: "nested-control-plane".to_owned(),
             family: nested_family,
             family_registered: true,
+            inventory_status: inventory_status(nested_control),
+            runtime_authority: runtime_authority(nested_control, "control-plane"),
+        });
+    }
+
+    let split_root = exact_absolute_path(
+        &string(data, "split_root").ok_or("manifest is missing split_root")?,
+        "split_root",
+    )?;
+    for (key, registration) in registered_nested_families(data) {
+        let child = validate_registered_nested_family_local(key, registration, &split_root)?;
+        let nested_family = string(&child, "repo_family")
+            .ok_or_else(|| format!("nested family {key} is missing repo_family"))?;
+        for raw in child
+            .get("repo")
+            .and_then(toml::Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let name = string(raw, "name")
+                .ok_or_else(|| format!("nested family {key} repository is missing name"))?;
+            managed.push(ManagedRepo {
+                name,
+                path: PathBuf::from(
+                    string(raw, "path").ok_or("nested repository is missing its path")?,
+                ),
+                remote: declared_remote(raw).ok_or("nested repository is missing its remote")?,
+                required_check: string(raw, "required_check")
+                    .ok_or("nested repository is missing its required check")?,
+                branch: string(raw, "default_branch").unwrap_or_else(|| "main".to_owned()),
+                tag: declared_release_tag(raw),
+                kind: "nested-family".to_owned(),
+                family: nested_family.clone(),
+                family_registered: true,
+                inventory_status: inventory_status(raw),
+                runtime_authority: runtime_authority(raw, "nested-library"),
+            });
+        }
+        let nested_control = child
+            .get("control_plane")
+            .ok_or_else(|| format!("nested family {key} is missing control_plane"))?;
+        managed.push(ManagedRepo {
+            name: string(nested_control, "name")
+                .ok_or("nested control plane is missing its name")?,
+            path: PathBuf::from(
+                string(nested_control, "path").ok_or("nested control plane is missing its path")?,
+            ),
+            remote: declared_remote(nested_control)
+                .ok_or("nested control plane is missing its remote")?,
+            required_check: string(nested_control, "required_check")
+                .ok_or("nested control plane is missing its required check")?,
+            branch: string(nested_control, "default_branch")
+                .or_else(|| string(nested_control, "branch"))
+                .unwrap_or_else(|| "main".to_owned()),
+            tag: declared_release_tag(nested_control),
+            kind: "nested-control-plane".to_owned(),
+            family: nested_family,
+            family_registered: true,
+            inventory_status: inventory_status(nested_control),
+            runtime_authority: runtime_authority(nested_control, "control-plane"),
         });
     }
 
     let mut names = std::collections::BTreeSet::new();
     let mut paths = std::collections::BTreeSet::new();
+    let mut remotes = std::collections::BTreeSet::new();
     for repo in &managed {
         if !names.insert(repo.name.clone()) {
             return Err(format!("duplicate managed repository name: {}", repo.name).into());
@@ -1930,6 +2550,9 @@ fn managed_repositories(
             return Err(
                 format!("duplicate managed repository path: {}", repo.path.display()).into(),
             );
+        }
+        if !remotes.insert(repo.remote.clone()) {
+            return Err(format!("duplicate managed repository remote: {}", repo.remote).into());
         }
     }
     Ok(managed)
@@ -4060,6 +4683,20 @@ fn validate_manifest_data(
         validate_managed_release_identity(control, "control_plane", "jain-split-ops", "current_tag")
     {
         errors.push(error);
+    }
+    if let Some(root) = split_root.as_deref() {
+        for (key, registration) in registered_nested_families(data) {
+            if let Err(error) =
+                validate_registered_nested_family_declaration(key, registration, root)
+            {
+                errors.push(error);
+            } else if check_paths {
+                if let Err(error) = validate_registered_nested_family_local(key, registration, root)
+                {
+                    errors.push(error);
+                }
+            }
+        }
     }
     if check_paths {
         if let Err(error) = validate_nested_family_local(data, true, &mut errors) {
@@ -11421,6 +12058,9 @@ engine_release_tree = "{engine_tree}"
             ("redline-core", "jeryu"),
             ("redline-split-ops", "jeryu"),
             ("redline-central", "jeryu"),
+            ("jeryu", "jeryu"),
+            ("jeryu-release-ops", "jeryu"),
+            ("jeryu-web", "jeryu"),
         ] {
             let authority = host_ci_authority(&manifest, repo).unwrap();
             assert_eq!(authority["repository"], repo);
@@ -11514,6 +12154,107 @@ release_cuda_compute_capability_required = "yes"
         assert!(host_ci_authority(&bad_cuda_policy, "jain-report")
             .unwrap_err()
             .contains("must be a boolean"));
+    }
+
+    #[test]
+    fn registered_nested_family_declaration_rejects_aliases_and_duplicate_identity() {
+        let manifest: toml::Value = fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml"),
+        )
+        .unwrap()
+        .parse()
+        .unwrap();
+        let split_root = Path::new("/home/ubuntu/jain-split");
+        let canonical = &manifest["nested_families"]["jeryu"];
+        validate_registered_nested_family_declaration("jeryu", canonical, split_root).unwrap();
+
+        let mut old_root = canonical.clone();
+        old_root["container_path"] = toml::Value::String("/home/ubuntu/jeryu-split".to_owned());
+        assert!(
+            validate_registered_nested_family_declaration("jeryu", &old_root, split_root)
+                .unwrap_err()
+                .contains("direct child of split_root")
+        );
+
+        let mut alternate_redline = canonical.clone();
+        alternate_redline["redline_authority"] =
+            toml::Value::String("/home/ubuntu/jain-split/jeryu-split/jeryu-redline".to_owned());
+        assert!(validate_registered_nested_family_declaration(
+            "jeryu",
+            &alternate_redline,
+            split_root
+        )
+        .unwrap_err()
+        .contains("redline_authority must be /home/ubuntu/jain-split/jain-redline"));
+
+        let mut owner_alias = canonical.clone();
+        owner_alias["forge_owner"] = toml::Value::String("veox".to_owned());
+        assert!(
+            validate_registered_nested_family_declaration("jeryu", &owner_alias, split_root)
+                .unwrap_err()
+                .contains("control_plane_remote must be http://127.0.0.1:8787/git/veox/")
+        );
+
+        let mut duplicate = canonical.clone();
+        let repositories = duplicate["repository"].as_array_mut().unwrap();
+        repositories.push(repositories[0].clone());
+        assert!(
+            validate_registered_nested_family_declaration("jeryu", &duplicate, split_root)
+                .unwrap_err()
+                .contains("duplicate repository name jeryu")
+        );
+
+        let mut premature_symlink_enforcement = canonical.clone();
+        premature_symlink_enforcement["symlink_policy"] =
+            toml::Value::String("enforced".to_owned());
+        assert!(validate_registered_nested_family_declaration(
+            "jeryu",
+            &premature_symlink_enforcement,
+            split_root
+        )
+        .unwrap_err()
+        .contains("cannot be enforced while a repository is retirement-pending"));
+    }
+
+    #[test]
+    fn registered_nested_family_projection_must_match_child_authority() {
+        let manifest: toml::Value = fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml"),
+        )
+        .unwrap()
+        .parse()
+        .unwrap();
+        let outer = &manifest["nested_families"]["jeryu"];
+        let mut child: toml::Value = r#"
+repo_family = "jeryu-split"
+release_identity = "jeryu-split"
+release_lineage = "v5"
+split_root = "/home/ubuntu/jain-split/jeryu-split"
+manifest_authority = "/home/ubuntu/jain-split/jeryu-split/jeryu-release-ops/repos.manifest.toml"
+[control_plane]
+name = "jeryu-release-ops"
+path = "/home/ubuntu/jain-split/jeryu-split/jeryu-release-ops"
+remote = "http://127.0.0.1:8787/git/jeryu/jeryu-release-ops.git"
+required_check = "jeryu-release-ops/required"
+[nested_families.redline]
+source_authority = "jain-redline"
+container_path = "/home/ubuntu/jain-split/jain-redline"
+"#
+        .parse()
+        .unwrap();
+        child
+            .as_table_mut()
+            .unwrap()
+            .insert("repo".to_owned(), outer.get("repository").unwrap().clone());
+        compare_registered_nested_family_child("jeryu", outer, &child).unwrap();
+
+        let mut drift = child;
+        drift["repo"][0]["runtime_authority"] = toml::Value::String("shadow-only".to_owned());
+        assert!(
+            compare_registered_nested_family_child("jeryu", outer, &drift)
+                .unwrap_err()
+                .contains("repository[jeryu].runtime_authority differs")
+        );
     }
 
     #[test]
@@ -11796,6 +12537,8 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             kind: "family".to_owned(),
             family: "jain-split".to_owned(),
             family_registered: true,
+            inventory_status: "active".to_owned(),
+            runtime_authority: "product".to_owned(),
         };
         assert_eq!(verify_managed_worktree(&managed)["status"], "pass");
 
@@ -11835,6 +12578,8 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             kind: "family".to_owned(),
             family: "jain-split".to_owned(),
             family_registered: true,
+            inventory_status: "active".to_owned(),
+            runtime_authority: "product".to_owned(),
         };
         assert_eq!(verify_managed_worktree(&managed)["status"], "pass");
 

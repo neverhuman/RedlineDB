@@ -12,11 +12,22 @@ cargo run --locked --quiet -- managed-repos --manifest repos.manifest.toml --jso
   > target/jankurai/contract-drift/managed-repositories.json
 jq -e '
   .schema_version == "jain.managed-repositories/v1" and
-  .repository_count == 34 and
+  .repository_count == ([.repositories[].name] | unique | length) and
+  .repository_count == ([.repositories[].path] | unique | length) and
+  .repository_count == ([.repositories[].remote] | unique | length) and
+  .repository_count == ([.family_counts[]] | add) and
+  .active_repository_count == ([.repositories[] | select(.inventory_status == "active")] | length) and
   ([.repositories[].name] | index("jain-split-ops") != null) and
   ([.repositories[].name] | index("jain-smartcluster") != null) and
   ([.repositories[].name] | index("redline-central") != null) and
-  ([.repositories[].name] | index("redline-split-ops") != null)
+  ([.repositories[].name] | index("redline-split-ops") != null) and
+  ([.repositories[].name] | index("jeryu-release-ops") != null) and
+  ([.repositories[].name] | index("jeryu-web") != null) and
+  .family_counts["jain-split"] > 0 and
+  .family_counts["redline-split"] > 0 and
+  .family_counts["jeryu-split"] > 0 and
+  (.nested_family_gates[] | select(.family == "jeryu-split") |
+    .symlink_policy == "retirement-pending" and .retirement_pending == ["jeryu-web"])
 ' target/jankurai/contract-drift/managed-repositories.json >/dev/null
 repo_count="$(jq '.repository_count' target/jankurai/contract-drift/managed-repositories.json)"
 write_receipt target/jankurai/contract-drift/receipt.json pass
