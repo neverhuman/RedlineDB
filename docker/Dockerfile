@@ -8,6 +8,6 @@ ENV LANG=C \
     LD_LIBRARY_PATH=/opt/redline/lib \
     PATH=/opt/redline/bin:/usr/bin:/bin
 
-WORKDIR /evidence
+WORKDIR /opt/redline/share
 USER 65532:65532
 ENTRYPOINT ["/opt/redline/bin/redline-testing"]

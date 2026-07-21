@@ -11,6 +11,7 @@ fn docker_topology_is_internal_pinned_and_socket_free() {
     assert_eq!(images.matches("@sha256:").count(), 2);
     assert!(!images.contains(":latest"));
     assert!(dockerfile.lines().next().unwrap().contains("@sha256:"));
+    assert!(dockerfile.contains("WORKDIR /opt/redline/share"));
     assert!(!dockerfile.contains("RUN "));
     assert!(compose.contains("internal: true"));
     assert!(compose.contains("pull_policy: never"));
