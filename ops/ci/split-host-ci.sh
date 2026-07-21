@@ -19,6 +19,16 @@ if [[ -v JERYU_BASE || -v JERYU_MERGE_TOKEN || -v JERYU_MERGE_TOKEN_FILE ]]; the
 fi
 unset JAIN_BASE
 
+jain_contract_source_object() {
+  local mirror="${1:?contract mirror is required}"
+  local -a declarations
+  mapfile -t declarations < <(sed -n '/^Source-commit:/p' "$mirror")
+  [[ "${#declarations[@]}" == 1 \
+    && "${declarations[0]}" =~ ^Source-commit:\ ([0-9a-f]{40})$ ]] \
+    || return 1
+  printf '%s\n' "${BASH_REMATCH[1]}"
+}
+
 OWNER="${1:?owner}"; REPO="${2:?repo}"; SHA="${3:?sha}"; REPO_PATH="${4:?repo_path}"
 CHECK="${5:-$REPO/required}"
 RUNNER_PATH="$(realpath -e -- "${BASH_SOURCE[0]}")" || exit 2
@@ -562,15 +572,10 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
         "$worker_contract_mirror")" == "$worker_mirror_blob" ]] \
       || native_setup_failure \
         'worker contract mirror differs from the exact product object' 1
-    mapfile -t worker_contract_objects < <(
-      sed -n 's/^Source-commit: \([0-9a-f]\{40\}\)$/\1/p' \
-        "$worker_contract_mirror"
-    )
-    [[ "${#worker_contract_objects[@]}" == 1 \
-      && "${worker_contract_objects[0]}" =~ ^[0-9a-f]{40}$ ]] \
-      || native_setup_failure \
-        'worker contract mirror must declare exactly one source object' 1
-    worker_contract_ancestor_object="${worker_contract_objects[0]}"
+    worker_contract_ancestor_object="$(
+      jain_contract_source_object "$worker_contract_mirror"
+    )" || native_setup_failure \
+      'worker contract mirror must declare exactly one source object' 1
   fi
   sibling_git_config="$tmp/sibling-safe-directory.config"
   : >"$sibling_git_config" \

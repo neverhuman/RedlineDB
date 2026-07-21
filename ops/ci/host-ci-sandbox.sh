@@ -17,6 +17,16 @@ fail() {
   exit 1
 }
 
+jain_contract_source_object() {
+  local mirror="${1:?contract mirror is required}"
+  local -a declarations
+  mapfile -t declarations < <(sed -n '/^Source-commit:/p' "$mirror")
+  [[ "${#declarations[@]}" == 1 \
+    && "${declarations[0]}" =~ ^Source-commit:\ ([0-9a-f]{40})$ ]] \
+    || return 1
+  printf '%s\n' "${BASH_REMATCH[1]}"
+}
+
 validate_control_authority() {
   local ref="$1" commit="$2" expires="$3" now
   if [[ "$ref" == refs/heads/main ]]; then
@@ -624,14 +634,10 @@ if [[ -e "$product_contract_mirror" ]]; then
     && "$("${safe_git[@]}" -C "${arguments[3]}" \
       hash-object --no-filters -- "$product_contract_mirror")" == "$mirror_blob" ]] \
     || fail 'physical product contract mirror differs from the exact product object'
-  mapfile -t declared_contract_objects < <(
-    sed -n 's/^Source-commit: \([0-9a-f]\{40\}\)$/\1/p' \
-      "$product_contract_mirror"
-  )
-  [[ "${#declared_contract_objects[@]}" == 1 \
-    && "${declared_contract_objects[0]}" =~ ^[0-9a-f]{40}$ ]] \
-    || fail 'product contract mirror must declare exactly one lowercase source object'
-  contract_ancestor_object="${declared_contract_objects[0]}"
+  contract_ancestor_object="$(
+    jain_contract_source_object "$product_contract_mirror"
+  )" || fail \
+    'product contract mirror must declare exactly one lowercase source object'
 fi
 
 hydrate_local_lfs_checkout() {

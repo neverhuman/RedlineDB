@@ -8,6 +8,47 @@ trap 'rm -rf "$tmp"' EXIT
 fixture="$tmp/control"
 mkdir -p "$fixture/ops/ci" "$fixture/tools/splitctl/src"
 
+extract_contract_parser() {
+  local script="$1"
+  sed -n \
+    '/^jain_contract_source_object() {$/,/^}$/p' "$script"
+}
+
+parser_fixture="$tmp/contract-mirror"
+valid_object="$(printf 'a%.0s' {1..40})"
+for boundary in host-ci-sandbox.sh split-host-ci.sh; do
+  parser="$(extract_contract_parser "$repo_root/ops/ci/$boundary")"
+  [[ -n "$parser" ]] || {
+    printf '%s omits the contract source parser\n' "$boundary" >&2
+    exit 1
+  }
+  printf 'Source-commit: %s\n' "$valid_object" >"$parser_fixture"
+  [[ "$(bash -c "$parser; jain_contract_source_object \"\$1\"" \
+    _ "$parser_fixture")" == "$valid_object" ]] || {
+    printf '%s rejected one exact contract source object\n' "$boundary" >&2
+    exit 1
+  }
+  for hostile in \
+    "Source-commit: malformed" \
+    "Source-commit: $valid_object
+Source-commit: malformed" \
+    "Source-commit: $valid_object
+Source-commit: $valid_object"; do
+    printf '%s\n' "$hostile" >"$parser_fixture"
+    if bash -c "$parser; jain_contract_source_object \"\$1\"" \
+      _ "$parser_fixture" >/dev/null 2>&1; then
+      printf '%s accepted malformed or ambiguous contract source declarations\n' \
+        "$boundary" >&2
+      exit 1
+    fi
+  done
+done
+[[ "$(extract_contract_parser "$repo_root/ops/ci/host-ci-sandbox.sh")" \
+  == "$(extract_contract_parser "$repo_root/ops/ci/split-host-ci.sh")" ]] || {
+  printf 'root and worker contract source parsers differ\n' >&2
+  exit 1
+}
+
 cp -- "$repo_root/ops/ci/host-ci-integrity.sh" "$fixture/ops/ci/host-ci-integrity.sh"
 for path in \
   Cargo.lock Cargo.toml repos.manifest.toml \
