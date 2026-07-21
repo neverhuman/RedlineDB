@@ -55,6 +55,10 @@ The commands accept `REDLINE_SPLIT_ROOT` for copied or relocated checkouts:
 REDLINE_SPLIT_ROOT="$PWD" ./redlinectl validate
 ./redlinectl clone --dry-run
 ./redlinectl family-ci --receipt target/release-evidence/redline-family-ci.json
+./redlinectl offline-containment \
+  --repo redline-testing \
+  --cargo-home /home/ubuntu/jain-split/target/redline-testing-cargo-home \
+  --receipt target/release-evidence/redline-testing-offline-containment.json
 ```
 
 `redlinectl` is a small shell launcher for the standalone Rust control-plane
@@ -63,6 +67,14 @@ tooling, but it is deliberately not a Cargo workspace and is never a Redline
 product or dependency member. All proof, lock, receipt, and safety tests run as
 Rust tests with `cargo test --locked`; Python is reserved for cross-language
 parity harnesses and is not used by this control plane.
+
+`offline-containment` is a closed-input proof for one exact released
+repository. It clones the manifest-bound commit directly from local Jeryu with
+`git clone --no-local`, detaches it, removes the remote, recursively rejects
+symlinks/special nodes, hashes in-tree Cargo custody and `Cargo.lock`, then runs
+`cargo test --workspace --locked --offline` in a user systemd scope with
+`IPAddressDeny=any` and `RestrictAddressFamilies=AF_UNIX`. Any failure leaves no
+passing receipt, and the standalone sandbox is automatically removed.
 
 Jain and Jeryu delegate here through their nested-family commands. Redline
 remains an independent family; both consumers must pin the same engine commit

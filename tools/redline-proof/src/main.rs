@@ -24,6 +24,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 const FAMILY: &str = "redline-split";
 const FAMILY_CI_SCHEMA: &str = "redline.family-ci/v1";
+const OFFLINE_CONTAINMENT_SCHEMA: &str = "redline.offline-containment/v1";
 const CONSUMER_SCHEMA: &str = "redline.consumer-evidence/v1";
 const LOCK_SCHEMA: &str = "redline.split.lock/v2";
 const PROOF_REFRESH_SCHEMA: &str = "redline.proof-refresh/v1";
@@ -2846,6 +2847,170 @@ fn clone_exact_standalone(source: &Path, destination: &Path, commit: &str) -> Re
             .arg(destination)
             .args(["fsck", "--full", "--strict"]),
     )?;
+    Ok(())
+}
+
+fn clone_exact_jeryu(remote: &str, destination: &Path, commit: &str) -> Result<()> {
+    if !remote.starts_with(LOCAL_JERYU_BASE) || !remote.ends_with(".git") || !is_sha1(commit) {
+        return Err(error(
+            "offline containment requires an exact local-Jeryu remote and SHA-1",
+        ));
+    }
+    require_path_absent(destination, "offline containment checkout")?;
+    command_output(
+        isolated_git()
+            .args([
+                "clone",
+                "--no-local",
+                "--no-checkout",
+                "--origin",
+                "origin",
+                "--",
+            ])
+            .arg(remote)
+            .arg(destination),
+    )?;
+    command_output(
+        isolated_git()
+            .arg("-C")
+            .arg(destination)
+            .args(["checkout", "--detach", commit]),
+    )?;
+    validate_physical_checkout(destination)?;
+    if git(destination, &["rev-parse", "HEAD"])? != commit
+        || !git(
+            destination,
+            &["status", "--porcelain", "--untracked-files=all"],
+        )?
+        .is_empty()
+    {
+        return Err(error("offline containment checkout identity drifted"));
+    }
+    command_output(
+        isolated_git()
+            .arg("-C")
+            .arg(destination)
+            .args(["remote", "remove", "origin"]),
+    )?;
+    Ok(())
+}
+
+fn physical_tree_sha256(root: &Path, context: &str) -> Result<String> {
+    reject_symlink_components(root, context)?;
+    let mut pending = vec![root.to_path_buf()];
+    let mut files = Vec::new();
+    while let Some(directory) = pending.pop() {
+        for entry in fs::read_dir(&directory)? {
+            let entry = entry?;
+            let path = entry.path();
+            let metadata = fs::symlink_metadata(&path)?;
+            if metadata.file_type().is_symlink() {
+                return Err(error(format!(
+                    "{context} contains a symlink: {}",
+                    path.display()
+                )));
+            }
+            if metadata.is_dir() {
+                pending.push(path);
+            } else if metadata.is_file() {
+                files.push(path);
+            } else {
+                return Err(error(format!(
+                    "{context} contains a special node: {}",
+                    path.display()
+                )));
+            }
+        }
+    }
+    files.sort();
+    let mut hasher = Sha256::new();
+    for path in files {
+        hasher.update(path.strip_prefix(root)?.as_os_str().as_bytes());
+        hasher.update([0]);
+        hasher.update(fs::read(path)?);
+        hasher.update([0]);
+    }
+    Ok(format!("{:x}", hasher.finalize()))
+}
+
+fn offline_containment(
+    manifest_path: &Path,
+    repo_name: &str,
+    cargo_home: &Path,
+    receipt: &Path,
+) -> Result<()> {
+    let manifest = load_manifest(manifest_path)?;
+    let repo = manifest
+        .repos
+        .iter()
+        .find(|repo| repo.name == repo_name)
+        .ok_or_else(|| error(format!("manifest has no repository named {repo_name}")))?;
+    if repo.release_commit == PENDING || !is_sha1(&repo.release_commit) {
+        return Err(error(format!("{repo_name} has no exact released commit")));
+    }
+    let workspace = manifest
+        .container_root
+        .parent()
+        .ok_or_else(|| error("Redline container has no workspace parent"))?;
+    let cargo_home = fs::canonicalize(cargo_home)?;
+    if !cargo_home.starts_with(workspace) {
+        return Err(error(
+            "offline containment Cargo custody must be inside jain-split",
+        ));
+    }
+    let custody_sha256 = physical_tree_sha256(&cargo_home, "offline Cargo custody")?;
+    let mut sandbox = StandaloneSandbox::new("redline-offline-containment")?;
+    let checkout = sandbox.path().join(repo_name);
+    clone_exact_jeryu(&repo.remote, &checkout, &repo.release_commit)?;
+    physical_tree_sha256(&checkout, "offline containment checkout")?;
+    let lock = checkout.join("Cargo.lock");
+    require_physical_file(&lock, "offline containment Cargo.lock")?;
+    let status = Command::new("systemd-run")
+        .args([
+            "--user",
+            "--wait",
+            "--pipe",
+            "--quiet",
+            "-p",
+            "IPAddressDeny=any",
+            "-p",
+            "RestrictAddressFamilies=AF_UNIX",
+            "-p",
+            "NoNewPrivileges=yes",
+        ])
+        .arg(format!("--working-directory={}", checkout.display()))
+        .arg(format!("--setenv=CARGO_HOME={}", cargo_home.display()))
+        .arg("--setenv=CARGO_NET_OFFLINE=true")
+        .arg(format!(
+            "--setenv=PATH={}",
+            env::var("PATH").map_err(|_| error("offline containment PATH is absent"))?
+        ))
+        .args(["cargo", "test", "--workspace", "--locked", "--offline"])
+        .status()?;
+    if !status.success() {
+        return Err(error(format!(
+            "offline containment tests failed with {status}"
+        )));
+    }
+    let tree = git(&checkout, &["rev-parse", "HEAD^{tree}"])?;
+    let value = json!({
+        "schema_version": OFFLINE_CONTAINMENT_SCHEMA,
+        "status": "pass",
+        "repository": repo.name,
+        "remote": repo.remote,
+        "commit": repo.release_commit,
+        "tree": tree,
+        "cargo_lock_sha256": sha256_file(&lock)?,
+        "cargo_custody_root": cargo_home,
+        "cargo_custody_sha256": custody_sha256,
+        "clone_mode": "git clone --no-local from local Jeryu; detached exact commit; remote removed",
+        "network_policy": "systemd IPAddressDeny=any; RestrictAddressFamilies=AF_UNIX",
+        "test_command": "cargo test --workspace --locked --offline",
+        "recursively_symlink_free": true,
+    });
+    write_checksummed_json(receipt, &value)?;
+    sandbox.cleanup()?;
+    println!("offline containment passed: {}", receipt.display());
     Ok(())
 }
 
@@ -6405,6 +6570,7 @@ fn dispatch(paths: &Paths, command: &str, mut args: Vec<String>) -> Result<()> {
             | "review-lock-verify"
             | "control-review-lock-verify"
             | "family-ci"
+            | "offline-containment"
             | "ci"
             | "proof-refresh"
             | "cutover-verify"
@@ -6451,6 +6617,18 @@ fn dispatch(paths: &Paths, command: &str, mut args: Vec<String>) -> Result<()> {
                 .unwrap_or_else(|| paths.root.join("target/release-evidence/redline-family-ci.json"));
             if !args.is_empty() { return Err(error("family-ci accepts only --receipt PATH")); }
             family_ci(&paths.manifest, &receipt)
+        }
+        "offline-containment" => {
+            let repo = take_option(&mut args, "--repo")?
+                .ok_or_else(|| error("offline-containment requires --repo NAME"))?;
+            let cargo_home = PathBuf::from(take_option(&mut args, "--cargo-home")?
+                .ok_or_else(|| error("offline-containment requires --cargo-home PATH"))?);
+            let receipt = PathBuf::from(take_option(&mut args, "--receipt")?
+                .unwrap_or_else(|| "target/release-evidence/redline-offline-containment.json".to_owned()));
+            if !args.is_empty() {
+                return Err(error("offline-containment accepts only --repo, --cargo-home, and --receipt"));
+            }
+            offline_containment(&paths.manifest, &repo, &cargo_home, &receipt)
         }
         "proof-refresh" => {
             let receipt = take_option(&mut args, "--receipt")?.map(PathBuf::from)
@@ -6556,7 +6734,7 @@ fn dispatch(paths: &Paths, command: &str, mut args: Vec<String>) -> Result<()> {
         }
         "update" => { if !args.is_empty() { return Err(error("update accepts no arguments")); } clone_or_update(&paths.manifest, false) }
         "--version" | "version" => { println!("redline-proof 0.1.0"); Ok(()) }
-        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|ci-required|control-validate|control-review-lock-verify|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
+        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|ci-required|control-validate|control-review-lock-verify|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|offline-containment --repo NAME --cargo-home PATH [--receipt PATH]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
     }
 }
 
@@ -6570,7 +6748,13 @@ fn real_main() -> Result<()> {
     };
     let family_lock = if matches!(
         command.as_str(),
-        "clone" | "update" | "family-ci" | "ci" | "ci-required" | "proof-refresh"
+        "clone"
+            | "update"
+            | "family-ci"
+            | "ci"
+            | "ci-required"
+            | "offline-containment"
+            | "proof-refresh"
     ) {
         Some(GlobalFamilyLock::acquire(paths.root.parent().ok_or_else(
             || error("Redline control-plane root has no family root"),
@@ -8562,5 +8746,17 @@ default_branch = "main"
             "prepared-successor"
         );
         assert!(!family_root.join("redline").exists());
+    }
+
+    #[test]
+    fn offline_containment_rejects_non_jeryu_clone_sources() {
+        let failure = clone_exact_jeryu(
+            "https://example.invalid/redline-testing.git",
+            Path::new("/tmp/unused-redline-containment-test"),
+            "0123456789abcdef0123456789abcdef01234567",
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(failure.contains("exact local-Jeryu remote"));
     }
 }

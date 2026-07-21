@@ -116,6 +116,14 @@ plane's `RUSTUP_TOOLCHAIN` override. Before Core CI, the runner builds the exact
 reviewed Redline Testing release package locally, verifies its commit, manifest,
 binary, and hashes, and records that binding under Core's dependency artifacts.
 
+Before consuming those artifacts, run `./redlinectl offline-containment --repo
+<name> --cargo-home <in-tree-custody> --receipt <path>`. The command clones the
+exact manifest commit from local Jeryu using an automatically removed
+standalone `git clone --no-local`, removes its remote, rejects links and special
+nodes, hashes custody/lock identities, and runs locked offline tests under
+systemd network denial. A failed or unavailable forge clone is a real red
+result; it never falls back to the canonical source checkout or emits evidence.
+
 Common repair signatures:
 
 - `existing immutable tag ... points to ...`: do not move it; correct the
