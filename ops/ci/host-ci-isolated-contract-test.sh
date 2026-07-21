@@ -31,43 +31,82 @@ esac
   && -d /opt/jain-ci/cargo-registry \
   && ! -L /opt/jain-ci/cargo-registry \
   && -f "$cargo_home/registry/stage-receipt.json" \
-  && ! -L "$cargo_home/registry/stage-receipt.json" ]] \
+    && ! -L "$cargo_home/registry/stage-receipt.json" ]] \
   || fail 'isolated Cargo cache is not the governed locked offline cache'
-mapfile -d '' -t product_cargo_locks < <(
-  git -C "$repo_root" ls-files -z -- Cargo.lock ':(glob)**/Cargo.lock' | LC_ALL=C sort -z
-)
-tracked_cargo_locks=()
-for product_cargo_lock in "${product_cargo_locks[@]}"; do
-  tracked_cargo_locks+=("$repo_root/$product_cargo_lock")
-done
+closure_helper=/opt/jain-ci/authority/control-plane/ops/ci/cargo-lock-closure.sh
+[[ -f "$closure_helper" && ! -L "$closure_helper" ]] \
+  || fail 'reviewed Cargo lock closure helper is unavailable'
+# shellcheck source=ops/ci/cargo-lock-closure.sh
+source "$closure_helper"
+lock_list_root="$writable_root/isolated-cargo-lock-lists"
+lock_source_records="$writable_root/isolated-cargo-lock-sources.jsonl"
+mkdir -m 0700 "$lock_list_root" \
+  || fail 'cannot create isolated Cargo lock list root'
+: >"$lock_source_records" || fail 'cannot create isolated lock source records'
+chmod 0600 "$lock_source_records"
+product_head="$(git -C "$repo_root" rev-parse --verify 'HEAD^{commit}')" \
+  || fail 'cannot resolve exact product lock source'
+product_lock_list="$lock_list_root/product.locks"
+jain_capture_sorted_nul "$product_lock_list" \
+  /usr/bin/git -C "$repo_root" ls-files -z -- \
+    Cargo.lock ':(glob)**/Cargo.lock' \
+  || fail 'exact product Cargo lock enumeration failed'
+jain_cargo_lock_source_record \
+  "$(basename "$repo_root")" "$product_head" "$repo_root" "$product_lock_list" \
+  >>"$lock_source_records" \
+  || fail 'cannot bind exact product Cargo lock source'
 if [[ "${JAIN_SIBLING_SOURCES_REQUIRED:-false}" == true ]]; then
-  while IFS=$'\t' read -r sibling_repository sibling_mount_path; do
+  sibling_source_count="$(
+    jq -er '.sources | length | select(. > 0)' "$JAIN_SIBLING_SOURCES_PATH"
+  )" || fail 'cannot count sealed sibling lock sources'
+  mapfile -t sibling_source_rows < <(
+    jq -er '.sources[] | [.repository,.mount_path,.commit] | @tsv' \
+      "$JAIN_SIBLING_SOURCES_PATH"
+  )
+  [[ "${#sibling_source_rows[@]}" == "$sibling_source_count" ]] \
+    || fail 'cannot enumerate every sealed sibling lock source'
+  for sibling_source_row in "${sibling_source_rows[@]}"; do
+    IFS=$'\t' read -r sibling_repository sibling_mount_path \
+      sibling_expected_commit <<<"$sibling_source_row"
     [[ "$sibling_mount_path" == "$JAIN_SPLIT_ROOT/$sibling_repository" \
       && -d "$sibling_mount_path/.git" && ! -L "$sibling_mount_path" \
       && ! -L "$sibling_mount_path/.git" ]] \
       || fail 'sealed sibling lock authority is not an exact checkout'
-    mapfile -d '' -t sibling_cargo_locks < <(
-      git -C "$sibling_mount_path" ls-files -z -- \
-        Cargo.lock ':(glob)**/Cargo.lock' | LC_ALL=C sort -z
-    )
-    for sibling_cargo_lock in "${sibling_cargo_locks[@]}"; do
-      tracked_cargo_locks+=("$sibling_mount_path/$sibling_cargo_lock")
-    done
-  done < <(
-    jq -er '.sources[] | [.repository,.mount_path] | @tsv' \
-      "$JAIN_SIBLING_SOURCES_PATH"
-  )
-fi
-lock_sha256s="$({
-  for cargo_lock in "${tracked_cargo_locks[@]}"; do
-    sha256sum -- "$cargo_lock" | cut -d' ' -f1
+    sibling_actual_commit="$(/usr/bin/git \
+      -c safe.directory="$sibling_mount_path" -C "$sibling_mount_path" \
+      rev-parse --verify 'HEAD^{commit}')" \
+      || fail 'cannot resolve sealed sibling lock source commit'
+    [[ "$sibling_actual_commit" == "$sibling_expected_commit" ]] \
+      || fail 'sealed sibling lock source commit differs from authority'
+    sibling_lock_list="$lock_list_root/$sibling_repository.locks"
+    jain_capture_sorted_nul "$sibling_lock_list" \
+      /usr/bin/git -c safe.directory="$sibling_mount_path" \
+        -C "$sibling_mount_path" ls-files -z -- \
+        Cargo.lock ':(glob)**/Cargo.lock' \
+      || fail 'sealed sibling Cargo lock enumeration failed'
+    jain_cargo_lock_source_record \
+      "$sibling_repository" "$sibling_actual_commit" \
+      "$sibling_mount_path" "$sibling_lock_list" \
+      >>"$lock_source_records" \
+      || fail 'cannot bind sealed sibling Cargo lock source'
   done
-} | jq -Rsc 'split("\n")[:-1] | sort')"
-jq -e --argjson lock_sha256s "$lock_sha256s" \
-  --argjson lock_count "${#tracked_cargo_locks[@]}" '
+fi
+expected_lock_closure="$writable_root/expected-lock-source-closure.json"
+jain_render_cargo_lock_source_closure \
+  "$lock_source_records" "$expected_lock_closure" \
+  || fail 'cannot render independently enumerated Cargo lock closure'
+actual_lock_closure="$cargo_home/registry/lock-source-closure.json"
+[[ -f "$actual_lock_closure" && ! -L "$actual_lock_closure" \
+  && "$(stat -c '%u:%g:%a:%h' -- "$actual_lock_closure")" \
+    == "$(id -u):$(id -g):600:1" \
+  && -z "$(cmp -s -- "$expected_lock_closure" "$actual_lock_closure" \
+    || printf different)" ]] \
+  || fail 'staged Cargo lock per-source closure differs from independent authority'
+jq -e --slurpfile closure "$expected_lock_closure" '
   select(.schema_version == "jain.locked-cargo-cache/v2")
-  | select(.lock_count == $lock_count)
-  | select(.lock_sha256s == $lock_sha256s)
+  | select($closure | length == 1)
+  | select(.lock_count == $closure[0].lock_count)
+  | select(.lock_sha256s == $closure[0].lock_sha256s)
   | select(.package_count > 0)' \
   "$cargo_home/registry/stage-receipt.json" >/dev/null \
   || fail 'Cargo cache receipt is not bound to the exact product/sibling lock closure'

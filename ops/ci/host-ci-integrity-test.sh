@@ -14,6 +14,7 @@ for path in \
   ops/ci/host-ci-publisher.sh ops/ci/host-ci-sandbox.sh \
   ops/ci/host-ci-boundary-preflight.sh \
   ops/ci/host-ci-proof-evidence.sh \
+  ops/ci/cargo-lock-closure.sh \
   ops/ci/native-build-tools.lock.json \
   ops/ci/native-runtime.sh ops/ci/pnpm-runtime.sh \
   ops/ci/pnpm-store.lock.json ops/ci/pinned-advisory.sh \
@@ -89,7 +90,7 @@ grep -F 'missing sealed sibling authority' \
 }
 for sibling_lock_binding in \
   'sealed_sibling_repositories' \
-  'git -C "$sibling_lock_checkout" ls-files -z --' \
+  'jain_capture_sorted_nul "$sibling_cargo_lock_list"' \
   '--lock "$sibling_lock_checkout/$sibling_cargo_lock_path"'; do
   grep -F -- "$sibling_lock_binding" \
     "$repo_root/ops/ci/split-host-ci.sh" >/dev/null || {
@@ -103,6 +104,18 @@ grep -F 'Cargo cache receipt is not bound to the exact product/sibling lock clos
   printf 'isolated worker does not verify the sibling Cargo lock closure\n' >&2
   exit 1
 }
+for closure_binding in \
+  'jain_render_cargo_lock_source_closure' \
+  'lock-source-closure.json' \
+  'staged Cargo lock per-source closure differs from independent authority'; do
+  grep -F -- "$closure_binding" \
+    "$repo_root/ops/ci/split-host-ci.sh" \
+    "$repo_root/ops/ci/host-ci-isolated-contract-test.sh" >/dev/null || {
+    printf 'host CI omits independently verified per-source lock closure: %s\n' \
+      "$closure_binding" >&2
+    exit 1
+  }
+done
 grep -F 'sibling protected main moved before publication' \
   "$repo_root/ops/ci/host-ci-publisher.sh" >/dev/null || {
   printf 'root publisher does not reject protected sibling ref drift\n' >&2

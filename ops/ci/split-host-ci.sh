@@ -171,6 +171,8 @@ verify_exact_control_plane_integrity || {
 CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
 # shellcheck source=ops/ci/native-runtime.sh
 source "$OPS_ROOT/ops/ci/native-runtime.sh"
+# shellcheck source=ops/ci/cargo-lock-closure.sh
+source "$OPS_ROOT/ops/ci/cargo-lock-closure.sh"
 # shellcheck source=ops/ci/pinned-advisory.sh
 source "$OPS_ROOT/ops/ci/pinned-advisory.sh"
 if [[ "$JAIN_RELEASE_CUDA_COMPUTE_CAPABILITY_REQUIRED" == true ]]; then
@@ -638,9 +640,20 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
     || native_setup_failure "cannot create fresh release Cargo configuration" 1
   chmod 0600 "$CARGO_HOME/config.toml" \
     || native_setup_failure "cannot secure fresh release Cargo configuration" 1
-  mapfile -d '' -t product_cargo_lock_paths < <(
-    git -C "$wt" ls-files -z -- Cargo.lock ':(glob)**/Cargo.lock' | LC_ALL=C sort -z
-  )
+  cargo_lock_list_root="$tmp/cargo-lock-lists"
+  cargo_lock_source_records="$tmp/cargo-lock-source-records.jsonl"
+  mkdir -m 0700 "$cargo_lock_list_root" \
+    || native_setup_failure "cannot create private Cargo lock list root" 1
+  : >"$cargo_lock_source_records" \
+    || native_setup_failure "cannot create Cargo lock source records" 1
+  chmod 0600 "$cargo_lock_source_records" \
+    || native_setup_failure "cannot secure Cargo lock source records" 1
+  product_cargo_lock_list="$cargo_lock_list_root/product.locks"
+  jain_capture_sorted_nul "$product_cargo_lock_list" \
+    /usr/bin/git -C "$wt" ls-files -z -- \
+      Cargo.lock ':(glob)**/Cargo.lock' \
+    || native_setup_failure "cannot enumerate exact product Cargo locks" 1
+  mapfile -d '' -t product_cargo_lock_paths <"$product_cargo_lock_list"
   root_lock_tracked=false
   cargo_lock_args=()
   for cargo_lock_path in "${product_cargo_lock_paths[@]}"; do
@@ -650,6 +663,10 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
   if [ -f "$wt/Cargo.toml" ] && [ "$root_lock_tracked" != true ]; then
     native_setup_failure "release Rust repository has no tracked root Cargo.lock" 1
   fi
+  jain_cargo_lock_source_record \
+    "$REPO" "$SHA" "$wt" "$product_cargo_lock_list" \
+    >>"$cargo_lock_source_records" \
+    || native_setup_failure "cannot bind exact product Cargo lock source" 1
   if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
     sealed_sibling_count="$(
       jq -er '.sources | length | select(. > 0)' "$JAIN_SIBLING_SOURCES_PATH"
@@ -667,15 +684,31 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
         && ! -L "$sibling_lock_checkout/.git" ]] \
         || native_setup_failure \
           "sealed sibling Cargo lock checkout is unavailable: $sibling_lock_repository" 1
-      mapfile -d '' -t sibling_cargo_lock_paths < <(
-        git -C "$sibling_lock_checkout" ls-files -z -- \
-          Cargo.lock ':(glob)**/Cargo.lock' | LC_ALL=C sort -z
-      )
+      sibling_lock_commit="$(git -C "$sibling_lock_checkout" \
+        rev-parse --verify 'HEAD^{commit}')" \
+        || native_setup_failure \
+          "cannot resolve sealed sibling Cargo lock commit: $sibling_lock_repository" 1
+      [[ "$sibling_lock_commit" =~ ^[0-9a-f]{40}$ ]] \
+        || native_setup_failure \
+          "sealed sibling Cargo lock commit is malformed: $sibling_lock_repository" 1
+      sibling_cargo_lock_list="$cargo_lock_list_root/$sibling_lock_repository.locks"
+      jain_capture_sorted_nul "$sibling_cargo_lock_list" \
+        /usr/bin/git -C "$sibling_lock_checkout" ls-files -z -- \
+          Cargo.lock ':(glob)**/Cargo.lock' \
+        || native_setup_failure \
+          "cannot enumerate sealed sibling Cargo locks: $sibling_lock_repository" 1
+      mapfile -d '' -t sibling_cargo_lock_paths <"$sibling_cargo_lock_list"
       for sibling_cargo_lock_path in "${sibling_cargo_lock_paths[@]}"; do
         cargo_lock_args+=(
           --lock "$sibling_lock_checkout/$sibling_cargo_lock_path"
         )
       done
+      jain_cargo_lock_source_record \
+        "$sibling_lock_repository" "$sibling_lock_commit" \
+        "$sibling_lock_checkout" "$sibling_cargo_lock_list" \
+        >>"$cargo_lock_source_records" \
+        || native_setup_failure \
+          "cannot bind sealed sibling Cargo lock source: $sibling_lock_repository" 1
     done
   fi
   if [ "${#cargo_lock_args[@]}" -gt 0 ]; then
@@ -687,6 +720,18 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
       --expected-source-uid 0 --expected-source-gid 0 \
       || native_setup_failure "locked Cargo registry cache staging failed" 1
     cargo_stage_receipt="$CARGO_HOME/registry/stage-receipt.json"
+    cargo_lock_source_closure="$CARGO_HOME/registry/lock-source-closure.json"
+    jain_render_cargo_lock_source_closure \
+      "$cargo_lock_source_records" "$cargo_lock_source_closure" \
+      || native_setup_failure "cannot render exact Cargo lock source closure" 1
+    jq -e --slurpfile closure "$cargo_lock_source_closure" '
+      select(.schema_version == "jain.locked-cargo-cache/v2")
+      | select($closure | length == 1)
+      | select(.lock_count == $closure[0].lock_count)
+      | select(.lock_sha256s == $closure[0].lock_sha256s)
+    ' "$cargo_stage_receipt" >/dev/null \
+      || native_setup_failure \
+        "locked Cargo stage receipt differs from the exact source closure" 1
     jq -e '
       (.governed_git_repositories | type) == "array"
       and (.governed_git_repositories

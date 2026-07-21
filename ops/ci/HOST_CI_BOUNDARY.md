@@ -221,7 +221,12 @@ immutable local Jeryu identities with an allowlisted owner, safe
 repository/tag, and exact 40-hex commit, binds them through the complete lock
 digest union, and rejects every external, branch, revision, unpinned, or
 malformed Git source. The worker then resolves those exact commits only through
-the scoped local bare-mirror rewrite.
+the scoped local bare-mirror rewrite. Each lock producer is captured through an
+exit-checked pipeline that cannot publish partial output. A private source
+closure binds every product/sibling commit to its exact lock count and digest
+set; the isolated worker recomputes that closure from the read-only authority
+mounts and requires it to match the aggregate cache-stage receipt before any
+product test runs.
 
 The request root must be on an executable filesystem because the sandbox copies
 the digest-pinned controller and reviewed runner beneath it before binding that
