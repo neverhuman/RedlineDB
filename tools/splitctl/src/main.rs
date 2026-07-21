@@ -1984,6 +1984,25 @@ fn validate_registered_nested_family_declaration(
             "{qualified}.control_plane_required_check must be {control_name}/required"
         ));
     }
+    let control_tag = string(family, "control_plane_current_tag")
+        .ok_or_else(|| format!("{qualified}.control_plane_current_tag is required"))?;
+    if !control_tag.starts_with(&format!("{control_name}-{lineage}."))
+        || !control_tag.contains("-split.")
+    {
+        return Err(format!(
+            "{qualified}.control_plane_current_tag must preserve {lineage} split lineage"
+        ));
+    }
+    if string(family, "control_plane_inventory_status").as_deref() != Some("active") {
+        return Err(format!(
+            "{qualified}.control_plane_inventory_status must be active"
+        ));
+    }
+    if string(family, "control_plane_runtime_authority").as_deref() != Some("control-plane") {
+        return Err(format!(
+            "{qualified}.control_plane_runtime_authority must be control-plane"
+        ));
+    }
     let canonical_redline = split_root.join("jain-redline");
     if string(family, "redline_authority").as_deref()
         != Some(canonical_redline.to_string_lossy().as_ref())
@@ -2156,6 +2175,9 @@ fn compare_registered_nested_family_child(
         ("control_plane", "path"),
         ("control_plane_remote", "remote"),
         ("control_plane_required_check", "required_check"),
+        ("control_plane_current_tag", "current_tag"),
+        ("control_plane_inventory_status", "inventory_status"),
+        ("control_plane_runtime_authority", "runtime_authority"),
     ] {
         if string(outer, outer_field) != string(child_control, child_field) {
             return Err(format!(
@@ -2241,7 +2263,8 @@ fn validate_registered_nested_family_local(
     key: &str,
     family: &toml::Value,
     split_root: &Path,
-) -> Result<toml::Value, String> {
+    check_child_authority: bool,
+) -> Result<(), String> {
     validate_registered_nested_family_declaration(key, family, split_root)?;
     let qualified = format!("nested_families.{key}");
     let container = PathBuf::from(string(family, "container_path").unwrap());
@@ -2249,7 +2272,9 @@ fn validate_registered_nested_family_local(
     let manifest = PathBuf::from(string(family, "manifest_path").unwrap());
     let container_metadata = physical_directory(&container, "registered family container")?;
     let control_metadata = physical_directory(&control, "registered family control plane")?;
-    physical_regular_file(&manifest, "registered family manifest")?;
+    if check_child_authority {
+        physical_regular_file(&manifest, "registered family manifest")?;
+    }
     let manifest_parent = physical_directory(
         manifest
             .parent()
@@ -2334,12 +2359,14 @@ fn validate_registered_nested_family_local(
             ));
         }
     }
-    let child: toml::Value = fs::read_to_string(&manifest)
-        .map_err(|error| format!("cannot read {}: {error}", manifest.display()))?
-        .parse()
-        .map_err(|error| format!("cannot parse {}: {error}", manifest.display()))?;
-    compare_registered_nested_family_child(key, family, &child)?;
-    Ok(child)
+    if check_child_authority {
+        let child: toml::Value = fs::read_to_string(&manifest)
+            .map_err(|error| format!("cannot read {}: {error}", manifest.display()))?
+            .parse()
+            .map_err(|error| format!("cannot parse {}: {error}", manifest.display()))?;
+        compare_registered_nested_family_child(key, family, &child)?;
+    }
+    Ok(())
 }
 
 fn managed_repositories(
@@ -2486,15 +2513,10 @@ fn managed_repositories(
         "split_root",
     )?;
     for (key, registration) in registered_nested_families(data) {
-        let child = validate_registered_nested_family_local(key, registration, &split_root)?;
-        let nested_family = string(&child, "repo_family")
-            .ok_or_else(|| format!("nested family {key} is missing repo_family"))?;
-        for raw in child
-            .get("repo")
-            .and_then(toml::Value::as_array)
-            .into_iter()
-            .flatten()
-        {
+        validate_registered_nested_family_declaration(key, registration, &split_root)?;
+        let nested_family = string(registration, "family")
+            .ok_or_else(|| format!("nested family {key} is missing family"))?;
+        for raw in registered_nested_projection(registration) {
             let name = string(raw, "name")
                 .ok_or_else(|| format!("nested family {key} repository is missing name"))?;
             managed.push(ManagedRepo {
@@ -2514,28 +2536,26 @@ fn managed_repositories(
                 runtime_authority: runtime_authority(raw, "nested-library"),
             });
         }
-        let nested_control = child
-            .get("control_plane")
-            .ok_or_else(|| format!("nested family {key} is missing control_plane"))?;
         managed.push(ManagedRepo {
-            name: string(nested_control, "name")
-                .ok_or("nested control plane is missing its name")?,
+            name: string(registration, "control_plane_name")
+                .ok_or("nested registration is missing its control-plane name")?,
             path: PathBuf::from(
-                string(nested_control, "path").ok_or("nested control plane is missing its path")?,
+                string(registration, "control_plane")
+                    .ok_or("nested registration is missing its control-plane path")?,
             ),
-            remote: declared_remote(nested_control)
-                .ok_or("nested control plane is missing its remote")?,
-            required_check: string(nested_control, "required_check")
-                .ok_or("nested control plane is missing its required check")?,
-            branch: string(nested_control, "default_branch")
-                .or_else(|| string(nested_control, "branch"))
-                .unwrap_or_else(|| "main".to_owned()),
-            tag: declared_release_tag(nested_control),
+            remote: string(registration, "control_plane_remote")
+                .ok_or("nested registration is missing its control-plane remote")?,
+            required_check: string(registration, "control_plane_required_check")
+                .ok_or("nested registration is missing its control-plane required check")?,
+            branch: "main".to_owned(),
+            tag: string(registration, "control_plane_current_tag"),
             kind: "nested-control-plane".to_owned(),
             family: nested_family,
             family_registered: true,
-            inventory_status: inventory_status(nested_control),
-            runtime_authority: runtime_authority(nested_control, "control-plane"),
+            inventory_status: string(registration, "control_plane_inventory_status")
+                .unwrap_or_else(|| "active".to_owned()),
+            runtime_authority: string(registration, "control_plane_runtime_authority")
+                .unwrap_or_else(|| "control-plane".to_owned()),
         });
     }
 
@@ -4437,17 +4457,28 @@ fn validate_manifest_command(args: Vec<String>) -> Result<(), Box<dyn std::error
     let mut path = PathBuf::from("repos.manifest.toml");
     let mut check_paths = false;
     let mut check_derived = false;
+    let mut check_nested_authorities = false;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
             "--manifest" => path = PathBuf::from(iter.next().ok_or("--manifest needs a path")?),
             "--check-paths" => check_paths = true,
             "--check-derived" => check_derived = true,
+            "--check-nested-authorities" => check_nested_authorities = true,
             value => return Err(format!("unknown validate-manifest argument: {value}").into()),
         }
     }
     let data: toml::Value = fs::read_to_string(&path)?.parse()?;
     validate_manifest_data(&data, &path, check_paths)?;
+    if check_nested_authorities {
+        let split_root = exact_absolute_path(
+            &string(&data, "split_root").ok_or("manifest is missing split_root")?,
+            "split_root",
+        )?;
+        for (key, registration) in registered_nested_families(&data) {
+            validate_registered_nested_family_local(key, registration, &split_root, true)?;
+        }
+    }
     if check_derived {
         let expected = manifest_sha256(&path)?;
         for (target, derived) in derived_manifest_targets(&data, &path)? {
@@ -4691,7 +4722,8 @@ fn validate_manifest_data(
             {
                 errors.push(error);
             } else if check_paths {
-                if let Err(error) = validate_registered_nested_family_local(key, registration, root)
+                if let Err(error) =
+                    validate_registered_nested_family_local(key, registration, root, false)
                 {
                     errors.push(error);
                 }
@@ -12236,6 +12268,9 @@ name = "jeryu-release-ops"
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu-release-ops"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-release-ops.git"
 required_check = "jeryu-release-ops/required"
+current_tag = "jeryu-release-ops-v5.0.0-split.0"
+inventory_status = "active"
+runtime_authority = "control-plane"
 [nested_families.redline]
 source_authority = "jain-redline"
 container_path = "/home/ubuntu/jain-split/jain-redline"
