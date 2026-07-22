@@ -37,33 +37,33 @@ write_policy = "auditor_output"
 path = "contracts/ci-plan.schema.json"
 source = "tools/splitctl/src/ci.rs closed runtime contract"
 command = "cargo test --locked ci::tests::published_contracts_match_runtime_shape"
-read_only = false
+read_only = true
 write_policy = "reviewed_manual"
 
 [[zone]]
 path = "contracts/ci-lane-result.schema.json"
 source = "tools/splitctl/src/ci.rs closed runtime contract"
 command = "cargo test --locked ci::tests::published_contracts_match_runtime_shape"
-read_only = false
+read_only = true
 write_policy = "reviewed_manual"
 
 [[zone]]
 path = "contracts/ci-performance.schema.json"
 source = "tools/splitctl/src/ci.rs closed runtime contract"
 command = "cargo test --locked ci::tests::published_contracts_match_runtime_shape"
-read_only = false
+read_only = true
 write_policy = "reviewed_manual"
 
 [[zone]]
 path = "contracts/host-ci-result.schema.json"
 source = "tools/splitctl/src/ci.rs closed runtime contract"
 command = "cargo test --locked ci::tests::published_contracts_match_runtime_shape"
-read_only = false
+read_only = true
 write_policy = "reviewed_manual"
 
 [[zone]]
 path = "contracts/host-ci-evidence.schema.json"
 source = "tools/splitctl/src/ci.rs closed runtime contract"
 command = "cargo test --locked ci::tests::published_contracts_match_runtime_shape"
-read_only = false
+read_only = true
 write_policy = "reviewed_manual"
