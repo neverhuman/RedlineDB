@@ -25,6 +25,12 @@ const RELEASE_VERSION: &str = "8.0.1";
 const RELEASE_STATUS: &str = "candidate";
 const ROLLBACK_TARGET: &str = "7.0.6";
 const LOCAL_JERYU_ORIGIN: &str = "http://127.0.0.1:8787";
+const APPLIANCE_DEPLOY_REMOTE: &str = "http://127.0.0.1:8787/git/veox/jain-deploy.git";
+const APPLIANCE_VERIFIER_NAME: &str = "jain-deploy-local-appliance-runner/v1";
+const APPLIANCE_VERIFIER_SHA256: &str =
+    "6f218a58092cab5d0d4e457b2f35163191bb490cbd4d3d322147eb2fdd8711f7";
+const ROOT_UID: u32 = 0;
+const ROOT_GID: u32 = 0;
 const FAMILY_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/veox/";
 const INFRA_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/veox/";
 const NESTED_REDLINE_REMOTE_PREFIX: &str = "http://127.0.0.1:8787/git/jeryu/";
@@ -255,7 +261,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--sealed-outer-projection] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-candidate [--manifest PATH] [--repo NAME]... [--journal PATH --token-file PATH --apply] [--receipt PATH] | release-status [--manifest PATH] [--appliance-canary-aggregate PATH] [--json PATH] | validate-appliance-promotion --aggregate PATH [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--sealed-outer-projection] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-candidate [--manifest PATH] [--repo NAME]... [--journal PATH --token-file PATH --apply] [--receipt PATH] | release-status [--manifest PATH] [--appliance-canary-aggregate PATH --appliance-canary-verifier-receipt PATH --token-file PATH] [--json PATH] | validate-appliance-promotion --aggregate PATH --verifier-receipt PATH --token-file PATH [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -5024,6 +5030,12 @@ const MAX_APPLIANCE_AGGREGATE_BYTES: u64 = 1024 * 1024;
 struct QualifiedApplianceCanary {
     matrix: JsonValue,
     aggregate_sha256: String,
+    verifier_receipt_sha256: String,
+}
+
+struct PhysicalJsonEvidence {
+    value: JsonValue,
+    sha256: String,
 }
 
 #[derive(Clone, Copy)]
@@ -5138,9 +5150,63 @@ fn valid_digest(value: &str) -> bool {
 }
 
 fn valid_https_url(value: &str) -> bool {
+    let Some(rest) = value.strip_prefix("https://") else {
+        return false;
+    };
+    if rest.is_empty() || value.chars().any(char::is_whitespace) || rest.contains('\\') {
+        return false;
+    }
+    let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
+    let authority = &rest[..authority_end];
+    if authority.is_empty()
+        || !authority.is_ascii()
+        || authority.contains(['@', '%'])
+        || authority.starts_with('[')
+    {
+        return false;
+    }
+    let (host, port) = match authority.rsplit_once(':') {
+        Some((host, port)) if !host.contains(':') => (host, Some(port)),
+        Some(_) => return false,
+        None => (authority, None),
+    };
+    if port.is_some_and(|port| {
+        port.is_empty()
+            || !port.bytes().all(|byte| byte.is_ascii_digit())
+            || port
+                .parse::<u16>()
+                .ok()
+                .filter(|value| *value > 0)
+                .is_none()
+    }) {
+        return false;
+    }
+    let host = host.to_ascii_lowercase();
+    host.contains('.')
+        && host.parse::<std::net::IpAddr>().is_err()
+        && host != "localhost"
+        && !host.ends_with(".localhost")
+        && !host.ends_with(".localdomain")
+        && host.split('.').all(|label| {
+            !label.is_empty()
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+        })
+}
+
+fn valid_deploy_release_tag(value: &str) -> bool {
     value
-        .strip_prefix("https://")
-        .is_some_and(|rest| !rest.is_empty() && !value.chars().any(char::is_whitespace))
+        .strip_prefix(&format!("jain-deploy-v{RELEASE_VERSION}-split."))
+        .is_some_and(|suffix| {
+            !suffix.is_empty()
+                && suffix.bytes().all(|byte| byte.is_ascii_digit())
+                && suffix
+                    .parse::<u64>()
+                    .is_ok_and(|number| number.to_string() == suffix)
+        })
 }
 
 fn valid_repo_digest(value: &str, expected_digest: &str) -> bool {
@@ -5269,45 +5335,200 @@ fn secret_like_json(value: &JsonValue) -> bool {
     }
 }
 
-fn read_qualified_appliance_canary(
+fn read_physical_json_evidence(
     path: &Path,
-) -> Result<QualifiedApplianceCanary, Box<dyn std::error::Error>> {
+    label: &str,
+    expected_uid: u32,
+    expected_gid: u32,
+) -> Result<PhysicalJsonEvidence, Box<dyn std::error::Error>> {
     let mut file = fs::OpenOptions::new()
         .read(true)
-        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
         .open(path)
-        .map_err(|error| format!("cannot open physical appliance aggregate: {error}"))?;
-    let metadata = file.metadata()?;
-    if !metadata.file_type().is_file()
-        || metadata.nlink() != 1
-        || metadata.len() == 0
-        || metadata.len() > MAX_APPLIANCE_AGGREGATE_BYTES
-        || metadata.mode() & 0o222 != 0
+        .map_err(|error| format!("cannot open physical {label}: {error}"))?;
+    let before = file.metadata()?;
+    if !before.file_type().is_file()
+        || before.nlink() != 1
+        || before.len() == 0
+        || before.len() > MAX_APPLIANCE_AGGREGATE_BYTES
+        || before.mode() & 0o222 != 0
+        || before.uid() != expected_uid
+        || before.gid() != expected_gid
     {
-        return Err("appliance aggregate must be a nonempty, non-writable, single-link regular file no larger than 1 MiB".into());
+        return Err(format!(
+            "{label} must be a nonempty, non-writable, single-link regular file owned by {expected_uid}:{expected_gid} and no larger than 1 MiB"
+        )
+        .into());
     }
-    let mut bytes = Vec::with_capacity(metadata.len() as usize);
+    let mut bytes = Vec::with_capacity(before.len() as usize);
     (&mut file)
         .take(MAX_APPLIANCE_AGGREGATE_BYTES + 1)
         .read_to_end(&mut bytes)?;
-    if bytes.len() as u64 != metadata.len() {
-        return Err("appliance aggregate changed while it was read".into());
+    let after = file.metadata()?;
+    let path_after = fs::symlink_metadata(path)?;
+    if bytes.len() as u64 != before.len()
+        || !same_file_metadata(&before, &after)
+        || !same_file_metadata(&before, &path_after)
+    {
+        return Err(format!("{label} changed while it was read").into());
     }
     let mut deserializer = serde_json::Deserializer::from_slice(&bytes);
     let raw = StrictJsonSeed
         .deserialize(&mut deserializer)
-        .map_err(|error| format!("appliance aggregate is not unambiguous JSON: {error}"))?;
+        .map_err(|error| format!("{label} is not unambiguous JSON: {error}"))?;
     deserializer
         .end()
-        .map_err(|error| format!("appliance aggregate has trailing JSON data: {error}"))?;
+        .map_err(|error| format!("{label} has trailing JSON data: {error}"))?;
     if secret_like_json(&raw) {
-        return Err("appliance aggregate contains secret-like evidence".into());
+        return Err(format!("{label} contains secret-like evidence").into());
     }
-    validate_qualified_appliance_canary(&raw)?;
-    Ok(QualifiedApplianceCanary {
-        matrix: raw,
-        aggregate_sha256: sha256_bytes(&bytes),
+    Ok(PhysicalJsonEvidence {
+        value: raw,
+        sha256: sha256_bytes(&bytes),
     })
+}
+
+fn appliance_verifier_seal(receipt: &Map<String, JsonValue>) -> Option<String> {
+    let verifier = exact_json_object(&receipt["verifier"], &["name", "sha256"])?;
+    let rows = [
+        ("verifier_name", verifier["name"].as_str()?),
+        ("verifier_sha256", verifier["sha256"].as_str()?),
+        ("aggregate_sha256", receipt["aggregate_sha256"].as_str()?),
+        ("release_tag", receipt["release_tag"].as_str()?),
+        ("source_commit", receipt["source_commit"].as_str()?),
+        ("release_job_id", receipt["release_job_id"].as_str()?),
+        (
+            "attestation_sha256",
+            receipt["attestation_sha256"].as_str()?,
+        ),
+        ("signature_sha256", receipt["signature_sha256"].as_str()?),
+        ("public_key_sha256", receipt["public_key_sha256"].as_str()?),
+        ("verified_at", receipt["verified_at"].as_str()?),
+    ]
+    .into_iter()
+    .map(|(name, value)| format!("{name}\t{value}\n"))
+    .collect::<String>();
+    Some(sha256_bytes(rows.as_bytes()))
+}
+
+fn validate_appliance_verifier_receipt(
+    receipt: &JsonValue,
+    aggregate: &QualifiedApplianceCanary,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let receipt = exact_json_object(
+        receipt,
+        &[
+            "schema_version",
+            "verifier",
+            "aggregate_sha256",
+            "release_tag",
+            "source_commit",
+            "release_job_id",
+            "attestation_sha256",
+            "signature_sha256",
+            "public_key_sha256",
+            "verified_at",
+            "seal_sha256",
+        ],
+    )
+    .ok_or("appliance verifier receipt violates its closed shape")?;
+    if receipt["schema_version"].as_str() != Some("jain.local-appliance-canary-verifier/v1") {
+        return Err("unsupported appliance verifier receipt schema".into());
+    }
+    let verifier = exact_json_object(&receipt["verifier"], &["name", "sha256"])
+        .ok_or("appliance verifier identity violates its closed shape")?;
+    if verifier["name"].as_str() != Some(APPLIANCE_VERIFIER_NAME)
+        || verifier["sha256"].as_str() != Some(APPLIANCE_VERIFIER_SHA256)
+    {
+        return Err("appliance verifier identity is not the reviewed release verifier".into());
+    }
+    let matrix = &aggregate.matrix;
+    if receipt["aggregate_sha256"].as_str() != Some(aggregate.aggregate_sha256.as_str())
+        || receipt["release_tag"] != matrix["release_tag"]
+        || receipt["source_commit"] != matrix["source_commit"]
+        || receipt["release_job_id"] != matrix["release_job"]["id"]
+        || receipt["attestation_sha256"] != matrix["release_job"]["attestation_sha256"]
+        || receipt["public_key_sha256"] != matrix["public_key_sha256"]
+        || !receipt["signature_sha256"]
+            .as_str()
+            .is_some_and(valid_sha256)
+        || !receipt["verified_at"]
+            .as_str()
+            .is_some_and(valid_utc_second_timestamp)
+        || !receipt["seal_sha256"].as_str().is_some_and(valid_sha256)
+        || receipt["seal_sha256"].as_str() != appliance_verifier_seal(receipt).as_deref()
+    {
+        return Err(
+            "appliance verifier receipt does not seal the qualified release identities".into(),
+        );
+    }
+    Ok(())
+}
+
+fn read_qualified_appliance_canary_with_authority(
+    aggregate_path: &Path,
+    verifier_receipt_path: &Path,
+    expected_uid: u32,
+    expected_gid: u32,
+    expected_tag_commit: Option<&str>,
+) -> Result<QualifiedApplianceCanary, Box<dyn std::error::Error>> {
+    let aggregate = read_physical_json_evidence(
+        aggregate_path,
+        "appliance aggregate",
+        expected_uid,
+        expected_gid,
+    )?;
+    validate_qualified_appliance_canary(&aggregate.value)?;
+    let mut qualification = QualifiedApplianceCanary {
+        matrix: aggregate.value,
+        aggregate_sha256: aggregate.sha256,
+        verifier_receipt_sha256: String::new(),
+    };
+    if expected_tag_commit
+        .is_some_and(|expected| qualification.matrix["source_commit"].as_str() != Some(expected))
+    {
+        return Err(
+            "appliance immutable Deploy tag does not resolve to the claimed source commit".into(),
+        );
+    }
+    let verifier = read_physical_json_evidence(
+        verifier_receipt_path,
+        "appliance verifier receipt",
+        expected_uid,
+        expected_gid,
+    )?;
+    validate_appliance_verifier_receipt(&verifier.value, &qualification)?;
+    qualification.verifier_receipt_sha256 = verifier.sha256;
+    Ok(qualification)
+}
+
+fn read_qualified_appliance_canary(
+    aggregate_path: &Path,
+    verifier_receipt_path: &Path,
+    token_file: &Path,
+) -> Result<QualifiedApplianceCanary, Box<dyn std::error::Error>> {
+    let qualification = read_qualified_appliance_canary_with_authority(
+        aggregate_path,
+        verifier_receipt_path,
+        ROOT_UID,
+        ROOT_GID,
+        None,
+    )?;
+    let tag = qualification.matrix["release_tag"]
+        .as_str()
+        .ok_or("appliance aggregate release tag is not a string")?;
+    let source_commit = qualification.matrix["source_commit"]
+        .as_str()
+        .ok_or("appliance aggregate source commit is not a string")?;
+    let tag_ref = format!("refs/tags/{tag}");
+    let forge_commit = secure_ls_remote_at(APPLIANCE_DEPLOY_REMOTE, &tag_ref, token_file)?
+        .ok_or("appliance immutable Deploy tag is absent from the governed forge")?;
+    if forge_commit != source_commit {
+        return Err(
+            "appliance immutable Deploy tag does not resolve to the claimed source commit".into(),
+        );
+    }
+    Ok(qualification)
 }
 
 fn validate_qualified_appliance_canary(
@@ -5355,11 +5576,7 @@ fn validate_qualified_appliance_canary(
     }
     let release_tag = matrix["release_tag"].as_str().unwrap_or_default();
     let source_commit = matrix["source_commit"].as_str().unwrap_or_default();
-    if !release_tag.starts_with(&format!("jain-deploy-v{RELEASE_VERSION}-"))
-        || release_tag.len() > 160
-        || release_tag.chars().any(char::is_whitespace)
-        || !valid_nonzero_lower_hex(source_commit, 40)
-    {
+    if !valid_deploy_release_tag(release_tag) || !valid_nonzero_lower_hex(source_commit, 40) {
         return Err("appliance aggregate has an invalid release tag or source commit".into());
     }
     if matrix["status"].as_str() != Some(RELEASE_STATUS)
@@ -5489,6 +5706,7 @@ fn appliance_canary_summary(qualification: &QualifiedApplianceCanary) -> JsonVal
         "qualification": true,
         "fixture": false,
         "aggregate_sha256": qualification.aggregate_sha256,
+        "verifier_receipt_sha256": qualification.verifier_receipt_sha256,
         "release": matrix["release"],
         "release_tag": matrix["release_tag"],
         "source_commit": matrix["source_commit"],
@@ -5520,11 +5738,27 @@ fn write_or_print_json_report(
     Ok(())
 }
 
+fn appliance_promotion_report(qualification: &QualifiedApplianceCanary) -> JsonValue {
+    json!({
+        "schema_version": "jain.appliance-promotion-validation/v1",
+        "release": RELEASE_VERSION,
+        "status": RELEASE_STATUS,
+        "formal_ga": false,
+        "rollback_target": ROLLBACK_TARGET,
+        "appliance_canary": appliance_canary_summary(qualification),
+        "promotion_evidence_ready": true,
+        "production_promotion_authorized": false,
+        "reason": "qualified appliance evidence is valid; this validation does not authorize publication, promotion, routing, or activation",
+    })
+}
+
 fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let root = control_plane_root();
     let mut manifest = root.join("repos.manifest.toml");
     let mut output = None;
     let mut appliance_canary_aggregate = None;
+    let mut appliance_canary_verifier_receipt = None;
+    let mut token_file = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
         match arg.as_str() {
@@ -5536,15 +5770,36 @@ fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                         .ok_or("--appliance-canary-aggregate needs a path")?,
                 ))
             }
+            "--appliance-canary-verifier-receipt" => {
+                appliance_canary_verifier_receipt = Some(PathBuf::from(
+                    iter.next()
+                        .ok_or("--appliance-canary-verifier-receipt needs a path")?,
+                ))
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
+            }
             value => return Err(format!("unknown release-status argument: {value}").into()),
         }
     }
     let data: toml::Value = fs::read_to_string(&manifest)?.parse()?;
     validate_manifest_data(&data, &manifest, false)?;
-    let qualification = appliance_canary_aggregate
-        .as_deref()
-        .map(read_qualified_appliance_canary)
-        .transpose();
+    let qualification = match (
+        appliance_canary_aggregate.as_deref(),
+        appliance_canary_verifier_receipt.as_deref(),
+        token_file.as_deref(),
+    ) {
+        (None, None, None) => Ok(None),
+        (Some(aggregate), Some(verifier), Some(token_file)) => {
+            read_qualified_appliance_canary(aggregate, verifier, token_file).map(Some)
+        }
+        _ => Err(
+            "release status requires the aggregate, verifier receipt, and token file together"
+                .into(),
+        ),
+    };
     let (appliance_canary, blocked_reason) = match qualification {
         Ok(Some(qualification)) => (appliance_canary_summary(&qualification), None),
         Ok(None) => (
@@ -5553,9 +5808,10 @@ fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                 "qualification": false,
                 "fixture": null,
                 "aggregate_sha256": null,
-                "reason": "a qualified non-fixture CPU+GPU appliance aggregate is required",
+                "verifier_receipt_sha256": null,
+                "reason": "a qualified non-fixture CPU+GPU appliance aggregate and root-sealed verifier receipt are required",
             }),
-            Some("a qualified non-fixture CPU+GPU appliance aggregate is required".to_owned()),
+            Some("a qualified non-fixture CPU+GPU appliance aggregate and root-sealed verifier receipt are required".to_owned()),
         ),
         Err(error) => {
             let reason = format!("appliance aggregate rejected: {error}");
@@ -5565,6 +5821,7 @@ fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
                     "qualification": false,
                     "fixture": null,
                     "aggregate_sha256": null,
+                    "verifier_receipt_sha256": null,
                     "reason": reason,
                 }),
                 Some(reason),
@@ -5588,7 +5845,7 @@ fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
         "reason": if promotion_evidence_ready {
             "appliance qualification evidence is ready; status remains candidate and production activation still requires explicit owner authorization and all remaining release gates"
         } else {
-            "promotion is blocked until a genuine qualified CPU+GPU appliance aggregate is supplied"
+            "promotion is blocked until a genuine qualified CPU+GPU appliance aggregate and root-sealed verifier receipt are supplied"
         },
     });
     write_or_print_json_report(output.as_deref(), &report)?;
@@ -5600,6 +5857,8 @@ fn release_status(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
 
 fn validate_appliance_promotion(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
     let mut aggregate = None;
+    let mut verifier_receipt = None;
+    let mut token_file = None;
     let mut output = None;
     let mut iter = args.into_iter();
     while let Some(arg) = iter.next() {
@@ -5607,6 +5866,16 @@ fn validate_appliance_promotion(args: Vec<String>) -> Result<(), Box<dyn std::er
             "--aggregate" => {
                 aggregate = Some(PathBuf::from(
                     iter.next().ok_or("--aggregate needs a path")?,
+                ))
+            }
+            "--verifier-receipt" => {
+                verifier_receipt = Some(PathBuf::from(
+                    iter.next().ok_or("--verifier-receipt needs a path")?,
+                ))
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
                 ))
             }
             "--json" => output = Some(PathBuf::from(iter.next().ok_or("--json needs a path")?)),
@@ -5621,18 +5890,14 @@ fn validate_appliance_promotion(args: Vec<String>) -> Result<(), Box<dyn std::er
         aggregate
             .as_deref()
             .ok_or("--aggregate is required for appliance promotion validation")?,
+        verifier_receipt
+            .as_deref()
+            .ok_or("--verifier-receipt is required for appliance promotion validation")?,
+        token_file
+            .as_deref()
+            .ok_or("--token-file is required for appliance promotion validation")?,
     )?;
-    let report = json!({
-        "schema_version": "jain.appliance-promotion-validation/v1",
-        "release": RELEASE_VERSION,
-        "status": RELEASE_STATUS,
-        "formal_ga": false,
-        "rollback_target": ROLLBACK_TARGET,
-        "appliance_canary": appliance_canary_summary(&qualification),
-        "promotion_evidence_ready": true,
-        "production_promotion_authorized": false,
-        "reason": "qualified appliance evidence is valid; this validation does not authorize publication, promotion, routing, or activation",
-    });
+    let report = appliance_promotion_report(&qualification);
     write_or_print_json_report(output.as_deref(), &report)
 }
 
@@ -11214,8 +11479,8 @@ mod tests {
             "qualification": true,
             "fixture": false,
             "release": RELEASE_VERSION,
-            "release_tag": "jain-deploy-v8.0.1-candidate.1",
-            "source_commit": "1".repeat(40),
+            "release_tag": "jain-deploy-v8.0.1-split.5",
+            "source_commit": "be6f00f5d0f501c3acad32e66dbfdb674a2fd532",
             "status": "candidate",
             "formal_ga": false,
             "rollback_release": "7.0.6",
@@ -11266,29 +11531,64 @@ mod tests {
         path
     }
 
+    fn qualified_appliance_verifier(matrix: &JsonValue, aggregate_sha256: &str) -> JsonValue {
+        let mut receipt = json!({
+            "schema_version": "jain.local-appliance-canary-verifier/v1",
+            "verifier": {
+                "name": APPLIANCE_VERIFIER_NAME,
+                "sha256": APPLIANCE_VERIFIER_SHA256
+            },
+            "aggregate_sha256": aggregate_sha256,
+            "release_tag": matrix["release_tag"],
+            "source_commit": matrix["source_commit"],
+            "release_job_id": matrix["release_job"]["id"],
+            "attestation_sha256": matrix["release_job"]["attestation_sha256"],
+            "signature_sha256": "a".repeat(64),
+            "public_key_sha256": matrix["public_key_sha256"],
+            "verified_at": "2026-07-21T23:01:00Z",
+            "seal_sha256": "1".repeat(64)
+        });
+        receipt["seal_sha256"] =
+            json!(appliance_verifier_seal(receipt.as_object().unwrap()).unwrap());
+        receipt
+    }
+
+    fn write_qualified_appliance_evidence(
+        root: &Path,
+        name: &str,
+        matrix: &JsonValue,
+    ) -> (PathBuf, PathBuf, u32, u32) {
+        let aggregate = write_immutable_json(root, &format!("{name}-aggregate.json"), matrix);
+        let aggregate_sha256 = sha256_bytes(&fs::read(&aggregate).unwrap());
+        let verifier = write_immutable_json(
+            root,
+            &format!("{name}-verifier.json"),
+            &qualified_appliance_verifier(matrix, &aggregate_sha256),
+        );
+        let metadata = fs::metadata(&aggregate).unwrap();
+        (aggregate, verifier, metadata.uid(), metadata.gid())
+    }
+
     #[test]
     fn appliance_promotion_accepts_only_real_same_release_cpu_gpu_aggregate() {
         let temp = TestDir::new("appliance-promotion-valid");
-        let aggregate =
-            write_immutable_json(temp.path(), "aggregate.json", &qualified_appliance_matrix());
-        let qualification = read_qualified_appliance_canary(&aggregate).unwrap();
+        let matrix = qualified_appliance_matrix();
+        let (aggregate, verifier, uid, gid) =
+            write_qualified_appliance_evidence(temp.path(), "valid", &matrix);
+        let qualification = read_qualified_appliance_canary_with_authority(
+            &aggregate,
+            &verifier,
+            uid,
+            gid,
+            matrix["source_commit"].as_str(),
+        )
+        .unwrap();
         assert_eq!(qualification.matrix["release"], RELEASE_VERSION);
         assert_eq!(qualification.matrix["lanes"]["cpu"]["qualification"], true);
         assert_eq!(qualification.matrix["lanes"]["gpu"]["qualification"], true);
         assert!(valid_sha256(&qualification.aggregate_sha256));
-
-        let report = temp.path().join("promotion.json");
-        validate_appliance_promotion(vec![
-            "--aggregate".to_owned(),
-            aggregate.display().to_string(),
-            "--json".to_owned(),
-            report.display().to_string(),
-        ])
-        .unwrap();
-        let report: JsonValue = serde_json::from_slice(&fs::read(report).unwrap()).unwrap();
-        assert_eq!(report["promotion_evidence_ready"], true);
-        assert_eq!(report["production_promotion_authorized"], false);
-        assert_eq!(report["status"], "candidate");
+        assert!(valid_sha256(&qualification.verifier_receipt_sha256));
+        assert_eq!(appliance_canary_summary(&qualification)["status"], "pass");
     }
 
     #[test]
@@ -11311,6 +11611,10 @@ mod tests {
         let mut value = qualified_appliance_matrix();
         value["release"] = json!("8.0.2");
         cases.push(("wrong-release", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release_tag"] = json!("jain-deploy-v8.0.1-candidate.forged");
+        cases.push(("non-immutable-tag", value));
 
         let mut value = qualified_appliance_matrix();
         value["lanes"]["gpu"]["qualification"] = json!(false);
@@ -11356,6 +11660,19 @@ mod tests {
         cases.push(("secret-value", value));
 
         let mut value = qualified_appliance_matrix();
+        value["release_job"]["attestation_url"] =
+            json!("https://operator:credential@release.jain.local/job.json");
+        cases.push(("credential-userinfo", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release_job"]["attestation_url"] = json!("https://127.0.0.1/job.json");
+        cases.push(("loopback-authority", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release_job"]["attestation_url"] = json!("https:///job.json");
+        cases.push(("missing-authority", value));
+
+        let mut value = qualified_appliance_matrix();
         value["created_at"] = json!("2026-02-30T23:00:00Z");
         cases.push(("invalid-time", value));
 
@@ -11378,9 +11695,17 @@ mod tests {
         cases.push(("missing-field", value));
 
         for (name, value) in cases {
-            let path = write_immutable_json(temp.path(), &format!("{name}.json"), &value);
+            let (aggregate, verifier, uid, gid) =
+                write_qualified_appliance_evidence(temp.path(), name, &value);
             assert!(
-                read_qualified_appliance_canary(&path).is_err(),
+                read_qualified_appliance_canary_with_authority(
+                    &aggregate,
+                    &verifier,
+                    uid,
+                    gid,
+                    value["source_commit"].as_str(),
+                )
+                .is_err(),
                 "accepted hostile aggregate {name}"
             );
         }
@@ -11390,20 +11715,50 @@ mod tests {
     fn appliance_promotion_rejects_ambiguous_or_unsafe_files() {
         let temp = TestDir::new("appliance-promotion-files");
         let value = qualified_appliance_matrix();
+        let (valid_aggregate, verifier, uid, gid) =
+            write_qualified_appliance_evidence(temp.path(), "authority", &value);
 
         let writable = temp.path().join("writable.json");
         fs::write(&writable, serde_json::to_vec(&value).unwrap()).unwrap();
-        assert!(read_qualified_appliance_canary(&writable).is_err());
+        assert!(read_qualified_appliance_canary_with_authority(
+            &writable,
+            &verifier,
+            uid,
+            gid,
+            value["source_commit"].as_str(),
+        )
+        .is_err());
 
         let original = write_immutable_json(temp.path(), "linked.json", &value);
         let linked = temp.path().join("linked-copy.json");
         fs::hard_link(&original, &linked).unwrap();
-        assert!(read_qualified_appliance_canary(&original).is_err());
-        assert!(read_qualified_appliance_canary(&linked).is_err());
+        assert!(read_qualified_appliance_canary_with_authority(
+            &original,
+            &verifier,
+            uid,
+            gid,
+            value["source_commit"].as_str(),
+        )
+        .is_err());
+        assert!(read_qualified_appliance_canary_with_authority(
+            &linked,
+            &verifier,
+            uid,
+            gid,
+            value["source_commit"].as_str(),
+        )
+        .is_err());
 
         let symlink_path = temp.path().join("symlink.json");
         symlink(&original, &symlink_path).unwrap();
-        assert!(read_qualified_appliance_canary(&symlink_path).is_err());
+        assert!(read_qualified_appliance_canary_with_authority(
+            &symlink_path,
+            &verifier,
+            uid,
+            gid,
+            value["source_commit"].as_str(),
+        )
+        .is_err());
 
         let duplicate = temp.path().join("duplicate.json");
         let bytes = serde_json::to_string(&value).unwrap().replacen(
@@ -11413,7 +11768,93 @@ mod tests {
         );
         fs::write(&duplicate, bytes).unwrap();
         fs::set_permissions(&duplicate, fs::Permissions::from_mode(0o444)).unwrap();
-        assert!(read_qualified_appliance_canary(&duplicate).is_err());
+        assert!(read_qualified_appliance_canary_with_authority(
+            &duplicate,
+            &verifier,
+            uid,
+            gid,
+            value["source_commit"].as_str(),
+        )
+        .is_err());
+        assert!(read_qualified_appliance_canary_with_authority(
+            &valid_aggregate,
+            &verifier,
+            uid.wrapping_add(1),
+            gid,
+            value["source_commit"].as_str(),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn appliance_promotion_rejects_unsealed_or_mismatched_verifier_authority() {
+        let temp = TestDir::new("appliance-promotion-verifier");
+        let matrix = qualified_appliance_matrix();
+        let (aggregate, verifier, uid, gid) =
+            write_qualified_appliance_evidence(temp.path(), "valid", &matrix);
+
+        assert!(read_qualified_appliance_canary_with_authority(
+            &aggregate,
+            &verifier,
+            uid,
+            gid,
+            Some("1a6f00f5d0f501c3acad32e66dbfdb674a2fd532"),
+        )
+        .is_err());
+
+        let aggregate_sha256 = sha256_bytes(&fs::read(&aggregate).unwrap());
+        let mut cases = Vec::new();
+
+        let mut receipt = qualified_appliance_verifier(&matrix, &aggregate_sha256);
+        receipt["verifier"]["sha256"] = json!("b".repeat(64));
+        receipt["seal_sha256"] =
+            json!(appliance_verifier_seal(receipt.as_object().unwrap()).unwrap());
+        cases.push(("wrong-verifier", receipt));
+
+        let mut receipt = qualified_appliance_verifier(&matrix, &aggregate_sha256);
+        receipt["aggregate_sha256"] = json!("b".repeat(64));
+        receipt["seal_sha256"] =
+            json!(appliance_verifier_seal(receipt.as_object().unwrap()).unwrap());
+        cases.push(("wrong-aggregate", receipt));
+
+        let mut receipt = qualified_appliance_verifier(&matrix, &aggregate_sha256);
+        receipt["attestation_sha256"] = json!("b".repeat(64));
+        receipt["seal_sha256"] =
+            json!(appliance_verifier_seal(receipt.as_object().unwrap()).unwrap());
+        cases.push(("wrong-attestation", receipt));
+
+        let mut receipt = qualified_appliance_verifier(&matrix, &aggregate_sha256);
+        receipt["signature_sha256"] = json!("0".repeat(64));
+        receipt["seal_sha256"] =
+            json!(appliance_verifier_seal(receipt.as_object().unwrap()).unwrap());
+        cases.push(("zero-signature", receipt));
+
+        let mut receipt = qualified_appliance_verifier(&matrix, &aggregate_sha256);
+        receipt["seal_sha256"] = json!("b".repeat(64));
+        cases.push(("forged-seal", receipt));
+
+        for (name, receipt) in cases {
+            let receipt =
+                write_immutable_json(temp.path(), &format!("{name}-verifier.json"), &receipt);
+            assert!(read_qualified_appliance_canary_with_authority(
+                &aggregate,
+                &receipt,
+                uid,
+                gid,
+                matrix["source_commit"].as_str(),
+            )
+            .is_err());
+        }
+
+        fs::set_permissions(&verifier, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(read_qualified_appliance_canary_with_authority(
+            &aggregate,
+            &verifier,
+            uid,
+            gid,
+            matrix["source_commit"].as_str(),
+        )
+        .is_err());
     }
 
     #[test]
@@ -11439,26 +11880,26 @@ mod tests {
     }
 
     #[test]
-    fn release_status_accepts_qualified_aggregate_without_authorizing_activation() {
+    fn qualified_summary_never_authorizes_activation() {
         let temp = TestDir::new("release-status-appliance-qualified");
-        let aggregate =
-            write_immutable_json(temp.path(), "aggregate.json", &qualified_appliance_matrix());
-        let output = temp.path().join("release-status.json");
-        release_status(vec![
-            "--manifest".to_owned(),
-            control_plane_root()
-                .join("repos.manifest.toml")
-                .display()
-                .to_string(),
-            "--appliance-canary-aggregate".to_owned(),
-            aggregate.display().to_string(),
-            "--json".to_owned(),
-            output.display().to_string(),
-        ])
+        let matrix = qualified_appliance_matrix();
+        let (aggregate, verifier, uid, gid) =
+            write_qualified_appliance_evidence(temp.path(), "summary", &matrix);
+        let qualification = read_qualified_appliance_canary_with_authority(
+            &aggregate,
+            &verifier,
+            uid,
+            gid,
+            matrix["source_commit"].as_str(),
+        )
         .unwrap();
-        let report: JsonValue = serde_json::from_slice(&fs::read(output).unwrap()).unwrap();
-        assert_eq!(report["appliance_canary"]["status"], "pass");
-        assert_eq!(report["appliance_canary"]["qualification"], true);
+        let summary = appliance_canary_summary(&qualification);
+        assert_eq!(summary["status"], "pass");
+        assert_eq!(summary["qualification"], true);
+        assert!(valid_sha256(
+            summary["verifier_receipt_sha256"].as_str().unwrap()
+        ));
+        let report = appliance_promotion_report(&qualification);
         assert_eq!(report["promotion_evidence_ready"], true);
         assert_eq!(report["production_promotion_authorized"], false);
         assert_eq!(report["formal_ga"], false);

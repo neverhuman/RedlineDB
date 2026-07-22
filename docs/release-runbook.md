@@ -259,8 +259,8 @@ Regenerate `release-worktree-verification.json` and the release status only afte
 ```bash
 just verify-worktrees
 just release-snapshot
-just validate-appliance-promotion /absolute/path/to/aggregate.json
-just release-status /absolute/path/to/aggregate.json
+just validate-appliance-promotion /root/evidence/aggregate.json /root/evidence/verifier.json /absolute/path/to/owner-token
+just release-status /root/evidence/aggregate.json /root/evidence/verifier.json /absolute/path/to/owner-token
 ```
 
 Accept the candidate only when every active managed checkout is clean `main`, tracks forge main,

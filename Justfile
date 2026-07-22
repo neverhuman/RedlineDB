@@ -155,11 +155,11 @@ release-promote-dry-run digest:
 release-rollback-dry-run to="7.0.6":
   version="$(just _release-version)"; ATOMICSOUL_PUSH=0 JAIN_RELEASE_VERSION="${version}" cargo run --locked --manifest-path ../jain-deploy/Cargo.toml -p jain-deploy-engine --bin deployctl -- rollback --to "{{to}}" --dry-run
 
-release-status aggregate:
-  version="$(just _release-version)"; cargo run --locked --quiet -- release-status --manifest repos.manifest.toml --appliance-canary-aggregate "{{aggregate}}" --json "docs/release-evidence/${version}/release-status.json"
+release-status aggregate verifier_receipt token_file:
+  version="$(just _release-version)"; cargo run --locked --quiet -- release-status --manifest repos.manifest.toml --appliance-canary-aggregate "{{aggregate}}" --appliance-canary-verifier-receipt "{{verifier_receipt}}" --token-file "{{token_file}}" --json "docs/release-evidence/${version}/release-status.json"
 
-validate-appliance-promotion aggregate:
-  cargo run --locked --quiet -- validate-appliance-promotion --aggregate "{{aggregate}}"
+validate-appliance-promotion aggregate verifier_receipt token_file:
+  cargo run --locked --quiet -- validate-appliance-promotion --aggregate "{{aggregate}}" --verifier-receipt "{{verifier_receipt}}" --token-file "{{token_file}}"
 
 refresh-authored:
   cargo run --locked --quiet -- refresh-ci-contract --authored

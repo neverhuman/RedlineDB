@@ -37,12 +37,17 @@ caches; they are never release sources.
 
 Appliance promotion evidence is fail-closed. `release-status` requires a
 physical, single-link, non-writable `jain.local-appliance-canary-matrix/v1`
-aggregate for the exact release. The aggregate must bind distinct qualified CPU
-and GPU receipts, the same signed release job, manifest, artifact set, and OCI
-index/platform identities. Fixture, unqualified, unknown-field, secret-like,
-mutable, linked, mismatched, or non-HTTPS evidence is rejected. Passing this
-evidence gate does not authorize publication, routing, promotion, or activation;
-candidate metadata remains `formal_ga = false` until a separate owner action.
+aggregate and a root-owned sealed `jain.local-appliance-canary-verifier/v1`
+receipt for the exact release. The receipt binds the aggregate, attestation,
+signature, public key, reviewed verifier, and immutable Deploy tag/commit; the
+tag is read back through the authenticated local forge transport. Both files
+are revalidated after bounded reads. The aggregate must bind distinct qualified
+CPU and GPU receipts, the same signed release job, manifest, artifact set, and
+OCI index/platform identities. Fixture, unqualified, unknown-field,
+secret-like, mutable, linked, mismatched, credential-bearing, loopback, or
+unsealed evidence is rejected. Passing this evidence gate does not authorize
+publication, routing, promotion, or activation; candidate metadata remains
+`formal_ga = false` until a separate owner action.
 
 The protected host boundary accepts only a clean exact-head product checkout
 and the governed Jankurai binary named by its protected installation receipt.
