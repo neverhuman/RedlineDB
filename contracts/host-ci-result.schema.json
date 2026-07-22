@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://jain.invalid/contracts/host-ci-result-v6.schema.json",
+  "$id": "https://jain.invalid/contracts/host-ci-result.schema.json",
   "title": "Jain typed host CI result v6",
   "type": "object",
   "additionalProperties": false,
@@ -41,7 +41,7 @@
     },
     "result_set_sha256": { "$ref": "#/$defs/sha256" },
     "metrics": { "$ref": "#/$defs/metrics" },
-    "host_evidence": { "$ref": "host-ci-evidence-v6.schema.json" },
+    "host_evidence": { "$ref": "host-ci-evidence.schema.json" },
     "sealed": { "const": true }
   },
   "$defs": {

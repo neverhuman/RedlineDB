@@ -276,8 +276,8 @@ for critical in repos.manifest.toml ops/ci/host-ci-publisher.sh \
   ops/ci/host-ci-evidence.sh ops/ci/host-ci-proof-evidence.sh \
   contracts/ci-plan.schema.json contracts/ci-lane-result.schema.json \
   contracts/ci-performance.schema.json \
-  contracts/host-ci-result-v6.schema.json \
-  contracts/host-ci-evidence-v6.schema.json \
+  contracts/host-ci-result.schema.json \
+  contracts/host-ci-evidence.schema.json \
   tools/splitctl/src/main.rs tools/splitctl/src/ci.rs \
   tools/splitctl/src/jeryu_client.rs; do
   [[ -f "$control_root/$critical" && ! -L "$control_root/$critical" \

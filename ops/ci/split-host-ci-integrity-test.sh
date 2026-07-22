@@ -318,7 +318,7 @@ install -D -m 0644 "$repo_root/contracts/release-candidate.schema.json" \
   "$control/contracts/release-candidate.schema.json"
 for contract in \
   ci-plan.schema.json ci-lane-result.schema.json ci-performance.schema.json \
-  host-ci-result-v6.schema.json host-ci-evidence-v6.schema.json; do
+  host-ci-result.schema.json host-ci-evidence.schema.json; do
   install -D -m 0644 "$repo_root/contracts/$contract" \
     "$control/contracts/$contract"
 done

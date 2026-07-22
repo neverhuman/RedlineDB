@@ -324,8 +324,8 @@ fn build_plan(request: PlanRequest<'_>) -> Result<JsonValue, Box<dyn std::error:
             "plan_schema_sha256": sha256_regular_file(&contract_root.join("ci-plan.schema.json"), "CI plan schema")?,
             "lane_result_schema_sha256": sha256_regular_file(&contract_root.join("ci-lane-result.schema.json"), "CI lane-result schema")?,
             "performance_schema_sha256": sha256_regular_file(&contract_root.join("ci-performance.schema.json"), "CI performance schema")?,
-            "host_result_schema_sha256": sha256_regular_file(&contract_root.join("host-ci-result-v6.schema.json"), "host CI result schema")?,
-            "host_evidence_schema_sha256": sha256_regular_file(&contract_root.join("host-ci-evidence-v6.schema.json"), "host CI evidence schema")?
+            "host_result_schema_sha256": sha256_regular_file(&contract_root.join("host-ci-result.schema.json"), "host CI result schema")?,
+            "host_evidence_schema_sha256": sha256_regular_file(&contract_root.join("host-ci-evidence.schema.json"), "host CI evidence schema")?
         },
         "profile": {
             "requested": requested_profile.as_str(),
@@ -2481,11 +2481,11 @@ fn revalidate_plan_inputs(plan: &JsonValue) -> Result<String, Box<dyn std::error
         ),
         (
             "host_result_schema_sha256",
-            root.join("contracts/host-ci-result-v6.schema.json"),
+            root.join("contracts/host-ci-result.schema.json"),
         ),
         (
             "host_evidence_schema_sha256",
-            root.join("contracts/host-ci-evidence-v6.schema.json"),
+            root.join("contracts/host-ci-evidence.schema.json"),
         ),
     ] {
         if sha256_regular_file(&path, "CI schema")? != plan["authority"][field].as_str().unwrap() {
@@ -4576,11 +4576,11 @@ mod tests {
                 PERFORMANCE_SCHEMA,
             ),
             (
-                include_str!("../../../contracts/host-ci-result-v6.schema.json"),
+                include_str!("../../../contracts/host-ci-result.schema.json"),
                 RUN_SCHEMA,
             ),
             (
-                include_str!("../../../contracts/host-ci-evidence-v6.schema.json"),
+                include_str!("../../../contracts/host-ci-evidence.schema.json"),
                 HOST_EVIDENCE_SCHEMA,
             ),
         ] {

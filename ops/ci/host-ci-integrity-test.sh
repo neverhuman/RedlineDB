@@ -125,8 +125,8 @@ for path in \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh \
   contracts/ci-plan.schema.json contracts/ci-lane-result.schema.json \
   contracts/ci-performance.schema.json \
-  contracts/host-ci-result-v6.schema.json \
-  contracts/host-ci-evidence-v6.schema.json \
+  contracts/host-ci-result.schema.json \
+  contracts/host-ci-evidence.schema.json \
   tools/splitctl/src/ci.rs \
   tools/splitctl/src/jeryu_client.rs \
   tools/splitctl/src/main.rs; do
