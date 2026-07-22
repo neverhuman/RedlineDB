@@ -5153,7 +5153,11 @@ fn valid_https_url(value: &str) -> bool {
     let Some(rest) = value.strip_prefix("https://") else {
         return false;
     };
-    if rest.is_empty() || value.chars().any(char::is_whitespace) || rest.contains('\\') {
+    if rest.is_empty()
+        || value.chars().any(char::is_whitespace)
+        || rest.contains('\\')
+        || rest.contains(['?', '#'])
+    {
         return false;
     }
     let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
@@ -5217,7 +5221,8 @@ fn valid_oci_repository(value: &str) -> bool {
     let registry = components.next().unwrap_or_default();
     let paths = components.collect::<Vec<_>>();
     let registry = registry.to_ascii_lowercase();
-    let registry_is_canonical = registry == value.split('/').next().unwrap_or_default()
+    let registry_is_canonical = registry.len() <= 253
+        && registry == value.split('/').next().unwrap_or_default()
         && registry.contains('.')
         && registry.parse::<std::net::IpAddr>().is_err()
         && registry != "localhost"
@@ -5225,6 +5230,7 @@ fn valid_oci_repository(value: &str) -> bool {
         && !registry.ends_with(".localdomain")
         && registry.split('.').all(|label| {
             !label.is_empty()
+                && label.len() <= 63
                 && !label.starts_with('-')
                 && !label.ends_with('-')
                 && label
@@ -5233,22 +5239,49 @@ fn valid_oci_repository(value: &str) -> bool {
         });
     registry_is_canonical
         && !paths.is_empty()
-        && paths.iter().all(|component| {
-            component.len() <= 128
-                && component
-                    .bytes()
-                    .next()
-                    .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
-                && component
-                    .bytes()
-                    .last()
-                    .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
-                && component.bytes().all(|byte| {
-                    byte.is_ascii_lowercase()
-                        || byte.is_ascii_digit()
-                        || matches!(byte, b'.' | b'_' | b'-')
-                })
-        })
+        && paths
+            .iter()
+            .all(|component| valid_oci_path_component(component))
+}
+
+fn valid_oci_path_component(value: &str) -> bool {
+    let bytes = value.as_bytes();
+    if bytes.is_empty() || bytes.len() > 128 {
+        return false;
+    }
+    let alphanumeric = |byte: u8| byte.is_ascii_lowercase() || byte.is_ascii_digit();
+    if !alphanumeric(bytes[0]) {
+        return false;
+    }
+    let mut index = 0;
+    while index < bytes.len() && alphanumeric(bytes[index]) {
+        index += 1;
+    }
+    while index < bytes.len() {
+        match bytes[index] {
+            b'.' => index += 1,
+            b'_' => {
+                index += 1;
+                if index < bytes.len() && bytes[index] == b'_' {
+                    index += 1;
+                }
+            }
+            b'-' => {
+                while index < bytes.len() && bytes[index] == b'-' {
+                    index += 1;
+                }
+            }
+            _ => return false,
+        }
+        let start = index;
+        while index < bytes.len() && alphanumeric(bytes[index]) {
+            index += 1;
+        }
+        if index == start {
+            return false;
+        }
+    }
+    true
 }
 
 fn valid_repo_digest(value: &str, expected_digest: &str) -> bool {
@@ -11735,6 +11768,16 @@ mod tests {
 
         let mut value = qualified_appliance_matrix();
         value["release_job"]["attestation_url"] =
+            json!("https://release.jain.local/job.json#token=exposed");
+        cases.push(("secret-fragment", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release_job"]["attestation_url"] =
+            json!("https://release.jain.local/job.json?download=1");
+        cases.push(("query-evidence", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release_job"]["attestation_url"] =
             json!("https://operator:credential@release.jain.local/job.json");
         cases.push(("credential-userinfo", value));
 
@@ -11788,10 +11831,17 @@ mod tests {
     #[test]
     fn oci_repository_digest_grammar_is_closed_and_canonical() {
         let digest = format!("sha256:{}", "a".repeat(64));
-        assert!(valid_repo_digest(
-            &format!("registry.jain.local/team/appliance_v1@{digest}"),
-            &digest,
-        ));
+        for repository in [
+            "registry.jain.local/team/appliance.v1",
+            "registry.jain.local/team/appliance_v1",
+            "registry.jain.local/team/appliance__v1",
+            "registry.jain.local/team/appliance---v1",
+        ] {
+            assert!(valid_repo_digest(
+                &format!("{repository}@{digest}"),
+                &digest,
+            ));
+        }
         for repository in [
             "registry.jain.local",
             "registry.jain.local/",
@@ -11802,6 +11852,10 @@ mod tests {
             "registry.jain.local/team/appliance?tag=latest",
             "registry.jain.local/team/appliance#fragment",
             "registry.jain.local/team/appliance:latest",
+            "registry.jain.local/team/a..b",
+            "registry.jain.local/team/a.-b",
+            "registry.jain.local/team/a_.b",
+            "registry.jain.local/team/a___b",
             "Registry.Jain.Local/team/appliance",
             "127.0.0.1/team/appliance",
             "localhost/team/appliance",
@@ -11813,6 +11867,14 @@ mod tests {
         }
         assert!(!valid_repo_digest(
             &format!("identity@registry.jain.local/appliance@{digest}"),
+            &digest,
+        ));
+        assert!(!valid_repo_digest(
+            &format!("{}.jain.local/appliance@{digest}", "a".repeat(64)),
+            &digest,
+        ));
+        assert!(!valid_repo_digest(
+            &format!("registry.jain.local/{}@{digest}", "a".repeat(129)),
             &digest,
         ));
     }
