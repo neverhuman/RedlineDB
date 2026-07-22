@@ -354,8 +354,10 @@ fn bare_mirror_refresh_is_dry_run_by_default_and_verifies_applied_refs() {
     fs::write(
         &manifest,
         format!(
-            "split_root = {:?}\n\n[[repo]]\nname = \"example\"\npath = {:?}\nprofile = \"rust\"\n",
-            split_root, source
+            "split_root = {:?}\nrepo_family = \"fixture\"\n\n[control_plane]\nname = \"fixture-control\"\npath = {:?}\nremote = \"http://127.0.0.1:8787/git/veox/fixture-control.git\"\nrequired_check = \"fixture-control/required\"\n\n[[repo]]\nname = \"example\"\npath = {:?}\nprofile = \"rust\"\nremote = \"http://127.0.0.1:8787/git/veox/example.git\"\nrequired_check = \"example/required\"\ndefault_branch = \"main\"\n",
+            split_root,
+            scratch.path().join("control"),
+            source
         ),
     )
     .expect("write manifest");
@@ -366,6 +368,8 @@ fn bare_mirror_refresh_is_dry_run_by_default_and_verifies_applied_refs() {
         manifest.to_str().expect("UTF-8 manifest"),
         "--receipt",
         dry_receipt.to_str().expect("UTF-8 receipt"),
+        "--repo",
+        "example",
     ]);
     assert!(
         dry.status.success(),
@@ -386,6 +390,8 @@ fn bare_mirror_refresh_is_dry_run_by_default_and_verifies_applied_refs() {
         manifest.to_str().expect("UTF-8 manifest"),
         "--receipt",
         apply_receipt.to_str().expect("UTF-8 receipt"),
+        "--repo",
+        "example",
         "--apply",
     ]);
     assert!(
