@@ -5,9 +5,9 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly repo_root
 readonly JANKURAI_VERSION="1.6.11"
-readonly JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
-readonly JANKURAI_TAG="v1.6.11-deadlang-precision"
-readonly JANKURAI_REV="dface7397fe24d46b0b1885ddd5782c34edbff49"
+readonly JANKURAI_SHA256="96d99e6e7d8dc9cf23df1081edd1f975231456592f81d9405385219a2c7298aa"
+readonly JANKURAI_TAG="v1.6.11-deadlang-precision-split.2"
+readonly JANKURAI_REV="4dfbdfa3585f1928d5f996d7b5e14608dff14a03"
 readonly JANKURAI_GIT="http://127.0.0.1:8787/git/jeryu/jankurai.git"
 readonly CARGO_AUDIT_VERSION="0.22.1"
 readonly CARGO_DENY_VERSION="0.19.8"
