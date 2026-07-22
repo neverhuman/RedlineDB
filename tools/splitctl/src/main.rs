@@ -7467,6 +7467,59 @@ fn declared_standard_version_tag(
     jankurai_product_keys.insert("product_version");
     let mut jankurai_platform_keys = jankurai_product_keys.clone();
     jankurai_platform_keys.extend(["workspace", "version"]);
+    let jeryu_phase_keys = ["standard", "version", "phase"]
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    let redline_control_keys = ["schema_version", "standard", "version", "required_check"]
+        .into_iter()
+        .collect::<std::collections::BTreeSet<_>>();
+    if keys == jeryu_phase_keys {
+        for key in &keys {
+            let Some(value) = table.get(*key).and_then(toml::Value::as_str) else {
+                return Err(format!("declared Jeryu phase identity {key} is not a string").into());
+            };
+            if !valid_cargo_cache_component(value) {
+                return Err(
+                    format!("declared Jeryu phase identity {key} is empty or malformed").into(),
+                );
+            }
+        }
+        if table.get("standard").and_then(toml::Value::as_str) != Some("jankurai")
+            || table.get("version").and_then(toml::Value::as_str) != Some("1.0.0")
+        {
+            return Err("declared Jeryu phase standard or version differs from authority".into());
+        }
+        let expected_phase = match repo_name {
+            "jeryu" => "portal-governed-auditor",
+            "jeryu-deploy" => "12-jeryu-cache-cache-architecture",
+            "jeryu-web" => "web-tui-overhaul",
+            _ => {
+                return Err("declared Jeryu phase identity is not an authorized repository".into())
+            }
+        };
+        if table.get("phase").and_then(toml::Value::as_str) != Some(expected_phase) {
+            return Err("declared Jeryu phase differs from repository authority".into());
+        }
+        return Ok(None);
+    }
+    if keys == redline_control_keys {
+        if repo_name != "redline-split-ops"
+            || table.get("standard").and_then(toml::Value::as_str)
+                != Some("redline-split-control-plane")
+            || table.get("schema_version").and_then(toml::Value::as_str) != Some("1.0.0")
+            || table.get("required_check").and_then(toml::Value::as_str)
+                != Some("redline-split-ops/required")
+        {
+            return Err("declared Redline control-plane identity differs from authority".into());
+        }
+        let Some(version) = table.get("version").and_then(toml::Value::as_str) else {
+            return Err("declared Redline control-plane version is not a string".into());
+        };
+        if !valid_cargo_cache_component(version) {
+            return Err("declared Redline control-plane version is empty or malformed".into());
+        }
+        return Ok(None);
+    }
     let is_closed_jankurai = keys == jankurai_keys
         || keys == jankurai_published_keys
         || keys == jankurai_product_keys
@@ -15066,6 +15119,186 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 declared_standard_version_tag(repo, root.path()).unwrap(),
                 None,
                 "{repo} Jankurai metadata must remain tag-neutral"
+            );
+        }
+
+        for (repo, phase) in [
+            ("jeryu/jeryu", "portal-governed-auditor"),
+            ("jeryu/jeryu-deploy", "12-jeryu-cache-cache-architecture"),
+            ("jeryu/jeryu-web", "web-tui-overhaul"),
+        ] {
+            fs::write(
+                &metadata,
+                render(&[
+                    ("standard", "jankurai"),
+                    ("version", "1.0.0"),
+                    ("phase", phase),
+                ]),
+            )
+            .unwrap();
+            assert_eq!(
+                declared_standard_version_tag(repo, root.path()).unwrap(),
+                None,
+                "{repo} phase metadata must remain tag-neutral"
+            );
+        }
+        for (repo, version) in [
+            ("veox/redline-split-ops", "8.0.1-rc.0"),
+            ("jeryu/redline-split-ops", "8.0.0-rc.0"),
+        ] {
+            fs::write(
+                &metadata,
+                render(&[
+                    ("schema_version", "1.0.0"),
+                    ("standard", "redline-split-control-plane"),
+                    ("version", version),
+                    ("required_check", "redline-split-ops/required"),
+                ]),
+            )
+            .unwrap();
+            assert_eq!(
+                declared_standard_version_tag(repo, root.path()).unwrap(),
+                None,
+                "{repo} control-plane metadata must remain tag-neutral"
+            );
+        }
+
+        for (repo, invalid) in [
+            (
+                "jeryu/jeryu",
+                render(&[
+                    ("standard", "jankurai"),
+                    ("version", "1.0.0"),
+                    ("phase", "web-tui-overhaul"),
+                ]),
+            ),
+            (
+                "jeryu/jeryu-web",
+                render(&[
+                    ("standard", "jankurai"),
+                    ("version", "2.0.0"),
+                    ("phase", "web-tui-overhaul"),
+                ]),
+            ),
+            (
+                "jeryu/other",
+                render(&[
+                    ("standard", "jankurai"),
+                    ("version", "1.0.0"),
+                    ("phase", "portal-governed-auditor"),
+                ]),
+            ),
+            (
+                "jeryu/jeryu",
+                "standard = \"jankurai\"\nversion = \"1.0.0\"\n".to_owned(),
+            ),
+            (
+                "jeryu/jeryu",
+                "standard = \"jankurai\"\nversion = \"1.0.0\"\nphase = 1\n".to_owned(),
+            ),
+            (
+                "jeryu/jeryu",
+                render(&[
+                    ("standard", "jankurai"),
+                    ("version", "1.0.0"),
+                    ("phase", "../../escape"),
+                ]),
+            ),
+            (
+                "jeryu/jeryu",
+                format!(
+                    "{}unknown = \"value\"\n",
+                    render(&[
+                        ("standard", "jankurai"),
+                        ("version", "1.0.0"),
+                        ("phase", "portal-governed-auditor"),
+                    ])
+                ),
+            ),
+        ] {
+            fs::write(&metadata, invalid).unwrap();
+            assert!(
+                declared_standard_version_tag(repo, root.path()).is_err(),
+                "invalid Jeryu phase identity for {repo} must fail closed"
+            );
+        }
+
+        let redline_control =
+            |standard: &str, schema_version: &str, version: &str, required_check: &str| {
+                render(&[
+                    ("schema_version", schema_version),
+                    ("standard", standard),
+                    ("version", version),
+                    ("required_check", required_check),
+                ])
+            };
+        for (repo, invalid) in [
+            (
+                "veox/other",
+                redline_control(
+                    "redline-split-control-plane",
+                    "1.0.0",
+                    "8.0.1-rc.0",
+                    "redline-split-ops/required",
+                ),
+            ),
+            (
+                "veox/redline-split-ops",
+                redline_control(
+                    "other",
+                    "1.0.0",
+                    "8.0.1-rc.0",
+                    "redline-split-ops/required",
+                ),
+            ),
+            (
+                "veox/redline-split-ops",
+                redline_control(
+                    "redline-split-control-plane",
+                    "2.0.0",
+                    "8.0.1-rc.0",
+                    "redline-split-ops/required",
+                ),
+            ),
+            (
+                "veox/redline-split-ops",
+                redline_control(
+                    "redline-split-control-plane",
+                    "1.0.0",
+                    "8.0.1-rc.0",
+                    "other/required",
+                ),
+            ),
+            (
+                "veox/redline-split-ops",
+                redline_control(
+                    "redline-split-control-plane",
+                    "1.0.0",
+                    "../../escape",
+                    "redline-split-ops/required",
+                ),
+            ),
+            (
+                "veox/redline-split-ops",
+                "schema_version = \"1.0.0\"\nstandard = \"redline-split-control-plane\"\nversion = \"8.0.1-rc.0\"\n".to_owned(),
+            ),
+            (
+                "veox/redline-split-ops",
+                format!(
+                    "{}unknown = \"value\"\n",
+                    redline_control(
+                        "redline-split-control-plane",
+                        "1.0.0",
+                        "8.0.1-rc.0",
+                        "redline-split-ops/required",
+                    )
+                ),
+            ),
+        ] {
+            fs::write(&metadata, invalid).unwrap();
+            assert!(
+                declared_standard_version_tag(repo, root.path()).is_err(),
+                "invalid Redline control-plane identity for {repo} must fail closed"
             );
         }
 
