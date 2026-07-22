@@ -284,6 +284,7 @@ fn build_plan(request: PlanRequest<'_>) -> Result<JsonValue, Box<dyn std::error:
     let (build_jobs, fleet_concurrency) =
         calibration.unwrap_or((manifest_ci_jobs, manifest_fleet_jobs));
     let max_parallel = build_jobs.min(8);
+    let host_network_namespace = fs::metadata("/proc/self/ns/net")?;
     let contract_root = root.join("contracts");
     let cache = match effective_profile {
         Profile::Presubmit => json!({
@@ -344,6 +345,8 @@ fn build_plan(request: PlanRequest<'_>) -> Result<JsonValue, Box<dyn std::error:
             "fleet_concurrency": fleet_concurrency,
             "authority_build_jobs": manifest_ci_jobs,
             "authority_fleet_concurrency": manifest_fleet_jobs,
+            "host_network_namespace_device": host_network_namespace.dev(),
+            "host_network_namespace_inode": host_network_namespace.ino(),
             "calibration": calibration.is_some(),
             "minimum_available_memory_bytes": MIN_AVAILABLE_MEMORY_BYTES,
             "swap_in_pages_max": 0,
@@ -1658,6 +1661,8 @@ fn validate_plan_value(plan: &JsonValue) -> Result<(), Box<dyn std::error::Error
             "build_jobs",
             "calibration",
             "fleet_concurrency",
+            "host_network_namespace_device",
+            "host_network_namespace_inode",
             "io_wait_percent_max_exclusive",
             "load1_max_exclusive",
             "max_parallel_lanes",
@@ -1698,6 +1703,13 @@ fn validate_plan_value(plan: &JsonValue) -> Result<(), Box<dyn std::error::Error
             && (![4, 8, 16, 24, 32].contains(&build_jobs)
                 || ![2, 4, 6, 8].contains(&fleet_concurrency)))
         || resources["minimum_available_memory_bytes"].as_u64() != Some(MIN_AVAILABLE_MEMORY_BYTES)
+        || resources["host_network_namespace_device"]
+            .as_u64()
+            .is_none()
+        || resources["host_network_namespace_inode"]
+            .as_u64()
+            .filter(|inode| *inode > 0)
+            .is_none()
         || resources["swap_in_pages_max"].as_u64() != Some(0)
         || resources["io_wait_percent_max_exclusive"].as_f64() != Some(15.0)
         || resources["load1_max_exclusive"].as_f64() != Some(96.0)
@@ -1936,15 +1948,24 @@ pub(crate) fn run_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
     if unsafe { libc::geteuid() } == 0 {
         return Err("ci-run refuses to execute product commands as root".into());
     }
-    if !network_namespace_isolated()? {
-        return Err("ci-run requires a network-isolated worker namespace".into());
-    }
     let plan_path = plan_path.ok_or("ci-run requires --plan")?;
     let receipt = receipt.ok_or("ci-run requires --receipt")?;
     let plan_bytes = read_root_owned_plan(&plan_path)?;
     let plan_sha256 = format!("{:x}", Sha256::digest(&plan_bytes));
     let plan: JsonValue = serde_json::from_slice(&plan_bytes)?;
     validate_plan_value(&plan)?;
+    if !network_namespace_isolated(
+        plan["resources"]["host_network_namespace_device"]
+            .as_u64()
+            .unwrap(),
+        plan["resources"]["host_network_namespace_inode"]
+            .as_u64()
+            .unwrap(),
+    )? {
+        return Err(
+            "ci-run requires a network-empty worker namespace distinct from the broker".into(),
+        );
+    }
     execute_plan(&plan, &plan_sha256, &receipt, true)?;
     println!("wrote {}", receipt.display());
     Ok(())
@@ -1999,10 +2020,12 @@ fn same_metadata(left: &fs::Metadata, right: &fs::Metadata) -> bool {
         && left.ctime_nsec() == right.ctime_nsec()
 }
 
-fn network_namespace_isolated() -> Result<bool, Box<dyn std::error::Error>> {
+fn network_namespace_isolated(
+    broker_device: u64,
+    broker_inode: u64,
+) -> Result<bool, Box<dyn std::error::Error>> {
     let current = fs::metadata("/proc/self/ns/net")?;
-    let init = fs::metadata("/proc/1/ns/net")?;
-    if current.dev() == init.dev() && current.ino() == init.ino() {
+    if current.dev() == broker_device && current.ino() == broker_inode {
         return Ok(false);
     }
     let mut interfaces = fs::read_dir("/sys/class/net")?
@@ -4225,6 +4248,7 @@ mod tests {
             "resources": {
                 "authority_build_jobs": 4, "authority_fleet_concurrency": 4,
                 "build_jobs": 4, "fleet_concurrency": 4, "calibration": false,
+                "host_network_namespace_device": 1, "host_network_namespace_inode": 1,
                 "max_parallel_lanes": 4, "minimum_available_memory_bytes": MIN_AVAILABLE_MEMORY_BYTES,
                 "swap_in_pages_max": 0, "io_wait_percent_max_exclusive": 15.0,
                 "load1_max_exclusive": 96.0, "network": "denied"
@@ -4292,7 +4316,10 @@ mod tests {
         )
         .unwrap();
         let checkout_path = checkout.path.clone();
-        assert_eq!(git(&checkout_path, &["rev-parse", "--git-common-dir"]), ".git");
+        assert_eq!(
+            git(&checkout_path, &["rev-parse", "--git-common-dir"]),
+            ".git"
+        );
         assert_eq!(
             git(&checkout_path, &["remote", "get-url", "origin"]),
             "http://127.0.0.1:8787/git/veox/fixture.git"

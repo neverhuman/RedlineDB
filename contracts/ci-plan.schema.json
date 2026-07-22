@@ -120,7 +120,8 @@
       "type": "object", "additionalProperties": false,
       "required": [
         "authority_build_jobs", "authority_fleet_concurrency", "build_jobs", "calibration",
-        "fleet_concurrency", "io_wait_percent_max_exclusive", "load1_max_exclusive",
+        "fleet_concurrency", "host_network_namespace_device", "host_network_namespace_inode",
+        "io_wait_percent_max_exclusive", "load1_max_exclusive",
         "max_parallel_lanes", "minimum_available_memory_bytes", "network", "swap_in_pages_max"
       ],
       "properties": {
@@ -128,6 +129,8 @@
         "authority_fleet_concurrency": { "type": "integer", "minimum": 1, "maximum": 64 },
         "build_jobs": { "type": "integer", "minimum": 1, "maximum": 64 },
         "fleet_concurrency": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "host_network_namespace_device": { "type": "integer", "minimum": 0 },
+        "host_network_namespace_inode": { "type": "integer", "minimum": 1 },
         "calibration": { "type": "boolean" },
         "max_parallel_lanes": { "type": "integer", "minimum": 1, "maximum": 64 },
         "minimum_available_memory_bytes": { "const": 21474836480 },
