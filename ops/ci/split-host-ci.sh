@@ -931,20 +931,23 @@ ci_gitconfig="${JAIN_HOST_CI_WRITABLE_ROOT:-$SPLIT_ROOT/target}/ci-gitconfig"
     printf '\tinsteadOf = http://127.0.0.1:8787/git/jain-split/\n'
     printf '\tinsteadOf = http://127.0.0.1:8787/git/redline/\n'
     printf '\tinsteadOf = https://github.com/neverhuman/\n'
-    if [ "${#governed_git_repositories[@]}" -gt 0 ]; then
-      printf '[safe]\n'
-      for governed_git_repository in "${governed_git_repositories[@]}"; do
-        governed_git_mirror="$SPLIT_ROOT/target/bare-mirrors/$governed_git_repository.git"
-        governed_git_mirror_real="$(realpath -e -- "$governed_git_mirror")" \
-          || native_setup_failure \
-            "governed locked Git mirror is unavailable: $governed_git_repository" 1
-        [[ -d "$governed_git_mirror" && ! -L "$governed_git_mirror" \
-          && "$governed_git_mirror_real" == "$governed_git_mirror" ]] \
-          || native_setup_failure \
-            "governed locked Git mirror is not a physical exact path: $governed_git_repository" 1
-        printf '\tdirectory = %s\n' "$governed_git_mirror"
-      done
+    printf '[safe]\n'
+    if [ "${JAIN_RELEASE_CI:-0}" = "1" ]; then
+      printf '\tdirectory = %s\n' "$JAIN_SPLIT_OPS_ROOT"
+      printf '\tdirectory = %s\n' "$rustsec_db"
+      printf '\tdirectory = %s\n' "$JAIN_CARGO_DENY_ADVISORY_DB"
     fi
+    for governed_git_repository in "${governed_git_repositories[@]}"; do
+      governed_git_mirror="$SPLIT_ROOT/target/bare-mirrors/$governed_git_repository.git"
+      governed_git_mirror_real="$(realpath -e -- "$governed_git_mirror")" \
+        || native_setup_failure \
+          "governed locked Git mirror is unavailable: $governed_git_repository" 1
+      [[ -d "$governed_git_mirror" && ! -L "$governed_git_mirror" \
+        && "$governed_git_mirror_real" == "$governed_git_mirror" ]] \
+        || native_setup_failure \
+          "governed locked Git mirror is not a physical exact path: $governed_git_repository" 1
+      printf '\tdirectory = %s\n' "$governed_git_mirror"
+    done
     printf '[core]\n\tfsmonitor = false\n\thooksPath = /dev/null\n'
     printf '[net]\n\tgit-fetch-with-cli = true\n'
   } > "$ci_gitconfig" \

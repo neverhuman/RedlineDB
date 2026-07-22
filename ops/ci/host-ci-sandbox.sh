@@ -1113,13 +1113,17 @@ systemd_args=(
   --setenv=GIT_ATTR_NOSYSTEM=1
   --setenv=JAIN_HOST_CI_REEXEC_STATE=/opt/jain-ci/authority/reexec-state.json
   --setenv=JAIN_SPLIT_OPS_ROOT=/opt/jain-ci/authority/control-plane
-  --setenv=GIT_CONFIG_COUNT=3
+  --setenv=GIT_CONFIG_COUNT=5
   --setenv=GIT_CONFIG_KEY_0=safe.directory
   --setenv=GIT_CONFIG_VALUE_0=/opt/jain-ci/authority/control-plane
-  --setenv=GIT_CONFIG_KEY_1=core.fsmonitor
-  --setenv=GIT_CONFIG_VALUE_1=false
-  --setenv=GIT_CONFIG_KEY_2=core.hooksPath
-  --setenv=GIT_CONFIG_VALUE_2=/dev/null
+  --setenv=GIT_CONFIG_KEY_1=safe.directory
+  --setenv=GIT_CONFIG_VALUE_1=/opt/jain-ci/authority/advisory-db
+  --setenv=GIT_CONFIG_KEY_2=safe.directory
+  --setenv="GIT_CONFIG_VALUE_2=$worker_deny_mount"
+  --setenv=GIT_CONFIG_KEY_3=core.fsmonitor
+  --setenv=GIT_CONFIG_VALUE_3=false
+  --setenv=GIT_CONFIG_KEY_4=core.hooksPath
+  --setenv=GIT_CONFIG_VALUE_4=/dev/null
   --setenv="JAIN_HOST_CI_HOST_PID_NAMESPACE=$host_pid_namespace"
   --setenv="JAIN_HOST_CI_HOST_USER_NAMESPACE=$host_user_namespace"
   --setenv=JAIN_HOST_CI_NETWORK_ISOLATED=1
@@ -1160,15 +1164,15 @@ if [[ "$cuda_required" == true ]]; then
 fi
 if [[ "$repo" == jain-starforge ]]; then
   systemd_args+=(
-    --setenv=GIT_CONFIG_COUNT=7
-    --setenv=GIT_CONFIG_KEY_3=filter.lfs.process
-    --setenv='GIT_CONFIG_VALUE_3=/opt/jain-ci/authority/release-bin/git-lfs filter-process'
-    --setenv=GIT_CONFIG_KEY_4=filter.lfs.clean
-    --setenv='GIT_CONFIG_VALUE_4=/opt/jain-ci/authority/release-bin/git-lfs clean -- %f'
-    --setenv=GIT_CONFIG_KEY_5=filter.lfs.smudge
-    --setenv='GIT_CONFIG_VALUE_5=/opt/jain-ci/authority/release-bin/git-lfs smudge -- %f'
-    --setenv=GIT_CONFIG_KEY_6=filter.lfs.required
-    --setenv=GIT_CONFIG_VALUE_6=true
+    --setenv=GIT_CONFIG_COUNT=9
+    --setenv=GIT_CONFIG_KEY_5=filter.lfs.process
+    --setenv='GIT_CONFIG_VALUE_5=/opt/jain-ci/authority/release-bin/git-lfs filter-process'
+    --setenv=GIT_CONFIG_KEY_6=filter.lfs.clean
+    --setenv='GIT_CONFIG_VALUE_6=/opt/jain-ci/authority/release-bin/git-lfs clean -- %f'
+    --setenv=GIT_CONFIG_KEY_7=filter.lfs.smudge
+    --setenv='GIT_CONFIG_VALUE_7=/opt/jain-ci/authority/release-bin/git-lfs smudge -- %f'
+    --setenv=GIT_CONFIG_KEY_8=filter.lfs.required
+    --setenv=GIT_CONFIG_VALUE_8=true
   )
 fi
 while IFS=$'\t' read -r name value; do

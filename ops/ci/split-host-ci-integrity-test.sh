@@ -722,6 +722,29 @@ MONITOR
     && ! -L "$JAIN_CARGO_DENY_ADVISORY_DB/.git" ]]; then
     deny_db_physical=1
   fi
+  rustsec_git_readable=0
+  rustsec_commit="$(git -C "$JAIN_RUSTSEC_ADVISORY_SOURCE" \
+    rev-parse 'HEAD^{commit}' 2>/dev/null || true)"
+  [[ "$rustsec_commit" =~ ^[0-9a-f]{40}$ ]] && rustsec_git_readable=1
+  deny_db_git_readable=0
+  deny_db_commit="$(git -C "$JAIN_CARGO_DENY_ADVISORY_DB" \
+    rev-parse 'HEAD^{commit}' 2>/dev/null || true)"
+  [[ "$deny_db_commit" =~ ^[0-9a-f]{40}$ \
+    && "$deny_db_commit" == "$rustsec_commit" ]] \
+    && deny_db_git_readable=1
+  command_safe_directories_exact=0
+  mapfile -t command_safe_directories < <(
+    git config --get-all safe.directory 2>/dev/null || true
+  )
+  if [[ "${#command_safe_directories[@]}" -eq 3 \
+    && "${command_safe_directories[0]}" \
+      == /opt/jain-ci/authority/control-plane \
+    && "${command_safe_directories[1]}" \
+      == /opt/jain-ci/authority/advisory-db \
+    && "${command_safe_directories[2]}" == "$JAIN_CARGO_DENY_ADVISORY_DB" \
+    && "${command_safe_directories[*]}" != *'*'* ]]; then
+    command_safe_directories_exact=1
+  fi
   advisory_lock_writable=0
   advisory_lock="$CARGO_HOME/advisory-dbs/db.lock"
   if : >"$advisory_lock" && rm -- "$advisory_lock"; then
@@ -741,12 +764,16 @@ MONITOR
   else
     rm -- "$JAIN_CARGO_DENY_ADVISORY_DB/.write-probe"
   fi
-  bare_mirror_safe=0
+  global_safe_directories_exact=0
   mapfile -t safe_directories < <(
     git config --global --get-all safe.directory 2>/dev/null || true
   )
-  if [[ "${#safe_directories[@]}" == 0 ]]; then
-    bare_mirror_safe=1
+  if [[ "${#safe_directories[@]}" -eq 3 \
+    && "${safe_directories[0]}" == /opt/jain-ci/authority/control-plane \
+    && "${safe_directories[1]}" == /opt/jain-ci/authority/advisory-db \
+    && "${safe_directories[2]}" == "$JAIN_CARGO_DENY_ADVISORY_DB" \
+    && "${safe_directories[*]}" != *'*'* ]]; then
+    global_safe_directories_exact=1
   fi
   evidence_staging_bounded=0
   if [[ "${JAIN_NATIVE_EVIDENCE_STAGING_ROOT:-}" \
@@ -820,13 +847,20 @@ MONITOR
     "${JAIN_CONTRACT_BASE_REF:-missing}" >>"$probe"
   printf 'boundary_rustsec_standalone=%s\n' "$rustsec_standalone" >>"$probe"
   printf 'boundary_deny_db_physical=%s\n' "$deny_db_physical" >>"$probe"
+  printf 'boundary_rustsec_git_readable=%s\n' \
+    "$rustsec_git_readable" >>"$probe"
+  printf 'boundary_deny_db_git_readable=%s\n' \
+    "$deny_db_git_readable" >>"$probe"
+  printf 'boundary_command_safe_directories_exact=%s\n' \
+    "$command_safe_directories_exact" >>"$probe"
   printf 'boundary_advisory_lock_writable=%s\n' \
     "$advisory_lock_writable" >>"$probe"
   printf 'boundary_advisory_db_swap_blocked=%s\n' \
     "$advisory_db_swap_blocked" >>"$probe"
   printf 'boundary_advisory_db_write_blocked=%s\n' \
     "$advisory_db_write_blocked" >>"$probe"
-  printf 'boundary_bare_mirror_safe=%s\n' "$bare_mirror_safe" >>"$probe"
+  printf 'boundary_global_safe_directories_exact=%s\n' \
+    "$global_safe_directories_exact" >>"$probe"
   printf 'boundary_evidence_staging_bounded=%s\n' \
     "$evidence_staging_bounded" >>"$probe"
   # A malicious background descendant must die with namespace PID 1 before
@@ -1161,10 +1195,13 @@ grep -Fq 'boundary_release_ci=1' "$success_log"
 grep -Fq "boundary_contract_base=$product_base_sha" "$success_log"
 grep -Fq 'boundary_rustsec_standalone=1' "$success_log"
 grep -Fq 'boundary_deny_db_physical=1' "$success_log"
+grep -Fq 'boundary_rustsec_git_readable=1' "$success_log"
+grep -Fq 'boundary_deny_db_git_readable=1' "$success_log"
+grep -Fq 'boundary_command_safe_directories_exact=1' "$success_log"
 grep -Fq 'boundary_advisory_lock_writable=1' "$success_log"
 grep -Fq 'boundary_advisory_db_swap_blocked=1' "$success_log"
 grep -Fq 'boundary_advisory_db_write_blocked=1' "$success_log"
-grep -Fq 'boundary_bare_mirror_safe=1' "$success_log"
+grep -Fq 'boundary_global_safe_directories_exact=1' "$success_log"
 grep -Fq 'boundary_evidence_staging_bounded=1' "$success_log"
 grep -Fq 'boundary_survivor_started=1' "$success_log"
 grep -Fq 'worker cgroup stopped before sealing' "$success_log"

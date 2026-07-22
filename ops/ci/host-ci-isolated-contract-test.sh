@@ -137,6 +137,9 @@ if jq -e 'has("governed_git_repositories")' \
     && -z "$(compgen -A variable GIT_CONFIG_VALUE_)" ]] \
     || fail 'inherited command-scope Git configuration survived setup'
   mapfile -t expected_safe_directories < <(
+    printf '%s\n' /opt/jain-ci/authority/control-plane \
+      "$JAIN_PINNED_ADVISORY_DB" \
+      "$JAIN_CARGO_DENY_ADVISORY_DB"
     jq -r --arg mirror_root "$JAIN_SPLIT_ROOT/target/bare-mirrors" \
       '.governed_git_repositories[] | "\($mirror_root)/\(.).git"' \
       "$cargo_home/registry/stage-receipt.json"
