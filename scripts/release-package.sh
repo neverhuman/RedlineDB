@@ -16,6 +16,10 @@ version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
 test -n "$version"
 tag="${REDLINE_TESTING_RELEASE_TAG:-redline-testing-v${version}-jain.1}"
 cargo run --locked --quiet -p xtask -- validate-release-tag --tag "$tag"
+# Release bytes must not depend on the absolute checkout path or caller flags.
+# The logical prefix is stable across every no-local release sandbox.
+unset CARGO_ENCODED_RUSTFLAGS
+export RUSTFLAGS="--remap-path-prefix=${repo_root}=/redline-testing"
 cargo build --release --locked
 
 target_name="linux-x86_64"

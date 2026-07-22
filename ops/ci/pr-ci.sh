@@ -25,6 +25,7 @@ ci_run cargo run --locked --quiet -- major-gate \
 ci_run cargo test --locked
 ci_run cargo test --locked -p xtask
 ci_run scripts/release-package.sh
+ci_run scripts/reproducible-release-test.sh
 
 # Security evidence is part of the required lane. Missing scanners fail closed
 # so a runner cannot report success from a partial tool installation.

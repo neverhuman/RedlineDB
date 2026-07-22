@@ -61,6 +61,8 @@ fn release_path_is_local_only_and_requires_custody() {
     assert!(!root.join(".github/workflows/release.yml").exists());
     let doctor = repo_file("scripts/ci-doctor.sh");
     let release = repo_file("scripts/release-package.sh");
+    let reproducible_release = repo_file("scripts/reproducible-release-test.sh");
+    let required = repo_file("ops/ci/pr-ci.sh");
     let docs = repo_file("docs/release.md");
     assert!(doctor.contains("authoritative release workflow must not publish through GitHub"));
     assert!(doctor.contains("custody-stage"));
@@ -71,6 +73,8 @@ fn release_path_is_local_only_and_requires_custody() {
         "--numeric-owner",
         "--mtime=\"@${source_date_epoch}\"",
         "gzip -n",
+        "unset CARGO_ENCODED_RUSTFLAGS",
+        "--remap-path-prefix=${repo_root}=/redline-testing",
     ] {
         assert!(
             release.contains(reproducibility_binding),
@@ -78,6 +82,11 @@ fn release_path_is_local_only_and_requires_custody() {
         );
     }
     assert!(!release.contains(" -czf "));
+    assert!(required.contains("ci_run scripts/reproducible-release-test.sh"));
+    assert!(reproducible_release.contains("git clone -q --no-local"));
+    assert!(reproducible_release.contains("CARGO_NET_OFFLINE=true"));
+    assert!(reproducible_release.contains("cmp -s"));
+    assert!(!repo_file("src/compat.rs").contains("env!(\"CARGO_MANIFEST_DIR\")"));
     assert!(docs.contains("xtask custody-stage"));
     assert!(docs.contains("--artifact"));
     assert!(!docs.contains("gh release create"));

@@ -4,6 +4,7 @@ use std::fs;
 use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::OnceLock;
 
 use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
@@ -31,6 +32,7 @@ const SQLITE_CONTRACT: &str = "redline-sqlite-contract/v1";
 const POSTGRES_CONTRACT: &str = "redline-postgres-contract/v1";
 const EVIDENCE_SCHEMA: &str = "redline.compat-evidence/v1";
 const FORBIDDEN_EXCLUSION_REASONS: [&str; 3] = ["unimplemented", "oracle unavailable", "flaky"];
+static REPO_ROOT: OnceLock<std::result::Result<PathBuf, String>> = OnceLock::new();
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct ContractManifest {
@@ -758,7 +760,7 @@ fn validate_custody_receipt(path: &Path) -> Result<BTreeMap<String, String>> {
         .get("cargo_lock_sha256")
         .and_then(|value| value.as_str())
         .context("custody receipt lacks cargo_lock_sha256")?;
-    if sha256_file(&repo_root().join("Cargo.lock"))? != lock_hash {
+    if sha256_file(&repo_root()?.join("Cargo.lock"))? != lock_hash {
         bail!("custody receipt Cargo.lock identity is stale");
     }
     for dependency in receipt
@@ -839,7 +841,7 @@ fn require_workspace_file(path: &Path, label: &str) -> Result<()> {
             path.display()
         );
     }
-    let workspace = repo_root()
+    let workspace = repo_root()?
         .parent()
         .and_then(Path::parent)
         .ok_or_else(|| anyhow::anyhow!("resolve jain-split workspace root"))?
@@ -976,7 +978,7 @@ fn extract_semver(version: &str) -> Option<String> {
 }
 
 fn corpus_hash(contract: &Contract) -> Result<String> {
-    let root = repo_root();
+    let root = repo_root()?;
     let mut paths = Vec::new();
     collect_regular_files(&root.join(&contract.corpus_path), &mut paths)?;
     if let Some(exclusions) = &contract.exclusions_path {
@@ -1064,8 +1066,73 @@ fn run_mode(mode: RunMode) -> &'static str {
     }
 }
 
-fn repo_root() -> &'static Path {
-    Path::new(env!("CARGO_MANIFEST_DIR"))
+fn repo_root() -> Result<&'static Path> {
+    match REPO_ROOT.get_or_init(|| {
+        env::current_exe()
+            .map_err(|error| format!("resolve current executable: {error}"))
+            .and_then(|executable| resolve_repo_root_from_executable(&executable))
+    }) {
+        Ok(root) => Ok(root),
+        Err(error) => bail!(error.clone()),
+    }
+}
+
+fn resolve_repo_root_from_executable(executable: &Path) -> std::result::Result<PathBuf, String> {
+    let executable = fs::canonicalize(executable)
+        .map_err(|error| format!("resolve executable {}: {error}", executable.display()))?;
+    let start = executable
+        .parent()
+        .ok_or_else(|| format!("executable has no parent: {}", executable.display()))?;
+    for candidate in start.ancestors() {
+        let common = physical_path(candidate, "contracts/compatibility-v1.toml", true)
+            && physical_path(candidate, "corpus/sqlite_parity", false);
+        let cargo_toml = physical_path(candidate, "Cargo.toml", true);
+        let cargo_lock = physical_path(candidate, "Cargo.lock", true);
+        let xtask = physical_path(candidate, "xtask", false);
+        let release_manifest = physical_path(candidate, "release-manifest.json", true);
+        let bin = physical_path(candidate, "bin", false);
+        let source = cargo_toml && cargo_lock && xtask;
+        let package = release_manifest && bin;
+        if common && (source || package) {
+            return Ok(candidate.to_path_buf());
+        }
+        if common && (cargo_toml || cargo_lock || xtask || release_manifest || bin) {
+            return Err(format!(
+                "incomplete physical redline-testing layout beside executable: {}",
+                candidate.display()
+            ));
+        }
+    }
+    Err(format!(
+        "cannot locate a physical redline-testing source or package root from executable {}",
+        executable.display()
+    ))
+}
+
+fn physical_path(root: &Path, relative: &str, regular_file: bool) -> bool {
+    let mut cursor = root.to_path_buf();
+    let mut components = Path::new(relative).components().peekable();
+    while let Some(component) = components.next() {
+        let std::path::Component::Normal(name) = component else {
+            return false;
+        };
+        cursor.push(name);
+        let Ok(metadata) = fs::symlink_metadata(&cursor) else {
+            return false;
+        };
+        if metadata.file_type().is_symlink() {
+            return false;
+        }
+        if components.peek().is_some() && !metadata.is_dir() {
+            return false;
+        }
+        if components.peek().is_none()
+            && ((regular_file && !metadata.is_file()) || (!regular_file && !metadata.is_dir()))
+        {
+            return false;
+        }
+    }
+    true
 }
 
 fn canonical_display(path: &Path) -> String {
@@ -1086,7 +1153,7 @@ fn sha256_bytes(bytes: &[u8]) -> String {
 fn git_output(args: &[&str]) -> Option<String> {
     let output = Command::new("git")
         .arg("-C")
-        .arg(repo_root())
+        .arg(repo_root().ok()?)
         .args(args)
         .output()
         .ok()?;
@@ -1125,11 +1192,12 @@ pub(crate) fn major_gate(baseline: &Path, candidate: &Path) -> Result<()> {
 }
 
 fn governed_contract_path(path: &Path, expected_relative: &str) -> Result<PathBuf> {
-    let expected = fs::canonicalize(repo_root().join(expected_relative))?;
+    let root = repo_root()?;
+    let expected = fs::canonicalize(root.join(expected_relative))?;
     let candidate = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        repo_root().join(path)
+        root.join(path)
     };
     let metadata = fs::symlink_metadata(&candidate)
         .with_context(|| format!("inspect compatibility contract {}", candidate.display()))?;
@@ -1188,7 +1256,7 @@ mod tests {
 
     impl Scratch {
         fn new(label: &str) -> Self {
-            let path = repo_root().join("target").join(format!(
+            let path = repo_root().unwrap().join("target").join(format!(
                 "{label}-{}-{}",
                 std::process::id(),
                 std::time::SystemTime::now()
@@ -1199,6 +1267,44 @@ mod tests {
             fs::create_dir_all(&path).expect("scratch directory");
             Self(path)
         }
+    }
+
+    #[test]
+    fn runtime_root_is_bound_to_the_physical_executable_layout() {
+        let workspace = repo_root()
+            .unwrap()
+            .parent()
+            .and_then(Path::parent)
+            .unwrap();
+        let scratch = Scratch(workspace.join("target").join(format!(
+            "compat-runtime-root-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        )));
+        let package = scratch.0.join("packaged");
+        fs::create_dir_all(package.join("bin")).unwrap();
+        fs::create_dir_all(package.join("contracts")).unwrap();
+        fs::create_dir_all(package.join("corpus/sqlite_parity")).unwrap();
+        fs::write(package.join("bin/redline-testing"), b"executable\n").unwrap();
+        fs::write(
+            package.join("contracts/compatibility-v1.toml"),
+            b"contract\n",
+        )
+        .unwrap();
+        fs::write(package.join("release-manifest.json"), b"{}\n").unwrap();
+
+        let resolved = resolve_repo_root_from_executable(&package.join("bin/redline-testing"))
+            .expect("physical package root");
+        assert_eq!(resolved, fs::canonicalize(&package).unwrap());
+
+        fs::remove_file(package.join("release-manifest.json")).unwrap();
+        assert!(
+            resolve_repo_root_from_executable(&package.join("bin/redline-testing")).is_err(),
+            "an executable-relative root must not be supplied by cwd or environment"
+        );
     }
 
     impl Drop for Scratch {
