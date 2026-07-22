@@ -5209,13 +5209,56 @@ fn valid_deploy_release_tag(value: &str) -> bool {
         })
 }
 
+fn valid_oci_repository(value: &str) -> bool {
+    if value.is_empty() || value.len() > 255 || !value.is_ascii() {
+        return false;
+    }
+    let mut components = value.split('/');
+    let registry = components.next().unwrap_or_default();
+    let paths = components.collect::<Vec<_>>();
+    let registry = registry.to_ascii_lowercase();
+    let registry_is_canonical = registry == value.split('/').next().unwrap_or_default()
+        && registry.contains('.')
+        && registry.parse::<std::net::IpAddr>().is_err()
+        && registry != "localhost"
+        && !registry.ends_with(".localhost")
+        && !registry.ends_with(".localdomain")
+        && registry.split('.').all(|label| {
+            !label.is_empty()
+                && !label.starts_with('-')
+                && !label.ends_with('-')
+                && label
+                    .bytes()
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        });
+    registry_is_canonical
+        && !paths.is_empty()
+        && paths.iter().all(|component| {
+            component.len() <= 128
+                && component
+                    .bytes()
+                    .next()
+                    .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+                && component
+                    .bytes()
+                    .last()
+                    .is_some_and(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit())
+                && component.bytes().all(|byte| {
+                    byte.is_ascii_lowercase()
+                        || byte.is_ascii_digit()
+                        || matches!(byte, b'.' | b'_' | b'-')
+                })
+        })
+}
+
 fn valid_repo_digest(value: &str, expected_digest: &str) -> bool {
-    value.rsplit_once('@').is_some_and(|(repository, digest)| {
-        !repository.is_empty()
-            && !value.chars().any(char::is_whitespace)
-            && digest == expected_digest
-            && valid_digest(digest)
-    })
+    let mut parts = value.split('@');
+    let repository = parts.next().unwrap_or_default();
+    let digest = parts.next().unwrap_or_default();
+    parts.next().is_none()
+        && valid_oci_repository(repository)
+        && digest == expected_digest
+        && valid_digest(digest)
 }
 
 fn appliance_artifact_set_sha256(artifacts: &JsonValue) -> Option<String> {
@@ -11638,6 +11681,37 @@ mod tests {
         ));
         cases.push(("runtime-mismatch", value));
 
+        let index_digest = qualified_appliance_matrix()["oci"]["index_digest"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        for (name, repository) in [
+            (
+                "oci-multiple-separators",
+                format!("identity@registry.jain.local/appliance@{index_digest}"),
+            ),
+            (
+                "oci-url-form",
+                format!("https://registry.jain.local/appliance@{index_digest}"),
+            ),
+            (
+                "oci-encoded-form",
+                format!("registry.jain.local/team%2fappliance@{index_digest}"),
+            ),
+            (
+                "oci-tag-form",
+                format!("registry.jain.local/appliance:latest@{index_digest}"),
+            ),
+            (
+                "oci-noncanonical-case",
+                format!("Registry.Jain.Local/appliance@{index_digest}"),
+            ),
+        ] {
+            let mut value = qualified_appliance_matrix();
+            value["oci"]["index"] = json!(repository);
+            cases.push((name, value));
+        }
+
         let mut value = qualified_appliance_matrix();
         value["manifest_sha256"] = json!("0".repeat(64));
         cases.push(("zero-digest", value));
@@ -11709,6 +11783,38 @@ mod tests {
                 "accepted hostile aggregate {name}"
             );
         }
+    }
+
+    #[test]
+    fn oci_repository_digest_grammar_is_closed_and_canonical() {
+        let digest = format!("sha256:{}", "a".repeat(64));
+        assert!(valid_repo_digest(
+            &format!("registry.jain.local/team/appliance_v1@{digest}"),
+            &digest,
+        ));
+        for repository in [
+            "registry.jain.local",
+            "registry.jain.local/",
+            "registry.jain.local//appliance",
+            "registry.jain.local/../appliance",
+            "registry.jain.local/team\\appliance",
+            "registry.jain.local/team%2fappliance",
+            "registry.jain.local/team/appliance?tag=latest",
+            "registry.jain.local/team/appliance#fragment",
+            "registry.jain.local/team/appliance:latest",
+            "Registry.Jain.Local/team/appliance",
+            "127.0.0.1/team/appliance",
+            "localhost/team/appliance",
+        ] {
+            assert!(
+                !valid_repo_digest(&format!("{repository}@{digest}"), &digest),
+                "accepted noncanonical OCI repository {repository}"
+            );
+        }
+        assert!(!valid_repo_digest(
+            &format!("identity@registry.jain.local/appliance@{digest}"),
+            &digest,
+        ));
     }
 
     #[test]
