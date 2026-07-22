@@ -1895,6 +1895,42 @@ fn registered_nested_projection(family: &toml::Value) -> impl Iterator<Item = &t
         .flatten()
 }
 
+fn validate_registered_nested_identity(
+    value: &toml::Value,
+    identity_key: &str,
+    tag_key: &str,
+    qualified: &str,
+    name: &str,
+    lineage: &str,
+) -> Result<(), String> {
+    let identity =
+        optional_typed_string(value, identity_key, &format!("{qualified}.{identity_key}"))?
+            .ok_or_else(|| format!("{qualified}.{identity_key} is required"))?;
+    let tag = optional_typed_string(value, tag_key, &format!("{qualified}.{tag_key}"))?;
+    match identity.as_str() {
+        "bound" => {
+            let tag =
+                tag.ok_or_else(|| format!("bound {qualified} identity must declare {tag_key}"))?;
+            if !tag.starts_with(&format!("{name}-{lineage}.")) || !tag.contains("-split.") {
+                return Err(format!(
+                    "{qualified}.{tag_key} must preserve {lineage} split lineage"
+                ));
+            }
+        }
+        "pending" => {
+            if tag.is_some() {
+                return Err(format!("pending {qualified} identity must omit {tag_key}"));
+            }
+        }
+        other => {
+            return Err(format!(
+                "{qualified}.{identity_key} must be pending or bound, found {other}"
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn validate_registered_nested_family_declaration(
     key: &str,
     family: &toml::Value,
@@ -1996,13 +2032,17 @@ fn validate_registered_nested_family_declaration(
             "{qualified}.control_plane_required_check must be {control_name}/required"
         ));
     }
-    let control_tag = string(family, "control_plane_current_tag")
-        .ok_or_else(|| format!("{qualified}.control_plane_current_tag is required"))?;
-    if !control_tag.starts_with(&format!("{control_name}-{lineage}."))
-        || !control_tag.contains("-split.")
-    {
+    validate_registered_nested_identity(
+        family,
+        "control_plane_identity_status",
+        "control_plane_current_tag",
+        &qualified,
+        &control_name,
+        &lineage,
+    )?;
+    if string(family, "control_plane_identity_status").as_deref() != Some("bound") {
         return Err(format!(
-            "{qualified}.control_plane_current_tag must preserve {lineage} split lineage"
+            "{qualified}.control_plane_identity_status must be bound"
         ));
     }
     if string(family, "control_plane_inventory_status").as_deref() != Some("active") {
@@ -2083,13 +2123,14 @@ fn validate_registered_nested_family_declaration(
                 "{qualified}.repository[{name}].default_branch must be main"
             ));
         }
-        let tag = string(repository, "current_tag")
-            .ok_or_else(|| format!("{qualified}.repository[{name}].current_tag is required"))?;
-        if !tag.starts_with(&format!("{name}-{lineage}.")) || !tag.contains("-split.") {
-            return Err(format!(
-                "{qualified}.repository[{name}].current_tag must preserve {lineage} split lineage"
-            ));
-        }
+        validate_registered_nested_identity(
+            repository,
+            "identity_status",
+            "current_tag",
+            &format!("{qualified}.repository[{name}]"),
+            &name,
+            &lineage,
+        )?;
         if string(repository, "inventory_status").as_deref() != Some("active") {
             return Err(format!(
                 "{qualified}.repository[{name}].inventory_status must be active while projected"
@@ -2187,6 +2228,7 @@ fn compare_registered_nested_family_child(
         ("control_plane", "path"),
         ("control_plane_remote", "remote"),
         ("control_plane_required_check", "required_check"),
+        ("control_plane_identity_status", "identity_status"),
         ("control_plane_current_tag", "current_tag"),
         ("control_plane_inventory_status", "inventory_status"),
         ("control_plane_runtime_authority", "runtime_authority"),
@@ -2232,6 +2274,7 @@ fn compare_registered_nested_family_child(
             "remote",
             "required_check",
             "default_branch",
+            "identity_status",
             "current_tag",
             "inventory_status",
             "runtime_authority",
@@ -13913,6 +13956,95 @@ release_cuda_compute_capability_required = "yes"
                 .contains("duplicate repository name jeryu")
         );
 
+        let mut pending_with_tag = canonical.clone();
+        let pending = pending_with_tag["repository"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|repo| string(repo, "name").as_deref() == Some("jeryu-tool-finder"))
+            .unwrap();
+        pending.as_table_mut().unwrap().insert(
+            "current_tag".to_owned(),
+            toml::Value::String("jeryu-tool-finder-v5.1.0-split.0".to_owned()),
+        );
+        assert!(validate_registered_nested_family_declaration(
+            "jeryu",
+            &pending_with_tag,
+            split_root
+        )
+        .unwrap_err()
+        .contains("pending nested_families.jeryu.repository[jeryu-tool-finder] identity must omit current_tag"));
+
+        let mut bound_without_tag = canonical.clone();
+        let bound = bound_without_tag["repository"]
+            .as_array_mut()
+            .unwrap()
+            .iter_mut()
+            .find(|repo| string(repo, "name").as_deref() == Some("jeryu"))
+            .unwrap();
+        bound.as_table_mut().unwrap().remove("current_tag");
+        assert!(validate_registered_nested_family_declaration(
+            "jeryu",
+            &bound_without_tag,
+            split_root
+        )
+        .unwrap_err()
+        .contains(
+            "bound nested_families.jeryu.repository[jeryu] identity must declare current_tag"
+        ));
+
+        let mut missing_identity = canonical.clone();
+        missing_identity["repository"].as_array_mut().unwrap()[0]
+            .as_table_mut()
+            .unwrap()
+            .remove("identity_status");
+        assert!(validate_registered_nested_family_declaration(
+            "jeryu",
+            &missing_identity,
+            split_root
+        )
+        .unwrap_err()
+        .contains("identity_status is required"));
+
+        let mut unknown_identity = canonical.clone();
+        unknown_identity["repository"].as_array_mut().unwrap()[0]["identity_status"] =
+            toml::Value::String("guessed".to_owned());
+        assert!(validate_registered_nested_family_declaration(
+            "jeryu",
+            &unknown_identity,
+            split_root
+        )
+        .unwrap_err()
+        .contains("identity_status must be pending or bound, found guessed"));
+
+        let mut missing_control_identity = canonical.clone();
+        missing_control_identity
+            .as_table_mut()
+            .unwrap()
+            .remove("control_plane_identity_status");
+        assert!(validate_registered_nested_family_declaration(
+            "jeryu",
+            &missing_control_identity,
+            split_root
+        )
+        .unwrap_err()
+        .contains("control_plane_identity_status is required"));
+
+        let mut pending_control_identity = canonical.clone();
+        pending_control_identity["control_plane_identity_status"] =
+            toml::Value::String("pending".to_owned());
+        pending_control_identity
+            .as_table_mut()
+            .unwrap()
+            .remove("control_plane_current_tag");
+        assert!(validate_registered_nested_family_declaration(
+            "jeryu",
+            &pending_control_identity,
+            split_root
+        )
+        .unwrap_err()
+        .contains("control_plane_identity_status must be bound"));
+
         let mut premature_symlink_enforcement = canonical.clone();
         premature_symlink_enforcement["symlink_policy"] =
             toml::Value::String("enforced".to_owned());
@@ -13945,6 +14077,7 @@ name = "jeryu-release-ops"
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu-release-ops"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-release-ops.git"
 required_check = "jeryu-release-ops/required"
+identity_status = "bound"
 current_tag = "jeryu-release-ops-v5.0.0-split.0"
 inventory_status = "active"
 runtime_authority = "control-plane"
@@ -13959,6 +14092,14 @@ container_path = "/home/ubuntu/jain-split/jain-redline"
             .unwrap()
             .insert("repo".to_owned(), outer.get("repository").unwrap().clone());
         compare_registered_nested_family_child("jeryu", outer, &child).unwrap();
+
+        let mut identity_drift = child.clone();
+        identity_drift["repo"][0]["identity_status"] = toml::Value::String("pending".to_owned());
+        assert!(
+            compare_registered_nested_family_child("jeryu", outer, &identity_drift)
+                .unwrap_err()
+                .contains("repository[jeryu].identity_status differs")
+        );
 
         let mut drift = child;
         drift["repo"][0]["runtime_authority"] = toml::Value::String("shadow-only".to_owned());
