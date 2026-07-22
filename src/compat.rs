@@ -1084,19 +1084,31 @@ fn resolve_repo_root_from_executable(executable: &Path) -> std::result::Result<P
         .parent()
         .ok_or_else(|| format!("executable has no parent: {}", executable.display()))?;
     for candidate in start.ancestors() {
-        let common = physical_path(candidate, "contracts/compatibility-v1.toml", true)
-            && physical_path(candidate, "corpus/sqlite_parity", false);
+        let contract = physical_path(candidate, "contracts/compatibility-v1.toml", true);
+        let corpus = physical_path(candidate, "corpus/sqlite_parity", false);
         let cargo_toml = physical_path(candidate, "Cargo.toml", true);
         let cargo_lock = physical_path(candidate, "Cargo.lock", true);
         let xtask = physical_path(candidate, "xtask", false);
         let release_manifest = physical_path(candidate, "release-manifest.json", true);
         let bin = physical_path(candidate, "bin", false);
-        let source = cargo_toml && cargo_lock && xtask;
-        let package = release_manifest && bin;
-        if common && (source || package) {
+        let source = contract && corpus && cargo_toml && cargo_lock && xtask;
+        let package = contract && corpus && release_manifest && bin;
+        if source || package {
             return Ok(candidate.to_path_buf());
         }
-        if common && (cargo_toml || cargo_lock || xtask || release_manifest || bin) {
+        let marker_present = [
+            "contracts",
+            "contracts/compatibility-v1.toml",
+            "corpus",
+            "corpus/sqlite_parity",
+            "Cargo.toml",
+            "Cargo.lock",
+            "release-manifest.json",
+            "bin",
+        ]
+        .iter()
+        .any(|relative| path_present(candidate, relative));
+        if marker_present {
             return Err(format!(
                 "incomplete physical redline-testing layout beside executable: {}",
                 candidate.display()
@@ -1107,6 +1119,10 @@ fn resolve_repo_root_from_executable(executable: &Path) -> std::result::Result<P
         "cannot locate a physical redline-testing source or package root from executable {}",
         executable.display()
     ))
+}
+
+fn path_present(root: &Path, relative: &str) -> bool {
+    fs::symlink_metadata(root.join(relative)).is_ok()
 }
 
 fn physical_path(root: &Path, relative: &str, regular_file: bool) -> bool {
@@ -1305,6 +1321,71 @@ mod tests {
             resolve_repo_root_from_executable(&package.join("bin/redline-testing")).is_err(),
             "an executable-relative root must not be supplied by cwd or environment"
         );
+    }
+
+    #[test]
+    fn partial_package_never_falls_back_to_an_enclosing_source() {
+        let workspace = repo_root()
+            .unwrap()
+            .parent()
+            .and_then(Path::parent)
+            .unwrap();
+        let scratch = Scratch(workspace.join("target").join(format!(
+            "compat-partial-package-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .expect("clock")
+                .as_nanos()
+        )));
+        let outer = scratch.0.join("source");
+        fs::create_dir_all(outer.join("contracts")).unwrap();
+        fs::create_dir_all(outer.join("corpus/sqlite_parity")).unwrap();
+        fs::create_dir_all(outer.join("xtask")).unwrap();
+        fs::write(outer.join("Cargo.toml"), b"source\n").unwrap();
+        fs::write(outer.join("Cargo.lock"), b"source\n").unwrap();
+        fs::write(outer.join("contracts/compatibility-v1.toml"), b"source\n").unwrap();
+
+        for (relative, regular_file) in [
+            ("contracts/compatibility-v1.toml", true),
+            ("corpus/sqlite_parity", false),
+            ("release-manifest.json", true),
+            ("bin", false),
+        ] {
+            for wrong_type in [false, true] {
+                let package = outer.join(format!(
+                    "package-{}-{wrong_type}",
+                    relative.replace('/', "-")
+                ));
+                fs::create_dir_all(package.join("contracts")).unwrap();
+                fs::create_dir_all(package.join("corpus/sqlite_parity")).unwrap();
+                fs::create_dir_all(package.join("bin")).unwrap();
+                fs::write(
+                    package.join("contracts/compatibility-v1.toml"),
+                    b"package\n",
+                )
+                .unwrap();
+                fs::write(package.join("release-manifest.json"), b"{}\n").unwrap();
+                fs::write(package.join("runner"), b"executable\n").unwrap();
+
+                let marker = package.join(relative);
+                if regular_file {
+                    fs::remove_file(&marker).unwrap();
+                } else {
+                    fs::remove_dir_all(&marker).unwrap();
+                }
+                if wrong_type {
+                    if regular_file {
+                        fs::create_dir_all(&marker).unwrap();
+                    } else {
+                        fs::write(&marker, b"not a directory\n").unwrap();
+                    }
+                }
+                let error = resolve_repo_root_from_executable(&package.join("runner"))
+                    .expect_err("partial package must fail before outer source fallback");
+                assert!(error.contains("incomplete physical redline-testing layout"));
+            }
+        }
     }
 
     impl Drop for Scratch {

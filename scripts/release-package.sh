@@ -15,15 +15,21 @@ cd "$repo_root"
 version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' Cargo.toml | head -n 1)"
 test -n "$version"
 tag="${REDLINE_TESTING_RELEASE_TAG:-redline-testing-v${version}-jain.1}"
-cargo run --locked --quiet -p xtask -- validate-release-tag --tag "$tag"
-source_date_epoch="${SOURCE_DATE_EPOCH:-$(git show -s --format=%ct HEAD)}"
-case "$source_date_epoch" in
+commit_epoch="$(git show -s --format=%ct HEAD)"
+case "$commit_epoch" in
   ''|*[!0-9]*)
-    printf 'SOURCE_DATE_EPOCH must be an unsigned integer: %s\n' "$source_date_epoch" >&2
+    printf 'release commit epoch must be an unsigned integer: %s\n' "$commit_epoch" >&2
     exit 2
     ;;
 esac
+if [ -n "${SOURCE_DATE_EPOCH+x}" ] && [ "$SOURCE_DATE_EPOCH" != "$commit_epoch" ]; then
+  printf 'SOURCE_DATE_EPOCH must equal release commit epoch: expected=%s actual=%s\n' \
+    "$commit_epoch" "$SOURCE_DATE_EPOCH" >&2
+  exit 2
+fi
+source_date_epoch="$commit_epoch"
 export SOURCE_DATE_EPOCH="$source_date_epoch"
+cargo run --locked --quiet -p xtask -- validate-release-tag --tag "$tag"
 # Release bytes must not depend on the absolute checkout path or caller flags.
 # The logical prefix is stable across every no-local release sandbox.
 unset CARGO_ENCODED_RUSTFLAGS

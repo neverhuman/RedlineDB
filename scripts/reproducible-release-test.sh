@@ -11,6 +11,8 @@ status="$(git -C "$repo_root" status --porcelain=v1 --untracked-files=no)"
   printf 'cross-root release proof requires an exact committed tree\n' >&2
   exit 1
 }
+version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$repo_root/Cargo.toml" | head -n 1)"
+package="redline-testing-${version}-linux-x86_64"
 
 sandbox_a=""
 sandbox_b=""
@@ -39,17 +41,70 @@ for clone in "$sandbox_a/source" "$sandbox_b/source"; do
   [ "$(git -C "$clone" rev-parse 'HEAD^{tree}')" = "$tree" ]
   [ -z "$(git -C "$clone" status --porcelain=v1 --untracked-files=all)" ]
   [ -d "$clone/.git" ] && [ ! -e "$clone/.git/objects/info/alternates" ]
+  if [ "$clone" = "$sandbox_a/source" ]; then
+    mkdir -p "$clone/target"
+    for hostile_epoch in 1 2; do
+      hostile_log="$clone/target/hostile-epoch-${hostile_epoch}.log"
+      if (
+        cd "$clone"
+        env CARGO_NET_OFFLINE=true SOURCE_DATE_EPOCH="$hostile_epoch" \
+          scripts/release-package.sh >"$hostile_log" 2>&1
+      ); then
+        printf 'divergent numeric SOURCE_DATE_EPOCH was accepted: %s\n' "$hostile_epoch" >&2
+        exit 1
+      fi
+      grep -F -q 'SOURCE_DATE_EPOCH must equal release commit epoch' "$hostile_log"
+      [ ! -e "$clone/dist/${package}.tar.gz" ]
+      [ ! -e "$clone/dist/${package}.tar.gz.sha256" ]
+    done
+  fi
   (
     cd "$clone"
-    export CARGO_NET_OFFLINE=true
-    source_date_epoch="$(git show -s --format=%ct HEAD)"
-    export SOURCE_DATE_EPOCH="$source_date_epoch"
-    scripts/release-package.sh
+    if [ "$clone" = "$sandbox_a/source" ]; then
+      env CARGO_NET_OFFLINE=true SOURCE_DATE_EPOCH="$(git show -s --format=%ct HEAD)" \
+        scripts/release-package.sh
+    else
+      env -u SOURCE_DATE_EPOCH CARGO_NET_OFFLINE=true scripts/release-package.sh
+    fi
   )
 done
 
-version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$repo_root/Cargo.toml" | head -n 1)"
-package="redline-testing-${version}-linux-x86_64"
+package_root="$sandbox_a/source/dist/${package}"
+package_runner="$package_root/bin/redline-testing"
+for marker_spec in \
+  "contracts/compatibility-v1.toml:file" \
+  "corpus/sqlite_parity:dir" \
+  "release-manifest.json:file"; do
+  marker="${marker_spec%:*}"
+  marker_type="${marker_spec##*:}"
+  marker_path="$package_root/$marker"
+  held_path="$marker_path.hostile-held"
+  mv -- "$marker_path" "$held_path"
+  for hostile_shape in missing wrong-type; do
+    if [ "$hostile_shape" = wrong-type ]; then
+      if [ "$marker_type" = file ]; then
+        mkdir -p "$marker_path"
+      else
+        printf 'not a directory\n' >"$marker_path"
+      fi
+    fi
+    hostile_log="$sandbox_a/package-layout-${marker//\//-}-${hostile_shape}.log"
+    if "$package_runner" major-gate \
+      --baseline contracts/compatibility-v1.reviewed.toml \
+      --candidate contracts/compatibility-v1.toml \
+      >"$hostile_log" 2>&1; then
+      printf 'partial packaged layout reached an enclosing source: %s %s\n' \
+        "$marker" "$hostile_shape" >&2
+      exit 1
+    fi
+    grep -F -q 'incomplete physical redline-testing layout' "$hostile_log"
+    if [ "$hostile_shape" = wrong-type ]; then
+      rm -rf -- "$marker_path"
+    fi
+  done
+  mv -- "$held_path" "$marker_path"
+done
+
 artifacts=(
   "dist/${package}/bin/redline-testing"
   "dist/release-manifest.json"

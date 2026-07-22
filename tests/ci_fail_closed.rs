@@ -69,6 +69,7 @@ fn release_path_is_local_only_and_requires_custody() {
     assert!(!release.contains("GITHUB_REF_NAME"));
     for reproducibility_binding in [
         "SOURCE_DATE_EPOCH",
+        "SOURCE_DATE_EPOCH must equal release commit epoch",
         "--sort=name",
         "--numeric-owner",
         "--mtime=\"@${source_date_epoch}\"",
@@ -90,6 +91,8 @@ fn release_path_is_local_only_and_requires_custody() {
     assert!(reproducible_release.contains("$repo_root/target/cross-root-release-a.XXXXXX"));
     assert!(reproducible_release.contains("$workspace_root/target/cross-root-release-b.XXXXXX"));
     assert!(reproducible_release.contains("CARGO_NET_OFFLINE=true"));
+    assert!(reproducible_release.contains("for hostile_epoch in 1 2"));
+    assert!(reproducible_release.contains("env -u SOURCE_DATE_EPOCH"));
     assert!(reproducible_release.contains("cmp -s"));
     assert!(!repo_file("src/compat.rs").contains("env!(\"CARGO_MANIFEST_DIR\")"));
     assert!(docs.contains("xtask custody-stage"));
