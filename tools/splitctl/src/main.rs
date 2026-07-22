@@ -7433,6 +7433,68 @@ fn declared_standard_version_tag(
         return Err("declared release-tag metadata is not a bounded regular file".into());
     }
     let data: toml::Value = fs::read_to_string(&path)?.parse()?;
+    let table = data
+        .as_table()
+        .ok_or("declared standard-version metadata is not a TOML table")?;
+    let keys = table
+        .keys()
+        .map(String::as_str)
+        .collect::<std::collections::BTreeSet<_>>();
+    let legacy_keys = [
+        "schema_version",
+        "workspace",
+        "version",
+        "release_authority",
+        "version_source",
+        "release_artifact",
+        "target_stack",
+    ]
+    .into_iter()
+    .collect::<std::collections::BTreeSet<_>>();
+    let jankurai_keys = [
+        "standard",
+        "standard_version",
+        "paper_edition",
+        "auditor_version",
+        "schema_version",
+        "target_stack",
+    ]
+    .into_iter()
+    .collect::<std::collections::BTreeSet<_>>();
+    let has_legacy_discriminator = keys.contains("workspace") || keys.contains("version");
+    if !has_legacy_discriminator {
+        if keys != jankurai_keys {
+            return Err(
+                "declared standard-version metadata is neither a closed release-tag nor Jankurai identity schema"
+                    .into(),
+            );
+        }
+        for key in &jankurai_keys {
+            let Some(value) = table.get(*key).and_then(toml::Value::as_str) else {
+                return Err(format!("declared Jankurai identity {key} is not a string").into());
+            };
+            if !valid_cargo_cache_component(value) {
+                return Err(
+                    format!("declared Jankurai identity {key} is empty or malformed").into(),
+                );
+            }
+        }
+        if table.get("standard").and_then(toml::Value::as_str) != Some("jankurai") {
+            return Err("declared standard identity is not Jankurai".into());
+        }
+        return Ok(None);
+    }
+    if !keys.is_subset(&legacy_keys)
+        || keys.contains("standard")
+        || keys.contains("standard_version")
+        || keys.contains("paper_edition")
+        || keys.contains("auditor_version")
+    {
+        return Err("declared release-tag metadata mixes schemas or has unknown fields".into());
+    }
+    if !keys.contains("workspace") || !keys.contains("version") {
+        return Err("declared release-tag metadata is incomplete".into());
+    }
     if data.get("workspace").and_then(toml::Value::as_str) != Some(repo_name) {
         return Err("declared release-tag workspace differs from the repository".into());
     }
@@ -14885,6 +14947,158 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             token_file.display().to_string(),
         ])
         .is_err());
+    }
+
+    #[test]
+    fn declared_release_tag_distinguishes_closed_jankurai_and_legacy_metadata() {
+        let root = TestDir::new("declared-release-tag-schema");
+        let agent = root.path().join("agent");
+        fs::create_dir(&agent).unwrap();
+        let metadata = agent.join("standard-version.toml");
+        let jankurai = [
+            ("standard", "jankurai"),
+            ("standard_version", "0.9.0"),
+            ("paper_edition", "2026.05-ed8"),
+            ("auditor_version", "1.6.11"),
+            ("schema_version", "1.9.0"),
+            ("target_stack", "jeryu-tool-control-plane"),
+        ];
+        let render = |rows: &[(&str, &str)]| {
+            rows.iter()
+                .map(|(key, value)| format!("{key} = \"{value}\"\n"))
+                .collect::<String>()
+        };
+
+        fs::write(&metadata, render(&jankurai)).unwrap();
+        assert_eq!(
+            declared_standard_version_tag("jeryu/jeryu-tool", root.path()).unwrap(),
+            None
+        );
+
+        for missing in jankurai.iter().map(|(key, _)| *key) {
+            let rows = jankurai
+                .iter()
+                .copied()
+                .filter(|(key, _)| *key != missing)
+                .collect::<Vec<_>>();
+            fs::write(&metadata, render(&rows)).unwrap();
+            assert!(
+                declared_standard_version_tag("jeryu/jeryu-tool", root.path()).is_err(),
+                "missing {missing} must fail closed"
+            );
+        }
+
+        for invalid in [
+            format!("{}unknown = \"value\"\n", render(&jankurai)),
+            render(&[
+                ("standard", "other"),
+                ("standard_version", "0.9.0"),
+                ("paper_edition", "2026.05-ed8"),
+                ("auditor_version", "1.6.11"),
+                ("schema_version", "1.9.0"),
+                ("target_stack", "jeryu-tool-control-plane"),
+            ]),
+            render(&[
+                ("standard", "jankurai"),
+                ("standard_version", ""),
+                ("paper_edition", "2026.05-ed8"),
+                ("auditor_version", "1.6.11"),
+                ("schema_version", "1.9.0"),
+                ("target_stack", "jeryu-tool-control-plane"),
+            ]),
+            render(&[
+                ("standard", "jankurai"),
+                ("standard_version", "0.9.0"),
+                ("paper_edition", "../../escape"),
+                ("auditor_version", "1.6.11"),
+                ("schema_version", "1.9.0"),
+                ("target_stack", "jeryu-tool-control-plane"),
+            ]),
+            format!("{}workspace = \"jeryu-tool\"\n", render(&jankurai)),
+            format!(
+                "{}workspace = \"jeryu-tool\"\nversion = \"jeryu-tool-v5.1.0-split.1\"\n",
+                render(&jankurai)
+            ),
+            "workspace = \"jeryu-tool\"\n".to_owned(),
+            "version = \"jeryu-tool-v5.1.0-split.1\"\n".to_owned(),
+            "standard = 1\nstandard_version = \"0.9.0\"\npaper_edition = \"2026.05-ed8\"\nauditor_version = \"1.6.11\"\nschema_version = \"1.9.0\"\ntarget_stack = \"jeryu-tool-control-plane\"\n".to_owned(),
+        ] {
+            fs::write(&metadata, invalid).unwrap();
+            assert!(declared_standard_version_tag("jeryu/jeryu-tool", root.path()).is_err());
+        }
+
+        fs::write(
+            &metadata,
+            "schema_version = \"1.0.0\"\nworkspace = \"jeryu-tool\"\nversion = \"jeryu-tool-v5.1.0-split.1\"\nrelease_authority = \"jeryu-release-ops\"\nversion_source = \"VERSION\"\n",
+        )
+        .unwrap();
+        assert_eq!(
+            declared_standard_version_tag("jeryu/jeryu-tool", root.path()).unwrap(),
+            Some("jeryu-tool-v5.1.0-split.1".to_owned())
+        );
+        fs::write(
+            &metadata,
+            "workspace = \"jeryu-tool\"\nversion = \"jeryu-tool-v5.1.0-split.1\"\nunknown = \"value\"\n",
+        )
+        .unwrap();
+        assert!(declared_standard_version_tag("jeryu/jeryu-tool", root.path()).is_err());
+    }
+
+    #[test]
+    fn git_materialization_accepts_tag_neutral_jankurai_identity() {
+        let root = TestDir::new("git-materialization-jankurai-identity");
+        let (source, _) = init_source(root.path());
+        fs::create_dir_all(source.join("agent")).unwrap();
+        fs::write(
+            source.join("agent/standard-version.toml"),
+            "standard = \"jankurai\"\nstandard_version = \"0.9.0\"\npaper_edition = \"2026.05-ed8\"\nauditor_version = \"1.6.11\"\nschema_version = \"1.9.0\"\ntarget_stack = \"jeryu-tool-control-plane\"\n",
+        )
+        .unwrap();
+        run_git_strict(&source, &["add", "agent/standard-version.toml"]).unwrap();
+        run_git_strict(&source, &["commit", "-m", "declare Jankurai identity"]).unwrap();
+        let head = resolve_commit(&source, "HEAD").unwrap();
+        let remote = init_bare(root.path());
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!("{head}:refs/heads/main"),
+            ],
+        )
+        .unwrap();
+        let token_root = TestDir::new_private_temp("git-materialization-jankurai-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let destination = root.path().join("materialized");
+        jeryu_git_materialize(vec![
+            "git-materialize".to_owned(),
+            "--repo".to_owned(),
+            "jeryu/jeryu-tool".to_owned(),
+            "--remote".to_owned(),
+            remote.display().to_string(),
+            "--ref".to_owned(),
+            "refs/heads/main".to_owned(),
+            "--expected-head".to_owned(),
+            head.clone(),
+            "--destination".to_owned(),
+            destination.display().to_string(),
+            "--token-file".to_owned(),
+            token_file.display().to_string(),
+            "--retain-declared-release-tag".to_owned(),
+        ])
+        .unwrap();
+        assert_eq!(resolve_commit(&destination, "HEAD").unwrap(), head);
+        assert!(strict_git_output(
+            &destination,
+            &["for-each-ref", "--format=%(refname)", "refs/tags"]
+        )
+        .unwrap()
+        .is_empty());
+        assert!(strict_git_output(&destination, &["remote"])
+            .unwrap()
+            .is_empty());
     }
 
     #[test]
