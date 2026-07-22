@@ -26,9 +26,12 @@ an unowned profile fail before a command starts.
 
 `presubmit` routes exact changed paths through `agent/test-map.json`, adds
 changed Rust packages and their reverse dependents, affected Node packages,
-contract consumers, static security and changed-surface coverage. Lockfile,
-CI/control, contract, generated-zone, source-policy, or control-plane changes
-automatically widen to `release-full`.
+contract consumers, static security and changed-surface coverage. Every
+affected Node package must expose an exact `lane=node-test` route whose command
+is `pnpm --dir <package> run test`; the planner binds the governed `pnpm`
+executable directly and rejects broad `required` routes for affected Node
+paths. Lockfile, CI/control, contract, generated-zone, source-policy, or
+control-plane changes automatically widen to `release-full`.
 
 `release-full` requires an explicit repository-owned
 `ops/ci/typed-required-non-test.sh` mapping. It represents each required, Rust build/test, security, complete
@@ -39,7 +42,7 @@ and coverage obligations together. Cross-repository consumers require one
 authority-bound executable command each; a local contract-drift command is not
 misrepresented as consumer execution. Missing repository mappings fail plan
 creation. Presubmit likewise combines each changed Rust test and coverage run,
-requires explicit test-map routing for affected Node packages, and requires the
+requires the typed Node route described above, and requires the
 physical root-installed 40-GiB local-only sccache identity at plan time.
 
 No v1 worker result is trusted or aggregatable. The reserved

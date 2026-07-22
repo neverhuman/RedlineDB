@@ -20,6 +20,7 @@ case "${1:-}" in
     mapfile -t sh_files < <(find ops -type f -name '*.sh' | sort)
     for f in "${sh_files[@]}"; do bash -n "$f"; done
     shellcheck -S error "${sh_files[@]}"
+    bash ops/ci/required-failure-propagation-test.sh
     bash ops/ci/cargo-lock-closure-test.sh
     bash ops/ci/native-runtime-test.sh
     bash ops/ci/pnpm-runtime-test.sh

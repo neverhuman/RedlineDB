@@ -34,6 +34,7 @@ const MAX_PLAN_BYTES: u64 = 4 * 1024 * 1024;
 const MAX_EVIDENCE_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_EVIDENCE_FILES: usize = 4096;
 const MAX_LANES: usize = 64;
+const MAX_CANONICAL_ID: usize = 96;
 const MAX_CHANGED_PATHS: usize = 20_000;
 const MAX_STRING: usize = 16 * 1024;
 const MAX_LANE_DURATION_MS: u64 = 3_660_000;
@@ -1336,7 +1337,7 @@ fn presubmit_lanes(
         .get("tests")
         .and_then(JsonValue::as_object)
         .ok_or("agent/test-map.json has no tests object")?;
-    let mut routed = BTreeMap::<String, (String, BTreeSet<String>)>::new();
+    let mut routed = BTreeMap::<(String, String), BTreeSet<String>>::new();
     for path in changed {
         for (pattern, route) in tests {
             if test_map_matches(pattern, path) {
@@ -1348,45 +1349,88 @@ fn presubmit_lanes(
                     .get("lane")
                     .and_then(JsonValue::as_str)
                     .ok_or("test-map lane must be a string")?;
-                let entry = routed
-                    .entry(command.to_owned())
-                    .or_insert_with(|| (lane_name.to_owned(), BTreeSet::new()));
-                entry.1.insert(path.clone());
+                if node_packages
+                    .iter()
+                    .any(|package| path_is_within_node_package(package, path))
+                    && is_broad_required_route(command)
+                {
+                    return Err(format!(
+                        "affected Node path {path} is routed through broad required instead of an explicit node-test lane"
+                    )
+                    .into());
+                }
+                routed
+                    .entry((lane_name.to_owned(), command.to_owned()))
+                    .or_default()
+                    .insert(path.clone());
             }
         }
     }
+    if !node_packages.is_empty() {
+        let pnpm = executable_path(executables, "pnpm")?;
+        for (index, package) in node_packages.iter().enumerate() {
+            let command = node_test_command(package);
+            let route_key = ("node-test".to_owned(), command.clone());
+            let paths = routed.remove(&route_key).ok_or_else(|| {
+                format!(
+                    "affected Node package {package} requires test-map lane=node-test command={command:?}"
+                )
+            })?;
+            if !paths
+                .iter()
+                .any(|path| path_is_within_node_package(package, path))
+            {
+                return Err(format!(
+                    "node-test route for {package} does not cover an affected package path"
+                )
+                .into());
+            }
+            let package_id = match safe_id(package).as_str() {
+                "" => "root".to_owned(),
+                value => value.to_owned(),
+            };
+            let mut obligations = vec![format!("node-package-test:{package_id}")];
+            if index == 0 {
+                obligations.push("affected-node-tests".to_owned());
+            }
+            lanes.push(lane(
+                &format!("affected-node-{}-{package_id}", index + 1),
+                "node-test",
+                &pnpm,
+                vec![
+                    "--dir".to_owned(),
+                    package.clone(),
+                    "run".to_owned(),
+                    "test".to_owned(),
+                ],
+                vec![],
+                obligations,
+                paths.into_iter().collect(),
+                300,
+                "presubmit-only",
+            ));
+        }
+        if routed.keys().any(|(kind, _)| kind == "node-test") {
+            return Err("node-test routes must bind exactly one affected package through the governed pnpm command".into());
+        }
+    }
     let mut route_index = 0;
-    let mut node_tests_bound = false;
-    for (command, (kind, paths)) in routed {
+    for ((kind, command), paths) in routed {
         if command == "just security" || command.ends_with("scripts/ci-local.sh security") {
             continue;
         }
         route_index += 1;
-        let covers_node = !node_tests_bound
-            && node_packages.iter().any(|root| {
-                paths.iter().any(|path| {
-                    root == "." || path == root || path.starts_with(&format!("{root}/"))
-                })
-            });
-        let mut obligations = vec![format!("mapped-route:{route_index}")];
-        if covers_node {
-            obligations.push("affected-node-tests".to_owned());
-            node_tests_bound = true;
-        }
         lanes.push(lane(
             &format!("mapped-{}-{}", route_index, safe_id(&kind)),
             &kind,
             &bash,
             vec!["-lc".to_owned(), command],
             vec![],
-            obligations,
+            vec![format!("mapped-route:{route_index}")],
             paths.into_iter().collect(),
             300,
             "presubmit-only",
         ));
-    }
-    if !node_packages.is_empty() && !node_tests_bound {
-        return Err("affected Node packages require an explicit test-map route".into());
     }
     if presubmit_requires_contract(changed, cross_repo_dependencies) {
         lanes.push(lane(
@@ -1454,6 +1498,21 @@ fn test_map_matches(pattern: &str, path: &str) -> bool {
     }
 }
 
+fn path_is_within_node_package(package: &str, path: &str) -> bool {
+    package == "." || path == package || path.starts_with(&format!("{package}/"))
+}
+
+fn node_test_command(package: &str) -> String {
+    format!("pnpm --dir {package} run test")
+}
+
+fn is_broad_required_route(command: &str) -> bool {
+    let command = command.trim();
+    command == "just required"
+        || command.ends_with("ops/ci/required.sh")
+        || command.ends_with("scripts/ci-local.sh required")
+}
+
 fn presubmit_requires_contract(changed: &[String], cross_repo_dependencies: &[String]) -> bool {
     changed.iter().any(|path| path.starts_with("contracts/"))
         || (!cross_repo_dependencies.is_empty()
@@ -1476,7 +1535,11 @@ fn safe_id(value: &str) -> String {
     while result.contains("--") {
         result = result.replace("--", "-");
     }
-    result.trim_matches('-').chars().take(64).collect()
+    result
+        .trim_matches('-')
+        .chars()
+        .take(MAX_CANONICAL_ID)
+        .collect()
 }
 
 fn validate_generated_lanes(
@@ -1512,7 +1575,7 @@ fn validate_generated_lanes(
             ],
             "CI lane",
         )?;
-        let id = bounded_string(&object["id"], "lane id", 96)?;
+        let id = bounded_string(&object["id"], "lane id", MAX_CANONICAL_ID)?;
         if safe_id(id) != id || !ids.insert(id.to_owned()) {
             return Err(format!("lane id is unsafe or duplicated: {id}").into());
         }
@@ -1697,7 +1760,7 @@ fn validate_plan_value(plan: &JsonValue) -> Result<(), Box<dyn std::error::Error
     if object["schema_version"].as_str() != Some(PLAN_SCHEMA) {
         return Err("unsupported CI plan schema".into());
     }
-    let repository = bounded_string(&object["repository"], "repository", 128)?;
+    let repository = bounded_string(&object["repository"], "repository", MAX_CANONICAL_ID)?;
     if safe_id(repository) != repository {
         return Err("CI repository name is not canonical".into());
     }
@@ -3182,7 +3245,7 @@ fn validate_lane_result(
     {
         return Err("CI lane result schema or plan binding is invalid".into());
     }
-    let lane_id = bounded_string(&object["lane_id"], "lane-result id", 96)?;
+    let lane_id = bounded_string(&object["lane_id"], "lane-result id", MAX_CANONICAL_ID)?;
     if safe_id(lane_id) != lane_id {
         return Err("CI lane-result id is unsafe".into());
     }
@@ -4626,6 +4689,54 @@ mod tests {
         (root, base, head, tracked, changed)
     }
 
+    fn node_fixture(command: &str, lane_name: &str) -> (TestDir, String, Vec<String>) {
+        let root = TestDir::new("node-routing");
+        git(root.path(), &["init", "-q", "-b", "main"]);
+        git(root.path(), &["config", "user.name", "CI test"]);
+        git(root.path(), &["config", "user.email", "ci-test@invalid"]);
+        write(
+            &root.path().join("apps/web/package.json"),
+            "{\"name\":\"fixture-web\",\"scripts\":{\"test\":\"node --test\"}}\n",
+        );
+        write(
+            &root.path().join("apps/web/src/app.ts"),
+            "export const value = 1;\n",
+        );
+        write(
+            &root.path().join("agent/test-map.json"),
+            &serde_json::to_string_pretty(&json!({
+                "tests": {
+                    "apps/web/**": {
+                        "command": command,
+                        "lane": lane_name,
+                        "purpose": "fixture"
+                    }
+                }
+            }))
+            .unwrap(),
+        );
+        git(root.path(), &["add", "."]);
+        git(root.path(), &["commit", "-q", "-m", "base"]);
+        write(
+            &root.path().join("apps/web/src/app.ts"),
+            "export const value = 2;\n",
+        );
+        git(root.path(), &["add", "."]);
+        git(root.path(), &["commit", "-q", "-m", "change web"]);
+        let head = git(root.path(), &["rev-parse", "HEAD"]);
+        (root, head, vec!["apps/web/src/app.ts".to_owned()])
+    }
+
+    fn presubmit_fixture_executables() -> BTreeMap<String, JsonValue> {
+        let executable =
+            |name: &str, path: &str| json!({"name": name, "path": path, "sha256": "a".repeat(64)});
+        BTreeMap::from([
+            ("bash".to_owned(), executable("bash", "/usr/bin/bash")),
+            ("cargo".to_owned(), executable("cargo", "/usr/bin/cargo")),
+            ("pnpm".to_owned(), executable("pnpm", "/usr/bin/pnpm")),
+        ])
+    }
+
     fn simple_lane(id: &str, dependencies: Vec<&str>, obligations: Vec<&str>) -> JsonValue {
         lane(
             id,
@@ -4830,6 +4941,77 @@ mod tests {
             affected_node_packages(&tracked, &["apps/web/src/app.tsx".to_owned()]),
             vec!["apps/web".to_owned()]
         );
+    }
+
+    #[test]
+    fn affected_node_routes_bind_direct_pnpm_tests_and_reject_broad_required() {
+        let (root, head, changed) = node_fixture("pnpm --dir apps/web run test", "node-test");
+        let raw: toml::Value = "name = \"fixture\"".parse().unwrap();
+        let lanes = presubmit_lanes(
+            root.path(),
+            &head,
+            &changed,
+            &[],
+            &["apps/web".to_owned()],
+            &[],
+            &raw,
+            &presubmit_fixture_executables(),
+        )
+        .unwrap();
+        let node_lane = lanes
+            .iter()
+            .find(|lane| lane["kind"] == "node-test")
+            .unwrap();
+        assert_eq!(node_lane["program"], "/usr/bin/pnpm");
+        assert_eq!(
+            node_lane["args"],
+            json!(["--dir", "apps/web", "run", "test"])
+        );
+        assert!(node_lane["obligations"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("affected-node-tests")));
+        assert!(!lanes.iter().any(|lane| {
+            lane["args"]
+                .as_array()
+                .is_some_and(|args| args.contains(&json!("just required")))
+        }));
+
+        let (broad, broad_head, broad_changed) = node_fixture("just required", "required");
+        assert!(presubmit_lanes(
+            broad.path(),
+            &broad_head,
+            &broad_changed,
+            &[],
+            &["apps/web".to_owned()],
+            &[],
+            &raw,
+            &presubmit_fixture_executables(),
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn affected_node_routes_reject_untyped_or_drifting_commands() {
+        let raw: toml::Value = "name = \"fixture\"".parse().unwrap();
+        for (command, lane_name) in [
+            ("pnpm --dir apps/web run test", "required"),
+            ("pnpm --dir apps/web run test:coverage", "node-test"),
+            ("just required", "node-test"),
+        ] {
+            let (root, head, changed) = node_fixture(command, lane_name);
+            assert!(presubmit_lanes(
+                root.path(),
+                &head,
+                &changed,
+                &[],
+                &["apps/web".to_owned()],
+                &[],
+                &raw,
+                &presubmit_fixture_executables(),
+            )
+            .is_err());
+        }
     }
 
     #[test]
@@ -5287,6 +5469,30 @@ mod tests {
         }
         assert_eq!(plan_schema["$defs"]["stringSet"]["maxItems"], 128);
         assert_eq!(plan_schema["$defs"]["packageSet"]["maxItems"], 1024);
+        assert_eq!(
+            plan_schema["$defs"]["name"]["pattern"],
+            "^[a-z0-9][a-z0-9-]{0,95}$"
+        );
+        assert_eq!(
+            plan_schema["$defs"]["lane"]["properties"]["id"]["pattern"],
+            "^[a-z0-9][a-z0-9-]{0,95}$"
+        );
+        let lane_result_schema: JsonValue = serde_json::from_str(include_str!(
+            "../../../contracts/ci-lane-result.schema.json"
+        ))
+        .unwrap();
+        assert_eq!(
+            lane_result_schema["properties"]["lane_id"]["pattern"],
+            "^[a-z0-9][a-z0-9-]{0,95}$"
+        );
+        assert_eq!(
+            safe_id(&"a".repeat(MAX_CANONICAL_ID)),
+            "a".repeat(MAX_CANONICAL_ID)
+        );
+        assert_ne!(
+            safe_id(&"a".repeat(MAX_CANONICAL_ID + 1)),
+            "a".repeat(MAX_CANONICAL_ID + 1)
+        );
         assert_eq!(
             plan_schema["$defs"]["execution"]["properties"]["allowed"]["const"],
             false
