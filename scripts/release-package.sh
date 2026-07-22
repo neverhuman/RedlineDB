@@ -27,7 +27,23 @@ export SOURCE_DATE_EPOCH="$source_date_epoch"
 # Release bytes must not depend on the absolute checkout path or caller flags.
 # The logical prefix is stable across every no-local release sandbox.
 unset CARGO_ENCODED_RUSTFLAGS
+unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
 export RUSTFLAGS="--remap-path-prefix=${repo_root}=/redline-testing"
+export CARGO_INCREMENTAL=0
+release_target="$(mktemp -d "$repo_root/target/release-build.XXXXXX")"
+cleanup_release_target() {
+  case "$release_target" in
+    "$repo_root"/target/release-build.*)
+      chmod -R u+w -- "$release_target" 2>/dev/null || true
+      rm -rf -- "$release_target"
+      ;;
+    *)
+      printf 'refusing unsafe release-target cleanup: %s\n' "$release_target" >&2
+      ;;
+  esac
+}
+trap cleanup_release_target EXIT HUP INT TERM
+export CARGO_TARGET_DIR="$release_target"
 cargo build --release --locked
 
 target_name="linux-x86_64"
@@ -44,7 +60,7 @@ mkdir -p "${pkg_dir}/schemas"
 mkdir -p "${pkg_dir}/templates"
 
 # Binary first (hashed separately at the top level).
-cp target/release/redline-testing "${pkg_dir}/bin/redline-testing"
+cp "$release_target/release/redline-testing" "${pkg_dir}/bin/redline-testing"
 
 # Corpora — both the pinned upstream manifest and every locally-authored
 # shard (hand-curated 10_* through 33_*; generated gen_*.json).

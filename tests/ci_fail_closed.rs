@@ -74,7 +74,10 @@ fn release_path_is_local_only_and_requires_custody() {
         "--mtime=\"@${source_date_epoch}\"",
         "gzip -n",
         "unset CARGO_ENCODED_RUSTFLAGS",
+        "unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER",
         "--remap-path-prefix=${repo_root}=/redline-testing",
+        "release_target=\"$(mktemp -d \"$repo_root/target/release-build.XXXXXX\")\"",
+        "export CARGO_TARGET_DIR=\"$release_target\"",
     ] {
         assert!(
             release.contains(reproducibility_binding),

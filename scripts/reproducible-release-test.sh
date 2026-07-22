@@ -45,7 +45,7 @@ done
 version="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$repo_root/Cargo.toml" | head -n 1)"
 package="redline-testing-${version}-linux-x86_64"
 artifacts=(
-  "target/release/redline-testing"
+  "dist/${package}/bin/redline-testing"
   "dist/release-manifest.json"
   "dist/${package}.tar.gz"
   "dist/${package}.tar.gz.sha256"
@@ -62,7 +62,7 @@ for relative in "${artifacts[@]}"; do
 done
 
 for name in root-a root-b; do
-  binary="$sandbox/$name/target/release/redline-testing"
+  binary="$sandbox/$name/dist/${package}/bin/redline-testing"
   if grep -F -a -q -- "$sandbox/$name" "$binary"; then
     printf 'release binary embeds its absolute build root: %s\n' "$name" >&2
     exit 1
