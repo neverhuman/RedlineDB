@@ -7461,15 +7461,18 @@ fn declared_standard_version_tag(
     ]
     .into_iter()
     .collect::<std::collections::BTreeSet<_>>();
-    let has_legacy_discriminator = keys.contains("workspace") || keys.contains("version");
-    if !has_legacy_discriminator {
-        if keys != jankurai_keys {
-            return Err(
-                "declared standard-version metadata is neither a closed release-tag nor Jankurai identity schema"
-                    .into(),
-            );
-        }
-        for key in &jankurai_keys {
+    let mut jankurai_published_keys = jankurai_keys.clone();
+    jankurai_published_keys.extend(["published", "release_tag"]);
+    let mut jankurai_product_keys = jankurai_published_keys.clone();
+    jankurai_product_keys.insert("product_version");
+    let mut jankurai_platform_keys = jankurai_product_keys.clone();
+    jankurai_platform_keys.extend(["workspace", "version"]);
+    let is_closed_jankurai = keys == jankurai_keys
+        || keys == jankurai_published_keys
+        || keys == jankurai_product_keys
+        || keys == jankurai_platform_keys;
+    if is_closed_jankurai {
+        for key in &keys {
             let Some(value) = table.get(*key).and_then(toml::Value::as_str) else {
                 return Err(format!("declared Jankurai identity {key} is not a string").into());
             };
@@ -7482,14 +7485,46 @@ fn declared_standard_version_tag(
         if table.get("standard").and_then(toml::Value::as_str) != Some("jankurai") {
             return Err("declared standard identity is not Jankurai".into());
         }
+        if let Some(release_tag) = table.get("release_tag").and_then(toml::Value::as_str) {
+            let auditor_version = table
+                .get("auditor_version")
+                .and_then(toml::Value::as_str)
+                .ok_or("declared Jankurai identity has no auditor version")?;
+            if release_tag != format!("v{auditor_version}") {
+                return Err(
+                    "declared Jankurai release tag differs from the auditor version".into(),
+                );
+            }
+        }
+        if keys == jankurai_platform_keys {
+            if table.get("workspace").and_then(toml::Value::as_str) != Some(repo_name) {
+                return Err("declared Jankurai workspace differs from the repository".into());
+            }
+            if table.get("version").and_then(toml::Value::as_str)
+                != table.get("product_version").and_then(toml::Value::as_str)
+            {
+                return Err(
+                    "declared Jankurai workspace version differs from the product version".into(),
+                );
+            }
+        }
         return Ok(None);
     }
-    if !keys.is_subset(&legacy_keys)
-        || keys.contains("standard")
-        || keys.contains("standard_version")
-        || keys.contains("paper_edition")
-        || keys.contains("auditor_version")
-    {
+    let has_jankurai_discriminator = [
+        "standard",
+        "standard_version",
+        "paper_edition",
+        "auditor_version",
+        "published",
+        "release_tag",
+        "product_version",
+    ]
+    .into_iter()
+    .any(|key| keys.contains(key));
+    if has_jankurai_discriminator {
+        return Err("declared Jankurai identity has an unknown or incomplete schema".into());
+    }
+    if !keys.is_subset(&legacy_keys) {
         return Err("declared release-tag metadata mixes schemas or has unknown fields".into());
     }
     if !keys.contains("workspace") || !keys.contains("version") {
@@ -14975,6 +15010,65 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             None
         );
 
+        let redline_central = [
+            ("auditor_version", "1.6.11"),
+            ("paper_edition", "2026.05-ed8"),
+            ("published", "2026-06-11"),
+            ("release_tag", "v1.6.11"),
+            ("schema_version", "1.9.0"),
+            ("standard", "jankurai"),
+            ("standard_version", "0.9.0"),
+            ("target_stack", "rust"),
+        ];
+        let fabric = [
+            ("standard", "jankurai"),
+            ("standard_version", "0.9.0"),
+            ("paper_edition", "2026.05-ed8"),
+            ("auditor_version", "1.6.11"),
+            ("schema_version", "1.9.0"),
+            ("published", "2026-06-11"),
+            ("release_tag", "v1.6.11"),
+            ("target_stack", "rust-crate"),
+            ("product_version", "9.0.0-distributed.1"),
+        ];
+        let shard = [
+            ("standard", "jankurai"),
+            ("standard_version", "0.9.0"),
+            ("paper_edition", "2026.05-ed8"),
+            ("auditor_version", "1.6.11"),
+            ("schema_version", "1.9.0"),
+            ("published", "2026-06-11"),
+            ("release_tag", "v1.6.11"),
+            ("target_stack", "rust-crate"),
+            ("product_version", "9.0.0-alpha.6"),
+        ];
+        let platform = [
+            ("workspace", "jain-platform"),
+            ("version", "9.0.0-distributed.1"),
+            ("standard", "jankurai"),
+            ("standard_version", "0.9.0"),
+            ("paper_edition", "2026.05-ed8"),
+            ("auditor_version", "1.6.11"),
+            ("schema_version", "1.9.0"),
+            ("published", "2026-06-11"),
+            ("release_tag", "v1.6.11"),
+            ("target_stack", "rust-crate"),
+            ("product_version", "9.0.0-distributed.1"),
+        ];
+        for (repo, rows) in [
+            ("veox/redline-central", redline_central.as_slice()),
+            ("veox/jain-fabric", fabric.as_slice()),
+            ("veox/jain-shard", shard.as_slice()),
+            ("veox/jain-platform", platform.as_slice()),
+        ] {
+            fs::write(&metadata, render(rows)).unwrap();
+            assert_eq!(
+                declared_standard_version_tag(repo, root.path()).unwrap(),
+                None,
+                "{repo} Jankurai metadata must remain tag-neutral"
+            );
+        }
+
         for missing in jankurai.iter().map(|(key, _)| *key) {
             let rows = jankurai
                 .iter()
@@ -15019,6 +15113,42 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 "{}workspace = \"jeryu-tool\"\nversion = \"jeryu-tool-v5.1.0-split.1\"\n",
                 render(&jankurai)
             ),
+            render(&[
+                ("auditor_version", "1.6.11"),
+                ("paper_edition", "2026.05-ed8"),
+                ("published", "2026-06-11"),
+                ("release_tag", "v1.6.10"),
+                ("schema_version", "1.9.0"),
+                ("standard", "jankurai"),
+                ("standard_version", "0.9.0"),
+                ("target_stack", "rust"),
+            ]),
+            render(&[
+                ("workspace", "other-platform"),
+                ("version", "9.0.0-distributed.1"),
+                ("standard", "jankurai"),
+                ("standard_version", "0.9.0"),
+                ("paper_edition", "2026.05-ed8"),
+                ("auditor_version", "1.6.11"),
+                ("schema_version", "1.9.0"),
+                ("published", "2026-06-11"),
+                ("release_tag", "v1.6.11"),
+                ("target_stack", "rust-crate"),
+                ("product_version", "9.0.0-distributed.1"),
+            ]),
+            render(&[
+                ("workspace", "jeryu-tool"),
+                ("version", "9.0.0-alpha.6"),
+                ("standard", "jankurai"),
+                ("standard_version", "0.9.0"),
+                ("paper_edition", "2026.05-ed8"),
+                ("auditor_version", "1.6.11"),
+                ("schema_version", "1.9.0"),
+                ("published", "2026-06-11"),
+                ("release_tag", "v1.6.11"),
+                ("target_stack", "rust-crate"),
+                ("product_version", "9.0.0-distributed.1"),
+            ]),
             "workspace = \"jeryu-tool\"\n".to_owned(),
             "version = \"jeryu-tool-v5.1.0-split.1\"\n".to_owned(),
             "standard = 1\nstandard_version = \"0.9.0\"\npaper_edition = \"2026.05-ed8\"\nauditor_version = \"1.6.11\"\nschema_version = \"1.9.0\"\ntarget_stack = \"jeryu-tool-control-plane\"\n".to_owned(),
