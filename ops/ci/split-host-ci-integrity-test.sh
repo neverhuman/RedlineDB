@@ -102,6 +102,50 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Worker mode must reject a widened or ambiguous command-scope Git
+# configuration before it reads reexec state or invokes Git. The complete
+# privileged fixture below supplies the exact positive environment.
+command_git_config_runner="$tmp/.split-host-ci-reviewed"
+install -m 0755 "$repo_root/ops/ci/split-host-ci.sh" \
+  "$command_git_config_runner"
+command_git_config_common=(
+  PATH=/usr/bin:/bin
+  GIT_CONFIG_NOSYSTEM=1
+  GIT_CONFIG_GLOBAL=/dev/null
+  GIT_CONFIG_COUNT=5
+  GIT_CONFIG_KEY_0=safe.directory
+  GIT_CONFIG_VALUE_0=/opt/jain-ci/authority/control-plane
+  GIT_CONFIG_KEY_1=safe.directory
+  GIT_CONFIG_KEY_2=safe.directory
+  GIT_CONFIG_VALUE_2=/tmp/command-git-config-deny-db
+  GIT_CONFIG_KEY_3=core.fsmonitor
+  GIT_CONFIG_VALUE_3=false
+  GIT_CONFIG_KEY_4=core.hooksPath
+  GIT_CONFIG_VALUE_4=/dev/null
+  JAIN_CARGO_DENY_ADVISORY_DB=/tmp/command-git-config-deny-db
+)
+if env -i "${command_git_config_common[@]}" \
+  GIT_CONFIG_VALUE_1='*' \
+  "$command_git_config_runner" veox jain-report \
+  0000000000000000000000000000000000000000 /nonexistent \
+  jain-report/required >"$tmp/command-git-wildcard.log" 2>&1; then
+  printf 'reviewed worker accepted wildcard command-scope Git trust\n' >&2
+  exit 1
+fi
+grep -Fq 'worker command Git configuration is not exact' \
+  "$tmp/command-git-wildcard.log"
+if env -i "${command_git_config_common[@]}" \
+  GIT_CONFIG_VALUE_1=/opt/jain-ci/authority/advisory-db \
+  GIT_CONFIG_KEY_5=safe.directory GIT_CONFIG_VALUE_5=/tmp/ambient \
+  "$command_git_config_runner" veox jain-report \
+  0000000000000000000000000000000000000000 /nonexistent \
+  jain-report/required >"$tmp/command-git-extra.log" 2>&1; then
+  printf 'reviewed worker accepted an extra command-scope Git key\n' >&2
+  exit 1
+fi
+grep -Fq 'worker command Git configuration is not exact' \
+  "$tmp/command-git-extra.log"
+
 control="$tmp/control"
 control_remote="$tmp/jain-split-ops.git"
 split_root="$tmp/split"
@@ -732,19 +776,9 @@ MONITOR
   [[ "$deny_db_commit" =~ ^[0-9a-f]{40}$ \
     && "$deny_db_commit" == "$rustsec_commit" ]] \
     && deny_db_git_readable=1
-  command_safe_directories_exact=0
-  mapfile -t command_safe_directories < <(
-    git config --get-all safe.directory 2>/dev/null || true
-  )
-  if [[ "${#command_safe_directories[@]}" -eq 3 \
-    && "${command_safe_directories[0]}" \
-      == /opt/jain-ci/authority/control-plane \
-    && "${command_safe_directories[1]}" \
-      == /opt/jain-ci/authority/advisory-db \
-    && "${command_safe_directories[2]}" == "$JAIN_CARGO_DENY_ADVISORY_DB" \
-    && "${command_safe_directories[*]}" != *'*'* ]]; then
-    command_safe_directories_exact=1
-  fi
+  command_git_config_validated=0
+  [[ "${JAIN_HOST_CI_COMMAND_GIT_CONFIG_VALIDATED:-0}" == 1 ]] \
+    && command_git_config_validated=1
   advisory_lock_writable=0
   advisory_lock="$CARGO_HOME/advisory-dbs/db.lock"
   if : >"$advisory_lock" && rm -- "$advisory_lock"; then
@@ -851,8 +885,8 @@ MONITOR
     "$rustsec_git_readable" >>"$probe"
   printf 'boundary_deny_db_git_readable=%s\n' \
     "$deny_db_git_readable" >>"$probe"
-  printf 'boundary_command_safe_directories_exact=%s\n' \
-    "$command_safe_directories_exact" >>"$probe"
+  printf 'boundary_command_git_config_validated=%s\n' \
+    "$command_git_config_validated" >>"$probe"
   printf 'boundary_advisory_lock_writable=%s\n' \
     "$advisory_lock_writable" >>"$probe"
   printf 'boundary_advisory_db_swap_blocked=%s\n' \
@@ -1197,7 +1231,7 @@ grep -Fq 'boundary_rustsec_standalone=1' "$success_log"
 grep -Fq 'boundary_deny_db_physical=1' "$success_log"
 grep -Fq 'boundary_rustsec_git_readable=1' "$success_log"
 grep -Fq 'boundary_deny_db_git_readable=1' "$success_log"
-grep -Fq 'boundary_command_safe_directories_exact=1' "$success_log"
+grep -Fq 'boundary_command_git_config_validated=1' "$success_log"
 grep -Fq 'boundary_advisory_lock_writable=1' "$success_log"
 grep -Fq 'boundary_advisory_db_swap_blocked=1' "$success_log"
 grep -Fq 'boundary_advisory_db_write_blocked=1' "$success_log"

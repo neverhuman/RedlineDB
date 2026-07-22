@@ -11,6 +11,8 @@ fail() {
 
 [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 ]] \
   || fail 'worker isolation marker is absent'
+[[ "${JAIN_HOST_CI_COMMAND_GIT_CONFIG_VALIDATED:-0}" == 1 ]] \
+  || fail 'worker command Git configuration was not validated'
 
 repo_root="$(git rev-parse --show-toplevel)"
 writable_root="$(realpath -e -- "${JAIN_HOST_CI_WRITABLE_ROOT:?}")" \

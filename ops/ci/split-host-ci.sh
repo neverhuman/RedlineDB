@@ -18,6 +18,7 @@ if [[ -v JERYU_BASE || -v JERYU_MERGE_TOKEN || -v JERYU_MERGE_TOKEN_FILE ]]; the
   exit 2
 fi
 unset JAIN_BASE JAIN_CONTRACT_BASE_REF
+unset JAIN_HOST_CI_COMMAND_GIT_CONFIG_VALIDATED
 
 jain_contract_source_object() {
   local mirror="${1:?contract mirror is required}"
@@ -96,6 +97,63 @@ fi
 
 # Reviewed worker mode accepts only the root-owned, read-only authority mount
 # created by host-ci-sandbox. Caller-owned state and checkout paths are invalid.
+
+jain_validate_worker_command_git_config() {
+  local expected_count config_variable config_index key_variable value_variable
+  local safe_directory safe_directory_real
+  local -a expected_keys=(
+    safe.directory safe.directory safe.directory core.fsmonitor core.hooksPath
+  )
+  local -a expected_values=(
+    /opt/jain-ci/authority/control-plane
+    /opt/jain-ci/authority/advisory-db
+    "${JAIN_CARGO_DENY_ADVISORY_DB:-}"
+    false
+    /dev/null
+  )
+  if [[ "$REPO" == jain-starforge ]]; then
+    expected_keys+=(
+      filter.lfs.process filter.lfs.clean filter.lfs.smudge filter.lfs.required
+    )
+    expected_values+=(
+      '/opt/jain-ci/authority/release-bin/git-lfs filter-process'
+      '/opt/jain-ci/authority/release-bin/git-lfs clean -- %f'
+      '/opt/jain-ci/authority/release-bin/git-lfs smudge -- %f'
+      true
+    )
+  fi
+  expected_count="${#expected_keys[@]}"
+  [[ "${GIT_CONFIG_COUNT:-}" == "$expected_count"
+    && "${GIT_CONFIG_NOSYSTEM:-}" == 1
+    && "${GIT_CONFIG_GLOBAL:-}" == /dev/null
+    && ! -v GIT_CONFIG_PARAMETERS
+    && ! -v GIT_CONFIG_SYSTEM ]] || return 1
+  for config_index in "${!expected_keys[@]}"; do
+    key_variable="GIT_CONFIG_KEY_$config_index"
+    value_variable="GIT_CONFIG_VALUE_$config_index"
+    [[ "${!key_variable:-}" == "${expected_keys[$config_index]}"
+      && "${!value_variable:-}" == "${expected_values[$config_index]}" ]] \
+      || return 1
+  done
+  for config_variable in \
+    "${!GIT_CONFIG_KEY_@}" "${!GIT_CONFIG_VALUE_@}"; do
+    config_index="${config_variable##*_}"
+    [[ "$config_index" =~ ^(0|[1-9][0-9]*)$
+      && "$config_index" -lt "$expected_count" ]] || return 1
+  done
+  for safe_directory in "${expected_values[@]:0:3}"; do
+    [[ -n "$safe_directory" && -d "$safe_directory" && ! -L "$safe_directory" ]] \
+      || return 1
+    safe_directory_real="$(realpath -e -- "$safe_directory")" || return 1
+    [[ "$safe_directory_real" == "$safe_directory" ]] || return 1
+  done
+}
+
+if ! jain_validate_worker_command_git_config; then
+  printf '[split-host-ci] worker command Git configuration is not exact\n' >&2
+  exit 2
+fi
+export JAIN_HOST_CI_COMMAND_GIT_CONFIG_VALIDATED=1
 
 REEXEC_STATE="${JAIN_HOST_CI_REEXEC_STATE:-}"
 SPLIT_ROOT="${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}"
