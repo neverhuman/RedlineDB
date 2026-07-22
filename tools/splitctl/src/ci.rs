@@ -1352,10 +1352,10 @@ fn presubmit_lanes(
                 if node_packages
                     .iter()
                     .any(|package| path_is_within_node_package(package, path))
-                    && is_broad_required_route(command)
+                    && lane_name != "node-test"
                 {
                     return Err(format!(
-                        "affected Node path {path} is routed through broad required instead of an explicit node-test lane"
+                        "affected Node path {path} has an overlapping non-node-test route {lane_name}; Node routing must be type-unambiguous"
                     )
                     .into());
                 }
@@ -1504,13 +1504,6 @@ fn path_is_within_node_package(package: &str, path: &str) -> bool {
 
 fn node_test_command(package: &str) -> String {
     format!("pnpm --dir {package} run test")
-}
-
-fn is_broad_required_route(command: &str) -> bool {
-    let command = command.trim();
-    command == "just required"
-        || command.ends_with("ops/ci/required.sh")
-        || command.ends_with("scripts/ci-local.sh required")
 }
 
 fn presubmit_requires_contract(changed: &[String], cross_repo_dependencies: &[String]) -> bool {
@@ -4690,6 +4683,16 @@ mod tests {
     }
 
     fn node_fixture(command: &str, lane_name: &str) -> (TestDir, String, Vec<String>) {
+        node_fixture_routes(json!({
+            "apps/web/**": {
+                "command": command,
+                "lane": lane_name,
+                "purpose": "fixture"
+            }
+        }))
+    }
+
+    fn node_fixture_routes(tests: JsonValue) -> (TestDir, String, Vec<String>) {
         let root = TestDir::new("node-routing");
         git(root.path(), &["init", "-q", "-b", "main"]);
         git(root.path(), &["config", "user.name", "CI test"]);
@@ -4704,16 +4707,7 @@ mod tests {
         );
         write(
             &root.path().join("agent/test-map.json"),
-            &serde_json::to_string_pretty(&json!({
-                "tests": {
-                    "apps/web/**": {
-                        "command": command,
-                        "lane": lane_name,
-                        "purpose": "fixture"
-                    }
-                }
-            }))
-            .unwrap(),
+            &serde_json::to_string_pretty(&json!({"tests": tests})).unwrap(),
         );
         git(root.path(), &["add", "."]);
         git(root.path(), &["commit", "-q", "-m", "base"]);
@@ -5012,6 +5006,30 @@ mod tests {
             )
             .is_err());
         }
+
+        let (overlap, overlap_head, overlap_changed) = node_fixture_routes(json!({
+            "apps/web/**": {
+                "command": "pnpm --dir apps/web run test",
+                "lane": "node-test",
+                "purpose": "typed Node tests"
+            },
+            "apps/web/src/**": {
+                "command": "just check && just required",
+                "lane": "check",
+                "purpose": "hostile overlapping composite"
+            }
+        }));
+        assert!(presubmit_lanes(
+            overlap.path(),
+            &overlap_head,
+            &overlap_changed,
+            &[],
+            &["apps/web".to_owned()],
+            &[],
+            &raw,
+            &presubmit_fixture_executables(),
+        )
+        .is_err());
     }
 
     #[test]

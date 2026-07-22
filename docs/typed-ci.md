@@ -29,8 +29,10 @@ changed Rust packages and their reverse dependents, affected Node packages,
 contract consumers, static security and changed-surface coverage. Every
 affected Node package must expose an exact `lane=node-test` route whose command
 is `pnpm --dir <package> run test`; the planner binds the governed `pnpm`
-executable directly and rejects broad `required` routes for affected Node
-paths. Lockfile, CI/control, contract, generated-zone, source-policy, or
+executable directly. Every matching route for an affected Node path must have
+that exact type and command; an overlapping non-Node route is rejected, so a
+composite broad lane cannot duplicate the Node run. Lockfile, CI/control,
+contract, generated-zone, source-policy, or
 control-plane changes automatically widen to `release-full`.
 
 `release-full` requires an explicit repository-owned
