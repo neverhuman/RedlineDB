@@ -11073,8 +11073,8 @@ fn refresh_bare_mirrors(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
     let split_root =
         PathBuf::from(string(&data, "split_root").ok_or("manifest missing split_root")?);
     let mirror_root = split_root.join("target/bare-mirrors");
-    let repos = manifest_repos(&data)?;
-    let known: Vec<String> = repos.iter().filter_map(|r| string(r, "name")).collect();
+    let repos = bare_mirror_repositories(&data, &manifest)?;
+    let known: Vec<String> = repos.iter().map(|repo| repo.name.clone()).collect();
     for name in &selected {
         if !known.iter().any(|known_name| known_name == name) {
             return Err(format!("unknown repo: {name}").into());
@@ -11085,8 +11085,7 @@ fn refresh_bare_mirrors(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
         if apply {
             fs::create_dir_all(&mirror_root)?;
         }
-        for raw in repos {
-            let repo = repo_from(raw)?;
+        for repo in repos {
             if !selected.is_empty() && !selected.iter().any(|name| name == &repo.name) {
                 continue;
             }
@@ -11170,6 +11169,13 @@ fn refresh_bare_mirrors(args: Vec<String>) -> Result<(), Box<dyn std::error::Err
     })();
     report["repositories"] = json!(items);
     finish_receipted_operation(&receipt, &mut report, result)
+}
+
+fn bare_mirror_repositories(
+    data: &toml::Value,
+    manifest: &Path,
+) -> Result<Vec<ManagedRepo>, Box<dyn std::error::Error>> {
+    managed_repositories(data, manifest)
 }
 
 fn run_git(args: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
@@ -17190,6 +17196,23 @@ current_tag = "jain-v8.0.0-split.0"
                 .find(|repo| repo.name == "jain-smartcluster")
                 .unwrap()
                 .family_registered
+        );
+
+        let mirror_repos =
+            bare_mirror_repositories(&data, &root.path().join("repos.manifest.toml")).unwrap();
+        let mirror_names = mirror_repos
+            .iter()
+            .map(|repo| repo.name.as_str())
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            mirror_names,
+            std::collections::BTreeSet::from([
+                "jain",
+                "jain-smartcluster",
+                "jain-split-ops",
+                "redline-core",
+                "redline-split-ops",
+            ])
         );
 
         let original_nested = fs::read_to_string(&nested).unwrap();
