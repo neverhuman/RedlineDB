@@ -35,35 +35,35 @@ write_policy = "auditor_output"
 
 [[zone]]
 path = "contracts/ci-plan.schema.json"
-source = "tools/splitctl/src/ci.rs closed runtime contract"
+source = "tools/splitctl/src/ci.rs closed runtime contract for contracts/ci-plan.schema.json"
 command = "cargo test --locked ci::tests::published_contracts_match_runtime_shape"
 read_only = false
 write_policy = "reviewed_contract"
 
 [[zone]]
 path = "contracts/ci-lane-result.schema.json"
-source = "tools/splitctl/src/ci.rs closed runtime contract"
+source = "tools/splitctl/src/ci.rs closed runtime contract for contracts/ci-lane-result.schema.json"
 command = "cargo test --locked ci::tests::published_contracts_match_runtime_shape"
 read_only = false
 write_policy = "reviewed_contract"
 
 [[zone]]
 path = "contracts/ci-performance.schema.json"
-source = "tools/splitctl/src/ci.rs closed runtime contract"
+source = "tools/splitctl/src/ci.rs closed runtime contract for contracts/ci-performance.schema.json"
 command = "cargo test --locked ci::tests::published_contracts_match_runtime_shape"
 read_only = false
 write_policy = "reviewed_contract"
 
 [[zone]]
 path = "contracts/host-ci-result.schema.json"
-source = "tools/splitctl/src/ci.rs closed runtime contract"
+source = "tools/splitctl/src/ci.rs closed runtime contract for contracts/host-ci-result.schema.json"
 command = "cargo test --locked ci::tests::published_contracts_match_runtime_shape"
 read_only = false
 write_policy = "reviewed_contract"
 
 [[zone]]
 path = "contracts/host-ci-evidence.schema.json"
-source = "tools/splitctl/src/ci.rs closed runtime contract"
+source = "tools/splitctl/src/ci.rs closed runtime contract for contracts/host-ci-evidence.schema.json"
 command = "cargo test --locked ci::tests::published_contracts_match_runtime_shape"
 read_only = false
 write_policy = "reviewed_contract"
