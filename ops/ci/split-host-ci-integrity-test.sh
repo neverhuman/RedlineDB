@@ -293,7 +293,9 @@ for boundary_file in \
   ops/ci/native-runtime.sh ops/ci/pnpm-runtime.sh ops/ci/host-ci-evidence.sh \
   ops/ci/host-ci-proof-evidence.sh \
   ops/ci/pinned-advisory.sh \
-  ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh; do
+  ops/ci/required.sh \
+  ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh \
+  ops/ci/typed-required-non-test.sh; do
   install -D -m 0755 "$repo_root/$boundary_file" "$control/$boundary_file"
 done
 install -D -m 0644 "$repo_root/ops/ci/native-build-tools.lock.json" \

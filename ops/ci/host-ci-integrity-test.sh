@@ -122,7 +122,9 @@ for path in \
   ops/ci/native-runtime.sh ops/ci/pnpm-runtime.sh \
   ops/ci/pnpm-store.lock.json ops/ci/pinned-advisory.sh \
   ops/ci/pinned-cargo-audit.sh ops/ci/pinned-cargo-deny.sh \
+  ops/ci/required.sh \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh \
+  ops/ci/typed-required-non-test.sh \
   contracts/ci-plan.schema.json contracts/ci-lane-result.schema.json \
   contracts/ci-performance.schema.json \
   contracts/host-ci-result.schema.json \

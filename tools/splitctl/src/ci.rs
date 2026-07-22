@@ -1,9 +1,8 @@
 //! Typed CI planning, execution, and performance evidence.
 //!
-//! The optimized runner is deliberately shadow-only until release-full
-//! equivalence is proven.  The root broker owns profile selection and plan
-//! creation; the unprivileged, network-isolated worker may only execute an
-//! immutable root-owned plan.
+//! The optimized runner is deliberately inactive until release-full
+//! equivalence and the protected root-broker boundary are proven. The root
+//! broker owns profile selection and plan creation; v1 plans cannot execute.
 
 use super::{
     control_plane_root, is_full_sha, managed_repositories, manifest_sha256, release_cargo_policy,
@@ -43,6 +42,34 @@ const RELEASE_FULL_LIMIT_MS: u64 = 15 * 60 * 1000;
 const MIN_PERFORMANCE_SAMPLES: usize = 20;
 const MIN_AVAILABLE_MEMORY_BYTES: u64 = 20 * 1024 * 1024 * 1024;
 const SCCACHE_MAX_BYTES: u64 = 40 * 1024 * 1024 * 1024;
+const EXECUTION_BOUNDARY: &str = "root-systemd-filesystem-v1";
+const EVIDENCE_SEALER: &str = "root-create-only-v1";
+const FLEET_SCHEDULER: &str = "root-fleet-lease-v1";
+const MEASUREMENT_SOURCE: &str = "continuous-cgroup-v1";
+const SOURCE_POSTCONDITION: &str = "exact-tree-clean-v1";
+const TOOL_MANIFEST: &str = "root-readonly-tool-manifest-v1";
+const CALIBRATION_SETTINGS: [(u64, u64); 20] = [
+    (4, 2),
+    (8, 2),
+    (16, 2),
+    (24, 2),
+    (32, 2),
+    (4, 4),
+    (8, 4),
+    (16, 4),
+    (24, 4),
+    (32, 4),
+    (4, 6),
+    (8, 6),
+    (16, 6),
+    (24, 6),
+    (32, 6),
+    (4, 8),
+    (8, 8),
+    (16, 8),
+    (24, 8),
+    (32, 8),
+];
 
 #[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
 enum Profile {
@@ -246,7 +273,14 @@ fn build_plan(request: PlanRequest<'_>) -> Result<JsonValue, Box<dyn std::error:
         return Err("presubmit requires a non-empty exact base..head change".into());
     }
 
-    let executables = bound_executables(&repo, head, &tracked_paths, effective_profile)?;
+    let cargo_configuration = validate_cargo_configuration(&repo, head, &tracked_paths)?;
+    let executables = bound_executables(
+        &repo,
+        head,
+        &tracked_paths,
+        effective_profile,
+        !node_packages.is_empty(),
+    )?;
     let lanes = if effective_profile == Profile::ReleaseFull {
         release_full_lanes(repository, raw, &tracked_paths, &executables)?
     } else {
@@ -257,6 +291,7 @@ fn build_plan(request: PlanRequest<'_>) -> Result<JsonValue, Box<dyn std::error:
             &rust_packages,
             &node_packages,
             &cross_repo_dependencies,
+            raw,
             &executables,
         )?
     };
@@ -266,6 +301,7 @@ fn build_plan(request: PlanRequest<'_>) -> Result<JsonValue, Box<dyn std::error:
         !rust_packages.is_empty(),
         !node_packages.is_empty(),
         presubmit_requires_contract(&changed_paths, &cross_repo_dependencies),
+        !cross_repo_dependencies.is_empty(),
     )?;
 
     let authority_sha256 = manifest_sha256(&manifest)?;
@@ -336,6 +372,7 @@ fn build_plan(request: PlanRequest<'_>) -> Result<JsonValue, Box<dyn std::error:
         },
         "source_scope": coverage_scope,
         "cross_repo_dependencies": cross_repo_dependencies,
+        "cargo_configuration": cargo_configuration,
         "toolchains": toolchain_files,
         "lockfiles": lockfiles,
         "executables": executables.values().cloned().collect::<Vec<_>>(),
@@ -356,6 +393,17 @@ fn build_plan(request: PlanRequest<'_>) -> Result<JsonValue, Box<dyn std::error:
         },
         "cache": cache,
         "lanes": lanes,
+        "execution": {
+            "allowed": false,
+            "activation_state": "blocked",
+            "activation_requires": "release-full-equivalence",
+            "required_boundary": EXECUTION_BOUNDARY,
+            "required_evidence_sealer": EVIDENCE_SEALER,
+            "required_fleet_scheduler": FLEET_SCHEDULER,
+            "required_measurement_source": MEASUREMENT_SOURCE,
+            "required_source_postcondition": SOURCE_POSTCONDITION,
+            "required_tool_manifest": TOOL_MANIFEST
+        },
         "publication": {
             "mode": "shadow-equivalence",
             "allowed": false,
@@ -569,6 +617,64 @@ fn is_toolchain_file(path: &str) -> bool {
         path,
         "rust-toolchain" | "rust-toolchain.toml" | ".node-version" | ".nvmrc" | "mise.toml"
     )
+}
+
+fn is_cargo_configuration(path: &str) -> bool {
+    path == ".cargo/config"
+        || path == ".cargo/config.toml"
+        || path.ends_with("/.cargo/config")
+        || path.ends_with("/.cargo/config.toml")
+}
+
+fn validate_cargo_configuration(
+    repo: &Path,
+    head: &str,
+    tracked: &[String],
+) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
+    let inputs = bound_inputs(repo, head, tracked, is_cargo_configuration)?;
+    for input in &inputs {
+        let path = input["path"].as_str().unwrap();
+        let bytes = git_bytes(repo, &["show", &format!("{head}:{path}")])?;
+        let value: toml::Value = std::str::from_utf8(&bytes)?.parse()?;
+        reject_unsafe_cargo_configuration(&value, "")?;
+    }
+    Ok(inputs)
+}
+
+fn reject_unsafe_cargo_configuration(
+    value: &toml::Value,
+    parent: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(table) = value.as_table() else {
+        return Ok(());
+    };
+    for (key, child) in table {
+        let path = if parent.is_empty() {
+            key.clone()
+        } else {
+            format!("{parent}.{key}")
+        };
+        if matches!(
+            key.as_str(),
+            "alias"
+                | "ar"
+                | "credential-provider"
+                | "global-credential-providers"
+                | "linker"
+                | "replace-with"
+                | "runner"
+                | "rustc"
+                | "rustc-wrapper"
+                | "rustc-workspace-wrapper"
+                | "rustflags"
+        ) {
+            return Err(
+                format!("Cargo configuration contains forbidden execution key {path}").into(),
+            );
+        }
+        reject_unsafe_cargo_configuration(child, &path)?;
+    }
+    Ok(())
 }
 
 fn bound_inputs(
@@ -814,6 +920,7 @@ fn bound_executables(
     head: &str,
     tracked: &[String],
     profile: Profile,
+    has_node: bool,
 ) -> Result<BTreeMap<String, JsonValue>, Box<dyn std::error::Error>> {
     let rust_channel = tracked
         .iter()
@@ -849,12 +956,17 @@ fn bound_executables(
     } else {
         format!("{rust_channel}-x86_64-unknown-linux-gnu")
     };
-    let cargo_path = PathBuf::from(format!(
-        "/home/ubuntu/.rustup/toolchains/{toolchain_directory}/bin/cargo"
+    let toolchain_bin = PathBuf::from(format!(
+        "/home/ubuntu/.rustup/toolchains/{toolchain_directory}/bin"
     ));
+    let cargo_path = toolchain_bin.join("cargo");
     let mut candidates = BTreeMap::from([
         ("bash", PathBuf::from("/usr/bin/bash")),
         ("cargo", cargo_path),
+        ("clippy-driver", toolchain_bin.join("clippy-driver")),
+        ("rustc", toolchain_bin.join("rustc")),
+        ("rustdoc", toolchain_bin.join("rustdoc")),
+        ("rustfmt", toolchain_bin.join("rustfmt")),
         ("time", PathBuf::from("/usr/bin/time")),
     ]);
     if tracked.iter().any(|path| path == "Cargo.toml") {
@@ -868,10 +980,17 @@ fn bound_executables(
         );
     }
     if profile == Profile::Presubmit {
-        let installed = PathBuf::from("/usr/local/libexec/jain/sccache");
-        if installed.is_file() {
-            candidates.insert("sccache", installed);
-        }
+        candidates.insert("sccache", PathBuf::from("/usr/local/libexec/jain/sccache"));
+    }
+    if has_node {
+        candidates.insert(
+            "node",
+            PathBuf::from("/home/ubuntu/.nvm/versions/node/v26.1.0/bin/node"),
+        );
+        candidates.insert(
+            "pnpm",
+            PathBuf::from("/home/ubuntu/.npm-global/lib/node_modules/pnpm/bin/pnpm.mjs"),
+        );
     }
     let mut result = BTreeMap::new();
     for (name, path) in candidates {
@@ -951,14 +1070,22 @@ fn release_full_lanes(
     let bash = executable_path(executables, "bash")?;
     let cargo = executable_path(executables, "cargo")?;
     let has_cargo = tracked.iter().any(|path| path == "Cargo.toml");
+    if !tracked
+        .iter()
+        .any(|path| path == "ops/ci/typed-required-non-test.sh")
+    {
+        return Err("release-full requires an explicit typed non-test required mapping".into());
+    }
     let mut lanes = vec![lane(
-        "required-product",
+        "required-pre-rust-tests",
         "required",
         &bash,
-        vec!["scripts/ci-local.sh".to_owned(), "required".to_owned()],
+        vec![
+            "ops/ci/typed-required-non-test.sh".to_owned(),
+            "pre-rust-tests".to_owned(),
+        ],
         vec![],
         vec![
-            "required".to_owned(),
             "compatibility".to_owned(),
             "conformance".to_owned(),
             "repository-specific".to_owned(),
@@ -967,8 +1094,8 @@ fn release_full_lanes(
         900,
         "forbidden",
     )];
+    let mut rust_qualification_ids = Vec::new();
     if has_cargo {
-        let nextest = executable_path(executables, "cargo-nextest")?;
         let llvm_cov = executable_path(executables, "cargo-llvm-cov")?;
         let policy = release_cargo_policy(repository, raw)?;
         let commands = policy
@@ -976,6 +1103,7 @@ fn release_full_lanes(
             .and_then(JsonValue::as_array)
             .ok_or("release Cargo policy has no commands")?;
         let mut build_ids = Vec::new();
+        let mut emitted_complete_coverage = false;
         for (index, command) in commands.iter().enumerate() {
             let label = command
                 .get("label")
@@ -1005,7 +1133,7 @@ fn release_full_lanes(
                         "rust-build",
                         &cargo,
                         original,
-                        vec![],
+                        vec!["required-pre-rust-tests".to_owned()],
                         vec![format!("release-build:{label}")],
                         vec!["all-rust-packages".to_owned()],
                         900,
@@ -1013,15 +1141,29 @@ fn release_full_lanes(
                     ));
                 }
                 "test" => {
-                    let mut args = vec!["nextest".to_owned(), "run".to_owned()];
+                    let mut args = vec!["llvm-cov".to_owned(), "nextest".to_owned()];
                     args.extend(original.into_iter().skip(1));
+                    args.extend([
+                        "--lcov".to_owned(),
+                        "--output-path".to_owned(),
+                        format!("target/llvm-cov/{id}.lcov.info"),
+                    ]);
+                    let mut obligations = vec![
+                        format!("release-test:{label}"),
+                        format!("complete-coverage:{label}"),
+                    ];
+                    if !emitted_complete_coverage {
+                        obligations.push("complete-coverage".to_owned());
+                        emitted_complete_coverage = true;
+                    }
+                    rust_qualification_ids.push(id.clone());
                     lanes.push(lane(
                         &id,
-                        "rust-test",
-                        &nextest,
+                        "rust-test-and-coverage",
+                        &llvm_cov,
                         args,
                         build_ids.clone(),
-                        vec![format!("release-test:{label}")],
+                        obligations,
                         vec!["all-rust-packages".to_owned()],
                         900,
                         "forbidden",
@@ -1030,39 +1172,40 @@ fn release_full_lanes(
                 _ => return Err("release Cargo policy contains an unsupported subcommand".into()),
             }
         }
-        lanes.push(lane(
-            "complete-rust-coverage",
-            "coverage",
-            &llvm_cov,
-            vec![
-                "llvm-cov".to_owned(),
-                "nextest".to_owned(),
-                "--locked".to_owned(),
-                "--workspace".to_owned(),
-                "--all-features".to_owned(),
-                "--lcov".to_owned(),
-                "--output-path".to_owned(),
-                "target/llvm-cov/lcov.info".to_owned(),
-            ],
-            build_ids,
-            vec!["complete-coverage".to_owned()],
-            vec!["all-rust-packages".to_owned()],
-            900,
-            "forbidden",
-        ));
-    } else {
-        lanes[0]["obligations"]
-            .as_array_mut()
-            .ok_or("generated required obligations are malformed")?
-            .push(json!("complete-coverage"));
+        if !emitted_complete_coverage {
+            return Err("release Cargo policy has no typed test-and-coverage command".into());
+        }
     }
+    let mut post_obligations = vec!["required".to_owned()];
+    if !has_cargo {
+        post_obligations.push("complete-coverage".to_owned());
+    }
+    let post_dependencies = if rust_qualification_ids.is_empty() {
+        vec!["required-pre-rust-tests".to_owned()]
+    } else {
+        rust_qualification_ids
+    };
+    lanes.push(lane(
+        "required-post-rust-tests",
+        "required",
+        &bash,
+        vec![
+            "ops/ci/typed-required-non-test.sh".to_owned(),
+            "post-rust-tests".to_owned(),
+        ],
+        post_dependencies,
+        post_obligations,
+        vec!["complete-product".to_owned()],
+        900,
+        "forbidden",
+    ));
     for (id, kind, mode, obligation, dependency) in [
         ("static-security", "security", "security", "security", None),
         (
-            "contract-consumers",
+            "contract-drift",
             "contract",
             "contract-drift",
-            "contract-consumers",
+            "contract-drift",
             None,
         ),
         (
@@ -1077,7 +1220,7 @@ fn release_full_lanes(
             "artifact",
             "artifact-support",
             "artifact",
-            Some("required-product"),
+            Some("required-post-rust-tests"),
         ),
     ] {
         lanes.push(lane(
@@ -1092,9 +1235,34 @@ fn release_full_lanes(
             "forbidden",
         ));
     }
+    let dependencies = toml_string_array(raw, "cross_repo_deps")?;
+    let commands = toml_string_array(raw, "typed_contract_consumer_commands")?;
+    if dependencies.len() != commands.len() {
+        return Err(
+            "release-full cross-repository consumers require one bound typed command each".into(),
+        );
+    }
+    for (index, (dependency, command)) in dependencies.iter().zip(commands).enumerate() {
+        let mut obligations = vec![format!("contract-consumer:{dependency}")];
+        if index == 0 {
+            obligations.push("contract-consumers".to_owned());
+        }
+        lanes.push(lane(
+            &format!("contract-consumer-{}-{}", index + 1, safe_id(dependency)),
+            "contract-consumer",
+            &bash,
+            vec!["-lc".to_owned(), command],
+            vec!["contract-drift".to_owned()],
+            obligations,
+            vec![dependency.clone()],
+            900,
+            "forbidden",
+        ));
+    }
     Ok(lanes)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn presubmit_lanes(
     repo: &Path,
     head: &str,
@@ -1102,6 +1270,7 @@ fn presubmit_lanes(
     rust_packages: &[String],
     node_packages: &[String],
     cross_repo_dependencies: &[String],
+    raw: &toml::Value,
     executables: &BTreeMap<String, JsonValue>,
 ) -> Result<Vec<JsonValue>, Box<dyn std::error::Error>> {
     let bash = executable_path(executables, "bash")?;
@@ -1118,7 +1287,6 @@ fn presubmit_lanes(
         "presubmit-only",
     )];
     if !rust_packages.is_empty() {
-        let nextest = executable_path(executables, "cargo-nextest")?;
         let llvm_cov = executable_path(executables, "cargo-llvm-cov")?;
         let mut package_args = Vec::new();
         for package in rust_packages {
@@ -1133,23 +1301,6 @@ fn presubmit_lanes(
             check_args,
             vec![],
             vec!["changed-rust-build".to_owned()],
-            rust_packages.to_vec(),
-            300,
-            "presubmit-only",
-        ));
-        let mut test_args = vec![
-            "nextest".to_owned(),
-            "run".to_owned(),
-            "--locked".to_owned(),
-        ];
-        test_args.extend(package_args.clone());
-        lanes.push(lane(
-            "changed-rust-test",
-            "rust-test",
-            &nextest,
-            test_args,
-            vec!["changed-rust-check".to_owned()],
-            vec!["changed-rust-tests".to_owned()],
             rust_packages.to_vec(),
             300,
             "presubmit-only",
@@ -1171,7 +1322,10 @@ fn presubmit_lanes(
             &llvm_cov,
             coverage_args,
             vec!["changed-rust-check".to_owned()],
-            vec!["changed-surface-coverage".to_owned()],
+            vec![
+                "changed-rust-tests".to_owned(),
+                "changed-surface-coverage".to_owned(),
+            ],
             rust_packages.to_vec(),
             300,
             "presubmit-only",
@@ -1202,39 +1356,41 @@ fn presubmit_lanes(
         }
     }
     let mut route_index = 0;
+    let mut node_tests_bound = false;
     for (command, (kind, paths)) in routed {
         if command == "just security" || command.ends_with("scripts/ci-local.sh security") {
             continue;
         }
         route_index += 1;
+        let covers_node = !node_tests_bound
+            && node_packages.iter().any(|root| {
+                paths.iter().any(|path| {
+                    root == "." || path == root || path.starts_with(&format!("{root}/"))
+                })
+            });
+        let mut obligations = vec![format!("mapped-route:{route_index}")];
+        if covers_node {
+            obligations.push("affected-node-tests".to_owned());
+            node_tests_bound = true;
+        }
         lanes.push(lane(
             &format!("mapped-{}-{}", route_index, safe_id(&kind)),
             &kind,
             &bash,
             vec!["-lc".to_owned(), command],
             vec![],
-            vec![format!("mapped-route:{route_index}")],
+            obligations,
             paths.into_iter().collect(),
             300,
             "presubmit-only",
         ));
     }
-    if !node_packages.is_empty() {
-        lanes.push(lane(
-            "affected-node-tests",
-            "node-test",
-            &bash,
-            vec!["scripts/ci-local.sh".to_owned(), "required".to_owned()],
-            vec![],
-            vec!["affected-node-tests".to_owned()],
-            node_packages.to_vec(),
-            300,
-            "presubmit-only",
-        ));
+    if !node_packages.is_empty() && !node_tests_bound {
+        return Err("affected Node packages require an explicit test-map route".into());
     }
     if presubmit_requires_contract(changed, cross_repo_dependencies) {
         lanes.push(lane(
-            "contract-consumers",
+            "contract-drift",
             "contract",
             &bash,
             vec![
@@ -1242,11 +1398,36 @@ fn presubmit_lanes(
                 "contract-drift".to_owned(),
             ],
             vec![],
-            vec!["contract-consumers".to_owned()],
-            cross_repo_dependencies.to_vec(),
+            vec!["contract-drift".to_owned()],
+            vec!["local-contracts".to_owned()],
             300,
             "presubmit-only",
         ));
+        let commands = toml_string_array(raw, "typed_contract_consumer_commands")?;
+        if commands.len() != cross_repo_dependencies.len() {
+            return Err(
+                "presubmit cross-repository consumers require one bound typed command each".into(),
+            );
+        }
+        for (index, (dependency, command)) in
+            cross_repo_dependencies.iter().zip(commands).enumerate()
+        {
+            let mut obligations = vec![format!("contract-consumer:{dependency}")];
+            if index == 0 {
+                obligations.push("contract-consumers".to_owned());
+            }
+            lanes.push(lane(
+                &format!("contract-consumer-{}-{}", index + 1, safe_id(dependency)),
+                "contract-consumer",
+                &bash,
+                vec!["-lc".to_owned(), command],
+                vec!["contract-drift".to_owned()],
+                obligations,
+                vec![dependency.clone()],
+                300,
+                "presubmit-only",
+            ));
+        }
     }
     Ok(lanes)
 }
@@ -1304,6 +1485,7 @@ fn validate_generated_lanes(
     has_changed_rust: bool,
     has_changed_node: bool,
     requires_contract: bool,
+    has_contract_consumers: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if lanes.is_empty() || lanes.len() > MAX_LANES {
         return Err("CI plan must contain one through 64 lanes".into());
@@ -1415,7 +1597,7 @@ fn validate_generated_lanes(
             "required",
             "security",
             "complete-coverage",
-            "contract-consumers",
+            "contract-drift",
             "jankurai",
             "artifact",
             "compatibility",
@@ -1434,6 +1616,11 @@ fn validate_generated_lanes(
         required.push("affected-node-tests");
     }
     if profile == Profile::Presubmit && requires_contract {
+        required.push("contract-drift");
+    }
+    if has_contract_consumers
+        && (profile == Profile::ReleaseFull || (profile == Profile::Presubmit && requires_contract))
+    {
         required.push("contract-consumers");
     }
     for requirement in required {
@@ -1487,7 +1674,9 @@ fn validate_plan_value(plan: &JsonValue) -> Result<(), Box<dyn std::error::Error
             "base_sha",
             "base_tree",
             "cache",
+            "cargo_configuration",
             "cross_repo_dependencies",
+            "execution",
             "executables",
             "head_sha",
             "head_tree",
@@ -1646,6 +1835,7 @@ fn validate_plan_value(plan: &JsonValue) -> Result<(), Box<dyn std::error::Error
     }
     validate_bound_file_array(&object["toolchains"], "toolchains")?;
     validate_bound_file_array(&object["lockfiles"], "lockfiles")?;
+    validate_bound_file_array(&object["cargo_configuration"], "Cargo configuration")?;
     validate_executables(&object["executables"])?;
     let executable_paths = object["executables"]
         .as_array()
@@ -1775,7 +1965,35 @@ fn validate_plan_value(plan: &JsonValue) -> Result<(), Box<dyn std::error::Error
         !rust_packages.is_empty(),
         !node_packages.is_empty(),
         presubmit_requires_contract(&changed_owned, &contract_consumers_owned),
+        !contract_consumers.is_empty(),
     )?;
+    let execution = exact_object(
+        &object["execution"],
+        &[
+            "activation_requires",
+            "activation_state",
+            "allowed",
+            "required_boundary",
+            "required_evidence_sealer",
+            "required_fleet_scheduler",
+            "required_measurement_source",
+            "required_source_postcondition",
+            "required_tool_manifest",
+        ],
+        "CI execution activation",
+    )?;
+    if execution["allowed"].as_bool() != Some(false)
+        || execution["activation_state"].as_str() != Some("blocked")
+        || execution["activation_requires"].as_str() != Some("release-full-equivalence")
+        || execution["required_boundary"].as_str() != Some(EXECUTION_BOUNDARY)
+        || execution["required_evidence_sealer"].as_str() != Some(EVIDENCE_SEALER)
+        || execution["required_fleet_scheduler"].as_str() != Some(FLEET_SCHEDULER)
+        || execution["required_measurement_source"].as_str() != Some(MEASUREMENT_SOURCE)
+        || execution["required_source_postcondition"].as_str() != Some(SOURCE_POSTCONDITION)
+        || execution["required_tool_manifest"].as_str() != Some(TOOL_MANIFEST)
+    {
+        return Err("typed CI v1 execution is not fail-closed".into());
+    }
     let publication = exact_object(
         &object["publication"],
         &[
@@ -1899,7 +2117,15 @@ fn validate_executables(value: &JsonValue) -> Result<(), Box<dyn std::error::Err
             "executable digest",
         )?;
     }
-    for required in ["bash", "cargo", "time"] {
+    for required in [
+        "bash",
+        "cargo",
+        "clippy-driver",
+        "rustc",
+        "rustdoc",
+        "rustfmt",
+        "time",
+    ] {
         if !names.contains(required) {
             return Err(format!("CI plan omits bound executable {required}").into());
         }
@@ -1954,6 +2180,9 @@ pub(crate) fn run_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
     let plan_sha256 = format!("{:x}", Sha256::digest(&plan_bytes));
     let plan: JsonValue = serde_json::from_slice(&plan_bytes)?;
     validate_plan_value(&plan)?;
+    if plan["execution"]["allowed"].as_bool() != Some(true) {
+        return Err("ci-run is intentionally inactive until the protected root systemd boundary, broker sealer, fleet lease, continuous cgroup sampler, tool manifest, post-run source proof, and release-full equivalence are installed".into());
+    }
     if !network_namespace_isolated(
         plan["resources"]["host_network_namespace_device"]
             .as_u64()
@@ -2187,6 +2416,11 @@ fn execute_plan(
     enforce_runtime_boundary: bool,
 ) -> Result<JsonValue, Box<dyn std::error::Error>> {
     require_sha256(plan_sha256, "plan digest")?;
+    if enforce_runtime_boundary {
+        return Err(
+            "unsealed worker prototype cannot cross the protected root-broker boundary".into(),
+        );
+    }
     let canonical_remote = revalidate_plan_inputs(plan)?;
     let writable_root = if enforce_runtime_boundary {
         Some(worker_writable_root()?)
@@ -2335,7 +2569,7 @@ fn execute_plan(
         "result_set_sha256": result_set_sha256,
         "metrics_sha256": metrics_sha256,
         "profile": profile.as_str(),
-        "measurement_source": "worker-proc-and-gnu-time-shadow",
+        "measurement_source": MEASUREMENT_SOURCE,
         "publication_allowed": false
     });
     validate_host_evidence(
@@ -3257,6 +3491,7 @@ fn validate_run_receipt(run: &JsonValue) -> Result<(), Box<dyn std::error::Error
         &[
             "authority_sha256",
             "base_sha",
+            "broker_seal",
             "configuration",
             "duration_ms",
             "finished_at_unix_ms",
@@ -3354,6 +3589,7 @@ fn validate_run_receipt(run: &JsonValue) -> Result<(), Box<dyn std::error::Error
     let metrics = exact_object(
         &object["metrics"],
         &[
+            "aggregate_peak_rss_bytes",
             "cache_hit_rate",
             "cache_hits",
             "cache_requests",
@@ -3362,9 +3598,10 @@ fn validate_run_receipt(run: &JsonValue) -> Result<(), Box<dyn std::error::Error
             "critical_path_ms",
             "io_wait_percent",
             "load1_max",
+            "measurement_sample_count",
+            "measurement_source",
             "minimum_available_memory_bytes",
             "oom_kill_delta",
-            "peak_rss_bytes",
             "swap_in_delta_pages",
         ],
         "run metrics",
@@ -3373,14 +3610,23 @@ fn validate_run_receipt(run: &JsonValue) -> Result<(), Box<dyn std::error::Error
         "cpu_system_ms",
         "cpu_user_ms",
         "critical_path_ms",
+        "aggregate_peak_rss_bytes",
+        "measurement_sample_count",
         "minimum_available_memory_bytes",
         "oom_kill_delta",
-        "peak_rss_bytes",
         "swap_in_delta_pages",
     ] {
         if metrics[field].as_u64().is_none() {
             return Err(format!("run metric {field} is invalid").into());
         }
+    }
+    if metrics["measurement_source"].as_str() != Some(MEASUREMENT_SOURCE)
+        || metrics["measurement_sample_count"]
+            .as_u64()
+            .filter(|count| *count >= 2)
+            .is_none()
+    {
+        return Err("run metrics are not continuous root-cgroup measurements".into());
     }
     if !metrics["io_wait_percent"]
         .as_f64()
@@ -3432,6 +3678,67 @@ fn validate_run_receipt(run: &JsonValue) -> Result<(), Box<dyn std::error::Error
         &metrics_sha256,
         profile,
     )?;
+    validate_broker_seal(&object["broker_seal"], plan_sha256, fleet_concurrency)?;
+    Ok(())
+}
+
+fn validate_broker_seal(
+    seal: &JsonValue,
+    plan_sha256: &str,
+    fleet_concurrency: u64,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let object = exact_object(
+        seal,
+        &[
+            "boundary",
+            "evidence_sealer",
+            "fleet_lease_id",
+            "fleet_slot",
+            "fleet_slot_count",
+            "measurement_source",
+            "plan_path",
+            "plan_sha256",
+            "sealed_by_uid",
+            "source_postcondition",
+            "tool_manifest_path",
+            "tool_manifest_sha256",
+        ],
+        "CI broker seal",
+    )?;
+    if object["boundary"].as_str() != Some(EXECUTION_BOUNDARY)
+        || object["evidence_sealer"].as_str() != Some(EVIDENCE_SEALER)
+        || object["measurement_source"].as_str() != Some(MEASUREMENT_SOURCE)
+        || object["source_postcondition"].as_str() != Some(SOURCE_POSTCONDITION)
+        || object["sealed_by_uid"].as_u64() != Some(0)
+        || object["plan_sha256"].as_str() != Some(plan_sha256)
+    {
+        return Err("CI broker seal is not bound to the protected v1 boundary".into());
+    }
+    require_sha256(
+        bounded_string(&object["fleet_lease_id"], "fleet lease", 64)?,
+        "fleet lease",
+    )?;
+    require_sha256(
+        bounded_string(&object["tool_manifest_sha256"], "tool manifest digest", 64)?,
+        "tool manifest digest",
+    )?;
+    for field in ["plan_path", "tool_manifest_path"] {
+        if !Path::new(bounded_string(&object[field], field, 4096)?).is_absolute() {
+            return Err(format!("CI broker seal {field} is not absolute").into());
+        }
+    }
+    let slot_count = object["fleet_slot_count"]
+        .as_u64()
+        .filter(|count| (1..=64).contains(count))
+        .ok_or("CI broker fleet slot count is invalid")?;
+    let slot = object["fleet_slot"]
+        .as_u64()
+        .filter(|slot| *slot < slot_count)
+        .ok_or("CI broker fleet slot is invalid")?;
+    let _ = slot;
+    if slot_count != fleet_concurrency {
+        return Err("CI broker fleet lease differs from the planned concurrency".into());
+    }
     Ok(())
 }
 
@@ -3461,7 +3768,7 @@ fn validate_host_evidence(
         || object["plan_sha256"].as_str() != Some(plan_sha256)
         || object["result_set_sha256"].as_str() != Some(result_set_sha256)
         || object["metrics_sha256"].as_str() != Some(metrics_sha256)
-        || object["measurement_source"].as_str() != Some("worker-proc-and-gnu-time-shadow")
+        || object["measurement_source"].as_str() != Some(MEASUREMENT_SOURCE)
         || object["publication_allowed"].as_bool() != Some(false)
     {
         return Err("host CI evidence v6 binding or shadow policy is invalid".into());
@@ -3546,8 +3853,17 @@ fn performance_report(evidence_root: &Path) -> Result<JsonValue, Box<dyn std::er
         if value.get("schema_version").and_then(JsonValue::as_str) != Some(RUN_SCHEMA) {
             continue;
         }
+        let sealed_bytes = read_root_sealed_file(&path, MAX_EVIDENCE_BYTES, "typed CI result")?;
+        if sealed_bytes != bytes {
+            return Err(format!(
+                "typed CI result changed while being classified: {}",
+                path.display()
+            )
+            .into());
+        }
         validate_run_receipt(&value)
             .map_err(|error| format!("malformed typed CI evidence {}: {error}", path.display()))?;
+        validate_performance_sample_custody(&value)?;
         if value["status"].as_str() != Some("pass") {
             continue;
         }
@@ -3620,6 +3936,53 @@ fn performance_report(evidence_root: &Path) -> Result<JsonValue, Box<dyn std::er
     Ok(report)
 }
 
+fn validate_performance_sample_custody(run: &JsonValue) -> Result<(), Box<dyn std::error::Error>> {
+    let seal = &run["broker_seal"];
+    let plan_path = Path::new(seal["plan_path"].as_str().unwrap());
+    let plan_bytes = read_root_sealed_file(plan_path, MAX_PLAN_BYTES, "typed CI plan")?;
+    let plan_sha256 = format!("{:x}", Sha256::digest(&plan_bytes));
+    if plan_sha256 != run["plan_sha256"].as_str().unwrap()
+        || seal["plan_sha256"].as_str() != Some(&plan_sha256)
+    {
+        return Err("root broker seal does not bind the exact immutable CI plan".into());
+    }
+    let plan: JsonValue = serde_json::from_slice(&plan_bytes)?;
+    validate_plan_value(&plan)?;
+    if plan["execution"]["allowed"].as_bool() != Some(true) {
+        return Err("inactive typed CI v1 plans cannot contribute performance evidence".into());
+    }
+    for (run_field, plan_field) in [
+        ("repository", "repository"),
+        ("head_sha", "head_sha"),
+        ("head_tree", "head_tree"),
+        ("base_sha", "base_sha"),
+    ] {
+        if run[run_field] != plan[plan_field] {
+            return Err("typed CI result identity differs from its sealed plan".into());
+        }
+    }
+    if run["authority_sha256"] != plan["authority"]["manifest_sha256"]
+        || run["profile"] != plan["profile"]["effective"]
+        || run["configuration"]["build_jobs"] != plan["resources"]["build_jobs"]
+        || run["configuration"]["fleet_concurrency"] != plan["resources"]["fleet_concurrency"]
+        || run["configuration"]["calibration"] != plan["resources"]["calibration"]
+    {
+        return Err("typed CI result configuration differs from its sealed plan".into());
+    }
+    let tool_manifest_path = Path::new(seal["tool_manifest_path"].as_str().unwrap());
+    let tool_manifest = read_root_sealed_file(
+        tool_manifest_path,
+        MAX_EVIDENCE_BYTES,
+        "typed CI tool manifest",
+    )?;
+    if format!("{:x}", Sha256::digest(&tool_manifest))
+        != seal["tool_manifest_sha256"].as_str().unwrap()
+    {
+        return Err("root broker seal has a drifting tool manifest".into());
+    }
+    Ok(())
+}
+
 fn calibration_report(
     samples: &[PerformanceSample],
 ) -> Result<JsonValue, Box<dyn std::error::Error>> {
@@ -3667,26 +4030,32 @@ fn calibration_report(
         }));
     }
     candidates.sort_by_key(|candidate| {
-        (
+        let setting = (
             candidate["build_jobs"].as_u64().unwrap(),
             candidate["fleet_concurrency"].as_u64().unwrap(),
-        )
+        );
+        CALIBRATION_SETTINGS
+            .iter()
+            .position(|candidate| *candidate == setting)
+            .unwrap()
     });
     for index in 0..candidates.len() {
-        let build_jobs = candidates[index]["build_jobs"].as_u64().unwrap();
-        let fleet = candidates[index]["fleet_concurrency"].as_u64().unwrap();
-        let baseline = candidates[..index]
+        let setting = (
+            candidates[index]["build_jobs"].as_u64().unwrap(),
+            candidates[index]["fleet_concurrency"].as_u64().unwrap(),
+        );
+        let order_index = CALIBRATION_SETTINGS
             .iter()
-            .rev()
-            .find(|candidate| {
-                (candidate["fleet_concurrency"].as_u64() == Some(fleet)
-                    && candidate["build_jobs"]
-                        .as_u64()
-                        .is_some_and(|value| value < build_jobs))
-                    || (candidate["build_jobs"].as_u64() == Some(build_jobs)
-                        && candidate["fleet_concurrency"]
-                            .as_u64()
-                            .is_some_and(|value| value < fleet))
+            .position(|candidate| *candidate == setting)
+            .unwrap();
+        let baseline = order_index
+            .checked_sub(1)
+            .and_then(|previous| {
+                candidates.iter().find(|candidate| {
+                    candidate["build_jobs"].as_u64() == Some(CALIBRATION_SETTINGS[previous].0)
+                        && candidate["fleet_concurrency"].as_u64()
+                            == Some(CALIBRATION_SETTINGS[previous].1)
+                })
             })
             .and_then(|candidate| candidate["p95_ms"].as_u64());
         let p95 = candidates[index]["p95_ms"].as_u64();
@@ -3700,8 +4069,8 @@ fn calibration_report(
             .as_array()
             .is_some_and(Vec::is_empty);
         let resources_valid = candidates[index]["invalid_sample_count"].as_u64() == Some(0);
-        let improvement_valid = baseline.is_none()
-            || improvement.is_some_and(|percent| percent.is_finite() && percent >= 5.0);
+        let improvement_valid = baseline.is_some()
+            && improvement.is_some_and(|percent| percent.is_finite() && percent >= 5.0);
         candidates[index]["improvement_percent"] =
             improvement.map_or(JsonValue::Null, |value| json!(value));
         candidates[index]["setting_valid"] =
@@ -3795,6 +4164,45 @@ fn read_bounded_evidence(path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Err
         || !same_metadata(&before, &path_after)
     {
         return Err(format!("CI evidence changed while reading: {}", path.display()).into());
+    }
+    Ok(bytes)
+}
+
+fn read_root_sealed_file(
+    path: &Path,
+    maximum_bytes: u64,
+    kind: &str,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let path = physical_regular_path(path, kind)?;
+    const O_NONBLOCK: i32 = 0o4000;
+    const O_NOFOLLOW: i32 = 0o400000;
+    let mut file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(O_NONBLOCK | O_NOFOLLOW)
+        .open(&path)?;
+    let before = file.metadata()?;
+    if before.uid() != 0
+        || before.gid() != 0
+        || before.nlink() != 1
+        || before.mode() & 0o777 != 0o444
+        || before.len() == 0
+        || before.len() > maximum_bytes
+    {
+        return Err(
+            format!("{kind} must be root-owned, single-link, mode 0444, and bounded").into(),
+        );
+    }
+    let mut bytes = Vec::with_capacity(before.len() as usize);
+    (&mut file)
+        .take(maximum_bytes + 1)
+        .read_to_end(&mut bytes)?;
+    let after = file.metadata()?;
+    let path_after = fs::symlink_metadata(&path)?;
+    if bytes.len() as u64 != before.len()
+        || !same_metadata(&before, &after)
+        || !same_metadata(&before, &path_after)
+    {
+        return Err(format!("{kind} changed while being read").into());
     }
     Ok(bytes)
 }
@@ -3970,6 +4378,7 @@ fn validate_calibration_report(value: &JsonValue) -> Result<(), Box<dyn std::err
         .filter(|candidates| candidates.len() <= 20)
         .ok_or("CI calibration candidates are invalid")?;
     let mut settings = BTreeSet::new();
+    let mut last_order = None;
     for candidate in candidates {
         let candidate = exact_object(
             candidate,
@@ -3999,6 +4408,14 @@ fn validate_calibration_report(value: &JsonValue) -> Result<(), Box<dyn std::err
         {
             return Err("CI calibration setting is invalid or duplicated".into());
         }
+        let order = CALIBRATION_SETTINGS
+            .iter()
+            .position(|setting| *setting == (build_jobs, fleet))
+            .unwrap();
+        if last_order.is_some_and(|previous| order <= previous) {
+            return Err("CI calibration candidates are not in the governed sequence".into());
+        }
+        last_order = Some(order);
         let observed = candidate["observed_sample_count"]
             .as_u64()
             .ok_or("calibration observed count missing")?;
@@ -4018,13 +4435,70 @@ fn validate_calibration_report(value: &JsonValue) -> Result<(), Box<dyn std::err
         {
             return Err("CI calibration candidate metrics are inconsistent".into());
         }
-        bounded_string_array(&candidate["repositories"], "calibration repositories", 64)?;
-        bounded_string_array(
+        let repositories =
+            bounded_string_array(&candidate["repositories"], "calibration repositories", 64)?;
+        let missing = bounded_string_array(
             &candidate["missing_repositories"],
             "calibration missing repositories",
             4,
         )?;
+        if repositories.iter().collect::<BTreeSet<_>>().len() != repositories.len()
+            || missing.iter().collect::<BTreeSet<_>>().len() != missing.len()
+        {
+            return Err("CI calibration repository sets contain duplicates".into());
+        }
+        let expected_missing = [
+            "jain-split-ops",
+            "jain-web",
+            "jain-smartcluster",
+            "redline-core",
+        ]
+        .into_iter()
+        .filter(|required| !repositories.contains(required))
+        .collect::<Vec<_>>();
+        if missing != expected_missing || (valid == 0) != candidate["p95_ms"].is_null() {
+            return Err("CI calibration coverage or p95 presence is inconsistent".into());
+        }
+        let predecessor = order.checked_sub(1).and_then(|previous| {
+            candidates.iter().find(|other| {
+                other["build_jobs"].as_u64() == Some(CALIBRATION_SETTINGS[previous].0)
+                    && other["fleet_concurrency"].as_u64() == Some(CALIBRATION_SETTINGS[previous].1)
+            })
+        });
+        let expected_improvement = predecessor
+            .and_then(|previous| previous["p95_ms"].as_u64())
+            .zip(candidate["p95_ms"].as_u64())
+            .and_then(|(previous, current)| {
+                (previous > 0)
+                    .then_some((previous as f64 - current as f64) * 100.0 / previous as f64)
+            });
+        let actual_improvement = candidate["improvement_percent"].as_f64();
+        if expected_improvement.is_some() != actual_improvement.is_some()
+            || expected_improvement
+                .zip(actual_improvement)
+                .is_some_and(|(expected, actual)| (expected - actual).abs() > 1e-9)
+        {
+            return Err("CI calibration improvement is not bound to its predecessor".into());
+        }
+        let expected_valid = predecessor.is_some()
+            && missing.is_empty()
+            && invalid == 0
+            && candidate["p95_ms"].as_u64().is_some()
+            && expected_improvement.is_some_and(|improvement| improvement >= 5.0);
+        if candidate["setting_valid"].as_bool() != Some(expected_valid) {
+            return Err("CI calibration validity is not sequential and fail-closed".into());
+        }
     }
+    let expected_selected = candidates
+        .iter()
+        .filter(|candidate| candidate["setting_valid"].as_bool() == Some(true))
+        .min_by_key(|candidate| {
+            (
+                candidate["p95_ms"].as_u64().unwrap(),
+                candidate["build_jobs"].as_u64().unwrap(),
+                candidate["fleet_concurrency"].as_u64().unwrap(),
+            )
+        });
     if let Some(selected) = object["selected"].as_object() {
         let selected = exact_object(
             &JsonValue::Object(selected.clone()),
@@ -4041,15 +4515,14 @@ fn validate_calibration_report(value: &JsonValue) -> Result<(), Box<dyn std::err
                 .ok_or("selected fleet missing")?,
         );
         let p95 = selected["p95_ms"].as_u64().ok_or("selected p95 missing")?;
-        if !candidates.iter().any(|candidate| {
-            candidate["setting_valid"].as_bool() == Some(true)
-                && candidate["build_jobs"].as_u64() == Some(setting.0)
+        if !expected_selected.is_some_and(|candidate| {
+            candidate["build_jobs"].as_u64() == Some(setting.0)
                 && candidate["fleet_concurrency"].as_u64() == Some(setting.1)
                 && candidate["p95_ms"].as_u64() == Some(p95)
         }) {
-            return Err("selected CI calibration is not a valid candidate".into());
+            return Err("selected CI calibration is not the fastest valid candidate".into());
         }
-    } else if !object["selected"].is_null() {
+    } else if !object["selected"].is_null() || expected_selected.is_some() {
         return Err("selected CI calibration must be an object or null".into());
     }
     Ok(())
@@ -4178,7 +4651,7 @@ mod tests {
                 "required",
                 "security",
                 "complete-coverage",
-                "contract-consumers",
+                "contract-drift",
                 "jankurai",
                 "artifact",
                 "compatibility",
@@ -4239,11 +4712,15 @@ mod tests {
                 "scope": if profile == Profile::ReleaseFull { "complete" } else { "changed-surface" }
             },
             "cross_repo_dependencies": [],
-            "toolchains": [], "lockfiles": [],
+            "cargo_configuration": [], "toolchains": [], "lockfiles": [],
             "executables": [
                 {"name":"bash","path":"/usr/bin/bash","sha256":"1".repeat(64)},
                 {"name":"cargo","path":"/usr/bin/cargo","sha256":"2".repeat(64)},
-                {"name":"time","path":"/usr/bin/time","sha256":"3".repeat(64)}
+                {"name":"clippy-driver","path":"/usr/bin/clippy-driver","sha256":"3".repeat(64)},
+                {"name":"rustc","path":"/usr/bin/rustc","sha256":"4".repeat(64)},
+                {"name":"rustdoc","path":"/usr/bin/rustdoc","sha256":"5".repeat(64)},
+                {"name":"rustfmt","path":"/usr/bin/rustfmt","sha256":"6".repeat(64)},
+                {"name":"time","path":"/usr/bin/time","sha256":"7".repeat(64)}
             ],
             "resources": {
                 "authority_build_jobs": 4, "authority_fleet_concurrency": 4,
@@ -4255,6 +4732,16 @@ mod tests {
             },
             "cache": cache,
             "lanes": lanes,
+            "execution": {
+                "allowed": false, "activation_state": "blocked",
+                "activation_requires": "release-full-equivalence",
+                "required_boundary": EXECUTION_BOUNDARY,
+                "required_evidence_sealer": EVIDENCE_SEALER,
+                "required_fleet_scheduler": FLEET_SCHEDULER,
+                "required_measurement_source": MEASUREMENT_SOURCE,
+                "required_source_postcondition": SOURCE_POSTCONDITION,
+                "required_tool_manifest": TOOL_MANIFEST
+            },
             "publication": {
                 "mode": "shadow-equivalence", "allowed": false,
                 "required_equivalence_profile": "release-full", "required_check": "fixture/required"
@@ -4360,18 +4847,28 @@ mod tests {
             simple_lane("static-security", vec![], vec!["static-security"]),
             simple_lane("static-security", vec![], vec!["other"]),
         ];
-        assert!(
-            validate_generated_lanes(&duplicate, Profile::Presubmit, false, false, false).is_err()
-        );
+        assert!(validate_generated_lanes(
+            &duplicate,
+            Profile::Presubmit,
+            false,
+            false,
+            false,
+            false
+        )
+        .is_err());
         let missing = vec![simple_lane("other", vec![], vec!["other"])];
         assert!(
-            validate_generated_lanes(&missing, Profile::Presubmit, false, false, false).is_err()
+            validate_generated_lanes(&missing, Profile::Presubmit, false, false, false, false)
+                .is_err()
         );
         let cycle = vec![
             simple_lane("static-security", vec!["second"], vec!["static-security"]),
             simple_lane("second", vec!["static-security"], vec!["other"]),
         ];
-        assert!(validate_generated_lanes(&cycle, Profile::Presubmit, false, false, false).is_err());
+        assert!(
+            validate_generated_lanes(&cycle, Profile::Presubmit, false, false, false, false)
+                .is_err()
+        );
     }
 
     #[test]
@@ -4383,7 +4880,7 @@ mod tests {
                 "required",
                 "security",
                 "complete-coverage",
-                "contract-consumers",
+                "contract-drift",
                 "jankurai",
                 "artifact",
                 "compatibility",
@@ -4392,7 +4889,8 @@ mod tests {
             ],
         )];
         assert!(
-            validate_generated_lanes(&lanes, Profile::ReleaseFull, false, false, false).is_err()
+            validate_generated_lanes(&lanes, Profile::ReleaseFull, false, false, false, false)
+                .is_err()
         );
     }
 
@@ -4408,6 +4906,11 @@ mod tests {
         let mut forged = plan.clone();
         forged["profile"]["selected_by_uid"] = json!(1000);
         assert!(validate_plan_value(&forged).is_err());
+
+        let mut activated = plan.clone();
+        activated["execution"]["allowed"] = json!(true);
+        activated["execution"]["activation_state"] = json!("active");
+        assert!(validate_plan_value(&activated).is_err());
 
         let mut cache = plan.clone();
         cache["cache"] = json!({
@@ -4442,6 +4945,66 @@ mod tests {
         let mut compiler_mismatch = plan;
         compiler_mismatch["executables"][1]["sha256"] = json!("short");
         assert!(validate_plan_value(&compiler_mismatch).is_err());
+    }
+
+    #[test]
+    fn cargo_configuration_rejects_execution_and_credential_hooks() {
+        let safe: toml::Value = "[net]\noffline = true\n".parse().unwrap();
+        reject_unsafe_cargo_configuration(&safe, "").unwrap();
+        for hostile in [
+            "[build]\nrustc-wrapper = \"/tmp/exec\"\n",
+            "[alias]\nci = \"run --bin hostile\"\n",
+            "[source.crates-io]\nreplace-with = \"hostile\"\n",
+            "[registry]\nglobal-credential-providers = [\"cargo:token\"]\n",
+            "[target.x86_64-unknown-linux-gnu]\nrunner = \"/tmp/exec\"\n",
+        ] {
+            let value: toml::Value = hostile.parse().unwrap();
+            assert!(reject_unsafe_cargo_configuration(&value, "").is_err());
+        }
+    }
+
+    #[test]
+    fn release_dag_runs_each_rust_test_configuration_once_with_coverage() {
+        let raw: toml::Value = "name = \"fixture\"".parse().unwrap();
+        let executable =
+            |name: &str, path: &str| json!({"name": name, "path": path, "sha256": "a".repeat(64)});
+        let executables = BTreeMap::from([
+            ("bash".to_owned(), executable("bash", "/usr/bin/bash")),
+            ("cargo".to_owned(), executable("cargo", "/usr/bin/cargo")),
+            (
+                "cargo-llvm-cov".to_owned(),
+                executable("cargo-llvm-cov", "/usr/bin/cargo-llvm-cov"),
+            ),
+        ]);
+        let lanes = release_full_lanes(
+            "fixture",
+            &raw,
+            &[
+                "Cargo.toml".to_owned(),
+                "ops/ci/typed-required-non-test.sh".to_owned(),
+            ],
+            &executables,
+        )
+        .unwrap();
+        assert_eq!(
+            lanes
+                .iter()
+                .filter(|lane| lane["kind"] == "rust-test-and-coverage")
+                .count(),
+            1
+        );
+        assert!(!lanes.iter().any(|lane| lane["id"] == "required-product"));
+        let obligations = lanes
+            .iter()
+            .flat_map(|lane| lane["obligations"].as_array().unwrap())
+            .filter_map(JsonValue::as_str)
+            .collect::<Vec<_>>();
+        assert_eq!(
+            obligations.iter().copied().collect::<BTreeSet<_>>().len(),
+            obligations.len()
+        );
+        assert!(obligations.contains(&"complete-coverage"));
+        assert!(obligations.contains(&"contract-drift"));
     }
 
     #[test]
@@ -4520,6 +5083,116 @@ mod tests {
     }
 
     #[test]
+    fn host_result_requires_broker_seal_and_continuous_aggregate_metrics() {
+        let root = TestDir::new("host-result");
+        let log_path = root.path().join("lane.log");
+        fs::write(&log_path, "pass\n").unwrap();
+        let plan_sha256 = "a".repeat(64);
+        let lane_result = json!({
+            "schema_version": LANE_RESULT_SCHEMA,
+            "plan_sha256": plan_sha256,
+            "lane_id": "required",
+            "kind": "required",
+            "status": "pass",
+            "reason": null,
+            "started_at_unix_ms": 1000,
+            "finished_at_unix_ms": 1001,
+            "duration_ms": 1,
+            "exit_code": 0,
+            "log_path": log_path,
+            "log_sha256": sha256_regular_file(&log_path, "test log").unwrap(),
+            "command_sha256": "b".repeat(64),
+            "dependencies": [],
+            "obligations": ["required"],
+            "metrics": {
+                "wall_ms": 1,
+                "cpu_user_ms": 0,
+                "cpu_system_ms": 0,
+                "peak_rss_bytes": 1,
+                "fs_inputs": 0,
+                "fs_outputs": 0
+            }
+        });
+        let lane_results = vec![lane_result];
+        let result_set_sha256 = format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_vec(&lane_results).unwrap())
+        );
+        let metrics = json!({
+            "aggregate_peak_rss_bytes": 1,
+            "cache_hit_rate": null,
+            "cache_hits": null,
+            "cache_requests": null,
+            "cpu_system_ms": 0,
+            "cpu_user_ms": 0,
+            "critical_path_ms": 1,
+            "io_wait_percent": 0.0,
+            "load1_max": 1.0,
+            "measurement_sample_count": 2,
+            "measurement_source": MEASUREMENT_SOURCE,
+            "minimum_available_memory_bytes": MIN_AVAILABLE_MEMORY_BYTES,
+            "oom_kill_delta": 0,
+            "swap_in_delta_pages": 0
+        });
+        let metrics_sha256 = format!(
+            "{:x}",
+            Sha256::digest(serde_json::to_vec(&metrics).unwrap())
+        );
+        let mut run = json!({
+            "schema_version": RUN_SCHEMA,
+            "plan_schema_version": PLAN_SCHEMA,
+            "plan_sha256": plan_sha256,
+            "repository": "fixture",
+            "head_sha": "c".repeat(40),
+            "head_tree": "d".repeat(40),
+            "base_sha": "e".repeat(40),
+            "authority_sha256": "f".repeat(64),
+            "configuration": {"build_jobs": 4, "fleet_concurrency": 2, "calibration": true},
+            "profile": "release-full",
+            "started_at_unix_ms": 1000,
+            "finished_at_unix_ms": 1001,
+            "duration_ms": 1,
+            "status": "pass",
+            "publication_allowed": false,
+            "publication_mode": "shadow-equivalence",
+            "lane_results": lane_results,
+            "result_set_sha256": result_set_sha256,
+            "metrics": metrics,
+            "host_evidence": {
+                "schema_version": HOST_EVIDENCE_SCHEMA,
+                "plan_sha256": plan_sha256,
+                "lane_result_schema_version": LANE_RESULT_SCHEMA,
+                "result_set_sha256": result_set_sha256,
+                "metrics_sha256": metrics_sha256,
+                "profile": "release-full",
+                "measurement_source": MEASUREMENT_SOURCE,
+                "publication_allowed": false
+            },
+            "broker_seal": {
+                "boundary": EXECUTION_BOUNDARY,
+                "evidence_sealer": EVIDENCE_SEALER,
+                "fleet_lease_id": "1".repeat(64),
+                "fleet_slot": 0,
+                "fleet_slot_count": 2,
+                "measurement_source": MEASUREMENT_SOURCE,
+                "plan_path": "/run/jain-ci/plan.json",
+                "plan_sha256": plan_sha256,
+                "sealed_by_uid": 0,
+                "source_postcondition": SOURCE_POSTCONDITION,
+                "tool_manifest_path": "/run/jain-ci/tools.json",
+                "tool_manifest_sha256": "2".repeat(64)
+            },
+            "sealed": true
+        });
+        validate_run_receipt(&run).unwrap();
+        run["metrics"]["measurement_sample_count"] = json!(1);
+        assert!(validate_run_receipt(&run).is_err());
+        run["metrics"]["measurement_sample_count"] = json!(2);
+        run.as_object_mut().unwrap().remove("broker_seal");
+        assert!(validate_run_receipt(&run).is_err());
+    }
+
+    #[test]
     fn nearest_rank_p95_and_health_thresholds_are_exact() {
         let samples = (1..=20).map(|value| (value * 10, true)).collect::<Vec<_>>();
         let profile = performance_profile(samples, 190);
@@ -4554,10 +5227,15 @@ mod tests {
         }
         let report = calibration_report(&samples).unwrap();
         validate_calibration_report(&report).unwrap();
+        assert_eq!(report["candidates"][0]["setting_valid"], false);
+        assert!(report["candidates"][0]["improvement_percent"].is_null());
         assert_eq!(report["selected"]["build_jobs"], 8);
         assert_eq!(report["selected"]["fleet_concurrency"], 2);
         assert_eq!(report["selected"]["p95_ms"], 940);
         assert_eq!(report["candidates"][2]["setting_valid"], false);
+        let mut forged = report;
+        forged["candidates"][0]["setting_valid"] = json!(true);
+        assert!(validate_calibration_report(&forged).is_err());
     }
 
     #[test]
@@ -4589,6 +5267,63 @@ mod tests {
             let encoded = serde_json::to_string(&value).unwrap();
             assert!(encoded.contains(schema));
         }
+        let plan_schema: JsonValue =
+            serde_json::from_str(include_str!("../../../contracts/ci-plan.schema.json")).unwrap();
+        let required = plan_schema["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(JsonValue::as_str)
+            .collect::<BTreeSet<_>>();
+        for field in [
+            "cargo_configuration",
+            "execution",
+            "lanes",
+            "profile",
+            "resources",
+            "source_scope",
+        ] {
+            assert!(required.contains(field));
+        }
+        assert_eq!(plan_schema["$defs"]["stringSet"]["maxItems"], 128);
+        assert_eq!(plan_schema["$defs"]["packageSet"]["maxItems"], 1024);
+        assert_eq!(
+            plan_schema["$defs"]["execution"]["properties"]["allowed"]["const"],
+            false
+        );
+        let host_schema: JsonValue = serde_json::from_str(include_str!(
+            "../../../contracts/host-ci-result.schema.json"
+        ))
+        .unwrap();
+        assert!(host_schema["required"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("broker_seal")));
+        assert_eq!(
+            host_schema["$defs"]["metrics"]["properties"]["measurement_source"]["const"],
+            MEASUREMENT_SOURCE
+        );
+        assert_eq!(
+            host_schema["$defs"]["metrics"]["properties"]["measurement_sample_count"]["minimum"],
+            2
+        );
+        let packages = (0..1024)
+            .map(|index| json!(format!("package-{index}")))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            bounded_string_array(&json!(packages), "packages", 1024)
+                .unwrap()
+                .len(),
+            1024
+        );
+        assert!(bounded_string_array(
+            &json!((0..1025)
+                .map(|index| format!("package-{index}"))
+                .collect::<Vec<_>>()),
+            "packages",
+            1024
+        )
+        .is_err());
     }
 
     #[test]
