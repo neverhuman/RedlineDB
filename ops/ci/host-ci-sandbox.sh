@@ -370,6 +370,7 @@ for name in "${environment_names[@]}"; do
   [[ "$name" =~ $allowed_environment \
     && "$name" != *TOKEN* && "$name" != *SECRET* && "$name" != *PASSWORD* \
     && "$name" != JAIN_BASE && "$name" != JAIN_HOST_CI_PUBLISHER \
+    && "$name" != JAIN_CONTRACT_BASE_REF \
     && "$name" != JAIN_NATIVE_EVIDENCE_ROOT \
     && "$name" != JAIN_NATIVE_EVIDENCE_STAGING_ROOT \
     && "$name" != JAIN_PROOF_EVIDENCE_ROOT \
@@ -579,6 +580,47 @@ product_release_tag_binding="$(jq -er --arg owner "$protected_owner" \
   || fail 'invalid product materialization receipt'
 IFS=$'\t' read -r product_release_tag_ref product_release_tag_commit \
   <<<"$product_release_tag_binding"
+
+# Contract drift compares the requested head against the independently
+# authenticated protected-main commit. The worker receives only the exact SHA;
+# it never receives a forge credential, remote, or caller-selected ref.
+product_base_ref=refs/heads/main
+product_base_authority="$root_request/product-main-authority"
+product_base_materialization="$("$splitctl_path" jeryu-local git-materialize \
+  --repo "$protected_owner/$repo" --remote "$product_remote" \
+  --ref "$product_base_ref" --resolve-ref-head \
+  --destination "$product_base_authority" --token-file "$token_file")" \
+  || fail 'cannot materialize authenticated product protected main'
+product_base_commit="$(jq -er --arg owner "$protected_owner" \
+  --arg repo "$repo" --arg remote "$product_remote" \
+  --arg reference "$product_base_ref" '
+  select(.schema_version == "jain.jeryu-git-materialization/v1")
+  | select(.repository == ($owner + "/" + $repo) and .remote == $remote)
+  | select(.reference == $reference and .status == "pass")
+  | select(.commit | test("^[0-9a-f]{40}$"))
+  | select(.origin_retained == false and .lfs_hydrated == false)
+  | select(.release_tag_ref == "" and .release_tag_commit == "")
+  | .commit
+' <<<"$product_base_materialization")" \
+  || fail 'invalid product protected-main materialization receipt'
+validate_product_base_authority() {
+  [[ -d "$product_base_authority/.git" && ! -L "$product_base_authority" \
+    && ! -L "$product_base_authority/.git" \
+    && "$("${safe_git[@]}" -C "$product_base_authority" \
+      rev-parse 'HEAD^{commit}')" == "$product_base_commit" \
+    && -z "$("${safe_git[@]}" -C "$product_base_authority" remote)" \
+    && -z "$("${safe_git[@]}" -C "$product_base_authority" \
+      for-each-ref --format='%(refname)' refs/tags)" \
+    && -z "$("${safe_git[@]}" -C "$product_base_authority" \
+      status --porcelain=v1 --untracked-files=all)" \
+    && "$("${safe_git[@]}" -C "$product_authority" \
+      rev-parse --verify "$product_base_commit^{commit}")" \
+      == "$product_base_commit" ]] \
+    && "${safe_git[@]}" -C "$product_authority" merge-base --is-ancestor \
+      "$product_base_commit" "${arguments[2]}"
+}
+validate_product_base_authority \
+  || fail 'product protected main is not an exact ancestor authority'
 
 validate_product_release_tag_checkout() {
   local checkout="${1:?checkout required}" retained
@@ -892,6 +934,7 @@ if [[ "$sibling_sources_required" == true ]]; then
 fi
 jq -n --arg commit "$control_commit" --arg result "$worker_result" \
   --arg request_id "$request_id" \
+  --arg product_base_commit "$product_base_commit" \
   --arg product_release_tag_ref "$product_release_tag_ref" \
   --arg product_release_tag_commit "$product_release_tag_commit" \
   --arg sibling_sources_path "$worker_sibling_sources_path" \
@@ -906,6 +949,7 @@ jq -n --arg commit "$control_commit" --arg result "$worker_result" \
     source_root:"/opt/jain-ci/authority/control-plane",
     exact_root:"/opt/jain-ci/authority/control-plane",
     request_id:$request_id,commit:$commit,result_path:$result,
+    product_base_commit:$product_base_commit,
     product_release_tag_ref:$product_release_tag_ref,
     product_release_tag_commit:$product_release_tag_commit,
     sibling_sources_required:$sibling_sources_required,
@@ -951,6 +995,7 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
   --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
   --arg native_evidence_root "$native_evidence_root" \
   --arg proof_evidence_root "$proof_evidence_root" \
+  --arg product_base_commit "$product_base_commit" \
   --arg product_release_tag_ref "$product_release_tag_ref" \
   --arg product_release_tag_commit "$product_release_tag_commit" \
   --arg sibling_sources_sha "$sibling_sources_sha256" \
@@ -971,6 +1016,7 @@ jq -n --arg request_id "$request_id" --arg nonce "$nonce" \
     grype_db_inventory_sha256:$grype_db_inventory_sha256,
     native_evidence_root:$native_evidence_root,
     proof_evidence_root:$proof_evidence_root,
+    product_base_commit:$product_base_commit,
     product_release_tag_ref:$product_release_tag_ref,
     product_release_tag_commit:$product_release_tag_commit,
     sibling_sources_required:$sibling_sources_required,
@@ -1243,16 +1289,19 @@ evidence_sha=''
 promoted_evidence_dir=''
 if [[ "$runner_rc" == 0 && -f "$worker_result" && ! -L "$worker_result" \
   && "$(stat -c '%u:%a:%h' -- "$worker_result")" == "$worker_uid:600:1" ]] \
+  && validate_product_base_authority \
   && validate_product_release_tag_checkout "$product_authority" \
   && validate_product_release_tag_checkout "${arguments[3]}" \
   && validate_product_release_tag_checkout "$audit_worktree" \
   && jq -e --arg owner "${arguments[0]}" --arg repo "$repo" \
     --arg head "${arguments[2]}" --arg check "${arguments[4]}" \
     --arg commit "$control_commit" \
+    --arg product_base_commit "$product_base_commit" \
     'select(.schema_version == "jain.host-ci-worker-evidence/v5")
      | select(.owner == $owner and .repository == $repo)
      | select(.head_sha == $head and .required_check == $check)
      | select(.control_plane_commit == $commit)
+     | select(.product_base_commit == $product_base_commit)
      | select(.native_evidence_dir | type == "string")
      | select(.native_evidence_sha256 | type == "string")
      | select(.product_release_tag_ref | type == "string")
@@ -1271,6 +1320,8 @@ if [[ "$runner_rc" == 0 && -f "$worker_result" && ! -L "$worker_result" \
       == "$sibling_sources_sha256" \
     && "$(jq -er '.product_release_tag_ref' "$worker_result")" \
       == "$product_release_tag_ref" \
+    && "$(jq -er '.product_base_commit' "$worker_result")" \
+      == "$product_base_commit" \
     && "$(jq -er '.product_release_tag_commit' "$worker_result")" \
       == "$product_release_tag_commit" \
     && "$(jq -r '.cuda_compute_capability_required' "$worker_result")" \
@@ -1389,6 +1440,7 @@ jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
   --argjson audit_rc "$audit_rc" \
   --argjson proof_validator_rc "$proof_validator_rc" \
   --argjson evidence_required "$derived_required" \
+  --arg product_base_commit "$product_base_commit" \
   --arg product_release_tag_ref "$product_release_tag_ref" \
   --arg product_release_tag_commit "$product_release_tag_commit" \
   --arg sibling_sources_sha "$sibling_sources_sha256" \
@@ -1402,6 +1454,7 @@ jq -n --arg request_id "$request_id" --arg commit "$control_commit" \
     required_check:$check,conclusion:$conclusion,runner_exit_code:$rc,
     native_evidence_required:$evidence_required,
     native_evidence_dir:$evidence_dir,native_evidence_sha256:$evidence_sha,
+    product_base_commit:$product_base_commit,
     product_release_tag_ref:$product_release_tag_ref,
     product_release_tag_commit:$product_release_tag_commit,
     sibling_sources_required:$sibling_sources_required,

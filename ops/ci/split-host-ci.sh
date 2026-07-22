@@ -17,7 +17,7 @@ if [[ -v JERYU_BASE || -v JERYU_MERGE_TOKEN || -v JERYU_MERGE_TOKEN_FILE ]]; the
   printf '[split-host-ci] caller-provided forge credentials are forbidden; use the root publisher\n' >&2
   exit 2
 fi
-unset JAIN_BASE
+unset JAIN_BASE JAIN_CONTRACT_BASE_REF
 
 jain_contract_source_object() {
   local mirror="${1:?contract mirror is required}"
@@ -112,6 +112,7 @@ jq -e '
   | select(.result_path | type == "string" and startswith("/"))
   | select(.splitctl_path == "/opt/jain-ci/authority/splitctl")
   | select(.request_id | test("^[0-9a-f]{64}$"))
+  | select(.product_base_commit | test("^[0-9a-f]{40}$"))
   | select(.product_release_tag_ref | type == "string")
   | select(.product_release_tag_commit | type == "string")
   | select(.sibling_sources_required | type == "boolean")
@@ -132,6 +133,9 @@ CHILD_RESULT_PATH="$(jq -er '.result_path' "$REEXEC_STATE")" || exit 2
 SPLITCTL_BIN="$(realpath -e -- "$(jq -er '.splitctl_path' "$REEXEC_STATE")")" \
   || exit 2
 JAIN_HOST_CI_REQUEST_ID="$(jq -er '.request_id' "$REEXEC_STATE")" || exit 2
+JAIN_PRODUCT_BASE_COMMIT="$(
+  jq -er '.product_base_commit' "$REEXEC_STATE"
+)" || exit 2
 JAIN_PRODUCT_RELEASE_TAG_REF="$(
   jq -er '.product_release_tag_ref' "$REEXEC_STATE"
 )" || exit 2
@@ -216,6 +220,18 @@ verify_product_release_tag() {
       merge-base --is-ancestor "$JAIN_PRODUCT_RELEASE_TAG_COMMIT" "$SHA"
 }
 
+verify_product_contract_base() {
+  local checkout="${1:?checkout required}"
+  [[ "$JAIN_PRODUCT_BASE_COMMIT" =~ ^[0-9a-f]{40}$ \
+    && "$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+      -c core.untrackedCache=false -c diff.external= -C "$checkout" \
+      rev-parse --verify "$JAIN_PRODUCT_BASE_COMMIT^{commit}")" \
+      == "$JAIN_PRODUCT_BASE_COMMIT" ]] \
+    && git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+      -c core.untrackedCache=false -c diff.external= -C "$checkout" \
+      merge-base --is-ancestor "$JAIN_PRODUCT_BASE_COMMIT" "$SHA"
+}
+
 verify_exact_control_plane_integrity() {
   local verified
   verified="$(
@@ -289,12 +305,15 @@ post_check() {
   [[ "$conclusion" == success ]] || return 0
   verify_product_release_tag "$REPO_PATH" \
     && verify_product_release_tag "$wt" \
+    && verify_product_contract_base "$REPO_PATH" \
+    && verify_product_contract_base "$wt" \
     || return 1
   result_tmp="$CHILD_RESULT_PATH.tmp.$$"
   jq -n --arg owner "$OWNER" --arg repo "$REPO" --arg head_sha "$SHA" \
     --arg check "$CHECK" --arg commit "$CONTROL_PLANE_COMMIT" \
     --arg evidence_dir "${JAIN_NATIVE_EVIDENCE_DIR:-}" \
     --arg evidence_sha "${JAIN_NATIVE_EVIDENCE_SHA256:-}" \
+    --arg product_base_commit "$JAIN_PRODUCT_BASE_COMMIT" \
     --arg product_release_tag_ref "$JAIN_PRODUCT_RELEASE_TAG_REF" \
     --arg product_release_tag_commit "$JAIN_PRODUCT_RELEASE_TAG_COMMIT" \
     --arg sibling_sources_sha "$JAIN_SIBLING_SOURCES_SHA256" \
@@ -307,6 +326,7 @@ post_check() {
       control_plane_commit:$commit,
       native_evidence_dir:$evidence_dir,
       native_evidence_sha256:$evidence_sha,
+      product_base_commit:$product_base_commit,
       product_release_tag_ref:$product_release_tag_ref,
       product_release_tag_commit:$product_release_tag_commit,
       sibling_sources_required:$sibling_sources_required,
@@ -365,6 +385,8 @@ run_release_cargo_commands() {
 [ -e "$REPO_PATH/.git" ] || { echo "not a git repo: $REPO_PATH" >&2; exit 2; }
 verify_product_release_tag "$REPO_PATH" \
   || { echo "sealed product release tag is missing or mismatched" >&2; exit 2; }
+verify_product_contract_base "$REPO_PATH" \
+  || { echo "sealed product protected-main base is missing or not an ancestor" >&2; exit 2; }
 command -v jq >/dev/null 2>&1 || { echo "host CI requires jq" >&2; exit 2; }
 [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "host CI requires a full 40-hex SHA" >&2; exit 2; }
 
@@ -516,6 +538,11 @@ validate_physical_checkout "$wt" "$SHA" \
   || { post_check failure; echo "physical checkout is not isolated" >&2; exit 1; }
 verify_product_release_tag "$wt" \
   || { post_check failure; echo "physical checkout release tag mismatch" >&2; exit 1; }
+verify_product_contract_base "$wt" \
+  || { post_check failure; echo "physical checkout contract base mismatch" >&2; exit 1; }
+# Product contract lanes receive only the independently authenticated commit,
+# never a caller-selected ref, forge credential, or retained remote.
+export JAIN_CONTRACT_BASE_REF="$JAIN_PRODUCT_BASE_COMMIT"
 
 # Repositories that execute native build tools or the Web frontend activate the
 # exact validated tool root before product bytes. Unrelated release lanes do

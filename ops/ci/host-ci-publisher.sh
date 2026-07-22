@@ -185,6 +185,7 @@ jq -e --arg request_id "$request_id" \
    | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
    | select(.native_evidence_root | type == "string")
    | select(.proof_evidence_root | type == "string")
+   | select(.product_base_commit | test("^[0-9a-f]{40}$"))
    | select(.product_release_tag_ref | type == "string")
    | select(.product_release_tag_commit | type == "string")
    | select(.sibling_sources_required | type == "boolean")
@@ -240,6 +241,7 @@ jq -e --arg request_id "$request_id" \
    | select(.native_evidence_required | type == "boolean")
    | select(.native_evidence_dir | type == "string")
    | select(.native_evidence_sha256 | type == "string")
+   | select(.product_base_commit | test("^[0-9a-f]{40}$"))
    | select(.product_release_tag_ref | type == "string")
    | select(.product_release_tag_commit | type == "string")
    | select(.sibling_sources_required | type == "boolean")
@@ -321,7 +323,9 @@ required_check="$(jq -er '.required_check' "$result")"
 
 product_release_tag_ref="$(jq -er '.product_release_tag_ref' "$result")"
 product_release_tag_commit="$(jq -er '.product_release_tag_commit' "$result")"
-[[ "$(jq -er '.product_release_tag_ref' "$state")" \
+product_base_commit="$(jq -er '.product_base_commit' "$result")"
+[[ "$(jq -er '.product_base_commit' "$state")" == "$product_base_commit" \
+  && "$(jq -er '.product_release_tag_ref' "$state")" \
     == "$product_release_tag_ref" \
   && "$(jq -er '.product_release_tag_commit' "$state")" \
     == "$product_release_tag_commit" ]] \
@@ -350,6 +354,27 @@ else
   [[ -z "$product_release_tag_commit" && -z "$retained_product_tags" ]] \
     || fail 'tag-free product authority retained unexpected tags'
 fi
+product_base_authority="$request_dir/product-main-authority"
+[[ -d "$product_base_authority/.git" && ! -L "$product_base_authority" \
+  && ! -L "$product_base_authority/.git" \
+  && ! -e "$product_base_authority/.git/commondir" \
+  && ! -e "$product_base_authority/.git/worktrees" \
+  && ! -e "$product_base_authority/.git/objects/info/alternates" \
+  && "$("${safe_git[@]}" -C "$product_base_authority" \
+    rev-parse --absolute-git-dir)" == "$product_base_authority/.git" \
+  && "$("${safe_git[@]}" -C "$product_base_authority" \
+    rev-parse --verify 'HEAD^{commit}')" == "$product_base_commit" \
+  && -z "$("${safe_git[@]}" -C "$product_base_authority" remote)" \
+  && -z "$("${safe_git[@]}" -C "$product_base_authority" \
+    for-each-ref --format='%(refname)' refs/tags)" \
+  && -z "$("${safe_git[@]}" -C "$product_base_authority" \
+    status --porcelain=v1 --untracked-files=all)" \
+  && "$("${safe_git[@]}" -C "$product_authority" \
+    rev-parse --verify "$product_base_commit^{commit}")" \
+    == "$product_base_commit" ]] \
+  && "${safe_git[@]}" -C "$product_authority" merge-base --is-ancestor \
+    "$product_base_commit" "$head_sha" \
+  || fail 'sealed product protected-main authority changed or is not an ancestor'
 
 family_root="$(realpath -e -- "$(jq -er '.split_root' \
   "$request_dir/caller-request.json")")" \
@@ -571,6 +596,11 @@ forge_git_base="$(jq -er '.forge_git_base' "$config")"
 product_remote="${forge_git_base%/}/$owner/$repo.git"
 "$splitctl_path" jeryu-local ref-readback \
   --repo "$owner/$repo" --remote "$product_remote" \
+  --ref refs/heads/main --expected-head "$product_base_commit" \
+  --token-file "$token_file" >/dev/null \
+  || fail 'product protected main moved before publication'
+"$splitctl_path" jeryu-local ref-readback \
+  --repo "$owner/$repo" --remote "$product_remote" \
   --expected-head "$head_sha" --token-file "$token_file" >/dev/null \
   || fail 'head is not an advertised authoritative product ref'
 if [[ "$conclusion" == success && -n "$product_release_tag_ref" ]]; then
@@ -595,8 +625,8 @@ proof_run_id="$(jq -er '.run_id' "$proof_evidence_resolved/receipt.json")"
 proof_score="$(jq -er '.score' "$proof_evidence_resolved/receipt.json")"
 proof_hard="$(jq -er '.hard_findings' "$proof_evidence_resolved/receipt.json")"
 proof_caps="$(jq -er '.caps_applied' "$proof_evidence_resolved/receipt.json")"
-proof_summary="receipt_sha256=$proof_receipt_sha attempt_id=$proof_attempt_id run_id=$proof_run_id auditor_sha256=$jankurai_sha proof_status=$proof_status score=$proof_score hard_findings=$proof_hard caps_applied=$proof_caps product_release_tag_ref=${product_release_tag_ref:-none} product_release_tag_commit=${product_release_tag_commit:-none} sibling_sources_sha256=${sibling_sources_sha:-none} cuda_compute_capability=${cuda_cap:-none} cuda_capability_record_sha256=${cuda_record_sha:-none} root_seal=$(jq -er '.root_seal' "$state")"
-description="$required_check cuda-sm=${cuda_cap:-none} record=${cuda_record_sha:0:12} root-seal=$(jq -er '.root_seal' "$state" | cut -c1-16)"
+proof_summary="receipt_sha256=$proof_receipt_sha attempt_id=$proof_attempt_id run_id=$proof_run_id auditor_sha256=$jankurai_sha proof_status=$proof_status score=$proof_score hard_findings=$proof_hard caps_applied=$proof_caps product_base_commit=$product_base_commit product_release_tag_ref=${product_release_tag_ref:-none} product_release_tag_commit=${product_release_tag_commit:-none} sibling_sources_sha256=${sibling_sources_sha:-none} cuda_compute_capability=${cuda_cap:-none} cuda_capability_record_sha256=${cuda_record_sha:-none} root_seal=$(jq -er '.root_seal' "$state")"
+description="$required_check base=${product_base_commit:0:12} cuda-sm=${cuda_cap:-none} root-seal=$(jq -er '.root_seal' "$state" | cut -c1-16)"
 publish_rc=0
 "$splitctl_path" jeryu-publish-host-ci \
   --token-file "$token_file" --repo "$owner/$repo" --head-sha "$head_sha" \

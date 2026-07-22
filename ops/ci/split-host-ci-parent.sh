@@ -2,7 +2,7 @@
 # Unprivileged bootstrap for split-host-ci. Publication is not reachable here;
 # the sole privileged transition is the exact root sandbox command.
 set -uo pipefail
-unset JAIN_BASE JAIN_HOST_CI_PUBLISHER
+unset JAIN_BASE JAIN_CONTRACT_BASE_REF JAIN_HOST_CI_PUBLISHER
 if [[ -v CUDA_COMPUTE_CAP ]]; then
   unset CUDA_COMPUTE_CAP
   printf '[split-host-ci] caller-provided CUDA_COMPUTE_CAP is forbidden\n' >&2

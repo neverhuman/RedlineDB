@@ -806,6 +806,8 @@ MONITOR
   printf 'boundary_forge_attempt=%s\n' "$forge_attempt" >>"$probe"
   printf 'boundary_sudo_attempt=%s\n' "$sudo_attempt" >>"$probe"
   printf 'boundary_release_ci=%s\n' "${JAIN_RELEASE_CI:-missing}" >>"$probe"
+  printf 'boundary_contract_base=%s\n' \
+    "${JAIN_CONTRACT_BASE_REF:-missing}" >>"$probe"
   printf 'boundary_rustsec_standalone=%s\n' "$rustsec_standalone" >>"$probe"
   printf 'boundary_deny_db_physical=%s\n' "$deny_db_physical" >>"$probe"
   printf 'boundary_advisory_lock_writable=%s\n' \
@@ -837,9 +839,12 @@ git -C "$product" config user.name 'Product Fixture'
 git -C "$product" config user.email product-fixture@example.invalid
 git -C "$product" add .
 git -C "$product" commit --quiet -m fixture
+product_base_sha="$(git -C "$product" rev-parse HEAD)"
+git -C "$product" commit --quiet --allow-empty -m 'fixture successor head'
 product_sha="$(git -C "$product" rev-parse HEAD)"
 git init --quiet --bare "$product_remote"
 git -C "$product" push --quiet "$product_remote" \
+  "$product_base_sha:refs/heads/main" \
   "$product_sha:refs/heads/test-head"
 sudo -n chown -R root:root "$product_forge_root"
 
@@ -1046,6 +1051,7 @@ JAIN_HOST_CI_PUBLISHER="$publisher" \
 JAIN_HOST_CI_SANDBOX="$sandbox" \
 JAIN_SPLIT_ROOT="$sandbox_family_root" \
 JAIN_RELEASE_CI=0 \
+JAIN_CONTRACT_BASE_REF=refs/heads/caller-forged-base \
 JAIN_RUSTSEC_ADVISORY_SOURCE=/caller/forbidden-advisory-source \
 JAIN_TEST_ATTACK_URL="$forge_base" \
 JAIN_TEST_REQUIRE_ISOLATION=1 \
@@ -1142,6 +1148,7 @@ grep -Fq 'boundary_root_request_readable=0' "$success_log"
 grep -Fq 'boundary_forge_attempt=blocked' "$success_log"
 grep -Fq 'boundary_sudo_attempt=blocked' "$success_log"
 grep -Fq 'boundary_release_ci=1' "$success_log"
+grep -Fq "boundary_contract_base=$product_base_sha" "$success_log"
 grep -Fq 'boundary_rustsec_standalone=1' "$success_log"
 grep -Fq 'boundary_deny_db_physical=1' "$success_log"
 grep -Fq 'boundary_advisory_lock_writable=1' "$success_log"
@@ -1177,9 +1184,20 @@ success_request="$(dirname "${retained_states[0]}")"
 sudo -n jq -e 'select(.status == "consumed")' \
   "$success_request/root-state.json" >/dev/null
 sudo -n jq -e --arg ref "$bootstrap_control_ref" \
-  --arg expires "$bootstrap_expires_at" '
-    select(.control_ref == $ref and .bootstrap_expires_at == $expires)' \
+  --arg expires "$bootstrap_expires_at" --arg base "$product_base_sha" '
+    select(.control_ref == $ref and .bootstrap_expires_at == $expires)
+    | select(.product_base_commit == $base)' \
   "$success_request/root-state.json" >/dev/null
+sudo -n jq -e --arg base "$product_base_sha" '
+  select(.product_base_commit == $base)' \
+  "$success_request/root-result.json" >/dev/null
+[[ "$(sudo -n git \
+    -c safe.directory="$success_request/product-main-authority" \
+    -C "$success_request/product-main-authority" \
+    rev-parse --verify 'HEAD^{commit}')" == "$product_base_sha" ]] || {
+  printf 'sealed protected-main checkout differs from root-derived base\n' >&2
+  exit 1
+}
 success_proof_dir="$(sudo -n jq -er '.proof_evidence_dir' \
   "$success_request/root-result.json")"
 case "$success_proof_dir" in
@@ -1366,6 +1384,32 @@ grep -Fq 'tag-free product authority retained unexpected tags' \
   "$tmp/product-tag-tamper.log"
 [[ "$(stat -c '%s' "$forge_log")" == "$expiry_mismatch_offset" ]] || {
   printf 'unsealed local product tag reached the forge\n' >&2
+  exit 1
+}
+
+# A valid seal cannot bless a protected-main checkout whose detached HEAD was
+# changed after the sandbox derived the base, even when the replacement commit
+# is the tested head and remains in the same repository.
+product_base_tamper_id="$(printf '2%.0s' {1..64})"
+make_sealed_variant "$product_base_tamper_id" '.request_id=$request_id' \
+  "$(date +%s)"
+sudo -n git \
+  -c safe.directory="$request_root/$product_base_tamper_id/product-main-authority" \
+  -C "$request_root/$product_base_tamper_id/product-main-authority" \
+  fetch --quiet "$product_remote" "$product_sha"
+sudo -n git \
+  -c safe.directory="$request_root/$product_base_tamper_id/product-main-authority" \
+  -C "$request_root/$product_base_tamper_id/product-main-authority" \
+  update-ref HEAD "$product_sha"
+if sudo -n "$publisher" "$request_root/$product_base_tamper_id" \
+  >"$tmp/product-base-tamper.log" 2>&1; then
+  printf 'publisher accepted a changed protected-main checkout\n' >&2
+  exit 1
+fi
+grep -Fq 'sealed product protected-main authority changed' \
+  "$tmp/product-base-tamper.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$expiry_mismatch_offset" ]] || {
+  printf 'changed protected-main checkout reached the forge\n' >&2
   exit 1
 }
 
@@ -1733,7 +1777,7 @@ chmod 0600 "$fd_attack_request"
 cp -- "$fd_attack_request" "$tmp/fixed-worker-environment-base.json"
 for fixed_key in JAIN_SPLIT_OPS_ROOT JAIN_HOST_CI_REEXEC_STATE \
   JAIN_HOST_CI_NETWORK_ISOLATED JAIN_PINNED_ADVISORY_DB JAIN_ADVISORY_DB \
-  JAIN_CARGO_DENY_ADVISORY_DB CUDA_COMPUTE_CAP; do
+  JAIN_CARGO_DENY_ADVISORY_DB JAIN_CONTRACT_BASE_REF CUDA_COMPUTE_CAP; do
   fixed_log="$tmp/fixed-worker-environment-$fixed_key.log"
   fixed_forge_offset="$(stat -c '%s' "$forge_log")"
   jq --arg key "$fixed_key" \
@@ -1875,12 +1919,35 @@ make_proof_tamper_variant() {
       sudo -n chmod 0400 "$proof_destination/report.json"
       sudo -n chmod 0500 "$proof_destination"
       ;;
+    none) ;;
     *) return 1 ;;
   esac
 }
 
+# Publication re-reads the protected main from the canonical Git remote. A
+# main movement after sealing invalidates an otherwise fully valid attempt
+# before either check POST.
+product_base_moved_id="$(printf '3%.0s' {1..64})"
+make_proof_tamper_variant "$product_base_moved_id" none
+sudo -n git --git-dir="$product_remote" update-ref \
+  refs/heads/main "$product_sha" "$product_base_sha"
+product_base_moved_offset="$(stat -c '%s' "$forge_log")"
+if sudo -n "$publisher" "$request_root/$product_base_moved_id" \
+  >"$tmp/product-base-moved.log" 2>&1; then
+  printf 'publisher accepted a moved protected main\n' >&2
+  exit 1
+fi
+grep -Fq 'product protected main moved before publication' \
+  "$tmp/product-base-moved.log"
+[[ "$(stat -c '%s' "$forge_log")" == "$product_base_moved_offset" ]] || {
+  printf 'moved protected main reached forge publication\n' >&2
+  exit 1
+}
+sudo -n git --git-dir="$product_remote" update-ref \
+  refs/heads/main "$product_base_sha" "$product_sha"
+
 # A valid root seal cannot bless evidence that changed afterward or whose
-# immutable inode shape was replaced. All four failures occur before a POST.
+# immutable inode shape was replaced. All three failures occur before a POST.
 for proof_mutation in missing hardlink tamper; do
   case "$proof_mutation" in
     missing) proof_mutation_id="$(printf 'd%.0s' {1..64})" ;;
@@ -1910,7 +1977,8 @@ git -C "$cuda_product" remote remove origin
 cuda_product_remote="$product_forge_root/veox/jain-starforge.git"
 sudo -n git init --quiet --bare "$cuda_product_remote"
 sudo -n git -c safe.directory="$cuda_product" -C "$cuda_product" push --quiet \
-  "$cuda_product_remote" "$product_sha:refs/heads/cuda-fixture"
+  "$cuda_product_remote" "$product_base_sha:refs/heads/main" \
+  "$product_sha:refs/heads/cuda-fixture"
 printf '' >"$forge_state"
 printf '%s\n' ok >"$forge_behavior"
 cuda_forge_offset="$(stat -c '%s' "$forge_log")"
