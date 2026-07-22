@@ -6,6 +6,7 @@ cd "$REPO_ROOT"
 log 'contract-drift lane: validate manifest and local-Jeryu policy contracts'
 require_tool jq
 mkdir -p target/jankurai/contract-drift
+cargo test --locked ci::tests::published_contracts_match_runtime_shape
 cargo run --locked --quiet -- validate-local-jeryu --manifest repos.manifest.toml --skip-remotes
 cargo run --locked --quiet -- validate-manifest --manifest repos.manifest.toml --check-derived
 cargo run --locked --quiet -- managed-repos --manifest repos.manifest.toml --json \

@@ -1,0 +1,198 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.invalid/contracts/ci-plan.schema.json",
+  "title": "Jain typed CI plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "authority", "base_sha", "base_tree", "cache", "cross_repo_dependencies",
+    "executables", "head_sha", "head_tree", "lanes", "lockfiles", "profile",
+    "publication", "repository", "repository_path", "required_check", "resources",
+    "schema_version", "source_scope", "toolchains"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.ci-plan/v1" },
+    "repository": { "$ref": "#/$defs/name" },
+    "repository_path": { "$ref": "#/$defs/absolutePath" },
+    "required_check": { "type": "string", "minLength": 3, "maxLength": 256 },
+    "head_sha": { "$ref": "#/$defs/sha1" },
+    "head_tree": { "$ref": "#/$defs/sha1" },
+    "base_sha": { "$ref": "#/$defs/sha1" },
+    "base_tree": { "$ref": "#/$defs/sha1" },
+    "authority": { "$ref": "#/$defs/authority" },
+    "profile": { "$ref": "#/$defs/profile" },
+    "source_scope": { "$ref": "#/$defs/sourceScope" },
+    "cross_repo_dependencies": { "$ref": "#/$defs/stringSet" },
+    "toolchains": { "$ref": "#/$defs/boundFiles" },
+    "lockfiles": { "$ref": "#/$defs/boundFiles" },
+    "executables": {
+      "type": "array", "minItems": 3, "maxItems": 16,
+      "items": { "$ref": "#/$defs/executable" }
+    },
+    "resources": { "$ref": "#/$defs/resources" },
+    "cache": { "$ref": "#/$defs/cache" },
+    "lanes": {
+      "type": "array", "minItems": 1, "maxItems": 64,
+      "items": { "$ref": "#/$defs/lane" }
+    },
+    "publication": { "$ref": "#/$defs/publication" }
+  },
+  "$defs": {
+    "sha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,127}$" },
+    "absolutePath": { "type": "string", "pattern": "^/", "maxLength": 4096 },
+    "relativePath": {
+      "type": "string", "minLength": 1, "maxLength": 4096,
+      "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\u0000-\\u001f\\u007f]+$"
+    },
+    "stringSet": {
+      "type": "array", "maxItems": 128, "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 16384 }
+    },
+    "authority": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "host_evidence_schema_sha256", "host_result_schema_sha256",
+        "lane_result_schema_sha256", "manifest_path", "manifest_sha256",
+        "performance_schema_sha256", "plan_schema_sha256"
+      ],
+      "properties": {
+        "manifest_path": { "$ref": "#/$defs/absolutePath" },
+        "manifest_sha256": { "$ref": "#/$defs/sha256" },
+        "plan_schema_sha256": { "$ref": "#/$defs/sha256" },
+        "lane_result_schema_sha256": { "$ref": "#/$defs/sha256" },
+        "performance_schema_sha256": { "$ref": "#/$defs/sha256" },
+        "host_result_schema_sha256": { "$ref": "#/$defs/sha256" },
+        "host_evidence_schema_sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "profile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["effective", "requested", "selected_by_uid", "widened", "widening_reasons"],
+      "properties": {
+        "requested": { "enum": ["presubmit", "release-full"] },
+        "effective": { "enum": ["presubmit", "release-full"] },
+        "selected_by_uid": { "const": 0 },
+        "widened": { "type": "boolean" },
+        "widening_reasons": {
+          "type": "array", "maxItems": 16, "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        }
+      }
+    },
+    "sourceScope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["changed_paths", "contract_consumers", "node_packages", "rust_packages", "scope"],
+      "properties": {
+        "changed_paths": {
+          "type": "array", "maxItems": 20000, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relativePath" }
+        },
+        "contract_consumers": { "$ref": "#/$defs/stringSet" },
+        "node_packages": { "$ref": "#/$defs/stringSet" },
+        "rust_packages": { "$ref": "#/$defs/stringSet" },
+        "scope": { "enum": ["changed-surface", "complete"] }
+      }
+    },
+    "boundFiles": {
+      "type": "array", "maxItems": 4096,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["bytes", "path", "sha256"],
+        "properties": {
+          "path": { "$ref": "#/$defs/relativePath" },
+          "sha256": { "$ref": "#/$defs/sha256" },
+          "bytes": { "type": "integer", "minimum": 0, "maximum": 8388608 }
+        }
+      }
+    },
+    "executable": {
+      "type": "object", "additionalProperties": false,
+      "required": ["name", "path", "sha256"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,63}$" },
+        "path": { "$ref": "#/$defs/absolutePath" },
+        "sha256": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "resources": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "authority_build_jobs", "authority_fleet_concurrency", "build_jobs", "calibration",
+        "fleet_concurrency", "io_wait_percent_max_exclusive", "load1_max_exclusive",
+        "max_parallel_lanes", "minimum_available_memory_bytes", "network", "swap_in_pages_max"
+      ],
+      "properties": {
+        "authority_build_jobs": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "authority_fleet_concurrency": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "build_jobs": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "fleet_concurrency": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "calibration": { "type": "boolean" },
+        "max_parallel_lanes": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "minimum_available_memory_bytes": { "const": 21474836480 },
+        "swap_in_pages_max": { "const": 0 },
+        "io_wait_percent_max_exclusive": { "const": 15.0 },
+        "load1_max_exclusive": { "const": 96.0 },
+        "network": { "const": "denied" }
+      }
+    },
+    "cache": {
+      "type": "object", "additionalProperties": false,
+      "required": ["compiler_cache_forbidden_for_release", "enabled", "max_bytes", "mode", "root"],
+      "properties": {
+        "compiler_cache_forbidden_for_release": { "const": true },
+        "enabled": { "type": "boolean" },
+        "max_bytes": { "type": "integer", "minimum": 0, "maximum": 42949672960 },
+        "mode": { "enum": ["content-addressed-local-only", "forbidden"] },
+        "root": { "type": ["string", "null"] }
+      }
+    },
+    "lane": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "args", "cache_policy", "coverage", "dependencies", "environment",
+        "expected_outputs", "id", "kind", "network", "obligations", "program", "timeout_seconds"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,95}$" },
+        "kind": { "type": "string", "minLength": 1, "maxLength": 96 },
+        "program": { "$ref": "#/$defs/absolutePath" },
+        "args": {
+          "type": "array", "maxItems": 128,
+          "items": { "type": "string", "minLength": 1, "maxLength": 16384 }
+        },
+        "environment": { "type": "object", "additionalProperties": false },
+        "dependencies": {
+          "type": "array", "maxItems": 64, "uniqueItems": true,
+          "items": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,95}$" }
+        },
+        "obligations": {
+          "type": "array", "minItems": 1, "maxItems": 64, "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 16384 }
+        },
+        "coverage": {
+          "type": "array", "maxItems": 20000, "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 16384 }
+        },
+        "expected_outputs": {
+          "type": "array", "minItems": 2, "maxItems": 4, "uniqueItems": true,
+          "items": { "$ref": "#/$defs/relativePath" }
+        },
+        "timeout_seconds": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "cache_policy": { "enum": ["presubmit-only", "forbidden"] },
+        "network": { "const": "denied" }
+      }
+    },
+    "publication": {
+      "type": "object", "additionalProperties": false,
+      "required": ["allowed", "mode", "required_check", "required_equivalence_profile"],
+      "properties": {
+        "allowed": { "const": false },
+        "mode": { "const": "shadow-equivalence" },
+        "required_check": { "type": "string", "minLength": 3, "maxLength": 256 },
+        "required_equivalence_profile": { "const": "release-full" }
+      }
+    }
+  }
+}

@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.invalid/contracts/ci-performance.schema.json",
+  "title": "Jain CI performance evidence",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "calibration", "evidence_root", "generated_at_unix", "profiles", "sample_count", "schema_version", "status"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.ci-performance/v1" },
+    "evidence_root": { "type": "string", "pattern": "^/", "maxLength": 4096 },
+    "generated_at_unix": { "type": "integer", "minimum": 1 },
+    "sample_count": { "type": "integer", "minimum": 0, "maximum": 4096 },
+    "status": { "enum": ["green", "calibrating", "red"] },
+    "calibration": { "$ref": "#/$defs/calibration" },
+    "profiles": {
+      "type": "object", "additionalProperties": false,
+      "required": ["presubmit", "release-full"],
+      "properties": {
+        "presubmit": { "$ref": "#/$defs/profile" },
+        "release-full": { "$ref": "#/$defs/profile" }
+      }
+    }
+  },
+  "$defs": {
+    "calibration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["candidates", "minimum_improvement_percent", "required_repositories", "selected"],
+      "properties": {
+        "minimum_improvement_percent": { "const": 5.0 },
+        "required_repositories": {
+          "const": ["jain-split-ops", "jain-web", "jain-smartcluster", "redline-core"]
+        },
+        "candidates": {
+          "type": "array", "maxItems": 20,
+          "items": { "$ref": "#/$defs/calibrationCandidate" }
+        },
+        "selected": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object", "additionalProperties": false,
+              "required": ["build_jobs", "fleet_concurrency", "p95_ms"],
+              "properties": {
+                "build_jobs": { "enum": [4, 8, 16, 24, 32] },
+                "fleet_concurrency": { "enum": [2, 4, 6, 8] },
+                "p95_ms": { "type": "integer", "minimum": 0 }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "calibrationCandidate": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "build_jobs", "fleet_concurrency", "improvement_percent", "invalid_sample_count",
+        "missing_repositories", "observed_sample_count", "p95_ms", "repositories",
+        "setting_valid", "valid_sample_count"
+      ],
+      "properties": {
+        "build_jobs": { "enum": [4, 8, 16, 24, 32] },
+        "fleet_concurrency": { "enum": [2, 4, 6, 8] },
+        "observed_sample_count": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "valid_sample_count": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "invalid_sample_count": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "repositories": {
+          "type": "array", "maxItems": 64, "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1, "maxLength": 128 }
+        },
+        "missing_repositories": {
+          "type": "array", "maxItems": 4, "uniqueItems": true,
+          "items": { "enum": ["jain-split-ops", "jain-web", "jain-smartcluster", "redline-core"] }
+        },
+        "p95_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "improvement_percent": { "type": ["number", "null"] },
+        "setting_valid": { "type": "boolean" }
+      }
+    },
+    "profile": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "invalid_sample_count", "limit_ms", "observed_sample_count", "p95_ms", "sample_count", "status"
+      ],
+      "properties": {
+        "limit_ms": { "type": "integer", "minimum": 1 },
+        "p95_ms": { "type": ["integer", "null"], "minimum": 0 },
+        "observed_sample_count": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "sample_count": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "invalid_sample_count": { "type": "integer", "minimum": 0, "maximum": 4096 },
+        "status": { "enum": ["green", "calibrating", "red"] }
+      }
+    }
+  }
+}

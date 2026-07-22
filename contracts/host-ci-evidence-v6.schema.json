@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.invalid/contracts/host-ci-evidence-v6.schema.json",
+  "title": "Jain typed host CI evidence v6",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "lane_result_schema_version", "measurement_source", "metrics_sha256", "plan_sha256",
+    "profile", "publication_allowed", "result_set_sha256", "schema_version"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.host-ci-evidence/v6" },
+    "plan_sha256": { "$ref": "#/$defs/sha256" },
+    "lane_result_schema_version": { "const": "jain.ci-lane-result/v1" },
+    "result_set_sha256": { "$ref": "#/$defs/sha256" },
+    "metrics_sha256": { "$ref": "#/$defs/sha256" },
+    "profile": { "enum": ["presubmit", "release-full"] },
+    "measurement_source": { "const": "worker-proc-and-gnu-time-shadow" },
+    "publication_allowed": { "const": false }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+  }
+}

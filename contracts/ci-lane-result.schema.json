@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.invalid/contracts/ci-lane-result.schema.json",
+  "title": "Jain typed CI lane result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "command_sha256", "dependencies", "duration_ms", "exit_code", "finished_at_unix_ms",
+    "kind", "lane_id", "log_path", "log_sha256", "metrics", "obligations",
+    "plan_sha256", "reason", "schema_version", "started_at_unix_ms", "status"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.ci-lane-result/v1" },
+    "plan_sha256": { "$ref": "#/$defs/sha256" },
+    "lane_id": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,95}$" },
+    "kind": { "type": "string", "minLength": 1, "maxLength": 96 },
+    "status": { "enum": ["pass", "fail", "canceled"] },
+    "reason": { "type": ["string", "null"], "maxLength": 1024 },
+    "started_at_unix_ms": { "type": "integer", "minimum": 1 },
+    "finished_at_unix_ms": { "type": "integer", "minimum": 1 },
+    "duration_ms": { "type": "integer", "minimum": 0, "maximum": 3660000 },
+    "exit_code": { "type": ["integer", "null"], "minimum": 0, "maximum": 255 },
+    "log_path": { "type": "string", "pattern": "^/", "maxLength": 4096 },
+    "log_sha256": { "$ref": "#/$defs/sha256" },
+    "command_sha256": { "$ref": "#/$defs/sha256" },
+    "dependencies": { "$ref": "#/$defs/stringSet" },
+    "obligations": { "$ref": "#/$defs/stringSet" },
+    "metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "cpu_system_ms", "cpu_user_ms", "fs_inputs", "fs_outputs", "peak_rss_bytes", "wall_ms"
+      ],
+      "properties": {
+        "wall_ms": { "type": "integer", "minimum": 0, "maximum": 3660000 },
+        "cpu_user_ms": { "type": "integer", "minimum": 0, "maximum": 3660000 },
+        "cpu_system_ms": { "type": "integer", "minimum": 0, "maximum": 3660000 },
+        "peak_rss_bytes": { "type": "integer", "minimum": 0 },
+        "fs_inputs": { "type": "integer", "minimum": 0 },
+        "fs_outputs": { "type": "integer", "minimum": 0 }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "stringSet": {
+      "type": "array", "maxItems": 64, "uniqueItems": true,
+      "items": { "type": "string", "minLength": 1, "maxLength": 16384 }
+    }
+  }
+}

@@ -308,12 +308,20 @@ sed -i \
   "$control/ops/ci/host-ci-proof-evidence.sh"
 install -D -m 0644 "$repo_root/tools/splitctl/src/main.rs" \
   "$control/tools/splitctl/src/main.rs"
+install -D -m 0644 "$repo_root/tools/splitctl/src/ci.rs" \
+  "$control/tools/splitctl/src/ci.rs"
 install -D -m 0644 "$repo_root/tools/splitctl/src/jeryu_client.rs" \
   "$control/tools/splitctl/src/jeryu_client.rs"
 install -D -m 0644 "$repo_root/tools/splitctl/src/release_candidate.rs" \
   "$control/tools/splitctl/src/release_candidate.rs"
 install -D -m 0644 "$repo_root/contracts/release-candidate.schema.json" \
   "$control/contracts/release-candidate.schema.json"
+for contract in \
+  ci-plan.schema.json ci-lane-result.schema.json ci-performance.schema.json \
+  host-ci-result-v6.schema.json host-ci-evidence-v6.schema.json; do
+  install -D -m 0644 "$repo_root/contracts/$contract" \
+    "$control/contracts/$contract"
+done
 git init --quiet --bare "$control_remote"
 sed -i \
   "s#/home/ubuntu/jain-split#$sandbox_family_root#g" \

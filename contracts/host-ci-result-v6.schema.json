@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.invalid/contracts/host-ci-result-v6.schema.json",
+  "title": "Jain typed host CI result v6",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "authority_sha256", "base_sha", "configuration", "duration_ms", "finished_at_unix_ms", "head_sha",
+    "head_tree", "host_evidence", "lane_results", "metrics", "plan_schema_version",
+    "plan_sha256", "profile", "publication_allowed", "publication_mode", "repository",
+    "result_set_sha256", "schema_version", "sealed", "started_at_unix_ms", "status"
+  ],
+  "properties": {
+    "schema_version": { "const": "jain.host-ci-result/v6" },
+    "plan_schema_version": { "const": "jain.ci-plan/v1" },
+    "plan_sha256": { "$ref": "#/$defs/sha256" },
+    "repository": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]{0,127}$" },
+    "head_sha": { "$ref": "#/$defs/sha1" },
+    "head_tree": { "$ref": "#/$defs/sha1" },
+    "base_sha": { "$ref": "#/$defs/sha1" },
+    "authority_sha256": { "$ref": "#/$defs/sha256" },
+    "configuration": {
+      "type": "object", "additionalProperties": false,
+      "required": ["build_jobs", "calibration", "fleet_concurrency"],
+      "properties": {
+        "build_jobs": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "fleet_concurrency": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "calibration": { "type": "boolean" }
+      }
+    },
+    "profile": { "enum": ["presubmit", "release-full"] },
+    "started_at_unix_ms": { "type": "integer", "minimum": 1 },
+    "finished_at_unix_ms": { "type": "integer", "minimum": 1 },
+    "duration_ms": { "type": "integer", "minimum": 0, "maximum": 86400000 },
+    "status": { "enum": ["pass", "fail"] },
+    "publication_allowed": { "const": false },
+    "publication_mode": { "const": "shadow-equivalence" },
+    "lane_results": {
+      "type": "array", "minItems": 1, "maxItems": 64,
+      "items": { "$ref": "ci-lane-result.schema.json" }
+    },
+    "result_set_sha256": { "$ref": "#/$defs/sha256" },
+    "metrics": { "$ref": "#/$defs/metrics" },
+    "host_evidence": { "$ref": "host-ci-evidence-v6.schema.json" },
+    "sealed": { "const": true }
+  },
+  "$defs": {
+    "sha1": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "nullableCounter": { "type": ["integer", "null"], "minimum": 0 },
+    "nullableRate": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+    "metrics": {
+      "type": "object", "additionalProperties": false,
+      "required": [
+        "cache_hit_rate", "cache_hits", "cache_requests", "cpu_system_ms", "cpu_user_ms",
+        "critical_path_ms", "io_wait_percent", "load1_max", "minimum_available_memory_bytes",
+        "oom_kill_delta", "peak_rss_bytes", "swap_in_delta_pages"
+      ],
+      "properties": {
+        "cache_hit_rate": { "$ref": "#/$defs/nullableRate" },
+        "cache_hits": { "$ref": "#/$defs/nullableCounter" },
+        "cache_requests": { "$ref": "#/$defs/nullableCounter" },
+        "cpu_system_ms": { "type": "integer", "minimum": 0 },
+        "cpu_user_ms": { "type": "integer", "minimum": 0 },
+        "critical_path_ms": { "type": "integer", "minimum": 0 },
+        "io_wait_percent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "load1_max": { "type": "number", "minimum": 0 },
+        "minimum_available_memory_bytes": { "type": "integer", "minimum": 0 },
+        "oom_kill_delta": { "type": "integer", "minimum": 0 },
+        "peak_rss_bytes": { "type": "integer", "minimum": 0 },
+        "swap_in_delta_pages": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}
