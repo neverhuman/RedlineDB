@@ -5154,19 +5154,17 @@ fn valid_https_url(value: &str) -> bool {
         return false;
     };
     if rest.is_empty()
-        || value.chars().any(char::is_whitespace)
-        || rest.contains('\\')
-        || rest.contains(['?', '#'])
+        || value.len() > 2048
+        || !rest.is_ascii()
+        || !rest.bytes().all(|byte| (0x21..=0x7e).contains(&byte))
+        || rest.contains(['\\', '%', '@', '?', '#'])
     {
         return false;
     }
-    let authority_end = rest.find(['/', '?', '#']).unwrap_or(rest.len());
-    let authority = &rest[..authority_end];
-    if authority.is_empty()
-        || !authority.is_ascii()
-        || authority.contains(['@', '%'])
-        || authority.starts_with('[')
-    {
+    let Some((authority, path)) = rest.split_once('/') else {
+        return false;
+    };
+    if authority.is_empty() || path.is_empty() || authority.starts_with('[') {
         return false;
     }
     let (host, port) = match authority.rsplit_once(':') {
@@ -5180,24 +5178,43 @@ fn valid_https_url(value: &str) -> bool {
             || port
                 .parse::<u16>()
                 .ok()
-                .filter(|value| *value > 0)
+                .filter(|value| *value > 0 && value.to_string() == port)
                 .is_none()
     }) {
         return false;
     }
-    let host = host.to_ascii_lowercase();
-    host.contains('.')
+    let canonical_host = host.to_ascii_lowercase();
+    host.len() <= 253
+        && host == canonical_host
+        && host.contains('.')
         && host.parse::<std::net::IpAddr>().is_err()
         && host != "localhost"
         && !host.ends_with(".localhost")
         && !host.ends_with(".localdomain")
         && host.split('.').all(|label| {
             !label.is_empty()
+                && label.len() <= 63
+                && label.bytes().any(|byte| byte.is_ascii_lowercase())
                 && !label.starts_with('-')
                 && !label.ends_with('-')
                 && label
                     .bytes()
-                    .all(|byte| byte.is_ascii_alphanumeric() || byte == b'-')
+                    .all(|byte| byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'-')
+        })
+        && path.split('/').all(|component| {
+            !component.is_empty()
+                && component.len() <= 128
+                && component
+                    .bytes()
+                    .next()
+                    .is_some_and(|byte| byte.is_ascii_alphanumeric())
+                && component
+                    .bytes()
+                    .last()
+                    .is_some_and(|byte| byte.is_ascii_alphanumeric())
+                && component
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-'))
         })
 }
 
@@ -11786,6 +11803,20 @@ mod tests {
         cases.push(("loopback-authority", value));
 
         let mut value = qualified_appliance_matrix();
+        value["release_job"]["attestation_url"] = json!("https://127.1/job.json");
+        cases.push(("legacy-numeric-authority", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release_job"]["attestation_url"] =
+            json!(format!("https://{}.jain.local/job.json", "a".repeat(64)));
+        cases.push(("overlength-dns-label", value));
+
+        let mut value = qualified_appliance_matrix();
+        value["release_job"]["attestation_url"] =
+            json!("https://release.jain.local/job\u{0000}.json");
+        cases.push(("control-byte-path", value));
+
+        let mut value = qualified_appliance_matrix();
         value["release_job"]["attestation_url"] = json!("https:///job.json");
         cases.push(("missing-authority", value));
 
@@ -11877,6 +11908,36 @@ mod tests {
             &format!("registry.jain.local/{}@{digest}", "a".repeat(129)),
             &digest,
         ));
+    }
+
+    #[test]
+    fn https_release_evidence_url_grammar_is_closed_and_canonical() {
+        for value in [
+            "https://release.jain.local/jobs/job-1.json",
+            "https://release.jain.local:443/jobs/job-1.json.sig",
+        ] {
+            assert!(valid_https_url(value), "rejected canonical URL {value}");
+        }
+        let long_label = format!("https://{}.jain.local/job.json", "a".repeat(64));
+        let control_path = "https://release.jain.local/job\u{0000}.json";
+        for value in [
+            "https://release.jain.local",
+            "https://Release.jain.local/job.json",
+            "https://127.1/job.json",
+            "https://127.0.0.1.local/job.json",
+            "https://release.123.local/job.json",
+            "https://release.jain.local:0443/job.json",
+            "https://release.jain.local:0/job.json",
+            "https://release.jain.local/jobs//job.json",
+            "https://release.jain.local/jobs/../job.json",
+            "https://release.jain.local/jobs/job%2ejson",
+            "https://release.jain.local/jobs/job.json?download=1",
+            "https://release.jain.local/jobs/job.json#fragment",
+            control_path,
+            long_label.as_str(),
+        ] {
+            assert!(!valid_https_url(value), "accepted noncanonical URL");
+        }
     }
 
     #[test]
