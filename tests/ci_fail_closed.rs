@@ -65,6 +65,19 @@ fn release_path_is_local_only_and_requires_custody() {
     assert!(doctor.contains("authoritative release workflow must not publish through GitHub"));
     assert!(doctor.contains("custody-stage"));
     assert!(!release.contains("GITHUB_REF_NAME"));
+    for reproducibility_binding in [
+        "SOURCE_DATE_EPOCH",
+        "--sort=name",
+        "--numeric-owner",
+        "--mtime=\"@${source_date_epoch}\"",
+        "gzip -n",
+    ] {
+        assert!(
+            release.contains(reproducibility_binding),
+            "release packaging lacks reproducibility binding: {reproducibility_binding}"
+        );
+    }
+    assert!(!release.contains(" -czf "));
     assert!(docs.contains("xtask custody-stage"));
     assert!(docs.contains("--artifact"));
     assert!(!docs.contains("gh release create"));

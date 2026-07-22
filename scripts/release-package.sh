@@ -70,6 +70,13 @@ artifact_hashes_obj="$(cd "${pkg_dir}" && find . -type f \
 
 commit="$(git rev-parse HEAD 2>/dev/null || printf unknown)"
 tag_revision="${tag##*.}"
+source_date_epoch="${SOURCE_DATE_EPOCH:-$(git show -s --format=%ct HEAD)}"
+case "$source_date_epoch" in
+  ''|*[!0-9]*)
+    printf 'SOURCE_DATE_EPOCH must be an unsigned integer: %s\n' "$source_date_epoch" >&2
+    exit 2
+    ;;
+esac
 
 jq -n \
   --arg version "$version" \
@@ -93,8 +100,10 @@ jq -n \
     generated_by: "scripts/release-package.sh"
   }' > "${pkg_dir}/release-manifest.json"
 
-tar -C dist --sort=name --owner=0 --group=0 --numeric-owner \
-  -czf "dist/${package}.tar.gz" "${package}"
+LC_ALL=C tar -C dist --sort=name --format=gnu \
+  --owner=0 --group=0 --numeric-owner --mtime="@${source_date_epoch}" \
+  -cf - "${package}" \
+  | gzip -n > "dist/${package}.tar.gz"
 sha256sum "dist/${package}.tar.gz" > "dist/${package}.tar.gz.sha256"
 cp "${pkg_dir}/release-manifest.json" dist/release-manifest.json
 
