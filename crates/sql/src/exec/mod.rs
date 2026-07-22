@@ -787,11 +787,17 @@ pub fn execute_prepared(
                 affected_rows: 0,
             })
         }
-        // SET TRANSACTION changes the active kernel transaction before SHOW
-        // can expose the selected level. Unsupported Serializable therefore
-        // fails immediately and never becomes a recalled-only false promise.
-        PreparedKind::SetTransactionIsolation { level } => {
-            conn.set_transaction_isolation(*level)?;
+        // Access modes are accepted without changing isolation. An explicit
+        // SET TRANSACTION level applies only to an active transaction, while
+        // SET SESSION CHARACTERISTICS selects the default for later BEGINs.
+        PreparedKind::SetTransaction { isolation, session } => {
+            if let Some(level) = isolation {
+                if *session {
+                    conn.set_default_transaction_isolation(*level)?;
+                } else {
+                    conn.set_transaction_isolation(*level)?;
+                }
+            }
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
                 affected_rows: 0,
@@ -974,7 +980,7 @@ fn template_writes(kind: &PreparedKind) -> bool {
         | PreparedKind::Explain(_)
         | PreparedKind::Select(_)
         | PreparedKind::Attach(_)
-        | PreparedKind::SetTransactionIsolation { .. }
+        | PreparedKind::SetTransaction { .. }
         | PreparedKind::SetSessionVariable
         | PreparedKind::ShowVariable { .. } => false,
         PreparedKind::CreateTable(_)

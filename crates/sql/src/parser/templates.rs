@@ -327,8 +327,7 @@ fn bind_alter_index(
     }
 }
 
-/// Track J — `SET TRANSACTION ISOLATION LEVEL <level>`. Recall-only stash
-/// on the session.
+/// Track J — transaction modes and session transaction defaults.
 fn bind_set_statement(
     sql: &str,
     schema_epoch: SchemaEpoch,
@@ -362,13 +361,18 @@ fn bind_set_statement(
     }
     if let sqlparser::ast::Set::SetTransaction {
         modes,
-        snapshot: _,
-        session: _,
+        snapshot,
+        session,
     } = set
     {
-        for mode in modes {
+        if snapshot.is_some() {
+            return Err(Error::UnsupportedSql(
+                "SET TRANSACTION SNAPSHOT is not supported".to_owned(),
+            ));
+        }
+        let isolation = modes.into_iter().find_map(|mode| {
             if let sqlparser::ast::TransactionMode::IsolationLevel(level) = mode {
-                let mapped = match level {
+                Some(match level {
                     sqlparser::ast::TransactionIsolationLevel::ReadUncommitted => {
                         crate::statement::TransactionIsolationLevel::ReadUncommitted
                     }
@@ -382,24 +386,18 @@ fn bind_set_statement(
                         crate::statement::TransactionIsolationLevel::Serializable
                     }
                     sqlparser::ast::TransactionIsolationLevel::Snapshot => {
-                        crate::statement::TransactionIsolationLevel::Serializable
+                        crate::statement::TransactionIsolationLevel::RepeatableRead
                     }
-                };
-                return Ok(template(
-                    sql,
-                    schema_epoch,
-                    false,
-                    PreparedKind::SetTransactionIsolation { level: mapped },
-                ));
+                })
+            } else {
+                None
             }
-        }
+        });
         return Ok(template(
             sql,
             schema_epoch,
             false,
-            PreparedKind::SetTransactionIsolation {
-                level: crate::statement::TransactionIsolationLevel::ReadCommitted,
-            },
+            PreparedKind::SetTransaction { isolation, session },
         ));
     }
     Err(Error::UnsupportedSql(format!(

@@ -154,11 +154,12 @@ pub enum PreparedKind {
         name: Arc<str>,
         if_exists: bool,
     },
-    /// `SET TRANSACTION ISOLATION LEVEL <level>`. The executor applies the
-    /// selected behavior to the active kernel transaction before updating
-    /// session-visible state.
-    SetTransactionIsolation {
-        level: TransactionIsolationLevel,
+    /// `SET TRANSACTION ...` or `SET SESSION CHARACTERISTICS AS TRANSACTION
+    /// ...`. Access-mode-only statements carry no isolation and therefore
+    /// cannot change kernel visibility by accident.
+    SetTransaction {
+        isolation: Option<TransactionIsolationLevel>,
+        session: bool,
     },
     /// Accepted connection/session variable whose value does not affect the
     /// embedded execution kernel (for example `application_name`).

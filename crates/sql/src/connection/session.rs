@@ -371,9 +371,13 @@ impl Connection {
         let committed_sqlite_sequences = self.db.sqlite_sequence_snapshot();
         let mut session = self.session.lock().expect("session poisoned");
         let implicit_tx = if session.tx.is_none() {
-            let tx = self.db.engine.begin(Isolation::Snapshot)?;
+            let tx = self
+                .db
+                .engine
+                .begin(kernel_isolation(session.default_transaction_isolation))?;
             session.sqlite_sequences = committed_sqlite_sequences;
             session.tx = Some(tx);
+            session.transaction_isolation = session.default_transaction_isolation;
             session.failed = false;
             session.sqlite_sequences_dirty.clear();
             if session.sqlite_sequences_tx_snapshot.is_none() {
@@ -511,10 +515,12 @@ impl Connection {
     }
 
     pub fn begin(&self, mode: BeginMode) -> Result<()> {
-        self.begin_with_isolation(
-            mode,
-            crate::statement::TransactionIsolationLevel::RepeatableRead,
-        )
+        let isolation = self
+            .session
+            .lock()
+            .expect("session poisoned")
+            .default_transaction_isolation;
+        self.begin_with_isolation(mode, isolation)
     }
 
     pub fn begin_with_isolation(
@@ -548,14 +554,31 @@ impl Connection {
         isolation: crate::statement::TransactionIsolationLevel,
     ) -> Result<()> {
         let mut session = self.session.lock().expect("session poisoned");
-        let tx = session
-            .tx
-            .as_mut()
-            .ok_or(Error::TransactionState("no active transaction"))?;
+        let Some(tx) = session.tx.as_mut() else {
+            // PostgreSQL accepts this shape outside a transaction with a
+            // warning and no effect. The embedded API has no warning channel,
+            // so preserve compatibility as an explicit no-op.
+            return Ok(());
+        };
         self.db
             .engine
             .set_transaction_isolation(tx, kernel_isolation(isolation))?;
         session.transaction_isolation = isolation;
+        Ok(())
+    }
+
+    pub fn set_default_transaction_isolation(
+        &self,
+        isolation: crate::statement::TransactionIsolationLevel,
+    ) -> Result<()> {
+        if isolation == crate::statement::TransactionIsolationLevel::Serializable {
+            return Err(Error::Kernel(redlinedb_kernel::Error::UnsupportedIsolation));
+        }
+        let mut session = self.session.lock().expect("session poisoned");
+        session.default_transaction_isolation = isolation;
+        if session.tx.is_none() {
+            session.transaction_isolation = isolation;
+        }
         Ok(())
     }
 
@@ -610,6 +633,7 @@ impl Connection {
                 if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
                     session.sqlite_sequences = snapshot;
                 }
+                session.transaction_isolation = session.default_transaction_isolation;
                 return Err(err);
             }
             session.tx = Some(tx);
@@ -618,6 +642,7 @@ impl Connection {
             .tx
             .take()
             .ok_or(Error::TransactionState("no active transaction"))?;
+        session.transaction_isolation = session.default_transaction_isolation;
         match self.db.engine.commit(tx) {
             Ok(CommitOutcome::Committed(_)) => {
                 session.kernel_unique_guards.clear();
@@ -673,6 +698,7 @@ impl Connection {
             .tx
             .take()
             .ok_or(Error::TransactionState("no active transaction"))?;
+        session.transaction_isolation = session.default_transaction_isolation;
         let result = self.db.engine.rollback(tx);
         session.kernel_unique_guards.clear();
         session.unique_guards.clear();

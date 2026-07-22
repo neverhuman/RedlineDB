@@ -198,4 +198,8 @@ if grep -n 'gh attestation verify' ops/ci/lib.sh >/dev/null; then
     report_error "redline-testing release path must not depend on GitHub attestation"
 fi
 
+if ! bash ops/ci/oracle-custody-test.sh; then
+    report_error "redline-testing custody receipt must bind the exact artifact"
+fi
+
 exit "$fail"

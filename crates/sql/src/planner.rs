@@ -351,7 +351,7 @@ pub(crate) fn build_plan(
         PreparedKind::DropSequence { .. } => {
             simple_node(PhysicalKind::Constant, "DROP SEQUENCE".to_owned())
         }
-        PreparedKind::SetTransactionIsolation { .. } => {
+        PreparedKind::SetTransaction { .. } => {
             simple_node(PhysicalKind::Constant, "SET TRANSACTION".to_owned())
         }
         PreparedKind::SetSessionVariable => simple_node(PhysicalKind::Constant, "SET".to_owned()),

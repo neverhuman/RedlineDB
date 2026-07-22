@@ -196,9 +196,12 @@ pub struct SessionState {
     /// Track J — Postgres-style sequences keyed by folded sequence name.
     /// Drives nextval/currval/setval.
     pub pg_sequences: std::collections::BTreeMap<String, SequenceState>,
-    /// Track J — `SET TRANSACTION ISOLATION LEVEL` recall value. Default
-    /// is `ReadCommitted` (Postgres' default).
+    /// Isolation of the active transaction, or the session default while no
+    /// transaction is open.
     pub transaction_isolation: crate::statement::TransactionIsolationLevel,
+    /// Default selected by `SET SESSION CHARACTERISTICS`. Repeatable Read
+    /// preserves the pre-4.2 transaction behavior.
+    pub default_transaction_isolation: crate::statement::TransactionIsolationLevel,
 }
 
 /// Track J — runtime state for a PostgreSQL-style sequence.
@@ -288,7 +291,9 @@ impl Default for SessionState {
                 s
             },
             pg_sequences: std::collections::BTreeMap::new(),
-            transaction_isolation: crate::statement::TransactionIsolationLevel::ReadCommitted,
+            transaction_isolation: crate::statement::TransactionIsolationLevel::RepeatableRead,
+            default_transaction_isolation:
+                crate::statement::TransactionIsolationLevel::RepeatableRead,
         }
     }
 }
@@ -348,7 +353,9 @@ impl SessionState {
         self.sqlite_sequences.clear();
         self.sqlite_sequences_tx_snapshot = None;
         self.sqlite_sequences_dirty.clear();
-        self.transaction_isolation = crate::statement::TransactionIsolationLevel::ReadCommitted;
+        self.transaction_isolation = crate::statement::TransactionIsolationLevel::RepeatableRead;
+        self.default_transaction_isolation =
+            crate::statement::TransactionIsolationLevel::RepeatableRead;
     }
 
     /// Reset journal + savepoint stack at a transaction boundary.

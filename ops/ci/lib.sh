@@ -628,8 +628,16 @@ ci_verify_redline_testing_attestation() {
     local receipt="${REDLINE_ORACLE_CUSTODY_RECEIPT:?REDLINE_ORACLE_CUSTODY_RECEIPT is required}"
     [ -f "$artifact" ] && [ ! -L "$artifact" ] || return 1
     [ -f "$receipt" ] && [ ! -L "$receipt" ] || return 1
-    jq -e '.schema_version == "redline.custody-receipt/v1" and .status == "pass"' \
-        "$receipt" >/dev/null
+    [ "$(stat -c %h "$artifact")" = 1 ] || return 1
+    [ "$(stat -c %h "$receipt")" = 1 ] || return 1
+    local artifact_sha256
+    artifact_sha256="$(sha256sum "$artifact" | awk '{print $1}')"
+    jq -e --arg artifact_sha256 "$artifact_sha256" '
+        .schema_version == "redline.custody-receipt/v1"
+        and .status == "pass"
+        and (.artifact_sha256 | type == "string")
+        and .artifact_sha256 == $artifact_sha256
+    ' "$receipt" >/dev/null
 }
 
 ci_verify_redlinedb_release_smoke() {

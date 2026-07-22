@@ -196,6 +196,137 @@ fn set_transaction_changes_the_active_kernel_behavior() {
 }
 
 #[test]
+fn access_modes_leave_the_active_isolation_unchanged() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = Database::create(dir.path().join("access-mode-isolation.redline")).expect("database");
+    let mut reader = db.connect().expect("reader");
+    let mut writer = db.connect().expect("writer");
+    writer
+        .execute("CREATE TABLE t(id INTEGER PRIMARY KEY, value INTEGER)", ())
+        .expect("create");
+    writer
+        .execute("INSERT INTO t VALUES (1, 10)", ())
+        .expect("seed");
+
+    begin_at(&mut reader, TransactionIsolationLevel::RepeatableRead).expect("begin reader");
+    assert_eq!(
+        read_i64(&mut reader, "SELECT value FROM t WHERE id = 1"),
+        10
+    );
+    reader
+        .execute("SET TRANSACTION READ ONLY", ())
+        .expect("accept read-only mode");
+    reader
+        .execute("SET TRANSACTION READ WRITE", ())
+        .expect("accept read-write mode");
+    writer
+        .execute("UPDATE t SET value = 20 WHERE id = 1", ())
+        .expect("committed update");
+    assert_eq!(
+        read_i64(&mut reader, "SELECT value FROM t WHERE id = 1"),
+        10
+    );
+    let shown: String = reader
+        .query_row("SHOW transaction_isolation", ())
+        .expect("show unchanged isolation");
+    assert_eq!(shown, "repeatable read");
+    reader.commit().expect("commit reader");
+}
+
+#[test]
+fn snapshot_sql_maps_to_repeatable_read_behavior() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = Database::create(dir.path().join("snapshot-alias.redline")).expect("database");
+    let mut reader = db.connect().expect("reader");
+    let mut writer = db.connect().expect("writer");
+    writer
+        .execute("CREATE TABLE t(id INTEGER PRIMARY KEY, value INTEGER)", ())
+        .expect("create");
+    writer
+        .execute("INSERT INTO t VALUES (1, 10)", ())
+        .expect("seed");
+
+    reader.execute("BEGIN", ()).expect("begin reader");
+    reader
+        .execute("SET TRANSACTION ISOLATION LEVEL SNAPSHOT", ())
+        .expect("snapshot alias");
+    assert_eq!(
+        read_i64(&mut reader, "SELECT value FROM t WHERE id = 1"),
+        10
+    );
+    writer
+        .execute("UPDATE t SET value = 20 WHERE id = 1", ())
+        .expect("committed update");
+    assert_eq!(
+        read_i64(&mut reader, "SELECT value FROM t WHERE id = 1"),
+        10
+    );
+    let shown: String = reader
+        .query_row("SHOW transaction_isolation", ())
+        .expect("show snapshot mapping");
+    assert_eq!(shown, "repeatable read");
+    reader.commit().expect("commit reader");
+}
+
+#[test]
+fn set_transaction_outside_a_transaction_is_accepted_without_changing_the_default() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db = Database::create(dir.path().join("set-before-begin.redline")).expect("database");
+    let mut conn = db.connect().expect("connection");
+
+    conn.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED", ())
+        .expect("outside-transaction SET is accepted as a no-op");
+    conn.execute("BEGIN", ())
+        .expect("begin with unchanged default");
+    let shown: String = conn
+        .query_row("SHOW transaction_isolation", ())
+        .expect("show transaction isolation");
+    assert_eq!(shown, "repeatable read");
+    conn.rollback().expect("rollback");
+}
+
+#[test]
+fn session_characteristics_select_the_next_transaction_default() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let db =
+        Database::create(dir.path().join("session-characteristics.redline")).expect("database");
+    let mut conn = db.connect().expect("connection");
+
+    conn.execute(
+        "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL READ COMMITTED",
+        (),
+    )
+    .expect("set session default");
+    conn.execute("BEGIN", ())
+        .expect("begin with session default");
+    let shown: String = conn
+        .query_row("SHOW transaction_isolation", ())
+        .expect("show session default");
+    assert_eq!(shown, "read committed");
+    conn.rollback().expect("rollback");
+
+    conn.execute("BEGIN", ()).expect("begin at read committed");
+    conn.execute(
+        "SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL REPEATABLE READ",
+        (),
+    )
+    .expect("change only the later default");
+    let shown: String = conn
+        .query_row("SHOW transaction_isolation", ())
+        .expect("show active transaction isolation");
+    assert_eq!(shown, "read committed");
+    conn.rollback().expect("rollback current transaction");
+
+    conn.execute("BEGIN", ())
+        .expect("begin with updated default");
+    let shown: String = conn
+        .query_row("SHOW transaction_isolation", ())
+        .expect("show updated session default");
+    assert_eq!(shown, "repeatable read");
+    conn.rollback().expect("rollback");
+}
+
+#[test]
 fn repeatable_read_prevents_cross_row_read_skew() {
     let dir = tempfile::tempdir().expect("tempdir");
     let db = Database::create(dir.path().join("read-skew.redline")).expect("database");
