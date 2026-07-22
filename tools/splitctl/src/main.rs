@@ -7515,8 +7515,20 @@ fn declared_standard_version_tag(
         let Some(version) = table.get("version").and_then(toml::Value::as_str) else {
             return Err("declared Redline control-plane version is not a string".into());
         };
-        if !valid_cargo_cache_component(version) {
-            return Err("declared Redline control-plane version is empty or malformed".into());
+        let expected_version = match repo {
+            "veox/redline-split-ops" => "8.0.1-rc.0",
+            "jeryu/redline-split-ops" => "8.0.0-rc.0",
+            _ => {
+                return Err(
+                    "declared Redline control-plane owner is not authorized for this identity"
+                        .into(),
+                )
+            }
+        };
+        if version != expected_version || !valid_cargo_cache_component(version) {
+            return Err(
+                "declared Redline control-plane version differs from owner authority".into(),
+            );
         }
         return Ok(None);
     }
@@ -15239,6 +15251,33 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                     "redline-split-control-plane",
                     "1.0.0",
                     "8.0.1-rc.0",
+                    "redline-split-ops/required",
+                ),
+            ),
+            (
+                "veox/redline-split-ops",
+                redline_control(
+                    "redline-split-control-plane",
+                    "1.0.0",
+                    "8.0.0-rc.0",
+                    "redline-split-ops/required",
+                ),
+            ),
+            (
+                "jeryu/redline-split-ops",
+                redline_control(
+                    "redline-split-control-plane",
+                    "1.0.0",
+                    "8.0.1-rc.0",
+                    "redline-split-ops/required",
+                ),
+            ),
+            (
+                "veox/redline-split-ops",
+                redline_control(
+                    "redline-split-control-plane",
+                    "1.0.0",
+                    "9.9.9-safe",
                     "redline-split-ops/required",
                 ),
             ),
