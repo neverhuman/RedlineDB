@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
-use std::fs;
+use std::fs::{self, File};
 use std::io::Write;
-use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::{FileExt, MetadataExt, OpenOptionsExt};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -41,6 +41,15 @@ struct ToolIdentity {
 struct ArtifactIdentity {
     path: String,
     sha256: String,
+    device: u64,
+    inode: u64,
+    length: u64,
+}
+
+#[derive(Debug)]
+struct PhysicalArtifact {
+    identity: ArtifactIdentity,
+    file: File,
 }
 
 #[derive(Debug, Serialize)]
@@ -84,7 +93,8 @@ pub(crate) fn stage(request: StageRequest<'_>) -> Result<()> {
         out_dir,
     } = request;
     let workspace = workspace_root(repo_root)?;
-    let artifact_before = physical_artifact_identity(artifact, &workspace)?;
+    let artifact_custody = open_physical_artifact(artifact, &workspace)?;
+    let artifact_before = artifact_custody.identity.clone();
     let source_cargo_home = fs::canonicalize(source_cargo_home)?;
     let selected = resolved_registry_packages(repo_root, &source_cargo_home)?;
     let cargo_home = prepare_output(cargo_home, &workspace)?;
@@ -127,7 +137,7 @@ pub(crate) fn stage(request: StageRequest<'_>) -> Result<()> {
         status.success(),
         "offline custody build failed with {status}"
     );
-    let artifact_after = physical_artifact_identity(artifact, &workspace)?;
+    let artifact_after = artifact_custody.revalidate_path(artifact)?;
     ensure!(
         artifact_after == artifact_before,
         "release artifact identity changed during offline custody build"
@@ -476,7 +486,20 @@ fn require_tree(path: &Path, workspace: &Path, label: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
+#[cfg(test)]
 fn physical_artifact_identity(artifact: &Path, workspace: &Path) -> Result<ArtifactIdentity> {
+    Ok(open_physical_artifact(artifact, workspace)?.identity)
+}
+
+fn open_physical_artifact(artifact: &Path, workspace: &Path) -> Result<PhysicalArtifact> {
+    open_physical_artifact_with_hook(artifact, workspace, || {})
+}
+
+fn open_physical_artifact_with_hook(
+    artifact: &Path,
+    workspace: &Path,
+    after_open: impl FnOnce(),
+) -> Result<PhysicalArtifact> {
     ensure!(
         artifact.is_absolute(),
         "release artifact path must be absolute"
@@ -505,8 +528,8 @@ fn physical_artifact_identity(artifact: &Path, workspace: &Path) -> Result<Artif
         );
     }
 
-    let metadata = fs::symlink_metadata(artifact)
-        .with_context(|| format!("inspect release artifact {}", artifact.display()))?;
+    let file = open_no_follow(artifact, "release artifact")?;
+    let metadata = file.metadata()?;
     ensure!(
         metadata.is_file() && !metadata.file_type().is_symlink(),
         "release artifact must be a physical regular file"
@@ -515,31 +538,194 @@ fn physical_artifact_identity(artifact: &Path, workspace: &Path) -> Result<Artif
         metadata.nlink() == 1,
         "release artifact must have exactly one hard link"
     );
-    let canonical = fs::canonicalize(artifact)?;
-    ensure!(
-        canonical.starts_with(&workspace),
-        "release artifact resolves outside the custody workspace"
-    );
-    Ok(ArtifactIdentity {
-        path: canonical.display().to_string(),
-        sha256: sha256_file(&canonical)?,
-    })
+    let identity = ArtifactIdentity {
+        path: artifact.display().to_string(),
+        sha256: sha256_open_file(&file, &metadata)?,
+        device: metadata.dev(),
+        inode: metadata.ino(),
+        length: metadata.len(),
+    };
+    after_open();
+    let custody = PhysicalArtifact { identity, file };
+    custody.revalidate_path(artifact)?;
+    Ok(custody)
 }
 
 fn write_new_receipt(path: &Path, body: &[u8]) -> Result<()> {
+    write_new_receipt_with_hook(path, body, || {})
+}
+
+fn write_new_receipt_with_hook(
+    path: &Path,
+    body: &[u8],
+    after_file_sync: impl FnOnce(),
+) -> Result<()> {
+    let parent = path
+        .parent()
+        .context("custody receipt path has no parent directory")?;
+    let parent_file = open_directory_no_follow(parent, "custody receipt parent")?;
+    let parent_metadata = parent_file.metadata()?;
     let mut file = fs::OpenOptions::new()
+        .read(true)
         .write(true)
         .create_new(true)
+        .mode(0o400)
+        .custom_flags(libc::O_NOFOLLOW)
         .open(path)
         .with_context(|| format!("create new custody receipt {}", path.display()))?;
     file.write_all(body)?;
     file.sync_all()?;
     let metadata = file.metadata()?;
     ensure!(
-        metadata.is_file() && metadata.nlink() == 1,
-        "custody receipt must be a physical single-link regular file"
+        metadata.is_file() && metadata.nlink() == 1 && metadata.mode() & 0o777 == 0o400,
+        "custody receipt must be a physical owner-read-only single-link regular file"
+    );
+    ensure!(
+        metadata.len() == body.len() as u64,
+        "custody receipt length drifted"
+    );
+    ensure!(
+        read_open_file(&file, metadata.len())? == body,
+        "custody receipt descriptor bytes differ from the requested body"
+    );
+    after_file_sync();
+    validate_published_file(path, &file, &metadata, body, "custody receipt")?;
+    parent_file.sync_all()?;
+    let reopened_parent = open_directory_no_follow(parent, "custody receipt parent")?;
+    ensure!(
+        same_file_identity(&parent_metadata, &reopened_parent.metadata()?),
+        "custody receipt parent directory changed during publication"
+    );
+    validate_published_file(path, &file, &metadata, body, "custody receipt")?;
+    Ok(())
+}
+
+impl PhysicalArtifact {
+    fn revalidate_path(&self, artifact: &Path) -> Result<ArtifactIdentity> {
+        let held_metadata = self.file.metadata()?;
+        ensure!(
+            held_metadata.is_file()
+                && held_metadata.nlink() == 1
+                && held_metadata.dev() == self.identity.device
+                && held_metadata.ino() == self.identity.inode
+                && held_metadata.len() == self.identity.length,
+            "release artifact descriptor identity changed"
+        );
+        ensure!(
+            sha256_open_file(&self.file, &held_metadata)? == self.identity.sha256,
+            "release artifact descriptor bytes changed"
+        );
+        let reopened = open_no_follow(artifact, "release artifact")?;
+        let reopened_metadata = reopened.metadata()?;
+        ensure!(
+            same_regular_file_identity(&held_metadata, &reopened_metadata),
+            "release artifact pathname no longer names the held descriptor"
+        );
+        ensure!(
+            sha256_open_file(&reopened, &reopened_metadata)? == self.identity.sha256,
+            "release artifact pathname bytes differ from the held descriptor"
+        );
+        let final_metadata = fs::symlink_metadata(artifact)?;
+        ensure!(
+            same_regular_file_identity(&held_metadata, &final_metadata),
+            "release artifact pathname changed during revalidation"
+        );
+        Ok(self.identity.clone())
+    }
+}
+
+fn open_no_follow(path: &Path, label: &str) -> Result<File> {
+    fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW)
+        .open(path)
+        .with_context(|| format!("open {label} without following links: {}", path.display()))
+}
+
+fn open_directory_no_follow(path: &Path, label: &str) -> Result<File> {
+    let file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW)
+        .open(path)
+        .with_context(|| format!("open {label} directory: {}", path.display()))?;
+    ensure!(
+        file.metadata()?.is_dir(),
+        "{label} must be a physical directory"
+    );
+    Ok(file)
+}
+
+fn same_file_identity(expected: &fs::Metadata, observed: &fs::Metadata) -> bool {
+    expected.dev() == observed.dev() && expected.ino() == observed.ino()
+}
+
+fn same_regular_file_identity(expected: &fs::Metadata, observed: &fs::Metadata) -> bool {
+    expected.is_file()
+        && observed.is_file()
+        && expected.nlink() == 1
+        && observed.nlink() == 1
+        && expected.len() == observed.len()
+        && same_file_identity(expected, observed)
+}
+
+fn validate_published_file(
+    path: &Path,
+    held: &File,
+    held_metadata: &fs::Metadata,
+    expected_body: &[u8],
+    label: &str,
+) -> Result<()> {
+    let path_metadata = fs::symlink_metadata(path)
+        .with_context(|| format!("inspect published {label} {}", path.display()))?;
+    ensure!(
+        !path_metadata.file_type().is_symlink()
+            && same_regular_file_identity(held_metadata, &path_metadata),
+        "published {label} pathname differs from the held descriptor"
+    );
+    let reopened = open_no_follow(path, label)?;
+    let reopened_metadata = reopened.metadata()?;
+    ensure!(
+        same_regular_file_identity(held_metadata, &reopened_metadata),
+        "published {label} reopened to a different file"
+    );
+    ensure!(
+        read_open_file(held, held_metadata.len())? == expected_body
+            && read_open_file(&reopened, reopened_metadata.len())? == expected_body,
+        "published {label} bytes differ from the held descriptor"
     );
     Ok(())
+}
+
+fn read_open_file(file: &File, length: u64) -> Result<Vec<u8>> {
+    let length = usize::try_from(length).context("open file is too large to verify")?;
+    let mut body = vec![0_u8; length];
+    let mut offset = 0;
+    while offset < body.len() {
+        let read = file.read_at(&mut body[offset..], offset as u64)?;
+        ensure!(read != 0, "open file ended before its recorded length");
+        offset += read;
+    }
+    Ok(body)
+}
+
+fn sha256_open_file(file: &File, metadata: &fs::Metadata) -> Result<String> {
+    let mut hasher = Sha256::new();
+    let mut buffer = [0_u8; 64 * 1024];
+    let mut offset = 0_u64;
+    while offset < metadata.len() {
+        let remaining = usize::try_from(metadata.len() - offset).unwrap_or(usize::MAX);
+        let limit = remaining.min(buffer.len());
+        let read = file.read_at(&mut buffer[..limit], offset)?;
+        ensure!(read != 0, "open file ended before its recorded length");
+        hasher.update(&buffer[..read]);
+        offset += read as u64;
+    }
+    let after = file.metadata()?;
+    ensure!(
+        same_regular_file_identity(metadata, &after),
+        "open file identity changed while hashing"
+    );
+    Ok(format!("{:x}", hasher.finalize()))
 }
 
 fn collect_regular_files(path: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
@@ -594,6 +780,8 @@ fn sha256_file(path: &Path) -> Result<String> {
 mod tests {
     use super::*;
     use std::os::unix::fs::symlink;
+    use std::sync::mpsc;
+    use std::thread;
 
     struct Scratch(PathBuf);
 
@@ -669,5 +857,68 @@ mod tests {
         symlink(&target, &linked).unwrap();
         assert!(write_new_receipt(&linked, b"replacement\n").is_err());
         assert_eq!(fs::read(&target).unwrap(), b"foreign\n");
+    }
+
+    #[test]
+    fn release_artifact_identity_rejects_concurrent_path_swap_before_restore() {
+        let scratch = Scratch::new();
+        let workspace = scratch.0.join("workspace");
+        fs::create_dir(&workspace).unwrap();
+        let artifact = workspace.join("redline-testing.tar.gz");
+        let displaced = workspace.join("displaced.tar.gz");
+        fs::write(&artifact, b"reviewed artifact\n").unwrap();
+
+        let (swap_tx, swap_rx) = mpsc::channel();
+        let (swapped_tx, swapped_rx) = mpsc::channel();
+        let worker_artifact = artifact.clone();
+        let worker_displaced = displaced.clone();
+        thread::scope(|scope| {
+            scope.spawn(move || {
+                swap_rx.recv().unwrap();
+                fs::rename(&worker_artifact, &worker_displaced).unwrap();
+                fs::write(&worker_artifact, b"forged artifact bytes\n").unwrap();
+                swapped_tx.send(()).unwrap();
+            });
+            let result = open_physical_artifact_with_hook(&artifact, &workspace, || {
+                swap_tx.send(()).unwrap();
+                swapped_rx.recv().unwrap();
+            });
+            assert!(result.is_err(), "artifact pathname swap must fail closed");
+        });
+
+        fs::remove_file(&artifact).unwrap();
+        fs::rename(&displaced, &artifact).unwrap();
+        let restored = physical_artifact_identity(&artifact, &workspace).unwrap();
+        assert_eq!(restored.sha256, sha256_file(&artifact).unwrap());
+    }
+
+    #[test]
+    fn custody_receipt_rejects_concurrent_path_swap_before_restore() {
+        let scratch = Scratch::new();
+        let receipt = scratch.0.join("custody-receipt.json");
+        let displaced = scratch.0.join("displaced-receipt.json");
+        let body = b"{\"status\":\"pass\"}\n";
+
+        let (swap_tx, swap_rx) = mpsc::channel();
+        let (swapped_tx, swapped_rx) = mpsc::channel();
+        let worker_receipt = receipt.clone();
+        let worker_displaced = displaced.clone();
+        thread::scope(|scope| {
+            scope.spawn(move || {
+                swap_rx.recv().unwrap();
+                fs::rename(&worker_receipt, &worker_displaced).unwrap();
+                fs::write(&worker_receipt, b"{\"status\":\"forged\"}\n").unwrap();
+                swapped_tx.send(()).unwrap();
+            });
+            let result = write_new_receipt_with_hook(&receipt, body, || {
+                swap_tx.send(()).unwrap();
+                swapped_rx.recv().unwrap();
+            });
+            assert!(result.is_err(), "receipt pathname swap must fail closed");
+        });
+
+        fs::remove_file(&receipt).unwrap();
+        fs::rename(&displaced, &receipt).unwrap();
+        assert_eq!(fs::read(&receipt).unwrap(), body);
     }
 }
