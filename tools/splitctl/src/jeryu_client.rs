@@ -156,6 +156,50 @@ impl JeryuRequest {
         Self::new(Method::Get, format!("/repos/{repo}"), None)
     }
 
+    pub fn initial_main(
+        repo: &str,
+        source_ref: &str,
+        commit_oid: &str,
+        tree_oid: &str,
+    ) -> Result<Self> {
+        validate_repo_slug(repo)?;
+        if repo.split_once('/').map(|(owner, _)| owner) != Some("veox") {
+            return Err(JeryuError::new(
+                "initial main creation is restricted to veox ownership",
+            ));
+        }
+        validate_ref_name(source_ref, "initial main source ref")?;
+        if !source_ref.starts_with("refs/heads/") || source_ref == "refs/heads/main" {
+            return Err(JeryuError::new(
+                "initial main source must be a non-main heads ref",
+            ));
+        }
+        for (label, oid) in [("commit", commit_oid), ("tree", tree_oid)] {
+            validate_sha(oid)?;
+            if oid.chars().any(|character| character.is_ascii_uppercase())
+                || oid.bytes().all(|byte| byte == b'0')
+            {
+                return Err(JeryuError::new(format!(
+                    "initial main {label} must be a nonzero lowercase full SHA"
+                )));
+            }
+        }
+        Self::new(
+            Method::Post,
+            format!("/api/v1/admin/repos/{repo}/initial-main"),
+            Some(
+                json!({
+                    "schema_version": "jeryu.initial-main-request/v1",
+                    "expected_old_oid": "0000000000000000000000000000000000000000",
+                    "source_ref": source_ref,
+                    "commit_oid": commit_oid,
+                    "tree_oid": tree_oid,
+                })
+                .to_string(),
+            ),
+        )
+    }
+
     pub fn pr_list(repo: &str, state: &str) -> Result<Self> {
         validate_repo_slug(repo)?;
         if !matches!(state, "open" | "closed" | "all") {
@@ -1796,6 +1840,70 @@ mod tests {
         assert!(JeryuRequest::repo_create("jeryu/jain-fabric", None).is_err());
         assert!(JeryuRequest::repo_create("veox/../jain-fabric", None).is_err());
         assert!(JeryuRequest::repo_create("veox/jain-fabric", Some("bad\ntext")).is_err());
+    }
+
+    #[test]
+    fn initial_main_request_is_admin_create_only_and_tree_bound() {
+        let commit = "a".repeat(40);
+        let tree = "b".repeat(40);
+        let request = JeryuRequest::initial_main(
+            "veox/jain-fabric",
+            "refs/heads/reviewed/bootstrap",
+            &commit,
+            &tree,
+        )
+        .unwrap();
+        assert_eq!(request.method(), "POST");
+        assert_eq!(
+            request.path(),
+            "/api/v1/admin/repos/veox/jain-fabric/initial-main"
+        );
+        assert_eq!(
+            serde_json::from_str::<JsonValue>(request.body().unwrap()).unwrap(),
+            json!({
+                "schema_version": "jeryu.initial-main-request/v1",
+                "expected_old_oid": "0000000000000000000000000000000000000000",
+                "source_ref": "refs/heads/reviewed/bootstrap",
+                "commit_oid": commit,
+                "tree_oid": tree,
+            })
+        );
+        for invalid in [
+            (
+                "jeryu/jain-fabric",
+                "refs/heads/reviewed/bootstrap",
+                "a".repeat(40),
+                "b".repeat(40),
+            ),
+            (
+                "veox/jain-fabric",
+                "refs/heads/main",
+                "a".repeat(40),
+                "b".repeat(40),
+            ),
+            (
+                "veox/jain-fabric",
+                "refs/tags/reviewed",
+                "a".repeat(40),
+                "b".repeat(40),
+            ),
+            (
+                "veox/jain-fabric",
+                "refs/heads/reviewed/bootstrap",
+                "0".repeat(40),
+                "b".repeat(40),
+            ),
+            (
+                "veox/jain-fabric",
+                "refs/heads/reviewed/bootstrap",
+                "A".repeat(40),
+                "b".repeat(40),
+            ),
+        ] {
+            assert!(
+                JeryuRequest::initial_main(invalid.0, invalid.1, &invalid.2, &invalid.3).is_err()
+            );
+        }
     }
 
     #[test]

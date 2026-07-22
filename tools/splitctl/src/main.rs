@@ -265,7 +265,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | ci-plan --repo NAME --head SHA --base SHA --profile presubmit|release-full [--output PATH] [--calibration --build-jobs 4|8|16|24|32 --fleet-concurrency 2|4|6|8] | ci-run --plan PATH --receipt PATH | ci-performance --evidence-root PATH [--output PATH] | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--sealed-outer-projection] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-candidate [--manifest PATH] [--repo NAME]... [--journal PATH --token-file PATH --apply] [--receipt PATH] | release-status [--manifest PATH] [--appliance-canary-aggregate PATH --appliance-canary-verifier-receipt PATH --token-file PATH] [--json PATH] | validate-appliance-promotion --aggregate PATH --verifier-receipt PATH --token-file PATH [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | ci-plan --repo NAME --head SHA --base SHA --profile presubmit|release-full [--output PATH] [--calibration --build-jobs 4|8|16|24|32 --fleet-concurrency 2|4|6|8] | ci-run --plan PATH --receipt PATH | ci-performance --evidence-root PATH [--output PATH] | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--sealed-outer-projection] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-candidate [--manifest PATH] [--repo NAME]... [--journal PATH --token-file PATH --apply] [--receipt PATH] | release-status [--manifest PATH] [--appliance-canary-aggregate PATH --appliance-canary-verifier-receipt PATH --token-file PATH] [--json PATH] | validate-appliance-promotion --aggregate PATH --verifier-receipt PATH --token-file PATH [--json PATH] | bootstrap-main --repo PATH --remote URL --source-ref REF --reviewed-commit SHA --reviewed-tree SHA --token-file PATH [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -6081,9 +6081,13 @@ fn snapshot_rows(data: &toml::Value) -> Result<Vec<JsonValue>, Box<dyn std::erro
 }
 
 fn bootstrap_main_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    reject_legacy_jeryu_environment()?;
     let mut repo = None;
     let mut remote = None;
+    let mut source_ref = None;
     let mut reviewed_commit = None;
+    let mut reviewed_tree = None;
+    let mut token_file = None;
     let mut receipt = None;
     let mut apply = false;
     let mut iter = args.into_iter();
@@ -6091,8 +6095,17 @@ fn bootstrap_main_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
         match arg.as_str() {
             "--repo" => repo = Some(PathBuf::from(iter.next().ok_or("--repo needs a path")?)),
             "--remote" => remote = Some(iter.next().ok_or("--remote needs a URL")?),
+            "--source-ref" => source_ref = Some(iter.next().ok_or("--source-ref needs a ref")?),
             "--reviewed-commit" => {
                 reviewed_commit = Some(iter.next().ok_or("--reviewed-commit needs a SHA")?)
+            }
+            "--reviewed-tree" => {
+                reviewed_tree = Some(iter.next().ok_or("--reviewed-tree needs a SHA")?)
+            }
+            "--token-file" => {
+                token_file = Some(PathBuf::from(
+                    iter.next().ok_or("--token-file needs a path")?,
+                ))
             }
             "--receipt" => {
                 receipt = Some(PathBuf::from(iter.next().ok_or("--receipt needs a path")?))
@@ -6101,9 +6114,46 @@ fn bootstrap_main_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
             value => return Err(format!("unknown bootstrap-main argument: {value}").into()),
         }
     }
-    let repo = repo.ok_or("bootstrap-main requires --repo")?;
+    let control_root = control_plane_root();
+    let split_root = control_root.parent().ok_or("splitctl root has no parent")?;
+    let repo = validate_physical_git_checkout_beneath(
+        &repo.ok_or("bootstrap-main requires --repo")?,
+        split_root,
+    )?;
     let remote = remote.ok_or("bootstrap-main requires --remote")?;
+    let destination_slug = fixed_jeryu_git_slug(&remote)?;
+    let (destination_owner, destination_name) = destination_slug
+        .split_once('/')
+        .ok_or("bootstrap-main destination needs owner/name")?;
+    if destination_owner != "veox"
+        || repo.file_name().and_then(OsStr::to_str) != Some(destination_name)
+    {
+        return Err(
+            "bootstrap-main is restricted to the same canonical checkout under veox".into(),
+        );
+    }
+    let remotes = secure_git_output(Some(&repo), &["remote"])?;
+    let source_remote = secure_git_output(Some(&repo), &["remote", "get-url", "origin"])?;
+    let source_slug = fixed_jeryu_git_slug(&source_remote)?;
+    let (source_owner, source_name) = source_slug
+        .split_once('/')
+        .ok_or("bootstrap-main source origin needs owner/name")?;
+    if remotes != "origin"
+        || source_name != destination_name
+        || !matches!(source_owner, "jeryu" | "veox")
+    {
+        return Err(
+            "bootstrap-main requires one same-name canonical jeryu/ or veox/ origin".into(),
+        );
+    }
+    let source_ref = source_ref.ok_or("bootstrap-main requires --source-ref")?;
     let reviewed_commit = reviewed_commit.ok_or("bootstrap-main requires --reviewed-commit")?;
+    let reviewed_tree = reviewed_tree.ok_or("bootstrap-main requires --reviewed-tree")?;
+    let token_file = token_file.ok_or("bootstrap-main requires an explicit --token-file path")?;
+    let identity = authenticated_repository_identity(&destination_slug, &token_file)?;
+    if identity.get("visibility").and_then(JsonValue::as_str) != Some("private") {
+        return Err("bootstrap-main destination must remain private".into());
+    }
     let receipt = match receipt {
         Some(path) => path,
         None => {
@@ -6114,27 +6164,108 @@ fn bootstrap_main_command(args: Vec<String>) -> Result<(), Box<dyn std::error::E
             release_evidence_path(&format!("bootstrap-main-{}.json", receipt_component(name)))
         }
     };
-    let mut report = receipt_header("jain.bootstrap-main/v1", "bootstrap-main", apply);
+    let mut report = receipt_header("jain.bootstrap-main/v2", "bootstrap-main", apply);
     report["repository"] = json!(repo);
+    report["repository_slug"] = json!(destination_slug);
     report["remote"] = json!(remote);
+    report["source_origin"] = json!(source_remote);
+    report["source_ref"] = json!(source_ref);
+    report["api_identity"] = identity;
+    report["token_metadata_validated"] = json!(true);
+    report["authority_sha256"] = json!(manifest_sha256(&control_root.join("repos.manifest.toml"))?);
     report["reviewed_commit_input"] = json!(reviewed_commit);
-    let result = bootstrap_main(&repo, &remote, &reviewed_commit, apply, &mut report);
+    report["reviewed_tree_input"] = json!(reviewed_tree);
+    let result = bootstrap_main(
+        BootstrapMainInputs {
+            repo: &repo,
+            remote: &remote,
+            source_ref: &source_ref,
+            reviewed_commit: &reviewed_commit,
+            reviewed_tree: &reviewed_tree,
+            token_file: &token_file,
+        },
+        apply,
+        &mut report,
+        authenticated_initial_main_cas,
+    );
     finish_receipted_operation(&receipt, &mut report, result)
 }
 
-fn bootstrap_main(
-    repo: &Path,
-    remote: &str,
-    reviewed_commit: &str,
+struct BootstrapMainInputs<'a> {
+    repo: &'a Path,
+    remote: &'a str,
+    source_ref: &'a str,
+    reviewed_commit: &'a str,
+    reviewed_tree: &'a str,
+    token_file: &'a Path,
+}
+
+fn bootstrap_main<F>(
+    inputs: BootstrapMainInputs<'_>,
     apply: bool,
     report: &mut JsonValue,
-) -> Result<(), Box<dyn std::error::Error>> {
-    let reviewed = resolve_commit(repo, reviewed_commit)?;
-    report["reviewed_commit"] = json!(reviewed);
-    let before = ls_remote_ref(repo, remote, "refs/heads/main")?;
+    mut create_main: F,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: FnMut(
+        &Path,
+        &str,
+        &str,
+        &str,
+        &str,
+        &Path,
+        &mut JsonValue,
+    ) -> Result<(), Box<dyn std::error::Error>>,
+{
+    let BootstrapMainInputs {
+        repo,
+        remote,
+        source_ref,
+        reviewed_commit,
+        reviewed_tree,
+        token_file,
+    } = inputs;
+    validate_bootstrap_remote(remote)?;
+    validate_heads_ref(source_ref)?;
+    if source_ref == "refs/heads/main" {
+        return Err("bootstrap-main source must be a non-main heads ref".into());
+    }
+    if !is_nonzero_full_sha(reviewed_commit) || !is_nonzero_full_sha(reviewed_tree) {
+        return Err(
+            "bootstrap-main reviewed commit and tree must be nonzero lowercase full SHAs".into(),
+        );
+    }
+    if !secure_git_output(
+        Some(repo),
+        &["status", "--porcelain=v1", "--untracked-files=all"],
+    )?
+    .is_empty()
+        || secure_git_output(Some(repo), &["rev-parse", "--verify", "HEAD^{commit}"])?
+            != reviewed_commit
+        || secure_git_output(Some(repo), &["rev-parse", "--verify", "HEAD^{tree}"])?
+            != reviewed_tree
+    {
+        return Err("bootstrap-main requires a clean exact reviewed HEAD and tree".into());
+    }
+    let source_closure_objects = validate_reachable_object_closure(repo, reviewed_commit)?;
+    if secure_ls_remote_at(remote, source_ref, token_file)?.as_deref() != Some(reviewed_commit) {
+        return Err("bootstrap-main source ref does not equal the reviewed commit".into());
+    }
+    report["reviewed_commit"] = json!(reviewed_commit);
+    report["reviewed_tree"] = json!(reviewed_tree);
+    report["source_closure_objects"] = json!(source_closure_objects);
+    report["source_ref_readback"] = json!(reviewed_commit);
+    let before = secure_ls_remote_at(remote, "refs/heads/main", token_file)?;
     report["before"] = json!({"remote_main": before});
     match before {
-        Some(existing) if existing == reviewed => {
+        Some(existing) if existing == reviewed_commit => {
+            verify_remote_main_materialization(
+                remote,
+                reviewed_commit,
+                reviewed_tree,
+                token_file,
+                report,
+            )?;
             report["action"] = json!("verified-existing");
             report["after"] = json!({"remote_main": existing});
             Ok(())
@@ -6143,7 +6274,7 @@ fn bootstrap_main(
             report["action"] = json!("refused-existing-history");
             report["after"] = json!({"remote_main": existing});
             Err(format!(
-                "refusing to replace existing remote main {existing} with reviewed commit {reviewed}"
+                "refusing to replace existing remote main {existing} with reviewed commit {reviewed_commit}"
             )
             .into())
         }
@@ -6153,81 +6284,265 @@ fn bootstrap_main(
             Ok(())
         }
         None => {
-            create_remote_main_cas(repo, remote, &reviewed, report)?;
-            let after = ls_remote_ref(repo, remote, "refs/heads/main")?;
+            report["mutation_attempted"] = json!(true);
+            if let Err(error) = create_main(
+                repo,
+                remote,
+                source_ref,
+                reviewed_commit,
+                reviewed_tree,
+                token_file,
+                report,
+            ) {
+                let after = secure_ls_remote_at(remote, "refs/heads/main", token_file)?;
+                report["action"] = json!("create-failed-readback-required");
+                report["after"] = json!({"remote_main": after});
+                return Err(format!(
+                    "bootstrap compare-and-create outcome is ambiguous; do not retry before exact readback: {error}"
+                )
+                .into());
+            }
+            let after = secure_ls_remote_at(remote, "refs/heads/main", token_file)?;
             report["action"] = json!("created");
             report["after"] = json!({"remote_main": after});
-            if after.as_deref() == Some(reviewed.as_str()) {
-                Ok(())
-            } else {
-                Err("remote main did not resolve to the reviewed commit after bootstrap".into())
+            if after.as_deref() != Some(reviewed_commit) {
+                return Err(
+                    "remote main did not resolve to the reviewed commit after bootstrap".into(),
+                );
             }
+            verify_remote_main_materialization(
+                remote,
+                reviewed_commit,
+                reviewed_tree,
+                token_file,
+                report,
+            )?;
+            Ok(())
         }
     }
 }
 
-fn create_remote_main_cas(
-    repo: &Path,
-    remote: &str,
-    reviewed: &str,
-    report: &mut JsonValue,
-) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(bare) = local_jeryu_bare_repo(remote)? {
-        let output = Command::new("git")
-            .args([
-                "--git-dir",
-                bare.to_str().ok_or("non-UTF8 Jeryu repository path")?,
-                "update-ref",
-                "refs/heads/main",
-                reviewed,
-                "0000000000000000000000000000000000000000",
-            ])
-            .output()?;
-        if !output.status.success() {
-            return Err(format!(
-                "local Jeryu compare-and-swap bootstrap failed: {}",
-                String::from_utf8_lossy(&output.stderr).trim()
-            )
-            .into());
-        }
-        report["transport"] = json!("local-jeryu-server-update-ref-cas");
+fn validate_bootstrap_remote(remote: &str) -> Result<(), Box<dyn std::error::Error>> {
+    if fixed_jeryu_git_slug(remote).is_ok() {
         return Ok(());
     }
-    let refspec = format!("{reviewed}:refs/heads/main");
-    run_git_strict(
-        repo,
-        &[
-            "push",
-            "--porcelain",
-            "--force-with-lease=refs/heads/main:",
-            remote,
-            &refspec,
-        ],
-    )?;
-    report["transport"] = json!("git-push-absent-lease");
+    #[cfg(debug_assertions)]
+    {
+        validate_materialization_remote("veox/bootstrap-fixture", remote)
+    }
+    #[cfg(not(debug_assertions))]
+    Err("bootstrap-main remote is not the canonical fixed local Jeryu URL".into())
+}
+
+fn authenticated_initial_main_cas(
+    _repo: &Path,
+    remote: &str,
+    source_ref: &str,
+    reviewed_commit: &str,
+    reviewed_tree: &str,
+    token_file: &Path,
+    report: &mut JsonValue,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let repo = fixed_jeryu_git_slug(remote)?;
+    let request = JeryuRequest::initial_main(&repo, source_ref, reviewed_commit, reviewed_tree)?;
+    report["cas_request"] = jeryu_request_json(&request);
+    let response = JeryuClient::from_token_file(token_file)?.execute(&request)?;
+    validate_initial_main_response(&response, &repo, source_ref, reviewed_commit, reviewed_tree)?;
+    report["cas_outcome"] = response["outcome"].clone();
+    report["cas_response"] = response;
+    report["transport"] = json!("authenticated-jeryu-api-zero-old-oid-cas");
+    report["external_state_changed"] = json!(report["cas_outcome"] == "created");
     Ok(())
 }
 
-fn local_jeryu_bare_repo(remote: &str) -> Result<Option<PathBuf>, Box<dyn std::error::Error>> {
-    let Some(slug) = remote
-        .strip_prefix(&format!("{LOCAL_JERYU_ORIGIN}/git/"))
-        .and_then(|value| value.strip_suffix(".git"))
-    else {
-        return Ok(None);
-    };
-    validate_jeryu_repo_slug(slug)?;
-    let root = env::var_os("JERYU_GIT_ROOT")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from("/home/ubuntu/.local/share/jeryu/git"));
-    let path = root.join(format!("{slug}.git"));
-    if !path.is_dir() {
-        return Err(format!(
-            "declared local Jeryu bare repository is missing: {}",
-            path.display()
+fn validate_initial_main_response(
+    response: &JsonValue,
+    repo: &str,
+    source_ref: &str,
+    reviewed_commit: &str,
+    reviewed_tree: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let expected_old = "0000000000000000000000000000000000000000";
+    let expected_keys = BTreeSet::from([
+        "actor",
+        "audit_id",
+        "commit_oid",
+        "main_ref",
+        "old_oid",
+        "outcome",
+        "protection",
+        "repository",
+        "schema_version",
+        "source_oid",
+        "source_ref",
+        "tree_oid",
+    ]);
+    let actual_keys = response
+        .as_object()
+        .map(|object| object.keys().map(String::as_str).collect::<BTreeSet<_>>());
+    let exact = actual_keys.as_ref() == Some(&expected_keys)
+        && response.get("schema_version").and_then(JsonValue::as_str)
+            == Some("jeryu.initial-main-result/v1")
+        && response.get("repository").and_then(JsonValue::as_str) == Some(repo)
+        && response.get("source_ref").and_then(JsonValue::as_str) == Some(source_ref)
+        && response.get("source_oid").and_then(JsonValue::as_str) == Some(reviewed_commit)
+        && response.get("main_ref").and_then(JsonValue::as_str) == Some("refs/heads/main")
+        && response.get("old_oid").and_then(JsonValue::as_str) == Some(expected_old)
+        && response.get("commit_oid").and_then(JsonValue::as_str) == Some(reviewed_commit)
+        && response.get("tree_oid").and_then(JsonValue::as_str) == Some(reviewed_tree)
+        && matches!(
+            response.get("outcome").and_then(JsonValue::as_str),
+            Some("created" | "already_exact")
         )
-        .into());
+        && response
+            .get("actor")
+            .and_then(JsonValue::as_str)
+            .is_some_and(|actor| !actor.is_empty() && actor.len() <= 100)
+        && response
+            .get("audit_id")
+            .and_then(JsonValue::as_str)
+            .is_some_and(|audit| !audit.is_empty() && audit.len() <= 200)
+        && response.get("protection").is_some_and(JsonValue::is_object);
+    if !exact {
+        return Err("Jeryu initial-main response does not exactly bind the reviewed CAS".into());
     }
-    Ok(Some(path))
+    let name = repo
+        .split_once('/')
+        .map(|(_, name)| name)
+        .ok_or("initial-main response repository needs owner/name")?;
+    validate_protection_policy(
+        response
+            .get("protection")
+            .ok_or("initial-main response has no protection")?,
+        repo,
+        "main",
+        &format!("{name}/required"),
+    )?;
+    Ok(())
+}
+
+fn validate_reachable_object_closure(
+    repo: &Path,
+    commit: &str,
+) -> Result<usize, Box<dyn std::error::Error>> {
+    let objects = secure_git_output(
+        Some(repo),
+        &["rev-list", "--objects", "--missing=print", commit],
+    )?;
+    if objects.lines().any(|line| line.starts_with('?')) {
+        return Err("reviewed Git object closure is incomplete".into());
+    }
+    let object_count = objects.lines().filter(|line| !line.is_empty()).count();
+    if object_count == 0
+        || !secure_git_status(
+            Some(repo),
+            &["fsck", "--full", "--strict", "--no-dangling", commit],
+        )?
+    {
+        return Err("reviewed Git object closure failed strict fsck".into());
+    }
+    Ok(object_count)
+}
+
+fn authenticated_clone_no_local(
+    remote: &str,
+    destination: &Path,
+    token_file: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let destination = destination
+        .to_str()
+        .ok_or("bootstrap materialization path is not UTF-8")?;
+    let mut command = secure_git_authenticated_command(None, token_file)?;
+    #[cfg(debug_assertions)]
+    if Path::new(remote).is_absolute() {
+        command.command.args(["-c", "protocol.file.allow=always"]);
+    }
+    let output = command
+        .command
+        .args([
+            "clone",
+            "--quiet",
+            "--no-local",
+            "--no-checkout",
+            "--single-branch",
+            "--branch",
+            "main",
+            remote,
+            destination,
+        ])
+        .output()?;
+    if !output.status.success() {
+        return Err("authenticated standalone main clone failed".into());
+    }
+    Ok(())
+}
+
+fn verify_remote_main_materialization(
+    remote: &str,
+    reviewed_commit: &str,
+    reviewed_tree: &str,
+    token_file: &Path,
+    report: &mut JsonValue,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let parent = control_plane_root().join("target/bootstrap-main-materializations");
+    fs::create_dir_all(&parent)?;
+    let metadata = fs::symlink_metadata(&parent)?;
+    if fs::canonicalize(&parent)? != parent
+        || !metadata.file_type().is_dir()
+        || metadata.file_type().is_symlink()
+    {
+        return Err(
+            "bootstrap materialization parent is not a canonical physical directory".into(),
+        );
+    }
+    let nonce = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let destination = parent.join(format!("verify-{}-{nonce}", std::process::id()));
+    let created = MaterializationDirectory::create(destination.clone())?;
+    authenticated_clone_no_local(remote, &destination, token_file)?;
+    let dot_git = destination.join(".git");
+    let git_metadata = fs::symlink_metadata(&dot_git)?;
+    if !git_metadata.file_type().is_dir()
+        || git_metadata.file_type().is_symlink()
+        || fs::symlink_metadata(dot_git.join("objects/info/alternates")).is_ok()
+    {
+        return Err("bootstrap materialization is not an independent standalone clone".into());
+    }
+    let commit = secure_git_output(
+        Some(&destination),
+        &["rev-parse", "--verify", "HEAD^{commit}"],
+    )?;
+    let tree = secure_git_output(
+        Some(&destination),
+        &["rev-parse", "--verify", "HEAD^{tree}"],
+    )?;
+    if commit != reviewed_commit || tree != reviewed_tree {
+        return Err("bootstrap materialization commit or tree differs from review".into());
+    }
+    if secure_git_output(Some(&destination), &["remote"])? != "origin"
+        || secure_git_output(Some(&destination), &["remote", "get-url", "origin"])? != remote
+    {
+        return Err("bootstrap materialization retained a noncanonical origin".into());
+    }
+    validate_materialization_object_tree(&destination, "HEAD")?;
+    let object_count = validate_reachable_object_closure(&destination, reviewed_commit)?;
+    if secure_ls_remote_at(remote, "refs/heads/main", token_file)?.as_deref()
+        != Some(reviewed_commit)
+    {
+        return Err("remote main moved during bootstrap materialization".into());
+    }
+    drop(created);
+    if fs::symlink_metadata(&destination).is_ok() {
+        return Err("bootstrap materialization cleanup failed".into());
+    }
+    report["materialization"] = json!({
+        "transport": "authenticated-git-clone-no-local",
+        "commit": commit,
+        "tree": tree,
+        "object_count": object_count,
+        "strict_fsck": true,
+        "cleanup_verified": true,
+    });
+    Ok(())
 }
 
 fn immutable_tag_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
@@ -6843,6 +7158,7 @@ fn strict_git_output(repo: &Path, args: &[&str]) -> Result<String, Box<dyn std::
     Ok(String::from_utf8(output.stdout)?.trim().to_owned())
 }
 
+#[cfg(test)]
 fn run_git_strict(repo: &Path, args: &[&str]) -> Result<(), Box<dyn std::error::Error>> {
     let output = Command::new("git")
         .arg("-C")
@@ -8575,6 +8891,14 @@ fn secure_ls_remote(
 
 fn is_full_sha(value: &str) -> bool {
     value.len() == 40 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn is_nonzero_full_sha(value: &str) -> bool {
+    is_full_sha(value)
+        && !value
+            .chars()
+            .any(|character| character.is_ascii_uppercase())
+        && value.bytes().any(|byte| byte != b'0')
 }
 
 fn validate_release_branch(value: &str) -> Result<(), Box<dyn std::error::Error>> {
@@ -13560,6 +13884,52 @@ engine_release_tree = "{engine_tree}"
         remote
     }
 
+    fn fixture_initial_main_cas(
+        repo: &Path,
+        remote: &str,
+        _source_ref: &str,
+        reviewed_commit: &str,
+        _reviewed_tree: &str,
+        token_file: &Path,
+        report: &mut JsonValue,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let refspec = format!("{reviewed_commit}:refs/heads/main");
+        secure_materialization_git_status(
+            repo,
+            remote,
+            token_file,
+            &[
+                "push",
+                "--porcelain",
+                "--force-with-lease=refs/heads/main:",
+                remote,
+                &refspec,
+            ],
+        )?;
+        report["transport"] = json!("test-fixture-zero-old-oid-lease");
+        report["cas_outcome"] = json!("created");
+        report["external_state_changed"] = json!(true);
+        Ok(())
+    }
+
+    fn bootstrap_inputs<'a>(
+        repo: &'a Path,
+        remote: &'a str,
+        source_ref: &'a str,
+        reviewed_commit: &'a str,
+        reviewed_tree: &'a str,
+        token_file: &'a Path,
+    ) -> BootstrapMainInputs<'a> {
+        BootstrapMainInputs {
+            repo,
+            remote,
+            source_ref,
+            reviewed_commit,
+            reviewed_tree,
+            token_file,
+        }
+    }
+
     fn commit_next(repo: &Path) -> String {
         fs::write(repo.join("payload.txt"), "different history\n").unwrap();
         run_git_strict(repo, &["add", "payload.txt"]).unwrap();
@@ -14506,55 +14876,301 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
     }
 
     #[test]
-    fn bootstrap_main_is_dry_run_cas_idempotent_and_refuses_history() {
+    fn bootstrap_main_is_authenticated_tree_bound_idempotent_and_refuses_history() {
         let root = TestDir::new("bootstrap-main");
         let (repo, reviewed) = init_source(root.path());
+        let reviewed_tree = secure_git_output(Some(&repo), &["rev-parse", "HEAD^{tree}"]).unwrap();
         let remote = init_bare(root.path());
-        let receipt = root.path().join("bootstrap.json");
-        let base_args = || {
-            vec![
-                "--repo".to_owned(),
-                repo.display().to_string(),
-                "--remote".to_owned(),
-                remote.display().to_string(),
-                "--reviewed-commit".to_owned(),
-                reviewed.clone(),
-                "--receipt".to_owned(),
-                receipt.display().to_string(),
-            ]
-        };
+        run_git_strict(
+            &repo,
+            &["remote", "add", "origin", remote.to_str().unwrap()],
+        )
+        .unwrap();
+        let source_ref = "refs/heads/reviewed/bootstrap";
+        let source_refspec = format!("{reviewed}:{source_ref}");
+        run_git_strict(&repo, &["push", remote.to_str().unwrap(), &source_refspec]).unwrap();
+        let token_root = TestDir::new_private_temp("bootstrap-main-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let remote_text = remote.to_str().unwrap();
+        let mut report = receipt_header("test", "bootstrap-main", false);
 
-        bootstrap_main_command(base_args()).unwrap();
+        bootstrap_main(
+            bootstrap_inputs(
+                &repo,
+                remote_text,
+                source_ref,
+                &reviewed,
+                &reviewed_tree,
+                &token_file,
+            ),
+            false,
+            &mut report,
+            fixture_initial_main_cas,
+        )
+        .unwrap();
         assert_eq!(
-            ls_remote_ref(&repo, remote.to_str().unwrap(), "refs/heads/main").unwrap(),
+            secure_ls_remote_at(remote_text, "refs/heads/main", &token_file).unwrap(),
             None
         );
-        assert_eq!(read_json(&receipt)["action"], "would-create");
+        assert_eq!(report["action"], "would-create");
 
-        let mut apply = base_args();
-        apply.push("--apply".to_owned());
-        bootstrap_main_command(apply.clone()).unwrap();
+        bootstrap_main(
+            bootstrap_inputs(
+                &repo,
+                remote_text,
+                source_ref,
+                &reviewed,
+                &reviewed_tree,
+                &token_file,
+            ),
+            true,
+            &mut report,
+            fixture_initial_main_cas,
+        )
+        .unwrap();
         assert_eq!(
-            ls_remote_ref(&repo, remote.to_str().unwrap(), "refs/heads/main").unwrap(),
+            secure_ls_remote_at(remote_text, "refs/heads/main", &token_file).unwrap(),
             Some(reviewed.clone())
         );
-        bootstrap_main_command(apply).unwrap();
-        assert_eq!(read_json(&receipt)["action"], "verified-existing");
+        assert_eq!(report["materialization"]["commit"], reviewed);
+        assert_eq!(report["materialization"]["tree"], reviewed_tree);
+        assert_eq!(report["materialization"]["cleanup_verified"], true);
+        bootstrap_main(
+            bootstrap_inputs(
+                &repo,
+                remote_text,
+                source_ref,
+                &reviewed,
+                &reviewed_tree,
+                &token_file,
+            ),
+            true,
+            &mut report,
+            fixture_initial_main_cas,
+        )
+        .unwrap();
+        assert_eq!(report["action"], "verified-existing");
 
         let different = commit_next(&repo);
-        let mut refuse = base_args();
-        let index = refuse
-            .iter()
-            .position(|value| value == "--reviewed-commit")
-            .unwrap();
-        refuse[index + 1] = different;
-        refuse.push("--apply".to_owned());
-        assert!(bootstrap_main_command(refuse).is_err());
-        assert_eq!(read_json(&receipt)["status"], "fail");
+        let different_tree = secure_git_output(Some(&repo), &["rev-parse", "HEAD^{tree}"]).unwrap();
+        let successor_ref = "refs/heads/reviewed/successor";
+        let successor_refspec = format!("{different}:{successor_ref}");
+        run_git_strict(&repo, &["push", remote_text, &successor_refspec]).unwrap();
+        assert!(bootstrap_main(
+            bootstrap_inputs(
+                &repo,
+                remote_text,
+                successor_ref,
+                &different,
+                &different_tree,
+                &token_file,
+            ),
+            true,
+            &mut report,
+            fixture_initial_main_cas,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("refusing to replace existing remote main"));
         assert_eq!(
-            ls_remote_ref(&repo, remote.to_str().unwrap(), "refs/heads/main").unwrap(),
+            secure_ls_remote_at(remote_text, "refs/heads/main", &token_file).unwrap(),
             Some(reviewed)
         );
+    }
+
+    #[test]
+    fn bootstrap_main_rejects_tree_source_ref_and_object_closure_drift() {
+        let root = TestDir::new("bootstrap-main-hostile");
+        let (repo, reviewed) = init_source(root.path());
+        let reviewed_tree = secure_git_output(Some(&repo), &["rev-parse", "HEAD^{tree}"]).unwrap();
+        let remote = init_bare(root.path());
+        let remote_text = remote.to_str().unwrap();
+        run_git_strict(&repo, &["remote", "add", "origin", remote_text]).unwrap();
+        let source_ref = "refs/heads/reviewed/bootstrap";
+        let source_refspec = format!("{reviewed}:{source_ref}");
+        run_git_strict(&repo, &["push", remote_text, &source_refspec]).unwrap();
+        let token_root = TestDir::new_private_temp("bootstrap-main-hostile-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let mut report = receipt_header("test", "bootstrap-main", false);
+
+        for invalid in [
+            "0".repeat(40),
+            reviewed.to_ascii_uppercase(),
+            reviewed[..12].to_owned(),
+        ] {
+            assert!(bootstrap_main(
+                bootstrap_inputs(
+                    &repo,
+                    remote_text,
+                    source_ref,
+                    &invalid,
+                    &reviewed_tree,
+                    &token_file,
+                ),
+                false,
+                &mut report,
+                fixture_initial_main_cas,
+            )
+            .unwrap_err()
+            .to_string()
+            .contains("nonzero lowercase full SHAs"));
+        }
+        assert!(bootstrap_main(
+            bootstrap_inputs(
+                &repo,
+                remote_text,
+                source_ref,
+                &reviewed,
+                &"b".repeat(40),
+                &token_file,
+            ),
+            false,
+            &mut report,
+            fixture_initial_main_cas,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("clean exact reviewed HEAD and tree"));
+        assert!(bootstrap_main(
+            bootstrap_inputs(
+                &repo,
+                remote_text,
+                "refs/heads/reviewed/missing",
+                &reviewed,
+                &reviewed_tree,
+                &token_file,
+            ),
+            false,
+            &mut report,
+            fixture_initial_main_cas,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("source ref does not equal"));
+        assert!(bootstrap_main(
+            bootstrap_inputs(
+                &repo,
+                remote_text,
+                "refs/heads/main",
+                &reviewed,
+                &reviewed_tree,
+                &token_file,
+            ),
+            false,
+            &mut report,
+            fixture_initial_main_cas,
+        )
+        .unwrap_err()
+        .to_string()
+        .contains("non-main heads ref"));
+
+        let blob = secure_git_output(Some(&repo), &["rev-parse", "HEAD:payload.txt"]).unwrap();
+        let object = repo.join(".git/objects").join(&blob[..2]).join(&blob[2..]);
+        fs::remove_file(object).unwrap();
+        assert!(validate_reachable_object_closure(&repo, &reviewed).is_err());
+    }
+
+    #[test]
+    fn bootstrap_main_push_failure_is_ambiguous_and_never_retried() {
+        let root = TestDir::new("bootstrap-main-rejected-push");
+        let (repo, reviewed) = init_source(root.path());
+        let reviewed_tree = secure_git_output(Some(&repo), &["rev-parse", "HEAD^{tree}"]).unwrap();
+        let remote = init_bare(root.path());
+        let remote_text = remote.to_str().unwrap();
+        run_git_strict(&repo, &["remote", "add", "origin", remote_text]).unwrap();
+        let source_ref = "refs/heads/reviewed/bootstrap";
+        let source_refspec = format!("{reviewed}:{source_ref}");
+        run_git_strict(&repo, &["push", remote_text, &source_refspec]).unwrap();
+        let hook = remote.join("hooks/pre-receive");
+        fs::write(&hook, "#!/bin/sh\nexit 1\n").unwrap();
+        fs::set_permissions(&hook, fs::Permissions::from_mode(0o755)).unwrap();
+        let token_root = TestDir::new_private_temp("bootstrap-main-rejected-token");
+        let token_file = token_root.path().join("token");
+        fs::write(&token_file, b"fixture-token-0123456789\n").unwrap();
+        fs::set_permissions(&token_file, fs::Permissions::from_mode(0o600)).unwrap();
+        let mut report = receipt_header("test", "bootstrap-main", true);
+
+        let error = bootstrap_main(
+            bootstrap_inputs(
+                &repo,
+                remote_text,
+                source_ref,
+                &reviewed,
+                &reviewed_tree,
+                &token_file,
+            ),
+            true,
+            &mut report,
+            fixture_initial_main_cas,
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("outcome is ambiguous"));
+        assert_eq!(report["mutation_attempted"], true);
+        assert_eq!(report["action"], "create-failed-readback-required");
+        assert_eq!(
+            secure_ls_remote_at(remote_text, "refs/heads/main", &token_file).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn initial_main_response_binds_exact_cas_and_strict_protection() {
+        let commit = "a".repeat(40);
+        let tree = "b".repeat(40);
+        let mut protection = immutable_main_readback("example/required");
+        protection["url"] = json!("/repos/veox/example/branches/main/protection");
+        let response = json!({
+            "schema_version": "jeryu.initial-main-result/v1",
+            "repository": "veox/example",
+            "source_ref": "refs/heads/reviewed/bootstrap",
+            "source_oid": commit,
+            "main_ref": "refs/heads/main",
+            "old_oid": "0000000000000000000000000000000000000000",
+            "commit_oid": commit,
+            "tree_oid": tree,
+            "actor": "jeryu-admin",
+            "protection": protection,
+            "audit_id": "audit-1",
+            "outcome": "created",
+        });
+        validate_initial_main_response(
+            &response,
+            "veox/example",
+            "refs/heads/reviewed/bootstrap",
+            &commit,
+            &tree,
+        )
+        .unwrap();
+        for (field, value) in [
+            ("tree_oid", json!("c".repeat(40))),
+            ("old_oid", json!("1".repeat(40))),
+            ("outcome", json!("updated")),
+        ] {
+            let mut hostile = response.clone();
+            hostile[field] = value;
+            assert!(validate_initial_main_response(
+                &hostile,
+                "veox/example",
+                "refs/heads/reviewed/bootstrap",
+                &commit,
+                &tree,
+            )
+            .is_err());
+        }
+        let mut unknown = response;
+        unknown["unexpected"] = json!(true);
+        assert!(validate_initial_main_response(
+            &unknown,
+            "veox/example",
+            "refs/heads/reviewed/bootstrap",
+            &commit,
+            &tree,
+        )
+        .is_err());
     }
 
     #[test]

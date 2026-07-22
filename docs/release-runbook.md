@@ -49,20 +49,23 @@ The managed inventory must contain all Jain repositories, SmartCluster, `jain-sp
 complete Redline family rooted at `jain-redline/`. Generated views are changed only with
 `just sync-derived-apply`; validate them again immediately afterward.
 
-For a repository whose forge has no `main`, first run the dry plan, inspect it, and then apply the
-same reviewed SHA:
+For a governed `veox/*` repository whose forge has no `main`, first publish the independently
+reviewed source branch. Apply and read back immutable-main protection while `main` is still absent:
 
 ```bash
-just bootstrap-main /absolute/checkout http://127.0.0.1:8787/git/OWNER/REPO.git REVIEWED_SHA
-just bootstrap-main-apply /absolute/checkout http://127.0.0.1:8787/git/OWNER/REPO.git REVIEWED_SHA
+just jeryu-protection veox/REPO REPO/required
+just jeryu-protection-apply veox/REPO REPO/required
+just jeryu-protection-readback veox/REPO REPO/required
 ```
 
-Apply and read back immutable-main protection before accepting the repository into the graph:
+Then run the authenticated dry plan and apply the same full commit and tree. The command consumes
+the admin-only `jeryu.initial-main-request/v1` create-only zero-OID CAS, requires its response to
+bind the exact strict protection, and verifies the result through an automatically removed
+standalone `git clone --no-local`; direct Git pushes to `main` remain forbidden:
 
 ```bash
-just jeryu-protection OWNER/REPO REPO/required
-just jeryu-protection-apply OWNER/REPO REPO/required
-just jeryu-protection-readback OWNER/REPO REPO/required
+just bootstrap-main /absolute/checkout http://127.0.0.1:8787/git/veox/REPO.git refs/heads/REVIEWED_BRANCH REVIEWED_SHA REVIEWED_TREE /absolute/token-file
+just bootstrap-main-apply /absolute/checkout http://127.0.0.1:8787/git/veox/REPO.git refs/heads/REVIEWED_BRANCH REVIEWED_SHA REVIEWED_TREE /absolute/token-file
 ```
 
 Protection requires the declared status check, one independent approval, linear history, admin
