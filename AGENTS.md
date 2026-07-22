@@ -13,8 +13,10 @@ Rules:
 - Keep the native Redline release identity (`4.1.0-jain.N`); Jain binds the
   accepted immutable Redline identity into its own release authority.
 - Select Jankurai only from the root-controlled release PATH, then freeze and
-  verify its physical path, version `1.6.11`, and SHA-256
-  `fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e`.
+  verify its physical path and closed release identity: version `1.6.11`, tag
+  `v1.6.11-deadlang-precision-split.2`, source revision
+  `4dfbdfa3585f1928d5f996d7b5e14608dff14a03`, and binary SHA-256
+  `96d99e6e7d8dc9cf23df1081edd1f975231456592f81d9405385219a2c7298aa`.
 - Run `rtk bash scripts/ci-local.sh required` before requesting review.
 - The live TCP smoke binary needs a separately managed RedlineDB server. The
   protected required lane remains host-local and does not start external services.

@@ -10,7 +10,9 @@ require_cmd() {
 }
 
 readonly JANKURAI_VERSION="1.6.11"
-readonly JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+readonly JANKURAI_TAG="v1.6.11-deadlang-precision-split.2"
+readonly JANKURAI_REV="4dfbdfa3585f1928d5f996d7b5e14608dff14a03"
+readonly JANKURAI_SHA256="96d99e6e7d8dc9cf23df1081edd1f975231456592f81d9405385219a2c7298aa"
 
 # Freeze the release sandbox's PATH selection before defining the wrapper.
 JANKURAI_BIN="$(command -v jankurai 2>/dev/null || true)"

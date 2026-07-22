@@ -4,6 +4,11 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 source "$ROOT/ops/ci/lib.sh"
 
+[[ "$JANKURAI_TAG" == "v1.6.11-deadlang-precision-split.2" ]]
+[[ "$JANKURAI_REV" == "4dfbdfa3585f1928d5f996d7b5e14608dff14a03" ]]
+[[ "$JANKURAI_SHA256" == \
+  "96d99e6e7d8dc9cf23df1081edd1f975231456592f81d9405385219a2c7298aa" ]]
+
 fixture_root="$(mktemp -d /tmp/redline-central-jankurai.XXXXXX)"
 cleanup() {
   rm -rf -- "$fixture_root"
