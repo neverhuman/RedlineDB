@@ -22,9 +22,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-const RELEASE_VERSION: &str = "8.0.1";
+const RELEASE_VERSION: &str = "10.0.0";
 const RELEASE_STATUS: &str = "candidate";
-const ROLLBACK_TARGET: &str = "7.0.6";
+const ROLLBACK_TARGET: &str = "8.0.1";
 const LOCAL_JERYU_ORIGIN: &str = "http://127.0.0.1:8787";
 const APPLIANCE_DEPLOY_REMOTE: &str = "http://127.0.0.1:8787/git/veox/jain-deploy.git";
 const APPLIANCE_VERIFIER_NAME: &str = "jain-deploy-local-appliance-runner/v1";
@@ -4708,11 +4708,20 @@ fn validate_manifest_data(
             names.len()
         ));
     }
-    if repos.len() != 26 {
-        errors.push(format!(
-            "expected 26 family repositories, found {}",
-            repos.len()
-        ));
+    match data
+        .get("expected_repo_count")
+        .and_then(toml::Value::as_integer)
+    {
+        Some(expected_repo_count) => {
+            let expected_repo_count = expected_repo_count as usize;
+            if repos.len() != expected_repo_count {
+                errors.push(format!(
+                    "expected {expected_repo_count} family repositories, found {}",
+                    repos.len()
+                ));
+            }
+        }
+        None => errors.push("manifest must declare expected_repo_count".to_owned()),
     }
     let infrastructure = data
         .get("infrastructure_repo")
@@ -11982,11 +11991,11 @@ mod tests {
             "qualification": true,
             "fixture": false,
             "release": RELEASE_VERSION,
-            "release_tag": "jain-deploy-v8.0.1-split.5",
+            "release_tag": "jain-deploy-v10.0.0-split.5",
             "source_commit": "be6f00f5d0f501c3acad32e66dbfdb674a2fd532",
             "status": "candidate",
             "formal_ga": false,
-            "rollback_release": "7.0.6",
+            "rollback_release": "8.0.1",
             "release_job": {
                 "id": sha('2'),
                 "attestation_url": "https://release.jain.local/jobs/job-1.json",
@@ -16845,7 +16854,7 @@ source_inventory_sha256 = "{}"
             (
                 "rollback_target",
                 toml::Value::String("8.0.0".to_owned()),
-                "rollback_target must be 7.0.6",
+                "rollback_target must be 8.0.1",
             ),
         ] {
             let mut invalid_manifest = canonical.clone();

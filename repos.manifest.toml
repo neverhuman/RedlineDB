@@ -1,9 +1,10 @@
 schema_version = "1"
-release_version = "8.0.1"
+release_version = "10.0.0"
+expected_repo_count = 26
 status = "candidate"
 formal_ga = false
 sagemaker = "N/A"
-rollback_target = "7.0.6"
+rollback_target = "8.0.1"
 generator_version = "splitctl 0.1.0"
 fleet_jobs = 4
 ci_jobs = 4
@@ -17,7 +18,7 @@ split_root = "/home/ubuntu/jain-split"
 manifest_authority = "/home/ubuntu/jain-split/jain-split-ops/repos.manifest.toml"
 repo_family = "jain-split"
 umbrella_repo = "jain"
-dependency_tag_suffix = "v8.0.1-split.0"
+dependency_tag_suffix = "v10.0.0-split.0"
 rollout_wave_order = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
 
 required_repos = [
