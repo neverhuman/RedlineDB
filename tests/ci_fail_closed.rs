@@ -75,7 +75,7 @@ fn release_path_is_local_only_and_requires_custody() {
         "gzip -n",
         "unset CARGO_ENCODED_RUSTFLAGS",
         "unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER",
-        "--remap-path-prefix=${repo_root}=/redline-testing",
+        "--remap-path-prefix=${repo_root}=/redline-testing -Cstrip=symbols -Clink-arg=-Wl,--build-id=none",
         "release_target=\"$(mktemp -d \"$repo_root/target/release-build.XXXXXX\")\"",
         "export CARGO_TARGET_DIR=\"$release_target\"",
     ] {
@@ -87,6 +87,8 @@ fn release_path_is_local_only_and_requires_custody() {
     assert!(!release.contains(" -czf "));
     assert!(required.contains("ci_run scripts/reproducible-release-test.sh"));
     assert!(reproducible_release.contains("git clone -q --no-local"));
+    assert!(reproducible_release.contains("$repo_root/target/cross-root-release-a.XXXXXX"));
+    assert!(reproducible_release.contains("$workspace_root/target/cross-root-release-b.XXXXXX"));
     assert!(reproducible_release.contains("CARGO_NET_OFFLINE=true"));
     assert!(reproducible_release.contains("cmp -s"));
     assert!(!repo_file("src/compat.rs").contains("env!(\"CARGO_MANIFEST_DIR\")"));

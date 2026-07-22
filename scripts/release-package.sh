@@ -28,7 +28,7 @@ export SOURCE_DATE_EPOCH="$source_date_epoch"
 # The logical prefix is stable across every no-local release sandbox.
 unset CARGO_ENCODED_RUSTFLAGS
 unset RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER
-export RUSTFLAGS="--remap-path-prefix=${repo_root}=/redline-testing"
+export RUSTFLAGS="--remap-path-prefix=${repo_root}=/redline-testing -Cstrip=symbols -Clink-arg=-Wl,--build-id=none"
 export CARGO_INCREMENTAL=0
 release_target="$(mktemp -d "$repo_root/target/release-build.XXXXXX")"
 cleanup_release_target() {

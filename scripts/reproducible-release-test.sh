@@ -3,6 +3,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+workspace_root="$(cd "$repo_root/../.." && pwd)"
 head="$(git -C "$repo_root" rev-parse HEAD)"
 tree="$(git -C "$repo_root" rev-parse 'HEAD^{tree}')"
 status="$(git -C "$repo_root" status --porcelain=v1 --untracked-files=no)"
@@ -11,22 +12,27 @@ status="$(git -C "$repo_root" status --porcelain=v1 --untracked-files=no)"
   exit 1
 }
 
-sandbox="$(mktemp -d "$repo_root/target/cross-root-release.XXXXXX")"
+sandbox_a=""
+sandbox_b=""
 cleanup() {
-  case "$sandbox" in
-    "$repo_root"/target/cross-root-release.*)
-      chmod -R u+w -- "$sandbox" 2>/dev/null || true
-      rm -rf -- "$sandbox"
-      ;;
-    *)
-      printf 'refusing unsafe cross-root cleanup target: %s\n' "$sandbox" >&2
-      ;;
-  esac
+  for sandbox in "$sandbox_a" "$sandbox_b"; do
+    [ -n "$sandbox" ] || continue
+    case "$sandbox" in
+      "$repo_root"/target/cross-root-release-a.*|"$workspace_root"/target/cross-root-release-b.*)
+        chmod -R u+w -- "$sandbox" 2>/dev/null || true
+        rm -rf -- "$sandbox"
+        ;;
+      *)
+        printf 'refusing unsafe cross-root cleanup target: %s\n' "$sandbox" >&2
+        ;;
+    esac
+  done
 }
 trap cleanup EXIT HUP INT TERM
+sandbox_a="$(mktemp -d "$repo_root/target/cross-root-release-a.XXXXXX")"
+sandbox_b="$(mktemp -d "$workspace_root/target/cross-root-release-b.XXXXXX")"
 
-for name in root-a root-b; do
-  clone="$sandbox/$name"
+for clone in "$sandbox_a/source" "$sandbox_b/source"; do
   git clone -q --no-local "$repo_root" "$clone"
   git -C "$clone" checkout -q --detach "$head"
   [ "$(git -C "$clone" rev-parse HEAD)" = "$head" ]
@@ -51,8 +57,8 @@ artifacts=(
   "dist/${package}.tar.gz.sha256"
 )
 for relative in "${artifacts[@]}"; do
-  left="$sandbox/root-a/$relative"
-  right="$sandbox/root-b/$relative"
+  left="$sandbox_a/source/$relative"
+  right="$sandbox_b/source/$relative"
   cmp -s -- "$left" "$right" || {
     printf 'cross-root release artifact differs: %s\n' "$relative" >&2
     sha256sum -- "$left" "$right" >&2
@@ -61,10 +67,10 @@ for relative in "${artifacts[@]}"; do
   sha256sum -- "$left"
 done
 
-for name in root-a root-b; do
-  binary="$sandbox/$name/dist/${package}/bin/redline-testing"
-  if grep -F -a -q -- "$sandbox/$name" "$binary"; then
-    printf 'release binary embeds its absolute build root: %s\n' "$name" >&2
+for clone in "$sandbox_a/source" "$sandbox_b/source"; do
+  binary="$clone/dist/${package}/bin/redline-testing"
+  if grep -F -a -q -- "$clone" "$binary"; then
+    printf 'release binary embeds its absolute build root: %s\n' "$clone" >&2
     exit 1
   fi
 done
