@@ -1,0 +1,20 @@
+schema_version = "redline.compatibility-contracts/v1"
+
+[[contract]]
+id = "redline-sqlite-contract/v1"
+compatibility_mode = "sqlite"
+oracle = "sqlite"
+corpus_path = "corpus/sqlite_parity"
+expected_case_count = 2445
+required_case_count = 2445
+exclusion_count = 0
+
+[[contract]]
+id = "redline-postgres-contract/v1"
+compatibility_mode = "sqlite"
+oracle = "postgres"
+corpus_path = "corpus/beyond_sqlite/generated_manifest.json"
+exclusions_path = "metadata/beyond_sqlite/skip-list.toml"
+expected_case_count = 265
+required_case_count = 151
+exclusion_count = 114

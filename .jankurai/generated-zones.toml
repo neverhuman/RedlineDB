@@ -4,6 +4,12 @@ read_only = true
 source = "Migrated from /home/ubuntu/redlineDB/crates/bench/sqlite_parity/generated_manifest.json"
 command = "copy from pinned RedlineDB parity corpus during split"
 
+[[zone]]
+path = "contracts/compatibility-v1.reviewed.toml"
+read_only = true
+source = "Exact contract bytes approved at commit 2e8b9867b7696933be15f2bf30d05806eac5ec0e"
+command = "immutable reviewed baseline; src/compat.rs pins its SHA-256"
+
 # Hand-authored shard directory: each file is curated, not generated, but the
 # directory is enumerated by `build.rs` at compile time so the runner can
 # include_str! every shard. Files inside this directory may be edited by hand

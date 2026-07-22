@@ -110,6 +110,9 @@ enum Command {
     /// Stage frozen oracle artifacts, validate the locked Cargo closure, build
     /// offline, and emit a content-addressed in-tree custody receipt.
     CustodyStage {
+        /// Exact packaged release artifact whose bytes the receipt binds.
+        #[arg(long)]
+        artifact: PathBuf,
         /// Existing local cache used only to bootstrap exact custody bytes.
         #[arg(long)]
         source_cargo_home: PathBuf,
@@ -168,21 +171,23 @@ fn main() -> Result<()> {
             ship_gate(&target, &sqlite_bin)
         }
         Command::CustodyStage {
+            artifact,
             source_cargo_home,
             cargo_home,
             sqlite_bin,
             postgres_client_bin,
             postgres_server_bin,
             out_dir,
-        } => custody::stage(
-            &repo_root,
-            &source_cargo_home,
-            &cargo_home,
-            &sqlite_bin,
-            &postgres_client_bin,
-            &postgres_server_bin,
-            &out_dir,
-        ),
+        } => custody::stage(custody::StageRequest {
+            repo_root: &repo_root,
+            artifact: &artifact,
+            source_cargo_home: &source_cargo_home,
+            cargo_home: &cargo_home,
+            sqlite_bin: &sqlite_bin,
+            postgres_client_bin: &postgres_client_bin,
+            postgres_server_bin: &postgres_server_bin,
+            out_dir: &out_dir,
+        }),
     }
 }
 

@@ -1,6 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -20,6 +21,11 @@ use crate::{beyond_sqlite, sqlite_parity};
 
 const CONTRACT_MANIFEST_PATH: &str = "contracts/compatibility-v1.toml";
 const CONTRACT_MANIFEST: &str = include_str!("../contracts/compatibility-v1.toml");
+const REVIEWED_CONTRACT_BASELINE_PATH: &str = "contracts/compatibility-v1.reviewed.toml";
+const REVIEWED_CONTRACT_BASELINE: &str =
+    include_str!("../contracts/compatibility-v1.reviewed.toml");
+const REVIEWED_CONTRACT_BASELINE_SHA256: &str =
+    "268b0db22de148fefc1ad48b88fc61b576099c545982379d359e87227d3e6812";
 const POSTGRES_EXCLUSIONS: &str = include_str!("../metadata/beyond_sqlite/skip-list.toml");
 const SQLITE_CONTRACT: &str = "redline-sqlite-contract/v1";
 const POSTGRES_CONTRACT: &str = "redline-postgres-contract/v1";
@@ -117,6 +123,7 @@ pub(crate) fn run_contract(args: RunArgs) -> Result<()> {
         .find(|contract| contract.id == contract_id)
         .ok_or_else(|| anyhow::anyhow!("unknown compatibility contract `{contract_id}`"))?
         .clone();
+    validate_release_selector(args.mode, &args.cases)?;
     crate::cli::run::validate_samples(args.repetitions, args.warmup)?;
     let release_identity = release_identity(args.mode)?;
     let mut target = binary_identity(&args.target_bin)?;
@@ -655,6 +662,13 @@ fn select_cases(
     })
 }
 
+fn validate_release_selector(mode: RunMode, selector: &str) -> Result<()> {
+    if mode == RunMode::Release && selector != "all" {
+        bail!("release compatibility evidence requires --cases all");
+    }
+    Ok(())
+}
+
 fn sqlite_descriptor(case: &Case) -> CaseDescriptor {
     CaseDescriptor {
         id: case.id as u64,
@@ -739,6 +753,7 @@ fn validate_custody_receipt(path: &Path) -> Result<BTreeMap<String, String>> {
     {
         bail!("oracle custody receipt is not a passing v1 receipt");
     }
+    validate_custody_artifact(&receipt)?;
     let lock_hash = receipt
         .get("cargo_lock_sha256")
         .and_then(|value| value.as_str())
@@ -770,6 +785,30 @@ fn validate_custody_receipt(path: &Path) -> Result<BTreeMap<String, String>> {
     Ok(identities)
 }
 
+fn validate_custody_artifact(receipt: &serde_json::Value) -> Result<()> {
+    let artifact_path = receipt
+        .get("artifact_path")
+        .and_then(|value| value.as_str())
+        .context("custody receipt lacks artifact_path")?;
+    let artifact_path = PathBuf::from(artifact_path);
+    require_workspace_file(&artifact_path, "release artifact")?;
+    let expected = receipt
+        .get("artifact_sha256")
+        .and_then(|value| value.as_str())
+        .context("custody receipt lacks artifact_sha256")?;
+    if expected.len() != 64 || !expected.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        bail!("custody receipt artifact_sha256 is malformed");
+    }
+    let actual = sha256_file(&artifact_path)?;
+    if actual != expected {
+        bail!(
+            "release artifact identity changed: {}",
+            artifact_path.display()
+        );
+    }
+    Ok(())
+}
+
 fn validate_receipt_file_identity(value: &serde_json::Value, label: &str) -> Result<String> {
     let path = PathBuf::from(
         value
@@ -794,8 +833,11 @@ fn require_workspace_file(path: &Path, label: &str) -> Result<()> {
     let canonical =
         fs::canonicalize(path).with_context(|| format!("resolve {label} at {}", path.display()))?;
     let metadata = fs::symlink_metadata(path)?;
-    if !metadata.is_file() || metadata.file_type().is_symlink() {
-        bail!("{label} is not a physical regular file: {}", path.display());
+    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.nlink() != 1 {
+        bail!(
+            "{label} is not a physical single-link regular file: {}",
+            path.display()
+        );
     }
     let workspace = repo_root()
         .parent()
@@ -1054,29 +1096,58 @@ fn git_output(args: &[&str]) -> Option<String> {
         .then(|| String::from_utf8_lossy(&output.stdout).trim().to_owned())
 }
 
-pub(crate) fn major_gate(baseline: &str, candidate: &str) -> Result<()> {
-    let baseline_manifest = manifest_at_revision(baseline)?;
-    let candidate_manifest = manifest_at_revision(candidate)?;
+pub(crate) fn major_gate(baseline: &Path, candidate: &Path) -> Result<()> {
+    let baseline_path = governed_contract_path(baseline, REVIEWED_CONTRACT_BASELINE_PATH)?;
+    let candidate_path = governed_contract_path(candidate, CONTRACT_MANIFEST_PATH)?;
+    let baseline_bytes = fs::read(&baseline_path)?;
+    let baseline_sha256 = sha256_bytes(&baseline_bytes);
+    if baseline_sha256 != REVIEWED_CONTRACT_BASELINE_SHA256 {
+        bail!(
+            "reviewed compatibility baseline digest mismatch: expected={} actual={}",
+            REVIEWED_CONTRACT_BASELINE_SHA256,
+            baseline_sha256
+        );
+    }
+    if baseline_bytes != REVIEWED_CONTRACT_BASELINE.as_bytes() {
+        bail!("reviewed compatibility baseline differs from the embedded authority");
+    }
+    let baseline_manifest =
+        toml::from_str(&String::from_utf8(baseline_bytes)?).context("parse reviewed baseline")?;
+    let candidate_manifest = toml::from_str(&fs::read_to_string(&candidate_path)?)
+        .context("parse compatibility candidate")?;
     compare_contracts(&baseline_manifest, &candidate_manifest)?;
-    println!("redline compatibility major gate passed: baseline={baseline} candidate={candidate}");
+    println!(
+        "redline compatibility major gate passed: baseline={} candidate={}",
+        baseline_path.display(),
+        candidate_path.display()
+    );
     Ok(())
 }
 
-fn manifest_at_revision(revision: &str) -> Result<ContractManifest> {
-    let object = format!("{revision}:{CONTRACT_MANIFEST_PATH}");
-    let output = Command::new("git")
-        .arg("-C")
-        .arg(repo_root())
-        .args(["show", &object])
-        .output()?;
-    if !output.status.success() {
+fn governed_contract_path(path: &Path, expected_relative: &str) -> Result<PathBuf> {
+    let expected = fs::canonicalize(repo_root().join(expected_relative))?;
+    let candidate = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        repo_root().join(path)
+    };
+    let metadata = fs::symlink_metadata(&candidate)
+        .with_context(|| format!("inspect compatibility contract {}", candidate.display()))?;
+    if !metadata.is_file() || metadata.file_type().is_symlink() || metadata.nlink() != 1 {
         bail!(
-            "cannot read compatibility contract at {revision}: {}",
-            String::from_utf8_lossy(&output.stderr).trim()
+            "compatibility contract must be a physical single-link regular file: {}",
+            candidate.display()
         );
     }
-    toml::from_str(&String::from_utf8(output.stdout)?)
-        .context("parse compatibility manifest from Git")
+    let candidate = fs::canonicalize(candidate)?;
+    if candidate != expected {
+        bail!(
+            "unexpected compatibility contract path: expected={} actual={}",
+            expected.display(),
+            candidate.display()
+        );
+    }
+    Ok(candidate)
 }
 
 fn compare_contracts(baseline: &ContractManifest, candidate: &ContractManifest) -> Result<()> {
@@ -1112,6 +1183,29 @@ fn compare_contracts(baseline: &ContractManifest, candidate: &ContractManifest) 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(label: &str) -> Self {
+            let path = repo_root().join("target").join(format!(
+                "{label}-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("clock")
+                    .as_nanos()
+            ));
+            fs::create_dir_all(&path).expect("scratch directory");
+            Self(path)
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
 
     #[test]
     fn v1_contract_counts_match_the_embedded_corpora() {
@@ -1167,6 +1261,15 @@ mod tests {
     }
 
     #[test]
+    fn release_mode_requires_the_complete_governed_selection() {
+        assert!(validate_release_selector(RunMode::Release, "all").is_ok());
+        assert!(validate_release_selector(RunMode::Diagnostic, "id:1").is_ok());
+        let error = validate_release_selector(RunMode::Release, "priority:P0")
+            .expect_err("release subset must fail closed");
+        assert!(error.to_string().contains("--cases all"));
+    }
+
+    #[test]
     fn major_gate_rejects_removed_or_weakened_contracts() {
         let baseline = load_and_validate_manifest().unwrap();
         let mut candidate = baseline.clone();
@@ -1175,6 +1278,37 @@ mod tests {
         let mut candidate = baseline.clone();
         candidate.contract.remove(0);
         assert!(compare_contracts(&baseline, &candidate).is_err());
+    }
+
+    #[test]
+    fn reviewed_contract_baseline_has_the_fixed_approved_digest() {
+        assert_eq!(
+            sha256_bytes(REVIEWED_CONTRACT_BASELINE.as_bytes()),
+            REVIEWED_CONTRACT_BASELINE_SHA256
+        );
+        let reviewed: ContractManifest = toml::from_str(REVIEWED_CONTRACT_BASELINE).unwrap();
+        let candidate = load_and_validate_manifest().unwrap();
+        compare_contracts(&reviewed, &candidate).unwrap();
+    }
+
+    #[test]
+    fn custody_artifact_binding_rejects_missing_foreign_and_tampered_bytes() {
+        let scratch = Scratch::new("compat-custody-artifact");
+        let artifact = scratch.0.join("redline-testing.tar.gz");
+        fs::write(&artifact, b"reviewed artifact\n").unwrap();
+        let mut receipt = json!({
+            "artifact_path": artifact,
+            "artifact_sha256": sha256_file(&artifact).unwrap(),
+        });
+        validate_custody_artifact(&receipt).unwrap();
+
+        receipt["artifact_sha256"] = serde_json::Value::String("0".repeat(64));
+        assert!(validate_custody_artifact(&receipt).is_err());
+        receipt["artifact_sha256"] = serde_json::Value::String(sha256_file(&artifact).unwrap());
+        fs::write(&artifact, b"tampered artifact\n").unwrap();
+        assert!(validate_custody_artifact(&receipt).is_err());
+        receipt.as_object_mut().unwrap().remove("artifact_sha256");
+        assert!(validate_custody_artifact(&receipt).is_err());
     }
 
     #[test]

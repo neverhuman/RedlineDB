@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 use std::fs;
+use std::io::Write;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -35,10 +37,18 @@ struct ToolIdentity {
     version: String,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ArtifactIdentity {
+    path: String,
+    sha256: String,
+}
+
 #[derive(Debug, Serialize)]
 struct CustodyReceipt {
     schema_version: &'static str,
     status: &'static str,
+    artifact_path: String,
+    artifact_sha256: String,
     cargo_lock_sha256: String,
     cargo_home: String,
     dependency_count: usize,
@@ -51,16 +61,30 @@ struct CustodyReceipt {
     network_policy: &'static str,
 }
 
-pub fn stage(
-    repo_root: &Path,
-    source_cargo_home: &Path,
-    cargo_home: &Path,
-    sqlite_bin: &Path,
-    postgres_client_bin: &Path,
-    postgres_server_bin: &Path,
-    out_dir: &Path,
-) -> Result<()> {
+pub(crate) struct StageRequest<'a> {
+    pub(crate) repo_root: &'a Path,
+    pub(crate) artifact: &'a Path,
+    pub(crate) source_cargo_home: &'a Path,
+    pub(crate) cargo_home: &'a Path,
+    pub(crate) sqlite_bin: &'a Path,
+    pub(crate) postgres_client_bin: &'a Path,
+    pub(crate) postgres_server_bin: &'a Path,
+    pub(crate) out_dir: &'a Path,
+}
+
+pub(crate) fn stage(request: StageRequest<'_>) -> Result<()> {
+    let StageRequest {
+        repo_root,
+        artifact,
+        source_cargo_home,
+        cargo_home,
+        sqlite_bin,
+        postgres_client_bin,
+        postgres_server_bin,
+        out_dir,
+    } = request;
     let workspace = workspace_root(repo_root)?;
+    let artifact_before = physical_artifact_identity(artifact, &workspace)?;
     let source_cargo_home = fs::canonicalize(source_cargo_home)?;
     let selected = resolved_registry_packages(repo_root, &source_cargo_home)?;
     let cargo_home = prepare_output(cargo_home, &workspace)?;
@@ -103,6 +127,11 @@ pub fn stage(
         status.success(),
         "offline custody build failed with {status}"
     );
+    let artifact_after = physical_artifact_identity(artifact, &workspace)?;
+    ensure!(
+        artifact_after == artifact_before,
+        "release artifact identity changed during offline custody build"
+    );
 
     let dependency_closure_sha256 = dependency_digest(&dependencies);
     let mut oracles = BTreeMap::new();
@@ -112,6 +141,8 @@ pub fn stage(
     let receipt = CustodyReceipt {
         schema_version: "redline.custody-receipt/v1",
         status: "pass",
+        artifact_path: artifact_after.path,
+        artifact_sha256: artifact_after.sha256,
         cargo_lock_sha256: sha256_file(&lock_path)?,
         cargo_home: cargo_home.display().to_string(),
         dependency_count: dependencies.len(),
@@ -126,7 +157,7 @@ pub fn stage(
     let receipt_path = out_dir.join("custody-receipt.json");
     let mut body = serde_json::to_vec_pretty(&receipt)?;
     body.push(b'\n');
-    fs::write(&receipt_path, body)?;
+    write_new_receipt(&receipt_path, &body)?;
     println!("custody receipt: {}", receipt_path.display());
     Ok(())
 }
@@ -445,6 +476,72 @@ fn require_tree(path: &Path, workspace: &Path, label: &str) -> Result<PathBuf> {
     Ok(path)
 }
 
+fn physical_artifact_identity(artifact: &Path, workspace: &Path) -> Result<ArtifactIdentity> {
+    ensure!(
+        artifact.is_absolute(),
+        "release artifact path must be absolute"
+    );
+    let workspace = fs::canonicalize(workspace).context("resolve custody workspace")?;
+    ensure!(
+        artifact.starts_with(&workspace),
+        "release artifact must remain in-tree"
+    );
+
+    let relative = artifact
+        .strip_prefix(&workspace)
+        .context("resolve release artifact beneath workspace")?;
+    let mut cursor = workspace.clone();
+    for component in relative.components() {
+        let std::path::Component::Normal(name) = component else {
+            bail!("release artifact path contains a non-normal component");
+        };
+        cursor.push(name);
+        let metadata = fs::symlink_metadata(&cursor)
+            .with_context(|| format!("inspect release artifact path {}", cursor.display()))?;
+        ensure!(
+            !metadata.file_type().is_symlink(),
+            "release artifact path contains a symlink: {}",
+            cursor.display()
+        );
+    }
+
+    let metadata = fs::symlink_metadata(artifact)
+        .with_context(|| format!("inspect release artifact {}", artifact.display()))?;
+    ensure!(
+        metadata.is_file() && !metadata.file_type().is_symlink(),
+        "release artifact must be a physical regular file"
+    );
+    ensure!(
+        metadata.nlink() == 1,
+        "release artifact must have exactly one hard link"
+    );
+    let canonical = fs::canonicalize(artifact)?;
+    ensure!(
+        canonical.starts_with(&workspace),
+        "release artifact resolves outside the custody workspace"
+    );
+    Ok(ArtifactIdentity {
+        path: canonical.display().to_string(),
+        sha256: sha256_file(&canonical)?,
+    })
+}
+
+fn write_new_receipt(path: &Path, body: &[u8]) -> Result<()> {
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(path)
+        .with_context(|| format!("create new custody receipt {}", path.display()))?;
+    file.write_all(body)?;
+    file.sync_all()?;
+    let metadata = file.metadata()?;
+    ensure!(
+        metadata.is_file() && metadata.nlink() == 1,
+        "custody receipt must be a physical single-link regular file"
+    );
+    Ok(())
+}
+
 fn collect_regular_files(path: &Path, files: &mut Vec<PathBuf>) -> Result<()> {
     let metadata = fs::symlink_metadata(path)?;
     if metadata.file_type().is_symlink() {
@@ -496,6 +593,30 @@ fn sha256_file(path: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::fs::symlink;
+
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new() -> Self {
+            let path = std::env::temp_dir().join(format!(
+                "redline-testing-custody-artifact-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .expect("clock")
+                    .as_nanos()
+            ));
+            fs::create_dir(&path).expect("scratch directory");
+            Self(path)
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
 
     #[test]
     fn dependency_digest_is_order_sensitive_and_stable() {
@@ -506,5 +627,47 @@ mod tests {
             archive: "/ignored/demo.crate".into(),
         };
         assert_eq!(dependency_digest(&[dependency]).len(), 64);
+    }
+
+    #[test]
+    fn release_artifact_identity_rejects_foreign_linked_and_symlinked_files() {
+        let scratch = Scratch::new();
+        let workspace = scratch.0.join("workspace");
+        fs::create_dir(&workspace).unwrap();
+        let artifact = workspace.join("redline-testing.tar.gz");
+        fs::write(&artifact, b"reviewed artifact\n").unwrap();
+
+        let identity = physical_artifact_identity(&artifact, &workspace).unwrap();
+        assert_eq!(identity.path, artifact.display().to_string());
+        assert_eq!(identity.sha256, sha256_file(&artifact).unwrap());
+
+        let hard_link = workspace.join("hard-link.tar.gz");
+        fs::hard_link(&artifact, &hard_link).unwrap();
+        assert!(physical_artifact_identity(&artifact, &workspace).is_err());
+        fs::remove_file(&hard_link).unwrap();
+
+        let symlink_path = workspace.join("symlink.tar.gz");
+        symlink(&artifact, &symlink_path).unwrap();
+        assert!(physical_artifact_identity(&symlink_path, &workspace).is_err());
+
+        let foreign = scratch.0.join("foreign.tar.gz");
+        fs::write(&foreign, b"foreign artifact\n").unwrap();
+        assert!(physical_artifact_identity(&foreign, &workspace).is_err());
+    }
+
+    #[test]
+    fn custody_receipt_creation_refuses_existing_and_symlink_paths() {
+        let scratch = Scratch::new();
+        let receipt = scratch.0.join("custody-receipt.json");
+        write_new_receipt(&receipt, b"{\"status\":\"pass\"}\n").unwrap();
+        assert!(write_new_receipt(&receipt, b"replacement\n").is_err());
+        assert_eq!(fs::read(&receipt).unwrap(), b"{\"status\":\"pass\"}\n");
+
+        let target = scratch.0.join("foreign.json");
+        fs::write(&target, b"foreign\n").unwrap();
+        let linked = scratch.0.join("linked-receipt.json");
+        symlink(&target, &linked).unwrap();
+        assert!(write_new_receipt(&linked, b"replacement\n").is_err());
+        assert_eq!(fs::read(&target).unwrap(), b"foreign\n");
     }
 }

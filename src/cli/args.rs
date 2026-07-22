@@ -59,9 +59,9 @@ pub(crate) struct RunArgs {
 #[derive(Debug, Args)]
 pub(crate) struct MajorGateArgs {
     #[arg(long)]
-    pub(crate) baseline: String,
+    pub(crate) baseline: PathBuf,
     #[arg(long)]
-    pub(crate) candidate: String,
+    pub(crate) candidate: PathBuf,
 }
 
 #[derive(Debug, Args)]

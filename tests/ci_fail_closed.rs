@@ -66,7 +66,17 @@ fn release_path_is_local_only_and_requires_custody() {
     assert!(doctor.contains("custody-stage"));
     assert!(!release.contains("GITHUB_REF_NAME"));
     assert!(docs.contains("xtask custody-stage"));
+    assert!(docs.contains("--artifact"));
     assert!(!docs.contains("gh release create"));
+
+    let custody_schema: serde_json::Value =
+        serde_json::from_str(&repo_file("schemas/custody-receipt.schema.json"))
+            .expect("valid custody receipt schema");
+    let required = custody_schema["required"]
+        .as_array()
+        .expect("custody schema required fields");
+    assert!(required.iter().any(|field| field == "artifact_path"));
+    assert!(required.iter().any(|field| field == "artifact_sha256"));
 }
 
 #[test]
@@ -127,6 +137,9 @@ fn required_lane_runs_security_with_strict_tool_checks() {
         required
             .contains("ci_run env REDLINE_STRICT_TOOLS=1 bash \"$repo_root/ops/ci/security.sh\"")
     );
+    assert!(required.contains("major-gate"));
+    assert!(required.contains("--baseline contracts/compatibility-v1.reviewed.toml"));
+    assert!(required.contains("--candidate contracts/compatibility-v1.toml"));
 }
 
 #[test]

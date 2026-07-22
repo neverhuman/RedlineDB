@@ -21,10 +21,13 @@ local through Jeryu and physical custody under `/home/ubuntu/jain-split`.
    recomputes every bundled file's SHA-256 against the manifest. If a file is
    in the tarball but missing from `artifact_hashes` (or vice versa), this
    test fails loudly. It runs as part of `just pr-ci`.
-4. **Custody.** `xtask custody-stage` validates every registry package checksum
-   in `Cargo.lock`, stages physical SQLite/PostgreSQL oracle artifacts in-tree,
-   performs `cargo build --workspace --locked --offline`, and records compiler,
-   dependency-closure, oracle version, and SHA-256 identities.
+4. **Custody.** After `just release-local`, run `xtask custody-stage` with
+   `--artifact "$PWD/dist/redline-testing-<version>-linux-x86_64.tar.gz"`.
+   It validates a physical single-link release artifact plus every registry
+   package checksum in `Cargo.lock`, stages physical SQLite/PostgreSQL oracle
+   artifacts in-tree, performs `cargo build --workspace --locked --offline`,
+   and records the exact artifact, compiler, dependency-closure, oracle
+   version, and SHA-256 identities.
 5. **Tag the release.** After protected merge, the Redline family controller
    creates the next unused manifest-bound immutable
    `redline-testing-v<version>-jain.<revision>` tag with compare-and-swap

@@ -21,6 +21,9 @@ release surface is the locally attested runner tarball; see
   authoritative build and release path.
 - Removed the remaining Python CI helper in favor of the tested Rust xtask
   implementation.
+- Required CI now anchors compatibility counts to the reviewed v1 contract;
+  release evidence requires the complete case selection, and custody receipts
+  bind the exact physical packaged artifact.
 
 ## [1.0.1] - 2026-05-26
 

@@ -6,6 +6,8 @@
   "required": [
     "schema_version",
     "status",
+    "artifact_path",
+    "artifact_sha256",
     "cargo_lock_sha256",
     "cargo_home",
     "dependency_count",
@@ -20,6 +22,8 @@
   "properties": {
     "schema_version": { "const": "redline.custody-receipt/v1" },
     "status": { "const": "pass" },
+    "artifact_path": { "type": "string", "minLength": 1 },
+    "artifact_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "cargo_lock_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
     "cargo_home": { "type": "string", "minLength": 1 },
     "dependency_count": { "type": "integer", "minimum": 1 },

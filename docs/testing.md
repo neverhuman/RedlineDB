@@ -18,7 +18,7 @@ bash ops/ci/pr-ci.sh         # the single validate command (fmt, check, test, pa
 | security | `bash ops/ci/security.sh` | offline gitleaks, pinned local RustSec `cargo audit --no-fetch`, `cargo deny`, blocking zizmor, and no-update SBOM |
 | jankurai | `bash ops/ci/jankurai.sh` | fail-closed audit/proof using exact regular non-symlink Jankurai 1.6.11 bytes at `/home/ubuntu/.jeryu/bin/jankurai`; target-only copy-code, rust-witness, security, cost, and release evidence |
 | ship-gate | `cargo run -p xtask -- ship-gate` | prospective SQLite cases self-compare; required contract cases cannot be removed |
-| compatibility | `cargo run --locked -- run --contract <id> --cases <selector> --mode diagnostic\|release` | deterministic selection and strict fail-closed evidence |
+| compatibility | `cargo run --locked -- run --contract <id> --cases <selector> --mode diagnostic\|release` | deterministic selection and strict fail-closed evidence; release requires `--cases all` |
 | beyond-postgres | `cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact` | every published case passes the `psql` ↔ `psql` oracle self-compare with zero skips |
 
 ### Forge proof parity
