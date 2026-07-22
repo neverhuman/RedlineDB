@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:deca752000bb2051a30aa2c30f6450cb5d6c9363377321cbe4137cb063c8b003",
-  "input_fingerprint": "sha256:08f8b47e0dc236a587e5ad4be9254e2085ff4262f3162ee949914d3f630d4259",
+  "report_fingerprint": "sha256:622c2ff11b82dbba823c2d4b00081f76092f15c88575a70866cd89548b62abef",
+  "input_fingerprint": "sha256:1b8a41d8b21d3d73d2040e708903e64af8c347ff7d5dbcf9c5aa7022f5eb6902",
   "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
   "manifest_fingerprints": {
     "owner_map": "sha256:8906e7de840f5494a011115f1c570db3ddbfee3d9a8e6fbe11e94ca6cf6adc56",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:f33b9715b6109208b44f6931c43f37e8da642dd67ff6faaad77be486954243a4"
   },
   "dirty_worktree": true,
-  "generated_at": "1784714312",
+  "generated_at": "1784716095",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784714312",
-  "started_at": "1784714312",
-  "elapsed_ms": 6026,
+  "run_id": "1784716095",
+  "started_at": "1784716095",
+  "elapsed_ms": 6092,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "4babe51",
+    "head": "d24210a",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1014,7 +1014,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-22T09:58:26.284058960+00:00",
+    "generated_at": "2026-07-22T10:28:09.439880921+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1052,7 +1052,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 286,
+      "files_scanned": 287,
       "files_considered": 6,
       "active_files": 6,
       "exact_file_classes": 0,
@@ -1335,15 +1335,15 @@
           {
             "path": "tools/splitctl/src/ci.rs",
             "language": "rust",
-            "start_line": 418,
-            "end_line": 419,
+            "start_line": 419,
+            "end_line": 420,
             "unit_name": "physical_regular_path"
           },
           {
             "path": "tools/splitctl/src/ci.rs",
             "language": "rust",
-            "start_line": 434,
-            "end_line": 435,
+            "start_line": 435,
+            "end_line": 436,
             "unit_name": "physical_checkout"
           },
           {
@@ -1377,8 +1377,8 @@
           {
             "path": "tools/splitctl/src/ci.rs",
             "language": "rust",
-            "start_line": 552,
-            "end_line": 553,
+            "start_line": 553,
+            "end_line": 554,
             "unit_name": "validate_relative_path"
           },
           {
@@ -1699,15 +1699,15 @@
           {
             "path": "tools/splitctl/src/ci.rs",
             "language": "rust",
-            "start_line": 601,
-            "end_line": 602,
+            "start_line": 602,
+            "end_line": 603,
             "unit_name": "is_lockfile"
           },
           {
             "path": "tools/splitctl/src/ci.rs",
             "language": "rust",
-            "start_line": 615,
-            "end_line": 616,
+            "start_line": 616,
+            "end_line": 617,
             "unit_name": "is_toolchain_file"
           }
         ]
