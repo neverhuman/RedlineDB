@@ -111,6 +111,39 @@ for mutation in \
   fi
 done
 
+redline_filter_args=(--arg request_id "$sibling_sha64" \
+  --arg control "$sibling_sha40" --arg owner veox \
+  --arg repository jain --arg head "$valid_object" \
+  --arg check jain/required --arg split_root /family)
+jq '
+  .repository="jain"
+  | .required_check="jain/required"
+  | .sources[0].repository="redline-split-ops"
+  | .sources[0].owner="jeryu"
+  | .sources[0].remote=
+      "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
+  | .sources[0].mount_path="/family/jain-redline/redline-split-ops"
+' "$sibling_fixture" >"$sibling_fixture.redline"
+jq -e "${redline_filter_args[@]}" "$sibling_filter" \
+  "$sibling_fixture.redline" >/dev/null || {
+  printf 'production sibling-source filter rejected sealed Redline control\n' >&2
+  exit 1
+}
+for mutation in \
+  '.sources[0].owner="root"' \
+  '.sources[0].remote="http://127.0.0.1:8787/git/veox/redline-split-ops.git"' \
+  '.sources[0].mount_path="/family/redline-split-ops"' \
+  '.sources[0].repository="redline-core"'; do
+  jq "$mutation" "$sibling_fixture.redline" \
+    >"$sibling_fixture.redline-hostile"
+  if jq -e "${redline_filter_args[@]}" "$sibling_filter" \
+    "$sibling_fixture.redline-hostile" >/dev/null 2>&1; then
+    printf 'production sibling-source filter accepted hostile Redline mutation: %s\n' \
+      "$mutation" >&2
+    exit 1
+  fi
+done
+
 cp -- "$repo_root/ops/ci/host-ci-integrity.sh" "$fixture/ops/ci/host-ci-integrity.sh"
 for path in \
   Cargo.lock Cargo.toml repos.manifest.toml \
@@ -183,13 +216,26 @@ if grep -Eq 'safe\.directory=(\*|"?\$SPLIT_ROOT"?)' \
 fi
 for required_source_binding in \
   '--ref refs/heads/main --resolve-ref-head' \
-  'BindReadOnlyPaths=$sibling_checkout:$family_root/$sibling' \
+  'BindReadOnlyPaths=$sibling_checkout:$sibling_mount_path' \
+  'sibling_names+=(redline-split-ops)' \
+  'sibling_mount_path="$family_root/jain-redline/redline-split-ops"' \
   'sibling_sources_sha256' \
   'jain.host-ci-sibling-sources/v1'; do
   grep -F -- "$required_source_binding" \
     "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
     printf 'root sandbox lacks protected sibling source binding: %s\n' \
       "$required_source_binding" >&2
+    exit 1
+  }
+done
+for nested_worker_binding in \
+  '"$REPO" == jain' \
+  'sib_path="$SPLIT_ROOT/jain-redline/redline-split-ops"' \
+  'mapfile -t sealed_sibling_repositories'; do
+  grep -F -- "$nested_worker_binding" \
+    "$repo_root/ops/ci/split-host-ci.sh" >/dev/null || {
+    printf 'reviewed worker omits sealed Redline source binding: %s\n' \
+      "$nested_worker_binding" >&2
     exit 1
   }
 done
@@ -234,6 +280,17 @@ grep -F 'sibling protected main moved before publication' \
 for boundary in host-ci-sandbox.sh split-host-ci.sh host-ci-publisher.sh; do
   grep -F 'sibling_sources_sha256' "$repo_root/ops/ci/$boundary" >/dev/null || {
     printf '%s does not carry the sibling source digest\n' "$boundary" >&2
+    exit 1
+  }
+done
+for publisher_nested_binding in \
+  '"$repo" == jain' \
+  '.repository == "redline-split-ops"' \
+  '$family_root + "/jain-redline/redline-split-ops"'; do
+  grep -F -- "$publisher_nested_binding" \
+    "$repo_root/ops/ci/host-ci-publisher.sh" >/dev/null || {
+    printf 'root publisher omits sealed Redline binding: %s\n' \
+      "$publisher_nested_binding" >&2
     exit 1
   }
 done

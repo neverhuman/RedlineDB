@@ -52,14 +52,28 @@ select((keys | sort) == ([
       "owner", "reference", "remote", "repository", "tree"
     ] | sort)
     and (.repository | test("^[a-z0-9][a-z0-9-]*$"))
-    and .owner == "veox"
-    and .remote == ("http://127.0.0.1:8787/git/veox/" + .repository + ".git")
+    and (
+      (
+        .repository == "redline-split-ops"
+        and (.owner == "jeryu" or .owner == "veox")
+        and .remote == ("http://127.0.0.1:8787/git/" + .owner
+          + "/redline-split-ops.git")
+        and .mount_path == ($split_root + "/jain-redline/redline-split-ops")
+      )
+      or
+      (
+        .repository != "redline-split-ops"
+        and .owner == "veox"
+        and .remote == ("http://127.0.0.1:8787/git/veox/"
+          + .repository + ".git")
+        and .mount_path == ($split_root + "/" + .repository)
+      )
+    )
     and .reference == "refs/heads/main"
     and (.commit | test("^[0-9a-f]{40}$"))
     and (.tree | test("^[0-9a-f]{40}$"))
     and (.inventory_sha256 | test("^[0-9a-f]{64}$"))
     and (.entry_count | type) == "number" and .entry_count >= 0
-    and .mount_path == ($split_root + "/" + .repository)
     and (.contract_tag_ref | type == "string")
     and (.contract_tag_object | type == "string")
     and (.contract_tag_commit | type == "string")
@@ -341,7 +355,8 @@ worker_sibling_request="${JAIN_NEEDS_SIBLINGS:-0}"
 [[ "$worker_sibling_request" == 0 || "$worker_sibling_request" == 1 ]] \
   || exit 2
 worker_sibling_sources_required=false
-if [[ "$REPO" == jain-deploy || "$worker_sibling_request" == 1 ]]; then
+if [[ "$REPO" == jain || "$REPO" == jain-deploy \
+  || "$worker_sibling_request" == 1 ]]; then
   worker_sibling_sources_required=true
 fi
 [[ "$worker_sibling_sources_required" == "$JAIN_SIBLING_SOURCES_REQUIRED" ]] \
@@ -656,12 +671,13 @@ if [ "${JAIN_RELEASE_CI:-0}" = "1" ] && [ "${#native_learners[@]}" -gt 0 ]; then
   }
 fi
 
-# Independence by default: NO sibling repos are linked, so a repo's required lane
-# must resolve cross-repo deps from its committed vendor-crates/ (offline). An
-# opted-in lane may clone only the root-provisioned protected-main mounts bound by
-# the sealed sibling receipt. Ambient canonical HEAD and working-tree state are
-# never source authority.
-if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
+# Independence by default: NO sibling product repos are linked, so a required
+# lane must resolve cross-repo deps from committed offline inputs. An opted-in
+# lane may clone only root-provisioned protected-main mounts bound by the sealed
+# source receipt. Jain additionally receives the nested Redline control plane
+# because its required lane delegates validation there. Ambient canonical HEAD
+# and working-tree state are never source authority.
+if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
   worker_contract_ancestor_object=""
   worker_contract_mirror="$wt/contracts/MIRROR.md"
   if [[ -e "$worker_contract_mirror" ]]; then
@@ -691,14 +707,12 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
   chmod 0600 "$sibling_git_config" \
     || native_setup_failure "cannot secure bounded sibling Git config" 1
   sibling_seen=0
-  for sib in \
-    jain jain-docs jain-domain jain-math jain-contracts jain-catboost \
-    jain-xgboost jain-lightgbm jain-jable jain-battle-gpu jain-starforge \
-    jain-core jain-llm jain-agent jain-jnoccio jain-zyal jain-jailgun \
-    jain-research jain-report jain-tui jain-cli jain-web jain-python \
-    jain-model-zoo jain-ops jain-smartcluster jain-deploy; do
-    [ "$sib" = "$REPO" ] && continue
-    sib_path="$SPLIT_ROOT/$sib"
+  mapfile -t sealed_sibling_repositories < <(
+    jq -er '.sources[].repository' "$JAIN_SIBLING_SOURCES_PATH"
+  )
+  [[ "${#sealed_sibling_repositories[@]}" -gt 0 ]] \
+    || native_setup_failure 'sealed sibling authority is empty' 1
+  for sib in "${sealed_sibling_repositories[@]}"; do
     sibling_binding="$(jq -er --arg sibling "$sib" '
       [.sources[] | select(.repository == $sibling)]
       | select(length == 1) | .[0]
@@ -709,6 +723,10 @@ if [ "$REPO" = "jain-deploy" ] || [ "${JAIN_NEEDS_SIBLINGS:-0}" = "1" ]; then
     IFS=$'\t' read -r sib_sha sib_tree sib_inventory_sha \
       sib_entry_count sib_mount_path sib_contract_tag_ref \
       sib_contract_tag_object sib_contract_tag_commit <<<"$sibling_binding"
+    sib_path="$SPLIT_ROOT/$sib"
+    if [[ "$sib" == redline-split-ops ]]; then
+      sib_path="$SPLIT_ROOT/jain-redline/redline-split-ops"
+    fi
     [[ "$sib_mount_path" == "$sib_path" \
       && "$(realpath -e -- "$sib_path")" == "$sib_path" \
       && -d "$sib_path/.git" && ! -L "$sib_path" && ! -L "$sib_path/.git" ]] \

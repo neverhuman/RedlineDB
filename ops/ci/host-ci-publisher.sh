@@ -391,7 +391,8 @@ sibling_request="$(jq -r '.environment.JAIN_NEEDS_SIBLINGS // "0"' \
 [[ "$sibling_request" == 0 || "$sibling_request" == 1 ]] \
   || fail 'sealed sibling request policy is invalid'
 expected_sibling_sources=false
-if [[ "$repo" == jain-deploy || "$sibling_request" == 1 ]]; then
+if [[ "$repo" == jain || "$repo" == jain-deploy \
+  || "$sibling_request" == 1 ]]; then
   expected_sibling_sources=true
 fi
 sibling_sources_required="$(jq -r '.sibling_sources_required' "$result")"
@@ -426,14 +427,29 @@ if [[ "$sibling_sources_required" == true ]]; then
         == (.sources | length))
     | select(all(.sources[];
         (.repository | test("^[a-z0-9][a-z0-9-]*$"))
-        and .owner == "veox"
-        and .remote == ("http://127.0.0.1:8787/git/veox/" + .repository + ".git")
+        and (
+          (
+            .repository == "redline-split-ops"
+            and (.owner == "jeryu" or .owner == "veox")
+            and .remote == ("http://127.0.0.1:8787/git/" + .owner
+              + "/redline-split-ops.git")
+            and .mount_path
+              == ($family_root + "/jain-redline/redline-split-ops")
+          )
+          or
+          (
+            .repository != "redline-split-ops"
+            and .owner == "veox"
+            and .remote == ("http://127.0.0.1:8787/git/veox/"
+              + .repository + ".git")
+            and .mount_path == ($family_root + "/" + .repository)
+          )
+        )
         and .reference == "refs/heads/main"
         and (.commit | test("^[0-9a-f]{40}$"))
         and (.tree | test("^[0-9a-f]{40}$"))
         and (.inventory_sha256 | test("^[0-9a-f]{64}$"))
-        and (.entry_count | type) == "number" and .entry_count >= 0
-        and .mount_path == ($family_root + "/" + .repository)))' \
+        and (.entry_count | type) == "number" and .entry_count >= 0))' \
     "$sibling_sources_path" >/dev/null \
     || fail 'sealed sibling source inventory has invalid identities'
 else

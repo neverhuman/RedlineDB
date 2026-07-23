@@ -484,7 +484,8 @@ sibling_request="$(jq -r '.environment.JAIN_NEEDS_SIBLINGS // "0"' "$request")"
 [[ "$sibling_request" == 0 || "$sibling_request" == 1 ]] \
   || fail 'JAIN_NEEDS_SIBLINGS must be exactly 0 or 1'
 sibling_sources_required=false
-if [[ "$repo" == jain-deploy || "$sibling_request" == 1 ]]; then
+if [[ "$repo" == jain || "$repo" == jain-deploy \
+  || "$sibling_request" == 1 ]]; then
   sibling_sources_required=true
 fi
 
@@ -739,11 +740,12 @@ if [[ "$repo" == jain-web ]]; then
     || fail 'cannot stage authenticated pnpm store'
 fi
 
-# Sibling source is release authority, not ambient developer state. Root
-# resolves each opted-in sibling's protected main through the authenticated
+# Sibling and nested-control source is release authority, not ambient developer
+# state. Root resolves each required protected main through the authenticated
 # forge, materializes it independently, and later bind-overrides the canonical
 # path inside the worker. The worker therefore retains the established
-# ../jain-*/ Cargo layout without observing a feature branch or dirty checkout.
+# ../jain-* and jain-redline layouts without observing feature branches or
+# dirty checkouts.
 sibling_sources_path=""
 sibling_sources_sha256=""
 sibling_bind_args=()
@@ -752,13 +754,19 @@ if [[ "$sibling_sources_required" == true ]]; then
   sibling_entries="$root_request/sibling-sources.jsonl"
   mkdir -m 0700 "$sibling_stage_root"
   : >"$sibling_entries"
-  sibling_names=(
-    jain jain-docs jain-domain jain-math jain-contracts jain-catboost
-    jain-xgboost jain-lightgbm jain-jable jain-battle-gpu jain-starforge
-    jain-core jain-llm jain-agent jain-jnoccio jain-zyal jain-jailgun
-    jain-research jain-report jain-tui jain-cli jain-web jain-python
-    jain-model-zoo jain-ops jain-smartcluster jain-deploy
-  )
+  sibling_names=()
+  if [[ "$repo" == jain-deploy || "$sibling_request" == 1 ]]; then
+    sibling_names=(
+      jain jain-docs jain-domain jain-math jain-contracts jain-catboost
+      jain-xgboost jain-lightgbm jain-jable jain-battle-gpu jain-starforge
+      jain-core jain-llm jain-agent jain-jnoccio jain-zyal jain-jailgun
+      jain-research jain-report jain-tui jain-cli jain-web jain-python
+      jain-model-zoo jain-ops jain-smartcluster jain-deploy
+    )
+  fi
+  if [[ "$repo" == jain ]]; then
+    sibling_names+=(redline-split-ops)
+  fi
   for sibling in "${sibling_names[@]}"; do
     [[ "$sibling" == "$repo" ]] && continue
     sibling_authority_json="$("$splitctl_path" host-ci-authority \
@@ -766,13 +774,28 @@ if [[ "$sibling_sources_required" == true ]]; then
       || fail "sibling authority is absent or ambiguous: $sibling"
     sibling_authority="$(jq -er --arg sibling "$sibling" '
       select(.schema_version == "jain.host-ci-repository-authority/v1")
-      | select(.repository == $sibling and .forge_owner == "veox")
+      | select(.repository == $sibling)
       | select(.required_check == ($sibling + "/required"))
+      | select(.forge_owner | test("^[A-Za-z0-9._-]+$"))
       | select(.remote | type == "string")
       | [.forge_owner, .remote] | @tsv
     ' <<<"$sibling_authority_json")" \
       || fail "invalid sibling authority: $sibling"
     IFS=$'\t' read -r sibling_owner sibling_remote <<<"$sibling_authority"
+    if [[ "$sibling" == redline-split-ops ]]; then
+      [[ "$sibling_owner" == jeryu || "$sibling_owner" == veox ]] \
+        || fail 'nested Redline control owner is invalid'
+      sibling_mount_path="$family_root/jain-redline/redline-split-ops"
+    else
+      [[ "$sibling_owner" == veox ]] \
+        || fail "Jain sibling owner is invalid: $sibling"
+      sibling_mount_path="$family_root/$sibling"
+    fi
+    [[ "$sibling_remote" \
+        == "${forge_git_base%/}/$sibling_owner/$sibling.git" \
+      && "$(realpath -e -- "$sibling_mount_path")" == "$sibling_mount_path" \
+      && -d "$sibling_mount_path" && ! -L "$sibling_mount_path" ]] \
+      || fail "sibling authority path or remote is invalid: $sibling"
     sibling_checkout="$sibling_stage_root/$sibling"
     sibling_materialize_args=(jeryu-local git-materialize \
       --repo "$sibling_owner/$sibling" --remote "$sibling_remote" \
@@ -786,8 +809,9 @@ if [[ "$sibling_sources_required" == true ]]; then
     sibling_materialization="$("$splitctl_path" "${sibling_materialize_args[@]}")" \
       || fail "cannot materialize authenticated sibling main: $sibling"
     sibling_binding="$(jq -er --arg sibling "$sibling" \
+      --arg owner "$sibling_owner" \
       'select(.schema_version == "jain.jeryu-git-materialization/v1")
-       | select(.repository == ("veox/" + $sibling))
+       | select(.repository == ($owner + "/" + $sibling))
        | select(.reference == "refs/heads/main" and .status == "pass")
        | select(.commit | test("^[0-9a-f]{40}$"))
        | select(.ancestor_tag_ref | type == "string")
@@ -832,7 +856,7 @@ if [[ "$sibling_sources_required" == true ]]; then
       --arg remote "$sibling_remote" --arg reference refs/heads/main \
       --arg commit "$sibling_commit" --arg tree "$sibling_tree" \
       --arg inventory "$sibling_inventory_sha256" \
-      --arg mount_path "$family_root/$sibling" \
+      --arg mount_path "$sibling_mount_path" \
       --arg contract_tag_ref "$sibling_contract_tag_ref" \
       --arg contract_tag_object "$sibling_contract_tag_object" \
       --arg contract_tag_commit "$sibling_contract_tag_commit" \
@@ -845,7 +869,7 @@ if [[ "$sibling_sources_required" == true ]]; then
         contract_tag_commit:$contract_tag_commit}' >>"$sibling_entries" \
       || fail "cannot record sibling source authority: $sibling"
     sibling_bind_args+=(
-      --property="BindReadOnlyPaths=$sibling_checkout:$family_root/$sibling"
+      --property="BindReadOnlyPaths=$sibling_checkout:$sibling_mount_path"
     )
   done
   sibling_sources_path="$worker_authority/sibling-sources.json"
