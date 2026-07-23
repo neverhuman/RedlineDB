@@ -1079,7 +1079,7 @@ systemd_args=(
   --property=ProtectHome=tmpfs --property=NoNewPrivileges=yes
   --property='CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SETPCAP'
   --property='AmbientCapabilities=CAP_SYS_ADMIN CAP_SETPCAP'
-  --property=RestrictSUIDSGID=yes --property=LockPersonality=yes
+  --property=LockPersonality=yes
   --property=RestrictRealtime=yes --property='RestrictNamespaces=pid mnt'
   --property=SystemCallArchitectures=native
   --property='SystemCallFilter=@system-service unshare mount umount2'
@@ -1236,7 +1236,7 @@ audit_systemd_args=(
   --property=ProtectHome=tmpfs --property=NoNewPrivileges=yes
   --property='CapabilityBoundingSet=CAP_SYS_ADMIN CAP_SETPCAP'
   --property='AmbientCapabilities=CAP_SYS_ADMIN CAP_SETPCAP'
-  --property=RestrictSUIDSGID=yes --property=LockPersonality=yes
+  --property=LockPersonality=yes
   --property=RestrictRealtime=yes --property='RestrictNamespaces=pid mnt'
   --property=SystemCallArchitectures=native
   --property='SystemCallFilter=@system-service unshare mount umount2'
