@@ -27,7 +27,7 @@
     "release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json": {"command": "./redlinectl successor-receipt-verify release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json && ./redlinectl lock-verify", "lane": "successor-reconcile", "purpose": "verify the changed reconciled receipt and synchronized historical lock without claiming cutover"},
     "release-evidence/**/jain-consumer.json": {"command": "./redlinectl cutover-verify && just security", "lane": "cutover", "purpose": "bind final cutover to governed Jain consumer evidence"},
     "release-evidence/**/jeryu-consumer.json": {"command": "./redlinectl cutover-verify && just security", "lane": "cutover", "purpose": "bind final cutover to governed Jeryu consumer evidence"},
-    "repos.manifest.toml": {"command": "./redlinectl control-validate && ./redlinectl review-lock-verify", "lane": "manifest-review", "purpose": "verify canonical ownership and synchronized or exact successor review state"},
+    "repos.manifest.toml": {"command": "./redlinectl authority-validate && cargo test --locked", "lane": "authority-source", "purpose": "verify exact six-repository veox authority while preserving pre-refresh lock failures"},
     "rust-toolchain.toml": {"command": "just check", "lane": "check", "purpose": "verify the pinned Rust toolchain"},
     "scripts/": {"command": "just check", "lane": "check", "purpose": "verify local CI dispatchers"},
     "scripts/**": {"command": "just check", "lane": "check", "purpose": "verify local CI dispatchers"},
@@ -35,8 +35,8 @@
     "schemas/**": {"command": "just required", "lane": "contract", "purpose": "parse governed receipt schemas"},
     "ops/": {"command": "bash ops/ci/quality-gates.sh", "lane": "ci", "purpose": "verify canonical CI orchestration"},
     "ops/**": {"command": "bash ops/ci/quality-gates.sh", "lane": "ci", "purpose": "verify canonical CI orchestration"},
-    "tools/": {"command": "just required", "lane": "required", "purpose": "run Rust proof and safety tests"},
-    "tools/**": {"command": "just required", "lane": "required", "purpose": "run Rust proof and safety tests"}
+    "tools/": {"command": "./redlinectl authority-validate && cargo test --locked && cargo clippy --locked --all-targets -- -D warnings", "lane": "authority-source", "purpose": "run Rust authority, proof, and safety tests without relabeling lock readiness"},
+    "tools/**": {"command": "./redlinectl authority-validate && cargo test --locked && cargo clippy --locked --all-targets -- -D warnings", "lane": "authority-source", "purpose": "run Rust authority, proof, and safety tests without relabeling lock readiness"}
   },
   "workspace": "redline-split-ops"
 }

@@ -55,6 +55,9 @@ doctor:
 validate:
   {{redlinectl}} validate
 
+authority-validate:
+  {{redlinectl}} authority-validate
+
 lock-verify:
   {{redlinectl}} lock-verify
 

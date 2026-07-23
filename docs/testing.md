@@ -1,18 +1,24 @@
 # Testing and repair
 
-Run `just check` for formatting, clippy, Rust unit tests, manifest validation,
-and structural lock validation. Run `just security` for fail-closed secret,
+Run `just authority-validate`, `cargo fmt --check`, strict locked Clippy, and
+`cargo test --locked` for the source-only authority review. Run `just security` for fail-closed secret,
 dependency, workflow, and SBOM checks. Run `just score` for the pinned audit
 and the Rust score/hard-finding/cap gate.
 
-The local Jeryu host runner enters through `scripts/ci-local.sh required`. That
+The `.jain.5` recovery branch intentionally cannot pass `just check`,
+`control-validate`, `doctor`, `validate`, or release readiness while the
+tracked lock has four `.jain.3`-era rows, Central is missing from it, its mirror
+is absent, and the six `veox/*` forge repositories are unadopted. A green
+source-only authority check is never proof or cutover eligibility.
+
+The local-forge host runner enters through `scripts/ci-local.sh required`. That
 entrypoint runs `ops/ci/quality-gates.sh`, so the single protected required
 status is published only after required, security, pinned score, and release
 readiness all pass on the exact detached commit. It accepts the narrower
 `security`, `score`, and `release-readiness` lanes for targeted repair reruns.
-The protected control-plane lane never creates a family-container symlink and
-does not need the child checkouts: `control-validate` reads only the canonical
-manifest, schemas, and authoritative lock from its exact standalone runner.
+The protected control-plane lane never creates a family-container symlink.
+After proof refresh, `control-validate` reads only the canonical manifest,
+schemas, and authoritative lock from its exact standalone runner.
 Before the existing gates run, the Rust `ci-required` wrapper verifies the
 tracked predecessor and prepared authoritative digests, then constructs the
 physical predecessor compatibility mirror required by the review verifier.
@@ -31,8 +37,7 @@ failure. Each removal first quarantines the directory entry relative to the
 held parent, verifies that it is the owned inode, unlinks it, and proves the
 held inode reached link count zero before cleanup state advances.
 The required lane uses `control-review-lock-verify`, which validates the exact
-manifest, derived lock transition, and tracked predecessor binding
-without consulting sibling checkouts. The operational `review-lock-verify`
+manifest and lock binding without consulting sibling checkouts. The operational `review-lock-verify`
 retains live clean-main and immutable-tag readback; `family-ci` remains the
 authority for running every child lane.
 The retained 8.0.0 successor operation receipts describe the pre-relocation
@@ -40,18 +45,20 @@ checkout paths and manifest digest, so the 8.0.1 control lane does not credit
 them as current release evidence.
 The required entrypoint removes a parent runner's temporary global Git-config
 override before release readiness. This prevents mirror-cache rewrites from
-disguising canonical local-Jeryu remote identity while retaining the operator's
+disguising canonical local-forge remote identity while retaining the operator's
 supported local-forge credential helper.
 
 The required lane uses `./redlinectl control-validate`, which validates the
-canonical manifest and control-plane lock without requiring sibling checkouts.
+canonical manifest and control-plane lock without requiring sibling checkouts;
+it must stay red when source authority has advanced but proof refresh has not.
 Mirror identity, live family checkout, and hub-engine guards remain in
 `./redlinectl lock-verify`, `./redlinectl validate`, and
 `./redlinectl family-ci`.
 
 The manifest parser is closed-schema: it requires the canonical relative
-manifest authority, container, lock, repository paths, exact Jain/Jeryu
-consumer set and rows, and rejects unknown or omitted fields. Operational
+manifest authority, container, lock, exactly one control plus five product
+rows, canonical `veox/*` forge slugs/remotes, exact immutable releases, exact
+Jain/Jeryu consumer rows, and rejects unknown or omitted fields. Operational
 commands also walk the physical Redline container without following links and
 reject any symlink or `.git/worktrees` registry. Lock, mirror, and checksum
 sidecars must each be regular single-link files with distinct device/inode
@@ -65,22 +72,11 @@ cannot pass cutover. `proof-refresh` is the only writer that can replace it and
 requires exact manifest product, revision, commit, tree checksum, remote, and
 protection-policy metadata first.
 
-`./redlinectl proof-refresh --prepare-successor --receipt PATH` is the only
-supported way to derive an ineligible authoritative candidate for a
-one-revision Core correction. Tests require the successor tag to be absent,
-every child main to be clean and forge-equal, and the two starting lock copies
-to match the manifest-bound predecessor SHA-256. Preparation never writes the
-product mirror. `review-lock-verify` accepts the temporary split state only when
-the candidate has the exact bound historical digest and records it as
-cutover-ineligible; strict operational verification continues to fail.
-`successor-receipt-verify PATH` rejects unknown fields, a bad sidecar, path
-substitution, manual eligibility, mismatched transition flags, or any manifest,
-engine, predecessor, or prepared-lock identity difference.
-Post-merge, `proof-refresh --reconcile-successor --receipt PATH` accepts only
-that authoritative candidate plus the byte-exact predecessor mirror, updates
-both copies transactionally, and emits a `reconciled` receipt. Unrelated drift
-is rejected. Both receipt variants use `redline.proof-successor/v1` and have
-checksum sidecars.
+The retained prepare/reconcile implementation and 8.0.0 receipts are historical
+audit coverage for the superseded one-revision `.jain.4` attempt. The tests now
+prove those four-row inputs cannot mutate, validate, reconcile, or relabel the
+six-repository `.jain.5` authority. Current recovery uses only normal
+no-waiver proof refresh after fresh family and consumer evidence.
 
 For a historical 8.0.0 successor-receipt audit only, verify the retained
 artifact with:
@@ -94,21 +90,20 @@ artifact with:
 These checks prove synchronization only; the receipt must continue to report
 `cutover_eligible=false` until normal two-consumer proof refresh completes.
 
-`just family-ci` is intentionally stronger: every child must be clean `main`,
-equal its local-Jeryu forge head, and either have no proposed tag yet or have an
-immutable tag already bound to that exact commit. It executes the complete
-child lanes in automatically removed standalone `git clone --no-local`
+`just family-ci` is intentionally stronger: every product must be clean `main`,
+equal its canonical `veox/*` local-forge head, and have an immutable tag bound
+to that exact commit. It executes the complete product lanes in automatically removed standalone `git clone --no-local`
 checkouts detached at the exact reviewed SHA and writes checksummed JSON plus
 raw logs. Each clone must have a physical `.git` directory equal to its common
 Git directory, full history, no alternates, no linked-checkout registry, a clean
-detached HEAD, and the canonical Jeryu origin. Sandbox roots live only beneath
+detached HEAD, and the canonical local-forge origin. Sandbox roots live only beneath
 `redline-split-ops/target/standalone-sandboxes`. Cleanup requires its private
 marker, never follows symlink targets, holds the root and marker identities,
 quarantines the root relative to its held parent, then traverses and removes
 only through held directory descriptors. A late entry at the original sandbox
 name is left untouched, and both held root and marker inodes must be unlinked.
-When the protected authority onboards `redline-central`, its governed command
-list contains both `scripts/ci-local.sh required` and the fail-closed
+The governed `redline-central` command list contains both
+`scripts/ci-local.sh required` and the fail-closed
 `scripts/ci-local.sh family-release`. The latter consumes operator-supplied
 real Redline and Postgres DSNs; family CI never synthesizes or waives them.
 Child commands use each repository's pinned toolchain, never the control

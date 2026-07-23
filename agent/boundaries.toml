@@ -4,7 +4,7 @@ profile = "control-plane"
 required_check = "redline-split-ops/required"
 
 [split]
-cross_repo_dependency_policy = "pinned-local-jeryu-git-tags"
+cross_repo_dependency_policy = "pinned-local-veox-git-tags"
 local_path_patches = false
 
 cargo_members = []

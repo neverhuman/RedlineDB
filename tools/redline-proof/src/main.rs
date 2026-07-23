@@ -28,7 +28,7 @@ const CONSUMER_SCHEMA: &str = "redline.consumer-evidence/v1";
 const LOCK_SCHEMA: &str = "redline.split.lock/v2";
 const PROOF_REFRESH_SCHEMA: &str = "redline.proof-refresh/v1";
 const PROOF_SUCCESSOR_SCHEMA: &str = "redline.proof-successor/v1";
-const LOCAL_JERYU_BASE: &str = "http://127.0.0.1:8787/git/";
+const LOCAL_FORGE_BASE: &str = "http://127.0.0.1:8787/git/";
 const RELEASE_VERSION: &str = "8.0.1";
 const RELEASE_EVIDENCE_ROOT: &str = "../../jain-split-ops/docs/release-evidence/8.0.1";
 const RELEASE_PROTECTION_POLICY: &str = "immutable-main-v1";
@@ -2095,8 +2095,7 @@ fn require_fresh(timestamp: DateTime<Utc>, now: DateTime<Utc>, field: &str) -> R
 struct Repo {
     name: String,
     path: PathBuf,
-    github_slug: String,
-    remote: String,
+    forge_slug: String,
     product_version: String,
     tag_revision: i64,
     current_tag: String,
@@ -2111,6 +2110,8 @@ struct Repo {
 struct Manifest {
     path: PathBuf,
     container_root: PathBuf,
+    control_forge_slug: String,
+    control_remote: String,
     repos: Vec<Repo>,
     successor: SuccessorTransition,
 }
@@ -2156,51 +2157,61 @@ fn require_exact_toml_fields(
     Ok(())
 }
 
-fn expected_repo_contract(
-    name: &str,
-) -> Option<(&'static str, &'static str, &'static str, &'static str)> {
+fn expected_repo_contract(name: &str) -> Option<(&'static str, &'static str, &'static str)> {
     match name {
-        "redline" => Some((
-            "../redline",
-            "neverhuman/RedlineDB",
-            "jeryu/redlineDB",
-            "public-hub",
-        )),
-        "redline-core" => Some((
-            "../redline-core",
-            "neverhuman/redline-core",
-            "jeryu/redline-core",
-            "canonical-engine",
-        )),
+        "redline" => Some(("../redline", "veox/redline", "public-hub")),
+        "redline-core" => Some(("../redline-core", "veox/redline-core", "canonical-engine")),
         "redline-central" => Some((
             "../redline-central",
-            "neverhuman/redline-central",
-            "jeryu/redline-central",
+            "veox/redline-central",
             "shared-client-shim",
         )),
         "redline-testing" => Some((
             "../redline-testing",
-            "neverhuman/redline-testing",
-            "jeryu/redline-testing",
+            "veox/redline-testing",
             "parity-harness",
         )),
         "redline-web" => Some((
             "../redline-web",
-            "neverhuman/redline-web",
-            "jeryu/redline-web",
+            "veox/redline-web",
             "observability-console",
         )),
         _ => None,
     }
 }
 
-fn expected_repo_release(name: &str) -> Option<(&'static str, i64)> {
+fn expected_repo_release(name: &str) -> Option<(&'static str, i64, &'static str, &'static str)> {
     match name {
-        "redline" => Some(("4.1.0", 2)),
-        "redline-core" => Some(("4.1.0", 4)),
-        "redline-central" => Some(("4.1.0", 1)),
-        "redline-testing" => Some(("1.0.1", 1)),
-        "redline-web" => Some(("0.1.0", 1)),
+        "redline" => Some((
+            "4.1.0",
+            2,
+            "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+            "13c0ed0f2bf25cd4eb99cd141155a67b0c01c10564e9557d076d071a0eb1bd82",
+        )),
+        "redline-core" => Some((
+            "4.1.0",
+            5,
+            "2924a34bdca8263adc9ebff9220f5bb99ba4323f",
+            "402043243b4d4b057ad1eeb89e8b2f098ed8c402948b8382bc75d0e4b7128704",
+        )),
+        "redline-central" => Some((
+            "4.1.0",
+            1,
+            "87e8d350e80c7e7996f8336c8294e82ee7585ba1",
+            "fcbb3123408c24d7b516a7af94020341d3b55a2c2b92d4e4bce60e9cbd6efbca",
+        )),
+        "redline-testing" => Some((
+            "1.0.1",
+            1,
+            "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+            "825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac",
+        )),
+        "redline-web" => Some((
+            "0.1.0",
+            1,
+            "09fd93be10238cd85abc164b0b01cf0f681ea304",
+            "27fef5fd44ad897dbaa244963312b6861e0c54b951ddb4f645f715fbf417c8a9",
+        )),
         _ => None,
     }
 }
@@ -2476,6 +2487,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         &[
             "name",
             "path",
+            "forge_slug",
             "remote",
             "required_check",
             "family",
@@ -2488,10 +2500,12 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         ],
         "manifest control_plane",
     )?;
+    let control_forge_slug = toml_string(control, "forge_slug", "control_plane")?;
+    let control_remote = toml_string(control, "remote", "control_plane")?;
     if toml_string(control, "name", "control_plane")? != "redline-split-ops"
         || toml_string(control, "path", "control_plane")? != "."
-        || toml_string(control, "remote", "control_plane")?
-            != "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
+        || control_forge_slug != "veox/redline-split-ops"
+        || control_remote != "http://127.0.0.1:8787/git/veox/redline-split-ops.git"
         || toml_string(control, "required_check", "control_plane")? != "redline-split-ops/required"
         || toml_string(control, "family", "control_plane")? != FAMILY
     {
@@ -2502,9 +2516,9 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         .get("repo")
         .and_then(toml::Value::as_array)
         .ok_or_else(|| error("manifest must contain repository rows"))?;
-    if !matches!(rows.len(), 4 | 5) {
+    if rows.len() != 5 {
         return Err(error(
-            "manifest must contain the four active Redline repositories and at most one governed redline-central row",
+            "manifest must contain exactly five product repositories plus its control plane",
         ));
     }
     let mut repos = Vec::new();
@@ -2518,8 +2532,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             &[
                 "name",
                 "path",
-                "github_slug",
-                "jeryu_slug",
+                "forge_slug",
                 "remote",
                 "role",
                 "profile",
@@ -2535,9 +2548,8 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             ],
             &format!("{name} repository row"),
         )?;
-        let (expected_path, expected_github, expected_jeryu, expected_role) =
-            expected_repo_contract(&name)
-                .ok_or_else(|| error(format!("{name}: release identity is not authorized")))?;
+        let (expected_path, expected_forge_slug, expected_role) = expected_repo_contract(&name)
+            .ok_or_else(|| error(format!("{name}: release identity is not authorized")))?;
         let raw_path = toml_string(table, "path", &name)?;
         let repo_path = PathBuf::from(&raw_path);
         if raw_path != expected_path {
@@ -2553,8 +2565,9 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         if default_branch != "main" {
             return Err(error(format!("{name}: default branch must be main")));
         }
-        let (expected_product_version, expected_revision) = expected_repo_release(&name)
-            .ok_or_else(|| error(format!("{name}: release identity is not authorized")))?;
+        let (expected_product_version, expected_revision, expected_commit, expected_checksum) =
+            expected_repo_release(&name)
+                .ok_or_else(|| error(format!("{name}: release identity is not authorized")))?;
         let (
             product_version,
             tag_revision,
@@ -2569,11 +2582,9 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             expected_product_version,
             expected_revision,
         )?;
-        let jeryu_slug = toml_string(table, "jeryu_slug", "manifest repository")?;
-        let github_slug = toml_string(table, "github_slug", "manifest repository")?;
+        let forge_slug = toml_string(table, "forge_slug", "manifest repository")?;
         let role = toml_string(table, "role", "manifest repository")?;
-        if github_slug != expected_github
-            || jeryu_slug != expected_jeryu
+        if forge_slug != expected_forge_slug
             || role != expected_role
             || table.get("profile").and_then(toml::Value::as_str) != Some("custom")
             || table.get("has_jeryu_std").and_then(toml::Value::as_bool) != Some(true)
@@ -2583,20 +2594,21 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             return Err(error(format!("{name}: repository row contract is invalid")));
         }
         let remote = toml_string(table, "remote", "manifest repository")?;
-        let expected_remote = format!(
-            "{LOCAL_JERYU_BASE}{}.git",
-            jeryu_slug.trim_start_matches('/')
-        );
+        let expected_remote = format!("{LOCAL_FORGE_BASE}{forge_slug}.git");
         if remote != expected_remote {
             return Err(error(format!(
                 "{name}: remote must be {expected_remote}, found {remote}"
             )));
         }
+        if release_commit != expected_commit || release_checksum_sha256 != expected_checksum {
+            return Err(error(format!(
+                "{name}: release commit or tree checksum differs from the immutable reviewed identity"
+            )));
+        }
         repos.push(Repo {
             name,
             path: repo_path,
-            github_slug,
-            remote,
+            forge_slug,
             product_version,
             tag_revision,
             current_tag,
@@ -2608,11 +2620,13 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         });
     }
     let names: BTreeSet<&str> = repos.iter().map(|repo| repo.name.as_str()).collect();
-    let mut expected =
-        BTreeSet::from(["redline", "redline-core", "redline-testing", "redline-web"]);
-    if names.contains("redline-central") {
-        expected.insert("redline-central");
-    }
+    let expected = BTreeSet::from([
+        "redline",
+        "redline-core",
+        "redline-testing",
+        "redline-web",
+        "redline-central",
+    ]);
     if names != expected {
         return Err(error("manifest repository set is invalid"));
     }
@@ -2625,6 +2639,8 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
                 .as_path(),
         )?,
         path: manifest_path,
+        control_forge_slug,
+        control_remote,
         repos,
         successor,
     })
@@ -2682,7 +2698,35 @@ fn validate_operational_manifest(path: &Path) -> Result<()> {
 }
 
 fn expected_origin(repo: &Repo) -> String {
-    repo.remote.clone()
+    format!("{LOCAL_FORGE_BASE}{}.git", repo.forge_slug)
+}
+
+fn remote_ref(remote: &str, reference: &str) -> Result<Option<String>> {
+    let output = isolated_git()
+        .args(["ls-remote", remote, reference])
+        .output()?;
+    if !output.status.success() {
+        return Err(error(format!(
+            "cannot read canonical forge remote {remote} at {reference}; veox repository adoption is required"
+        )));
+    }
+    let raw = String::from_utf8(output.stdout)?;
+    let matches: Vec<&str> = raw
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let sha = fields.next()?;
+            let found = fields.next()?;
+            (found == reference && fields.next().is_none()).then_some(sha)
+        })
+        .collect();
+    match matches.as_slice() {
+        [] => Ok(None),
+        [sha] if is_sha1(sha) => Ok(Some((*sha).to_owned())),
+        _ => Err(error(format!(
+            "canonical forge remote {remote} returned ambiguous {reference}"
+        ))),
+    }
 }
 
 fn command_output(command: &mut Command) -> Result<Output> {
@@ -2904,35 +2948,13 @@ fn validate_product_version(root: &Path, repo: &Repo) -> Result<()> {
 }
 
 fn forge_ref(root: &Path, reference: &str) -> Result<Option<String>> {
-    let output = isolated_git()
-        .arg("-C")
-        .arg(root)
-        .args(["ls-remote", "origin", reference])
-        .output()?;
-    if !output.status.success() {
-        return Err(error(format!(
-            "cannot read origin {reference} for {}",
+    let origin = git(root, &["remote", "get-url", "origin"])?;
+    remote_ref(&origin, reference).map_err(|value| {
+        error(format!(
+            "cannot read origin {reference} for {}: {value}",
             root.display()
-        )));
-    }
-    let raw = String::from_utf8(output.stdout)?;
-    let matches: Vec<&str> = raw
-        .lines()
-        .filter_map(|line| {
-            let mut fields = line.split_whitespace();
-            let sha = fields.next()?;
-            let found = fields.next()?;
-            (found == reference && fields.next().is_none()).then_some(sha)
-        })
-        .collect();
-    match matches.as_slice() {
-        [] => Ok(None),
-        [sha] if is_sha1(sha) => Ok(Some((*sha).to_owned())),
-        _ => Err(error(format!(
-            "origin returned ambiguous {reference} for {}",
-            root.display()
-        ))),
-    }
+        ))
+    })
 }
 
 fn local_tag_exists(root: &Path, tag: &str) -> Result<bool> {
@@ -4478,10 +4500,6 @@ fn render_lock(
                 "checksum_sha256 = {}",
                 toml_quote(&row.repo.release_checksum_sha256)?
             ),
-            format!(
-                "github = {}",
-                toml_quote(&format!("https://github.com/{}.git", row.repo.github_slug))?
-            ),
             format!("jeryu = {}", toml_quote(&expected_origin(&row.repo))?),
             format!("required_check = {}", toml_quote(&row.repo.required_check)?),
             format!(
@@ -5334,7 +5352,7 @@ fn verify_lock_with(
             || entry.get("jeryu").and_then(toml::Value::as_str) != Some(&expected_origin(repo))
         {
             return Err(error(format!(
-                "{}: lock required check or Jeryu remote differs from manifest",
+                "{}: lock required check or local-forge remote differs from manifest",
                 repo.name
             )));
         }
@@ -5397,7 +5415,7 @@ fn verify_lock_with(
                     || subject != metadata.subject
                 {
                     return Err(error(format!(
-                        "{}: lock metadata differs from immutable Jeryu tag",
+                        "{}: lock metadata differs from immutable local-forge tag",
                         repo.name
                     )));
                 }
@@ -5725,9 +5743,8 @@ fn consumer_verify(lock: &Path, consumer_lock: &Path) -> Result<()> {
     Ok(())
 }
 
-fn remote_verify(lock: &Path) -> Result<()> {
-    verify_checksum(lock)?;
-    let value = load_lock(lock)?;
+fn remote_verify(manifest: &Path, lock: &Path) -> Result<()> {
+    let value = verify_lock(manifest, lock, None)?;
     for entry in lock_entries(&value)? {
         let name = entry
             .get("name")
@@ -5742,9 +5759,9 @@ fn remote_verify(lock: &Path) -> Result<()> {
             .get("commit")
             .and_then(toml::Value::as_str)
             .unwrap_or("");
-        if !remote.starts_with(LOCAL_JERYU_BASE) || tag.is_empty() {
+        if !remote.starts_with(LOCAL_FORGE_BASE) || tag.is_empty() {
             return Err(error(format!(
-                "{name}: canonical local Jeryu remote or tag is missing"
+                "{name}: canonical local-forge remote or tag is missing"
             )));
         }
         let output = isolated_git()
@@ -5770,7 +5787,7 @@ fn remote_verify(lock: &Path) -> Result<()> {
             )));
         }
     }
-    println!("Redline immutable tags verified on canonical local Jeryu");
+    println!("Redline immutable tags verified on the canonical local forge");
     Ok(())
 }
 
@@ -6030,7 +6047,7 @@ fn release_receipt(path: &Path, paths: &Paths) -> Result<()> {
     Ok(())
 }
 
-fn validate_control(manifest_path: &Path, lock: &Path) -> Result<usize> {
+fn validate_authority_source(manifest_path: &Path) -> Result<usize> {
     let manifest = load_manifest(manifest_path)?;
     validate_receipt_schemas(manifest.path.parent().unwrap_or(Path::new(".")))?;
     let control_cargo = manifest
@@ -6046,11 +6063,133 @@ fn validate_control(manifest_path: &Path, lock: &Path) -> Result<usize> {
             ));
         }
     }
+    Ok(manifest.repos.len() + 1)
+}
+
+fn validate_control(manifest_path: &Path, lock: &Path) -> Result<usize> {
+    validate_authority_source(manifest_path)?;
     let value = verify_lock(manifest_path, lock, None)?;
     Ok(lock_entries(&value)?.len())
 }
 
+fn validate_operational_readiness(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
+    let manifest = load_manifest(manifest_path)?;
+    let mut blockers = Vec::new();
+
+    if let Err(value) = verify_lock(manifest_path, lock, Some(mirror)) {
+        blockers.push(format!("lock/mirror: {value}"));
+    }
+    match load_lock(lock) {
+        Ok(value) => {
+            match lock_entries(&value) {
+                Ok(entries) => {
+                    let names = entries
+                        .iter()
+                        .filter_map(|entry| entry.get("name").and_then(toml::Value::as_str))
+                        .collect::<BTreeSet<_>>();
+                    let expected = manifest
+                        .repos
+                        .iter()
+                        .map(|repo| repo.name.as_str())
+                        .collect::<BTreeSet<_>>();
+                    if names != expected || entries.len() != manifest.repos.len() {
+                        let missing = expected.difference(&names).copied().collect::<Vec<_>>();
+                        let extra = names.difference(&expected).copied().collect::<Vec<_>>();
+                        blockers.push(format!(
+                            "lock repository closure differs from authority; missing={missing:?} extra={extra:?}"
+                        ));
+                    }
+                }
+                Err(value) => blockers.push(format!("lock repository closure: {value}")),
+            }
+            if let Some(core) = manifest
+                .repos
+                .iter()
+                .find(|repo| repo.name == "redline-core")
+            {
+                let engine_tag = value
+                    .get("engine_tag")
+                    .and_then(toml::Value::as_str)
+                    .unwrap_or("<missing>");
+                let engine_commit = value
+                    .get("engine_commit")
+                    .and_then(toml::Value::as_str)
+                    .unwrap_or("<missing>");
+                if engine_tag != core.current_tag || engine_commit != core.release_commit {
+                    blockers.push(format!(
+                        "lock engine is stale: {engine_tag}@{engine_commit}, authority requires {}@{}",
+                        core.current_tag, core.release_commit
+                    ));
+                }
+            }
+            if proof_table(&value)
+                .ok()
+                .and_then(|proof| proof.get("cutover_eligible"))
+                .and_then(toml::Value::as_bool)
+                != Some(true)
+            {
+                blockers.push("lock remains cutover_eligible=false".to_owned());
+            }
+        }
+        Err(value) => blockers.push(format!("lock parse: {value}")),
+    }
+
+    let expected_control_remote = format!("{LOCAL_FORGE_BASE}{}.git", manifest.control_forge_slug);
+    if manifest.control_remote != expected_control_remote {
+        blockers.push(format!(
+            "redline-split-ops control remote is {}, expected {expected_control_remote}",
+            manifest.control_remote
+        ));
+    }
+    let mut remotes = vec![(
+        "redline-split-ops".to_owned(),
+        manifest.control_remote.clone(),
+    )];
+    remotes.extend(
+        manifest
+            .repos
+            .iter()
+            .map(|repo| (repo.name.clone(), expected_origin(repo))),
+    );
+    for (name, remote) in remotes {
+        match remote_ref(&remote, "refs/heads/main") {
+            Ok(Some(_)) => {}
+            Ok(None) => blockers.push(format!(
+                "{name}: canonical forge remote lacks refs/heads/main: {remote}"
+            )),
+            Err(value) => blockers.push(format!("{name}: {value}")),
+        }
+    }
+
+    for repo in &manifest.repos {
+        let checkout = manifest.repo_root(repo);
+        if let Err(value) = validate_physical_checkout(&checkout) {
+            blockers.push(format!("{} checkout: {value}", repo.name));
+            continue;
+        }
+        match git(&checkout, &["remote", "get-url", "origin"]) {
+            Ok(origin) if origin == expected_origin(repo) => {}
+            Ok(origin) => blockers.push(format!(
+                "{} checkout origin is {origin}, expected {}",
+                repo.name,
+                expected_origin(repo)
+            )),
+            Err(value) => blockers.push(format!("{} checkout origin: {value}", repo.name)),
+        }
+    }
+
+    if blockers.is_empty() {
+        Ok(())
+    } else {
+        Err(error(format!(
+            "operational Redline authority is not ready: {}",
+            blockers.join(" | ")
+        )))
+    }
+}
+
 fn validate(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
+    validate_operational_readiness(manifest_path, lock, mirror)?;
     let count = validate_control(manifest_path, lock)?;
     verify_lock(manifest_path, lock, Some(mirror))?;
     let manifest = load_manifest(manifest_path)?;
@@ -6162,7 +6301,7 @@ fn clone_or_update(manifest_path: &Path, dry_run: bool) -> Result<()> {
                 || git(&checkout, &["remote", "get-url", "origin"])? != remote
             {
                 return Err(error(format!(
-                    "{} checkout must have exactly the canonical Jeryu origin",
+                    "{} checkout must have exactly the canonical local-forge origin",
                     repo.name
                 )));
             }
@@ -6208,7 +6347,7 @@ fn clone_or_update(manifest_path: &Path, dry_run: bool) -> Result<()> {
             != Some(&head)
         {
             return Err(error(format!(
-                "{} local head does not equal Jeryu main",
+                "{} local head does not equal local-forge main",
                 repo.name
             )));
         }
@@ -6416,6 +6555,12 @@ fn dispatch(paths: &Paths, command: &str, mut args: Vec<String>) -> Result<()> {
         validate_operational_manifest(&paths.manifest)?;
     }
     match command {
+        "authority-validate" => {
+            if !args.is_empty() { return Err(error("authority-validate accepts no arguments")); }
+            let count = validate_authority_source(&paths.manifest)?;
+            println!("redline source authority ok: {count} repositories");
+            Ok(())
+        }
         "validate" => { if !args.is_empty() { return Err(error("validate accepts no arguments")); } validate(&paths.manifest, &paths.lock, &paths.mirror) }
         "control-validate" => {
             if !args.is_empty() { return Err(error("control-validate accepts no arguments")); }
@@ -6512,7 +6657,7 @@ fn dispatch(paths: &Paths, command: &str, mut args: Vec<String>) -> Result<()> {
             if args.len() != 1 { return Err(error("consumer-verify requires one consumer lock path")); }
             consumer_verify(&paths.lock, Path::new(&args[0]))
         }
-        "remote-verify" => { if !args.is_empty() { return Err(error("remote-verify accepts no arguments")); } remote_verify(&paths.lock) }
+        "remote-verify" => { if !args.is_empty() { return Err(error("remote-verify accepts no arguments")); } remote_verify(&paths.manifest, &paths.lock) }
         "audit-verify" => {
             if args.len() != 1 {
                 return Err(error("audit-verify requires one Jankurai JSON path"));
@@ -6556,7 +6701,7 @@ fn dispatch(paths: &Paths, command: &str, mut args: Vec<String>) -> Result<()> {
         }
         "update" => { if !args.is_empty() { return Err(error("update accepts no arguments")); } clone_or_update(&paths.manifest, false) }
         "--version" | "version" => { println!("redline-proof 0.1.0"); Ok(()) }
-        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|ci-required|control-validate|control-review-lock-verify|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
+        _ => Err(error("usage: redlinectl {authority-validate|clone [--dry-run]|update|ci-required|control-validate|control-review-lock-verify|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
     }
 }
 
@@ -6687,6 +6832,24 @@ mod tests {
         git(root, &["add", "README.md"]).unwrap();
         git(root, &["commit", "-m", "fixture"]).unwrap();
         git(root, &["rev-parse", "HEAD"]).unwrap()
+    }
+
+    fn manifest_repo_mut<'a>(value: &'a mut toml::Value, name: &str) -> &'a mut toml::value::Table {
+        value
+            .get_mut("repo")
+            .and_then(toml::Value::as_array_mut)
+            .unwrap()
+            .iter_mut()
+            .find(|repo| repo.get("name").and_then(toml::Value::as_str) == Some(name))
+            .and_then(toml::Value::as_table_mut)
+            .unwrap()
+    }
+
+    fn manifest_failure(name: &str, value: &toml::Value) -> String {
+        let fixture = TestDir::new_in_root(&format!("manifest-{name}"));
+        let path = fixture.path().join("repos.manifest.toml");
+        fs::write(&path, toml::to_string(value).unwrap()).unwrap();
+        load_manifest(&path).unwrap_err().to_string()
     }
 
     #[test]
@@ -7323,8 +7486,7 @@ mod tests {
         Repo {
             name: "redline-testing".to_owned(),
             path: PathBuf::from("../redline-testing"),
-            github_slug: "neverhuman/redline-testing".to_owned(),
-            remote: format!("{LOCAL_JERYU_BASE}jeryu/redline-testing.git"),
+            forge_slug: "veox/redline-testing".to_owned(),
             product_version: "1.0.1".to_owned(),
             tag_revision: 1,
             current_tag: "redline-testing-v1.0.1-jain.1".to_owned(),
@@ -7482,9 +7644,11 @@ mod tests {
     }
 
     #[test]
-    fn canonical_manifest_uses_authorized_corrective_revisions() {
+    fn canonical_manifest_is_the_exact_six_repository_veox_authority() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
+        assert_eq!(manifest.control_forge_slug, "veox/redline-split-ops");
+        assert_eq!(manifest.repos.len() + 1, 6);
         let identities: BTreeMap<&str, (&str, i64, &str)> = manifest
             .repos
             .iter()
@@ -7505,7 +7669,7 @@ mod tests {
         );
         assert_eq!(
             identities.get("redline-core"),
-            Some(&("4.1.0", 4, "redline-core-v4.1.0-jain.4"))
+            Some(&("4.1.0", 5, "redline-core-v4.1.0-jain.5"))
         );
         assert_eq!(
             identities.get("redline-testing"),
@@ -7515,7 +7679,15 @@ mod tests {
             identities.get("redline-web"),
             Some(&("0.1.0", 1, "redline-web-v0.1.0-jain.1"))
         );
-        assert!(!identities.contains_key("redline-central"));
+        assert_eq!(
+            identities.get("redline-central"),
+            Some(&("4.1.0", 1, "redline-central-v4.1.0-jain.1"))
+        );
+        assert!(manifest
+            .repos
+            .iter()
+            .all(|repo| repo.forge_slug.starts_with("veox/")
+                && expected_origin(repo).starts_with("http://127.0.0.1:8787/git/veox/")));
     }
 
     #[test]
@@ -7529,33 +7701,7 @@ mod tests {
         fs::write(central.join("scripts/ci-local.sh"), b"#!/bin/sh\n").unwrap();
 
         let source = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let mut manifest_text = fs::read_to_string(source.join("repos.manifest.toml")).unwrap();
-        manifest_text.push_str(
-            r#"
-
-[[repo]]
-name = "redline-central"
-path = "../redline-central"
-github_slug = "neverhuman/redline-central"
-jeryu_slug = "jeryu/redline-central"
-remote = "http://127.0.0.1:8787/git/jeryu/redline-central.git"
-role = "shared-client-shim"
-profile = "custom"
-has_jeryu_std = true
-product_version = "4.1.0"
-tag_revision = 1
-current_tag = "redline-central-v4.1.0-jain.1"
-release_commit = "PENDING"
-release_checksum_sha256 = "PENDING"
-protection_policy = "immutable-main-v1"
-required_check = "redline-central/required"
-default_branch = "main"
-"#,
-        );
-        let manifest_path = control.join("repos.manifest.toml");
-        fs::create_dir_all(&control).unwrap();
-        fs::write(&manifest_path, manifest_text).unwrap();
-        let manifest = load_manifest(&manifest_path).unwrap();
+        let manifest = load_manifest(&source.join("repos.manifest.toml")).unwrap();
         let repo = manifest
             .repos
             .iter()
@@ -7586,38 +7732,24 @@ default_branch = "main"
     }
 
     #[test]
-    fn successor_transition_accepts_only_the_next_core_revision() {
+    fn historical_successor_transition_cannot_skip_to_jain5_or_omit_central() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
         let lock = load_lock(&root.join("redline.lock.toml")).unwrap();
-        let (core, previous) = successor_transition(&manifest, &lock).unwrap();
-        assert_eq!(core.current_tag, "redline-core-v4.1.0-jain.4");
-        assert_eq!(
-            previous.get("tag").and_then(toml::Value::as_str),
-            Some("redline-core-v4.1.0-jain.3")
-        );
-
-        let mut skipped = manifest.clone();
-        let skipped_core = skipped
-            .repos
-            .iter_mut()
-            .find(|repo| repo.name == "redline-core")
-            .unwrap();
-        skipped_core.tag_revision = 5;
-        skipped_core.current_tag = "redline-core-v4.1.0-jain.5".to_owned();
-        assert!(successor_transition(&skipped, &lock)
+        assert!(successor_transition(&manifest, &lock)
             .unwrap_err()
             .to_string()
             .contains("exactly one next-revision"));
+        assert!(!lock_entries(&lock).unwrap().iter().any(|entry| {
+            entry.get("name").and_then(toml::Value::as_str) == Some("redline-central")
+        }));
     }
 
     #[test]
     fn successor_transition_renders_an_explicitly_ineligible_lock() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
         let lock_path = root.join("redline.lock.toml");
         let lock = load_lock(&lock_path).unwrap();
-        successor_transition(&manifest, &lock).unwrap();
         let rendered =
             render_historical_successor_lock(&fs::read_to_string(lock_path).unwrap(), &lock)
                 .unwrap();
@@ -7641,7 +7773,7 @@ default_branch = "main"
     }
 
     #[test]
-    fn successor_transition_reconciles_only_the_exact_reviewed_lock() {
+    fn historical_jain3_predecessor_cannot_validate_as_the_six_repo_authority() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
         let predecessor =
@@ -7649,7 +7781,11 @@ default_branch = "main"
                 .unwrap();
         let predecessor_value: toml::Value =
             std::str::from_utf8(&predecessor).unwrap().parse().unwrap();
-        validate_bound_predecessor_identity(&manifest, &predecessor, &predecessor_value).unwrap();
+        let failure =
+            validate_bound_predecessor_identity(&manifest, &predecessor, &predecessor_value)
+                .unwrap_err()
+                .to_string();
+        assert!(failure.contains("repository rows are not exact and unique"));
         let historical = render_historical_successor_lock(
             std::str::from_utf8(&predecessor).unwrap(),
             &predecessor_value,
@@ -7660,21 +7796,15 @@ default_branch = "main"
             fs::read(root.join("redline.lock.toml")).unwrap()
         );
 
-        let (source, value) = successor_transition_input_with(
+        let failure = successor_transition_input_with(
             &manifest,
             &historical,
             &predecessor,
             validate_bound_predecessor_identity,
         )
-        .unwrap();
-        assert_eq!(source.as_bytes(), predecessor);
-        assert_eq!(
-            proof_table(&value)
-                .unwrap()
-                .get("cutover_eligible")
-                .and_then(toml::Value::as_bool),
-            Some(true)
-        );
+        .unwrap_err()
+        .to_string();
+        assert!(failure.contains("repository rows are not exact and unique"));
 
         let mut tampered = historical.clone();
         tampered.extend_from_slice(b"# manual drift\n");
@@ -7686,7 +7816,7 @@ default_branch = "main"
         )
         .unwrap_err()
         .to_string()
-        .contains("not the exact reviewed successor transition"));
+        .contains("repository rows are not exact and unique"));
     }
 
     #[test]
@@ -7723,7 +7853,7 @@ default_branch = "main"
     }
 
     #[test]
-    fn successor_prepare_review_and_reconcile_are_transactional() {
+    fn successor_prepare_refuses_to_mutate_the_jain3_lock_for_the_jain5_authority() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let manifest = root.join("repos.manifest.toml");
         let predecessor =
@@ -7743,124 +7873,24 @@ default_branch = "main"
             .unwrap();
         }
 
-        let prepared = fixture.path().join("prepared.json");
-        proof_refresh_prepare_successor_with(
+        let before_authoritative = fs::read(&authoritative).unwrap();
+        let before_mirror = fs::read(&mirror).unwrap();
+        let receipt = fixture.path().join("must-not-exist.json");
+        let failure = proof_refresh_prepare_successor_with(
             &manifest,
             &authoritative,
             &mirror,
-            &prepared,
-            validate_bound_predecessor_identity,
-            |_| Ok(()),
-        )
-        .unwrap();
-        assert_eq!(fs::read(&mirror).unwrap(), predecessor);
-        assert_eq!(
-            sha256_file(&authoritative).unwrap(),
-            SUCCESSOR_PREPARED_LOCK_SHA256
-        );
-        assert_eq!(
-            review_lock_verify_with(
-                &manifest,
-                &authoritative,
-                &mirror,
-                false,
-                validate_bound_predecessor_identity,
-                |_| Ok(()),
-            )
-            .unwrap(),
-            "prepared-successor"
-        );
-        let prepared_value = read_json(&prepared).unwrap();
-        assert_eq!(prepared_value["transition_state"], "prepared");
-        assert_eq!(prepared_value["compatibility_mirror_updated"], false);
-        assert_eq!(prepared_value["cutover_eligible"], false);
-        verify_checksum(&prepared).unwrap();
-        successor_receipt_verify(&prepared, &manifest, &authoritative, &mirror).unwrap();
-
-        let premature = fixture.path().join("premature-reconciled.json");
-        let mut premature_value = prepared_value.clone();
-        premature_value["transition_state"] = json!("reconciled");
-        premature_value["compatibility_mirror_updated"] = json!(true);
-        write_checksummed_json(&premature, &premature_value).unwrap();
-        assert!(
-            successor_receipt_verify(&premature, &manifest, &authoritative, &mirror)
-                .unwrap_err()
-                .to_string()
-                .contains("mirror drift")
-        );
-
-        let reconciled = fixture.path().join("reconciled.json");
-        proof_refresh_reconcile_successor_with(
-            &manifest,
-            &authoritative,
-            &mirror,
-            &reconciled,
-            validate_bound_predecessor_identity,
-            |_| Ok(()),
-        )
-        .unwrap();
-        assert_eq!(
-            fs::read(&authoritative).unwrap(),
-            fs::read(&mirror).unwrap()
-        );
-        assert_eq!(
-            review_lock_verify_with(
-                &manifest,
-                &authoritative,
-                &mirror,
-                false,
-                validate_bound_predecessor_identity,
-                |_| Ok(()),
-            )
-            .unwrap(),
-            "reconciled-successor"
-        );
-        let reconciled_value = read_json(&reconciled).unwrap();
-        assert_eq!(reconciled_value["transition_state"], "reconciled");
-        assert_eq!(reconciled_value["compatibility_mirror_updated"], true);
-        assert_eq!(reconciled_value["cutover_eligible"], false);
-        verify_checksum(&reconciled).unwrap();
-        successor_receipt_verify(&reconciled, &manifest, &authoritative, &mirror).unwrap();
-
-        let tampered_receipt = fixture.path().join("tampered.json");
-        let mut tampered_value = prepared_value;
-        tampered_value["manual_override"] = json!(true);
-        write_checksummed_json(&tampered_receipt, &tampered_value).unwrap();
-        assert!(
-            successor_receipt_verify(&tampered_receipt, &manifest, &authoritative, &mirror,)
-                .unwrap_err()
-                .to_string()
-                .contains("unsupported fields")
-        );
-
-        let malformed = predecessor
-            .iter()
-            .copied()
-            .chain(b"# duplicate row\n".iter().copied())
-            .collect::<Vec<_>>();
-        for path in [&authoritative, &mirror] {
-            fs::write(path, &malformed).unwrap();
-            fs::write(
-                checksum_path(path),
-                format!("{}  redline.lock.toml\n", sha256_bytes(&malformed)),
-            )
-            .unwrap();
-        }
-        let rejected = fixture.path().join("rejected.json");
-        assert!(proof_refresh_prepare_successor_with(
-            &manifest,
-            &authoritative,
-            &mirror,
-            &rejected,
+            &receipt,
             validate_bound_predecessor_identity,
             |_| Ok(()),
         )
         .unwrap_err()
-        .to_string()
-        .contains("predecessor lock digest"));
-        assert_eq!(fs::read(&authoritative).unwrap(), malformed);
-        assert_eq!(fs::read(&mirror).unwrap(), malformed);
-        assert!(!rejected.exists());
+        .to_string();
+        assert!(failure.contains("repository rows are not exact and unique"));
+        assert_eq!(fs::read(&authoritative).unwrap(), before_authoritative);
+        assert_eq!(fs::read(&mirror).unwrap(), before_mirror);
+        assert!(!receipt.exists());
+        assert!(!checksum_path(&receipt).exists());
     }
 
     #[test]
@@ -7876,6 +7906,129 @@ default_branch = "main"
             .unwrap_err()
             .to_string()
             .contains("current_tag must be redline-v4.1.0-jain.2"));
+    }
+
+    #[test]
+    fn manifest_rejects_missing_duplicate_legacy_owner_and_identity_drift() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let canonical: toml::Value = fs::read_to_string(root.join("repos.manifest.toml"))
+            .unwrap()
+            .parse()
+            .unwrap();
+
+        for missing in ["redline-central", "redline"] {
+            let mut value = canonical.clone();
+            value
+                .get_mut("repo")
+                .and_then(toml::Value::as_array_mut)
+                .unwrap()
+                .retain(|repo| repo.get("name").and_then(toml::Value::as_str) != Some(missing));
+            assert!(manifest_failure(&format!("missing-{missing}"), &value)
+                .contains("exactly five product repositories"));
+        }
+
+        let mut duplicate = canonical.clone();
+        let central = duplicate
+            .get("repo")
+            .and_then(toml::Value::as_array)
+            .unwrap()
+            .iter()
+            .find(|repo| repo.get("name").and_then(toml::Value::as_str) == Some("redline-central"))
+            .unwrap()
+            .clone();
+        duplicate
+            .get_mut("repo")
+            .and_then(toml::Value::as_array_mut)
+            .unwrap()
+            .push(central);
+        assert!(manifest_failure("duplicate-central", &duplicate)
+            .contains("exactly five product repositories"));
+
+        let mut legacy_owner = canonical.clone();
+        let legacy = manifest_repo_mut(&mut legacy_owner, "redline-core");
+        legacy.insert(
+            "forge_slug".to_owned(),
+            toml::Value::String("jeryu/redline-core".to_owned()),
+        );
+        legacy.insert(
+            "remote".to_owned(),
+            toml::Value::String("http://127.0.0.1:8787/git/jeryu/redline-core.git".to_owned()),
+        );
+        assert!(manifest_failure("legacy-jeryu-owner", &legacy_owner)
+            .contains("repository row contract is invalid"));
+
+        let mut stale_core = canonical.clone();
+        let core = manifest_repo_mut(&mut stale_core, "redline-core");
+        core.insert("tag_revision".to_owned(), toml::Value::Integer(4));
+        core.insert(
+            "current_tag".to_owned(),
+            toml::Value::String("redline-core-v4.1.0-jain.4".to_owned()),
+        );
+        core.insert(
+            "release_commit".to_owned(),
+            toml::Value::String("3567bdced0ca1fe3671c9ebda876c914e2fc2c9e".to_owned()),
+        );
+        core.insert(
+            "release_checksum_sha256".to_owned(),
+            toml::Value::String(
+                "b36a4ac5afd332bab7473f1007061356a991a7590eeda1336809be5dad5ce746".to_owned(),
+            ),
+        );
+        assert!(manifest_failure("stale-jain4", &stale_core)
+            .contains("expected product 4.1.0 revision 5"));
+
+        let mut wrong_tag = canonical.clone();
+        manifest_repo_mut(&mut wrong_tag, "redline-web").insert(
+            "current_tag".to_owned(),
+            toml::Value::String("redline-web-v0.1.0-jain.2".to_owned()),
+        );
+        assert!(manifest_failure("wrong-tag", &wrong_tag)
+            .contains("current_tag must be redline-web-v0.1.0-jain.1"));
+
+        for (name, field, value) in [
+            (
+                "wrong-commit",
+                "release_commit",
+                toml::Value::String("9".repeat(40)),
+            ),
+            (
+                "wrong-checksum",
+                "release_checksum_sha256",
+                toml::Value::String("8".repeat(64)),
+            ),
+        ] {
+            let mut drift = canonical.clone();
+            manifest_repo_mut(&mut drift, "redline-central").insert(field.to_owned(), value);
+            assert!(manifest_failure(name, &drift)
+                .contains("differs from the immutable reviewed identity"));
+        }
+
+        let mut legacy_control = canonical;
+        let control = legacy_control
+            .get_mut("control_plane")
+            .and_then(toml::Value::as_table_mut)
+            .unwrap();
+        control.insert(
+            "forge_slug".to_owned(),
+            toml::Value::String("jeryu/redline-split-ops".to_owned()),
+        );
+        control.insert(
+            "remote".to_owned(),
+            toml::Value::String("http://127.0.0.1:8787/git/jeryu/redline-split-ops.git".to_owned()),
+        );
+        assert!(manifest_failure("legacy-control-owner", &legacy_control)
+            .contains("control-plane identity is invalid"));
+    }
+
+    #[test]
+    fn absent_canonical_forge_remote_fails_closed() {
+        let fixture = TestDir::new_in_root("absent-forge-remote");
+        let absent = fixture.path().join("veox-redline-core.git");
+        let failure = remote_ref(absent.to_str().unwrap(), "refs/heads/main")
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("cannot read canonical forge remote"));
+        assert!(failure.contains("veox repository adoption is required"));
     }
 
     #[test]
@@ -8251,8 +8404,7 @@ default_branch = "main"
                 repo: Repo {
                     name: (*name).to_owned(),
                     path: PathBuf::from(format!("../{name}")),
-                    github_slug: format!("neverhuman/{name}"),
-                    remote: format!("{LOCAL_JERYU_BASE}jeryu/{name}.git"),
+                    forge_slug: format!("veox/{name}"),
                     product_version: match *name {
                         "redline" | "redline-core" => "4.1.0",
                         "redline-testing" => "1.0.1",
@@ -8501,7 +8653,7 @@ default_branch = "main"
     }
 
     #[test]
-    fn control_validation_does_not_require_family_checkouts() {
+    fn source_authority_validation_is_not_lock_or_cutover_eligibility() {
         let fixture = TestDir::new_in_root("standalone-control");
         let control = fixture.path().join("redline-split-ops");
         let family_root = fixture.path();
@@ -8529,13 +8681,16 @@ default_branch = "main"
         }
         assert!(!family_root.join("redline.lock.toml").exists());
         assert_eq!(
-            validate_control(
-                &control.join("repos.manifest.toml"),
-                &control.join("redline.lock.toml"),
-            )
-            .unwrap(),
-            4
+            validate_authority_source(&control.join("repos.manifest.toml")).unwrap(),
+            6
         );
+        let control_failure = validate_control(
+            &control.join("repos.manifest.toml"),
+            &control.join("redline.lock.toml"),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(control_failure.contains("repository set differs"));
         assert!(verify_lock(
             &control.join("repos.manifest.toml"),
             &control.join("redline.lock.toml"),
@@ -8552,14 +8707,24 @@ default_branch = "main"
             format!("{SUCCESSOR_PREDECESSOR_LOCK_SHA256}  redline.lock.toml\n"),
         )
         .unwrap();
+        let review_failure = control_review_lock_verify(
+            &control.join("repos.manifest.toml"),
+            &control.join("redline.lock.toml"),
+            &mirror,
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(
+            review_failure.contains("repository set differs from the canonical manifest"),
+            "unexpected review failure: {review_failure}"
+        );
+        let lock = load_lock(&control.join("redline.lock.toml")).unwrap();
         assert_eq!(
-            control_review_lock_verify(
-                &control.join("repos.manifest.toml"),
-                &control.join("redline.lock.toml"),
-                &mirror,
-            )
-            .unwrap(),
-            "prepared-successor"
+            proof_table(&lock)
+                .unwrap()
+                .get("cutover_eligible")
+                .and_then(toml::Value::as_bool),
+            Some(false)
         );
         assert!(!family_root.join("redline").exists());
     }

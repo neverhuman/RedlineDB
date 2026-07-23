@@ -2,30 +2,21 @@
 
 The release version comes from `Cargo.toml`, `Cargo.lock`, and
 `agent/standard-version.toml`; `repos.manifest.toml` is the sole authority for
-the four child repositories and their immutable tags. Release history is in
+the five product repositories and their immutable tags. Release history is in
 `CHANGELOG.md`. This control plane prepares the Redline dependency cutover for
 Jain 8.0.1 but does not itself push images, change routes, or promote production.
 
 ## Required sequence
 
-1. For a one-revision Core correction, bind the exact successor commit and tree
-   checksum plus the reviewed predecessor lock digest in the manifest, then run
-   `proof-refresh --prepare-successor` before creating the tag. Commit its
-   explicitly ineligible authoritative lock, sidecar, and `prepared` receipt
-   through protected review; this mode never writes the product mirror. The
-   review verifier accepts only the exact manifest-bound split state and records
-   `cutover_eligible=false`. After merge, run
-   `proof-refresh --reconcile-successor --receipt
-   release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json` to
-   update the mirror atomically, then submit that exact `reconciled` operation
-   receipt through protected review. That review must pass
-   `successor-receipt-verify`, the checksum sidecar, `review-lock-verify`, and
-   the governed required/Jankurai gates without an exception or cap waiver.
-2. Run `bash ops/ci/quality-gates.sh` on the exact reviewed control commit.
-3. Run `just family-ci` with all child repositories clean, on `main`, and equal
-   to local Jeryu. Preserve the receipt, checksum sidecar, and named logs.
-4. Create the immutable successor tag, then verify every local, Jeryu, and
-   mirror tag resolves the manifest commit and
+1. Land or adopt all six canonical `veox/*` repositories without changing the
+   existing immutable product tags. Source authority validation is not lock or
+   cutover evidence.
+2. Preserve the historical `.jain.3` lock as red evidence until the governed
+   proof workflow can replace both lock copies atomically.
+3. Run `just family-ci` with all five products clean, on `main`, equal to their
+   local-forge heads, and supplied real Central service DSNs. Preserve the
+   receipt, checksum sidecar, and named logs.
+4. Verify every local and `veox/*` forge tag resolves the manifest commit and
    release-tree checksum. Immutable tags are never recreated or moved.
 5. Build and test both Jain and Jeryu against the exact Redline engine. Each
    clean-main producer writes closed-schema evidence, its real test log, and a

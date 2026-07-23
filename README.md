@@ -11,11 +11,17 @@ receipts; no production promotion is claimed.
 With Rust 1.96.0 and the pinned local security tools installed, run:
 
 ```bash
-just required
+just authority-validate
 just check
 just security
 just score
 ```
+
+During the `.jain.5` ownership recovery, `authority-validate` proves only the
+closed source manifest. `required`, `doctor`, `validate`, lock review, release
+readiness, and cutover remain intentionally red until all six `veox/*`
+repositories exist, the product checkouts are adopted, and no-waiver
+`proof-refresh` replaces the historical lock and creates its physical mirror.
 
 Use [`docs/architecture.md`](docs/architecture.md) for control-plane boundaries,
 [`docs/testing.md`](docs/testing.md) for proof routing and rerun commands, and
@@ -23,21 +29,20 @@ Use [`docs/architecture.md`](docs/architecture.md) for control-plane boundaries,
 rollback sequence.
 
 `redline-split-ops` owns the nested Redline family manifest, lock verification,
-clone/update delegation, bounded family CI, and diagnostics. The four child
+clone/update delegation, bounded family CI, and diagnostics. The five product
 repositories remain independent Git repositories and are never included in an
 umbrella Cargo workspace.
 
-`redline-central` has a separate protected onboarding review and is not active
-in the current manifest or lock. The parser already reserves its exact initial
-release identity, and family CI requires both its protected `required` lane and
-its real-service `family-release` lane whenever the governed row is present.
-Adding that row remains a protected authority change after Central lands.
+`redline-central` is now the fifth product row at its existing protected
+`redline-central-v4.1.0-jain.1` identity. Family CI requires both its protected
+`required` lane and its real-service `family-release` lane. The unchanged
+historical lock still omits Central and is therefore not release evidence.
 
 The manifest is the sole release-identity authority. Each repository declares
-its product version, corrective tag revision, exact tag, Jeryu remote,
-release commit/tree checksum binding, and protection policy. Commit/checksum
-pairs may both be `PENDING` while review is underway; `proof-refresh` refuses
-them until both are exact.
+its product version, corrective tag revision, exact tag, canonical local-forge `veox/*` remote,
+release commit/tree checksum binding, and protection policy. All five product
+pairs are exact; only the unreleased control-plane pair remains `PENDING`.
+`proof-refresh` refuses any pending product identity.
 
 ```text
 jain-redline/
@@ -45,7 +50,7 @@ jain-redline/
 │   ├── repos.manifest.toml            # canonical child manifest
 │   └── redline.lock.toml              # authoritative child pins and proof lock
 ├── redline{,-core,-testing,-web}/     # physical standalone repositories
-├── redline-central/                   # governed support; active row awaits landing
+├── redline-central/                   # fifth governed product repository
 └── redline.lock.toml                  # transactional compatibility mirror
 ```
 
@@ -102,7 +107,7 @@ fields (replace the values with their reviewed consumer check output):
   "status": "pass",
   "source_commit": "0123456789abcdef0123456789abcdef01234567",
   "required_check": "jain-split/redline-consumer",
-  "engine_tag": "redline-core-v4.1.0-jain.4",
+  "engine_tag": "redline-core-v4.1.0-jain.5",
   "engine_commit": "<family-ci redline-core commit>",
   "proof_lock_id": "redline-proof/v2/4.1.0/<family-ci redline-core commit>",
   "family_ci_receipt_sha256": "<family-ci receipt SHA256>",
@@ -139,38 +144,13 @@ replaces the authoritative lock and its compatibility mirror with identical
 bytes. `cutover-verify` reconstructs the lock from the still-fresh receipts and
 live immutable tag readback; a manual lock edit cannot make cutover pass.
 
-When a reviewed Core correction advances exactly one immutable tag revision,
-start the transition before creating that tag:
-
-```bash
-./redlinectl proof-refresh --prepare-successor \
-  --receipt release-evidence/8.0.0/redline-proof-successor-jain4-prepared.json
-```
-
-This mode accepts no family/consumer evidence or eligibility override. It
-requires clean forge-equal child mains, the proposed Core tag to be absent, and
-the byte-exact reviewed predecessor lock bound by SHA-256 in the manifest. It
-writes only the candidate authoritative lock, its sidecar, and a typed
-`prepared` receipt; the compatibility mirror stays unchanged. The manifest,
-historical authoritative lock, and preparation receipt land through protected
-review first. The review lane accepts that split state only when the historical
-bytes are the tool's exact manifest-bound rendering; operational `validate`,
-`lock-verify`, and `cutover-verify` remain strict and fail on the split state.
-`successor-receipt-verify` checksum-verifies the closed receipt fields, both
-canonical lock paths, predecessor/prepared digests, and exact engine identities.
-Generated-evidence ownership and merge-audit acceptance are documented in
-`docs/generated-zones.md` and `docs/audit-rubric.md`.
-After merge, reconcile once:
-
-```bash
-./redlinectl proof-refresh --reconcile-successor \
-  --receipt release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json
-```
-
-This atomically updates the mirror and produces the governed `reconciled`
-receipt, which is then submitted through protected review. Any other byte drift
-fails closed. Only a normal two-consumer `proof-refresh` can restore cutover
-eligibility.
+The retained 8.0.0 successor receipts document the superseded `.jain.4`
+attempt only. They cannot validate this six-repository `.jain.5` authority or
+make its four-row `.jain.3` lock green. Recovery requires repository adoption,
+fresh five-product family CI, both fresh consumer receipts, and one normal
+no-waiver `proof-refresh`. Generated-evidence ownership and merge-audit
+acceptance are documented in `docs/generated-zones.md` and
+`docs/audit-rubric.md`.
 
 Reviewed cutover inputs live under `release-evidence/<release>/`, alongside
 their checksum sidecars and the family-CI logs named by the receipt. The proof

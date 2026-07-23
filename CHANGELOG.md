@@ -2,6 +2,10 @@
 
 ## 8.0.1-rc.0
 
+- Rebound the closed family authority to one control plane plus five products,
+  all under canonical local-forge `veox/*` ownership; added the existing
+  Central `.jain.1` release and Core `.jain.5` recovery identity without
+  changing the historical lock or claiming cutover eligibility.
 - Relocated the Redline family to physical standalone repositories under
   `jain-redline/` and replaced family-CI linked checkouts with exact-SHA
   standalone clones.

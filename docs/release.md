@@ -7,33 +7,27 @@ cutover. Its version sources are `Cargo.toml`, `Cargo.lock`, and
 `agent/standard-version.toml`; release history is in `CHANGELOG.md`.
 
 The release sequence is `just required`, `just security`, `just score`, a fresh
-`just family-ci`, immutable tag readback from local Jeryu, checksummed Jain and
+`just family-ci`, immutable tag readback from the local forge, checksummed Jain and
 Jeryu consumer evidence, `just proof-refresh ...`, then
 `just cutover-verify`. Proof refresh writes the authoritative lock, mirror,
 both SHA256 sidecars, and operation receipt as one rollback-safe transaction.
 SBOM integrity evidence is produced by `just security`.
 
-For a one-revision Core correction, the reviewed manifest change is paired with
-`proof-refresh --prepare-successor` before the new tag exists. That read-safe
-mode derives only the candidate authoritative lock from the manifest-bound
-predecessor without accepting release evidence, an eligibility flag, or writing
-the product mirror. Following the protected control-plane merge,
-`proof-refresh --reconcile-successor` may atomically update only the exact
-checksummed predecessor mirror. Fresh family CI, the immutable successor tag,
-both consumer receipts, and normal proof refresh are still required before
-cutover. The protected reconciled receipt proves mirror equality while
-continuing to report `cutover_eligible=false`.
+The present recovery is not the historical one-revision successor workflow:
+Core `.jain.5` and Central `.jain.1` already exist, while the tracked lock still
+has four `.jain.3`-era product rows. Source authority validation cannot relabel
+that lock. Repository adoption, fresh five-product family CI, both consumer
+receipts, and normal proof refresh are required before cutover.
 
-The authorized corrective family identities are
-`redline-core-v4.1.0-jain.4`, `redline-v4.1.0-jain.2`,
+The authorized recovery identities are
+`redline-core-v4.1.0-jain.5`, `redline-v4.1.0-jain.2`,
 `redline-testing-v1.0.1-jain.1`, and `redline-web-v0.1.0-jain.1`. Earlier tags
 remain immutable. Before proof refresh, every manifest commit and release-tree
 SHA256 must be exact and must match the reviewed main commit and immutable tag.
-The reviewed Core identity for `.jain.4` is commit
-`3567bdced0ca1fe3671c9ebda876c914e2fc2c9e` with release-tree SHA-256
-`b36a4ac5afd332bab7473f1007061356a991a7590eeda1336809be5dad5ce746`.
-The immutable tag remains absent until this rebound control manifest and fresh
-family CI pass, and must then resolve that exact commit on local Jeryu. Both
+The list also requires `redline-central-v4.1.0-jain.1`. Core `.jain.5` is
+commit `2924a34bdca8263adc9ebff9220f5bb99ba4323f` with release-tree SHA-256
+`402043243b4d4b057ad1eeb89e8b2f098ed8c402948b8382bc75d0e4b7128704`.
+Both
 Jain and Jeryu consumer receipts are mandatory; proof refresh has no waiver or
 single-consumer acceptance path. Until fresh receipts produce a new lock, the
 tracked `.jain.3` lock is intentionally historical and cutover-ineligible.
