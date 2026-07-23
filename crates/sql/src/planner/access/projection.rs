@@ -59,10 +59,10 @@ pub(crate) fn projected_columns_are_covered(
 }
 
 pub(crate) fn predicates_for_index(selection: &Option<Expr>) -> Vec<String> {
-    match selection.as_ref().map(|expr| vec![expr_to_string(expr)]) {
-        Some(v) => v,
-        None => Vec::new(),
-    }
+    selection
+        .as_ref()
+        .map(|expr| vec![expr_to_string(expr)])
+        .unwrap_or_default()
 }
 
 pub(crate) fn is_range_predicate(selection: &Option<Expr>) -> bool {

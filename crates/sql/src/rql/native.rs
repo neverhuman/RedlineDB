@@ -135,13 +135,12 @@ pub(super) fn native_select_shape_supported(schema: &SchemaSnapshot, select: &Rq
     if !select.group_by.is_empty() && !projection_has_aggregate {
         return false;
     }
-    if let Some(having) = &select.having {
-        if tables.is_empty()
+    if let Some(having) = &select.having
+        && (tables.is_empty()
             || !projection_has_aggregate
-            || !native_select_aggregate_clause_expr_supported(&tables, &select.group_by, having)
-        {
-            return false;
-        }
+            || !native_select_aggregate_clause_expr_supported(&tables, &select.group_by, having))
+    {
+        return false;
     }
     if projection_has_aggregate
         && (tables.is_empty()

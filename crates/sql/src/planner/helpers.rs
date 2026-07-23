@@ -190,10 +190,10 @@ pub(crate) fn column_ordinal_for_table(name: &str, table: &TableDef) -> Option<u
 }
 
 pub(crate) fn eval_constant(expr: &Expr, bindings: &[Option<SqlValue>]) -> Option<SqlValue> {
-    if let Expr::Value(v) = expr {
-        if let Some(name) = crate::parser::bind::as_bind_name(&v.value) {
-            return crate::parser::bind::resolve_positional(name, bindings);
-        }
+    if let Expr::Value(v) = expr
+        && let Some(name) = crate::parser::bind::as_bind_name(&v.value)
+    {
+        return crate::parser::bind::resolve_positional(name, bindings);
     }
     match expr {
         Expr::Value(v) => Some(match &v.value {

@@ -51,25 +51,10 @@ jobs:
           toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
-      - name: Install mold linker
-        run: sudo apt-get install -y mold
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --locked --version 0.19.8
-      - name: Install gitleaks
+      - name: Verify sealed security inputs
         run: |
-          set -euo pipefail
-          source ops/ci/lib.sh
-          ci_install_gitleaks
-      - name: Install actionlint (workflow linter)
-        run: |
-          curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
-            | tar -xz -C /usr/local/bin actionlint
-      - name: Install syft (SBOM generator)
-        run: |
-          curl -sSL https://github.com/anchore/syft/releases/download/v1.10.0/syft_1.10.0_linux_amd64.tar.gz \
-            | tar -xz -C /usr/local/bin syft
+          bash ops/ci/governed-security-inputs-test.sh
+          bash ops/ci/pinned-rustsec-test.sh
       - name: Prepare accepted baseline
         run: |
           set -euo pipefail
@@ -206,23 +191,10 @@ jobs:
           toolchain: 1.95.0
           components: rustfmt, clippy
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --locked --version 0.19.8
-      - name: Install gitleaks
+      - name: Verify sealed security inputs
         run: |
-          set -euo pipefail
-          source ops/ci/lib.sh
-          ci_install_gitleaks
-      - name: Install actionlint (workflow linter)
-        run: |
-          curl -sSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
-            | tar -xz -C /usr/local/bin actionlint
-      - name: Install syft (SBOM generator)
-        run: |
-          curl -sSL https://github.com/anchore/syft/releases/download/v1.10.0/syft_1.10.0_linux_amd64.tar.gz \
-            | tar -xz -C /usr/local/bin syft
+          bash ops/ci/governed-security-inputs-test.sh
+          bash ops/ci/pinned-rustsec-test.sh
       # Thin dispatcher: all supply-chain logic lives in ops/ci/security.sh
       # so CI and local (`scripts/ci-local.sh security`, `just security`)
       # run identical hard-gated commands and preserve their evidence logs.
@@ -245,7 +217,5 @@ jobs:
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with:
           toolchain: 1.95.0
-      - name: Install cargo-deny
-        run: cargo install cargo-deny --locked --version 0.19.8
       - name: dependency-review lane (ops/ci/dependency-review.sh)
         run: bash ops/ci/dependency-review.sh

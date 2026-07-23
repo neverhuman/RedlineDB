@@ -3,7 +3,9 @@ use std::sync::Arc;
 use crate::format::{Csn, RelId};
 use crate::{Error, Result};
 
-use super::super::codec::{BytesReader, BytesWriter, frame_snapshot, parse_header};
+use super::super::codec::{
+    BytesReader, BytesWriter, FrameValidation, frame_snapshot, parse_header,
+};
 use super::super::ids::{IndexId, TableId};
 use super::super::value::OwnedValue;
 use super::{HistogramBucket, IndexStats, MostCommonValue, StatsSnapshot, TableStats};
@@ -16,13 +18,15 @@ pub(super) fn encode_snapshot_file(snapshot: &StatsSnapshot) -> Result<Vec<u8>> 
 pub(super) fn decode_snapshot_file(bytes: &[u8]) -> Result<StatsSnapshot> {
     let frame = parse_header(
         bytes,
-        MAGIC,
-        Error::CatalogCorrupt("stats snapshot file too small"),
-        Error::CatalogCorrupt("stats snapshot magic mismatch"),
-        Error::CatalogCorrupt("stats snapshot length overflow"),
-        Error::CatalogCorrupt("stats snapshot length mismatch"),
-        VERSION,
-        Error::UnsupportedVersion,
+        FrameValidation {
+            magic: MAGIC,
+            expected_version: VERSION,
+            file_too_small: Error::CatalogCorrupt("stats snapshot file too small"),
+            magic_mismatch: Error::CatalogCorrupt("stats snapshot magic mismatch"),
+            length_overflow: Error::CatalogCorrupt("stats snapshot length overflow"),
+            length_mismatch: Error::CatalogCorrupt("stats snapshot length mismatch"),
+            invalid_version: Error::UnsupportedVersion,
+        },
     )?;
     super::decode_snapshot(frame.payload)
 }

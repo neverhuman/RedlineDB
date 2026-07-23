@@ -587,7 +587,7 @@ fn normalize_dml_value(expr: Expr, params: &mut ParamLayout) -> Result<DmlValue>
     if is_default_dml_expr(&expr) {
         return Ok(DmlValue::Default);
     }
-    Ok(DmlValue::Expr(normalize_expr(expr, params)?))
+    Ok(DmlValue::Expr(Box::new(normalize_expr(expr, params)?)))
 }
 
 fn is_default_dml_expr(expr: &Expr) -> bool {

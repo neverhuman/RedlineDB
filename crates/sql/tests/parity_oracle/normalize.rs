@@ -82,10 +82,10 @@ fn row_key(row: &[SqlValue]) -> String {
 }
 
 /// Sort rows lexicographically when the SQL has no top-level `ORDER BY`.
-pub fn maybe_sort(sql: &str, rows: &mut Vec<Vec<SqlValue>>) {
+pub fn maybe_sort(sql: &str, rows: &mut [Vec<SqlValue>]) {
     let upper = sql.to_ascii_uppercase();
     if !upper.contains("ORDER BY") {
-        rows.sort_by(|a, b| row_key(a).cmp(&row_key(b)));
+        rows.sort_by_key(|a| row_key(a));
     }
 }
 

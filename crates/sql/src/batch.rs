@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 use std::{
     fs,
     path::{Path, PathBuf},
@@ -129,11 +129,10 @@ impl QueryMemoryBroker {
         if self.spill_path.is_some() {
             return Ok(());
         }
-        let stamp = match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(d) => d,
-            Err(_) => Duration::default(),
-        }
-        .as_nanos();
+        let stamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
         let seq = QUERY_SPILL_COUNTER.fetch_add(1, Ordering::Relaxed);
         let path =
             crate::exec::vec::spill::spill_path(&self.spill_root, &format!("query-{stamp}-{seq}"));

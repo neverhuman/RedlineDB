@@ -301,15 +301,15 @@ pub fn archive(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String
         }
         return Ok(DotOutcome::Ok);
     }
-    if has_arg(args, "--list") {
-        if let Some(path) = &file {
-            let text = fs::read_to_string(path).unwrap_or_default();
-            for line in text.lines().filter(|line| !line.is_empty()) {
-                state
-                    .output
-                    .write_line(line)
-                    .map_err(|err| err.to_string())?;
-            }
+    if has_arg(args, "--list")
+        && let Some(path) = &file
+    {
+        let text = fs::read_to_string(path).unwrap_or_default();
+        for line in text.lines().filter(|line| !line.is_empty()) {
+            state
+                .output
+                .write_line(line)
+                .map_err(|err| err.to_string())?;
         }
     }
     Ok(DotOutcome::Ok)
@@ -563,7 +563,7 @@ fn escape(value: &str) -> String {
 }
 
 fn has_arg(args: &[&str], name: &str) -> bool {
-    args.iter().any(|arg| *arg == name)
+    args.contains(&name)
 }
 
 fn option_value<'a>(args: &'a [&str], name: &str) -> Option<&'a str> {

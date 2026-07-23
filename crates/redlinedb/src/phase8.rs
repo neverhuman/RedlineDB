@@ -180,6 +180,7 @@ pub fn backup_physical_to_path(
     options: PhysicalBackupOptions,
 ) -> Result<PhysicalBackupStats> {
     let start = Instant::now();
+    crate::storage_format::inspect_storage_format(db.path())?;
     db.checkpoint()?;
     let src = db.path();
     let identity = load_identity_or_init(src)?;
@@ -262,6 +263,7 @@ pub fn restore_from_backup(
     for rel in &manifest.files {
         bytes_copied += copy_file(src, dst, &PathBuf::from(rel))?;
     }
+    let restored_storage_format = crate::storage_format::inspect_storage_format(dst)?;
     let mut restored_identity = load_identity_or_init(dst)?;
     restored_identity.db_id = next_db_id();
     if !options.preserve_timeline {
@@ -286,6 +288,9 @@ pub fn restore_from_backup(
     sql_opts.engine.data_file_name = "data.redline".to_owned();
     let _reopened =
         redlinedb_sql::Database::open_with_recovery_target(dst, sql_opts, recovery_target)?;
+    if restored_storage_format == crate::storage_format::StorageFormatState::LegacyGenerationOne {
+        crate::storage_format::persist_current_storage_format(dst)?;
+    }
 
     write_text_atomic(&phase8_path(dst).join(RESTORE_COMPLETE_FILE), "ok\n")?;
     Ok(RestoreStats {

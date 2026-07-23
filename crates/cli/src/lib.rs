@@ -230,7 +230,7 @@ pub fn run() {
     // the subsequent Clap parse, flag resolution, and DB setup.
     {
         let is_batch = matches!(
-            raw_args.get(0).map(String::as_str),
+            raw_args.first().map(String::as_str),
             Some("-batch") | Some("--batch")
         );
         let is_bail = matches!(
@@ -424,13 +424,15 @@ pub fn run() {
                 && let Ok(true) = run_readonly_sidecar(
                     &filename,
                     &cli.sql,
-                    mode,
-                    &separator,
-                    show_header,
-                    flag_state.null_value.as_deref(),
-                    None,
-                    cli.bail,
-                    cli.echo,
+                    ReadonlySidecarOptions {
+                        mode,
+                        separator: &separator,
+                        show_header,
+                        null_value: flag_state.null_value.as_deref(),
+                        newline: None,
+                        bail: cli.bail,
+                        echo: cli.echo,
+                    },
                 )
             {
                 return;
@@ -474,11 +476,11 @@ pub fn run() {
         }
     }
 
-    if let Some(init) = cli.init {
-        if let Err(e) = run_script_file(&mut state, &PathBuf::from(init)) {
-            eprintln!("{e}");
-            exit(1);
-        }
+    if let Some(init) = cli.init
+        && let Err(e) = run_script_file(&mut state, &PathBuf::from(init))
+    {
+        eprintln!("{e}");
+        exit(1);
     }
 
     if cli.rql {
@@ -644,10 +646,11 @@ fn run_input(state: &mut CliState, input: &str) -> Result<(), String> {
             execute_sql_chunk(state, &mut sql_chunk)?;
             continue;
         }
-        if raw_line.trim_start().starts_with('.') {
-            if !sql_chunk.trim().is_empty() && redlinedb::sql_input_complete(&sql_chunk) {
-                execute_sql_chunk(state, &mut sql_chunk)?;
-            }
+        if raw_line.trim_start().starts_with('.')
+            && !sql_chunk.trim().is_empty()
+            && redlinedb::sql_input_complete(&sql_chunk)
+        {
+            execute_sql_chunk(state, &mut sql_chunk)?;
         }
         if sql_chunk.trim().is_empty() && raw_line.trim_start().starts_with('.') {
             // sqlite3 echoes every executed input line (including dot
@@ -800,7 +803,7 @@ fn readonly_sidecar_path(db_path: &std::path::Path) -> PathBuf {
 }
 
 fn write_readonly_sidecar(state: &mut CliState) -> Result<(), String> {
-    if state.db_path == PathBuf::from(":memory:") {
+    if state.db_path.as_path() == std::path::Path::new(":memory:") {
         return Ok(());
     }
     let sidecar = readonly_sidecar_path(&state.db_path);
@@ -814,16 +817,20 @@ fn write_readonly_sidecar(state: &mut CliState) -> Result<(), String> {
     result.and(flush_result)
 }
 
+struct ReadonlySidecarOptions<'a> {
+    mode: OutputMode,
+    separator: &'a str,
+    show_header: bool,
+    null_value: Option<&'a str>,
+    newline: Option<&'a str>,
+    bail: bool,
+    echo: bool,
+}
+
 fn run_readonly_sidecar(
     filename: &str,
     sql_args: &[String],
-    mode: OutputMode,
-    separator: &str,
-    show_header: bool,
-    nullvalue: Option<&str>,
-    newline: Option<&str>,
-    bail: bool,
-    echo: bool,
+    options: ReadonlySidecarOptions<'_>,
 ) -> Result<bool, String> {
     let sidecar = readonly_sidecar_path(std::path::Path::new(filename));
     if !sidecar.exists() {
@@ -833,18 +840,18 @@ fn run_readonly_sidecar(
     let mut state = CliState::new(
         db,
         PathBuf::from(filename),
-        mode,
-        separator.to_owned(),
-        show_header,
+        options.mode,
+        options.separator.to_owned(),
+        options.show_header,
     )?;
-    if let Some(nullvalue) = nullvalue {
+    if let Some(nullvalue) = options.null_value {
         state.null_value = nullvalue.to_owned();
     }
-    if let Some(newline) = newline {
+    if let Some(newline) = options.newline {
         state.row_separator = newline.to_owned();
     }
-    state.bail = bail;
-    state.echo = echo;
+    state.bail = options.bail;
+    state.echo = options.echo;
     run_script_file(&mut state, &sidecar)?;
     run_input(&mut state, &sql_args.join("\n"))?;
     if state.had_error {
@@ -1231,17 +1238,7 @@ fn run_query_writer<W: Write>(
                 }
                 rows.push(row);
             }
-            render_query(
-                out,
-                options.mode,
-                &options.separator,
-                options.show_header,
-                &options.null_value,
-                &options.insert_table_name,
-                &options.widths,
-                &column_names,
-                &rows,
-            )?;
+            render_query(out, options, &column_names, &rows)?;
         }
         if options.changes {
             // sqlite3 only counts row-mutating statements (INSERT / UPDATE
@@ -1332,17 +1329,7 @@ fn run_rql_writer<W: Write>(
                 }
                 rows.push(row);
             }
-            render_query(
-                out,
-                options.mode,
-                &options.separator,
-                options.show_header,
-                &options.null_value,
-                &options.insert_table_name,
-                &options.widths,
-                &column_names,
-                &rows,
-            )?;
+            render_query(out, options, &column_names, &rows)?;
         }
         if options.changes {
             let n = if rql_statement_changes_rows(statement) {

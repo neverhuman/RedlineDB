@@ -296,10 +296,12 @@ pub(crate) fn execute_update(
                 tx,
                 &plan.table,
                 redlinedb_kernel::catalog::TriggerTimeKind::Before,
-                fresh.rowid,
-                new_rowid,
-                &old_values,
-                &values,
+                UpdateTriggerRows {
+                    old_rowid: fresh.rowid,
+                    new_rowid,
+                    old_values,
+                    new_values: &values,
+                },
                 &plan.assignments,
             )?;
             apply_constraints(&plan.table, &values)?;
@@ -326,7 +328,7 @@ pub(crate) fn execute_update(
                 conn.engine(),
                 tx,
                 &plan.table,
-                &old_values,
+                old_values,
                 &values,
                 fresh.rowid,
                 new_rowid,
@@ -347,7 +349,7 @@ pub(crate) fn execute_update(
                 session,
                 tx,
                 &plan.table,
-                &old_values,
+                old_values,
                 &values,
             )?;
             fire_update_triggers(
@@ -355,10 +357,12 @@ pub(crate) fn execute_update(
                 tx,
                 &plan.table,
                 redlinedb_kernel::catalog::TriggerTimeKind::After,
-                fresh.rowid,
-                new_rowid,
-                &old_values,
-                &values,
+                UpdateTriggerRows {
+                    old_rowid: fresh.rowid,
+                    new_rowid,
+                    old_values,
+                    new_values: &values,
+                },
                 &plan.assignments,
             )?;
             if let Some(returning) = &plan.returning {
@@ -394,15 +398,19 @@ pub(crate) fn execute_update(
 /// drives the `UPDATE OF cols` filter so triggers declared to fire on a
 /// specific column set are skipped when none of those columns appear in
 /// the SET list.
+struct UpdateTriggerRows<'a> {
+    old_rowid: redlinedb_kernel::format::RowId,
+    new_rowid: redlinedb_kernel::format::RowId,
+    old_values: &'a [SqlValue],
+    new_values: &'a [SqlValue],
+}
+
 fn fire_update_triggers(
     conn: &Connection,
     tx: &mut redlinedb_kernel::engine::Txn,
     table: &Arc<redlinedb_kernel::catalog::TableDef>,
     time: redlinedb_kernel::catalog::TriggerTimeKind,
-    old_rowid: redlinedb_kernel::format::RowId,
-    new_rowid: redlinedb_kernel::format::RowId,
-    old_values: &[SqlValue],
-    new_values: &[SqlValue],
+    rows: UpdateTriggerRows<'_>,
     assignments: &[(usize, DmlValue)],
 ) -> Result<()> {
     let schema = conn.engine().schema_snapshot();
@@ -419,18 +427,20 @@ fn fire_update_triggers(
         conn,
         tx,
         &schema,
-        table,
-        redlinedb_kernel::catalog::TriggerEventKind::Update,
-        time,
-        Some(crate::exec::trigger::TriggerRowValues {
-            rowid: old_rowid,
-            values: old_values.to_vec(),
-        }),
-        Some(crate::exec::trigger::TriggerRowValues {
-            rowid: new_rowid,
-            values: new_values.to_vec(),
-        }),
-        Some(&changed_cols),
+        crate::exec::trigger::TriggerInvocation {
+            table,
+            event: redlinedb_kernel::catalog::TriggerEventKind::Update,
+            time,
+            old: Some(crate::exec::trigger::TriggerRowValues {
+                rowid: rows.old_rowid,
+                values: rows.old_values.to_vec(),
+            }),
+            new: Some(crate::exec::trigger::TriggerRowValues {
+                rowid: rows.new_rowid,
+                values: rows.new_values.to_vec(),
+            }),
+            changed_cols: Some(&changed_cols),
+        },
     )
 }
 
@@ -448,15 +458,17 @@ fn fire_delete_triggers(
         conn,
         tx,
         &schema,
-        table,
-        redlinedb_kernel::catalog::TriggerEventKind::Delete,
-        redlinedb_kernel::catalog::TriggerTimeKind::After,
-        Some(crate::exec::trigger::TriggerRowValues {
-            rowid,
-            values: values.to_vec(),
-        }),
-        None,
-        None,
+        crate::exec::trigger::TriggerInvocation {
+            table,
+            event: redlinedb_kernel::catalog::TriggerEventKind::Delete,
+            time: redlinedb_kernel::catalog::TriggerTimeKind::After,
+            old: Some(crate::exec::trigger::TriggerRowValues {
+                rowid,
+                values: values.to_vec(),
+            }),
+            new: None,
+            changed_cols: None,
+        },
     )
 }
 
@@ -472,15 +484,17 @@ fn fire_before_delete_triggers(
         conn,
         tx,
         &schema,
-        table,
-        redlinedb_kernel::catalog::TriggerEventKind::Delete,
-        redlinedb_kernel::catalog::TriggerTimeKind::Before,
-        Some(crate::exec::trigger::TriggerRowValues {
-            rowid,
-            values: values.to_vec(),
-        }),
-        None,
-        None,
+        crate::exec::trigger::TriggerInvocation {
+            table,
+            event: redlinedb_kernel::catalog::TriggerEventKind::Delete,
+            time: redlinedb_kernel::catalog::TriggerTimeKind::Before,
+            old: Some(crate::exec::trigger::TriggerRowValues {
+                rowid,
+                values: values.to_vec(),
+            }),
+            new: None,
+            changed_cols: None,
+        },
     )
 }
 

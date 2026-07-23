@@ -99,20 +99,20 @@ fn dispatch_from_sql(db_addr: usize, name: &str, a: &str, b: &str) -> Option<std
 
 fn invoke_needed(db: *mut rldb, name: &str) {
     let needed = NEEDED_CB.lock().expect("needed cb poisoned");
-    if let Some(entry) = *needed {
-        if let Ok(cstr) = std::ffi::CString::new(name) {
-            let user_data = entry.user_data as *mut c_void;
-            // SAFETY: callback signature matches the FFI ABI for
-            // sqlite3_collation_needed; user_data is the pointer the
-            // registrar provided (stored as usize, cast back here) and
-            // remains valid for the lifetime guaranteed by the SQLite ABI;
-            // cstr lives for the entire call; ledgered at
-            // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/collation.rs,
-            // line=184, detector=rust.unsafe.extern-fn).
-            unsafe {
-                // SAFETY: see the documented FFI-ABI callback invariant above.
-                (entry.cb)(user_data, db, 1 /* SQLITE_UTF8 */, cstr.as_ptr());
-            }
+    if let Some(entry) = *needed
+        && let Ok(cstr) = std::ffi::CString::new(name)
+    {
+        let user_data = entry.user_data as *mut c_void;
+        // SAFETY: callback signature matches the FFI ABI for
+        // sqlite3_collation_needed; user_data is the pointer the
+        // registrar provided (stored as usize, cast back here) and
+        // remains valid for the lifetime guaranteed by the SQLite ABI;
+        // cstr lives for the entire call; ledgered at
+        // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/collation.rs,
+        // line=184, detector=rust.unsafe.extern-fn).
+        unsafe {
+            // SAFETY: see the documented FFI-ABI callback invariant above.
+            (entry.cb)(user_data, db, 1 /* SQLITE_UTF8 */, cstr.as_ptr());
         }
     }
 }

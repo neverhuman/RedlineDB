@@ -37,7 +37,7 @@ impl StatementCache {
         let shard_count = if capacity == 0 {
             1
         } else {
-            capacity.min(64).max(1)
+            capacity.clamp(1, 64)
         };
         let hasher = RandomState::new();
         let mut shards = Vec::with_capacity(shard_count);

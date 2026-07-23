@@ -184,20 +184,20 @@ pub(crate) fn strip_sqlite_table_index_hints(sql: &str) -> Result<String> {
                 let end = quoted_end(bytes, i, bytes[i]);
                 // Quoted identifiers can be table aliases — record the
                 // payload (without quotes) for the hint-binding step.
-                if end > i + 1 {
-                    if let Ok(inner) = std::str::from_utf8(&bytes[i + 1..end - 1]) {
-                        last_ident = Some(inner.to_owned());
-                    }
+                if end > i + 1
+                    && let Ok(inner) = std::str::from_utf8(&bytes[i + 1..end - 1])
+                {
+                    last_ident = Some(inner.to_owned());
                 }
                 out.push_str(&sql[i..end]);
                 i = end;
             }
             b'[' => {
                 let end = bracket_quoted_end(bytes, i);
-                if end > i + 1 {
-                    if let Ok(inner) = std::str::from_utf8(&bytes[i + 1..end - 1]) {
-                        last_ident = Some(inner.to_owned());
-                    }
+                if end > i + 1
+                    && let Ok(inner) = std::str::from_utf8(&bytes[i + 1..end - 1])
+                {
+                    last_ident = Some(inner.to_owned());
                 }
                 out.push_str(&sql[i..end]);
                 i = end;

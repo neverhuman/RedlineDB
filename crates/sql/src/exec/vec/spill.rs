@@ -25,11 +25,10 @@ pub const SPILL_BLOCK_BYTES: usize = 64 * 1024;
 static SPILL_FILE_COUNTER: AtomicU64 = AtomicU64::new(1);
 
 pub(crate) fn spill_path(root: &Path, label: &str) -> PathBuf {
-    let stamp = match SystemTime::now().duration_since(UNIX_EPOCH) {
-        Ok(d) => d,
-        Err(_) => Duration::default(),
-    }
-    .as_nanos();
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
     let seq = SPILL_FILE_COUNTER.fetch_add(1, Ordering::Relaxed);
     root.join(format!("redline-ve-{label}-{stamp}-{seq}.spill"))
 }

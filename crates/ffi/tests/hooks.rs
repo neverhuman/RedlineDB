@@ -352,5 +352,5 @@ fn exec_walk_invokes_trace_profile_commit_hooks() {
     let _ = COMMIT_COUNT.load(Ordering::Relaxed);
     rldb_close(db);
     // Silence unused imports under cfg.
-    let _ = (Arc::new(0u8), CStr::from_bytes_with_nul(b"\0").ok());
+    let _ = (Arc::new(0u8), c"");
 }

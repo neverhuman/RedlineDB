@@ -5,16 +5,19 @@
 //! dispatcher in `udf.rs` when materialising a SQL row of arguments), then
 //! handed to C as `*mut RldbValue` for read-only inspection.
 
+use std::collections::HashMap;
 use std::ffi::CString;
 use std::os::raw::{c_int, c_uchar, c_uint, c_void};
 use std::ptr;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, LazyLock, Mutex};
 
 use redlinedb_sql::value::SqlValue;
 
 use crate::types::*;
 
-static DUP_VALUES: Mutex<Vec<Box<RldbValue>>> = Mutex::new(Vec::new());
+type DuplicatedValues = HashMap<usize, Box<RldbValue>>;
+
+static DUP_VALUES: LazyLock<Mutex<DuplicatedValues>> = LazyLock::new(|| Mutex::new(HashMap::new()));
 
 /// Opaque value type backing the C `sqlite3_value*` opaque pointer.
 ///
@@ -219,7 +222,7 @@ pub unsafe extern "C" fn sqlite3_value_dup(value: *mut RldbValue) -> *mut RldbVa
     let duplicate_ptr = duplicate.as_mut() as *mut RldbValue;
     match DUP_VALUES.lock() {
         Ok(mut values) => {
-            values.push(duplicate);
+            values.insert(duplicate_ptr as usize, duplicate);
             duplicate_ptr
         }
         Err(_) => ptr::null_mut(),
@@ -235,12 +238,7 @@ pub unsafe extern "C" fn sqlite3_value_free(value: *mut RldbValue) {
     }
     let target = value as usize;
     if let Ok(mut values) = DUP_VALUES.lock() {
-        if let Some(index) = values
-            .iter()
-            .position(|stored| stored.as_ref() as *const RldbValue as usize == target)
-        {
-            values.swap_remove(index);
-        }
+        values.remove(&target);
     }
 }
 

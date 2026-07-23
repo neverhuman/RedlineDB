@@ -211,11 +211,11 @@ pub unsafe extern "C" fn sqlite3_set_auxdata(
         }
         return;
     };
-    if let Some(previous) = aux_data.remove(&index) {
-        if let Some(destructor) = previous.destructor {
-            // SAFETY: paired with the previous sqlite3_set_auxdata call.
-            unsafe { destructor(previous.ptr_addr as *mut c_void) };
-        }
+    if let Some(previous) = aux_data.remove(&index)
+        && let Some(destructor) = previous.destructor
+    {
+        // SAFETY: paired with the previous sqlite3_set_auxdata call.
+        unsafe { destructor(previous.ptr_addr as *mut c_void) };
     }
     if data.is_null() {
         return;

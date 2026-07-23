@@ -284,7 +284,7 @@ impl sqlx::column::ColumnIndex<RedlineStatement<'_>> for usize {
     }
 }
 
-impl<'i> sqlx::column::ColumnIndex<RedlineStatement<'_>> for &'i str {
+impl sqlx::column::ColumnIndex<RedlineStatement<'_>> for &str {
     fn index(&self, statement: &RedlineStatement<'_>) -> Result<usize, Error> {
         statement
             .column_names
@@ -333,7 +333,7 @@ impl Row for RedlineRow {
     }
 }
 
-impl<'i> sqlx::column::ColumnIndex<RedlineRow> for &'i str {
+impl sqlx::column::ColumnIndex<RedlineRow> for &str {
     fn index(&self, row: &RedlineRow) -> Result<usize, Error> {
         row.columns
             .iter()
@@ -428,11 +428,11 @@ impl TransactionManager for RedlineTransactionManager {
 
     fn start_rollback(conn: &mut RedlineConnection) {
         let state = Arc::clone(&conn.state);
-        let _ = tokio::task::spawn_blocking(move || {
+        std::mem::drop(tokio::task::spawn_blocking(move || {
             if let Ok(mut guard) = state.lock() {
                 let _ = guard.conn.rollback();
             }
-        });
+        }));
     }
 
     fn get_transaction_depth(conn: &<Self::Database as Database>::Connection) -> usize {

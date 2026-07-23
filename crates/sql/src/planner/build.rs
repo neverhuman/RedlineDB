@@ -14,13 +14,15 @@ pub(crate) fn build_select_plan(
     let mut base = match &plan.source {
         SelectSource::Table(table) => build_table_scan_plan(
             conn,
-            table,
-            &plan.projection,
-            &plan.selection,
-            &plan.order_by,
-            bindings,
-            &optimizer,
-            plan.table_hint.as_ref(),
+            TableScanRequest {
+                table,
+                projection: &plan.projection,
+                selection: &plan.selection,
+                order_by: &plan.order_by,
+                bindings,
+                optimizer: &optimizer,
+                table_hint: plan.table_hint.as_ref(),
+            },
         ),
         SelectSource::Tables(tables) => {
             build_join_plan(conn, tables, &plan.selection, bindings, &optimizer)
@@ -136,93 +138,29 @@ pub(crate) fn build_select_plan(
     base
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::connection::{Database, DbOptions};
-    use crate::planner::access_path::{planner_use_access_path, set_planner_use_access_path};
-    use crate::statement::PreparedKind;
-
-    fn select_plan(conn: &Arc<Connection>, sql: &str) -> SelectPlan {
-        let stmt = conn.prepare(sql).expect("prepare");
-        match &stmt.template().kind {
-            PreparedKind::Select(plan) => plan.clone(),
-            other => panic!("expected SELECT plan, got {other:?}"),
-        }
-    }
-
-    fn index_child_limit(plan: &PhysicalPlan) -> Option<usize> {
-        let [child] = plan.children.as_slice() else {
-            panic!("expected LIMIT over one child, got {plan:?}");
-        };
-        let index = match child.kind {
-            PhysicalKind::IndexScan => child,
-            PhysicalKind::Project => {
-                let [project_child] = child.children.as_slice() else {
-                    panic!("expected PROJECT over one child, got {child:?}");
-                };
-                assert!(matches!(project_child.kind, PhysicalKind::IndexScan));
-                project_child
-            }
-            _ => panic!("expected LIMIT over IndexScan or Project, got {child:?}"),
-        };
-        index.ordered_index_scan_limit
-    }
-
-    fn with_access_path_gate<T>(value: bool, f: impl FnOnce() -> T) -> T {
-        let prev = planner_use_access_path();
-        set_planner_use_access_path(value);
-        let out = f();
-        set_planner_use_access_path(prev);
-        out
-    }
-
-    #[test]
-    fn access_path_limit_pushdown_refuses_residual_predicate() {
-        let conn = Database::create_in_memory(DbOptions::default())
-            .expect("db")
-            .connect();
-        conn.execute("CREATE TABLE t(tenant INTEGER, k INTEGER, keep INTEGER)")
-            .expect("create");
-        conn.execute("CREATE INDEX t_tk ON t(tenant, k)")
-            .expect("index");
-        let select = select_plan(
-            &conn,
-            "SELECT k FROM t WHERE tenant = 1 AND keep = 1 ORDER BY k LIMIT 3",
-        );
-        with_access_path_gate(true, || {
-            let physical = build_select_plan(&conn, &select, &[]);
-            assert_eq!(index_child_limit(&physical), None);
-        });
-    }
-
-    #[test]
-    fn access_path_limit_pushdown_keeps_residual_free_ordered_scan() {
-        let conn = Database::create_in_memory(DbOptions::default())
-            .expect("db")
-            .connect();
-        conn.execute("CREATE TABLE t(tenant INTEGER, k INTEGER, v INTEGER)")
-            .expect("create");
-        conn.execute("CREATE INDEX t_tk ON t(tenant, k)")
-            .expect("index");
-        let select = select_plan(&conn, "SELECT k FROM t WHERE tenant = 1 ORDER BY k LIMIT 3");
-        with_access_path_gate(true, || {
-            let physical = build_select_plan(&conn, &select, &[]);
-            assert_eq!(index_child_limit(&physical), Some(3));
-        });
-    }
+pub(crate) struct TableScanRequest<'a> {
+    pub(crate) table: &'a Arc<TableDef>,
+    pub(crate) projection: &'a [SelectItem],
+    pub(crate) selection: &'a Option<Expr>,
+    pub(crate) order_by: &'a [OrderByExpr],
+    pub(crate) bindings: &'a [Option<SqlValue>],
+    pub(crate) optimizer: &'a OptimizerConfig,
+    pub(crate) table_hint: Option<&'a crate::statement::TableAccessHint>,
 }
 
 pub(crate) fn build_table_scan_plan(
     conn: &Connection,
-    table: &Arc<TableDef>,
-    projection: &[SelectItem],
-    selection: &Option<Expr>,
-    order_by: &[OrderByExpr],
-    bindings: &[Option<SqlValue>],
-    optimizer: &OptimizerConfig,
-    table_hint: Option<&crate::statement::TableAccessHint>,
+    request: TableScanRequest<'_>,
 ) -> PhysicalPlan {
+    let TableScanRequest {
+        table,
+        projection,
+        selection,
+        order_by,
+        bindings,
+        optimizer,
+        table_hint,
+    } = request;
     let stats = conn.stats_snapshot();
     let table_stats = stats.tables.get(&table.table_id);
     let row_estimate = estimate_table_rows(table_stats);
@@ -365,12 +303,14 @@ fn access_path_satisfies_ordering(
         let ir = choose_access_path_ir(
             conn.engine(),
             table,
-            &[], // covering detection not needed for order-satisfaction check
-            selection,
-            bindings,
-            table_hint,
-            order_by,
-            None,
+            access_path::AccessPathRequest {
+                projection: &[], // covering detection not needed for order-satisfaction check
+                selection,
+                bindings,
+                hint: table_hint,
+                requested_order: order_by,
+                requested_limit: None,
+            },
         );
         return ir.order_satisfies(order_by);
     }
@@ -423,5 +363,82 @@ pub(crate) fn access_plan_to_node(
                 .collect();
             node
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::connection::{Database, DbOptions};
+    use crate::planner::access_path::{planner_use_access_path, set_planner_use_access_path};
+    use crate::statement::PreparedKind;
+
+    fn select_plan(conn: &Arc<Connection>, sql: &str) -> SelectPlan {
+        let stmt = conn.prepare(sql).expect("prepare");
+        match &stmt.template().kind {
+            PreparedKind::Select(plan) => plan.clone(),
+            other => panic!("expected SELECT plan, got {other:?}"),
+        }
+    }
+
+    fn index_child_limit(plan: &PhysicalPlan) -> Option<usize> {
+        let [child] = plan.children.as_slice() else {
+            panic!("expected LIMIT over one child, got {plan:?}");
+        };
+        let index = match child.kind {
+            PhysicalKind::IndexScan => child,
+            PhysicalKind::Project => {
+                let [project_child] = child.children.as_slice() else {
+                    panic!("expected PROJECT over one child, got {child:?}");
+                };
+                assert!(matches!(project_child.kind, PhysicalKind::IndexScan));
+                project_child
+            }
+            _ => panic!("expected LIMIT over IndexScan or Project, got {child:?}"),
+        };
+        index.ordered_index_scan_limit
+    }
+
+    fn with_access_path_gate<T>(value: bool, f: impl FnOnce() -> T) -> T {
+        let prev = planner_use_access_path();
+        set_planner_use_access_path(value);
+        let out = f();
+        set_planner_use_access_path(prev);
+        out
+    }
+
+    #[test]
+    fn access_path_limit_pushdown_refuses_residual_predicate() {
+        let conn = Database::create_in_memory(DbOptions::default())
+            .expect("db")
+            .connect();
+        conn.execute("CREATE TABLE t(tenant INTEGER, k INTEGER, keep INTEGER)")
+            .expect("create");
+        conn.execute("CREATE INDEX t_tk ON t(tenant, k)")
+            .expect("index");
+        let select = select_plan(
+            &conn,
+            "SELECT k FROM t WHERE tenant = 1 AND keep = 1 ORDER BY k LIMIT 3",
+        );
+        with_access_path_gate(true, || {
+            let physical = build_select_plan(&conn, &select, &[]);
+            assert_eq!(index_child_limit(&physical), None);
+        });
+    }
+
+    #[test]
+    fn access_path_limit_pushdown_keeps_residual_free_ordered_scan() {
+        let conn = Database::create_in_memory(DbOptions::default())
+            .expect("db")
+            .connect();
+        conn.execute("CREATE TABLE t(tenant INTEGER, k INTEGER, v INTEGER)")
+            .expect("create");
+        conn.execute("CREATE INDEX t_tk ON t(tenant, k)")
+            .expect("index");
+        let select = select_plan(&conn, "SELECT k FROM t WHERE tenant = 1 ORDER BY k LIMIT 3");
+        with_access_path_gate(true, || {
+            let physical = build_select_plan(&conn, &select, &[]);
+            assert_eq!(index_child_limit(&physical), Some(3));
+        });
     }
 }

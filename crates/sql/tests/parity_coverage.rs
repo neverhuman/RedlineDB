@@ -544,10 +544,13 @@ fn sqlite_cast_numeric_returns_numeric_storage_class() {
     );
     assert_eq!(q1(&c, "SELECT CAST(5 AS NUMERIC)"), SqlValue::Integer(5));
     assert_eq!(
-        q1(&c, "SELECT typeof(CAST(3.14 AS NUMERIC))"),
+        q1(&c, "SELECT typeof(CAST(3.125 AS NUMERIC))"),
         SqlValue::Text(Arc::from("real"))
     );
-    assert_eq!(q1(&c, "SELECT CAST(3.14 AS NUMERIC)"), SqlValue::Real(3.14));
+    assert_eq!(
+        q1(&c, "SELECT CAST(3.125 AS NUMERIC)"),
+        SqlValue::Real(3.125)
+    );
 }
 
 #[test]

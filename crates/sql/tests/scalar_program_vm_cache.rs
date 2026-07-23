@@ -60,7 +60,6 @@ use program::{
     program_cache_len, program_cache_misses_total, reset_program_cache_counters,
     with_program_cache, with_program_cache_scope,
 };
-use redlinedb_sql::value::SqlValue;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 
 /// Process-wide serialiser for the cache-counter tests.

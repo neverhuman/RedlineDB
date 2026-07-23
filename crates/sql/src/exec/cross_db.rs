@@ -38,7 +38,7 @@ pub(crate) const CROSS_DB_RELATION_TAG: u64 = 0xCD80_0000_0000_0000;
 const RESERVED_ALIASES: &[&str] = &["main", concat!("te", "mp")];
 
 fn is_reserved_alias(lower: &str) -> bool {
-    RESERVED_ALIASES.iter().any(|reserved| *reserved == lower)
+    RESERVED_ALIASES.contains(&lower)
 }
 
 thread_local! {

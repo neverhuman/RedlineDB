@@ -128,8 +128,8 @@
       "purpose": "verify thin IDE/agent adapters stay aligned with .jankurai/JANKURAI_STANDARD.md"
     },
     ".github/workflows/": {
-      "command": "just security",
-      "purpose": "verify CI workflows lint clean and the security lane runs"
+      "command": "rtk bash ops/ci/external-release-policy-test.sh && just security",
+      "purpose": "verify CI workflows lint clean, the security lane runs, and no external release publisher reappears"
     },
     ".gitignore": {
       "command": "just score",
@@ -380,6 +380,11 @@
       "command": "rtk bash -n ops/ci/lib.sh && rtk just redline-testing-official",
       "purpose": "verify the shared CI library installs and verifies the verified redline-testing release artifact",
       "proof_lane": "redline-testing-official"
+    },
+    "ops/ci/external-release-policy-test.sh": {
+      "command": "rtk bash ops/ci/external-release-policy-test.sh",
+      "purpose": "require the retired external release workflow to remain absent and local Jeryu to remain the sole publisher",
+      "proof_lane": "security"
     },
     "ops/ci/parity.sh": {
       "command": "rtk bash -n ops/ci/parity.sh && rtk just redline-testing-official",

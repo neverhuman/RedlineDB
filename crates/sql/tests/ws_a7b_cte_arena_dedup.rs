@@ -36,7 +36,7 @@ fn union_distinct_recursive_cte_scales() {
     // dedup, plus 1500 vector clones; the AHashSet keyed on encoded
     // bytes turns each insert into O(1) amortized.
     let dir = tempdir().expect("temp dir");
-    let db = Database::create(&dir.path().join("ws_a7b_dist.db"), DbOptions::default())
+    let db = Database::create(dir.path().join("ws_a7b_dist.db"), DbOptions::default())
         .expect("create db");
     let conn = db.connect();
 
@@ -65,7 +65,7 @@ fn union_distinct_dedup_actually_dedups() {
     // for every current row (n+1 and n+1 again). UNION (no ALL) must
     // collapse them so the final result is 1..=20, exactly 20 rows.
     let dir = tempdir().expect("temp dir");
-    let db = Database::create(&dir.path().join("ws_a7b_dup.db"), DbOptions::default())
+    let db = Database::create(dir.path().join("ws_a7b_dup.db"), DbOptions::default())
         .expect("create db");
     let conn = db.connect();
     conn.execute("CREATE TABLE dups(k INTEGER)")
@@ -92,7 +92,7 @@ fn union_all_preserves_duplicates() {
     // termination we have a strictly larger multiset than the DISTINCT
     // shape would produce.
     let dir = tempdir().expect("temp dir");
-    let db = Database::create(&dir.path().join("ws_a7b_all.db"), DbOptions::default())
+    let db = Database::create(dir.path().join("ws_a7b_all.db"), DbOptions::default())
         .expect("create db");
     let conn = db.connect();
 
@@ -138,7 +138,7 @@ fn limit_pushdown_still_applies_with_arena() {
     // to confirm WS-A7's LIMIT push-down still short-circuits over the
     // new frontier-range representation.
     let dir = tempdir().expect("temp dir");
-    let db = Database::create(&dir.path().join("ws_a7b_limit.db"), DbOptions::default())
+    let db = Database::create(dir.path().join("ws_a7b_limit.db"), DbOptions::default())
         .expect("create db");
     let conn = db.connect();
 

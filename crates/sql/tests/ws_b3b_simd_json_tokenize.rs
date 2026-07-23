@@ -253,7 +253,7 @@ fn next_rand(state: &mut u64) -> u32 {
 #[test]
 fn diff_thousand_iterations_padded_vs_plain() {
     let db = Db::new();
-    let mut rng = 0xC0FFEE_BAADu64;
+    let mut rng = 0x00C0_FFEE_BAAD_u64;
     let doc = "{\"a\":1,\"b\":{\"c\":2,\"d\":3},\"e\":[10,20,30,40]}";
     let templates: [&str; 6] = ["$.a", "$.b.c", "$.b.d", "$.e[0]", "$.e[3]", "$"];
     for _ in 0..1000 {

@@ -101,14 +101,12 @@ pub(crate) fn repo_root() -> PathBuf {
     if let Ok(out) = Command::new("git")
         .args(["rev-parse", "--show-toplevel"])
         .output()
+        && out.status.success()
+        && let Ok(trimmed) = std::str::from_utf8(&out.stdout)
     {
-        if out.status.success() {
-            if let Ok(trimmed) = std::str::from_utf8(&out.stdout) {
-                let path = PathBuf::from(trimmed.trim_end_matches('\n'));
-                if !path.as_os_str().is_empty() {
-                    return path;
-                }
-            }
+        let path = PathBuf::from(trimmed.trim_end_matches('\n'));
+        if !path.as_os_str().is_empty() {
+            return path;
         }
     }
     match env::current_dir() {

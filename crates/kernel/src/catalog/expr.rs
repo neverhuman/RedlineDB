@@ -403,12 +403,11 @@ struct UtcDateTime {
 
 impl UtcDateTime {
     fn now() -> Self {
-        use std::time::{Duration, SystemTime, UNIX_EPOCH};
+        use std::time::{SystemTime, UNIX_EPOCH};
 
-        let dur = match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(dur) => dur,
-            Err(_) => Duration::default(),
-        };
+        let dur = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
         Self::from_unix(dur.as_secs() as i64)
     }
 

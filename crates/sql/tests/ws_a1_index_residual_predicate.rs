@@ -84,10 +84,8 @@ fn covering_scan_does_not_ignore_residual_predicate() {
     conn.execute("CREATE INDEX kv_ts ON kv(tenant, status)")
         .expect("idx");
     for i in 1..=5 {
-        conn.execute(&format!(
-            "INSERT INTO kv(tenant, status) VALUES (1, 'active')"
-        ))
-        .expect("insert row");
+        conn.execute("INSERT INTO kv(tenant, status) VALUES (1, 'active')")
+            .expect("insert row");
         let _ = i;
     }
     // 5 rows all (tenant=1, status='active'). Plus 5 (tenant=1, status='idle').

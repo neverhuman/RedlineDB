@@ -40,14 +40,9 @@ pub(super) fn apply_parent_action(
     match action {
         FkAction::NoAction | FkAction::Restrict => Err(fk_violation_error(child)),
         FkAction::Cascade => {
-            if new_parent.is_none() {
-                for (rowid, values) in affected {
-                    cascade_delete_child(conn, session, tx, child, *rowid, values, depth)?;
-                }
-            } else {
+            if let Some(new_parent) = new_parent {
                 let parent = lookup_parent(&conn.engine().schema_snapshot(), fk)?;
                 let parent_ords = parent_column_ordinals(&parent, fk)?;
-                let new_parent = new_parent.unwrap();
                 let new_key: Vec<SqlValue> = parent_ords
                     .iter()
                     .map(|o| {
@@ -69,6 +64,10 @@ pub(super) fn apply_parent_action(
                         &new_key,
                         depth,
                     )?;
+                }
+            } else {
+                for (rowid, values) in affected {
+                    cascade_delete_child(conn, session, tx, child, *rowid, values, depth)?;
                 }
             }
             Ok(())

@@ -38,7 +38,7 @@ pub(super) fn rewrite_drop_column_rows(
             continue;
         };
         let mut values = row.values;
-        if drop_ordinal as usize >= values.len() {
+        if drop_ordinal >= values.len() {
             return Err(Error::UnsupportedSql(
                 "ALTER TABLE DROP COLUMN rewrite hit short row payload".to_owned(),
             ));

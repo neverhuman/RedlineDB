@@ -37,12 +37,14 @@ pub(crate) fn choose_access_path(
         let ir = choose_access_path_ir(
             conn.engine(),
             table,
-            projection,
-            selection,
-            bindings,
-            table_hint,
-            order_by,
-            None,
+            access_path::AccessPathRequest {
+                projection,
+                selection,
+                bindings,
+                hint: table_hint,
+                requested_order: order_by,
+                requested_limit: None,
+            },
         );
         return lower_access_path_to_legacy(&ir);
     }

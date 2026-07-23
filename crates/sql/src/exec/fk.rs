@@ -74,10 +74,9 @@ pub(crate) fn foreign_key_check_rows(
             let session: &SessionState = unsafe { &*ptr };
             session.deferred_fk_checks.clone()
         }
-        None => match conn.with_session(|session| Ok(session.deferred_fk_checks.clone())) {
-            Ok(v) => v,
-            Err(_) => Vec::new(),
-        },
+        None => conn
+            .with_session(|session| Ok(session.deferred_fk_checks.clone()))
+            .unwrap_or_default(),
     };
 
     let mut rows = Vec::new();

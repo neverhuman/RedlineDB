@@ -36,10 +36,7 @@ pub(crate) fn bind_query_with_params(
     // `limit_clause`; fold it down into a LimitOffset shape so the rest of
     // the binding pipeline only has to look at one place. WITH TIES is not
     // supported yet (would require ORDER BY tie-breaking on top of LIMIT).
-    let limit_clause = match fold_fetch_into_limit_clause(limit_clause, fetch)? {
-        Some(clause) => Some(clause),
-        None => None,
-    };
+    let limit_clause = fold_fetch_into_limit_clause(limit_clause, fetch)?;
     if let Some(with) = with {
         // CTEs: materialize each CTE body (handling recursive references)
         // and dispatch to the trailing query under an active CTE scope.
@@ -73,7 +70,7 @@ pub(crate) fn bind_query_with_params(
             left,
             right,
         } => bind_union_all_query(
-            UnionAllQueryContext {
+            QueryBindContext {
                 conn,
                 schema,
                 schema_epoch,
@@ -88,14 +85,16 @@ pub(crate) fn bind_query_with_params(
             *right,
         ),
         SetExpr::Select(select) => bind_simple_select_query(
-            conn,
-            schema,
-            schema_epoch,
-            sql,
+            QueryBindContext {
+                conn,
+                schema,
+                schema_epoch,
+                sql,
+                order_by,
+                limit_clause,
+                params,
+            },
             select,
-            order_by,
-            limit_clause,
-            params,
         ),
         SetExpr::Values(values) => {
             bind_values_query(schema_epoch, sql, values, order_by, limit_clause, params)
@@ -256,7 +255,7 @@ fn apply_query_tail(
     Ok(template)
 }
 
-pub(crate) struct UnionAllQueryContext<'a> {
+pub(crate) struct QueryBindContext<'a> {
     pub conn: &'a Connection,
     pub schema: Arc<SchemaSnapshot>,
     pub schema_epoch: SchemaEpoch,
@@ -267,15 +266,18 @@ pub(crate) struct UnionAllQueryContext<'a> {
 }
 
 pub(crate) fn bind_simple_select_query(
-    conn: &Connection,
-    schema: Arc<SchemaSnapshot>,
-    schema_epoch: SchemaEpoch,
-    sql: &str,
+    ctx: QueryBindContext<'_>,
     mut select: Box<sqlparser::ast::Select>,
-    order_by: Option<sqlparser::ast::OrderBy>,
-    limit_clause: Option<LimitClause>,
-    params: &mut ParamLayout,
 ) -> Result<PreparedTemplate> {
+    let QueryBindContext {
+        conn,
+        schema,
+        schema_epoch,
+        sql,
+        order_by,
+        limit_clause,
+        params,
+    } = ctx;
     // Track K — DISTINCT ON (exprs) keeps the first row per distinct
     // combination of `exprs`, where "first" is decided by the outer
     // ORDER BY. We normalize the ON expressions here and let the
@@ -439,7 +441,7 @@ pub(crate) fn bind_simple_select_query(
 }
 
 pub(crate) fn bind_union_all_query(
-    ctx: UnionAllQueryContext<'_>,
+    ctx: QueryBindContext<'_>,
     op: SetOperator,
     set_quantifier: SetQuantifier,
     left: SetExpr,
@@ -1392,18 +1394,15 @@ fn build_named_window_map(
         let key = def.0.value.to_ascii_lowercase();
         let resolved = match &def.1 {
             NamedWindowExpr::WindowSpec(spec) => merge_window_with_base(spec, &map)?,
-            NamedWindowExpr::NamedWindow(name) => {
-                let base = map
-                    .get(&name.value.to_ascii_lowercase())
-                    .cloned()
-                    .ok_or_else(|| {
-                        Error::UnsupportedSql(format!(
-                            "named window references unknown window: {}",
-                            name.value
-                        ))
-                    })?;
-                base
-            }
+            NamedWindowExpr::NamedWindow(name) => map
+                .get(&name.value.to_ascii_lowercase())
+                .cloned()
+                .ok_or_else(|| {
+                    Error::UnsupportedSql(format!(
+                        "named window references unknown window: {}",
+                        name.value
+                    ))
+                })?,
         };
         map.insert(key, resolved);
     }
@@ -1765,6 +1764,6 @@ mod nested_query_wrapper_tests {
         assert_eq!(plan.order_by.len(), 1);
         assert!(matches!(&plan.order_by[0].expr, Expr::Identifier(id) if id.value == "v"));
         assert!(matches!(plan.limit, Some(Expr::Value(_))));
-        assert!(matches!(plan.offset, None));
+        assert!(plan.offset.is_none());
     }
 }

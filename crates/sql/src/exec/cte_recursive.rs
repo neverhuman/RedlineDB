@@ -131,18 +131,18 @@ pub(super) fn materialize_cte(
     // WS-A7: if the outer query has a bounded LIMIT we can stop the
     // recursion as soon as enough rows have accumulated. SQLite calls
     // this LIMIT pushdown into the recursive worktable.
-    if let Some(cap) = row_cap {
-        if accumulated.len() >= cap {
-            accumulated.truncate(cap);
-            return finish_cte(
-                cte_name,
-                columns_arc,
-                &column_vec,
-                &folded_cte_name,
-                &folded_columns,
-                accumulated,
-            );
-        }
+    if let Some(cap) = row_cap
+        && accumulated.len() >= cap
+    {
+        accumulated.truncate(cap);
+        return finish_cte(
+            cte_name,
+            columns_arc,
+            &column_vec,
+            &folded_cte_name,
+            &folded_columns,
+            accumulated,
+        );
     }
 
     // Frontier of "rows discovered in the previous iteration" — what the
@@ -232,18 +232,18 @@ pub(super) fn materialize_cte(
         frontier = frontier_start..accumulated.len();
 
         // WS-A7: stop once accumulated rows satisfy the outer LIMIT.
-        if let Some(cap) = row_cap {
-            if accumulated.len() >= cap {
-                accumulated.truncate(cap);
-                return finish_cte(
-                    cte_name,
-                    columns_arc,
-                    &column_vec,
-                    &folded_cte_name,
-                    &folded_columns,
-                    accumulated,
-                );
-            }
+        if let Some(cap) = row_cap
+            && accumulated.len() >= cap
+        {
+            accumulated.truncate(cap);
+            return finish_cte(
+                cte_name,
+                columns_arc,
+                &column_vec,
+                &folded_cte_name,
+                &folded_columns,
+                accumulated,
+            );
         }
 
         if iter + 1 == RECURSIVE_CTE_ITERATION_LIMIT {

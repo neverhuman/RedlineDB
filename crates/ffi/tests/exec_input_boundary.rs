@@ -245,7 +245,7 @@ fn multi_byte_utf8_handled() {
     let text_ptr = rldb_column_text(fetch_stmt, 0);
     assert!(!text_ptr.is_null(), "label column text pointer is null");
     let nbytes = rldb_column_bytes(fetch_stmt, 0) as usize;
-    let bytes = unsafe { std::slice::from_raw_parts(text_ptr as *const u8, nbytes) };
+    let bytes = unsafe { std::slice::from_raw_parts(text_ptr, nbytes) };
     assert_eq!(
         bytes,
         label.as_bytes(),

@@ -59,6 +59,12 @@ pub fn parallel_scan_diagnostics() -> ParallelScanDiagnostics {
     ParallelScanDiagnostics::default()
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct ScanVisibility<'a> {
+    pub tx_status: &'a ConcurrentTxStatus,
+    pub snapshot: &'a Snapshot,
+}
+
 impl PageBackedHeap {
     /// WS-C3 R2: scan a disjoint page range in parallel, returning every
     /// row visible to `snapshot` whose relation matches `rel_filter`
@@ -76,10 +82,9 @@ impl PageBackedHeap {
     /// `mpsc::sync_channel` so memory stays bounded even when the
     /// consumer is slower than the producers. The drain happens on the
     /// dispatcher thread (the still-serial SQL executor mainline).
-    pub fn parallel_scan_page_range(
+    pub(crate) fn parallel_scan_page_range(
         &self,
-        tx_status: &ConcurrentTxStatus,
-        snapshot: &Snapshot,
+        visibility: ScanVisibility<'_>,
         owner: Option<TxId>,
         page_range: std::ops::Range<PageId>,
         rel_filter: Option<RelId>,
@@ -99,8 +104,8 @@ impl PageBackedHeap {
 
         if workers == 1 {
             return self.serial_scan_page_range(
-                tx_status,
-                snapshot,
+                visibility.tx_status,
+                visibility.snapshot,
                 owner,
                 page_range,
                 rel_filter,
@@ -127,8 +132,7 @@ impl PageBackedHeap {
                     let mut page_no = start.saturating_add(worker_idx as u64);
                     while page_no < end {
                         match heap.collect_heap_page(
-                            tx_status,
-                            snapshot,
+                            visibility,
                             owner,
                             PageId(page_no),
                             rel_filter,
@@ -214,8 +218,10 @@ impl PageBackedHeap {
         let end = page_range.end.0;
         while page_no < end {
             self.collect_heap_page(
-                tx_status,
-                snapshot,
+                ScanVisibility {
+                    tx_status,
+                    snapshot,
+                },
                 owner,
                 PageId(page_no),
                 rel_filter,
@@ -239,8 +245,7 @@ impl PageBackedHeap {
     /// page or when no frame is allocated. Errors short-circuit.
     fn collect_heap_page<F>(
         &self,
-        tx_status: &ConcurrentTxStatus,
-        snapshot: &Snapshot,
+        visibility: ScanVisibility<'_>,
         owner: Option<TxId>,
         page_id: PageId,
         rel_filter: Option<RelId>,
@@ -282,7 +287,8 @@ impl PageBackedHeap {
                 {
                     continue;
                 }
-                match tuple.visibility_concurrent(tx_status, snapshot, owner) {
+                match tuple.visibility_concurrent(visibility.tx_status, visibility.snapshot, owner)
+                {
                     TupleVisibility::Visible => {
                         sink(HeapScanRow {
                             rel_id: effective_rel,

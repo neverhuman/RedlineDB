@@ -116,7 +116,6 @@ fn strict_boolean_and_uuid_columns_rejected_per_sqlite_parity() {
         msg.to_ascii_lowercase().contains("strict"),
         "error should mention STRICT: {msg}"
     );
-    return;
 }
 
 #[test]

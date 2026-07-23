@@ -79,10 +79,9 @@ fn lean_constant_matches_one_megabyte_at_four_kib_pages() {
     // Guard against future refactors that change the constant without
     // updating the docs. 256 * 4096 = 1 MiB.
     assert_eq!(LEAN_BUFFER_POOL_PAGES * 4096, 1024 * 1024);
-    assert!(
-        LEAN_STATEMENT_CACHE_CAPACITY <= 16,
-        "lean statement cache must stay small ({LEAN_STATEMENT_CACHE_CAPACITY})"
-    );
+    const {
+        assert!(LEAN_STATEMENT_CACHE_CAPACITY <= 16);
+    }
 }
 
 #[test]

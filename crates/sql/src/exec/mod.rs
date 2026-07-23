@@ -495,9 +495,7 @@ pub fn execute_prepared(
         ))),
         PreparedKind::DropTable(spec) => {
             with_write_tx(conn, |session, tx| {
-                session
-                    .sqlite_sequences
-                    .remove(&spec.name.name.folded().to_owned());
+                session.sqlite_sequences.remove(spec.name.name.folded());
                 session
                     .sqlite_sequences_dirty
                     .insert(spec.name.name.folded().to_owned());
@@ -702,9 +700,7 @@ pub fn execute_prepared(
                     return Err(err);
                 }
             };
-            if let Err(err) = sidecar_conn.commit() {
-                return Err(err);
-            }
+            sidecar_conn.commit()?;
             record_row_changes_and_last_insert_rowid(conn, affected_rows, last_insert_rowid)?;
             Ok(ExecutionResult {
                 runtime: RuntimeState::Done,
@@ -889,10 +885,7 @@ pub(crate) fn materialize_prepared_rows_limited(
             if step_select_runtime(conn, &mut runtime, bindings, &mut current)? {
                 break;
             }
-            rows.push(match current.take() {
-                Some(row) => row,
-                None => Vec::new(),
-            });
+            rows.push(current.take().unwrap_or_default());
             if max_rows.is_some_and(|max| rows.len() >= max) {
                 finish_select_runtime(conn, &mut runtime)?;
                 break;

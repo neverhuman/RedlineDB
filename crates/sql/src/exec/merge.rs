@@ -86,10 +86,10 @@ pub(crate) fn execute_merge(
                     if !kind_matched {
                         continue;
                     }
-                    if let Some(pred) = predicate {
-                        if !is_truthy(&eval_scalar(pred, &ctx, bindings)?) {
-                            continue;
-                        }
+                    if let Some(pred) = predicate
+                        && !is_truthy(&eval_scalar(pred, &ctx, bindings)?)
+                    {
+                        continue;
                     }
                     match clause {
                         MergeClausePlan::MatchedUpdate { assignments, .. } => {
@@ -132,13 +132,19 @@ pub(crate) fn execute_merge(
                     else {
                         continue;
                     };
-                    if let Some(pred) = predicate {
-                        if !is_truthy(&eval_scalar(pred, &ctx, bindings)?) {
-                            continue;
-                        }
+                    if let Some(pred) = predicate
+                        && !is_truthy(&eval_scalar(pred, &ctx, bindings)?)
+                    {
+                        continue;
                     }
                     apply_not_matched_insert(
-                        conn, session, tx, plan, columns, values, &ctx, bindings,
+                        conn,
+                        session,
+                        tx,
+                        plan,
+                        (columns, values),
+                        &ctx,
+                        bindings,
                     )?;
                     affected += 1;
                     break;
@@ -236,11 +242,11 @@ fn apply_not_matched_insert(
     session: &mut crate::session::SessionState,
     tx: &mut redlinedb_kernel::engine::Txn,
     plan: &MergePlan,
-    columns: &[usize],
-    values: &[DmlValue],
+    insert: (&[usize], &[DmlValue]),
     ctx: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<()> {
+    let (columns, values) = insert;
     let mut row_values = vec![SqlValue::Null; plan.target.columns.len()];
     let mut provided = vec![false; plan.target.columns.len()];
     let mut scratch = EvalScratch::default();

@@ -67,10 +67,7 @@ fn rldb_exec_inner(
         // Fire trace hook before preparing each statement.
         crate::sqlite3_api::hooks_fire::fire_trace(db, rest);
         let start = std::time::Instant::now();
-        let (stmt_opt, tail) = match prepare_statement(db_ref, rest, errmsg, db) {
-            Ok(pair) => pair,
-            Err(code) => return Err(code),
-        };
+        let (stmt_opt, tail) = prepare_statement(db_ref, rest, errmsg, db)?;
         // Capture the head we just consumed so the commit/rollback hook
         // can detect the keyword.
         let consumed = &rest[..rest.len() - tail.len()];

@@ -124,7 +124,7 @@ pub(crate) fn iso_utc_now() -> String {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default();
     let total_secs = now.as_secs() as i64;
-    let micros = (now.subsec_micros()) as u32;
+    let micros = now.subsec_micros();
     iso_utc_format(total_secs, micros)
 }
 
@@ -162,7 +162,7 @@ fn civil_from_epoch(epoch_secs: i64) -> (i64, u32, u32, u32, u32, u32) {
     // Shift epoch so that day 0 is March 1, year 0 (Hinnant's "days from civil").
     let z = days + 719_468;
     let era = if z >= 0 { z } else { z - 146_096 } / 146_097;
-    let doe = (z - era * 146_097) as i64;
+    let doe = z - era * 146_097;
     let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
     let y = yoe + era * 400;
     let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);

@@ -200,13 +200,15 @@ fn encode_snapshot_file(snapshot: &SchemaSnapshot) -> Result<Vec<u8>> {
 fn decode_snapshot_file(bytes: &[u8]) -> Result<Arc<SchemaSnapshot>> {
     let frame = parse_header(
         bytes,
-        MAGIC,
-        Error::CatalogCorrupt("catalog snapshot file too small"),
-        Error::CatalogCorrupt("catalog snapshot magic mismatch"),
-        Error::CatalogCorrupt("catalog snapshot length overflow"),
-        Error::CatalogCorrupt("catalog snapshot length mismatch"),
-        VERSION,
-        Error::UnsupportedVersion,
+        super::codec::FrameValidation {
+            magic: MAGIC,
+            expected_version: VERSION,
+            file_too_small: Error::CatalogCorrupt("catalog snapshot file too small"),
+            magic_mismatch: Error::CatalogCorrupt("catalog snapshot magic mismatch"),
+            length_overflow: Error::CatalogCorrupt("catalog snapshot length overflow"),
+            length_mismatch: Error::CatalogCorrupt("catalog snapshot length mismatch"),
+            invalid_version: Error::UnsupportedVersion,
+        },
     )?;
     Ok(Arc::new(decode_snapshot(frame.payload)?))
 }

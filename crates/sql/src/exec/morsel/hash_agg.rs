@@ -330,26 +330,23 @@ impl<'arena> MorselHashAggregator<'arena> {
         if self.group_specs.is_empty()
             && self.agg_specs.len() == 1
             && matches!(self.agg_specs[0].kind, AggKind::Sum)
+            && let Some(col_idx) = self.agg_specs[0].col
+            && let Some(ColumnBatch::I64(buf)) = morsel.columns.get(col_idx)
+            && morsel.validity.count_ones() == n
         {
-            if let Some(col_idx) = self.agg_specs[0].col {
-                if let Some(ColumnBatch::I64(buf)) = morsel.columns.get(col_idx) {
-                    if morsel.validity.count_ones() == n {
-                        // All-valid: SIMD reduction.
-                        let slice = &buf[..n];
-                        let (delta_sum, delta_count) = sum_i64_dispatch(slice);
-                        let entry = self.table.entry(Vec::new()).or_insert_with(|| {
-                            let states = self
-                                .agg_specs
-                                .iter()
-                                .map(|s| AccState::new(s.kind))
-                                .collect();
-                            (Vec::new(), states)
-                        });
-                        entry.1[0].add_bulk_int(delta_sum, delta_count);
-                        return Ok(());
-                    }
-                }
-            }
+            // All-valid: SIMD reduction.
+            let slice = &buf[..n];
+            let (delta_sum, delta_count) = sum_i64_dispatch(slice);
+            let entry = self.table.entry(Vec::new()).or_insert_with(|| {
+                let states = self
+                    .agg_specs
+                    .iter()
+                    .map(|s| AccState::new(s.kind))
+                    .collect();
+                (Vec::new(), states)
+            });
+            entry.1[0].add_bulk_int(delta_sum, delta_count);
+            return Ok(());
         }
 
         // General path: row-major over the live rows. Hot loop walks the

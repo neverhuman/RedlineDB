@@ -38,7 +38,7 @@ fn combined_semantic_delta_round_trip_mixed() {
         replacements: vec![
             (2, CombinedReplacementValue::Null),
             (3, CombinedReplacementValue::Integer(99)),
-            (5, CombinedReplacementValue::Real(3.14159)),
+            (5, CombinedReplacementValue::Real(std::f64::consts::PI)),
             (6, CombinedReplacementValue::Text(b"hello".to_vec())),
             (
                 8,

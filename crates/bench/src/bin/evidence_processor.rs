@@ -209,12 +209,12 @@ fn expected_runner_sha() -> Result<String> {
         "CI_REDLINE_TESTING_BIN_SHA256",
         "CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256",
     ] {
-        if let Ok(value) = env::var(name) {
-            if !value.is_empty() {
-                return normalize_hash(&Value::String(value)).ok_or_else(|| {
-                    anyhow!("verified redline-testing runner SHA-256 is not a valid digest")
-                });
-            }
+        if let Ok(value) = env::var(name)
+            && !value.is_empty()
+        {
+            return normalize_hash(&Value::String(value)).ok_or_else(|| {
+                anyhow!("verified redline-testing runner SHA-256 is not a valid digest")
+            });
         }
     }
     bail!("verified redline-testing runner SHA-256 is unavailable from provenance")
@@ -277,12 +277,13 @@ fn validated_suite(
                 );
             }
         }
-        "rql_phase1" => {
-            if total != EXPECTED_RQL_PHASE1_CASES || passed + skipped != EXPECTED_RQL_PHASE1_CASES {
-                bail!(
-                    "suite {name} expected {EXPECTED_RQL_PHASE1_CASES} runnable cases, got total={total} passed={passed} skipped={skipped}"
-                );
-            }
+        "rql_phase1"
+            if (total != EXPECTED_RQL_PHASE1_CASES
+                || passed + skipped != EXPECTED_RQL_PHASE1_CASES) =>
+        {
+            bail!(
+                "suite {name} expected {EXPECTED_RQL_PHASE1_CASES} runnable cases, got total={total} passed={passed} skipped={skipped}"
+            );
         }
         _ if passed + skipped != total => bail!(
             "suite {name} has inconsistent totals: passed={passed} skipped={skipped} total={total}"

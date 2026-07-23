@@ -110,11 +110,11 @@ impl AnyConnectionBackend for RedlineConnection {
 
     fn start_rollback(&mut self) {
         let state = Arc::clone(&self.state);
-        let _ = tokio::task::spawn_blocking(move || {
+        std::mem::drop(tokio::task::spawn_blocking(move || {
             if let Ok(mut guard) = state.lock() {
                 let _ = guard.conn.rollback();
             }
-        });
+        }));
     }
 
     fn get_transaction_depth(&self) -> usize {
@@ -146,10 +146,7 @@ impl AnyConnectionBackend for RedlineConnection {
 
         Box::pin(
             stream::once(async move {
-                let args = match args {
-                    Some(args) => args,
-                    None => Vec::new(),
-                };
+                let args = args.unwrap_or_default();
                 let outcome = execute_query(state, sql, args).await?;
                 Ok::<_, Error>(outcome.into_stream())
             })
@@ -168,10 +165,7 @@ impl AnyConnectionBackend for RedlineConnection {
         let args = arguments.map(any_arguments_to_redline);
 
         Box::pin(async move {
-            let args = match args {
-                Some(args) => args,
-                None => Vec::new(),
-            };
+            let args = args.unwrap_or_default();
             match execute_query(state, sql, args).await? {
                 QueryOutcome::Rows(mut rows) => Ok(rows.drain(..).next()),
                 QueryOutcome::Result(_) => Ok(None),
@@ -322,13 +316,8 @@ async fn execute_query(
 
         if column_count > 0 {
             let mut rows = Vec::new();
-            loop {
-                match stmt.step().map_err(map_redline_error)? {
-                    redlinedb::Step::Row(row) => {
-                        rows.push(build_any_row(&column_names, &column_names_vec, &row)?);
-                    }
-                    redlinedb::Step::Done => break,
-                }
+            while let redlinedb::Step::Row(row) = stmt.step().map_err(map_redline_error)? {
+                rows.push(build_any_row(&column_names, &column_names_vec, &row)?);
             }
             Ok(QueryOutcome::Rows(rows))
         } else {
@@ -460,16 +449,15 @@ fn build_any_row(
     column_names_vec: &[UStr],
     row: &redlinedb::Row<'_>,
 ) -> Result<AnyRow, Error> {
-    let column_count = column_names_vec.len();
-    let mut columns = Vec::with_capacity(column_count);
-    let mut values = Vec::with_capacity(column_count);
+    let mut columns = Vec::with_capacity(column_names_vec.len());
+    let mut values = Vec::with_capacity(column_names_vec.len());
 
-    for index in 0..column_count {
+    for (index, name) in column_names_vec.iter().enumerate() {
         let value: redlinedb::Value = row.get(index).map_err(map_redline_error)?;
         let (any_kind, type_info_kind) = any_value_from_redline(value);
         columns.push(AnyColumn {
             ordinal: index,
-            name: column_names_vec[index].clone(),
+            name: name.clone(),
             type_info: AnyTypeInfo {
                 kind: type_info_kind,
             },

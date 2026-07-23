@@ -372,6 +372,7 @@ fn open_database_at(
         ));
     }
 
+    let storage_format = crate::storage_format::inspect_storage_format(&path)?;
     let sql_options = crate::sql_options(options);
     // `OpenOptions::create` means "create when absent", not "replace an
     // existing image". `normalize_path` creates a missing directory before
@@ -384,6 +385,11 @@ fn open_database_at(
     } else {
         redlinedb_sql::Database::open(&path, sql_options)?
     };
+    if storage_format == crate::storage_format::StorageFormatState::LegacyGenerationOne
+        && !options.read_only
+    {
+        crate::storage_format::persist_current_storage_format(&path)?;
+    }
 
     let owner_lock = if options.process_owner_lock && !options.read_only {
         Some(Arc::new(acquire_owner_lock(&path)?))

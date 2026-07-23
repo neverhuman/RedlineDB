@@ -117,12 +117,7 @@ fn returning_clause_disqualifies_fast_path() {
             .expect("prepare");
         assert_eq!(stmt.step().expect("step"), Step::Row);
         let _ = stmt.column_i64(0).expect("v");
-        loop {
-            match stmt.step().expect("step") {
-                Step::Row => continue,
-                Step::Done => break,
-            }
-        }
+        while let Step::Row = stmt.step().expect("step") {}
     }
 
     let mut stmt = conn

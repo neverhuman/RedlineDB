@@ -60,7 +60,6 @@ pub fn run_oracle(sql: &str) -> OracleResult {
             }
         }
     }
-    let mut rows = rows;
     maybe_sort(&query, &mut rows);
     OracleResult::ok(rows)
 }

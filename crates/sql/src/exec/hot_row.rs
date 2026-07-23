@@ -584,9 +584,11 @@ impl Default for HotRowCoordinator {
 /// WAL payload can't encode (e.g. Real that loses precision through
 /// f64 round-tripping in some weird middle layer — currently no such
 /// case, but the gate is structural-only here).
+type LiftedCoordinatorPlans = (Vec<(u16, i64)>, Vec<(u16, CombinedReplacementValue)>);
+
 pub(crate) fn lift_plans_for_coordinator(
     plans: &[AssignmentPlan],
-) -> Option<(Vec<(u16, i64)>, Vec<(u16, CombinedReplacementValue)>)> {
+) -> Option<LiftedCoordinatorPlans> {
     let mut deltas = Vec::new();
     let mut replacements = Vec::new();
     for plan in plans {

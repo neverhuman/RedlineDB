@@ -126,10 +126,10 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     // any qualifier other than `main`, so once the session has registered
     // the namespace via CREATE SCHEMA we treat qualified references as
     // ordinary table names in the main schema.
-    if let Some(rewritten) = strip_registered_pg_schema_prefixes(conn, sql) {
-        if rewritten != sql {
-            return parse_prepared_template_impl(conn, &rewritten);
-        }
+    if let Some(rewritten) = strip_registered_pg_schema_prefixes(conn, sql)
+        && rewritten != sql
+    {
+        return parse_prepared_template_impl(conn, &rewritten);
     }
     // Track J: rewrite SELECTs against `pg_namespace` / `pg_class` into a
     // session-snapshotted VALUES list so the introspection probes that the
@@ -855,7 +855,7 @@ fn rewrite_on_conflict_clauses(sql: &str) -> String {
             }
         }
     }
-    deletions.sort_by(|a, b| b.0.cmp(&a.0));
+    deletions.sort_by_key(|item| std::cmp::Reverse(item.0));
     for (s, e) in deletions {
         buf.replace_range(s..e, "");
     }
@@ -1610,10 +1610,8 @@ fn rewrite_glob_to_function(input: &str) -> String {
             }
             // Detect a trailing `NOT` so we can wrap the rewrite in NOT.
             let negate = trim_trailing_keyword_ci(&out, "NOT").is_some();
-            if negate {
-                if let Some(prefix) = trim_trailing_keyword_ci(&out, "NOT") {
-                    out.truncate(prefix.len());
-                }
+            if negate && let Some(prefix) = trim_trailing_keyword_ci(&out, "NOT") {
+                out.truncate(prefix.len());
             }
             // Strip residual whitespace before the LHS atom.
             while let Some(last) = out.chars().last() {
@@ -1864,7 +1862,7 @@ fn trim_trailing_keyword_ci<'a>(text: &'a str, keyword: &str) -> Option<&'a str>
     }
     let key_start = bytes.len() - keyword.len();
     for (i, k) in keyword.bytes().enumerate() {
-        if bytes[key_start + i].to_ascii_uppercase() != k.to_ascii_uppercase() {
+        if !bytes[key_start + i].eq_ignore_ascii_case(&k) {
             return None;
         }
     }
@@ -2305,7 +2303,7 @@ fn find_jsonb_lhs_start(prefix: &str) -> Option<usize> {
                         .iter()
                         .map(|b| b.to_ascii_lowercase())
                         .collect();
-                    if stop_words.iter().any(|w| *w == lower.as_slice()) {
+                    if stop_words.contains(&lower.as_slice()) {
                         return Some(word_end + 1);
                     }
                 }
@@ -2825,8 +2823,8 @@ fn rewrite_pg_array_overlap(sql: &str) -> String {
 ///   * punctuation that introduces a new expression (`,;=<>+*/%`),
 ///   * the right edge of any SQL keyword (`SELECT`, `FROM`, `WHERE`,
 ///     `AND`, `OR`, etc.).
-/// Returns the (start, end) byte span; `end` is the first non-whitespace
-/// byte before `pos`.
+///     Returns the (start, end) byte span; `end` is the first non-whitespace
+///     byte before `pos`.
 fn expr_to_left(bytes: &[u8], pos: usize) -> Option<(usize, usize)> {
     let mut end = pos;
     while end > 0 && (bytes[end - 1] as char).is_whitespace() {
@@ -2855,10 +2853,10 @@ fn expr_to_left(bytes: &[u8], pos: usize) -> Option<(usize, usize)> {
                 }
                 depth_bracket -= 1;
             }
-            b',' | b';' | b'=' | b'<' | b'>' | b'+' | b'*' | b'/' | b'%' => {
-                if depth_paren == 0 && depth_bracket == 0 {
-                    break;
-                }
+            b',' | b';' | b'=' | b'<' | b'>' | b'+' | b'*' | b'/' | b'%'
+                if depth_paren == 0 && depth_bracket == 0 =>
+            {
+                break;
             }
             _ => {}
         }
@@ -3097,10 +3095,8 @@ fn expr_to_right(bytes: &[u8], start: usize) -> Option<(usize, usize)> {
                 }
                 depth_bracket -= 1;
             }
-            b',' | b';' | b'=' | b'<' | b'>' => {
-                if depth_paren == 0 && depth_bracket == 0 {
-                    break;
-                }
+            b',' | b';' | b'=' | b'<' | b'>' if depth_paren == 0 && depth_bracket == 0 => {
+                break;
             }
             _ => {}
         }
@@ -3429,10 +3425,10 @@ fn trailing_expr_span(out: &[u8]) -> Option<(usize, usize)> {
                 }
                 depth_b -= 1;
             }
-            b',' | b';' | b'=' | b'<' | b'>' | b'+' | b'-' | b'*' | b'/' | b'%' => {
-                if depth_p == 0 && depth_b == 0 {
-                    break;
-                }
+            b',' | b';' | b'=' | b'<' | b'>' | b'+' | b'-' | b'*' | b'/' | b'%'
+                if depth_p == 0 && depth_b == 0 =>
+            {
+                break;
             }
             _ => {}
         }
@@ -4733,10 +4729,10 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
         // Replace `alias.col` references in the projection with the
         // resolved expression / scalar subquery.
         let new_projection = match &kind {
-            LateralKind::InlineExpr { name: _, body } => {
+            LateralKind::InlineExpr { body } => {
                 substitute_alias_column(&projection_text, &alias, |_| Some(format!("({body})")))
             }
-            LateralKind::ScalarSubquery { single_col_name: _ } => {
+            LateralKind::ScalarSubquery => {
                 substitute_alias_column(&projection_text, &alias, |_| Some(format!("({subquery})")))
             }
             LateralKind::Unsupported => break,
@@ -4769,10 +4765,10 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
 enum LateralKind {
     /// Subquery is `SELECT <expr> AS <name>` with no FROM/WHERE.
     /// Promote to `(<expr>)` inline in the outer SELECT.
-    InlineExpr { name: String, body: String },
+    InlineExpr { body: String },
     /// Subquery has a FROM but produces a single column; we treat the
     /// whole subquery as a scalar correlated SELECT.
-    ScalarSubquery { single_col_name: String },
+    ScalarSubquery,
     /// Anything more complex (multi-row, multi-column, set-returning
     /// function). Skip; the parser will surface its native error.
     Unsupported,
@@ -4784,13 +4780,12 @@ fn classify_lateral_subquery(subquery: &str) -> LateralKind {
         return LateralKind::Unsupported;
     }
     // No FROM? Inline form: `SELECT <expr> AS <name>`.
-    if !find_top_level_keyword(&upper, subquery.as_bytes(), 0, " FROM ").is_some() {
+    if find_top_level_keyword(&upper, subquery.as_bytes(), 0, " FROM ").is_none() {
         let after_select = subquery.trim_start()["SELECT ".len()..].trim();
         let upper_after = after_select.to_ascii_uppercase();
         if let Some(as_pos) = upper_after.find(" AS ") {
             let body = after_select[..as_pos].trim().to_owned();
-            let name = after_select[as_pos + 4..].trim().to_owned();
-            return LateralKind::InlineExpr { name, body };
+            return LateralKind::InlineExpr { body };
         }
         return LateralKind::Unsupported;
     }
@@ -4808,17 +4803,7 @@ fn classify_lateral_subquery(subquery: &str) -> LateralKind {
     if items.len() != 1 {
         return LateralKind::Unsupported;
     }
-    let item = items.into_iter().next().unwrap();
-    let upper_item = item.to_ascii_uppercase();
-    let name = if let Some(p) = upper_item.find(" AS ") {
-        item[p + 4..].trim().to_owned()
-    } else {
-        // bare identifier — use as-is
-        item.trim().to_owned()
-    };
-    LateralKind::ScalarSubquery {
-        single_col_name: name,
-    }
+    LateralKind::ScalarSubquery
 }
 
 /// Walk `text` substituting every occurrence of `alias.col` (when

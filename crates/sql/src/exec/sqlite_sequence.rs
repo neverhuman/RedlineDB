@@ -29,11 +29,11 @@ pub(super) fn build_runtime(
     alias: Option<&Arc<str>>,
     plan: &SelectPlan,
     bindings: &[Option<SqlValue>],
-    limit: usize,
-    offset: usize,
+    window: (usize, usize),
     temp_dir: Option<PathBuf>,
     memory: &mut QueryMemoryBroker,
 ) -> Result<SelectRuntimeSource> {
+    let (limit, offset) = window;
     let rows = rows(conn, alias)?;
     if plan.order_by.is_empty() {
         return Ok(SelectRuntimeSource::SqliteSequence { rows, cursor: 0 });

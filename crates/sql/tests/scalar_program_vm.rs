@@ -560,18 +560,17 @@ fn ast_eval(
 }
 
 fn ast_eval_value(v: &Value, bindings: &[Option<SqlValue>]) -> SqlValue {
-    if let Some(name) = parser::bind::as_bind_name(v) {
-        if let Some(rest) = name.strip_prefix('?') {
-            if let Ok(slot) = rest.parse::<usize>() {
-                if slot == 0 {
-                    return SqlValue::Null;
-                }
-                return bindings
-                    .get(slot - 1)
-                    .and_then(|s| s.clone())
-                    .unwrap_or(SqlValue::Null);
-            }
+    if let Some(name) = parser::bind::as_bind_name(v)
+        && let Some(rest) = name.strip_prefix('?')
+        && let Ok(slot) = rest.parse::<usize>()
+    {
+        if slot == 0 {
+            return SqlValue::Null;
         }
+        return bindings
+            .get(slot - 1)
+            .and_then(|s| s.clone())
+            .unwrap_or(SqlValue::Null);
     }
     match v {
         Value::Null => SqlValue::Null,

@@ -62,7 +62,7 @@ pub(crate) fn lookup(name: &str) -> Option<&'static dyn TvFunc> {
         .chain(super::pragma_tv::registry().iter())
         .chain(super::json_tv::registry().iter())
         .find(|f| f.name() == lower.as_str())
-        .map(|f| *f)
+        .copied()
 }
 
 static EXTRA_TVFS: &[&dyn TvFunc] = &[&GenerateSeries];

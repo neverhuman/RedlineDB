@@ -51,13 +51,16 @@ pub(crate) fn fire_triggers(
     conn: &Connection,
     tx: &mut Txn,
     schema: &SchemaSnapshot,
-    table: &Arc<TableDef>,
-    event: TriggerEventKind,
-    time: TriggerTimeKind,
-    old: Option<TriggerRowValues>,
-    new: Option<TriggerRowValues>,
-    changed_cols: Option<&[String]>,
+    invocation: TriggerInvocation<'_>,
 ) -> Result<()> {
+    let TriggerInvocation {
+        table,
+        event,
+        time,
+        old,
+        new,
+        changed_cols,
+    } = invocation;
     let triggers = triggers_for(schema, table.schema_id, &table.folded, event, time);
     if triggers.is_empty() {
         return Ok(());
@@ -90,6 +93,15 @@ pub(crate) fn fire_triggers(
 pub(crate) struct TriggerRowValues {
     pub(crate) rowid: RowId,
     pub(crate) values: Vec<SqlValue>,
+}
+
+pub(crate) struct TriggerInvocation<'a> {
+    pub(crate) table: &'a Arc<TableDef>,
+    pub(crate) event: TriggerEventKind,
+    pub(crate) time: TriggerTimeKind,
+    pub(crate) old: Option<TriggerRowValues>,
+    pub(crate) new: Option<TriggerRowValues>,
+    pub(crate) changed_cols: Option<&'a [String]>,
 }
 
 fn any_column_in_filter(filter: &[Box<str>], changed: Option<&[String]>) -> bool {

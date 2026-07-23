@@ -173,10 +173,8 @@ pub(crate) fn eval_scalar_function_values(
         "octet_length" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
             Some(SqlValue::Blob(value)) => Ok(SqlValue::Integer(value.len() as i64)),
-            Some(SqlValue::Text(value)) => Ok(SqlValue::Integer(value.as_bytes().len() as i64)),
-            Some(other) => Ok(SqlValue::Integer(
-                value_to_string(other).as_bytes().len() as i64
-            )),
+            Some(SqlValue::Text(value)) => Ok(SqlValue::Integer(value.len() as i64)),
+            Some(other) => Ok(SqlValue::Integer(value_to_string(other).len() as i64)),
         },
         // SQLite concat(X, ...) — concatenates non-NULL operands (NULLs treated
         // as empty strings). Always returns TEXT.
@@ -598,7 +596,7 @@ pub(crate) fn eval_scalar_function_values(
         "current_schema" => Ok(SqlValue::Text(Arc::clone(current_schema_arc()))),
         _ => {
             let db = crate::udf::current_db();
-            match crate::udf::call_registered_scalar(db, &name, &values) {
+            match crate::udf::call_registered_scalar(db, name, &values) {
                 Some(Ok(v)) => Ok(v),
                 Some(Err(msg)) => Err(Error::UnsupportedSql(msg)),
                 None => Err(Error::UnsupportedSql(format!(
@@ -996,8 +994,5 @@ fn total_changes_value() -> i64 {
 }
 
 fn usize_to_sql_i64(value: usize) -> i64 {
-    match i64::try_from(value) {
-        Ok(value) => value,
-        Err(_) => i64::MAX,
-    }
+    i64::try_from(value).unwrap_or(i64::MAX)
 }

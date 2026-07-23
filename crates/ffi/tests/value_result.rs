@@ -125,9 +125,9 @@ fn result_setters_populate_context_slot() {
         let result = (*ctx).take_result();
         assert_eq!(result.to_sql(), SqlValue::Integer(1_000_000_000_000));
 
-        sqlite3_result_double(ctx, 3.14);
+        sqlite3_result_double(ctx, 3.125);
         let result = (*ctx).take_result();
-        assert_eq!(result.to_sql(), SqlValue::Real(3.14));
+        assert_eq!(result.to_sql(), SqlValue::Real(3.125));
 
         let text = CString::new("rldb").unwrap();
         sqlite3_result_text(ctx, text.as_ptr(), -1, None);

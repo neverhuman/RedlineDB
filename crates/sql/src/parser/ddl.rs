@@ -234,7 +234,7 @@ fn build_ctas_columns(select: &SelectPlan) -> Result<Vec<ColumnSpec>> {
     }
     let mut counts = std::collections::HashMap::<String, usize>::new();
     let mut columns = Vec::with_capacity(names.len());
-    for (name, affinity) in names.into_iter().zip(affinities.into_iter()) {
+    for (name, affinity) in names.into_iter().zip(affinities) {
         let folded = name.to_ascii_lowercase();
         let ordinal = counts.entry(folded).or_insert(0);
         let column_name = if *ordinal == 0 {
@@ -417,7 +417,7 @@ fn source_output_affinities(source: &SelectSource) -> Vec<redlinedb_kernel::cata
         SelectSource::CompoundAll(branches) | SelectSource::CompoundSet { branches, .. } => {
             branches
                 .first()
-                .map(|plan| ctas_projection_affinities(plan))
+                .map(ctas_projection_affinities)
                 .unwrap_or_default()
         }
         SelectSource::SqliteSchema | SelectSource::SqliteTempSchema => vec![
