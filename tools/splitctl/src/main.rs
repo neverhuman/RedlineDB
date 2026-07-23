@@ -2229,7 +2229,6 @@ fn compare_registered_nested_family_child(
         ("control_plane_remote", "remote"),
         ("control_plane_required_check", "required_check"),
         ("control_plane_identity_status", "identity_status"),
-        ("control_plane_current_tag", "current_tag"),
         ("control_plane_inventory_status", "inventory_status"),
         ("control_plane_runtime_authority", "runtime_authority"),
     ] {
@@ -2238,6 +2237,17 @@ fn compare_registered_nested_family_child(
                 "{qualified}.{outer_field} differs from child control_plane.{child_field}"
             ));
         }
+    }
+    // A nested control plane publishes its identity tag as `current_tag`, or — once it
+    // has superseded a predecessor (jeryu-style, whose ControlPlane schema carries
+    // `predecessor_tag` in place of `current_tag`) — as `predecessor_tag`. The parent
+    // registration mirrors whichever the child publishes as its control-plane identity.
+    let child_control_tag =
+        string(child_control, "current_tag").or_else(|| string(child_control, "predecessor_tag"));
+    if string(outer, "control_plane_current_tag") != child_control_tag {
+        return Err(format!(
+            "{qualified}.control_plane_current_tag differs from child control_plane current/predecessor tag"
+        ));
     }
     let child_redline = child
         .get("nested_families")
@@ -14480,7 +14490,7 @@ path = "/home/ubuntu/jain-split/jeryu-split/jeryu-release-ops"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-release-ops.git"
 required_check = "jeryu-release-ops/required"
 identity_status = "bound"
-current_tag = "jeryu-release-ops-v5.0.0-split.0"
+predecessor_tag = "jeryu-release-ops-v5.0.0-split.1"
 inventory_status = "active"
 runtime_authority = "control-plane"
 [nested_families.redline]
