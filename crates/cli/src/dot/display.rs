@@ -77,8 +77,6 @@ pub fn parse_bool(value: &str) -> Result<bool, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-
     #[test]
     fn separator_is_literal() {
         // `.separator '\t'` (the two characters backslash and t) must NOT

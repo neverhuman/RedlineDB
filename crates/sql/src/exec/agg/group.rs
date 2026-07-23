@@ -372,7 +372,7 @@ fn try_one_pass_grouped(
         // total instead of N small ones.
         debug_assert_eq!(out.len(), order_keys.len());
         let mut paired: Vec<(Vec<SqlValue>, Vec<SqlValue>)> =
-            out.into_iter().zip(order_keys.into_iter()).collect();
+            out.into_iter().zip(order_keys).collect();
         paired.sort_by(|a, b| {
             for (idx, (_, desc)) in order_specs.iter().enumerate() {
                 let mut ord = compare_values(&a.1[idx], &b.1[idx]);
@@ -395,7 +395,7 @@ enum ProjectionItem {
     /// Bare aggregate call: emit slot value as-is.
     AggSlot(usize),
     /// Non-aggregate expression: eval against representative row context.
-    Scalar(Expr),
+    Scalar(Box<Expr>),
 }
 
 fn eval_projection_item(
@@ -422,7 +422,7 @@ fn classify_expr(expr: &Expr, slots: &mut Vec<AggSlot>) -> Result<Option<Project
     if expr_contains_aggregate(expr) {
         return Ok(None);
     }
-    Ok(Some(ProjectionItem::Scalar(expr.clone())))
+    Ok(Some(ProjectionItem::Scalar(Box::new(expr.clone()))))
 }
 
 /// If `expr` is a bare supported built-in aggregate call, register (or

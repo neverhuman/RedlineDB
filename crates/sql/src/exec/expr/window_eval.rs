@@ -304,7 +304,7 @@ fn eval_window_call(
     let mut results = vec![SqlValue::Null; rows.len()];
     let layouts = window_cache.layouts_for(window)?;
     if whole_partition_aggregate_window(
-        &func_name,
+        func_name,
         &args,
         rows,
         layouts,
@@ -315,7 +315,7 @@ fn eval_window_call(
         return Ok(results);
     }
     if prefix_aggregate_window(
-        &func_name,
+        func_name,
         &args,
         rows,
         layouts,
@@ -325,13 +325,13 @@ fn eval_window_call(
     )? {
         return Ok(results);
     }
-    if ranking_window(&func_name, &args, layouts, &mut results)? {
+    if ranking_window(func_name, &args, layouts, &mut results)? {
         return Ok(results);
     }
     for layout in layouts {
         for (sorted_pos, row_idx) in layout.order_index_map.iter().enumerate() {
             let value = compute_function_for_row(
-                &func_name,
+                func_name,
                 &args,
                 rows,
                 &layout.order_index_map,

@@ -95,23 +95,22 @@ impl Cell {
 
 pub(crate) fn render_query<W: Write>(
     out: &mut W,
-    mode: OutputMode,
-    separator: &str,
-    show_header: bool,
-    null_value: &str,
-    insert_table_name: &str,
-    user_widths: &[usize],
+    options: &crate::QueryOptions,
     column_names: &[String],
     rows: &[Vec<Cell>],
 ) -> Result<(), String> {
-    match mode {
+    let separator = options.separator.as_str();
+    let show_header = options.show_header;
+    let null_value = options.null_value.as_str();
+    let user_widths = options.widths.as_slice();
+    match options.mode {
         OutputMode::Json => render_json(out, column_names, rows),
         OutputMode::Quote => render_quote(out, column_names, rows, separator, show_header),
         OutputMode::Line => render_line(out, column_names, rows, null_value),
         OutputMode::Ascii => render_ascii(out, column_names, rows, show_header, null_value),
         OutputMode::Csv | OutputMode::List | OutputMode::Tabs => render_delimited(
             out,
-            mode,
+            options.mode,
             separator,
             column_names,
             rows,
@@ -151,7 +150,7 @@ pub(crate) fn render_query<W: Write>(
             user_widths,
         ),
         OutputMode::Html => render_html(out, column_names, rows, show_header),
-        OutputMode::Insert => render_insert(out, column_names, rows, insert_table_name),
+        OutputMode::Insert => render_insert(out, column_names, rows, &options.insert_table_name),
         OutputMode::Tcl => render_tcl(out, column_names, rows, separator, show_header, null_value),
     }
 }
@@ -315,7 +314,7 @@ fn render_delimited<W: Write>(
     };
     let mut wrote_anything = false;
     if show_header && !column_names.is_empty() {
-        let header: Vec<String> = column_names.iter().cloned().collect();
+        let header: Vec<String> = column_names.to_vec();
         write_delimited_row(out, &header, mode, separator, false)?;
         wrote_anything = true;
     }
@@ -938,11 +937,9 @@ fn csv_needs_quotes(text: &str, separator: &str) -> bool {
     }
     // Matches sqlite3's behaviour: any embedded quote, whitespace, or
     // apostrophe forces quoting so the value round-trips through CSV.
-    text.chars().any(|ch| {
-        matches!(ch, '"' | '\'' | '\n' | '\r' | '\t')
-            || (ch.is_whitespace() && ch != ' ')
-            || ch == ' '
-    }) || text.starts_with(' ')
+    text.chars()
+        .any(|ch| matches!(ch, '"' | '\'' | '\n' | '\r' | '\t') || ch.is_whitespace())
+        || text.starts_with(' ')
         || text.ends_with(' ')
 }
 

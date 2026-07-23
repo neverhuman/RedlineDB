@@ -104,9 +104,9 @@ fn format_real_g(v: f64, precision: usize) -> String {
         .expect("rust f64 fmt always emits valid exponent");
     let dot_pos = mantissa.find('.').unwrap_or(mantissa.len());
     let mut digits: Vec<u8> = Vec::with_capacity(precision + 4);
-    digits.extend_from_slice(mantissa[..dot_pos].as_bytes());
+    digits.extend_from_slice(&mantissa.as_bytes()[..dot_pos]);
     if dot_pos < mantissa.len() {
-        digits.extend_from_slice(mantissa[dot_pos + 1..].as_bytes());
+        digits.extend_from_slice(&mantissa.as_bytes()[dot_pos + 1..]);
     }
     // We have precision+2 digits (e.g. 19 for precision=17). For the
     // round-trip shortening to work we keep the 18-digit form around: round
@@ -121,15 +121,16 @@ fn format_real_g(v: f64, precision: usize) -> String {
     }
     // Now `digits` has `work_len` digits. Apply SQLite's shortening special
     // case for precision==17 (the `!`-flag in `%!.17g`).
-    if precision == 17 && digits.len() == 18 {
-        if let Some((shortened, new_exp)) = sqlite_shorten(&digits, exp, av, neg) {
-            let mut digits = shortened;
-            // Trim trailing zeros (keep at least one digit).
-            while digits.len() > 1 && *digits.last().unwrap() == b'0' {
-                digits.pop();
-            }
-            return assemble_g(&digits, new_exp, neg, precision as i32);
+    if precision == 17
+        && digits.len() == 18
+        && let Some((shortened, new_exp)) = sqlite_shorten(&digits, exp, av, neg)
+    {
+        let mut digits = shortened;
+        // Trim trailing zeros (keep at least one digit).
+        while digits.len() > 1 && *digits.last().unwrap() == b'0' {
+            digits.pop();
         }
+        return assemble_g(&digits, new_exp, neg, precision as i32);
     }
     // Fallback: round the 18-digit form down to 17 digits.
     if digits.len() > precision {
@@ -200,12 +201,11 @@ fn sqlite_shorten(digits: &[u8], exp: i32, original: f64, neg: bool) -> Option<(
             trimmed.pop();
         }
         let candidate = assemble_g(&trimmed, new_exp, neg, 17);
-        if let Ok(parsed) = candidate.parse::<f64>() {
-            if parsed.to_bits() == original.to_bits()
-                || (neg && (-parsed).to_bits() == original.to_bits())
-            {
-                return Some((trimmed, new_exp));
-            }
+        if let Ok(parsed) = candidate.parse::<f64>()
+            && (parsed.to_bits() == original.to_bits()
+                || (neg && (-parsed).to_bits() == original.to_bits()))
+        {
+            return Some((trimmed, new_exp));
         }
     }
     None

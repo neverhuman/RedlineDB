@@ -14,6 +14,7 @@ bash ops/ci/fast.sh
 # sources fail this protected check instead of being treated as advisory.
 bash ops/ci/security.sh
 bash ops/ci/dependency-review.sh
+bash ops/ci/storage-format-compat.sh
 bash ops/ci/jankurai-audit.sh
 
 echo "==> redline-core PR-CI: OK"

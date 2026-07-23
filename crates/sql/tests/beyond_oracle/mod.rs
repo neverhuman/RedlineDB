@@ -99,7 +99,7 @@ impl PostgresHarness {
     }
 
     fn connect(url: &str) -> Self {
-        let mut client = postgres::Client::connect(&url, postgres::NoTls)
+        let mut client = postgres::Client::connect(url, postgres::NoTls)
             .expect("connect to REDLINEDB_POSTGRES_URL");
         let schema = format!(
             "redlinedb_beyond_{}_{}",

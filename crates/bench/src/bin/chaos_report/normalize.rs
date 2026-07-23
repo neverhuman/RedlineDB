@@ -18,27 +18,6 @@ pub(crate) fn infer_source_paths(workload: &str) -> Vec<String> {
         "covered-range-warm",
     ];
     let top = ["secondary-index-ordered-limit"];
-    let workload_rs = [
-        "single-row-insert",
-        "batched-insert100",
-        "point-read-pk",
-        "writers-disjoint",
-        "hot-row-update",
-        "mixed-oltp",
-        "mixed95-read5-write",
-        "mixed80-read20-write",
-        "mixed50-read50-write",
-        "connection-limit",
-        "large-sort-spill",
-        "json-path-extract",
-        "json-path-update",
-        "vector-flat-search",
-        "vector-ann-search",
-        "vector-ann-search-disk",
-        "commit-storm-batched",
-        "hot-counter-update",
-        "queue-mixed",
-    ];
     let mut source_paths = Vec::new();
     if chaos.contains(&workload) {
         source_paths.push("crates/bench/src/chaos.rs".to_string());
@@ -48,8 +27,6 @@ pub(crate) fn infer_source_paths(workload: &str) -> Vec<String> {
         source_paths.push("crates/sql/src/exec/index_access.rs".to_string());
     } else if top.contains(&workload) {
         source_paths.push("crates/sql/src/exec/select_top.rs".to_string());
-    } else if workload_rs.contains(&workload) {
-        source_paths.push("crates/bench/src/workload.rs".to_string());
     } else {
         source_paths.push("crates/bench/src/workload.rs".to_string());
     }
@@ -57,12 +34,11 @@ pub(crate) fn infer_source_paths(workload: &str) -> Vec<String> {
 }
 
 pub(crate) fn record_source_paths(record: &Value) -> Vec<String> {
-    if let Some(stats) = record.get("engine_stats").and_then(Value::as_object) {
-        if let Some(p) = stats.get("test_code_path").and_then(Value::as_str) {
-            if !p.is_empty() {
-                return vec![p.to_string()];
-            }
-        }
+    if let Some(stats) = record.get("engine_stats").and_then(Value::as_object)
+        && let Some(p) = stats.get("test_code_path").and_then(Value::as_str)
+        && !p.is_empty()
+    {
+        return vec![p.to_string()];
     }
     let workload = record.get("workload").and_then(Value::as_str).unwrap_or("");
     infer_source_paths(workload)
@@ -76,12 +52,11 @@ pub(crate) fn normalize_record(record: &Value, manifest: Option<&Value>) -> Valu
         .unwrap_or("")
         .to_string();
     let mut source_paths: Vec<String> = Vec::new();
-    if let Some(stats) = record.get("engine_stats").and_then(Value::as_object) {
-        if let Some(p) = stats.get("test_code_path").and_then(Value::as_str) {
-            if !p.is_empty() {
-                source_paths.push(p.to_string());
-            }
-        }
+    if let Some(stats) = record.get("engine_stats").and_then(Value::as_object)
+        && let Some(p) = stats.get("test_code_path").and_then(Value::as_str)
+        && !p.is_empty()
+    {
+        source_paths.push(p.to_string());
     }
     if source_paths.is_empty() {
         source_paths = infer_source_paths(&workload);
@@ -106,10 +81,10 @@ pub(crate) fn normalize_record(record: &Value, manifest: Option<&Value>) -> Valu
             "test_code_paths".to_string(),
             Value::Array(dedup.into_iter().map(Value::String).collect()),
         );
-        if let Some(m) = manifest {
-            if let Some(cp) = m.get("config_path").and_then(Value::as_str) {
-                map.insert("config_path".to_string(), Value::String(cp.to_string()));
-            }
+        if let Some(m) = manifest
+            && let Some(cp) = m.get("config_path").and_then(Value::as_str)
+        {
+            map.insert("config_path".to_string(), Value::String(cp.to_string()));
         }
     }
     out

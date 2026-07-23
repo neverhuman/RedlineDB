@@ -315,7 +315,7 @@ mod tests {
     #[test]
     fn as_accessors_typed() {
         assert_eq!(Value::Integer(42).as_integer().unwrap(), 42);
-        assert_eq!(Value::Real(3.14).as_real().unwrap(), 3.14);
+        assert_eq!(Value::Real(3.125).as_real().unwrap(), 3.125);
         assert_eq!(Value::Text(Arc::from("x")).as_text().unwrap(), "x");
         assert_eq!(Value::Blob(Arc::from(&b"yz"[..])).as_blob().unwrap(), b"yz");
     }

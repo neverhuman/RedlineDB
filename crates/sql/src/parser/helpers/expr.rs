@@ -360,10 +360,10 @@ pub(crate) fn resolve_column_ordinal_in_table(
     // alias the rowid value is routed to that column ordinal so the
     // existing dispatch (which honours rowid_alias_column) takes
     // effect.
-    if table.is_public_rowid_name(name) {
-        if let Some(ord) = table.rowid_alias_column {
-            return Ok(ord as usize);
-        }
+    if table.is_public_rowid_name(name)
+        && let Some(ord) = table.rowid_alias_column
+    {
+        return Ok(ord as usize);
     }
     Err(Error::UnknownColumn(name.to_owned()))
 }

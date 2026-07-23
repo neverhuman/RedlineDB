@@ -360,16 +360,28 @@ pub(crate) fn lower_to_legacy(path: &AccessPath) -> super::AccessPath {
 /// will lift the ORDER BY satisfaction check out of
 /// `select_top::order_satisfied_by_index_with_prefix` into the
 /// planner so this entry can populate them with real values.
+pub(crate) struct AccessPathRequest<'a> {
+    pub(crate) projection: &'a [SelectItem],
+    pub(crate) selection: &'a Option<Expr>,
+    pub(crate) bindings: &'a [Option<SqlValue>],
+    pub(crate) hint: Option<&'a TableAccessHint>,
+    pub(crate) requested_order: &'a [OrderByExpr],
+    pub(crate) requested_limit: Option<usize>,
+}
+
 pub(crate) fn choose_access_path(
     engine: &Engine,
     table: &Arc<TableDef>,
-    projection: &[SelectItem],
-    selection: &Option<Expr>,
-    bindings: &[Option<SqlValue>],
-    hint: Option<&TableAccessHint>,
-    requested_order: &[OrderByExpr],
-    requested_limit: Option<usize>,
+    request: AccessPathRequest<'_>,
 ) -> AccessPath {
+    let AccessPathRequest {
+        projection,
+        selection,
+        bindings,
+        hint,
+        requested_order,
+        requested_limit,
+    } = request;
     // Step 1: rowid PK shortcut. The integer-PK alias is the cheapest
     // path; respect `NOT INDEXED` (which forbids index AND rowid
     // shortcuts to keep parity with SQLite's directive).
@@ -641,8 +653,8 @@ fn access_path_trace_json(path: &AccessPath) -> String {
 
 /// Conservative port of `select_top::order_satisfied_by_index_with_prefix`
 /// + the reverse-walk variant. Returns `No` when the ORDER BY is
-/// empty, when any item is non-identifier, when keys are
-/// expression-sourced, or when the requested direction is mixed.
+///   empty, when any item is non-identifier, when keys are
+///   expression-sourced, or when the requested direction is mixed.
 ///
 /// The scaffolding wave's job is faithful mirror, not perfection: the
 /// later wave that owns the executor rewrite will collapse the
@@ -828,12 +840,14 @@ mod tests {
         choose_access_path(
             &engine,
             &table,
-            projection,
-            &plan.selection,
-            &[],
-            hint,
-            &plan.order_by,
-            limit_usize(plan),
+            AccessPathRequest {
+                projection,
+                selection: &plan.selection,
+                bindings: &[],
+                hint,
+                requested_order: &plan.order_by,
+                requested_limit: limit_usize(plan),
+            },
         )
     }
 

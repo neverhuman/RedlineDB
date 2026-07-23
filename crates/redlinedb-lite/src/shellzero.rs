@@ -368,13 +368,9 @@ fn tokenize(input: &str) -> Option<Vec<Token>> {
                 tokens.push(Token::Comma);
                 i += 1;
             }
-            b'|' => {
-                if i + 1 < bytes.len() && bytes[i + 1] == b'|' {
-                    tokens.push(Token::Concat);
-                    i += 2;
-                } else {
-                    return None;
-                }
+            b'|' if i + 1 < bytes.len() && bytes[i + 1] == b'|' => {
+                tokens.push(Token::Concat);
+                i += 2;
             }
             b'\'' => {
                 let mut s = String::new();

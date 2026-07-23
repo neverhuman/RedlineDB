@@ -38,17 +38,17 @@ pub fn tables(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
     let rows = total.div_ceil(cols);
     // Per-column widths driven by the longest name placed in that column.
     let mut col_widths = vec![0usize; cols];
-    for col in 0..cols {
+    for (col, width) in col_widths.iter_mut().enumerate() {
         for row in 0..rows {
             let idx = col * rows + row;
             if let Some(name) = names.get(idx) {
-                col_widths[col] = col_widths[col].max(name.chars().count());
+                *width = (*width).max(name.chars().count());
             }
         }
     }
     for row in 0..rows {
         let mut line = String::new();
-        for col in 0..cols {
+        for (col, width) in col_widths.iter().enumerate() {
             let idx = col * rows + row;
             if idx >= total {
                 continue;
@@ -58,7 +58,7 @@ pub fn tables(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
                     line.push(' ');
                 }
             }
-            line.push_str(&format!("{:<width$}", names[idx], width = col_widths[col]));
+            line.push_str(&format!("{:<width$}", names[idx], width = width));
         }
         state
             .output

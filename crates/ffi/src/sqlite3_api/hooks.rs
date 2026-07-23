@@ -41,6 +41,8 @@ pub type AuthorizerFn = unsafe extern "C" fn(
     arg6: *const c_char,
 ) -> c_int;
 
+type HookSlot<F> = Mutex<Option<(F, usize)>>;
+
 /// Per-connection hook slots. `user_data` and the callback pointer are
 /// stored together to ensure they are updated atomically by the registrar.
 /// `user_data` is held as `usize` so the struct is auto-`Send + Sync`; it
@@ -80,7 +82,7 @@ fn validate_db(db: *mut rldb) -> Option<&'static rldb> {
 
 fn swap_slot<F: Copy>(
     db: *mut rldb,
-    pick: fn(&HookSlots) -> &Mutex<Option<(F, usize)>>,
+    pick: fn(&HookSlots) -> &HookSlot<F>,
     cb: Option<F>,
     user_data: *mut c_void,
 ) -> *mut c_void {

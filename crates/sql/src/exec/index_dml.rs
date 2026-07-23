@@ -48,10 +48,10 @@ pub(crate) struct BuiltIndexKeyWithValues {
 /// unchanged — BINARY is byte-exact by definition, and RTRIM/custom
 /// collations are not yet reflected in the physical key encoding.
 fn apply_index_key_collation(value: SqlValue, collation: Option<&str>) -> SqlValue {
-    if let Some("NOCASE") = collation {
-        if let SqlValue::Text(s) = value {
-            return SqlValue::Text(s.to_ascii_lowercase().into());
-        }
+    if let Some("NOCASE") = collation
+        && let SqlValue::Text(s) = value
+    {
+        return SqlValue::Text(s.to_ascii_lowercase().into());
     }
     value
 }
@@ -110,7 +110,7 @@ fn encode_built_index_key(
     let EncodedIndexKey {
         bytes,
         contains_null,
-    } = encode_index_key(&value_refs, &dirs, &mut buf);
+    } = encode_index_key(value_refs, dirs, &mut buf);
     BuiltIndexKey {
         bytes,
         contains_null,

@@ -242,17 +242,19 @@ pub(crate) fn wrap_limit_with_conn(
             let ir = choose_access_path_ir(
                 conn.engine(),
                 table,
-                &[], // covering detection not needed for limit-pushdown check
-                &plan.selection,
-                &[],
-                plan.table_hint.as_ref(),
-                &plan.order_by,
-                Some(n),
+                access_path::AccessPathRequest {
+                    projection: &[], // covering detection not needed for limit-pushdown check
+                    selection: &plan.selection,
+                    bindings: &[],
+                    hint: plan.table_hint.as_ref(),
+                    requested_order: &plan.order_by,
+                    requested_limit: Some(n),
+                },
             );
-            if let Some(k) = ir.hard_limit() {
-                if let Some(index_scan) = limit_annotatable_index_scan_mut(&mut input) {
-                    index_scan.ordered_index_scan_limit = Some(k);
-                }
+            if let Some(k) = ir.hard_limit()
+                && let Some(index_scan) = limit_annotatable_index_scan_mut(&mut input)
+            {
+                index_scan.ordered_index_scan_limit = Some(k);
             }
         }
     } else if let (PhysicalKind::IndexScan, Some(n)) = (input.kind, limit_n)

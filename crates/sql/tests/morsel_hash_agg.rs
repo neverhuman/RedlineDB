@@ -161,18 +161,16 @@ fn build_morsel_single_i64<'a>(arena: &'a Bump, values: &[i64]) -> Morsel<'a> {
 
 fn build_morsel_with_nulls_i64<'a>(arena: &'a Bump, values: &[Option<i64>]) -> Morsel<'a> {
     let mut b = MorselBuilder::with_capacity(arena, &[ColumnKind::I64], values.len());
-    let mut idx = 0_usize;
     // We can't push a Null into an I64 column, so build the morsel as
     // all-valid integer rows and then `invalidate(idx)` the slots that
     // are conceptually NULL. This matches how a filter operator would
     // mark rows it has rejected.
-    for v in values {
+    for (idx, v) in values.iter().enumerate() {
         let placeholder = v.unwrap_or(0);
         b.push_row(&[ValueRef::Integer(placeholder)]).expect("push");
         if v.is_none() {
             b.invalidate(idx);
         }
-        idx += 1;
     }
     b.finish()
 }
@@ -274,9 +272,9 @@ fn multi_group_count_with_validity_mask() {
     });
     // Reference: count surviving rows per group.
     let mut expected = [0i64; 4];
-    for idx in 0..pairs.len() {
+    for (idx, pair) in pairs.iter().enumerate() {
         if idx % 7 != 0 {
-            let g = pairs[idx].0 as usize;
+            let g = pair.0 as usize;
             expected[g] += 1;
         }
     }

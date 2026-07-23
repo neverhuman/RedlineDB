@@ -18,6 +18,7 @@ fn protected_required_lane_runs_every_hard_gate_in_order() {
         "bash ops/ci/fast.sh",
         "bash ops/ci/security.sh",
         "bash ops/ci/dependency-review.sh",
+        "bash ops/ci/storage-format-compat.sh",
         "bash ops/ci/jankurai-audit.sh",
     ] {
         let offset = remainder
@@ -58,11 +59,22 @@ fn release_security_surfaces_have_no_active_soft_gate() {
     );
 
     let workflow = read(".github/workflows/jankurai.yml");
-    assert!(workflow.contains("cargo install cargo-deny --locked --version 0.19.8"));
+    assert!(workflow.contains("bash ops/ci/governed-security-inputs-test.sh"));
+    assert!(workflow.contains("bash ops/ci/pinned-rustsec-test.sh"));
     assert!(workflow.contains(
         "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json"
     ));
-    assert!(!workflow.contains("cargo-deny --locked --version 0.18.0"));
+    assert!(!workflow.contains("cargo install"));
+    assert!(!workflow.contains("curl "));
+
+    let security = read("ops/ci/security.sh");
+    assert!(security.contains("cargo metadata --format-version 1 --locked --offline"));
+    assert!(security.contains("--no-fetch --json"));
+    assert!(security.contains("check --disable-fetch"));
+
+    let tools = read("ops/ci/security-tools.sh");
+    assert!(tools.contains("REDLINE_CARGO_DENY_VERSION=\"cargo-deny 0.19.8\""));
+    assert!(tools.contains("redline_validate_security_tool cargo-deny"));
 
     let security_marker = read("tools/security-lane.sh");
     assert!(security_marker.contains("bash \"$ROOT/ops/ci/security.sh\""));

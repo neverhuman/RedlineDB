@@ -157,38 +157,45 @@ pub(super) struct FrameHeader<'a> {
     pub payload: &'a [u8],
 }
 
+pub(super) struct FrameValidation<F> {
+    pub magic: u32,
+    pub expected_version: u16,
+    pub file_too_small: Error,
+    pub magic_mismatch: Error,
+    pub length_overflow: Error,
+    pub length_mismatch: Error,
+    pub invalid_version: F,
+}
+
 /// Validate the 20-byte framed header and return the payload slice.
 /// Caller supplies the `magic` it expects and an `invalid_version`
 /// constructor for the version mismatch path so each store can keep
 /// raising its own typed `Error` for version drift.
-pub(super) fn parse_header<'a>(
+pub(super) fn parse_header<'a, F>(
     bytes: &'a [u8],
-    magic: u32,
-    file_too_small: Error,
-    magic_mismatch: Error,
-    length_overflow: Error,
-    length_mismatch: Error,
-    expected_version: u16,
-    invalid_version: impl FnOnce(u16) -> Error,
-) -> Result<FrameHeader<'a>> {
+    validation: FrameValidation<F>,
+) -> Result<FrameHeader<'a>>
+where
+    F: FnOnce(u16) -> Error,
+{
     if bytes.len() < FILE_HEADER_LEN {
-        return Err(file_too_small);
+        return Err(validation.file_too_small);
     }
     let observed_magic = u32::from_le_bytes(bytes[0..4].try_into().unwrap());
-    if observed_magic != magic {
-        return Err(magic_mismatch);
+    if observed_magic != validation.magic {
+        return Err(validation.magic_mismatch);
     }
     let version = u16::from_le_bytes(bytes[4..6].try_into().unwrap());
-    if version != expected_version {
-        return Err(invalid_version(version));
+    if version != validation.expected_version {
+        return Err((validation.invalid_version)(version));
     }
     let payload_len = u64::from_le_bytes(bytes[8..16].try_into().unwrap()) as usize;
     let crc = u32::from_le_bytes(bytes[16..20].try_into().unwrap());
     let expected = FILE_HEADER_LEN
         .checked_add(payload_len)
-        .ok_or(length_overflow)?;
+        .ok_or(validation.length_overflow)?;
     if bytes.len() != expected {
-        return Err(length_mismatch);
+        return Err(validation.length_mismatch);
     }
     let payload = &bytes[FILE_HEADER_LEN..];
     if crc32_payload(payload) != crc {

@@ -16,7 +16,7 @@ pub struct Bitmap {
 
 impl Bitmap {
     pub fn new(cap_rows: usize) -> Self {
-        let words = (cap_rows + BITS_PER_WORD - 1) / BITS_PER_WORD;
+        let words = cap_rows.div_ceil(BITS_PER_WORD);
         Self {
             words: smallvec![0u64; words],
             bit_len: cap_rows,

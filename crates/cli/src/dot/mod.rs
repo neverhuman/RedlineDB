@@ -424,9 +424,9 @@ pub fn split_args(line: &str) -> Vec<String> {
     // inside a double-quoted segment so we can expand escapes on token
     // close.
     let mut current_double_quoted = false;
-    let mut iter = line.chars().peekable();
+    let iter = line.chars().peekable();
     let mut quote: Option<char> = None;
-    while let Some(ch) = iter.next() {
+    for ch in iter {
         match (quote, ch) {
             (Some(q), c) if c == q => quote = None,
             (Some(_), c) => current.push(c),

@@ -116,7 +116,7 @@ pub(crate) fn extract_int(value: &Value) -> Option<i64> {
     }
 }
 
-pub(crate) fn build_groups<'a>(records: &'a [Value]) -> BTreeMap<GroupKey, Vec<&'a Value>> {
+pub(crate) fn build_groups(records: &[Value]) -> BTreeMap<GroupKey, Vec<&Value>> {
     let mut grouped: BTreeMap<GroupKey, Vec<&Value>> = BTreeMap::new();
     for record in records {
         let run = record.get("_run").and_then(Value::as_str).unwrap_or("");

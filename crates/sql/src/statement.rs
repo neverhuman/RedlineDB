@@ -391,7 +391,7 @@ pub enum InsertConflict {
 
 #[derive(Debug, Clone)]
 pub enum DmlValue {
-    Expr(Expr),
+    Expr(Box<Expr>),
     Default,
 }
 
@@ -472,9 +472,8 @@ pub enum CompoundSetOp {
 /// the hint inside `index_access::try_match_index_access`:
 ///   - `NotIndexed`        → never advertise an index path (TableScan).
 ///   - `IndexedBy(name)`   → only match when the chosen index name (case-
-///                           insensitively) equals `name`; otherwise fall
-///                           through to TableScan (permissive: SQLite does
-///                           the same when the named index does not apply).
+///     insensitively) equals `name`; otherwise fall through to TableScan
+///     (permissive: SQLite does the same when the named index does not apply).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TableAccessHint {
     NotIndexed,

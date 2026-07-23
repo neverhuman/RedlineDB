@@ -594,13 +594,9 @@ fn parse_decimal_str(s: &str) -> Option<Decimal> {
 fn align_scale(a: &Decimal, b: &Decimal) -> (Vec<u8>, Vec<u8>, usize) {
     let target = a.scale.max(b.scale);
     let mut left = a.digits.clone();
-    for _ in 0..(target - a.scale) {
-        left.push(0);
-    }
+    left.extend(std::iter::repeat_n(0, target - a.scale));
     let mut right = b.digits.clone();
-    for _ in 0..(target - b.scale) {
-        right.push(0);
-    }
+    right.extend(std::iter::repeat_n(0, target - b.scale));
     (left, right, target)
 }
 
@@ -725,7 +721,7 @@ fn decimal_mul(a: &Decimal, b: &Decimal) -> Decimal {
         carry = total / 10;
     }
     while carry > 0 {
-        out.push((carry % 10) as u16);
+        out.push(carry % 10);
         carry /= 10;
     }
     out.reverse();
@@ -764,9 +760,7 @@ fn decimal_div(a: &Decimal, b: &Decimal) -> Option<Decimal> {
     // Long division on the aligned dividend (a × 10^(QUOTIENT_SCALE + b.scale)).
     let mut dividend = a.digits.clone();
     let extra = QUOTIENT_SCALE + b.scale;
-    for _ in 0..extra {
-        dividend.push(0);
-    }
+    dividend.extend(std::iter::repeat_n(0, extra));
     let divisor = &b.digits;
     let mut quotient: Vec<u8> = Vec::with_capacity(dividend.len());
     let mut current: Vec<u8> = Vec::new();

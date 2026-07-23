@@ -14,13 +14,27 @@
 
 set -euo pipefail
 
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=ops/ci/pinned-rustsec.sh
+. "$repo_root/ops/ci/pinned-rustsec.sh"
+# shellcheck source=ops/ci/security-tools.sh
+. "$repo_root/ops/ci/security-tools.sh"
+
 LOG_PATH=".jankurai/dependency-review.log"
 mkdir -p "$(dirname "$LOG_PATH")"
 
-command -v cargo-deny >/dev/null 2>&1 || {
-    printf 'cargo-deny is required for dependency review\n' >&2
-    exit 1
-}
+export CARGO_NET_OFFLINE=true
+rustsec_stage="$(mktemp -d "${TMPDIR:-/tmp}/redline-dependency-rustsec.XXXXXX")"
+trap 'rm -rf -- "$rustsec_stage"' EXIT
+redline_prepare_local_rustsec "$rustsec_stage"
+redline_resolve_pinned_rustsec
+redline_resolve_security_tools
+redline_resolve_cargo_deny_rustsec
+cargo metadata --format-version 1 --locked --offline \
+    > .jankurai/dependency-review-metadata.json
 
-cargo deny --all-features check advisories bans licenses sources 2>&1 \
+CARGO_HOME="$REDLINE_CARGO_DENY_HOME" \
+    "$REDLINE_CARGO_DENY_BIN" check --disable-fetch \
+    --metadata-path .jankurai/dependency-review-metadata.json \
+    advisories bans licenses sources 2>&1 \
     | tee "$LOG_PATH"

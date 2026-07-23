@@ -524,15 +524,15 @@ fn compile_into(
 fn compile_value(v: &Value, p: &mut ScalarProgram, s: &mut CompileState) -> Result<bool> {
     // Bind parameters arrive here as `Value::Placeholder("?N")`.
     if let Some(name) = crate::parser::bind::as_bind_name(v) {
-        if let Some(rest) = name.strip_prefix('?') {
-            if let Ok(slot) = rest.parse::<usize>() {
-                if slot > u8::MAX as usize + 1 || slot == 0 {
-                    return Ok(false);
-                }
-                p.ops.push(Op::LoadBinding((slot - 1) as u8));
-                s.push(1);
-                return Ok(true);
+        if let Some(rest) = name.strip_prefix('?')
+            && let Ok(slot) = rest.parse::<usize>()
+        {
+            if slot > u8::MAX as usize + 1 || slot == 0 {
+                return Ok(false);
             }
+            p.ops.push(Op::LoadBinding((slot - 1) as u8));
+            s.push(1);
+            return Ok(true);
         }
         return Ok(false);
     }

@@ -139,7 +139,7 @@ impl Database {
         ephemeral_root: Option<Arc<EphemeralRoot>>,
         private_memory: bool,
     ) -> Result<Arc<Self>> {
-        let base = path.as_ref();
+        let base = path;
         let metadata_sync_policy = if private_memory {
             MetadataSyncPolicy::Disabled
         } else {
@@ -270,8 +270,10 @@ impl Database {
     }
 
     pub fn connect(self: &Arc<Self>) -> Arc<Connection> {
-        let mut session = SessionState::default();
-        session.sqlite_sequences = self.sqlite_sequence_snapshot();
+        let session = SessionState {
+            sqlite_sequences: self.sqlite_sequence_snapshot(),
+            ..SessionState::default()
+        };
         Arc::new(Connection {
             db: Arc::clone(self),
             session: Mutex::new(session),

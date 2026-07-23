@@ -56,10 +56,10 @@ impl BtreeIndex {
                 (Some(last_left), Some(first_right))
                     if last_left.logical_key() == first_right.logical_key() =>
                 {
-                    match first_right.physical().map(|p| p.to_vec()) {
-                        Some(vec) => vec,
-                        None => Vec::new(),
-                    }
+                    first_right
+                        .physical()
+                        .map(|p| p.to_vec())
+                        .unwrap_or_default()
                 }
                 _ => match right_entries.first().and_then(|entry| entry.logical_key()) {
                     Some(key) => key.to_vec(),

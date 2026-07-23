@@ -174,34 +174,6 @@ impl TryFrom<&AnyConnectOptions> for RedlineConnectOptions {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn mode_ro_disables_owner_lock_and_creation() {
-        let url = Url::parse("redline:///tmp/attach.redlineDB?mode=ro").expect("url");
-        let opts = RedlineConnectOptions::from_url(&url).expect("connect options");
-
-        assert!(matches!(opts.location, RedlineLocation::File(_)));
-        assert!(!opts.open_options.create);
-        assert!(opts.open_options.read_only);
-        assert!(!opts.open_options.process_owner_lock);
-    }
-
-    #[test]
-    fn ro_is_rejected_for_in_memory_url() {
-        let url = Url::parse("redline:///:memory:?mode=ro").expect("url");
-        let err = RedlineConnectOptions::from_url(&url).expect_err("reject memory ro");
-
-        assert!(
-            err.to_string()
-                .contains("read-only attach mode is only supported for file-backed"),
-            "unexpected error: {err}"
-        );
-    }
-}
-
 impl Connection for RedlineConnection {
     type Database = RedlineDb;
     type Options = RedlineConnectOptions;
@@ -258,5 +230,33 @@ impl Connection for RedlineConnection {
 
     fn should_flush(&self) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn mode_ro_disables_owner_lock_and_creation() {
+        let url = Url::parse("redline:///tmp/attach.redlineDB?mode=ro").expect("url");
+        let opts = RedlineConnectOptions::from_url(&url).expect("connect options");
+
+        assert!(matches!(opts.location, RedlineLocation::File(_)));
+        assert!(!opts.open_options.create);
+        assert!(opts.open_options.read_only);
+        assert!(!opts.open_options.process_owner_lock);
+    }
+
+    #[test]
+    fn ro_is_rejected_for_in_memory_url() {
+        let url = Url::parse("redline:///:memory:?mode=ro").expect("url");
+        let err = RedlineConnectOptions::from_url(&url).expect_err("reject memory ro");
+
+        assert!(
+            err.to_string()
+                .contains("read-only attach mode is only supported for file-backed"),
+            "unexpected error: {err}"
+        );
     }
 }

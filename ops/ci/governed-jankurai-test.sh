@@ -2,83 +2,168 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$repo_root"
+source_lib="$repo_root/ops/ci/lib.sh"
+production_broker="/opt/jain-ci/authority/release-bin/jankurai"
+production_governed="/home/ubuntu/.jeryu/bin/jankurai"
+tmp="$(mktemp -d "${TMPDIR:-/tmp}/redline-core-governed-jankurai.XXXXXX")"
+trap 'rm -rf -- "$tmp"' EXIT
 
-# shellcheck source=ops/ci/lib.sh
-. ops/ci/lib.sh
-
-tmp_dir="$(mktemp -d "${TMPDIR:-/tmp}/redline-core-governed-jankurai.XXXXXX")"
-trap 'rm -rf "$tmp_dir"' EXIT
-
-expect_rejected() {
-    local name="$1"
-    shift
-    if "$@" >"$tmp_dir/$name.log" 2>&1; then
-        printf 'negative probe unexpectedly accepted: %s\n' "$name" >&2
-        return 1
-    fi
-    printf 'negative probe rejected: %s\n' "$name"
+fail() {
+    printf 'governed-jankurai-test: %s\n' "$*" >&2
+    exit 1
 }
 
-expect_rejected missing \
-    ci_validate_jankurai_binary \
-    "$tmp_dir/missing" "$CI_JANKURAI_VERSION" "$CI_JANKURAI_SHA256"
+expect_failure() {
+    local description="$1" pattern="$2"
+    shift 2
+    if "$@" >"$tmp/failure.log" 2>&1; then
+        fail "$description: command unexpectedly succeeded"
+    fi
+    grep -Fq "$pattern" "$tmp/failure.log" || {
+        sed -n '1,80p' "$tmp/failure.log" >&2
+        fail "$description: expected failure text was absent"
+    }
+}
 
-ln -s "$CI_JANKURAI_BIN" "$tmp_dir/symlinked"
-expect_rejected symlink \
-    ci_validate_jankurai_binary \
-    "$tmp_dir/symlinked" "$CI_JANKURAI_VERSION" "$CI_JANKURAI_SHA256"
-rm -f "$tmp_dir/symlinked"
-
-cp "$CI_JANKURAI_BIN" "$tmp_dir/wrong-digest"
-chmod 0755 "$tmp_dir/wrong-digest"
-expect_rejected wrong-digest \
-    ci_validate_jankurai_binary \
-    "$tmp_dir/wrong-digest" "$CI_JANKURAI_VERSION" \
-    "0000000000000000000000000000000000000000000000000000000000000000"
-
-cp /usr/bin/true "$tmp_dir/wrong-version"
-chmod 0755 "$tmp_dir/wrong-version"
-wrong_version_sha="$(sha256sum "$tmp_dir/wrong-version" | awk '{print $1}')"
-expect_rejected wrong-version \
-    ci_validate_jankurai_binary \
-    "$tmp_dir/wrong-version" "$CI_JANKURAI_VERSION" "$wrong_version_sha"
-
-cp "$CI_JANKURAI_BIN" "$tmp_dir/hardlink-source"
-chmod 0755 "$tmp_dir/hardlink-source"
-ln "$tmp_dir/hardlink-source" "$tmp_dir/hardlinked"
-expect_rejected hardlink \
-    ci_validate_jankurai_binary \
-    "$tmp_dir/hardlinked" "$CI_JANKURAI_VERSION" "$CI_JANKURAI_SHA256"
-rm -f "$tmp_dir/hardlinked" "$tmp_dir/hardlink-source"
-
-mkdir -p "$tmp_dir/hostile-bin"
-printf '#!/usr/bin/env bash\nprintf "hostile PATH jankurai\\n"\n' \
-    > "$tmp_dir/hostile-bin/jankurai"
-chmod 0755 "$tmp_dir/hostile-bin/jankurai"
-
-expect_rejected hostile-source-selection \
-    /usr/bin/env PATH="$tmp_dir/hostile-bin:/usr/bin:/bin" \
-    /usr/bin/bash -c \
-    'set -euo pipefail; . "$1"; ci_require_governed_jankurai' \
-    _ "$repo_root/ops/ci/lib.sh"
-
-mkdir -p "$tmp_dir/empty-bin"
-expect_rejected missing-source-selection \
-    /usr/bin/env PATH="$tmp_dir/empty-bin:/usr/bin:/bin" \
-    /usr/bin/bash -c \
-    'set -euo pipefail; . "$1"; ci_require_governed_jankurai' \
-    _ "$repo_root/ops/ci/lib.sh"
-
-PATH="$tmp_dir/hostile-bin:/usr/bin:/bin"
-export PATH
-ci_require_governed_jankurai >/dev/null
-[ "$(type -t jankurai)" = "function" ]
-[ "$(jankurai --version)" = "jankurai $CI_JANKURAI_VERSION" ]
-
-if grep -Fq '/home/ubuntu/.jeryu/bin/jankurai' "$repo_root/ops/ci/lib.sh"; then
-    printf 'governed Jankurai selection still depends on the user home\n' >&2
-    exit 1
+grep -Fq "$production_broker" "$source_lib" || fail "release broker path is absent"
+grep -Fq "$production_governed" "$source_lib" || fail "ordinary governed path is absent"
+grep -Fq '96d99e6e7d8dc9cf23df1081edd1f975231456592f81d9405385219a2c7298aa' \
+    "$source_lib" || fail "protected Tool digest is absent"
+grep -Fq '479489f56f42045a71bf0651c3793d82f8689630' \
+    "$source_lib" || fail "protected Tool main authority is absent"
+grep -Fq 'jeryu-tool-v5.1.0-split.3' \
+    "$source_lib" || fail "immutable Tool authority tag is absent"
+if grep -Fq 'fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e' \
+    "$source_lib"; then
+    fail "retired Jankurai digest remains"
 fi
 
-printf 'governed Jankurai hostile probes passed\n'
+mkdir -p "$tmp/broker/bin" "$tmp/attacker/bin" \
+    "$tmp/home/.jeryu/bin" "$tmp/home/.jeryu/receipts/jankurai/sha256" \
+    "$tmp/home/.local/bin"
+governed_source="/usr/local/libexec/jain/jankurai"
+[[ -f "$governed_source" && ! -L "$governed_source" && -x "$governed_source" ]] \
+    || fail "governed Jankurai test source is unavailable"
+[[ "$("$governed_source" --version)" == 'jankurai 1.6.11' ]] \
+    || fail "governed Jankurai test source has the wrong version"
+[[ "$(sha256sum "$governed_source" | awk '{print $1}')" == \
+    '96d99e6e7d8dc9cf23df1081edd1f975231456592f81d9405385219a2c7298aa' ]] \
+    || fail "governed Jankurai test source has the wrong digest"
+
+broker_bin="$tmp/broker/bin/jankurai"
+attacker_bin="$tmp/attacker/bin/jankurai"
+ordinary_bin="$tmp/home/.jeryu/bin/jankurai"
+older_local_bin="$tmp/home/.local/bin/jankurai"
+cp -- "$governed_source" "$broker_bin"
+cp -- "$governed_source" "$attacker_bin"
+cp -- "$governed_source" "$ordinary_bin"
+chmod 0555 "$broker_bin" "$attacker_bin" "$ordinary_bin"
+printf '#!/usr/bin/env bash\nprintf "jankurai 1.6.11\\n"\n' >"$older_local_bin"
+chmod 0555 "$older_local_bin"
+
+# Exercise the production bytes while substituting only the two fixed paths
+# inside this automatically removed hostile fixture.
+test_lib="$tmp/lib.sh"
+sed -e "s#$production_broker#$broker_bin#g" \
+    -e "s#$production_governed#$ordinary_bin#g" \
+    "$source_lib" >"$test_lib"
+# shellcheck source=ops/ci/lib.sh
+source "$test_lib"
+
+receipt_tmp="$tmp/receipt.json"
+jq -n \
+    --arg remote "$JERYU_JANKURAI_SOURCE_REPO" \
+    --arg commit "$JERYU_JANKURAI_SOURCE_REV" \
+    --arg tag "$JERYU_JANKURAI_SOURCE_TAG" \
+    --arg tree "$JERYU_JANKURAI_SOURCE_TREE" \
+    --arg archive "$JERYU_JANKURAI_SOURCE_ARCHIVE_SHA256" \
+    --arg lock "$JERYU_JANKURAI_CARGO_LOCK_SHA256" \
+    --arg rustc "$JERYU_JANKURAI_RUSTC_VERSION" \
+    --arg cargo "$JERYU_JANKURAI_CARGO_VERSION" \
+    --arg triple "$JERYU_JANKURAI_TARGET_TRIPLE" \
+    --arg mode "$JERYU_JANKURAI_BUILD_MODE" \
+    --arg digest "$JERYU_JANKURAI_SHA256" \
+    --arg version "$JERYU_JANKURAI_VERSION" \
+    --arg path "$ordinary_bin" \
+    --arg manifest_repo "$JERYU_TOOL_AUTHORITY_REPO" \
+    --arg manifest_sha "$JERYU_TOOL_MANIFEST_SHA256" \
+    '{schema:"jeryu.jankurai-installation/v1",
+      source:{remote:$remote,commit:$commit,tag:$tag,tree:$tree,
+        archive_sha256:$archive,cargo_lock_sha256:$lock,
+        verification:"release-authoritative"},
+      build:{rustc:$rustc,cargo:$cargo,target_triple:$triple,mode:$mode,
+        cargo_net_offline:true,dedicated_cargo_home:true,
+        git_global_config_disabled:true,git_system_config_disabled:true,
+        git_http_follow_redirects:false,git_terminal_prompt:false,
+        jankurai_update_check:false,
+        network_scope:"local-forge-source-plus-offline-cargo",
+        no_proxy:"127.0.0.1,localhost,::1"},
+      governance:{status:"governed",
+        manifest_repo:$manifest_repo,
+        manifest_commit:("a"*40),manifest_tree:("b"*40),
+        manifest_sha256:$manifest_sha,protected_main:true,
+        protection_policy:"immutable-main-v1"},
+      binary:{sha256:$digest,version_output:$version},
+      installation:{path:$path,atomic:true},test_mode:false,
+      conclusion:"success"}' >"$receipt_tmp"
+receipt_sha="$(sha256sum "$receipt_tmp" | awk '{print $1}')"
+mv -- "$receipt_tmp" \
+    "$tmp/home/.jeryu/receipts/jankurai/sha256/$receipt_sha.json"
+
+ordinary_command='source "$1"; require_jankurai; [[ "$JERYU_GOVERNED_JANKURAI_BIN" == "$2" ]]'
+env -i HOME="$tmp/home" \
+    PATH="$tmp/home/.local/bin:$tmp/home/.jeryu/bin:/usr/bin:/bin" \
+    bash -c "$ordinary_command" bash "$test_lib" "$ordinary_bin"
+
+run_release_broker() {
+    local path="$1"
+    shift
+    local command_text
+    command_text='source "$1"; require_jankurai; [[ "$JERYU_GOVERNED_JANKURAI_BIN" == "$2" ]]'
+    env -i HOME="$tmp/home" PATH="$path:/usr/bin:/bin" JAIN_RELEASE_CI=1 "$@" \
+        bash -c "$command_text" bash "$test_lib" "$broker_bin"
+}
+
+run_release_broker "$tmp/broker/bin"
+run_release_broker "$tmp/broker/bin" \
+    JERYU_GOVERNED_JANKURAI_BIN="$attacker_bin" \
+    JERYU_JANKURAI_BIN="$attacker_bin"
+expect_failure "caller receipt substitution" \
+    "release broker Jankurai rejects caller receipt authority" \
+    run_release_broker "$tmp/broker/bin" \
+    JERYU_JANKURAI_RECEIPT="$tmp/caller.json" \
+    JERYU_JANKURAI_RECEIPT_SHA256="$(printf 'a%.0s' {1..64})" \
+    JERYU_JANKURAI_ALLOW_TEST_RECEIPT=1
+expect_failure "ambient home auditor" "release broker Jankurai path mismatch" \
+    run_release_broker "$tmp/home/.jeryu/bin"
+expect_failure "caller PATH substitution" "release broker Jankurai path mismatch" \
+    run_release_broker "$tmp/attacker/bin"
+expect_failure "missing broker" "release broker Jankurai path mismatch" \
+    run_release_broker "/usr/bin:/bin"
+
+cp -- "$broker_bin" "$tmp/broker-backup"
+chmod 0755 "$broker_bin"
+printf '#!/usr/bin/env bash\nprintf "jankurai 1.6.11\\n"\n' >"$broker_bin"
+chmod 0555 "$broker_bin"
+expect_failure "wrong broker identity" "governed jankurai identity mismatch" \
+    run_release_broker "$tmp/broker/bin"
+rm -- "$broker_bin"
+mv -- "$tmp/broker-backup" "$broker_bin"
+chmod 0555 "$broker_bin"
+
+chmod 0755 "$broker_bin"
+expect_failure "writable broker" "release broker Jankurai custody mismatch" \
+    run_release_broker "$tmp/broker/bin"
+chmod 0555 "$broker_bin"
+
+ln "$broker_bin" "$tmp/broker/bin/jankurai-linked"
+expect_failure "hard-linked broker" "release broker Jankurai custody mismatch" \
+    run_release_broker "$tmp/broker/bin"
+rm -- "$tmp/broker/bin/jankurai-linked"
+
+mv -- "$broker_bin" "$tmp/physical-broker"
+ln -s -- "$tmp/physical-broker" "$broker_bin"
+expect_failure "symlinked broker" "governed jankurai must be" \
+    run_release_broker "$tmp/broker/bin"
+
+printf 'governed Jankurai hostiles passed: ordinary broker caller shadow identity custody\n'

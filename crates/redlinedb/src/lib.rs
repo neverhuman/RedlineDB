@@ -68,7 +68,8 @@ pub use redlinedb_sql::{
 pub use redlinedb_sql::format_real_sqlite;
 pub use statement::{OwnedStatement, Prepared, Rows, Statement};
 pub use storage_format::{
-    MIN_READABLE_STORAGE_FORMAT_VERSION, STORAGE_FORMAT_VERSION, supports_storage_format,
+    MIN_READABLE_STORAGE_FORMAT_VERSION, STORAGE_FORMAT_FILE_NAME, STORAGE_FORMAT_VERSION,
+    supports_storage_format,
 };
 pub use value::{Value, ValueRef};
 
@@ -422,25 +423,26 @@ mod tests {
             .expect("setup");
 
         let mut stmt = conn.prepare("SELECT v FROM t ORDER BY v").expect("prepare");
-        let mut rows = stmt
-            .query_map((), |row| {
-                let value = row.get::<i64>(0)?;
-                if value == 2 {
-                    Err(Error::unsupported("mapped stop"))
-                } else {
-                    Ok(value)
-                }
-            })
-            .expect("query map");
-        assert_eq!(rows.next().expect("first").expect("first value"), 1);
-        assert_eq!(
-            rows.next()
-                .expect("second")
-                .expect_err("mapped error")
-                .code(),
-            ErrorCode::Unsupported
-        );
-        drop(rows);
+        {
+            let mut rows = stmt
+                .query_map((), |row| {
+                    let value = row.get::<i64>(0)?;
+                    if value == 2 {
+                        Err(Error::unsupported("mapped stop"))
+                    } else {
+                        Ok(value)
+                    }
+                })
+                .expect("query map");
+            assert_eq!(rows.next().expect("first").expect("first value"), 1);
+            assert_eq!(
+                rows.next()
+                    .expect("second")
+                    .expect_err("mapped error")
+                    .code(),
+                ErrorCode::Unsupported
+            );
+        }
 
         match stmt.step().expect("resume after iterator drop") {
             Step::Row(row) => assert_eq!(row.get::<i64>(0).expect("third value"), 3),
@@ -484,7 +486,7 @@ mod tests {
 
         conn.execute(
             "INSERT INTO t VALUES (?, ?, ?, ?, ?)",
-            (1_i64, "hello", 3.14_f64, vec![1_u8, 2, 3], true),
+            (1_i64, "hello", 3.125_f64, vec![1_u8, 2, 3], true),
         )
         .expect("insert via 5-tuple");
 

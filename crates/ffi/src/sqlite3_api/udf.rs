@@ -5,9 +5,10 @@
 //! consults this registry via the `udf_registry::dispatch` hook installed
 //! into `redlinedb_sql` when `sqlite3_create_function*` is first called.
 
+use std::collections::HashMap;
 use std::ffi::{CStr, c_void};
 use std::os::raw::{c_char, c_int};
-use std::sync::Mutex;
+use std::sync::{Mutex, MutexGuard};
 
 use redlinedb_sql::udf as sql_udf;
 use redlinedb_sql::value::SqlValue;
@@ -58,17 +59,18 @@ pub(crate) enum UdfEntry {
     Aggregate(AggregateEntry),
 }
 
+type UdfKey = (usize, String, i32);
+type UdfRegistry = HashMap<UdfKey, UdfEntry>;
+type UdfRegistryGuard = MutexGuard<'static, Option<UdfRegistry>>;
+
 /// Registry: (db_addr, lowercased_name, narg) -> entry.
 /// `narg = -1` matches any arity.
-static REGISTRY: Mutex<Option<std::collections::HashMap<(usize, String, i32), UdfEntry>>> =
-    Mutex::new(None);
+static REGISTRY: Mutex<Option<UdfRegistry>> = Mutex::new(None);
 
-fn registry()
--> std::sync::MutexGuard<'static, Option<std::collections::HashMap<(usize, String, i32), UdfEntry>>>
-{
+fn registry() -> UdfRegistryGuard {
     let mut guard = REGISTRY.lock().expect("udf registry poisoned");
     if guard.is_none() {
-        *guard = Some(std::collections::HashMap::new());
+        *guard = Some(HashMap::new());
         sql_udf::install_dispatch(dispatch_from_sql);
         sql_udf::install_aggregate_dispatch(aggregate_run_from_sql, aggregate_is_registered);
     }
@@ -207,10 +209,8 @@ fn dispatch_from_sql(
     // registration of the same name.
     let entry = if let Some(e) = map.get(&key_exact) {
         e
-    } else if let Some(e) = map.get(&key_any) {
-        e
     } else {
-        return None;
+        map.get(&key_any)?
     };
     let UdfEntry::Scalar(entry) = entry else {
         return Some(Err(format!(

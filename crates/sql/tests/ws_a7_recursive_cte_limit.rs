@@ -31,7 +31,7 @@ fn unbounded_recursive_cte_with_outer_limit() {
     // would hit RECURSIVE_CTE_ITERATION_LIMIT (10_000) and error.
     let dir = tempdir().expect("temp dir");
     let db =
-        Database::create(&dir.path().join("ws_a7.db"), DbOptions::default()).expect("create db");
+        Database::create(dir.path().join("ws_a7.db"), DbOptions::default()).expect("create db");
     let conn = db.connect();
     let sql = "WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM c) \
                SELECT n FROM c LIMIT 10";
@@ -57,8 +57,8 @@ fn unbounded_recursive_cte_with_outer_limit() {
 #[test]
 fn unbounded_recursive_cte_with_limit_offset() {
     let dir = tempdir().expect("temp dir");
-    let db = Database::create(&dir.path().join("ws_a7_off.db"), DbOptions::default())
-        .expect("create db");
+    let db =
+        Database::create(dir.path().join("ws_a7_off.db"), DbOptions::default()).expect("create db");
     let conn = db.connect();
     let sql = "WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM c) \
                SELECT n FROM c LIMIT 5 OFFSET 3";
@@ -83,7 +83,7 @@ fn bounded_recursive_cte_unaffected() {
     // WHERE terminates earlier than the LIMIT, so the LIMIT is just
     // a no-op slice).
     let dir = tempdir().expect("temp dir");
-    let db = Database::create(&dir.path().join("ws_a7_bounded.db"), DbOptions::default())
+    let db = Database::create(dir.path().join("ws_a7_bounded.db"), DbOptions::default())
         .expect("create db");
     let conn = db.connect();
     let sql = "WITH RECURSIVE c(n) AS (SELECT 1 UNION ALL SELECT n+1 FROM c WHERE n<4) \

@@ -258,11 +258,11 @@ fn builder_full_1024_row_morsel_layout() {
     for i in 0..MAX_BATCH_ROWS {
         owned.push(format!("row-{}", i));
     }
-    for i in 0..MAX_BATCH_ROWS {
+    for (i, text) in owned.iter().enumerate().take(MAX_BATCH_ROWS) {
         let row = [
             ValueRef::Integer(i as i64),
             ValueRef::Integer((i as i64) * 2),
-            ValueRef::Text(owned[i].as_str()),
+            ValueRef::Text(text.as_str()),
         ];
         b.push_row(&row).unwrap();
     }

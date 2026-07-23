@@ -216,15 +216,17 @@ fn fire_before_insert_triggers(
         conn,
         tx,
         &schema,
-        table,
-        TriggerEventKind::Insert,
-        TriggerTimeKind::Before,
-        None,
-        Some(crate::exec::trigger::TriggerRowValues {
-            rowid: RowId::ZERO,
-            values: values.to_vec(),
-        }),
-        None,
+        crate::exec::trigger::TriggerInvocation {
+            table,
+            event: TriggerEventKind::Insert,
+            time: TriggerTimeKind::Before,
+            old: None,
+            new: Some(crate::exec::trigger::TriggerRowValues {
+                rowid: RowId::ZERO,
+                values: values.to_vec(),
+            }),
+            changed_cols: None,
+        },
     ) {
         Ok(()) => Ok(false),
         Err(Error::TriggerIgnore) => Ok(true),
@@ -248,15 +250,17 @@ fn fire_insert_triggers(
         conn,
         tx,
         &schema,
-        table,
-        TriggerEventKind::Insert,
-        TriggerTimeKind::After,
-        None,
-        Some(crate::exec::trigger::TriggerRowValues {
-            rowid,
-            values: values.to_vec(),
-        }),
-        None,
+        crate::exec::trigger::TriggerInvocation {
+            table,
+            event: TriggerEventKind::Insert,
+            time: TriggerTimeKind::After,
+            old: None,
+            new: Some(crate::exec::trigger::TriggerRowValues {
+                rowid,
+                values: values.to_vec(),
+            }),
+            changed_cols: None,
+        },
     )
 }
 

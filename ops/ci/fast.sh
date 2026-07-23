@@ -32,8 +32,10 @@ run_preflight() {
     cargo fmt --check
     bash scripts/check_file_sizes.sh
     bash scripts/parity/lint-sqlite-parity-ledger.sh
+    bash ops/ci/external-release-policy-test.sh
     ci_verify_redlinedb_release_smoke
     cargo check --workspace --locked
+    cargo clippy --workspace --all-targets --locked --offline -- -D warnings
 }
 
 run_test_stage() {

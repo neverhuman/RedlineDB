@@ -641,7 +641,12 @@ fn lower_insert(
         }
         rows.push(
             row.iter()
-                .map(|expr| Ok(DmlValue::Expr(normalized_expr(expr, &mut params)?)))
+                .map(|expr| {
+                    Ok(DmlValue::Expr(Box::new(normalized_expr(
+                        expr,
+                        &mut params,
+                    )?)))
+                })
                 .collect::<Result<Vec<_>>>()?,
         );
     }
@@ -679,7 +684,7 @@ fn lower_update(
         .map(|assignment| {
             Ok((
                 column_ordinal(&table, &assignment.column)?,
-                DmlValue::Expr(normalized_expr(&assignment.value, &mut params)?),
+                DmlValue::Expr(Box::new(normalized_expr(&assignment.value, &mut params)?)),
             ))
         })
         .collect::<Result<Vec<_>>>()?;

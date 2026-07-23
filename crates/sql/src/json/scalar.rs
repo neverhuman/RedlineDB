@@ -63,7 +63,7 @@ fn jsonb_bytes(value: &SqlValue) -> Option<&[u8]> {
 }
 
 #[inline]
-fn path_text<'a>(value: &'a SqlValue) -> Option<&'a str> {
+fn path_text(value: &SqlValue) -> Option<&str> {
     if let SqlValue::Text(s) = value {
         Some(s.as_ref())
     } else {
@@ -168,10 +168,7 @@ pub(crate) fn parse_json_arg(value: &SqlValue) -> Result<Option<Value>> {
 
 /// Render a JSON value as TEXT (compact form, no extra whitespace).
 pub(crate) fn render_json(value: &Value) -> SqlValue {
-    let text = match serde_json::to_string(value) {
-        Ok(s) => s,
-        Err(_) => String::new(),
-    };
+    let text = serde_json::to_string(value).unwrap_or_default();
     SqlValue::Text(text.into())
 }
 

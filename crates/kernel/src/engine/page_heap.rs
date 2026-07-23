@@ -16,6 +16,7 @@ mod mutation;
 mod policy;
 #[path = "page_heap/scan.rs"]
 mod scan;
+pub(crate) use scan::ScanVisibility;
 pub use scan::{HeapScanRow, ParallelScanDiagnostics, parallel_scan_diagnostics};
 
 #[derive(Debug)]

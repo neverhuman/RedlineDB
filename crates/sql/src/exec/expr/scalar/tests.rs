@@ -9,12 +9,12 @@ fn row_width_sums_value_sizes() {
     let row = vec![
         SqlValue::Null,
         SqlValue::Integer(42),
-        SqlValue::Real(3.14),
+        SqlValue::Real(3.125),
         SqlValue::Text(Arc::from("hello")),
         SqlValue::Blob(Arc::from(&b"abc"[..])),
     ];
     // null=0, int=8, real=8, "hello"=5, b"abc"=3
-    assert_eq!(row_width(&row), 0 + 8 + 8 + 5 + 3);
+    assert_eq!(row_width(&row), 8 + 8 + 5 + 3);
 }
 
 #[test]

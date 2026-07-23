@@ -560,12 +560,7 @@ fn sqlite_sequence_next_rowid(
     let next = base
         .checked_add(1)
         .ok_or_else(|| Error::ConstraintViolation("database or disk is full".to_owned()))?;
-    if next > i64::MAX {
-        return Err(Error::ConstraintViolation(
-            "database or disk is full".to_owned(),
-        ));
-    }
-    session.sqlite_sequences.insert(key.to_owned(), next as i64);
+    session.sqlite_sequences.insert(key.to_owned(), next);
     session.sqlite_sequences_dirty.insert(key.to_owned());
     Ok(RowId::new(next as u64))
 }

@@ -324,7 +324,7 @@ fn import_rows_batched(
     for record in reader.records() {
         let record = record.map_err(|err| format!("Error: {err}"))?;
         if header.is_none() && state.show_header {
-            *(&mut header) = Some(record.iter().map(str::to_owned).collect());
+            header = Some(record.iter().map(str::to_owned).collect());
             continue;
         }
         if columns.is_none() {

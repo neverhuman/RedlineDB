@@ -119,8 +119,7 @@ fn gen_projection(rng: &mut ChaCha8Rng, table: &str) -> String {
     let mut out = Vec::new();
     let count = rng.random_range(1..=cols.len());
     let scalar = pick_unary_scalar(rng);
-    for i in 0..count {
-        let col = cols[i];
+    for col in cols.iter().take(count) {
         if rng.random_bool(0.25) {
             out.push(format!("{scalar}({table}.{col})"));
         } else {
@@ -135,7 +134,7 @@ fn gen_projection(rng: &mut ChaCha8Rng, table: &str) -> String {
 /// dedicated branches that wire the correct arity.
 fn pick_unary_scalar(rng: &mut ChaCha8Rng) -> &'static str {
     const FUNCS: &[&str] = &["length", "abs", "lower", "upper"];
-    *pick(rng, FUNCS)
+    FUNCS[rng.random_range(0..FUNCS.len())]
 }
 
 fn gen_where(rng: &mut ChaCha8Rng, table: &str) -> String {

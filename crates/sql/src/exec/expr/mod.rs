@@ -135,10 +135,10 @@ pub(crate) fn eval_scalar(
     if let Some(result) = try_eval_scalar_via_vm(expr, row, bindings) {
         return result;
     }
-    if let Expr::Value(v) = expr {
-        if let Some(name) = crate::parser::bind::as_bind_name(&v.value) {
-            return resolve_binding(name, bindings);
-        }
+    if let Expr::Value(v) = expr
+        && let Some(name) = crate::parser::bind::as_bind_name(&v.value)
+    {
+        return resolve_binding(name, bindings);
     }
     Ok(match expr {
         Expr::Value(v) => match &v.value {
@@ -200,9 +200,8 @@ pub(crate) fn eval_scalar(
                 Some(from) => values.push(eval_scalar(from, row, bindings)?),
                 None => values.push(SqlValue::Null),
             }
-            match substring_for {
-                Some(for_expr) => values.push(eval_scalar(for_expr, row, bindings)?),
-                None => {}
+            if let Some(for_expr) = substring_for {
+                values.push(eval_scalar(for_expr, row, bindings)?)
             }
             sqlite_substr_function(&values)?
         }

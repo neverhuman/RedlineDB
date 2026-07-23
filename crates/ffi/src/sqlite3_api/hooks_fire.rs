@@ -62,19 +62,19 @@ pub(crate) fn fire_for_sql(db: *mut rldb, sql: &str) -> CommitDecision {
                 }
             }
         }
-    } else if trimmed.starts_with("ROLLBACK") {
-        if let Some(handle) = validate_db(db) {
-            let slot = handle
-                .hooks
-                .rollback
-                .lock()
-                .expect("rollback hook poisoned");
-            if let Some((cb, user_data_addr)) = *slot {
-                let user_data = user_data_addr as *mut c_void;
-                // SAFETY: cb signature matches the documented C ABI; user_data
-                // remains valid per the standard hook contract.
-                unsafe { cb(user_data) };
-            }
+    } else if trimmed.starts_with("ROLLBACK")
+        && let Some(handle) = validate_db(db)
+    {
+        let slot = handle
+            .hooks
+            .rollback
+            .lock()
+            .expect("rollback hook poisoned");
+        if let Some((cb, user_data_addr)) = *slot {
+            let user_data = user_data_addr as *mut c_void;
+            // SAFETY: cb signature matches the documented C ABI; user_data
+            // remains valid per the standard hook contract.
+            unsafe { cb(user_data) };
         }
     }
     CommitDecision::Proceed

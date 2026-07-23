@@ -139,8 +139,8 @@ pub fn route_primitive_scan(plan: &crate::statement::SelectPlan) -> Result<Route
 ///     - `col` resolves to an Integer-affinity column on `table`.
 ///     - `op` is one of `=`, `!=`, `<`, `<=`, `>`, `>=`.
 ///     - `integer_literal` parses as `i64`.
-///   Anything else (AND/OR chains, IS NULL, BETWEEN, real literal,
-///   string literal, qualified identifier, etc.) is deferred to W4-A4+.
+///       Anything else (AND/OR chains, IS NULL, BETWEEN, real literal,
+///       string literal, qualified identifier, etc.) is deferred to W4-A4+.
 pub(crate) fn classify_for_routing(
     plan: &crate::statement::SelectPlan,
     table: &TableDef,
@@ -279,8 +279,8 @@ fn classify_predicate_top(
         let lhs = classify_predicate_top(left, table)?;
         let rhs = classify_predicate_top(right, table)?;
         let mut out: smallvec::SmallVec<[RoutedPredicate; 2]> = smallvec::SmallVec::new();
-        out.extend(lhs.into_iter());
-        out.extend(rhs.into_iter());
+        out.extend(lhs);
+        out.extend(rhs);
         // Defensive cap: in W4-A5 we expect at most ~4 conjuncts on the
         // realistic BETWEEN-style shapes; refuse anything wider so the
         // per-row check stays predictable. Long AND chains likely
@@ -664,11 +664,11 @@ pub(crate) fn execute_routed_scan(
                 ) => op.eval_f64(*lhs, *rhs),
                 // W4-A7 IN-list: linear scan over small literal sets.
                 (SqlValue::Integer(lhs), RoutedPredicateKind::InListI64 { negated, values }) => {
-                    let hit = values.iter().any(|v| *v == *lhs);
+                    let hit = values.contains(lhs);
                     if *negated { !hit } else { hit }
                 }
                 (SqlValue::Real(lhs), RoutedPredicateKind::InListF64 { negated, values }) => {
-                    let hit = values.iter().any(|v| *v == *lhs);
+                    let hit = values.contains(lhs);
                     if *negated { !hit } else { hit }
                 }
                 // Kind mismatch on a routed predicate: SQLite would

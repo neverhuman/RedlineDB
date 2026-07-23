@@ -5,8 +5,6 @@
 //! at various offsets relative to the 32-byte AVX2 chunk boundary, and
 //! random pairs.
 
-use std::cmp::Ordering;
-
 use redlinedb_kernel::index::cmp_keys;
 
 fn check(a: &[u8], b: &[u8]) {

@@ -363,10 +363,10 @@ pub(crate) fn try_resolve_cte_bound_table(
 /// `WITH` whose scope has already been popped — used by subqueries
 /// that bind at exec time).
 fn resolve_cte_def(ident_name: &str) -> Option<CteDef> {
-    if scope_active() {
-        if let Some(def) = lookup(ident_name) {
-            return Some(def);
-        }
+    if scope_active()
+        && let Some(def) = lookup(ident_name)
+    {
+        return Some(def);
     }
     lookup_permanent_cte(ident_name)
 }
@@ -512,10 +512,10 @@ fn derive_cte_row_cap(body_query: &Query, cte_name: &str) -> Option<usize> {
 fn literal_u64(expr: &sqlparser::ast::Expr) -> Option<u64> {
     use sqlparser::ast::{Expr, Value, ValueWithSpan};
     match expr {
-        Expr::Value(ValueWithSpan { value, .. }) => match value {
-            Value::Number(text, _) => text.parse::<u64>().ok(),
-            _ => None,
-        },
+        Expr::Value(ValueWithSpan {
+            value: Value::Number(text, _),
+            ..
+        }) => text.parse::<u64>().ok(),
         _ => None,
     }
 }

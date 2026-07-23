@@ -148,8 +148,8 @@ fn dispatch_ge(col: &[i64], target: i64, validity: &mut Bitmap) {
 
 pub(crate) fn filter_i64_eq_scalar(col: &[i64], target: i64, validity: &mut Bitmap) {
     let n = col.len().min(validity.bit_len());
-    for i in 0..n {
-        if validity.is_set(i) && col[i] != target {
+    for (i, value) in col.iter().enumerate().take(n) {
+        if validity.is_set(i) && *value != target {
             validity.clear(i);
         }
     }
@@ -157,8 +157,8 @@ pub(crate) fn filter_i64_eq_scalar(col: &[i64], target: i64, validity: &mut Bitm
 
 pub(crate) fn filter_i64_ne_scalar(col: &[i64], target: i64, validity: &mut Bitmap) {
     let n = col.len().min(validity.bit_len());
-    for i in 0..n {
-        if validity.is_set(i) && col[i] == target {
+    for (i, value) in col.iter().enumerate().take(n) {
+        if validity.is_set(i) && *value == target {
             validity.clear(i);
         }
     }
@@ -166,8 +166,8 @@ pub(crate) fn filter_i64_ne_scalar(col: &[i64], target: i64, validity: &mut Bitm
 
 pub(crate) fn filter_i64_lt_scalar(col: &[i64], target: i64, validity: &mut Bitmap) {
     let n = col.len().min(validity.bit_len());
-    for i in 0..n {
-        if validity.is_set(i) && !(col[i] < target) {
+    for (i, value) in col.iter().enumerate().take(n) {
+        if validity.is_set(i) && *value >= target {
             validity.clear(i);
         }
     }
@@ -175,8 +175,8 @@ pub(crate) fn filter_i64_lt_scalar(col: &[i64], target: i64, validity: &mut Bitm
 
 pub(crate) fn filter_i64_le_scalar(col: &[i64], target: i64, validity: &mut Bitmap) {
     let n = col.len().min(validity.bit_len());
-    for i in 0..n {
-        if validity.is_set(i) && !(col[i] <= target) {
+    for (i, value) in col.iter().enumerate().take(n) {
+        if validity.is_set(i) && *value > target {
             validity.clear(i);
         }
     }
@@ -184,8 +184,8 @@ pub(crate) fn filter_i64_le_scalar(col: &[i64], target: i64, validity: &mut Bitm
 
 pub(crate) fn filter_i64_gt_scalar(col: &[i64], target: i64, validity: &mut Bitmap) {
     let n = col.len().min(validity.bit_len());
-    for i in 0..n {
-        if validity.is_set(i) && !(col[i] > target) {
+    for (i, value) in col.iter().enumerate().take(n) {
+        if validity.is_set(i) && *value <= target {
             validity.clear(i);
         }
     }
@@ -193,8 +193,8 @@ pub(crate) fn filter_i64_gt_scalar(col: &[i64], target: i64, validity: &mut Bitm
 
 pub(crate) fn filter_i64_ge_scalar(col: &[i64], target: i64, validity: &mut Bitmap) {
     let n = col.len().min(validity.bit_len());
-    for i in 0..n {
-        if validity.is_set(i) && !(col[i] >= target) {
+    for (i, value) in col.iter().enumerate().take(n) {
+        if validity.is_set(i) && *value < target {
             validity.clear(i);
         }
     }
@@ -308,7 +308,7 @@ unsafe fn filter_i64_lt_avx2(col: &[i64], target: i64, validity: &mut Bitmap) {
         i += lanes;
     }
     while i < n {
-        if validity.is_set(i) && !(col[i] < target) {
+        if validity.is_set(i) && (col[i] >= target) {
             validity.clear(i);
         }
         i += 1;
@@ -345,7 +345,7 @@ unsafe fn filter_i64_le_avx2(col: &[i64], target: i64, validity: &mut Bitmap) {
         i += lanes;
     }
     while i < n {
-        if validity.is_set(i) && !(col[i] <= target) {
+        if validity.is_set(i) && (col[i] > target) {
             validity.clear(i);
         }
         i += 1;
@@ -380,7 +380,7 @@ unsafe fn filter_i64_gt_avx2(col: &[i64], target: i64, validity: &mut Bitmap) {
         i += lanes;
     }
     while i < n {
-        if validity.is_set(i) && !(col[i] > target) {
+        if validity.is_set(i) && (col[i] <= target) {
             validity.clear(i);
         }
         i += 1;
@@ -417,7 +417,7 @@ unsafe fn filter_i64_ge_avx2(col: &[i64], target: i64, validity: &mut Bitmap) {
         i += lanes;
     }
     while i < n {
-        if validity.is_set(i) && !(col[i] >= target) {
+        if validity.is_set(i) && (col[i] < target) {
             validity.clear(i);
         }
         i += 1;

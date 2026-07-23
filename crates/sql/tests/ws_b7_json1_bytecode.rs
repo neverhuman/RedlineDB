@@ -99,7 +99,7 @@ fn json_extract_blob_matches_text_form() {
 #[test]
 fn json_type_on_jsonb_blob() {
     let (_dir, conn) = open();
-    let blob = encode(&json!({"a": [1, 2, 3], "b": "x", "c": 3.14, "d": null}));
+    let blob = encode(&json!({"a": [1, 2, 3], "b": "x", "c": 3.125, "d": null}));
     assert_eq!(
         run_one(&conn, "SELECT json_type(?, '$.a')", &blob),
         vec![SqlValue::Text(Arc::from("array"))]

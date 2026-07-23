@@ -1410,10 +1410,7 @@ fn parse_pragma_object_name(input: &str) -> Result<String> {
         None => input.trim().to_owned(),
     };
     let mut parts = token.splitn(2, '.');
-    let first = match parts.next() {
-        Some(s) => s,
-        None => "",
-    };
+    let first = parts.next().unwrap_or_default();
     if let Some(second) = parts.next() {
         if first.eq_ignore_ascii_case("main") {
             return Ok(second.to_owned());

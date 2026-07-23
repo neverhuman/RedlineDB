@@ -202,10 +202,10 @@ pub(crate) fn try_match_index_access_hinted(
         // the catalog `name`). Skipping non-matching indexes here is
         // SQLite-parity: SQLite errors when the named index doesn't
         // exist on the table, but otherwise narrows to that index.
-        if let Some(TableAccessHint::IndexedBy(name)) = hint {
-            if !index.name.eq_ignore_ascii_case(name) {
-                continue;
-            }
+        if let Some(TableAccessHint::IndexedBy(name)) = hint
+            && !index.name.eq_ignore_ascii_case(name)
+        {
+            continue;
         }
         // Wave 7 P1 #5: do not advertise an index unless both the catalog
         // entry has a meta_page_id AND the engine has a live handle for
@@ -1127,10 +1127,10 @@ fn column_ordinal_for_table(name: &str, table: &TableDef) -> Option<usize> {
 /// predicate as non-indexable.
 fn eval_constant(expr: &Expr, bindings: &[Option<SqlValue>]) -> Option<SqlValue> {
     use sqlparser::ast::UnaryOperator;
-    if let Expr::Value(v) = expr {
-        if let Some(name) = crate::parser::bind::as_bind_name(&v.value) {
-            return crate::parser::bind::resolve_positional(name, bindings);
-        }
+    if let Expr::Value(v) = expr
+        && let Some(name) = crate::parser::bind::as_bind_name(&v.value)
+    {
+        return crate::parser::bind::resolve_positional(name, bindings);
     }
     match expr {
         Expr::Value(v) => Some(match &v.value {

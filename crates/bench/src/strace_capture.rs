@@ -53,10 +53,7 @@ pub fn capture_or_skip(target_pid: i32, output_path: &Path) -> StraceCapture {
             // unreadable (race against the kernel-side close) we still record
             // a capture record with an empty parse so the calling certify lane
             // can distinguish "ran with 0 syscalls" from "did not run at all".
-            let raw = match std::fs::read_to_string(output_path) {
-                Ok(text) => text,
-                Err(_) => String::new(),
-            };
+            let raw = std::fs::read_to_string(output_path).unwrap_or_default();
             StraceCapture {
                 syscall_counts: Some(parse_strace_summary(&raw)),
                 reason: None,

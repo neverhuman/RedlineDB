@@ -10,7 +10,7 @@
 //! `time` for something this narrow. Rounding is by `floor()` for `date()`
 //! components and by truncation for the integer fields, matching SQLite.
 
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 mod format;
 mod modifiers;
@@ -48,10 +48,9 @@ pub struct DateTime {
 
 impl DateTime {
     pub fn now_utc() -> Self {
-        let dur = match SystemTime::now().duration_since(UNIX_EPOCH) {
-            Ok(d) => d,
-            Err(_) => Duration::default(),
-        };
+        let dur = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default();
         Self::from_unix(dur.as_secs() as i64, dur.subsec_micros())
     }
 

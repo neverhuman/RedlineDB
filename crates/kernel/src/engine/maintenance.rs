@@ -147,8 +147,10 @@ impl Engine {
         diagnostics: Option<&mut ParallelScanDiagnostics>,
     ) -> Result<Vec<HeapScanRow>> {
         self.heap.parallel_scan_page_range(
-            &self.txs,
-            snapshot,
+            super::page_heap::ScanVisibility {
+                tx_status: &self.txs,
+                snapshot,
+            },
             owner,
             page_range,
             rel_filter,

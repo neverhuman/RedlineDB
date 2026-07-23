@@ -112,10 +112,10 @@ fn collect_columns(expr: &sqlparser::ast::Expr, table: &TableDef, out: &mut Vec<
     use sqlparser::ast::Expr;
     match expr {
         Expr::Identifier(ident) => {
-            if let Some(ordinal) = column_ordinal(table, &ident.value) {
-                if !out.contains(&ordinal) {
-                    out.push(ordinal);
-                }
+            if let Some(ordinal) = column_ordinal(table, &ident.value)
+                && !out.contains(&ordinal)
+            {
+                out.push(ordinal);
             }
         }
         Expr::CompoundIdentifier(parts) => {
