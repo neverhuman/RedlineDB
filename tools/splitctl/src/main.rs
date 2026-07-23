@@ -17600,7 +17600,7 @@ name = "two"
     #[test]
     fn derived_manifest_sync_is_dry_run_by_default_and_apply_is_explicit() {
         assert!(release_evidence_path("receipt.json")
-            .ends_with("docs/release-evidence/8.0.1/receipt.json"));
+            .ends_with("docs/release-evidence/10.0.0/receipt.json"));
         let root = TestDir::new("derived-sync");
         let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
         let mut canonical: toml::Value = fs::read_to_string(source).unwrap().parse().unwrap();
