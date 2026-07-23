@@ -1,6 +1,6 @@
 schema_version = "1"
 release_version = "10.0.0"
-expected_repo_count = 26
+expected_repo_count = 27
 status = "candidate"
 formal_ga = false
 sagemaker = "N/A"
@@ -48,6 +48,7 @@ required_repos = [
   "jain-model-zoo",
   "jain-ops",
   "jain-deploy",
+  "jain-shard",
 ]
 
 retired_paths = [
@@ -140,11 +141,21 @@ name = "jain-router"
 owner = "router"
 reason = "clean stopped repository pending protected Router onboarding after the host-CI broker repair"
 
-[[excluded_path]]
+[[repo]]
 path = "/home/ubuntu/jain-split/jain-shard"
 name = "jain-shard"
-owner = "shard"
-reason = "active protected Shard implementation pending a separate authority onboarding"
+github_slug = "neverhuman/jain-shard"
+jeryu_slug = "veox/jain-shard"
+profile = "rust-workspace"
+role = "shard"
+default_branch = "main"
+rollout_wave = 4
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = false
+identity_status = "pending"
+required_check = "jain-shard/required"
+note = "Durable data-shard storage engine (fragment codec + seed schedule); pending first onboarding landing."
 
 [[excluded_path]]
 path = "/home/ubuntu/jain-split/jankurai-tools-tui"
