@@ -67,6 +67,12 @@ test_lib="$tmp/lib.sh"
 sed -e "s#$production_broker#$broker_bin#g" \
     -e "s#$production_governed#$ordinary_bin#g" \
     "$source_lib" >"$test_lib"
+# The disposable broker fixture is owned by the invoking test user. Keep the
+# existing identity/mode/link hostiles scoped to that fixture; exact root
+# custody is exercised separately below against both a real root-owned binary
+# and an exact-byte user-owned expected-path hostile.
+fixture_owner="$(stat -c '%u:%g' -- "$broker_bin")"
+sed -i "s#0:0:555:1#${fixture_owner}:555:1#g" "$test_lib"
 # shellcheck source=ops/ci/lib.sh
 source "$test_lib"
 
@@ -123,6 +129,30 @@ run_release_broker() {
     env -i HOME="$tmp/home" PATH="$path:/usr/bin:/bin" JAIN_RELEASE_CI=1 "$@" \
         bash -c "$command_text" bash "$test_lib" "$broker_bin"
 }
+
+run_release_broker_with() {
+    local library="$1" expected_bin="$2" path="$3"
+    shift 3
+    local command_text
+    command_text='source "$1"; require_jankurai; [[ "$JERYU_GOVERNED_JANKURAI_BIN" == "$2" ]]'
+    env -i HOME="$tmp/home" PATH="$path:/usr/bin:/bin" JAIN_RELEASE_CI=1 "$@" \
+        bash -c "$command_text" bash "$library" "$expected_bin"
+}
+
+root_test_lib="$tmp/root-lib.sh"
+sed -e "s#$production_broker#$governed_source#g" \
+    -e "s#$production_governed#$ordinary_bin#g" \
+    "$source_lib" >"$root_test_lib"
+run_release_broker_with "$root_test_lib" "$governed_source" \
+    "$(dirname "$governed_source")"
+
+user_owned_test_lib="$tmp/user-owned-lib.sh"
+sed -e "s#$production_broker#$broker_bin#g" \
+    -e "s#$production_governed#$ordinary_bin#g" \
+    "$source_lib" >"$user_owned_test_lib"
+expect_failure "user-owned exact-byte expected-path broker" \
+    "release broker Jankurai custody mismatch" \
+    run_release_broker_with "$user_owned_test_lib" "$broker_bin" "$tmp/broker/bin"
 
 run_release_broker "$tmp/broker/bin"
 run_release_broker "$tmp/broker/bin" \

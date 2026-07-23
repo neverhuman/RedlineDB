@@ -89,8 +89,8 @@ require_jankurai() {
         return 1
     fi
     if [[ "$mode" == release-broker \
-        && "$(stat -c '%a:%h' -- "$bin" 2>/dev/null || true)" != "555:1" ]]; then
-        printf 'release broker Jankurai custody mismatch: expected mode 0555 and one link at %s\n' \
+        && "$(stat -c '%u:%g:%a:%h' -- "$bin" 2>/dev/null || true)" != "0:0:555:1" ]]; then
+        printf 'release broker Jankurai custody mismatch: expected root:root, mode 0555, and one link at %s\n' \
             "$bin" >&2
         return 1
     fi

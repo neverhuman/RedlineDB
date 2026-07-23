@@ -3,6 +3,31 @@
 readonly REDLINE_RUSTSEC_COMMIT="6e3286f4efa8c142fb33e5ea4342c8db6693cf34"
 readonly REDLINE_RUSTSEC_TREE="d12220aff0053a035739bec6e64aefbaafbf01a3"
 
+redline_rustsec_git() {
+    env -i \
+        PATH=/usr/bin:/bin \
+        HOME=/nonexistent \
+        XDG_CONFIG_HOME=/nonexistent \
+        LC_ALL=C \
+        GIT_CONFIG_GLOBAL=/dev/null \
+        GIT_CONFIG_SYSTEM=/dev/null \
+        GIT_CONFIG_NOSYSTEM=1 \
+        GIT_ATTR_NOSYSTEM=1 \
+        GIT_NO_LAZY_FETCH=1 \
+        GIT_TERMINAL_PROMPT=0 \
+        GIT_ASKPASS=/bin/false \
+        SSH_ASKPASS=/bin/false \
+        git \
+        -c core.attributesFile=/dev/null \
+        -c core.fsmonitor=false \
+        -c core.hooksPath=/dev/null \
+        -c credential.helper= \
+        -c diff.external= \
+        -c protocol.allow=never \
+        -c protocol.file.allow=always \
+        "$@"
+}
+
 redline_stage_local_rustsec() {
     local stage_root="${1:?stage root is required}"
     local source database deny_home deny_database
@@ -16,14 +41,10 @@ redline_stage_local_rustsec() {
         return 1
     }
     mkdir -p "$(dirname "$deny_database")"
-    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_LAZY_FETCH=1 \
-        git -c protocol.allow=never -c protocol.file.allow=always \
-        clone -q --no-local --no-checkout "$source" "$database"
-    GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_NO_LAZY_FETCH=1 \
-        git -c protocol.allow=never -c protocol.file.allow=always \
-        clone -q --no-local --no-checkout "$source" "$deny_database"
-    git -C "$database" checkout -q --detach "$REDLINE_RUSTSEC_COMMIT"
-    git -C "$deny_database" checkout -q --detach "$REDLINE_RUSTSEC_COMMIT"
+    redline_rustsec_git clone -q --no-local --no-checkout "$source" "$database"
+    redline_rustsec_git clone -q --no-local --no-checkout "$source" "$deny_database"
+    redline_rustsec_git -C "$database" checkout -q --detach "$REDLINE_RUSTSEC_COMMIT"
+    redline_rustsec_git -C "$deny_database" checkout -q --detach "$REDLINE_RUSTSEC_COMMIT"
     export JAIN_PINNED_ADVISORY_DB="$database"
     export JAIN_ADVISORY_DB="$database"
     export JAIN_PINNED_ADVISORY_COMMIT="$REDLINE_RUSTSEC_COMMIT"
@@ -70,23 +91,20 @@ redline_validate_pinned_rustsec() {
             return 1
         }
     fi
-    status="$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.external= \
-        -C "$database" status --porcelain=v1 --untracked-files=all)" || return 1
+    status="$(redline_rustsec_git -C "$database" \
+        status --porcelain=v1 --untracked-files=all)" || return 1
     [[ -z "$status" ]] || {
         printf '%s is dirty: %s\n' "$label" "$database" >&2
         return 1
     }
-    commit="$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.external= \
-        -C "$database" rev-parse 'HEAD^{commit}')" || return 1
-    tree="$(git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.external= \
-        -C "$database" rev-parse 'HEAD^{tree}')" || return 1
+    commit="$(redline_rustsec_git -C "$database" rev-parse 'HEAD^{commit}')" || return 1
+    tree="$(redline_rustsec_git -C "$database" rev-parse 'HEAD^{tree}')" || return 1
     [[ "$commit" == "$REDLINE_RUSTSEC_COMMIT" && "$tree" == "$REDLINE_RUSTSEC_TREE" ]] || {
         printf '%s mismatch: expected %s/%s got %s/%s\n' \
             "$label" "$REDLINE_RUSTSEC_COMMIT" "$REDLINE_RUSTSEC_TREE" "$commit" "$tree" >&2
         return 1
     }
-    git -c core.fsmonitor=false -c core.hooksPath=/dev/null -c diff.external= \
-        -C "$database" fsck --strict --no-progress >/dev/null || return 1
+    redline_rustsec_git -C "$database" fsck --strict --no-progress >/dev/null || return 1
 }
 
 redline_resolve_pinned_rustsec() {

@@ -14,12 +14,13 @@ pub(crate) fn backup_to_path(
     _options: BackupOptions,
 ) -> Result<BackupStats> {
     let start = Instant::now();
+    crate::storage_format::inspect_storage_format(src.path())?;
+    src.inner.db.checkpoint()?;
     let dst = dst.as_ref();
     if dst.exists() {
         fs::remove_dir_all(dst)?;
     }
     fs::create_dir_all(dst)?;
-    src.inner.db.checkpoint()?;
     copy_dir(src.path(), dst)?;
     Ok(BackupStats {
         tables_copied: 0,

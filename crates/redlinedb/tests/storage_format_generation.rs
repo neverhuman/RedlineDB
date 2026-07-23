@@ -1,6 +1,6 @@
 use std::fs;
 
-use redlinedb::{Database, ErrorCode, OpenOptions, Step};
+use redlinedb::{BackupOptions, Database, ErrorCode, OpenOptions, Step};
 
 const STORAGE_FORMAT_FILE: &str = "STORAGE_FORMAT";
 const GENERATION_ONE: &str = "redlinedb-storage-format/v1\ngeneration=1\n";
@@ -89,4 +89,67 @@ fn future_and_malformed_generations_fail_before_open() {
         .err()
         .expect("malformed generation must fail closed");
     assert_eq!(malformed.code(), ErrorCode::Corrupt);
+}
+
+#[test]
+fn public_backup_rejects_invalid_live_generation_without_destination_mutation() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let path = temp.path().join("live.redline");
+    let destination = temp.path().join("backup.redline");
+    let database = Database::create(&path).expect("create");
+    database
+        .connect()
+        .expect("connect")
+        .execute_batch("CREATE TABLE t(value INT); INSERT INTO t VALUES (11);")
+        .expect("seed");
+    fs::create_dir(&destination).expect("destination");
+    fs::write(destination.join("sentinel"), "preserve\n").expect("destination sentinel");
+
+    for (marker, expected_code) in [
+        (
+            "redlinedb-storage-format/v1\ngeneration=2\n",
+            ErrorCode::Unsupported,
+        ),
+        ("generation=1\n", ErrorCode::Corrupt),
+    ] {
+        fs::write(path.join(STORAGE_FORMAT_FILE), marker).expect("replace live marker");
+        let error = database
+            .backup_to_path(&destination, BackupOptions::default())
+            .expect_err("invalid live storage generation must fail before backup");
+        assert_eq!(error.code(), expected_code);
+        assert_eq!(
+            fs::read_to_string(destination.join("sentinel")).expect("preserved sentinel"),
+            "preserve\n"
+        );
+        assert_eq!(
+            fs::read_dir(&destination)
+                .expect("destination listing")
+                .count(),
+            1,
+            "failed backup mutated the destination"
+        );
+    }
+}
+
+#[test]
+fn public_backup_remains_a_reopenable_physical_copy() {
+    let temp = tempfile::tempdir().expect("tempdir");
+    let path = temp.path().join("source.redline");
+    let destination = temp.path().join("backup.redline");
+    let database = Database::create(&path).expect("create");
+    database
+        .connect()
+        .expect("connect")
+        .execute_batch("CREATE TABLE t(value INT); INSERT INTO t VALUES (29);")
+        .expect("seed");
+
+    database
+        .backup_to_path(&destination, BackupOptions::default())
+        .expect("physical backup");
+    drop(database);
+
+    let backup =
+        Database::open_with_options(&destination, OpenOptions::default().with_create(false))
+            .expect("reopen physical backup");
+    assert_eq!(scalar_i64(&backup, "SELECT value FROM t"), 29);
 }
