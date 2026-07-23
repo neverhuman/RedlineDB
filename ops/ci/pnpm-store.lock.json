@@ -1,8 +1,8 @@
 {
   "schema_version": "jain.pnpm-store/v1",
-  "store_root": "/var/lib/jain-host-ci/pnpm-store/33c201ee0f70525919f4be38e77cc4d3178b487d7d604f993f6d8c115198424b",
-  "inventory_sha256": "33c201ee0f70525919f4be38e77cc4d3178b487d7d604f993f6d8c115198424b",
-  "file_count": 16148,
+  "store_root": "/var/lib/jain-host-ci/pnpm-store/d243983ecf7fe3e79afd9ebe1491b747cea0ca68a6e00ff8316b6c26678b1d42",
+  "inventory_sha256": "d243983ecf7fe3e79afd9ebe1491b747cea0ca68a6e00ff8316b6c26678b1d42",
+  "file_count": 21498,
   "format": "v10",
   "lockfile_path": "apps/web/pnpm-lock.yaml",
   "lockfile_sha256": "1a290fa60b9290d5044fd243fd312d3347ec28977a198ad47c761956b34fed10",
