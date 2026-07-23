@@ -12520,6 +12520,10 @@ mod tests {
                 .parse()
                 .unwrap();
         {
+            let repo_count = manifest_data
+                .get("repo")
+                .and_then(toml::Value::as_array)
+                .map_or(0, |repos| repos.len()) as i64;
             let table = manifest_data.as_table_mut().unwrap();
             table.insert(
                 "release_version".to_owned(),
@@ -12528,6 +12532,12 @@ mod tests {
             table.insert(
                 "rollback_target".to_owned(),
                 toml::Value::String(ROLLBACK_TARGET.to_owned()),
+            );
+            // expected_repo_count is checked against repos.len(); keep it consistent
+            // with the (possibly previous-release) manifest this fixture is built from.
+            table.insert(
+                "expected_repo_count".to_owned(),
+                toml::Value::Integer(repo_count),
             );
         }
         let manifest = temp.path().join("repos.manifest.toml");
