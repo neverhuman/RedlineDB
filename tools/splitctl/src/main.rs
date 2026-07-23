@@ -12509,12 +12509,32 @@ mod tests {
     fn release_status_writes_blocked_evidence_without_aggregate() {
         let temp = TestDir::new("release-status-appliance-blocked");
         let output = temp.path().join("release-status.json");
+        // Exercise the blocked-without-aggregate path in isolation: build a
+        // manifest whose release_version/rollback_target match THIS binary so the
+        // assertion does not depend on the ambient control plane sharing the
+        // binary's version. In the sealed host-CI worker JAIN_SPLIT_OPS_ROOT names
+        // the previous-release control plane while a version bump is in flight.
+        let mut manifest_data: toml::Value =
+            fs::read_to_string(control_plane_root().join("repos.manifest.toml"))
+                .unwrap()
+                .parse()
+                .unwrap();
+        {
+            let table = manifest_data.as_table_mut().unwrap();
+            table.insert(
+                "release_version".to_owned(),
+                toml::Value::String(RELEASE_VERSION.to_owned()),
+            );
+            table.insert(
+                "rollback_target".to_owned(),
+                toml::Value::String(ROLLBACK_TARGET.to_owned()),
+            );
+        }
+        let manifest = temp.path().join("repos.manifest.toml");
+        fs::write(&manifest, toml::to_string_pretty(&manifest_data).unwrap()).unwrap();
         let error = release_status(vec![
             "--manifest".to_owned(),
-            control_plane_root()
-                .join("repos.manifest.toml")
-                .display()
-                .to_string(),
+            manifest.display().to_string(),
             "--json".to_owned(),
             output.display().to_string(),
         ])
