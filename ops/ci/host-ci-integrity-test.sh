@@ -149,6 +149,7 @@ for path in \
   Cargo.lock Cargo.toml repos.manifest.toml \
   ops/ci/host-ci-publisher.sh ops/ci/host-ci-sandbox.sh \
   ops/ci/host-ci-boundary-preflight.sh \
+  ops/ci/host-ci-inputs.sh ops/ci/host-ci-inputs-test.sh \
   ops/ci/host-ci-proof-evidence.sh \
   ops/ci/cargo-lock-closure.sh \
   ops/ci/native-build-tools.lock.json \

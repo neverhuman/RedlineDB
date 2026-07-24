@@ -1,6 +1,6 @@
 schema_version = "1"
 release_version = "10.0.0"
-expected_repo_count = 27
+expected_repo_count = 28
 status = "candidate"
 formal_ga = false
 sagemaker = "N/A"
@@ -48,6 +48,7 @@ required_repos = [
   "jain-model-zoo",
   "jain-ops",
   "jain-deploy",
+  "jain-nexus",
   "jain-shard",
 ]
 
@@ -239,6 +240,7 @@ release_feature_sets = [
 family = "jeryu-split"
 release_identity = "jeryu-split"
 release_lineage = "v5"
+release_phase = 0
 manifest_path = "/home/ubuntu/jain-split/jeryu-split/jeryu-release-ops/repos.manifest.toml"
 container_path = "/home/ubuntu/jain-split/jeryu-split"
 control_plane = "/home/ubuntu/jain-split/jeryu-split/jeryu-release-ops"
@@ -249,6 +251,7 @@ control_plane_identity_status = "bound"
 control_plane_current_tag = "jeryu-release-ops-v5.0.0-split.1"
 control_plane_inventory_status = "active"
 control_plane_runtime_authority = "control-plane"
+control_plane_rollout_wave = 26
 forge_owner = "jeryu"
 required = true
 redline_authority = "/home/ubuntu/jain-split/jain-redline"
@@ -260,6 +263,7 @@ symlink_policy = "retirement-pending"
 
 [[nested_families.jeryu.repository]]
 name = "jeryu"
+rollout_wave = 16
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu"
 jeryu_slug = "jeryu/jeryu"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu.git"
@@ -272,6 +276,7 @@ runtime_authority = "library"
 
 [[nested_families.jeryu.repository]]
 name = "jeryu-cache"
+rollout_wave = 17
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu-cache"
 jeryu_slug = "jeryu/jeryu-cache"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-cache.git"
@@ -284,6 +289,7 @@ runtime_authority = "library"
 
 [[nested_families.jeryu.repository]]
 name = "jeryu-ci-runner"
+rollout_wave = 18
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu-ci-runner"
 jeryu_slug = "jeryu/jeryu-ci-runner"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-ci-runner.git"
@@ -296,6 +302,7 @@ runtime_authority = "shadow-only"
 
 [[nested_families.jeryu.repository]]
 name = "jeryu-core"
+rollout_wave = 19
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu-core"
 jeryu_slug = "jeryu/jeryu-core"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-core.git"
@@ -308,6 +315,7 @@ runtime_authority = "library"
 
 [[nested_families.jeryu.repository]]
 name = "jeryu-deploy"
+rollout_wave = 20
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu-deploy"
 jeryu_slug = "jeryu/jeryu-deploy"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-deploy.git"
@@ -320,6 +328,7 @@ runtime_authority = "shadow-only"
 
 [[nested_families.jeryu.repository]]
 name = "jeryu-intelligence"
+rollout_wave = 21
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu-intelligence"
 jeryu_slug = "jeryu/jeryu-intelligence"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-intelligence.git"
@@ -332,6 +341,7 @@ runtime_authority = "library"
 
 [[nested_families.jeryu.repository]]
 name = "jeryu-jira"
+rollout_wave = 22
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu-jira"
 jeryu_slug = "jeryu/jeryu-jira"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-jira.git"
@@ -344,6 +354,7 @@ runtime_authority = "library"
 
 [[nested_families.jeryu.repository]]
 name = "jeryu-tool"
+rollout_wave = 23
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu-tool"
 jeryu_slug = "jeryu/jeryu-tool"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-tool.git"
@@ -356,6 +367,7 @@ runtime_authority = "library"
 
 [[nested_families.jeryu.repository]]
 name = "jeryu-tool-finder"
+rollout_wave = 24
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu-tool-finder"
 jeryu_slug = "jeryu/jeryu-tool-finder"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-tool-finder.git"
@@ -367,6 +379,7 @@ runtime_authority = "library"
 
 [[nested_families.jeryu.repository]]
 name = "jeryu-web"
+rollout_wave = 25
 path = "/home/ubuntu/jain-split/jeryu-split/jeryu-web"
 jeryu_slug = "jeryu/jeryu-web"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-web.git"
@@ -949,3 +962,33 @@ cargo_members = ["deployment/ops/sagemaker-ci", "deployment/product", "crates/ja
 copy_paths = ["deployment/ops", "contracts", "scripts/get_data.sh", "scripts/sync-base-digests.sh"]
 source_paths = ["deployment/ops/**", "crates/jain-deploy-engine/**", "scripts/get_data.sh", "scripts/sync-base-digests.sh"]
 cross_repo_deps = ["jain-cli"]
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-nexus"
+name = "jain-nexus"
+github_slug = "neverhuman/jain-nexus"
+jeryu_slug = "veox/jain-nexus"
+profile = "rust-workspace"
+role = "cloud-edge"
+default_branch = "main"
+rollout_wave = 9
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = true
+authored = true
+identity_status = "pending"
+required_check = "jain-nexus/required"
+note = "Public cloud edge for install gating, node/account registration, credit budgets, referral attribution, telemetry ingest, and registry pull authorization; pending governed onboarding."
+cargo_members = [
+  "crates/nexus-domain",
+  "crates/nexus-token",
+  "crates/nexus-ledger",
+  "crates/nexus-gate",
+  "crates/nexus-node-auth",
+  "crates/nexus-store",
+  "crates/nexus-api",
+  "crates/nexusd",
+]
+copy_paths = []
+source_paths = []
+cross_repo_deps = []

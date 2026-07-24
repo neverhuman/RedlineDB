@@ -4,6 +4,41 @@ const JOURNAL_SCHEMA: &str = "jain.release-candidate-journal/v1";
 const PLAN_SCHEMA: &str = "jain.release-candidate-plan/v1";
 const MAX_JOURNAL_BYTES: u64 = 8 * 1024 * 1024;
 const MAX_TRANSITIONS_PER_REPOSITORY: u64 = 16;
+#[cfg(test)]
+const PLAN_KEYS: [&str; 12] = [
+    "ci_jobs",
+    "fleet_jobs",
+    "formal_ga",
+    "manifest",
+    "manifest_sha256",
+    "release",
+    "release_status",
+    "repositories",
+    "rollback_target",
+    "schema_version",
+    "selected_repositories",
+    "status",
+];
+#[cfg(test)]
+const PLAN_ROW_REQUIRED_KEYS: [&str; 17] = [
+    "binding_bound",
+    "blocked_reasons",
+    "family",
+    "identity_status",
+    "kind",
+    "name",
+    "path",
+    "phase",
+    "remote",
+    "repo_slug",
+    "required_check",
+    "selected",
+    "state",
+    "status",
+    "tag",
+    "tag_prefix",
+    "wave",
+];
 const JOURNAL_KEYS: [&str; 16] = [
     "ci_jobs",
     "created_at_unix",
@@ -245,6 +280,63 @@ fn authority_metadata(
             .ok_or("nested manifest is missing control_plane")?;
         let name = string(control, "name").ok_or("nested control plane is missing its name")?;
         insert_authority_meta(&mut result, &name, control, 0, wave)?;
+    }
+
+    for (family_name, family) in registered_nested_families(data) {
+        let phase = family
+            .get("release_phase")
+            .and_then(toml::Value::as_integer)
+            .ok_or_else(|| format!("nested_families.{family_name} is missing release_phase"))?;
+        for raw in registered_nested_projection(family) {
+            let name = string(raw, "name").ok_or_else(|| {
+                format!("nested_families.{family_name} repository is missing name")
+            })?;
+            let wave = raw
+                .get("rollout_wave")
+                .and_then(toml::Value::as_integer)
+                .ok_or_else(|| {
+                    format!(
+                        "nested_families.{family_name}.repository[{name}] is missing rollout_wave"
+                    )
+                })?;
+            insert_authority_meta(&mut result, &name, raw, phase, wave)?;
+        }
+        let control_name = string(family, "control_plane_name").ok_or_else(|| {
+            format!("nested_families.{family_name} is missing control_plane_name")
+        })?;
+        let control_wave = family
+            .get("control_plane_rollout_wave")
+            .and_then(toml::Value::as_integer)
+            .ok_or_else(|| {
+                format!("nested_families.{family_name} is missing control_plane_rollout_wave")
+            })?;
+        let control = toml::Value::Table(
+            [
+                (
+                    "identity_status".to_owned(),
+                    family
+                        .get("control_plane_identity_status")
+                        .cloned()
+                        .ok_or_else(|| {
+                            format!(
+                                "nested_families.{family_name} is missing control-plane identity"
+                            )
+                        })?,
+                ),
+                (
+                    "current_tag".to_owned(),
+                    family
+                        .get("control_plane_current_tag")
+                        .cloned()
+                        .ok_or_else(|| {
+                            format!("nested_families.{family_name} is missing control-plane tag")
+                        })?,
+                ),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        insert_authority_meta(&mut result, &control_name, &control, phase, control_wave)?;
     }
 
     let control = data
@@ -2124,6 +2216,43 @@ mod tests {
     }
 
     #[test]
+    fn parent_authority_orders_registered_nested_family_before_jain_products() {
+        let data: toml::Value = fs::read_to_string(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml"),
+        )
+        .unwrap()
+        .parse()
+        .unwrap();
+        let metadata = authority_metadata(&data).unwrap();
+        assert_eq!((metadata["jeryu"].phase, metadata["jeryu"].wave), (0, 16));
+        assert_eq!(
+            (
+                metadata["jeryu-tool-finder"].phase,
+                metadata["jeryu-tool-finder"].wave
+            ),
+            (0, 24)
+        );
+        assert_eq!(
+            (
+                metadata["jeryu-release-ops"].phase,
+                metadata["jeryu-release-ops"].wave
+            ),
+            (0, 26)
+        );
+        assert_eq!(
+            (metadata["jain-domain"].phase, metadata["jain-domain"].wave),
+            (1, 1)
+        );
+        assert_eq!(
+            (
+                metadata["jain-split-ops"].phase,
+                metadata["jain-split-ops"].wave
+            ),
+            (2, 0)
+        );
+    }
+
+    #[test]
     fn journal_io_is_atomic_private_and_rejects_aliases_and_lock_races() {
         let directory = TestDirectory::new();
         let path = directory.0.join("campaign.json");
@@ -2167,6 +2296,20 @@ mod tests {
                 .map(|value| value.as_str().unwrap())
                 .collect::<BTreeSet<_>>()
         };
+        assert_eq!(
+            required("/$defs/plan/required"),
+            PLAN_KEYS.into_iter().collect()
+        );
+        assert_eq!(
+            required("/$defs/planRepository/required"),
+            PLAN_ROW_REQUIRED_KEYS.into_iter().collect()
+        );
+        for definition in ["plan", "planRepository", "journal", "journalRepository"] {
+            assert_eq!(
+                schema.pointer(&format!("/$defs/{definition}/additionalProperties")),
+                Some(&json!(false))
+            );
+        }
         assert_eq!(
             required("/$defs/journal/required"),
             JOURNAL_KEYS.into_iter().collect()

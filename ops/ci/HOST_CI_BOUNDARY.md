@@ -48,6 +48,16 @@ newest eight attempts per repository check. A symlink, special inode, extra
 file, size overflow, low-space store, or unexpected non-native evidence turns
 the check into failure; none can become publication authority.
 
+Coverage and security inputs for the independent auditor cross a second,
+request-scoped `tmpfs` capped at 64 MiB and 64 inodes. The worker may stage only
+the closed target paths declared by `host-ci-inputs.sh`, and seals their sorted
+paths, sizes, digests, request, exact product SHA, check, and control commit.
+After the worker cgroup is dead, root validates the complete inventory and
+copies only those files into ignored `target/` paths in the separate exact-head
+audit checkout. Linked, special, oversized, extra, unstable, or mismatched
+inputs make the product result fail; the auditor never sees the worker
+checkout.
+
 Jankurai proof output is independently bounded to three regular, single-link
 files in a 16 MiB, 32-inode `tmpfs`. The Rust validator binds the repository,
 resolves Jankurai's unambiguous Git head to the full commit inside the exact
@@ -85,6 +95,8 @@ install -o root -g root -m 0500 ops/ci/host-ci-publisher.sh \
   /usr/local/libexec/jain/host-ci-publisher
 install -o root -g root -m 0500 ops/ci/host-ci-boundary-preflight.sh \
   /usr/local/libexec/jain/host-ci-boundary-preflight
+install -o root -g root -m 0555 ops/ci/host-ci-inputs.sh \
+  /usr/local/libexec/jain/host-ci-inputs
 cargo build --locked --release --bin splitctl
 install -o root -g root -m 0500 target/release/splitctl \
   /usr/local/libexec/jain/splitctl
@@ -105,6 +117,8 @@ install -d -o jain-host-ci -g jain-host-ci -m 0700 \
   /var/cache/jain-host-ci/cargo
 install -d -o root -g root -m 0555 \
   /var/lib/jain-host-ci/cargo-registry
+install -d -o root -g root -m 0555 \
+  /var/lib/jain-host-ci/python-wheelhouse/<inventory-sha256>
 install -d -o root -g root -m 0700 /var/lib/jain-host-ci/requests
 install -d -o root -g root -m 0700 \
   /var/lib/jain-host-ci/native-evidence
@@ -117,11 +131,12 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
 
 ```json
 {
-  "schema_version": "jain.host-ci-sandbox-config/v7",
+  "schema_version": "jain.host-ci-sandbox-config/v8",
   "sandbox_sha256": "<64 lowercase hex>",
   "publisher_sha256": "<64 lowercase hex>",
   "splitctl_sha256": "<64 lowercase hex>",
   "jankurai_sha256": "<64 lowercase hex from governed install receipt>",
+  "inputs_sha256": "<sha256sum of installed host-ci-inputs>",
   "parent_uid": 1000,
   "parent_gid": 1000,
   "worker_user": "jain-host-ci",
@@ -129,6 +144,8 @@ Create `/usr/local/libexec/jain/host-ci-sandbox.config.json` as root mode
   "family_root": "/home/ubuntu/jain-split",
   "worker_cache": "/var/cache/jain-host-ci/cargo",
   "cargo_registry_cache": "/var/lib/jain-host-ci/cargo-registry",
+  "python_wheelhouse_root": "/var/lib/jain-host-ci/python-wheelhouse/<inventory-sha256>",
+  "python_wheelhouse_inventory_sha256": "<closed wheel inventory sha256>",
   "cargo_bin": "/home/ubuntu/.cargo/bin",
   "rustup_home": "/home/ubuntu/.rustup",
   "git_lfs_path": "/usr/bin/git-lfs",
@@ -173,7 +190,16 @@ the root materialization with no network. System/global Git configuration and
 tracked `.lfsconfig` are disabled; the worker receives only the exact pinned
 `filter.lfs.{process,clean,smudge,required}` values.
 
-The v7 sandbox config also requires the canonical root-owned, mode-0755,
+The v8 sandbox config also requires a nonempty, flat Python wheelhouse whose
+directory is canonical root-owned mode `0555` and whose safe `.whl` files are
+root-owned mode `0444`, single-link regular files. Its inventory digest is the
+SHA-256 of sorted `<filename>\t<size>\t<sha256>\n` records. The Python worker
+receives that directory read-only at
+`/opt/jain-ci/authority/python-wheelhouse`; every other repository has no such
+mount. Both root and worker recompute the inventory before product code runs.
+No host-CI path downloads or reconstructs missing wheels.
+
+The v8 sandbox config also requires the canonical root-owned, mode-0755,
 single-link `/usr/bin/nvidia-smi` and its exact digest. Root invokes it only for
 the four reviewed CUDA release policies. Keep `device_allow` empty; detector
 visibility is inventory authority, not permission to expose a device to the
@@ -262,9 +288,10 @@ namespace/seccomp probe cannot run. GPU release validation is dispatched by SCQ
 to registered GPU workers; do not add nonexistent AtomicSoul GPU devices to this
 host boundary. Re-run installation and
 preflight for every immutable broker revision; never update a digest without
-installing and reviewing the matching bytes. The two v5 configs must bind the
-same freshly provisioned digest from the protected jeryu-tool manifest/install
-receipt; an environment-specific review build digest is not portable authority.
+installing and reviewing the matching bytes. The publisher v5 and sandbox v8
+configs must bind the same freshly provisioned auditor digest from the
+protected jeryu-tool manifest/install receipt; an environment-specific review
+build digest is not portable authority.
 
 These commands are a post-merge authority-owner procedure. A source/PR lane
 must not install the broker, migrate the credential, run the unmerged publisher,

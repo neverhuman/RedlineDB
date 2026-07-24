@@ -122,6 +122,7 @@ config="$install_dir/host-ci-sandbox.config.json"
 publisher_path="$install_dir/host-ci-publisher"
 splitctl_path="$install_dir/splitctl"
 jankurai_path="$install_dir/jankurai"
+inputs_path="$install_dir/host-ci-inputs"
 security_tool_names=(actionlint grype syft)
 [[ ! -L "$sandbox_path" \
   && "$(stat -c '%u:%a:%h' -- "$sandbox_path" 2>/dev/null)" == '0:500:1' ]] \
@@ -135,6 +136,9 @@ security_tool_names=(actionlint grype syft)
 [[ ! -L "$jankurai_path" \
   && "$(stat -c '%u:%a:%h' -- "$jankurai_path" 2>/dev/null)" == '0:555:1' ]] \
   || fail 'Jankurai must be root-owned mode 0555'
+[[ ! -L "$inputs_path" \
+  && "$(stat -c '%u:%a:%h' -- "$inputs_path" 2>/dev/null)" == '0:555:1' ]] \
+  || fail 'host-CI input validator must be root-owned mode 0555'
 [[ ! -L "$install_dir" && -d "$install_dir" \
   && "$(stat -c '%u' -- "$install_dir")" == 0 \
   && "$((8#$(stat -c '%a' -- "$install_dir") & 8#022))" == 0 ]] \
@@ -143,11 +147,12 @@ security_tool_names=(actionlint grype syft)
   && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
   || fail 'unsafe root sandbox config'
 jq -e '
-  select(.schema_version == "jain.host-ci-sandbox-config/v7")
+  select(.schema_version == "jain.host-ci-sandbox-config/v8")
   | select(.sandbox_sha256 | test("^[0-9a-f]{64}$"))
   | select(.publisher_sha256 | test("^[0-9a-f]{64}$"))
   | select(.splitctl_sha256 | test("^[0-9a-f]{64}$"))
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
+  | select(.inputs_sha256 | test("^[0-9a-f]{64}$"))
   | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
   | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
   | select(.parent_uid | type == "number")
@@ -157,6 +162,8 @@ jq -e '
   | select(.family_root | type == "string" and startswith("/"))
   | select(.worker_cache | type == "string" and startswith("/"))
   | select(.cargo_registry_cache | type == "string" and startswith("/"))
+  | select(.python_wheelhouse_root | type == "string" and startswith("/"))
+  | select(.python_wheelhouse_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.grype_db_root | type == "string" and startswith("/"))
   | select(.grype_db_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.cargo_bin | type == "string" and startswith("/"))
@@ -182,6 +189,7 @@ sandbox_sha="$(sha256sum -- "$sandbox_path" | cut -d' ' -f1)"
 publisher_sha="$(sha256sum -- "$publisher_path" | cut -d' ' -f1)"
 splitctl_sha="$(sha256sum -- "$splitctl_path" | cut -d' ' -f1)"
 jankurai_sha="$(sha256sum -- "$jankurai_path" | cut -d' ' -f1)"
+inputs_sha="$(sha256sum -- "$inputs_path" | cut -d' ' -f1)"
 [[ "$sandbox_sha" == "$(jq -er '.sandbox_sha256' "$config")" \
   && "$publisher_sha" == "$(jq -er '.publisher_sha256' "$config")" \
   && "$splitctl_sha" == "$(jq -er '.splitctl_sha256' "$config")" ]] \
@@ -189,6 +197,10 @@ jankurai_sha="$(sha256sum -- "$jankurai_path" | cut -d' ' -f1)"
 [[ "$jankurai_sha" == "$(jq -er '.jankurai_sha256' "$config")" \
   && "$("$jankurai_path" --version)" == 'jankurai 1.6.11' ]] \
   || fail 'installed Jankurai digest/version mismatch'
+[[ "$inputs_sha" == "$(jq -er '.inputs_sha256' "$config")" ]] \
+  || fail 'installed host-CI input validator digest mismatch'
+# shellcheck source=ops/ci/host-ci-inputs.sh
+source "$inputs_path"
 security_tool_sha256="$(jq -c '.security_tool_sha256' "$config")"
 for tool in "${security_tool_names[@]}"; do
   tool_path="$install_dir/security-$tool"
@@ -231,6 +243,17 @@ cargo_registry_cache="$(realpath -e -- "$cargo_registry_cache_config")" \
 [[ "$cargo_registry_cache" == "$cargo_registry_cache_config" ]] \
   || fail 'Cargo registry cache path contains a symlink or alias'
 validate_cargo_registry_cache "$cargo_registry_cache"
+python_wheelhouse_config="$(jq -er '.python_wheelhouse_root' "$config")"
+python_wheelhouse_root="$(realpath -e -- "$python_wheelhouse_config")" \
+  || fail 'Python wheelhouse root unavailable'
+[[ "$python_wheelhouse_root" == "$python_wheelhouse_config" ]] \
+  || fail 'Python wheelhouse path contains a symlink or alias'
+python_wheelhouse_inventory_sha256="$(
+  jq -er '.python_wheelhouse_inventory_sha256' "$config"
+)"
+jain_host_ci_verify_python_wheelhouse \
+  "$python_wheelhouse_root" "$python_wheelhouse_inventory_sha256" 0 0 \
+  || fail 'Python wheelhouse inventory or custody mismatch'
 grype_db_config="$(jq -er '.grype_db_root' "$config")"
 grype_db_root="$(realpath -e -- "$grype_db_config")" \
   || fail 'Grype database root unavailable'
@@ -373,6 +396,7 @@ for name in "${environment_names[@]}"; do
     && "$name" != JAIN_CONTRACT_BASE_REF \
     && "$name" != JAIN_NATIVE_EVIDENCE_ROOT \
     && "$name" != JAIN_NATIVE_EVIDENCE_STAGING_ROOT \
+    && "$name" != JAIN_AUDIT_INPUT_STAGING_ROOT \
     && "$name" != JAIN_PROOF_EVIDENCE_ROOT \
     && "$name" != JAIN_PROOF_EVIDENCE_STAGING_ROOT \
     && "$name" != JAIN_RUSTSEC_ADVISORY_SOURCE \
@@ -382,6 +406,8 @@ for name in "${environment_names[@]}"; do
     && "$name" != JAIN_GRYPE_DB_ROOT \
     && "$name" != JAIN_GRYPE_DB_INVENTORY_SHA256 \
     && "$name" != JAIN_NATIVE_BUILD_TOOLS_ROOT \
+    && "$name" != JAIN_PYTHON_WHEELHOUSE_REQUIRED \
+    && "$name" != JAIN_PYTHON_WHEELHOUSE_INVENTORY_SHA256 \
     && "$name" != CUDA_COMPUTE_CAP \
     && "$name" != JAIN_SPLIT_OPS_ROOT \
     && "$name" != JAIN_HOST_CI_REEXEC_STATE \
@@ -426,7 +452,9 @@ fi
 [[ "$(sha256sum -- "$control_root/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
   == "$sandbox_sha" \
   && "$(sha256sum -- "$control_root/ops/ci/host-ci-publisher.sh" | cut -d' ' -f1)" \
-    == "$publisher_sha" ]] \
+    == "$publisher_sha" \
+  && "$(sha256sum -- "$control_root/ops/ci/host-ci-inputs.sh" | cut -d' ' -f1)" \
+    == "$inputs_sha" ]] \
   || fail 'installed brokers do not match reviewed main'
 
 # Materialize the exact reviewed RustSec commit while still root. The canonical
@@ -480,6 +508,10 @@ IFS=$'\t' read -r protected_owner protected_check cuda_required \
 [[ "${arguments[0]}" == "$protected_owner" \
   && "${arguments[4]}" == "$protected_check" ]] \
   || fail 'requested owner/check differs from manifest authority'
+python_wheelhouse_required=false
+if [[ "$repo" == jain-python ]]; then
+  python_wheelhouse_required=true
+fi
 sibling_request="$(jq -r '.environment.JAIN_NEEDS_SIBLINGS // "0"' "$request")"
 [[ "$sibling_request" == 0 || "$sibling_request" == 1 ]] \
   || fail 'JAIN_NEEDS_SIBLINGS must be exactly 0 or 1'
@@ -761,7 +793,8 @@ if [[ "$sibling_sources_required" == true ]]; then
       jain-xgboost jain-lightgbm jain-jable jain-battle-gpu jain-starforge
       jain-core jain-llm jain-agent jain-jnoccio jain-zyal jain-jailgun
       jain-research jain-report jain-tui jain-cli jain-web jain-python
-      jain-model-zoo jain-ops jain-smartcluster jain-deploy
+      jain-model-zoo jain-ops jain-smartcluster jain-shard jain-nexus
+      jain-deploy
     )
   fi
   if [[ "$repo" == jain ]]; then
@@ -951,6 +984,10 @@ install -o root -g root -m 0555 \
 install -o root -g root -m 0555 \
   "$control_root/ops/ci/split-host-ci.sh" \
   "$worker_authority/.split-host-ci-reviewed"
+if [[ "$python_wheelhouse_required" == true ]]; then
+  install -d -o root -g root -m 0555 \
+    "$worker_authority/python-wheelhouse"
+fi
 worker_result="$bootstrap_root/writable/worker-evidence.json"
 worker_sibling_sources_path=""
 if [[ "$sibling_sources_required" == true ]]; then
@@ -969,7 +1006,9 @@ jq -n --arg commit "$control_commit" --arg result "$worker_result" \
   --arg cuda_record_sha "$cuda_capability_record_sha256" \
   --arg cuda_cap "$cuda_compute_capability" \
   --argjson cuda_required "$cuda_required" \
-  '{schema_version:"jain.host-ci-reexec/v5",
+  --arg python_wheelhouse_sha "$python_wheelhouse_inventory_sha256" \
+  --argjson python_wheelhouse_required "$python_wheelhouse_required" \
+  '{schema_version:"jain.host-ci-reexec/v6",
     source_root:"/opt/jain-ci/authority/control-plane",
     exact_root:"/opt/jain-ci/authority/control-plane",
     request_id:$request_id,commit:$commit,result_path:$result,
@@ -983,6 +1022,8 @@ jq -n --arg commit "$control_commit" --arg result "$worker_result" \
     cuda_capability_record_path:$cuda_record_path,
     cuda_capability_record_sha256:$cuda_record_sha,
     cuda_compute_capability:$cuda_cap,
+    python_wheelhouse_required:$python_wheelhouse_required,
+    python_wheelhouse_inventory_sha256:$python_wheelhouse_sha,
     splitctl_path:"/opt/jain-ci/authority/splitctl"}' \
   >"$worker_authority/reexec-state.json"
 chmod 0444 "$worker_authority/reexec-state.json"
@@ -1063,6 +1104,18 @@ evidence_mounted=1
   == "tmpfs $evidence_staging_root" ]] \
   || fail 'native evidence staging is not the expected tmpfs'
 
+audit_input_staging_root="$bootstrap_root/writable/audit-input-staging"
+mkdir -m 0700 "$audit_input_staging_root"
+/usr/bin/mount -t tmpfs \
+  -o "nodev,nosuid,noexec,size=67108864,nr_inodes=64,mode=0700,uid=$worker_uid,gid=$worker_gid" \
+  "jain-host-ci-audit-input-$request_id" "$audit_input_staging_root" \
+  || fail 'cannot mount bounded audit input staging'
+audit_input_mounted=1
+[[ "$(/usr/bin/findmnt -rn -o FSTYPE,TARGET \
+  --target "$audit_input_staging_root")" \
+  == "tmpfs $audit_input_staging_root" ]] \
+  || fail 'audit input staging is not the expected tmpfs'
+
 unit="jain-host-ci-${request_id:0:24}.service"
 audit_unit="jain-host-ci-proof-${request_id:0:18}.service"
 proof_staging_root="$root_request/proof-staging"
@@ -1071,6 +1124,12 @@ cleanup_evidence_mount() {
   if [[ "${evidence_mounted:-0}" == 1 ]]; then
     /usr/bin/umount -- "$evidence_staging_root" >/dev/null 2>&1 || true
     evidence_mounted=0
+  fi
+}
+cleanup_audit_input_mount() {
+  if [[ "${audit_input_mounted:-0}" == 1 ]]; then
+    /usr/bin/umount -- "$audit_input_staging_root" >/dev/null 2>&1 || true
+    audit_input_mounted=0
   fi
 }
 cleanup_proof_mount() {
@@ -1086,6 +1145,7 @@ restore_owner() {
   systemctl reset-failed "$unit" >/dev/null 2>&1 || true
   systemctl reset-failed "$audit_unit" >/dev/null 2>&1 || true
   cleanup_evidence_mount
+  cleanup_audit_input_mount
   cleanup_proof_mount
   chown -R "$parent_uid:$parent_gid" "$bootstrap_root" >/dev/null 2>&1 || true
 }
@@ -1125,6 +1185,7 @@ systemd_args=(
   --property="BindReadOnlyPaths=$cargo_bin:/opt/jain-ci/cargo-bin"
   --property="BindReadOnlyPaths=$rustup_home:/opt/jain-ci/rustup"
   --property="BindPaths=$evidence_staging_root"
+  --property="BindPaths=$audit_input_staging_root"
   --property="InaccessiblePaths=/usr/bin/sudo /etc/sudoers /etc/sudoers.d -$install_dir -$request_root"
   --setenv="HOME=$bootstrap_root/child-home"
   --setenv="USER=$worker_user" --setenv="LOGNAME=$worker_user"
@@ -1159,6 +1220,7 @@ systemd_args=(
   --setenv="JAIN_GRYPE_DB_INVENTORY_SHA256=$grype_db_inventory_sha256"
   --setenv=GRYPE_DB_CACHE_DIR=/opt/jain-ci/grype-db
   --setenv="JAIN_NATIVE_EVIDENCE_STAGING_ROOT=$evidence_staging_root"
+  --setenv="JAIN_AUDIT_INPUT_STAGING_ROOT=$audit_input_staging_root"
 )
 if [[ "$sibling_sources_required" == true ]]; then
   systemd_args+=("${sibling_bind_args[@]}")
@@ -1167,6 +1229,11 @@ if [[ -n "$native_build_tools_root" ]]; then
   systemd_args+=(
     --property="BindReadOnlyPaths=$native_build_tools_root:$native_build_tools_mount"
     --setenv="JAIN_NATIVE_BUILD_TOOLS_ROOT=$native_build_tools_mount"
+  )
+fi
+if [[ "$python_wheelhouse_required" == true ]]; then
+  systemd_args+=(
+    --property="BindReadOnlyPaths=$python_wheelhouse_root:/opt/jain-ci/authority/python-wheelhouse"
   )
 fi
 if [[ -n "$pnpm_store_mount" ]]; then
@@ -1230,6 +1297,36 @@ systemctl kill --kill-whom=all --signal=KILL "$unit" >/dev/null 2>&1 || true
 systemctl is-active --quiet "$unit" \
   && fail 'sandbox cgroup remained active after worker exit'
 printf '[host-ci-sandbox] worker cgroup stopped before sealing\n' >&2
+
+# Worker-generated audit inputs cross into the separate root audit checkout
+# only through the bounded tmpfs receipt. Invalid or missing transfer evidence
+# can never produce a successful product conclusion.
+audit_input_valid=false
+audit_input_receipt_sha256=""
+audit_input_file_count=0
+if [[ "$runner_rc" == 0 ]]; then
+  audit_input_validation="$(
+    jain_host_ci_validate_audit_inputs \
+      "$audit_input_staging_root" "$request_id" "$control_commit" \
+      "${arguments[0]}" "$repo" "${arguments[2]}" "${arguments[4]}" \
+      "$worker_uid" "$worker_gid"
+  )" || audit_input_validation=""
+  IFS=$'\t' read -r audit_input_receipt_sha256 audit_input_file_count \
+    <<<"$audit_input_validation"
+  if [[ "$audit_input_receipt_sha256" =~ ^[0-9a-f]{64}$ \
+    && "$audit_input_file_count" =~ ^[0-5]$ ]]; then
+    if jain_host_ci_install_audit_inputs \
+      "$audit_input_staging_root" "$audit_worktree"; then
+      audit_input_valid=true
+    fi
+  fi
+fi
+/usr/bin/umount -- "$audit_input_staging_root" \
+  || fail 'cannot unmount bounded audit input staging'
+audit_input_mounted=0
+if /usr/bin/findmnt -rn -M "$audit_input_staging_root" >/dev/null; then
+  fail 'audit input staging mount survived root validation'
+fi
 
 # The auditor is a separately installed, digest-pinned trust input. It runs
 # only after every product process is dead, in its own private network and PID
@@ -1325,7 +1422,7 @@ if [[ "$runner_rc" == 0 && -f "$worker_result" && ! -L "$worker_result" \
     --arg head "${arguments[2]}" --arg check "${arguments[4]}" \
     --arg commit "$control_commit" \
     --arg product_base_commit "$product_base_commit" \
-    'select(.schema_version == "jain.host-ci-worker-evidence/v5")
+    'select(.schema_version == "jain.host-ci-worker-evidence/v6")
      | select(.owner == $owner and .repository == $repo)
      | select(.head_sha == $head and .required_check == $check)
      | select(.control_plane_commit == $commit)
@@ -1338,7 +1435,12 @@ if [[ "$runner_rc" == 0 && -f "$worker_result" && ! -L "$worker_result" \
      | select(.sibling_sources_sha256 | type == "string")
      | select(.cuda_compute_capability_required | type == "boolean")
      | select(.cuda_compute_capability | type == "string")
-     | select(.cuda_capability_record_sha256 | type == "string")' \
+     | select(.cuda_capability_record_sha256 | type == "string")
+     | select(.python_wheelhouse_required | type == "boolean")
+     | select(.python_wheelhouse_inventory_sha256 | type == "string")
+     | select(.audit_input_receipt_sha256 | test("^[0-9a-f]{64}$"))
+     | select((.audit_input_file_count | type) == "number"
+       and .audit_input_file_count >= 0 and .audit_input_file_count <= 5)' \
     "$worker_result" >/dev/null; then
   evidence_dir="$(jq -er '.native_evidence_dir' "$worker_result")"
   evidence_sha="$(jq -er '.native_evidence_sha256' "$worker_result")"
@@ -1357,7 +1459,16 @@ if [[ "$runner_rc" == 0 && -f "$worker_result" && ! -L "$worker_result" \
     && "$(jq -er '.cuda_compute_capability' "$worker_result")" \
       == "$cuda_compute_capability" \
     && "$(jq -er '.cuda_capability_record_sha256' "$worker_result")" \
-      == "$cuda_capability_record_sha256" ]]; then
+      == "$cuda_capability_record_sha256" \
+    && "$(jq -r '.python_wheelhouse_required' "$worker_result")" \
+      == "$python_wheelhouse_required" \
+    && "$(jq -er '.python_wheelhouse_inventory_sha256' "$worker_result")" \
+      == "$python_wheelhouse_inventory_sha256" \
+    && "$(jq -er '.audit_input_receipt_sha256' "$worker_result")" \
+      == "$audit_input_receipt_sha256" \
+    && "$(jq -er '.audit_input_file_count' "$worker_result")" \
+      == "$audit_input_file_count" \
+    && "$audit_input_valid" == true ]]; then
     conclusion=success
   fi
 fi

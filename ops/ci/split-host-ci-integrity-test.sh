@@ -45,6 +45,7 @@ request_root="$tmp/root-requests"
 worker_cache="$tmp/worker-cache"
 cargo_registry_cache=""
 grype_db_root=""
+python_wheelhouse_root=""
 noexec_request_root=""
 product_forge_root="$tmp/product-forge"
 cleanup() {
@@ -88,6 +89,14 @@ cleanup() {
     '') ;;
     *) printf 'refusing unsafe Grype database fixture cleanup: %s\n' \
          "$grype_db_root" >&2 ;;
+  esac
+  case "$python_wheelhouse_root" in
+    /var/lib/jain-host-ci/integrity-python-wheelhouse.??????)
+      sudo -n rm -rf -- "$python_wheelhouse_root" 2>/dev/null || true
+      ;;
+    '') ;;
+    *) printf 'refusing unsafe Python wheelhouse fixture cleanup: %s\n' \
+         "$python_wheelhouse_root" >&2 ;;
   esac
   if [[ -n "$noexec_request_root" ]]; then
     sudo -n /usr/bin/umount -- "$noexec_request_root" 2>/dev/null || true
@@ -296,6 +305,14 @@ if [[ "$mode" == wrong-head ]]; then
 fi
 score=92
 decision_passed=true
+evidence_carried=false
+if [[ -f target/jankurai/coverage/coverage-audit.json \
+  && -f target/security/evidence.json ]]; then
+  evidence_carried=true
+else
+  score=82
+  decision_passed=false
+fi
 if [[ "$mode" == score-failure ]]; then
   score=84
   decision_passed=false
@@ -304,6 +321,7 @@ policy_sha="$(sha256sum agent/audit-policy.toml | cut -d' ' -f1)"
 jq -n --arg head "$head" --arg policy_sha "$policy_sha" \
   --arg source_read_only "$source_read_only" \
   --arg network_isolated "$network_isolated" \
+  --arg evidence_carried "$evidence_carried" \
   --argjson score "$score" --argjson decision_passed "$decision_passed" \
   '{score:$score,repo:".",auditor_version:"1.6.11",
     input_fingerprint:("sha256:" + ("1" * 64)),
@@ -316,7 +334,8 @@ jq -n --arg head "$head" --arg policy_sha "$policy_sha" \
     policy:{path:"agent/audit-policy.toml",minimum_score:85,
       auditor_version:"1.6.11"},
     fixture:{source_read_only:($source_read_only == "true"),
-      network_isolated:($network_isolated == "true")}}' >"$report"
+      network_isolated:($network_isolated == "true"),
+      evidence_carried:($evidence_carried == "true")}}' >"$report"
 printf '# fixture Jankurai report\n' >"$markdown"
 printf '{"repair":"none"}\n' >"$repairs"
 JANKURAI
@@ -333,6 +352,7 @@ install -D -m 0644 "$repo_root/authority/source-paths.txt" \
 for boundary_file in \
   ops/ci/host-ci-integrity.sh ops/ci/host-ci-publisher.sh \
   ops/ci/host-ci-sandbox.sh ops/ci/host-ci-boundary-preflight.sh \
+  ops/ci/host-ci-inputs.sh ops/ci/host-ci-inputs-test.sh \
   ops/ci/cargo-lock-closure.sh \
   ops/ci/native-runtime.sh ops/ci/pnpm-runtime.sh ops/ci/host-ci-evidence.sh \
   ops/ci/host-ci-proof-evidence.sh \
@@ -410,6 +430,7 @@ sandbox="$publisher_root/host-ci-sandbox"
 sandbox_config="$publisher_root/host-ci-sandbox.config.json"
 splitctl="$publisher_root/splitctl"
 jankurai="$publisher_root/jankurai"
+inputs="$publisher_root/host-ci-inputs"
 security_tool_digest="$(sha256sum /usr/bin/true | cut -d' ' -f1)"
 git_lfs_path=/usr/bin/git-lfs
 git_lfs_digest="$(sha256sum "$git_lfs_path" | cut -d' ' -f1)"
@@ -422,6 +443,8 @@ sudo -n install -o root -g root -m 0500 \
   "$control/ops/ci/host-ci-publisher.sh" "$publisher"
 sudo -n install -o root -g root -m 0500 \
   "$control/ops/ci/host-ci-sandbox.sh" "$sandbox"
+sudo -n install -o root -g root -m 0555 \
+  "$control/ops/ci/host-ci-inputs.sh" "$inputs"
 sudo -n install -d -o xbwork -g xbwork -m 0700 "$worker_cache"
 sudo -n install -d -o root -g root -m 0755 /var/lib/jain-host-ci
 cargo_registry_cache="$(
@@ -438,6 +461,21 @@ sudo -n install -d -o root -g root -m 0555 \
   "$cargo_registry_cache/index/index.crates.io-6f17d22bba15001f/.cache"
 sudo -n install -o root -g root -m 0444 /dev/null \
   "$cargo_registry_cache/index/index.crates.io-6f17d22bba15001f/config.json"
+python_wheelhouse_root="$(
+  sudo -n mktemp -d /var/lib/jain-host-ci/integrity-python-wheelhouse.XXXXXX
+)"
+[[ "$python_wheelhouse_root" \
+  == /var/lib/jain-host-ci/integrity-python-wheelhouse.?????? ]]
+sudo -n install -o root -g root -m 0444 /usr/bin/true \
+  "$python_wheelhouse_root/fixture-1.0-py3-none-any.whl"
+sudo -n chmod 0555 "$python_wheelhouse_root"
+python_wheelhouse_inventory_sha256="$(
+  # shellcheck disable=SC1090
+  source "$control/ops/ci/host-ci-inputs.sh"
+  jain_host_ci_python_wheelhouse_inventory \
+    "$python_wheelhouse_root" 0 0 | cut -f1
+)"
+[[ "$python_wheelhouse_inventory_sha256" =~ ^[0-9a-f]{64}$ ]]
 grype_db_root="$(
   sudo -n mktemp -d /var/lib/jain-host-ci/integrity-grype-db.XXXXXX
 )"
@@ -509,9 +547,12 @@ sudo -n chmod 0600 "$publisher_config"
 jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' ' -f1)" \
   --arg publisher_digest "$(sha256sum "$control/ops/ci/host-ci-publisher.sh" | cut -d' ' -f1)" \
   --arg splitctl_digest "$splitctl_digest" --arg jankurai_digest "$fake_jankurai_digest" \
+  --arg inputs_digest "$(sha256sum "$control/ops/ci/host-ci-inputs.sh" | cut -d' ' -f1)" \
   --arg security_tool_digest "$security_tool_digest" \
   --arg family "$sandbox_family_root" --arg cache "$worker_cache" \
   --arg cargo_registry_cache "$cargo_registry_cache" \
+  --arg python_wheelhouse_root "$python_wheelhouse_root" \
+  --arg python_wheelhouse_inventory_sha256 "$python_wheelhouse_inventory_sha256" \
   --arg cargo_bin "$HOME/.cargo/bin" --arg rustup "$HOME/.rustup" \
   --arg git_lfs_path "$git_lfs_path" --arg git_lfs_digest "$git_lfs_digest" \
   --arg nvidia_smi_path "$nvidia_smi_path" \
@@ -527,9 +568,10 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
   --arg grype_db_root "$grype_db_root" \
   --arg grype_db_inventory_sha256 "$grype_db_inventory_sha256" \
   --argjson parent_uid "$(id -u)" --argjson parent_gid "$(id -g)" \
-  '{schema_version:"jain.host-ci-sandbox-config/v7",
+  '{schema_version:"jain.host-ci-sandbox-config/v8",
     sandbox_sha256:$digest,publisher_sha256:$publisher_digest,
     splitctl_sha256:$splitctl_digest,jankurai_sha256:$jankurai_digest,
+    inputs_sha256:$inputs_digest,
     security_tool_sha256:{actionlint:$security_tool_digest,
       grype:$security_tool_digest,syft:$security_tool_digest},
     grype_db_root:$grype_db_root,
@@ -537,6 +579,8 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
     parent_uid:$parent_uid,parent_gid:$parent_gid,
     worker_user:"xbwork",worker_group:"xbwork",family_root:$family,
     worker_cache:$cache,cargo_registry_cache:$cargo_registry_cache,
+    python_wheelhouse_root:$python_wheelhouse_root,
+    python_wheelhouse_inventory_sha256:$python_wheelhouse_inventory_sha256,
     cargo_bin:$cargo_bin,rustup_home:$rustup,
     git_lfs_path:$git_lfs_path,git_lfs_sha256:$git_lfs_digest,
     nvidia_smi_path:$nvidia_smi_path,nvidia_smi_sha256:$nvidia_smi_digest,
@@ -551,14 +595,18 @@ jq -cn --arg digest "$(sha256sum "$control/ops/ci/host-ci-sandbox.sh" | cut -d' 
 sudo -n chown root:root "$sandbox_config"
 sudo -n chmod 0600 "$sandbox_config"
 
-# Sandbox v7 requires an exact detector identity and cannot turn inventory
+# Sandbox v8 requires exact detector and wheelhouse identities and cannot turn inventory
 # authority into worker device access.
 valid_detector_config="$tmp/valid-detector-config.json"
 sudo -n cat "$sandbox_config" >"$valid_detector_config"
-for detector_case in missing-digest device-allow; do
+for detector_case in missing-digest missing-wheelhouse-digest device-allow; do
   case "$detector_case" in
     missing-digest)
       jq 'del(.nvidia_smi_sha256)' "$valid_detector_config" \
+        >"$tmp/detector-reject.json"
+      ;;
+    missing-wheelhouse-digest)
+      jq 'del(.python_wheelhouse_inventory_sha256)' "$valid_detector_config" \
         >"$tmp/detector-reject.json"
       ;;
     device-allow)
@@ -602,6 +650,29 @@ fi
 grep -Fq 'installed Jankurai digest/version mismatch' \
   "$tmp/jankurai-tamper.log"
 sudo -n install -o root -g root -m 0555 "$fake_jankurai" "$jankurai"
+
+sudo -n install -o root -g root -m 0555 /usr/bin/false "$inputs"
+if sudo -n "$sandbox" "$tmp/nonexistent-input-validator-request" \
+  >"$tmp/input-validator-tamper.log" 2>&1; then
+  printf 'sandbox accepted a replaced host-CI input validator\n' >&2
+  exit 1
+fi
+grep -Fq 'installed host-CI input validator digest mismatch' \
+  "$tmp/input-validator-tamper.log"
+sudo -n install -o root -g root -m 0555 \
+  "$control/ops/ci/host-ci-inputs.sh" "$inputs"
+
+sudo -n install -o root -g root -m 0444 /usr/bin/false \
+  "$python_wheelhouse_root/fixture-1.0-py3-none-any.whl"
+if sudo -n "$sandbox" "$tmp/nonexistent-wheelhouse-request" \
+  >"$tmp/wheelhouse-tamper.log" 2>&1; then
+  printf 'sandbox accepted a mutated Python wheelhouse\n' >&2
+  exit 1
+fi
+grep -Fq 'Python wheelhouse inventory or custody mismatch' \
+  "$tmp/wheelhouse-tamper.log"
+sudo -n install -o root -g root -m 0444 /usr/bin/true \
+  "$python_wheelhouse_root/fixture-1.0-py3-none-any.whl"
 
 sudo -n cat "$sandbox_config" >"$tmp/git-lfs-valid-config.json"
 sudo -n jq '.git_lfs_sha256 = "0000000000000000000000000000000000000000000000000000000000000000"' \
@@ -695,6 +766,7 @@ if sudo -n "$splitctl" host-ci-snapshot-request \
 fi
 
 mkdir -p "$product/scripts" "$product/agent" "$split_root/jain-core"
+printf '/target/\n' >"$product/.gitignore"
 cat >"$product/agent/audit-policy.toml" <<'POLICY'
 minimum_score = 85
 allowed_score_drop = 0
@@ -712,6 +784,13 @@ if [[ "${JAIN_RELEASE_CI:-0}" == 1 ]]; then
   [[ "$(command -v jankurai)" \
     == /opt/jain-ci/authority/release-bin/jankurai ]]
   [[ "$(jankurai --version)" == 'jankurai 1.6.11' ]]
+  mkdir -p target/jankurai/coverage target/security
+  printf '{"schema_version":"fixture.coverage/v1","status":"pass"}\n' \
+    >target/jankurai/coverage/coverage-audit.json
+  printf '{"schema_version":"fixture.security/v1","status":"pass"}\n' \
+    >target/security/evidence.json
+  chmod 0644 target/jankurai/coverage/coverage-audit.json \
+    target/security/evidence.json
 fi
 if [[ "${JAIN_TEST_REQUIRE_ISOLATION:-0}" == 1 ]]; then
   : "${JAIN_TEST_ATTACK_URL:?}" "${JAIN_TEST_ROOT_CONFIG_PATH:?}"

@@ -1958,6 +1958,20 @@ fn validate_registered_nested_family_declaration(
             "{qualified}.release_lineage must be v followed by digits"
         ));
     }
+    let release_phase = family
+        .get("release_phase")
+        .and_then(toml::Value::as_integer)
+        .ok_or_else(|| format!("{qualified}.release_phase is required"))?;
+    if release_phase != 0 {
+        return Err(format!(
+            "{qualified}.release_phase must be 0 so nested release dependencies precede Jain products"
+        ));
+    }
+    let control_plane_rollout_wave = family
+        .get("control_plane_rollout_wave")
+        .and_then(toml::Value::as_integer)
+        .filter(|wave| *wave >= 0)
+        .ok_or_else(|| format!("{qualified}.control_plane_rollout_wave is required"))?;
     let owner = string(family, "forge_owner")
         .filter(|value| valid_cargo_token(value))
         .ok_or_else(|| format!("{qualified}.forge_owner is required"))?;
@@ -2068,6 +2082,7 @@ fn validate_registered_nested_family_declaration(
     let mut names = std::collections::BTreeSet::new();
     let mut paths = std::collections::BTreeSet::new();
     let mut remotes = std::collections::BTreeSet::new();
+    let mut rollout_waves = std::collections::BTreeSet::new();
     let mut retirement_pending = Vec::new();
     for repository in registered_nested_projection(family) {
         let name = string(repository, "name")
@@ -2079,6 +2094,16 @@ fn validate_registered_nested_family_declaration(
         if name == control_name {
             return Err(format!(
                 "{qualified} must declare its control plane separately from repository projections"
+            ));
+        }
+        let rollout_wave = repository
+            .get("rollout_wave")
+            .and_then(toml::Value::as_integer)
+            .filter(|wave| *wave >= 0)
+            .ok_or_else(|| format!("{qualified}.repository[{name}].rollout_wave is required"))?;
+        if !rollout_waves.insert(rollout_wave) {
+            return Err(format!(
+                "{qualified} has duplicate repository rollout_wave {rollout_wave}"
             ));
         }
         let path = exact_absolute_path(
@@ -2153,6 +2178,15 @@ fn validate_registered_nested_family_declaration(
     }
     if names.is_empty() {
         return Err(format!("{qualified} must project at least one repository"));
+    }
+    if rollout_waves
+        .iter()
+        .next_back()
+        .is_some_and(|wave| control_plane_rollout_wave <= *wave)
+    {
+        return Err(format!(
+            "{qualified}.control_plane_rollout_wave must follow every projected repository"
+        ));
     }
     match symlink_policy.as_str() {
         "enforced" if !retirement_pending.is_empty() => {
@@ -14331,6 +14365,44 @@ release_cuda_compute_capability_required = "yes"
         let split_root = Path::new("/home/ubuntu/jain-split");
         let canonical = &manifest["nested_families"]["jeryu"];
         validate_registered_nested_family_declaration("jeryu", canonical, split_root).unwrap();
+
+        let mut missing_phase = canonical.clone();
+        missing_phase
+            .as_table_mut()
+            .unwrap()
+            .remove("release_phase");
+        assert!(
+            validate_registered_nested_family_declaration("jeryu", &missing_phase, split_root)
+                .unwrap_err()
+                .contains("release_phase is required")
+        );
+
+        let mut wrong_phase = canonical.clone();
+        wrong_phase["release_phase"] = toml::Value::Integer(1);
+        assert!(
+            validate_registered_nested_family_declaration("jeryu", &wrong_phase, split_root)
+                .unwrap_err()
+                .contains("release_phase must be 0")
+        );
+
+        let mut duplicate_wave = canonical.clone();
+        duplicate_wave["repository"].as_array_mut().unwrap()[1]["rollout_wave"] =
+            duplicate_wave["repository"][0]["rollout_wave"].clone();
+        assert!(validate_registered_nested_family_declaration(
+            "jeryu",
+            &duplicate_wave,
+            split_root
+        )
+        .unwrap_err()
+        .contains("duplicate repository rollout_wave"));
+
+        let mut early_control = canonical.clone();
+        early_control["control_plane_rollout_wave"] = toml::Value::Integer(25);
+        assert!(
+            validate_registered_nested_family_declaration("jeryu", &early_control, split_root)
+                .unwrap_err()
+                .contains("must follow every projected repository")
+        );
 
         let mut old_root = canonical.clone();
         old_root["container_path"] = toml::Value::String("/home/ubuntu/jeryu-split".to_owned());

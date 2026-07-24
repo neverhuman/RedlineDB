@@ -117,6 +117,7 @@ sandbox="$install_dir/host-ci-sandbox"
 sandbox_config="$install_dir/host-ci-sandbox.config.json"
 splitctl="$install_dir/splitctl"
 jankurai="$install_dir/jankurai"
+inputs="$install_dir/host-ci-inputs"
 for executable in "$publisher" "$sandbox" "$splitctl"; do
   [[ ! -L "$executable" \
     && "$(stat -c '%u:%a:%h' -- "$executable" 2>/dev/null)" == '0:500:1' ]] \
@@ -125,6 +126,9 @@ done
 [[ ! -L "$jankurai" \
   && "$(stat -c '%u:%a:%h' -- "$jankurai" 2>/dev/null)" == '0:555:1' ]] \
   || fail 'unsafe installed Jankurai auditor'
+[[ ! -L "$inputs" \
+  && "$(stat -c '%u:%a:%h' -- "$inputs" 2>/dev/null)" == '0:555:1' ]] \
+  || fail 'unsafe installed host-CI input validator'
 for config in "$publisher_config" "$sandbox_config"; do
   [[ ! -L "$config" \
     && "$(stat -c '%u:%a:%h' -- "$config" 2>/dev/null)" == '0:600:1' ]] \
@@ -148,11 +152,14 @@ token_file="$(jq -er '.token_file' "$publisher_config")"
   && "$(realpath -e -- "$token_file" 2>/dev/null)" == "$token_file" \
   && "$(stat -c '%u:%g:%a:%h' -- "$token_file" 2>/dev/null)" == '0:0:600:1' ]] \
   || fail 'publisher token file must be canonical root:root mode 0600 single-link'
-jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v7")
+jq -e 'select(.schema_version == "jain.host-ci-sandbox-config/v8")
+  | select(.inputs_sha256 | test("^[0-9a-f]{64}$"))
   | select(.jankurai_sha256 | test("^[0-9a-f]{64}$"))
   | select((.security_tool_sha256 | keys) == ["actionlint", "grype", "syft"])
   | select(all(.security_tool_sha256[]; test("^[0-9a-f]{64}$")))
   | select(.cargo_registry_cache | type == "string" and startswith("/"))
+  | select(.python_wheelhouse_root | type == "string" and startswith("/"))
+  | select(.python_wheelhouse_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.git_lfs_path | type == "string" and startswith("/"))
   | select(.git_lfs_sha256 | test("^[0-9a-f]{64}$"))
   | select(.nvidia_smi_path == "/usr/bin/nvidia-smi")
@@ -191,6 +198,11 @@ validate_control_authority \
   == "$(jq -er '.jankurai_sha256' "$sandbox_config")" \
   && "$("$jankurai" --version)" == 'jankurai 1.6.11' ]] \
   || fail 'governed Jankurai binary/version mismatch'
+[[ "$(sha256sum -- "$inputs" | cut -d' ' -f1)" \
+  == "$(jq -er '.inputs_sha256' "$sandbox_config")" ]] \
+  || fail 'host-CI input validator digest mismatch'
+# shellcheck source=ops/ci/host-ci-inputs.sh
+source "$inputs"
 for tool in actionlint grype syft; do
   tool_path="$install_dir/security-$tool"
   [[ ! -L "$tool_path" \
@@ -262,6 +274,15 @@ cargo_registry_cache="$(realpath -e -- "$cargo_registry_cache_config")" \
 [[ "$cargo_registry_cache" == "$cargo_registry_cache_config" ]] \
   || fail 'Cargo registry cache path contains a symlink or alias'
 validate_cargo_registry_cache "$cargo_registry_cache"
+python_wheelhouse_config="$(jq -er '.python_wheelhouse_root' "$sandbox_config")"
+python_wheelhouse_root="$(realpath -e -- "$python_wheelhouse_config")" \
+  || fail 'Python wheelhouse root missing'
+[[ "$python_wheelhouse_root" == "$python_wheelhouse_config" ]] \
+  || fail 'Python wheelhouse path contains a symlink or alias'
+jain_host_ci_verify_python_wheelhouse \
+  "$python_wheelhouse_root" \
+  "$(jq -er '.python_wheelhouse_inventory_sha256' "$sandbox_config")" 0 0 \
+  || fail 'Python wheelhouse inventory or custody mismatch'
 grype_db_config="$(jq -er '.grype_db_root' "$sandbox_config")"
 grype_db_root="$(realpath -e -- "$grype_db_config")" \
   || fail 'Grype database root missing'

@@ -178,7 +178,7 @@ SPLIT_ROOT="${JAIN_SPLIT_ROOT:-/home/ubuntu/jain-split}"
   && ! -L "$RUNNER_PATH" \
   && "$(stat -c '%a:%h' -- "$RUNNER_PATH")" == '555:1' ]] || exit 2
 jq -e '
-  select(.schema_version == "jain.host-ci-reexec/v5")
+  select(.schema_version == "jain.host-ci-reexec/v6")
   | select(.source_root == "/opt/jain-ci/authority/control-plane")
   | select(.exact_root == "/opt/jain-ci/authority/control-plane")
   | select(.result_path | type == "string" and startswith("/"))
@@ -194,6 +194,8 @@ jq -e '
   | select(.cuda_capability_record_path | type == "string")
   | select(.cuda_capability_record_sha256 | type == "string")
   | select(.cuda_compute_capability | type == "string")
+  | select(.python_wheelhouse_required | type == "boolean")
+  | select(.python_wheelhouse_inventory_sha256 | test("^[0-9a-f]{64}$"))
   | select(.commit | test("^[0-9a-f]{40}$"))' "$REEXEC_STATE" >/dev/null \
   || exit 2
 SOURCE_OPS_ROOT="$(realpath -e -- "$(jq -er '.source_root' "$REEXEC_STATE")")" \
@@ -234,6 +236,12 @@ JAIN_CUDA_CAPABILITY_RECORD_SHA256="$(
 )" || exit 2
 JAIN_CUDA_COMPUTE_CAPABILITY="$(
   jq -er '.cuda_compute_capability' "$REEXEC_STATE"
+)" || exit 2
+JAIN_PYTHON_WHEELHOUSE_REQUIRED="$(
+  jq -r '.python_wheelhouse_required' "$REEXEC_STATE"
+)" || exit 2
+JAIN_PYTHON_WHEELHOUSE_INVENTORY_SHA256="$(
+  jq -er '.python_wheelhouse_inventory_sha256' "$REEXEC_STATE"
 )" || exit 2
 [[ "$SOURCE_OPS_ROOT" == "$OPS_ROOT" \
   && "$OPS_ROOT" == /opt/jain-ci/authority/control-plane \
@@ -318,6 +326,8 @@ verify_exact_control_plane_integrity || {
 }
 
 CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
+# shellcheck source=ops/ci/host-ci-inputs.sh
+source "$OPS_ROOT/ops/ci/host-ci-inputs.sh"
 # shellcheck source=ops/ci/native-runtime.sh
 source "$OPS_ROOT/ops/ci/native-runtime.sh"
 # shellcheck source=ops/ci/cargo-lock-closure.sh
@@ -344,6 +354,25 @@ else
     && -z "$JAIN_CUDA_CAPABILITY_RECORD_SHA256" \
     && -z "$JAIN_CUDA_COMPUTE_CAPABILITY" \
     && ! -v CUDA_COMPUTE_CAP ]] || exit 2
+fi
+[[ "$JAIN_PYTHON_WHEELHOUSE_INVENTORY_SHA256" =~ ^[0-9a-f]{64}$ \
+  && "${JAIN_AUDIT_INPUT_STAGING_ROOT:-}" \
+    == "$JAIN_HOST_CI_WRITABLE_ROOT/audit-input-staging" \
+  && -d "$JAIN_AUDIT_INPUT_STAGING_ROOT" \
+  && ! -L "$JAIN_AUDIT_INPUT_STAGING_ROOT" ]] || exit 2
+if [[ "$JAIN_PYTHON_WHEELHOUSE_REQUIRED" == true ]]; then
+  [[ "$REPO" == jain-python \
+    && -d /opt/jain-ci/authority/python-wheelhouse \
+    && ! -L /opt/jain-ci/authority/python-wheelhouse ]] \
+    || exit 2
+  jain_host_ci_verify_python_wheelhouse \
+    /opt/jain-ci/authority/python-wheelhouse \
+    "$JAIN_PYTHON_WHEELHOUSE_INVENTORY_SHA256" 0 0 || exit 2
+else
+  [[ "$JAIN_PYTHON_WHEELHOUSE_REQUIRED" == false \
+    && "$REPO" != jain-python \
+    && ! -e /opt/jain-ci/authority/python-wheelhouse \
+    && ! -L /opt/jain-ci/authority/python-wheelhouse ]] || exit 2
 fi
 # The split family root (where the sibling repos + target/bare-mirrors live) is an
 # EXPLICIT parameter, not derived from this script's location: this control-plane
@@ -375,12 +404,27 @@ say() { printf '[split-host-ci] %s\n' "$*" >&2; }
 # seals the result, tears down the cgroup, and invokes the one-shot publisher.
 post_check() {
   local conclusion="${1:?conclusion is required}" result_tmp
+  local audit_input_validation audit_input_receipt_sha audit_input_file_count
   [[ "$conclusion" == success ]] || return 0
   verify_product_release_tag "$REPO_PATH" \
     && verify_product_release_tag "$wt" \
     && verify_product_contract_base "$REPO_PATH" \
     && verify_product_contract_base "$wt" \
     || return 1
+  jain_host_ci_stage_audit_inputs \
+    "$wt" "$JAIN_AUDIT_INPUT_STAGING_ROOT" \
+    "$JAIN_HOST_CI_REQUEST_ID" "$CONTROL_PLANE_COMMIT" \
+    "$OWNER" "$REPO" "$SHA" "$CHECK" || return 1
+  audit_input_validation="$(
+    jain_host_ci_validate_audit_inputs \
+      "$JAIN_AUDIT_INPUT_STAGING_ROOT" \
+      "$JAIN_HOST_CI_REQUEST_ID" "$CONTROL_PLANE_COMMIT" \
+      "$OWNER" "$REPO" "$SHA" "$CHECK" "$(id -u)" "$(id -g)"
+  )" || return 1
+  IFS=$'\t' read -r audit_input_receipt_sha audit_input_file_count \
+    <<<"$audit_input_validation"
+  [[ "$audit_input_receipt_sha" =~ ^[0-9a-f]{64}$ \
+    && "$audit_input_file_count" =~ ^[0-5]$ ]] || return 1
   result_tmp="$CHILD_RESULT_PATH.tmp.$$"
   jq -n --arg owner "$OWNER" --arg repo "$REPO" --arg head_sha "$SHA" \
     --arg check "$CHECK" --arg commit "$CONTROL_PLANE_COMMIT" \
@@ -394,7 +438,11 @@ post_check() {
     --arg cuda_cap "$JAIN_CUDA_COMPUTE_CAPABILITY" \
     --arg cuda_record_sha "$JAIN_CUDA_CAPABILITY_RECORD_SHA256" \
     --argjson cuda_required "$JAIN_RELEASE_CUDA_COMPUTE_CAPABILITY_REQUIRED" \
-    '{schema_version:"jain.host-ci-worker-evidence/v5",
+    --arg python_wheelhouse_sha "$JAIN_PYTHON_WHEELHOUSE_INVENTORY_SHA256" \
+    --argjson python_wheelhouse_required "$JAIN_PYTHON_WHEELHOUSE_REQUIRED" \
+    --arg audit_input_receipt_sha "$audit_input_receipt_sha" \
+    --argjson audit_input_file_count "$audit_input_file_count" \
+    '{schema_version:"jain.host-ci-worker-evidence/v6",
       owner:$owner,repository:$repo,head_sha:$head_sha,required_check:$check,
       control_plane_commit:$commit,
       native_evidence_dir:$evidence_dir,
@@ -406,7 +454,11 @@ post_check() {
       sibling_sources_sha256:$sibling_sources_sha,
       cuda_compute_capability_required:$cuda_required,
       cuda_compute_capability:$cuda_cap,
-      cuda_capability_record_sha256:$cuda_record_sha}' >"$result_tmp" || return 1
+      cuda_capability_record_sha256:$cuda_record_sha,
+      python_wheelhouse_required:$python_wheelhouse_required,
+      python_wheelhouse_inventory_sha256:$python_wheelhouse_sha,
+      audit_input_receipt_sha256:$audit_input_receipt_sha,
+      audit_input_file_count:$audit_input_file_count}' >"$result_tmp" || return 1
   chmod 0600 "$result_tmp" || return 1
   mv -- "$result_tmp" "$CHILD_RESULT_PATH" || return 1
   say 'recorded worker evidence for root policy validation'

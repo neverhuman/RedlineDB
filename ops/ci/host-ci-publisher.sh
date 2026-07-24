@@ -271,7 +271,8 @@ if find "$control_root" -xdev \( -type f -o -type d \) \
   fail 'immutable control checkout is group/world writable'
 fi
 for critical in repos.manifest.toml ops/ci/host-ci-publisher.sh \
-  ops/ci/host-ci-sandbox.sh ops/ci/native-runtime.sh \
+  ops/ci/host-ci-sandbox.sh ops/ci/host-ci-inputs.sh \
+  ops/ci/native-runtime.sh \
   ops/ci/pnpm-runtime.sh ops/ci/pnpm-store.lock.json \
   ops/ci/host-ci-evidence.sh ops/ci/host-ci-proof-evidence.sh \
   ops/ci/required.sh ops/ci/typed-required-non-test.sh \

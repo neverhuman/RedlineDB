@@ -24,6 +24,7 @@ case "${1:-}" in
     bash ops/ci/cargo-lock-closure-test.sh
     bash ops/ci/native-runtime-test.sh
     bash ops/ci/pnpm-runtime-test.sh
+    bash ops/ci/host-ci-inputs-test.sh
     bash ops/ci/native-materializer-test.sh
     bash ops/ci/host-ci-integrity-test.sh
     if [[ "${JAIN_HOST_CI_NETWORK_ISOLATED:-0}" == 1 ]]; then
