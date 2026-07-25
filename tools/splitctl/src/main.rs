@@ -11433,7 +11433,20 @@ fn validate_pending_preservation_origin(
     remote: &str,
     split_root: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    validate_pending_preservation_origin_with_interval(repo_path, remote, split_root, || Ok(()))
+}
+
+fn validate_pending_preservation_origin_with_interval<F>(
+    repo_path: &Path,
+    remote: &str,
+    split_root: &Path,
+    after_initial_custody: F,
+) -> Result<(), Box<dyn std::error::Error>>
+where
+    F: FnOnce() -> Result<(), Box<dyn std::error::Error>>,
+{
     validate_pending_checkout_custody(repo_path, split_root)?;
+    after_initial_custody()?;
     let bundle_root = split_root.join(".bundles");
     let canonical_bundle_root = fs::canonicalize(&bundle_root)
         .map_err(|error| format!("cannot resolve pending bundle root: {error}"))?;
@@ -11508,6 +11521,7 @@ fn validate_pending_preservation_origin(
     if !same_file_snapshot(&before, &after) {
         return Err("pending origin bundle changed while it was verified".into());
     }
+    validate_pending_checkout_custody(repo_path, split_root)?;
     Ok(())
 }
 
@@ -18646,6 +18660,68 @@ name = "two"
         assert_eq!(fs::read(&payload).unwrap(), staged);
         run_git_strict(&repo, &["reset", "--", "payload.txt"]).unwrap();
         fs::write(&payload, &original).unwrap();
+        validate_pending_preservation_origin(&repo, bundle_text, &split_root).unwrap();
+    }
+
+    #[test]
+    fn pending_origin_revalidates_checkout_custody_after_bundle_work() {
+        let root = TestDir::new("pending-origin-interval-custody");
+        let split_root = root.path().join("family");
+        let bundle_root = split_root.join(".bundles");
+        fs::create_dir_all(&bundle_root).unwrap();
+        let (repo, _) = init_source(&split_root);
+        let bundle = bundle_root.join("source.bundle");
+        let mut create = Command::new("git");
+        create
+            .arg("-C")
+            .arg(&repo)
+            .args(["bundle", "create"])
+            .arg(&bundle)
+            .arg("--all");
+        command(create);
+        fs::set_permissions(&bundle, fs::Permissions::from_mode(0o444)).unwrap();
+        let bundle_text = bundle.to_str().unwrap();
+        let payload = repo.join("payload.txt");
+        let original = fs::read(&payload).unwrap();
+
+        let changed = b"changed only after initial custody\n";
+        let error = validate_pending_preservation_origin_with_interval(
+            &repo,
+            bundle_text,
+            &split_root,
+            || {
+                fs::write(&payload, changed)?;
+                Ok(())
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("working bytes differ"));
+        assert_eq!(fs::read(&payload).unwrap(), changed);
+        fs::write(&payload, &original).unwrap();
+
+        let error = validate_pending_preservation_origin_with_interval(
+            &repo,
+            bundle_text,
+            &split_root,
+            || {
+                run_git_strict(
+                    &repo,
+                    &["update-index", "--assume-unchanged", "payload.txt"],
+                )?;
+                Ok(())
+            },
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(error.contains("assume-unchanged"));
+        assert_eq!(fs::read(&payload).unwrap(), original);
+        run_git_strict(
+            &repo,
+            &["update-index", "--no-assume-unchanged", "payload.txt"],
+        )
+        .unwrap();
+
         validate_pending_preservation_origin(&repo, bundle_text, &split_root).unwrap();
     }
 
