@@ -1,6 +1,6 @@
 schema_version = "1"
 release_version = "10.0.0"
-expected_repo_count = 28
+expected_repo_count = 27
 status = "candidate"
 formal_ga = false
 sagemaker = "N/A"
@@ -48,7 +48,6 @@ required_repos = [
   "jain-model-zoo",
   "jain-ops",
   "jain-deploy",
-  "jain-nexus",
   "jain-shard",
 ]
 
@@ -962,33 +961,3 @@ cargo_members = ["deployment/ops/sagemaker-ci", "deployment/product", "crates/ja
 copy_paths = ["deployment/ops", "contracts", "scripts/get_data.sh", "scripts/sync-base-digests.sh"]
 source_paths = ["deployment/ops/**", "crates/jain-deploy-engine/**", "scripts/get_data.sh", "scripts/sync-base-digests.sh"]
 cross_repo_deps = ["jain-cli"]
-
-[[repo]]
-path = "/home/ubuntu/jain-split/jain-nexus"
-name = "jain-nexus"
-github_slug = "neverhuman/jain-nexus"
-jeryu_slug = "veox/jain-nexus"
-profile = "rust-workspace"
-role = "cloud-edge"
-default_branch = "main"
-rollout_wave = 9
-has_jeryu_std = true
-onboarded = false
-mirror_github_main = true
-authored = true
-identity_status = "pending"
-required_check = "jain-nexus/required"
-note = "Public cloud edge for install gating, node/account registration, credit budgets, referral attribution, telemetry ingest, and registry pull authorization; pending governed onboarding."
-cargo_members = [
-  "crates/nexus-domain",
-  "crates/nexus-token",
-  "crates/nexus-ledger",
-  "crates/nexus-gate",
-  "crates/nexus-node-auth",
-  "crates/nexus-store",
-  "crates/nexus-api",
-  "crates/nexusd",
-]
-copy_paths = []
-source_paths = []
-cross_repo_deps = []
