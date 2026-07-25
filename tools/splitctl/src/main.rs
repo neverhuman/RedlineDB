@@ -13141,16 +13141,16 @@ mod tests {
     fn release_status_writes_blocked_evidence_without_aggregate() {
         let temp = TestDir::new("release-status-appliance-blocked");
         let output = temp.path().join("release-status.json");
-        // Exercise the blocked-without-aggregate path in isolation: build a
-        // manifest whose release_version/rollback_target match THIS binary so the
-        // assertion does not depend on the ambient control plane sharing the
-        // binary's version. In the sealed host-CI worker JAIN_SPLIT_OPS_ROOT names
-        // the previous-release control plane while a version bump is in flight.
-        let mut manifest_data: toml::Value =
-            fs::read_to_string(control_plane_root().join("repos.manifest.toml"))
-                .unwrap()
-                .parse()
-                .unwrap();
+        // Exercise the blocked-without-aggregate path in isolation. Read the
+        // manifest shipped with THIS test source, not the ambient installed
+        // control plane: sealed host CI intentionally points
+        // JAIN_SPLIT_OPS_ROOT at the protected predecessor while testing a
+        // successor with a newer closed manifest schema.
+        let source_manifest = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let mut manifest_data: toml::Value = fs::read_to_string(source_manifest)
+            .unwrap()
+            .parse()
+            .unwrap();
         {
             let repo_count = manifest_data
                 .get("repo")
