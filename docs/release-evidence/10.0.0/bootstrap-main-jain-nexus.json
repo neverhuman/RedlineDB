@@ -1,0 +1,19 @@
+{
+  "action": "created",
+  "after": {
+    "remote_main": "fd496d88b5603752aefdb34c7390f877aca671fe"
+  },
+  "before": {
+    "remote_main": null
+  },
+  "mode": "apply",
+  "operation": "bootstrap-main",
+  "remote": "http://127.0.0.1:8787/git/veox/jain-nexus.git",
+  "repository": "/home/ubuntu/jain-split/jain-nexus",
+  "reviewed_commit": "fd496d88b5603752aefdb34c7390f877aca671fe",
+  "reviewed_commit_input": "fd496d88b5603752aefdb34c7390f877aca671fe",
+  "schema_version": "jain.bootstrap-main/v1",
+  "status": "pass",
+  "timestamp_unix": 1784994439,
+  "transport": "local-jeryu-server-update-ref-cas"
+}
