@@ -15,7 +15,9 @@ case "${1:-validate}" in
   test) exec cargo test --locked --manifest-path "$repo_root/Cargo.toml" ;;
   security) exec bash "$repo_root/scripts/security.sh" ;;
   score) exec bash "$repo_root/scripts/score.sh" ;;
+  contract-drift) exec bash "$repo_root/ops/ci/contract-drift.sh" ;;
+  artifact-support) exec bash "$repo_root/ops/ci/artifact-support.sh" ;;
   release-readiness) exec bash "$repo_root/ops/ci/release-readiness.sh" ;;
   doctor) exec "$repo_root/redlinectl" doctor ;;
-  *) printf 'usage: %s {validate|fast|required|family-ci|test|security|score|release-readiness|doctor}\n' "$0" >&2; exit 64 ;;
+  *) printf 'usage: %s {validate|fast|required|family-ci|test|security|score|contract-drift|artifact-support|release-readiness|doctor}\n' "$0" >&2; exit 64 ;;
 esac
