@@ -32,6 +32,12 @@ const SUCCESSOR_PREDECESSOR_TAG: &str = "redline-core-v4.1.0-jain.3";
 const SUCCESSOR_PREDECESSOR_COMMIT: &str = "7137a1ee2d04be4eb6931d99ff78b8a52c827900";
 const SUCCESSOR_PREPARED_LOCK_SHA256: &str =
     "a6223759a257baec12d5bcaaa235de70823101e0b3be1898ce58ecec07c620b7";
+const HISTORICAL_JAIN4_TAG: &str = "redline-core-v4.1.0-jain.4";
+const HISTORICAL_JAIN4_COMMIT: &str = "3567bdced0ca1fe3671c9ebda876c914e2fc2c9e";
+const HISTORICAL_JAIN4_CHECKSUM_SHA256: &str =
+    "b36a4ac5afd332bab7473f1007061356a991a7590eeda1336809be5dad5ce746";
+const HISTORICAL_JAIN4_MANIFEST_SHA256: &str =
+    "55544e8d3e4d50a17e0bfe80fc00d819529d354caf8137564ede68021b96f0c6";
 const SANDBOX_MARKER: &str = ".redline-standalone-sandbox";
 const GIT_CONTEXT_ENV: [&str; 5] = [
     "GIT_DIR",
@@ -315,6 +321,18 @@ fn require_path_absent(path: &Path, context: &str) -> Result<()> {
     }
 }
 
+fn regular_file_present(path: &Path, context: &str) -> Result<bool> {
+    match fs::symlink_metadata(path) {
+        Err(value) if value.kind() == io::ErrorKind::NotFound => Ok(false),
+        Ok(metadata) if metadata.is_file() && !metadata.file_type().is_symlink() => Ok(true),
+        Ok(_) => Err(error(format!(
+            "{context} must be a physical regular file: {}",
+            path.display()
+        ))),
+        Err(value) => Err(value.into()),
+    }
+}
+
 struct StandaloneSandbox {
     root: PathBuf,
     token: String,
@@ -514,7 +532,7 @@ fn toml_integer(table: &toml::value::Table, key: &str, context: &str) -> Result<
 fn expected_repo_release(name: &str) -> Option<(&'static str, i64)> {
     match name {
         "redline" => Some(("4.1.0", 2)),
-        "redline-core" => Some(("4.1.0", 4)),
+        "redline-core" => Some(("4.1.0", 5)),
         "redline-testing" => Some(("1.0.1", 1)),
         "redline-web" => Some(("0.1.0", 1)),
         _ => None,
@@ -618,6 +636,22 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             "manifest must describe the Jain 8.0.0 candidate with SageMaker N/A",
         ));
     }
+    for (field, expected) in [
+        ("manifest_authority", "repos.manifest.toml"),
+        ("mirror_root", "../../target/bare-mirrors"),
+        (
+            "release_evidence_root",
+            "../../target/release-evidence/8.0.0",
+        ),
+        ("container", ".."),
+        ("lock", "redline.lock.toml"),
+    ] {
+        if value.get(field).and_then(toml::Value::as_str) != Some(expected) {
+            return Err(error(format!(
+                "manifest {field} must be exactly {expected}"
+            )));
+        }
+    }
     validate_protection_policy(&value)?;
     let successor = value
         .get("successor_transition")
@@ -659,6 +693,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         .and_then(toml::Value::as_table)
         .ok_or_else(|| error("manifest lacks control_plane"))?;
     if toml_string(control, "name", "control_plane")? != "redline-split-ops"
+        || toml_string(control, "path", "control_plane")? != "."
         || toml_string(control, "remote", "control_plane")?
             != "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
         || toml_string(control, "required_check", "control_plane")? != "redline-split-ops/required"
@@ -684,8 +719,12 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         let name = toml_string(table, "name", "manifest repository")?;
         let raw_path = toml_string(table, "path", &name)?;
         let repo_path = PathBuf::from(&raw_path);
-        if repo_path.is_absolute() || raw_path.contains("/home/ubuntu") {
-            return Err(error(format!("{name}: manifest path must be relative")));
+        let expected_path = format!("../{name}");
+        if repo_path.is_absolute() || raw_path.contains("/home/ubuntu") || raw_path != expected_path
+        {
+            return Err(error(format!(
+                "{name}: manifest path must be exactly {expected_path}"
+            )));
         }
         let default_branch = table
             .get("default_branch")
@@ -875,6 +914,8 @@ fn clone_exact_standalone(source: &Path, destination: &Path, commit: &str) -> Re
         Err(value) => return Err(value.into()),
     }
     let origin = git(source, &["remote", "get-url", "origin"])?;
+    let tree_ref = format!("{commit}^{{tree}}");
+    let source_tree = git(source, &["rev-parse", &tree_ref])?;
     command_output(
         isolated_git()
             .args([
@@ -903,6 +944,7 @@ fn clone_exact_standalone(source: &Path, destination: &Path, commit: &str) -> Re
     )?;
     validate_physical_checkout(destination)?;
     if git(destination, &["rev-parse", "HEAD"])? != commit
+        || git(destination, &["rev-parse", "HEAD^{tree}"])? != source_tree
         || !git(destination, &["branch", "--show-current"])?.is_empty()
         || !git(
             destination,
@@ -3031,55 +3073,57 @@ fn proof_refresh_reconcile_successor(
     )
 }
 
+fn explicit_cutover_eligibility(value: &toml::Value) -> Result<bool> {
+    proof_table(value)?
+        .get("cutover_eligible")
+        .and_then(toml::Value::as_bool)
+        .ok_or_else(|| error("Redline lock proof must declare boolean cutover_eligible"))
+}
+
 fn review_lock_verify_with(
     manifest_path: &Path,
     lock: &Path,
     mirror: &Path,
-    predecessor_validator: fn(&Manifest, &[u8], &toml::Value) -> Result<()>,
-    state_validator: fn(&Manifest) -> Result<()>,
 ) -> Result<&'static str> {
     verify_checksum(lock)?;
-    verify_checksum(mirror)?;
     let authoritative_bytes = fs::read(lock)?;
-    let mirror_bytes = fs::read(mirror)?;
-    if authoritative_bytes == mirror_bytes {
-        let value = verify_lock(manifest_path, lock, Some(mirror))?;
-        let eligible = proof_table(&value)?
-            .get("cutover_eligible")
-            .and_then(toml::Value::as_bool)
-            == Some(true);
-        return Ok(if eligible {
-            "synchronized"
-        } else {
-            "reconciled-successor"
-        });
-    }
-
-    let manifest = load_manifest(manifest_path)?;
-    verify_lock(manifest_path, lock, None)?;
-    successor_transition_input_with(
-        &manifest,
-        &authoritative_bytes,
-        &mirror_bytes,
-        predecessor_validator,
-    )?;
-    if sha256_bytes(&authoritative_bytes) != manifest.successor.prepared_lock_sha256 {
+    let value = load_lock(lock)?;
+    let eligible = explicit_cutover_eligibility(&value)?;
+    let mirror_present = regular_file_present(mirror, "Redline compatibility lock mirror")?;
+    let mirror_sidecar = checksum_path(mirror);
+    let sidecar_present =
+        regular_file_present(&mirror_sidecar, "Redline compatibility lock checksum")?;
+    if mirror_present != sidecar_present {
         return Err(error(
-            "reviewed successor authoritative lock digest differs from its manifest binding",
+            "Redline compatibility lock mirror and checksum must be both present or both absent",
         ));
     }
-    state_validator(&manifest)?;
-    Ok("prepared-successor")
+    if !mirror_present {
+        if eligible {
+            return Err(error(
+                "an eligible authoritative Redline lock requires its compatibility mirror",
+            ));
+        }
+        verify_lock(manifest_path, lock, None)?;
+        return Ok("authoritative-only-historical");
+    }
+    verify_checksum(mirror)?;
+    let mirror_bytes = fs::read(mirror)?;
+    if authoritative_bytes != mirror_bytes {
+        return Err(error(
+            "control-plane lock mirror drift: files differ byte-for-byte",
+        ));
+    }
+    let value = verify_lock(manifest_path, lock, Some(mirror))?;
+    Ok(if explicit_cutover_eligibility(&value)? {
+        "synchronized"
+    } else {
+        "reconciled-successor"
+    })
 }
 
 fn review_lock_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<&'static str> {
-    review_lock_verify_with(
-        manifest_path,
-        lock,
-        mirror,
-        validate_bound_predecessor,
-        validate_successor_repository_state,
-    )
+    review_lock_verify_with(manifest_path, lock, mirror)
 }
 
 fn proof_refresh(
@@ -3842,11 +3886,25 @@ fn security_receipt(path: &Path, root: &Path) -> Result<()> {
     Ok(())
 }
 
+fn historical_jain4_manifest(manifest_path: &Path) -> Result<Manifest> {
+    let mut manifest = load_manifest(manifest_path)?;
+    let core = manifest
+        .repos
+        .iter_mut()
+        .find(|repo| repo.name == "redline-core")
+        .ok_or_else(|| error("redline-core is missing from successor manifest"))?;
+    core.tag_revision = 4;
+    core.current_tag = HISTORICAL_JAIN4_TAG.to_owned();
+    core.release_commit = HISTORICAL_JAIN4_COMMIT.to_owned();
+    core.release_checksum_sha256 = HISTORICAL_JAIN4_CHECKSUM_SHA256.to_owned();
+    Ok(manifest)
+}
+
 fn successor_receipt_verify(
     path: &Path,
     manifest_path: &Path,
     lock: &Path,
-    mirror: &Path,
+    _mirror: &Path,
 ) -> Result<JsonValue> {
     verify_checksum(path)?;
     let receipt = read_json(path)?;
@@ -3870,7 +3928,7 @@ fn successor_receipt_verify(
         "lock_sha256",
     ];
     reject_unknown_fields(&receipt, &FIELDS, "successor-transition receipt")?;
-    let manifest = load_manifest(manifest_path)?;
+    let manifest = historical_jain4_manifest(manifest_path)?;
     let core = manifest
         .repos
         .iter()
@@ -3931,7 +3989,7 @@ fn successor_receipt_verify(
         || receipt
             .get("successor_manifest_sha256")
             .and_then(JsonValue::as_str)
-            != Some(&sha256_file(manifest_path)?)
+            != Some(HISTORICAL_JAIN4_MANIFEST_SHA256)
         || receipt.get("lock_sha256").and_then(JsonValue::as_str)
             != Some(&manifest.successor.prepared_lock_sha256)
     {
@@ -3940,9 +3998,13 @@ fn successor_receipt_verify(
         ));
     }
     let base = path.parent().unwrap_or(Path::new("."));
+    let historical_mirror = manifest_path
+        .parent()
+        .unwrap_or(Path::new("."))
+        .join("../redline-split/redline.lock.toml");
     for (field, expected) in [
         ("authoritative_lock", lock),
-        ("compatibility_mirror", mirror),
+        ("compatibility_mirror", historical_mirror.as_path()),
     ] {
         let recorded = resolve_recorded_path(
             receipt
@@ -3974,8 +4036,17 @@ fn successor_receipt_verify(
             "successor receipt prepared digest is not reproducible from the governed predecessor snapshot",
         ));
     }
-    if transition_state == "reconciled" {
-        verify_lock(manifest_path, lock, Some(mirror))?;
+    verify_checksum(lock)?;
+    if sha256_file(lock)? != SUCCESSOR_PREPARED_LOCK_SHA256 {
+        return Err(error(
+            "historical Jain.4 successor receipt does not match the reviewed authoritative lock",
+        ));
+    }
+    let authoritative = load_lock(lock)?;
+    if explicit_cutover_eligibility(&authoritative)? {
+        return Err(error(
+            "historical Jain.4 successor receipt cannot verify an eligible lock",
+        ));
     }
     Ok(receipt)
 }
@@ -4494,6 +4565,10 @@ mod tests {
             assert!(checkout.join(".git").is_dir());
             assert!(!checkout.join(".git/objects/info/alternates").exists());
             assert_eq!(git(&checkout, &["rev-parse", "HEAD"]).unwrap(), commit);
+            assert_eq!(
+                git(&checkout, &["rev-parse", "HEAD^{tree}"]).unwrap(),
+                git(&source, &["rev-parse", "HEAD^{tree}"]).unwrap()
+            );
             assert!(git(&checkout, &["branch", "--show-current"])
                 .unwrap()
                 .is_empty());
@@ -4723,7 +4798,7 @@ mod tests {
         );
         assert_eq!(
             identities.get("redline-core"),
-            Some(&("4.1.0", 4, "redline-core-v4.1.0-jain.4"))
+            Some(&("4.1.0", 5, "redline-core-v4.1.0-jain.5"))
         );
         assert_eq!(
             identities.get("redline-testing"),
@@ -4736,26 +4811,11 @@ mod tests {
     }
 
     #[test]
-    fn successor_transition_accepts_only_the_next_core_revision() {
+    fn current_jain5_authority_is_not_the_historical_jain4_successor() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
         let lock = load_lock(&root.join("redline.lock.toml")).unwrap();
-        let (core, previous) = successor_transition(&manifest, &lock).unwrap();
-        assert_eq!(core.current_tag, "redline-core-v4.1.0-jain.4");
-        assert_eq!(
-            previous.get("tag").and_then(toml::Value::as_str),
-            Some("redline-core-v4.1.0-jain.3")
-        );
-
-        let mut skipped = manifest.clone();
-        let skipped_core = skipped
-            .repos
-            .iter_mut()
-            .find(|repo| repo.name == "redline-core")
-            .unwrap();
-        skipped_core.tag_revision = 5;
-        skipped_core.current_tag = "redline-core-v4.1.0-jain.5".to_owned();
-        assert!(successor_transition(&skipped, &lock)
+        assert!(successor_transition(&manifest, &lock)
             .unwrap_err()
             .to_string()
             .contains("exactly one next-revision"));
@@ -4764,10 +4824,8 @@ mod tests {
     #[test]
     fn successor_transition_renders_an_explicitly_ineligible_lock() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
         let lock_path = root.join("redline.lock.toml");
         let lock = load_lock(&lock_path).unwrap();
-        successor_transition(&manifest, &lock).unwrap();
         let rendered =
             render_historical_successor_lock(&fs::read_to_string(lock_path).unwrap(), &lock)
                 .unwrap();
@@ -4793,7 +4851,7 @@ mod tests {
     #[test]
     fn successor_transition_reconciles_only_the_exact_reviewed_lock() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
+        let manifest = historical_jain4_manifest(&root.join("repos.manifest.toml")).unwrap();
         let predecessor =
             fs::read(root.join("release-evidence/8.0.0/redline-lock-jain3-predecessor.toml"))
                 .unwrap();
@@ -4873,142 +4931,35 @@ mod tests {
     }
 
     #[test]
-    fn successor_prepare_review_and_reconcile_are_transactional() {
+    fn historical_jain4_receipts_remain_verifiable_but_are_not_readiness_gates() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let manifest = root.join("repos.manifest.toml");
-        let predecessor =
-            fs::read(root.join("release-evidence/8.0.0/redline-lock-jain3-predecessor.toml"))
+        let authoritative = root.join("redline.lock.toml");
+        let current_mirror = root.join("../redline.lock.toml");
+        for receipt in [
+            "redline-proof-successor-jain4-prepared.json",
+            "redline-proof-successor-jain4-reconciled.json",
+        ] {
+            let path = root.join("release-evidence/8.0.0").join(receipt);
+            let value = successor_receipt_verify(&path, &manifest, &authoritative, &current_mirror)
                 .unwrap();
-        let fixture = TestDir::new("successor-operation");
-        let authoritative = fixture.path().join("authoritative/redline.lock.toml");
-        let mirror = fixture.path().join("mirror/redline.lock.toml");
-        fs::create_dir_all(authoritative.parent().unwrap()).unwrap();
-        fs::create_dir_all(mirror.parent().unwrap()).unwrap();
-        for path in [&authoritative, &mirror] {
-            fs::write(path, &predecessor).unwrap();
-            fs::write(
-                checksum_path(path),
-                format!("{}  redline.lock.toml\n", sha256_bytes(&predecessor)),
-            )
-            .unwrap();
+            assert_eq!(
+                value
+                    .get("successor_engine_tag")
+                    .and_then(JsonValue::as_str),
+                Some(HISTORICAL_JAIN4_TAG)
+            );
+            assert_eq!(
+                value
+                    .get("successor_manifest_sha256")
+                    .and_then(JsonValue::as_str),
+                Some(HISTORICAL_JAIN4_MANIFEST_SHA256)
+            );
         }
-
-        let prepared = fixture.path().join("prepared.json");
-        proof_refresh_prepare_successor_with(
-            &manifest,
-            &authoritative,
-            &mirror,
-            &prepared,
-            validate_bound_predecessor_identity,
-            |_| Ok(()),
-        )
-        .unwrap();
-        assert_eq!(fs::read(&mirror).unwrap(), predecessor);
         assert_eq!(
-            sha256_file(&authoritative).unwrap(),
-            SUCCESSOR_PREPARED_LOCK_SHA256
+            review_lock_verify(&manifest, &authoritative, &current_mirror).unwrap(),
+            "authoritative-only-historical"
         );
-        assert_eq!(
-            review_lock_verify_with(
-                &manifest,
-                &authoritative,
-                &mirror,
-                validate_bound_predecessor_identity,
-                |_| Ok(()),
-            )
-            .unwrap(),
-            "prepared-successor"
-        );
-        let prepared_value = read_json(&prepared).unwrap();
-        assert_eq!(prepared_value["transition_state"], "prepared");
-        assert_eq!(prepared_value["compatibility_mirror_updated"], false);
-        assert_eq!(prepared_value["cutover_eligible"], false);
-        verify_checksum(&prepared).unwrap();
-        successor_receipt_verify(&prepared, &manifest, &authoritative, &mirror).unwrap();
-
-        let premature = fixture.path().join("premature-reconciled.json");
-        let mut premature_value = prepared_value.clone();
-        premature_value["transition_state"] = json!("reconciled");
-        premature_value["compatibility_mirror_updated"] = json!(true);
-        write_checksummed_json(&premature, &premature_value).unwrap();
-        assert!(
-            successor_receipt_verify(&premature, &manifest, &authoritative, &mirror)
-                .unwrap_err()
-                .to_string()
-                .contains("mirror drift")
-        );
-
-        let reconciled = fixture.path().join("reconciled.json");
-        proof_refresh_reconcile_successor_with(
-            &manifest,
-            &authoritative,
-            &mirror,
-            &reconciled,
-            validate_bound_predecessor_identity,
-            |_| Ok(()),
-        )
-        .unwrap();
-        assert_eq!(
-            fs::read(&authoritative).unwrap(),
-            fs::read(&mirror).unwrap()
-        );
-        assert_eq!(
-            review_lock_verify_with(
-                &manifest,
-                &authoritative,
-                &mirror,
-                validate_bound_predecessor_identity,
-                |_| Ok(()),
-            )
-            .unwrap(),
-            "reconciled-successor"
-        );
-        let reconciled_value = read_json(&reconciled).unwrap();
-        assert_eq!(reconciled_value["transition_state"], "reconciled");
-        assert_eq!(reconciled_value["compatibility_mirror_updated"], true);
-        assert_eq!(reconciled_value["cutover_eligible"], false);
-        verify_checksum(&reconciled).unwrap();
-        successor_receipt_verify(&reconciled, &manifest, &authoritative, &mirror).unwrap();
-
-        let tampered_receipt = fixture.path().join("tampered.json");
-        let mut tampered_value = prepared_value;
-        tampered_value["manual_override"] = json!(true);
-        write_checksummed_json(&tampered_receipt, &tampered_value).unwrap();
-        assert!(
-            successor_receipt_verify(&tampered_receipt, &manifest, &authoritative, &mirror,)
-                .unwrap_err()
-                .to_string()
-                .contains("unsupported fields")
-        );
-
-        let malformed = predecessor
-            .iter()
-            .copied()
-            .chain(b"# duplicate row\n".iter().copied())
-            .collect::<Vec<_>>();
-        for path in [&authoritative, &mirror] {
-            fs::write(path, &malformed).unwrap();
-            fs::write(
-                checksum_path(path),
-                format!("{}  redline.lock.toml\n", sha256_bytes(&malformed)),
-            )
-            .unwrap();
-        }
-        let rejected = fixture.path().join("rejected.json");
-        assert!(proof_refresh_prepare_successor_with(
-            &manifest,
-            &authoritative,
-            &mirror,
-            &rejected,
-            validate_bound_predecessor_identity,
-            |_| Ok(()),
-        )
-        .unwrap_err()
-        .to_string()
-        .contains("predecessor lock digest"));
-        assert_eq!(fs::read(&authoritative).unwrap(), malformed);
-        assert_eq!(fs::read(&mirror).unwrap(), malformed);
-        assert!(!rejected.exists());
     }
 
     #[test]
@@ -5024,6 +4975,143 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("current_tag must be redline-v4.1.0-jain.2"));
+    }
+
+    #[test]
+    fn manifest_requires_the_physical_nested_topology() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let canonical = fs::read_to_string(source).unwrap();
+        let fixture = TestDir::new("physical-topology");
+        let path = fixture.path().join("repos.manifest.toml");
+        for (name, changed, expected) in [
+            (
+                "old-container",
+                canonical.replace("container = \"..\"", "container = \"../redline-split\""),
+                "manifest container must be exactly ..",
+            ),
+            (
+                "alternate-authority",
+                canonical.replace(
+                    "manifest_authority = \"repos.manifest.toml\"",
+                    "manifest_authority = \"/home/ubuntu/jain-split/redline-split-ops/repos.manifest.toml\"",
+                ),
+                "manifest manifest_authority must be exactly repos.manifest.toml",
+            ),
+            (
+                "old-evidence-root",
+                canonical.replace(
+                    "release_evidence_root = \"../../target/release-evidence/8.0.0\"",
+                    "release_evidence_root = \"../../jain-split-ops/docs/release-evidence/8.0.0\"",
+                ),
+                "manifest release_evidence_root must be exactly ../../target/release-evidence/8.0.0",
+            ),
+            (
+                "old-core-path",
+                canonical.replace(
+                    "path = \"../redline-core\"",
+                    "path = \"../redline-split/redline-core\"",
+                ),
+                "redline-core: manifest path must be exactly ../redline-core",
+            ),
+        ] {
+            fs::write(&path, changed).unwrap();
+            let failure = load_manifest(&path).unwrap_err().to_string();
+            assert!(
+                failure.contains(expected),
+                "{name} produced unexpected failure: {failure}"
+            );
+        }
+    }
+
+    #[test]
+    fn candidate_readiness_accepts_only_an_absent_mirror_for_ineligible_authority() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let fixture = TestDir::new("candidate-mirror-readiness");
+        let control = fixture.path().join("redline-split-ops");
+        fs::create_dir_all(&control).unwrap();
+        let manifest = control.join("repos.manifest.toml");
+        let lock = control.join("redline.lock.toml");
+        let mirror = fixture.path().join("redline.lock.toml");
+        for name in [
+            "repos.manifest.toml",
+            "redline.lock.toml",
+            "redline.lock.toml.sha256",
+        ] {
+            fs::copy(source.join(name), control.join(name)).unwrap();
+        }
+        assert_eq!(
+            review_lock_verify(&manifest, &lock, &mirror).unwrap(),
+            "authoritative-only-historical"
+        );
+
+        fs::copy(&lock, &mirror).unwrap();
+        let partial = review_lock_verify(&manifest, &lock, &mirror)
+            .unwrap_err()
+            .to_string();
+        assert!(partial.contains("both present or both absent"));
+        fs::remove_file(&mirror).unwrap();
+        fs::write(checksum_path(&mirror), b"partial\n").unwrap();
+        let partial = review_lock_verify(&manifest, &lock, &mirror)
+            .unwrap_err()
+            .to_string();
+        assert!(partial.contains("both present or both absent"));
+        fs::remove_file(checksum_path(&mirror)).unwrap();
+
+        let drifted = [fs::read(&lock).unwrap(), b"# mirror drift\n".to_vec()].concat();
+        fs::write(&mirror, &drifted).unwrap();
+        fs::write(
+            checksum_path(&mirror),
+            format!("{}  redline.lock.toml\n", sha256_bytes(&drifted)),
+        )
+        .unwrap();
+        let mismatch = review_lock_verify(&manifest, &lock, &mirror)
+            .unwrap_err()
+            .to_string();
+        assert!(mismatch.contains("files differ byte-for-byte"));
+        fs::remove_file(&mirror).unwrap();
+        fs::remove_file(checksum_path(&mirror)).unwrap();
+
+        let original = fs::read_to_string(&lock).unwrap();
+        let eligible = original.replace("cutover_eligible = false", "cutover_eligible = true");
+        fs::write(&lock, eligible.as_bytes()).unwrap();
+        fs::write(
+            checksum_path(&lock),
+            format!("{}  redline.lock.toml\n", sha256_bytes(eligible.as_bytes())),
+        )
+        .unwrap();
+        let eligible_failure = review_lock_verify(&manifest, &lock, &mirror)
+            .unwrap_err()
+            .to_string();
+        assert!(eligible_failure.contains("eligible authoritative Redline lock requires"));
+
+        let malformed =
+            original.replace("cutover_eligible = false", "cutover_eligible = \"false\"");
+        fs::write(&lock, malformed.as_bytes()).unwrap();
+        fs::write(
+            checksum_path(&lock),
+            format!(
+                "{}  redline.lock.toml\n",
+                sha256_bytes(malformed.as_bytes())
+            ),
+        )
+        .unwrap();
+        let malformed_failure = review_lock_verify(&manifest, &lock, &mirror)
+            .unwrap_err()
+            .to_string();
+        assert!(malformed_failure.contains("must declare boolean cutover_eligible"));
+
+        fs::write(&lock, original.as_bytes()).unwrap();
+        fs::write(
+            checksum_path(&lock),
+            format!("{}  redline.lock.toml\n", sha256_bytes(original.as_bytes())),
+        )
+        .unwrap();
+        fs::copy(&lock, &mirror).unwrap();
+        fs::copy(checksum_path(&lock), checksum_path(&mirror)).unwrap();
+        assert_eq!(
+            review_lock_verify(&manifest, &lock, &mirror).unwrap(),
+            "reconciled-successor"
+        );
     }
 
     #[test]
@@ -5366,6 +5454,15 @@ mod tests {
             )
             .unwrap(),
             4
+        );
+        assert_eq!(
+            review_lock_verify(
+                &control.join("repos.manifest.toml"),
+                &control.join("redline.lock.toml"),
+                &family_root.join("redline.lock.toml"),
+            )
+            .unwrap(),
+            "authoritative-only-historical"
         );
         assert!(verify_lock(
             &control.join("repos.manifest.toml"),

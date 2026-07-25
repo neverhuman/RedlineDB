@@ -30,24 +30,16 @@ cannot pass cutover. `proof-refresh` is the only writer that can replace it and
 requires exact manifest product, revision, commit, tree checksum, remote, and
 protection-policy metadata first.
 
-`./redlinectl proof-refresh --prepare-successor --receipt PATH` is the only
-supported way to derive an ineligible authoritative candidate for a
-one-revision Core correction. Tests require the successor tag to be absent,
-every child main to be clean and forge-equal, and the two starting lock copies
-to match the manifest-bound predecessor SHA-256. Preparation never writes the
-product mirror. `review-lock-verify` accepts the temporary split state only when
-the candidate has the exact bound historical digest and records it as
-cutover-ineligible; strict operational verification continues to fail.
-`successor-receipt-verify PATH` rejects unknown fields, a bad sidecar, path
-substitution, manual eligibility, mismatched transition flags, or any manifest,
-engine, predecessor, or prepared-lock identity difference.
-Post-merge, `proof-refresh --reconcile-successor --receipt PATH` accepts only
-that authoritative candidate plus the byte-exact predecessor mirror, updates
-both copies transactionally, and emits a `reconciled` receipt. Unrelated drift
-is rejected. Both receipt variants use `redline.proof-successor/v1` and have
-checksum sidecars.
+Candidate readiness permits the compatibility mirror to be absent only when
+the authoritative lock and checksum are valid and the proof explicitly says
+`cutover_eligible=false`. `review-lock-verify` and the release-readiness receipt
+report that state as `authoritative-only-historical`. A partial mirror pair,
+mismatched bytes or checksums, malformed proof value, or eligible authoritative
+lock without its mirror fails closed. Only normal two-consumer `proof-refresh`
+writes the authoritative lock, mirror, both sidecars, and operation receipt.
 
-For the current successor, verify the protected artifact with:
+The Jain.4 successor receipts remain verifiable historical artifacts, but they
+are not requirements for the current Jain.5 candidate:
 
 ```bash
 ./redlinectl successor-receipt-verify \
@@ -55,8 +47,9 @@ For the current successor, verify the protected artifact with:
 ./redlinectl review-lock-verify
 ```
 
-These checks prove synchronization only; the receipt must continue to report
-`cutover_eligible=false` until normal two-consumer proof refresh completes.
+The first command verifies the closed historical receipt and Jain.4 identities.
+The second verifies current Jain.5 readiness and may legitimately report the
+mirror-absent historical state. Neither command claims cutover eligibility.
 
 `just family-ci` is intentionally stronger: every child must be clean `main`,
 equal its local-Jeryu forge head, and either have no proposed tag yet or have an
@@ -66,7 +59,8 @@ checkouts detached at the exact reviewed SHA and writes checksummed JSON plus
 raw logs. Each clone must have a physical `.git` directory equal to its common
 Git directory, full history, no alternates, no linked-checkout registry, a clean
 detached HEAD, and the canonical Jeryu origin. Sandbox cleanup requires its
-private marker and refuses symlinked root components.
+private marker, runs after successful or failed child commands, and refuses
+symlinked root components. Family CI never registers a Git worktree.
 Child commands use each repository's pinned toolchain, never the control
 plane's `RUSTUP_TOOLCHAIN` override. Before Core CI, the runner builds the exact
 reviewed Redline Testing release package locally, verifies its commit, manifest,

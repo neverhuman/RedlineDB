@@ -12,7 +12,7 @@ check:
   cargo fmt --check
   cargo clippy --locked --all-targets -- -D warnings
   cargo test --locked
-  {{redlinectl}} review-lock-verify
+  {{redlinectl}} control-validate
 
 required:
   bash scripts/ci-local.sh required
@@ -37,7 +37,7 @@ score:
   #!/usr/bin/env bash
   set -euo pipefail
   export PATH="$HOME/.cargo/bin:$PATH"
-  test "$(jankurai --version)" = "jankurai 1.6.10"
+  test "$(jankurai --version)" = "jankurai 1.6.11"
   mkdir -p .jankurai target/jankurai/coverage
   install -m 0644 agent/jankurai-baseline.json target/jankurai/accepted-baseline.json
   jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md

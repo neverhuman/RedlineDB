@@ -8,19 +8,12 @@ Jain 8.0.0 but does not itself push images, change routes, or promote production
 
 ## Required sequence
 
-1. For a one-revision Core correction, bind the exact successor commit and tree
-   checksum plus the reviewed predecessor lock digest in the manifest, then run
-   `proof-refresh --prepare-successor` before creating the tag. Commit its
-   explicitly ineligible authoritative lock, sidecar, and `prepared` receipt
-   through protected review; this mode never writes the product mirror. The
-   review verifier accepts only the exact manifest-bound split state and records
-   `cutover_eligible=false`. After merge, run
-   `proof-refresh --reconcile-successor --receipt
-   release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json` to
-   update the mirror atomically, then submit that exact `reconciled` operation
-   receipt through protected review. That review must pass
-   `successor-receipt-verify`, the checksum sidecar, `review-lock-verify`, and
-   the governed required/Jankurai gates without an exception or cap waiver.
+1. Bind the exact Jain.5 Core tag, commit, and tree checksum in the manifest.
+   `control-validate` must accept the authoritative historical lock.
+   `review-lock-verify` may report `authoritative-only-historical` only when the
+   compatibility mirror and sidecar are both absent and the authoritative proof
+   is valid and explicitly ineligible. The Jain.4 successor receipts remain
+   verifiable history, not current readiness requirements.
 2. Run `bash ops/ci/quality-gates.sh` on the exact reviewed control commit.
 3. Run `just family-ci` with all child repositories clean, on `main`, and equal
    to local Jeryu. Preserve the receipt, checksum sidecar, and named logs.
@@ -36,9 +29,10 @@ Jain 8.0.0 but does not itself push images, change routes, or promote production
 7. Require the authoritative and compatibility lock bytes and checksums to
    match, then run `just cutover-verify`. This reconstructs the lock from the
    still-fresh evidence and live tag readback.
-8. Commit the derived lock, sidecar, and evidence bundle through protected
-   review. On reviewed `main`, restore the compatibility mirror from the exact
-   lock bytes and rerun `just cutover-verify` before any Jain dependency wave.
+8. Commit the derived authoritative lock, sidecar, receipt, and evidence bundle
+   through protected review. The normal two-consumer `proof-refresh` transaction
+   is the sole writer of the compatibility mirror and its sidecar; never restore
+   either by hand. Rerun `just cutover-verify` before any Jain dependency wave.
 
 ## Evidence and integration
 

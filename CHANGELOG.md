@@ -12,6 +12,12 @@
 - Advanced the canonical Redline core identity to the `.jain.4` bounded-cell
   repair after exact INSERT/UPDATE boundaries, repeated no-growth rejection,
   WAL stability, checkpoint, and reopen coverage passed protected CI.
+- Advanced the canonical Core identity to immutable `.jain.5` while retaining
+  Jain.4 successor receipts as historical verification-only artifacts.
+- Made candidate readiness accept only a valid explicitly ineligible
+  authoritative lock when the compatibility mirror is absent.
+- Replaced family-CI worktree isolation with marker-bound, automatically
+  removed full `git clone --no-local` sandboxes with no object alternates.
 - Added manifest-digest-bound successor preparation, protected split-state
   review, and post-merge mirror reconciliation without weakening strict
   operational lock or cutover verification.

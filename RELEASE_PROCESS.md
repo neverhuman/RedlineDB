@@ -6,9 +6,8 @@ the exact reviewed local-Jeryu main commit and both consumers have produced
 fresh checksummed evidence, run `just proof-refresh ...` and
 `just cutover-verify`. Production promotion is a separately authorized action.
 
-For a one-revision Core successor, the protected prepare review must precede
-tag creation. After it merges, run the one-time reconciler and protect its exact
-receipt separately:
+The former Jain.4 one-revision successor flow is retained as historical,
+verification-only tooling:
 
 ```bash
 ./redlinectl proof-refresh --reconcile-successor \
@@ -17,7 +16,8 @@ receipt separately:
   release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json
 ```
 
-The reconciled state is deliberately cutover-ineligible. It only proves that
-the authoritative lock and compatibility mirror are byte-identical; fresh
-family CI, the immutable successor tag, both consumer proofs, normal proof
-refresh, and cutover verification remain mandatory.
+Those receipts remain deliberately cutover-ineligible and are not Jain.5
+readiness requirements. With the current mirror absent,
+`review-lock-verify` reports `authoritative-only-historical`; fresh family CI,
+both consumer proofs, normal proof refresh, and cutover verification remain
+mandatory. Only normal proof refresh may create the current mirror pair.

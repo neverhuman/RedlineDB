@@ -4,7 +4,7 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 readonly repo_root
-readonly JANKURAI_VERSION="1.6.10"
+readonly JANKURAI_VERSION="1.6.11"
 readonly JANKURAI_REV="3c804453e6c7a6e0e4028d95cc3bccea467277ef"
 readonly JANKURAI_GIT="http://127.0.0.1:8787/git/jeryu/jankurai.git"
 readonly CARGO_AUDIT_VERSION="0.22.1"
