@@ -11021,6 +11021,152 @@ fn path_matches(path: &str, pattern: &str) -> bool {
     walk(path.as_bytes(), pattern.as_bytes())
 }
 
+fn same_file_snapshot(before: &fs::Metadata, after: &fs::Metadata) -> bool {
+    before.dev() == after.dev()
+        && before.ino() == after.ino()
+        && before.mode() == after.mode()
+        && before.uid() == after.uid()
+        && before.gid() == after.gid()
+        && before.nlink() == after.nlink()
+        && before.len() == after.len()
+        && before.mtime() == after.mtime()
+        && before.mtime_nsec() == after.mtime_nsec()
+        && before.ctime() == after.ctime()
+        && before.ctime_nsec() == after.ctime_nsec()
+}
+
+fn validate_pending_preservation_origin(
+    repo_path: &Path,
+    remote: &str,
+    split_root: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let bundle_root = split_root.join(".bundles");
+    let canonical_bundle_root = fs::canonicalize(&bundle_root)
+        .map_err(|error| format!("cannot resolve pending bundle root: {error}"))?;
+    if canonical_bundle_root != bundle_root
+        || !fs::symlink_metadata(&bundle_root)?.file_type().is_dir()
+    {
+        return Err("pending bundle root is not one canonical physical directory".into());
+    }
+    let bundle = PathBuf::from(remote);
+    if !bundle.is_absolute()
+        || bundle.extension() != Some(OsStr::new("bundle"))
+        || fs::canonicalize(&bundle).ok().as_deref() != Some(bundle.as_path())
+        || !bundle.starts_with(&bundle_root)
+        || bundle == bundle_root
+    {
+        return Err("pending origin must be one canonical bundle below split_root/.bundles".into());
+    }
+    let before = fs::symlink_metadata(&bundle)?;
+    let repo_owner = fs::symlink_metadata(repo_path)?;
+    if !before.file_type().is_file()
+        || before.file_type().is_symlink()
+        || before.mode() & 0o777 != 0o444
+        || before.nlink() != 1
+        || before.uid() != repo_owner.uid()
+        || before.gid() != repo_owner.gid()
+        || before.len() == 0
+        || before.len() > 2 * 1024 * 1024 * 1024
+    {
+        return Err("pending origin bundle has unsafe physical custody".into());
+    }
+    if !secure_git_output(
+        Some(repo_path),
+        &["status", "--porcelain=v1", "--untracked-files=all"],
+    )?
+    .is_empty()
+    {
+        return Err("pending preservation checkout must be clean".into());
+    }
+    let verification = secure_git_command(Some(repo_path))
+        .args(["bundle", "verify"])
+        .arg(&bundle)
+        .output()?;
+    let verification_text = format!(
+        "{}\n{}",
+        String::from_utf8_lossy(&verification.stdout),
+        String::from_utf8_lossy(&verification.stderr)
+    );
+    if !verification.status.success()
+        || !verification_text.contains("The bundle records a complete history.")
+    {
+        return Err("pending origin is not a verified complete-history bundle".into());
+    }
+    let advertised = secure_git_command(None)
+        .args(["-c", "protocol.file.allow=always", "ls-remote"])
+        .arg(&bundle)
+        .arg("HEAD")
+        .output()?;
+    if !advertised.status.success() {
+        return Err("pending origin bundle HEAD is not readable".into());
+    }
+    let advertised = std::str::from_utf8(&advertised.stdout)?.trim();
+    let mut fields = advertised.split_whitespace();
+    let bundle_head = fields
+        .next()
+        .filter(|value| is_full_sha(value))
+        .ok_or("pending origin bundle has no exact HEAD")?;
+    if fields.next() != Some("HEAD") || fields.next().is_some() {
+        return Err("pending origin bundle advertises an ambiguous HEAD".into());
+    }
+    let commit_ref = format!("{bundle_head}^{{commit}}");
+    if !secure_git_status(Some(repo_path), &["cat-file", "-e", &commit_ref])?
+        || !secure_git_status(
+            Some(repo_path),
+            &["merge-base", "--is-ancestor", bundle_head, "HEAD"],
+        )?
+    {
+        return Err("pending origin bundle HEAD is not an ancestor of checkout HEAD".into());
+    }
+    let after = fs::symlink_metadata(&bundle)?;
+    if !same_file_snapshot(&before, &after) {
+        return Err("pending origin bundle changed while it was verified".into());
+    }
+    Ok(())
+}
+
+fn managed_manifest_row_for_path<'a>(
+    data: &'a toml::Value,
+    path: &Path,
+) -> Option<&'a toml::Value> {
+    manifest_repos(data)
+        .ok()?
+        .into_iter()
+        .chain(data.get("control_plane"))
+        .find(|raw| string(raw, "path").as_deref().map(Path::new) == Some(path))
+}
+
+fn single_origin_url(
+    remotes: &std::collections::BTreeMap<String, Vec<String>>,
+) -> Result<&str, &'static str> {
+    let urls = remotes
+        .get("origin")
+        .ok_or("managed checkout must contain origin")?;
+    if remotes.len() != 1 || urls.len() != 1 {
+        return Err("managed checkout must contain one origin URL");
+    }
+    Ok(&urls[0])
+}
+
+fn validate_managed_origin(
+    raw: &toml::Value,
+    repo_path: &Path,
+    actual: &str,
+    expected: &str,
+    split_root: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if actual == expected {
+        return Ok(());
+    }
+    if repo_is_onboarded(raw) {
+        return Err(format!("remote origin does not match the manifest: {actual}").into());
+    }
+    if string(raw, "identity_status").as_deref() != Some("pending") {
+        return Err("non-onboarded preservation origin requires identity_status=pending".into());
+    }
+    validate_pending_preservation_origin(repo_path, actual, split_root)
+}
+
 fn validate_local_jeryu(
     manifest: Option<PathBuf>,
     skip_remotes: bool,
@@ -11106,10 +11252,8 @@ fn validate_local_jeryu(
             if remotes.keys().any(|name| name != "origin") {
                 errors.push(format!("{}: expected only origin remote", path.display()));
             }
-            let expected = managed_repositories(&data, &manifest_path)?
-                .into_iter()
-                .find(|repo| repo.path == path)
-                .map(|repo| repo.remote);
+            let managed = managed_manifest_row_for_path(&data, &path);
+            let expected = managed.and_then(declared_remote);
             let excluded = data
                 .get("excluded_path")
                 .and_then(toml::Value::as_array)
@@ -11125,17 +11269,22 @@ fn validate_local_jeryu(
                 errors.push(format!("{}: unmanaged git checkout", path.display()));
                 continue;
             }
-            for (remote, urls) in remotes {
-                for url in urls {
-                    if expected.as_deref() != Some(url.as_str()) {
-                        errors.push(format!(
-                            "{}: remote {} does not match the manifest: {}",
-                            path.display(),
-                            remote,
-                            url
-                        ));
-                    }
+            let url = match single_origin_url(&remotes) {
+                Ok(url) => url,
+                Err(error) => {
+                    errors.push(format!("{}: {error}", path.display()));
+                    continue;
                 }
+            };
+            let raw = managed.expect("expected remote came from one managed row");
+            if let Err(error) = validate_managed_origin(
+                raw,
+                &path,
+                url,
+                expected.as_deref().expect("validated expected remote"),
+                &split_root,
+            ) {
+                errors.push(format!("{}: {error}", path.display()));
             }
         }
     }
@@ -17839,6 +17988,177 @@ name = "two"
         let excluded_repo: toml::Value = "name = \"python\"\nonboarded = false".parse().unwrap();
         assert!(repo_is_onboarded(&default_repo));
         assert!(!repo_is_onboarded(&excluded_repo));
+    }
+
+    #[test]
+    fn pending_origin_accepts_only_sealed_complete_ancestor_bundle_custody() {
+        let root = TestDir::new("pending-origin-custody");
+        let split_root = root.path().join("family");
+        let bundle_root = split_root.join(".bundles");
+        fs::create_dir_all(&bundle_root).unwrap();
+        let (repo, base) = init_source(&split_root);
+        let bundle = bundle_root.join("source.bundle");
+        let mut create = Command::new("git");
+        create
+            .arg("-C")
+            .arg(&repo)
+            .args(["bundle", "create"])
+            .arg(&bundle)
+            .arg("--all");
+        command(create);
+        fs::set_permissions(&bundle, fs::Permissions::from_mode(0o444)).unwrap();
+        let bundle_text = bundle.to_str().unwrap();
+
+        validate_pending_preservation_origin(&repo, bundle_text, &split_root).unwrap();
+        let pending: toml::Value = "onboarded = false\nidentity_status = \"pending\""
+            .parse()
+            .unwrap();
+        validate_managed_origin(
+            &pending,
+            &repo,
+            bundle_text,
+            "http://127.0.0.1:8787/git/veox/source.git",
+            &split_root,
+        )
+        .unwrap();
+
+        let onboarded: toml::Value = "onboarded = true\nidentity_status = \"bound\""
+            .parse()
+            .unwrap();
+        assert!(validate_managed_origin(
+            &onboarded,
+            &repo,
+            bundle_text,
+            "http://127.0.0.1:8787/git/veox/source.git",
+            &split_root,
+        )
+        .is_err());
+        let stale_pending: toml::Value = "onboarded = false\nidentity_status = \"bound\""
+            .parse()
+            .unwrap();
+        assert!(validate_managed_origin(
+            &stale_pending,
+            &repo,
+            bundle_text,
+            "http://127.0.0.1:8787/git/veox/source.git",
+            &split_root,
+        )
+        .is_err());
+        validate_managed_origin(
+            &onboarded,
+            &repo,
+            "http://127.0.0.1:8787/git/veox/source.git",
+            "http://127.0.0.1:8787/git/veox/source.git",
+            &split_root,
+        )
+        .unwrap();
+
+        fs::set_permissions(&bundle, fs::Permissions::from_mode(0o644)).unwrap();
+        assert!(validate_pending_preservation_origin(&repo, bundle_text, &split_root).is_err());
+        fs::set_permissions(&bundle, fs::Permissions::from_mode(0o444)).unwrap();
+
+        let link = bundle_root.join("source-link.bundle");
+        symlink(&bundle, &link).unwrap();
+        assert!(
+            validate_pending_preservation_origin(&repo, link.to_str().unwrap(), &split_root)
+                .is_err()
+        );
+        fs::remove_file(&link).unwrap();
+
+        let hardlink = bundle_root.join("source-hardlink.bundle");
+        fs::hard_link(&bundle, &hardlink).unwrap();
+        assert!(validate_pending_preservation_origin(
+            &repo,
+            hardlink.to_str().unwrap(),
+            &split_root
+        )
+        .is_err());
+        fs::remove_file(&hardlink).unwrap();
+
+        let outside = split_root.join("outside.bundle");
+        let mut create = Command::new("git");
+        create
+            .arg("-C")
+            .arg(&repo)
+            .args(["bundle", "create"])
+            .arg(&outside)
+            .arg("--all");
+        command(create);
+        fs::set_permissions(&outside, fs::Permissions::from_mode(0o444)).unwrap();
+        assert!(validate_pending_preservation_origin(
+            &repo,
+            outside.to_str().unwrap(),
+            &split_root
+        )
+        .is_err());
+
+        let tip = commit_next(&repo);
+        assert_ne!(tip, base);
+        validate_pending_preservation_origin(&repo, bundle_text, &split_root).unwrap();
+        let partial = bundle_root.join("partial.bundle");
+        let exclusion = format!("^{base}");
+        let mut create = Command::new("git");
+        create
+            .arg("-C")
+            .arg(&repo)
+            .args(["bundle", "create"])
+            .arg(&partial)
+            .args(["HEAD", &exclusion]);
+        command(create);
+        fs::set_permissions(&partial, fs::Permissions::from_mode(0o444)).unwrap();
+        assert!(validate_pending_preservation_origin(
+            &repo,
+            partial.to_str().unwrap(),
+            &split_root
+        )
+        .is_err());
+
+        let unrelated_root = split_root.join("unrelated");
+        let (unrelated, _) = init_source(&unrelated_root);
+        fs::write(unrelated.join("payload.txt"), "unrelated history\n").unwrap();
+        run_git_strict(&unrelated, &["add", "payload.txt"]).unwrap();
+        run_git_strict(&unrelated, &["commit", "-m", "unrelated"]).unwrap();
+        let unrelated_bundle = bundle_root.join("unrelated.bundle");
+        let mut create = Command::new("git");
+        create
+            .arg("-C")
+            .arg(&unrelated)
+            .args(["bundle", "create"])
+            .arg(&unrelated_bundle)
+            .arg("--all");
+        command(create);
+        fs::set_permissions(&unrelated_bundle, fs::Permissions::from_mode(0o444)).unwrap();
+        assert!(validate_pending_preservation_origin(
+            &repo,
+            unrelated_bundle.to_str().unwrap(),
+            &split_root
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn managed_checkout_remote_set_is_closed_to_one_origin_url() {
+        let mut remotes = BTreeMap::from([(
+            "origin".to_owned(),
+            vec!["http://127.0.0.1:8787/git/veox/example.git".to_owned()],
+        )]);
+        assert_eq!(
+            single_origin_url(&remotes).unwrap(),
+            "http://127.0.0.1:8787/git/veox/example.git"
+        );
+        remotes.insert(
+            "backup".to_owned(),
+            vec!["http://127.0.0.1:8787/git/veox/other.git".to_owned()],
+        );
+        assert!(single_origin_url(&remotes).is_err());
+        remotes.remove("backup");
+        remotes
+            .get_mut("origin")
+            .unwrap()
+            .push("http://127.0.0.1:8787/git/veox/other.git".to_owned());
+        assert!(single_origin_url(&remotes).is_err());
+        remotes.clear();
+        assert!(single_origin_url(&remotes).is_err());
     }
 
     #[test]

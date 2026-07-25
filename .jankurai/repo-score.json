@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:0decb52bc441167cdb39efa539ea6c07d5a479d3261e9d49803ee44300a62413",
-  "input_fingerprint": "sha256:93a26aca83300217b70168f85db4feebd01f8c14bd8fc41371b1b0e265268c6e",
+  "report_fingerprint": "sha256:f31acd5b4ff7fec8825296afdfe06dead86ee03cf4fa3c0827ab00e8c3c019d6",
+  "input_fingerprint": "sha256:76ce0b28a1f9c98690cebb033aefb7da5cab7f1e1258f85b622309619a3594b3",
   "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
   "manifest_fingerprints": {
     "owner_map": "sha256:8906e7de840f5494a011115f1c570db3ddbfee3d9a8e6fbe11e94ca6cf6adc56",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:f33b9715b6109208b44f6931c43f37e8da642dd67ff6faaad77be486954243a4"
   },
   "dirty_worktree": true,
-  "generated_at": "1784744853",
+  "generated_at": "1784944712",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784744853",
-  "started_at": "1784744853",
-  "elapsed_ms": 6746,
+  "run_id": "1784944712",
+  "started_at": "1784944712",
+  "elapsed_ms": 6408,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "84663f0",
+    "head": "5259bb0",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1014,7 +1014,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-22T18:27:26.937028628+00:00",
+    "generated_at": "2026-07-25T01:58:25.742868309+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1052,7 +1052,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 287,
+      "files_scanned": 298,
       "files_considered": 6,
       "active_files": 6,
       "exact_file_classes": 0,
@@ -1265,15 +1265,15 @@
           {
             "path": "tools/splitctl/src/release_candidate.rs",
             "language": "rust",
-            "start_line": 1229,
-            "end_line": 1233,
+            "start_line": 1321,
+            "end_line": 1325,
             "unit_name": "mark_pending"
           },
           {
             "path": "tools/splitctl/src/release_candidate.rs",
             "language": "rust",
-            "start_line": 1245,
-            "end_line": 1249,
+            "start_line": 1337,
+            "end_line": 1341,
             "unit_name": "complete_transition"
           }
         ]
@@ -1468,15 +1468,15 @@
           {
             "path": "tools/splitctl/src/release_candidate.rs",
             "language": "rust",
-            "start_line": 1708,
-            "end_line": 1709,
+            "start_line": 1800,
+            "end_line": 1801,
             "unit_name": "lock_journal"
           },
           {
             "path": "tools/splitctl/src/release_candidate.rs",
             "language": "rust",
-            "start_line": 1786,
-            "end_line": 1787,
+            "start_line": 1878,
+            "end_line": 1879,
             "unit_name": "write_journal"
           }
         ]
@@ -1503,15 +1503,15 @@
           {
             "path": "tools/splitctl/src/release_candidate.rs",
             "language": "rust",
-            "start_line": 1133,
-            "end_line": 1134,
+            "start_line": 1225,
+            "end_line": 1226,
             "unit_name": "next_action"
           },
           {
             "path": "tools/splitctl/src/release_candidate.rs",
             "language": "rust",
-            "start_line": 1194,
-            "end_line": 1195,
+            "start_line": 1286,
+            "end_line": 1287,
             "unit_name": "campaign_complete"
           }
         ]
@@ -1678,15 +1678,15 @@
           {
             "path": "tools/splitctl/src/release_candidate.rs",
             "language": "rust",
-            "start_line": 1840,
-            "end_line": 1841,
+            "start_line": 1932,
+            "end_line": 1933,
             "unit_name": "unix_time"
           },
           {
             "path": "tools/splitctl/src/release_candidate.rs",
             "language": "rust",
-            "start_line": 1847,
-            "end_line": 1848,
+            "start_line": 1939,
+            "end_line": 1940,
             "unit_name": "unix_nanos"
           }
         ]
