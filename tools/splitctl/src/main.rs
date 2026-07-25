@@ -8513,6 +8513,26 @@ fn secure_git_output_bytes_bounded(
     args: &[&str],
     max_bytes: usize,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    fn drain_bounded(reader: &mut impl Read, max_bytes: usize) -> io::Result<(Vec<u8>, bool)> {
+        let retention_limit = max_bytes
+            .checked_add(1)
+            .ok_or_else(|| io::Error::other("fixed Git output limit is too large"))?;
+        let mut retained = Vec::with_capacity(retention_limit.min(8 * 1024));
+        let mut buffer = [0_u8; 8 * 1024];
+        let mut exceeded = false;
+        loop {
+            let count = reader.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            let remaining = retention_limit.saturating_sub(retained.len());
+            let keep = count.min(remaining);
+            retained.extend_from_slice(&buffer[..keep]);
+            exceeded |= keep < count || retained.len() > max_bytes;
+        }
+        Ok((retained, exceeded))
+    }
+
     let mut child = secure_git_command(repo)
         .args(args)
         .stdout(Stdio::piped())
@@ -8527,26 +8547,14 @@ fn secure_git_output_bytes_bounded(
         .take()
         .ok_or("fixed Git stderr is unavailable")?;
     let (stdout, stderr) = thread::scope(|scope| {
-        let stdout = scope.spawn(|| {
-            let mut bytes = Vec::new();
-            Read::by_ref(&mut stdout)
-                .take(max_bytes as u64 + 1)
-                .read_to_end(&mut bytes)
-                .map(|_| bytes)
-        });
-        let stderr = scope.spawn(|| {
-            let mut bytes = Vec::new();
-            Read::by_ref(&mut stderr)
-                .take(max_bytes as u64 + 1)
-                .read_to_end(&mut bytes)
-                .map(|_| bytes)
-        });
+        let stdout = scope.spawn(|| drain_bounded(&mut stdout, max_bytes));
+        let stderr = scope.spawn(|| drain_bounded(&mut stderr, max_bytes));
         (stdout.join(), stderr.join())
     });
-    let stdout = stdout.map_err(|_| "fixed Git stdout reader panicked")??;
-    let stderr = stderr.map_err(|_| "fixed Git stderr reader panicked")??;
+    let (stdout, stdout_exceeded) = stdout.map_err(|_| "fixed Git stdout reader panicked")??;
+    let (stderr, stderr_exceeded) = stderr.map_err(|_| "fixed Git stderr reader panicked")??;
     let status = child.wait()?;
-    if stdout.len() > max_bytes || stderr.len() > max_bytes {
+    if stdout_exceeded || stderr_exceeded {
         return Err(format!(
             "credentialless git {} exceeded its bounded output",
             args.first().copied().unwrap_or("<missing>")
@@ -18833,6 +18841,98 @@ name = "two"
             git_remotes(&repo).unwrap()["origin"],
             ["http://127.0.0.1:8787/git/veox/actual.git"]
         );
+    }
+
+    #[test]
+    fn bounded_fixed_git_output_terminates_for_oversized_streams_and_remote_inventory() {
+        const CHILD_MODE: &str = "JAIN_TEST_BOUNDED_GIT_OUTPUT_MODE";
+        const CHILD_REPO: &str = "JAIN_TEST_BOUNDED_GIT_OUTPUT_REPO";
+        const CHILD_OBJECT: &str = "JAIN_TEST_BOUNDED_GIT_OUTPUT_OBJECT";
+        if let Some(mode) = env::var_os(CHILD_MODE) {
+            let repo = PathBuf::from(env::var_os(CHILD_REPO).unwrap());
+            let error = match mode.to_str().unwrap() {
+                "stdout" => {
+                    let object = env::var(CHILD_OBJECT).unwrap();
+                    secure_git_output_bytes_bounded(
+                        Some(&repo),
+                        &["cat-file", "blob", &object],
+                        MAX_LOCAL_GIT_REMOTE_BYTES,
+                    )
+                    .unwrap_err()
+                    .to_string()
+                }
+                "stderr" => {
+                    let missing = "x".repeat(80 * 1024);
+                    secure_git_output_bytes_bounded(Some(&repo), &["upload-pack", &missing], 1024)
+                        .unwrap_err()
+                        .to_string()
+                }
+                "remotes" => git_remotes(&repo).unwrap_err().to_string(),
+                other => panic!("unknown bounded-output child mode: {other}"),
+            };
+            assert!(error.contains("exceeded its bounded output"), "{error}");
+            return;
+        }
+
+        let root = TestDir::new("bounded-git-output");
+        let (repo, _) = init_source(root.path());
+        let exact_path = repo.join("exact-output.bin");
+        fs::write(&exact_path, vec![b'e'; MAX_LOCAL_GIT_REMOTE_BYTES]).unwrap();
+        let exact_object =
+            strict_git_output(&repo, &["hash-object", "-w", exact_path.to_str().unwrap()]).unwrap();
+        assert_eq!(
+            secure_git_output_bytes_bounded(
+                Some(&repo),
+                &["cat-file", "blob", &exact_object],
+                MAX_LOCAL_GIT_REMOTE_BYTES,
+            )
+            .unwrap()
+            .len(),
+            MAX_LOCAL_GIT_REMOTE_BYTES
+        );
+
+        let oversized_path = repo.join("oversized-output.bin");
+        fs::write(&oversized_path, vec![b'o'; 1024 * 1024]).unwrap();
+        let oversized_object = strict_git_output(
+            &repo,
+            &["hash-object", "-w", oversized_path.to_str().unwrap()],
+        )
+        .unwrap();
+
+        let config_path = repo.join(".git/config");
+        let mut config = fs::read_to_string(&config_path).unwrap();
+        for index in 0..5_500 {
+            let name = format!("r{index:04}-{}", "x".repeat(94));
+            config.push_str(&format!(
+                "[remote \"{name}\"]\n\turl = http://127.0.0.1:8787/git/veox/example.git\n"
+            ));
+        }
+        assert!(config.len() < 1024 * 1024);
+        fs::write(&config_path, &config).unwrap();
+        reject_local_git_injection_with_policy(&repo, true).unwrap();
+
+        for mode in ["stdout", "stderr", "remotes"] {
+            let output = Command::new("/usr/bin/timeout")
+                .args(["5s"])
+                .arg(env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "tests::bounded_fixed_git_output_terminates_for_oversized_streams_and_remote_inventory",
+                    "--nocapture",
+                ])
+                .env(CHILD_MODE, mode)
+                .env(CHILD_REPO, &repo)
+                .env(CHILD_OBJECT, &oversized_object)
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "bounded-output {mode} child failed or timed out: status={:?}, stderr={}",
+                output.status.code(),
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+        assert_eq!(fs::read_to_string(&config_path).unwrap(), config);
     }
 
     #[test]
