@@ -19,6 +19,7 @@ use std::{
     },
     path::{Component, Path, PathBuf},
     process::{Command, Stdio},
+    thread,
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -46,6 +47,10 @@ const JERYU_GIT_USERNAME: &str = "x-access-token";
 const MAX_CARGO_LOCKS: usize = 1024;
 const MAX_CARGO_LOCK_BYTES: u64 = 1024 * 1024;
 const MAX_CARGO_LOCK_BYTES_TOTAL: u64 = 64 * 1024 * 1024;
+const MAX_LOCAL_GIT_REMOTE_BYTES: usize = 64 * 1024;
+const MAX_TRACKED_INVENTORY_BYTES: usize = 64 * 1024 * 1024;
+const MAX_TRACKED_FILE_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_TRACKED_TREE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 
 /// Resolve the control-plane checkout at runtime so release binaries do not
 /// embed the physical path of the checkout that compiled them. Commands are
@@ -6517,7 +6522,6 @@ fn verify_worktrees_command(args: Vec<String>) -> Result<(), Box<dyn std::error:
     finish_receipted_operation(&receipt, &mut report, result)
 }
 
-#[cfg(test)]
 #[derive(Debug, PartialEq, Eq)]
 struct PrimaryRegistration {
     path: PathBuf,
@@ -6525,7 +6529,6 @@ struct PrimaryRegistration {
     branch: String,
 }
 
-#[cfg(test)]
 fn parse_single_primary_registration(
     porcelain: &[u8],
 ) -> Result<PrimaryRegistration, Box<dyn std::error::Error>> {
@@ -8505,6 +8508,62 @@ fn secure_git_output(
     Ok(stdout.trim().to_owned())
 }
 
+fn secure_git_output_bytes_bounded(
+    repo: Option<&Path>,
+    args: &[&str],
+    max_bytes: usize,
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+    let mut child = secure_git_command(repo)
+        .args(args)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let mut stdout = child
+        .stdout
+        .take()
+        .ok_or("fixed Git stdout is unavailable")?;
+    let mut stderr = child
+        .stderr
+        .take()
+        .ok_or("fixed Git stderr is unavailable")?;
+    let (stdout, stderr) = thread::scope(|scope| {
+        let stdout = scope.spawn(|| {
+            let mut bytes = Vec::new();
+            Read::by_ref(&mut stdout)
+                .take(max_bytes as u64 + 1)
+                .read_to_end(&mut bytes)
+                .map(|_| bytes)
+        });
+        let stderr = scope.spawn(|| {
+            let mut bytes = Vec::new();
+            Read::by_ref(&mut stderr)
+                .take(max_bytes as u64 + 1)
+                .read_to_end(&mut bytes)
+                .map(|_| bytes)
+        });
+        (stdout.join(), stderr.join())
+    });
+    let stdout = stdout.map_err(|_| "fixed Git stdout reader panicked")??;
+    let stderr = stderr.map_err(|_| "fixed Git stderr reader panicked")??;
+    let status = child.wait()?;
+    if stdout.len() > max_bytes || stderr.len() > max_bytes {
+        return Err(format!(
+            "credentialless git {} exceeded its bounded output",
+            args.first().copied().unwrap_or("<missing>")
+        )
+        .into());
+    }
+    if !status.success() {
+        return Err(format!(
+            "credentialless git {} failed: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&stderr).trim()
+        )
+        .into());
+    }
+    Ok(stdout)
+}
+
 fn secure_lfs_git_output(
     repo: &Path,
     git_lfs: &Path,
@@ -8658,6 +8717,14 @@ fn validate_physical_git_checkout_beneath(
     path: &Path,
     split_root: &Path,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
+    validate_physical_git_checkout_beneath_with_policy(path, split_root, false)
+}
+
+fn validate_physical_git_checkout_beneath_with_policy(
+    path: &Path,
+    split_root: &Path,
+    allow_preservation_bundle_origin: bool,
+) -> Result<PathBuf, Box<dyn std::error::Error>> {
     if !path.is_absolute() {
         return Err("--repo-path must be absolute".into());
     }
@@ -8686,7 +8753,11 @@ fn validate_physical_git_checkout_beneath(
             .into());
         }
     }
-    reject_local_git_injection(&canonical)?;
+    if allow_preservation_bundle_origin {
+        reject_local_git_injection_with_policy(&canonical, true)?;
+    } else {
+        reject_local_git_injection(&canonical)?;
+    }
     let git_dir = secure_git_output(
         Some(&canonical),
         &["rev-parse", "--path-format=absolute", "--absolute-git-dir"],
@@ -8703,6 +8774,13 @@ fn validate_physical_git_checkout_beneath(
 }
 
 fn reject_local_git_injection(repo: &Path) -> Result<(), Box<dyn std::error::Error>> {
+    reject_local_git_injection_with_policy(repo, false)
+}
+
+fn reject_local_git_injection_with_policy(
+    repo: &Path,
+    allow_preservation_bundle_origin: bool,
+) -> Result<(), Box<dyn std::error::Error>> {
     let path = repo.join(".git/config");
     let metadata = fs::symlink_metadata(&path)?;
     if !metadata.file_type().is_file()
@@ -8758,8 +8836,10 @@ fn reject_local_git_injection(repo: &Path) -> Result<(), Box<dyn std::error::Err
             },
             "remote" => match key.as_str() {
                 "url" => {
-                    value.starts_with("http://127.0.0.1:8787/git/")
-                        && value.ends_with(".git")
+                    ((value.starts_with("http://127.0.0.1:8787/git/") && value.ends_with(".git"))
+                        || (allow_preservation_bundle_origin
+                            && Path::new(value).is_absolute()
+                            && Path::new(value).extension() == Some(OsStr::new("bundle"))))
                         && !value
                             .bytes()
                             .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
@@ -8785,7 +8865,13 @@ fn reject_local_git_injection(repo: &Path) -> Result<(), Box<dyn std::error::Err
             }
             "lfs" => {
                 let repo_name = repo.file_name().and_then(OsStr::to_str).unwrap_or_default();
-                if repo_name != "jain-starforge" {
+                if allow_preservation_bundle_origin
+                    && section_header == "lfs"
+                    && key == "repositoryformatversion"
+                    && value == "0"
+                {
+                    true
+                } else if repo_name != "jain-starforge" {
                     false
                 } else if section_header == "lfs" {
                     key == "repositoryformatversion" && value == "0"
@@ -11035,11 +11121,319 @@ fn same_file_snapshot(before: &fs::Metadata, after: &fs::Metadata) -> bool {
         && before.ctime_nsec() == after.ctime_nsec()
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct TrackedEntry {
+    mode: String,
+    object: String,
+}
+
+fn inventory_path(raw: &[u8]) -> Result<String, Box<dyn std::error::Error>> {
+    let path = std::str::from_utf8(raw)?;
+    if path.is_empty()
+        || path.len() > 4096
+        || path
+            .bytes()
+            .any(|byte| byte == 0 || byte.is_ascii_control())
+        || Path::new(path).is_absolute()
+        || Path::new(path)
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+    {
+        return Err("tracked inventory contains an unsafe path".into());
+    }
+    Ok(path.to_owned())
+}
+
+fn parse_index_inventory(
+    bytes: &[u8],
+) -> Result<BTreeMap<String, TrackedEntry>, Box<dyn std::error::Error>> {
+    if !bytes.is_empty() && !bytes.ends_with(&[0]) {
+        return Err("tracked index inventory is not NUL terminated".into());
+    }
+    let mut entries = BTreeMap::new();
+    for record in bytes
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
+        let tab = record
+            .iter()
+            .position(|byte| *byte == b'\t')
+            .ok_or("tracked index inventory record has no path")?;
+        let header = std::str::from_utf8(&record[..tab])?;
+        let mut fields = header.split_whitespace();
+        let mode = fields.next().ok_or("tracked index mode is missing")?;
+        let object = fields.next().ok_or("tracked index object is missing")?;
+        let stage = fields.next().ok_or("tracked index stage is missing")?;
+        if fields.next().is_some()
+            || !matches!(mode, "100644" | "100755")
+            || !is_full_sha(object)
+            || object
+                .chars()
+                .any(|character| character.is_ascii_uppercase())
+            || stage != "0"
+        {
+            return Err("tracked index contains a special mode, stage, or object".into());
+        }
+        let path = inventory_path(&record[tab + 1..])?;
+        if entries
+            .insert(
+                path,
+                TrackedEntry {
+                    mode: mode.to_owned(),
+                    object: object.to_owned(),
+                },
+            )
+            .is_some()
+        {
+            return Err("tracked index contains a duplicate path".into());
+        }
+    }
+    Ok(entries)
+}
+
+fn parse_head_inventory(
+    bytes: &[u8],
+) -> Result<BTreeMap<String, TrackedEntry>, Box<dyn std::error::Error>> {
+    if !bytes.is_empty() && !bytes.ends_with(&[0]) {
+        return Err("HEAD tree inventory is not NUL terminated".into());
+    }
+    let mut entries = BTreeMap::new();
+    for record in bytes
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
+        let tab = record
+            .iter()
+            .position(|byte| *byte == b'\t')
+            .ok_or("HEAD tree inventory record has no path")?;
+        let header = std::str::from_utf8(&record[..tab])?;
+        let mut fields = header.split_whitespace();
+        let mode = fields.next().ok_or("HEAD tree mode is missing")?;
+        let kind = fields.next().ok_or("HEAD tree kind is missing")?;
+        let object = fields.next().ok_or("HEAD tree object is missing")?;
+        if fields.next().is_some()
+            || !matches!(mode, "100644" | "100755")
+            || kind != "blob"
+            || !is_full_sha(object)
+            || object
+                .chars()
+                .any(|character| character.is_ascii_uppercase())
+        {
+            return Err("HEAD tree contains a special mode, kind, or object".into());
+        }
+        let path = inventory_path(&record[tab + 1..])?;
+        if entries
+            .insert(
+                path,
+                TrackedEntry {
+                    mode: mode.to_owned(),
+                    object: object.to_owned(),
+                },
+            )
+            .is_some()
+        {
+            return Err("HEAD tree contains a duplicate path".into());
+        }
+    }
+    Ok(entries)
+}
+
+fn parse_unsuppressed_paths(bytes: &[u8]) -> Result<BTreeSet<String>, Box<dyn std::error::Error>> {
+    if !bytes.is_empty() && !bytes.ends_with(&[0]) {
+        return Err("tracked flag inventory is not NUL terminated".into());
+    }
+    let mut paths = BTreeSet::new();
+    for record in bytes
+        .split(|byte| *byte == 0)
+        .filter(|record| !record.is_empty())
+    {
+        if record.len() < 3 || record[0] != b'H' || record[1] != b' ' {
+            return Err(
+                "tracked index contains assume-unchanged, skip-worktree, or unsupported state"
+                    .into(),
+            );
+        }
+        let path = inventory_path(&record[2..])?;
+        if !paths.insert(path) {
+            return Err("tracked flag inventory contains a duplicate path".into());
+        }
+    }
+    Ok(paths)
+}
+
+fn hash_open_working_file(
+    repo: &Path,
+    path: &Path,
+    expected_mode: &str,
+) -> Result<(String, u64), Box<dyn std::error::Error>> {
+    let absolute = repo.join(path);
+    let before = physical_regular_file(&absolute, "pending tracked working file")?;
+    let mut file = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_CLOEXEC | libc::O_NOFOLLOW)
+        .open(&absolute)?;
+    let descriptor_before = file.metadata()?;
+    if !same_file_snapshot(&before, &descriptor_before) {
+        return Err("pending tracked file changed before it was opened".into());
+    }
+    let executable = descriptor_before.mode() & 0o111 != 0;
+    if (expected_mode == "100755") != executable {
+        return Err("pending tracked working-file mode differs from HEAD".into());
+    }
+    let mut bytes = Vec::new();
+    Read::by_ref(&mut file)
+        .take(MAX_TRACKED_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_TRACKED_FILE_BYTES {
+        return Err("pending tracked working file exceeds the custody limit".into());
+    }
+
+    let mut child = secure_git_command(Some(repo))
+        .args(["hash-object", "--stdin"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    child
+        .stdin
+        .take()
+        .ok_or("cannot open fixed Git hash input")?
+        .write_all(&bytes)?;
+    let output = child.wait_with_output()?;
+    if !output.status.success()
+        || output.stdout.len() > 128
+        || output.stderr.len() > MAX_LOCAL_GIT_REMOTE_BYTES
+    {
+        return Err("fixed Git could not hash a pending tracked file".into());
+    }
+    let object = std::str::from_utf8(&output.stdout)?.trim();
+    if !is_full_sha(object)
+        || object
+            .chars()
+            .any(|character| character.is_ascii_uppercase())
+    {
+        return Err("fixed Git returned an invalid tracked blob identity".into());
+    }
+
+    let descriptor_after = file.metadata()?;
+    let after = fs::symlink_metadata(&absolute)?;
+    if !same_file_snapshot(&descriptor_before, &descriptor_after)
+        || !same_file_snapshot(&descriptor_after, &after)
+    {
+        return Err("pending tracked file changed while it was hashed".into());
+    }
+    Ok((object.to_owned(), bytes.len() as u64))
+}
+
+fn validate_pending_checkout_custody(
+    repo_path: &Path,
+    split_root: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let split_metadata = physical_directory(split_root, "pending split root")?;
+    let canonical_split = fs::canonicalize(split_root)?;
+    if canonical_split != split_root || !split_metadata.file_type().is_dir() {
+        return Err("pending split root is not one canonical physical directory".into());
+    }
+    let canonical =
+        validate_physical_git_checkout_beneath_with_policy(repo_path, split_root, true)?;
+    if canonical != repo_path {
+        return Err("pending checkout is not the exact canonical manifest path".into());
+    }
+
+    let head = secure_git_output(Some(repo_path), &["rev-parse", "--verify", "HEAD^{commit}"])?;
+    let branch = secure_git_output(Some(repo_path), &["symbolic-ref", "--quiet", "HEAD"])?;
+    let registration_bytes = secure_git_output_bytes_bounded(
+        Some(repo_path),
+        &["worktree", "list", "--porcelain", "-z"],
+        MAX_LOCAL_GIT_REMOTE_BYTES,
+    )?;
+    let registration = parse_single_primary_registration(&registration_bytes)?;
+    if registration.path != repo_path || registration.head != head || registration.branch != branch
+    {
+        return Err("pending checkout is not its one exact registered primary worktree".into());
+    }
+
+    let flags_before = secure_git_output_bytes_bounded(
+        Some(repo_path),
+        &["ls-files", "-v", "-z", "--"],
+        MAX_TRACKED_INVENTORY_BYTES,
+    )?;
+    let index_before = secure_git_output_bytes_bounded(
+        Some(repo_path),
+        &["ls-files", "--stage", "-z", "--"],
+        MAX_TRACKED_INVENTORY_BYTES,
+    )?;
+    let tree_before = secure_git_output_bytes_bounded(
+        Some(repo_path),
+        &["ls-tree", "-r", "-z", "HEAD"],
+        MAX_TRACKED_INVENTORY_BYTES,
+    )?;
+    let unsuppressed = parse_unsuppressed_paths(&flags_before)?;
+    let index = parse_index_inventory(&index_before)?;
+    let tree = parse_head_inventory(&tree_before)?;
+    if index != tree || unsuppressed != index.keys().cloned().collect() {
+        return Err("pending checkout index does not exactly equal its HEAD tree".into());
+    }
+
+    let mut total_bytes = 0_u64;
+    for (path, entry) in &index {
+        let (working_object, bytes) =
+            hash_open_working_file(repo_path, Path::new(path), &entry.mode)?;
+        total_bytes = total_bytes
+            .checked_add(bytes)
+            .ok_or("pending tracked tree byte count overflowed")?;
+        if total_bytes > MAX_TRACKED_TREE_BYTES || working_object != entry.object {
+            return Err("pending tracked working bytes differ from the exact HEAD tree".into());
+        }
+    }
+
+    let flags_after = secure_git_output_bytes_bounded(
+        Some(repo_path),
+        &["ls-files", "-v", "-z", "--"],
+        MAX_TRACKED_INVENTORY_BYTES,
+    )?;
+    let index_after = secure_git_output_bytes_bounded(
+        Some(repo_path),
+        &["ls-files", "--stage", "-z", "--"],
+        MAX_TRACKED_INVENTORY_BYTES,
+    )?;
+    let tree_after = secure_git_output_bytes_bounded(
+        Some(repo_path),
+        &["ls-tree", "-r", "-z", "HEAD"],
+        MAX_TRACKED_INVENTORY_BYTES,
+    )?;
+    let registration_after = secure_git_output_bytes_bounded(
+        Some(repo_path),
+        &["worktree", "list", "--porcelain", "-z"],
+        MAX_LOCAL_GIT_REMOTE_BYTES,
+    )?;
+    let head_after =
+        secure_git_output(Some(repo_path), &["rev-parse", "--verify", "HEAD^{commit}"])?;
+    if flags_after != flags_before
+        || index_after != index_before
+        || tree_after != tree_before
+        || registration_after != registration_bytes
+        || head_after != head
+    {
+        return Err("pending checkout Git state changed during custody validation".into());
+    }
+    if !secure_git_output(
+        Some(repo_path),
+        &["status", "--porcelain=v1", "--untracked-files=all"],
+    )?
+    .is_empty()
+    {
+        return Err("pending preservation checkout contains untracked state".into());
+    }
+    Ok(())
+}
+
 fn validate_pending_preservation_origin(
     repo_path: &Path,
     remote: &str,
     split_root: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    validate_pending_checkout_custody(repo_path, split_root)?;
     let bundle_root = split_root.join(".bundles");
     let canonical_bundle_root = fs::canonicalize(&bundle_root)
         .map_err(|error| format!("cannot resolve pending bundle root: {error}"))?;
@@ -11069,14 +11463,6 @@ fn validate_pending_preservation_origin(
         || before.len() > 2 * 1024 * 1024 * 1024
     {
         return Err("pending origin bundle has unsafe physical custody".into());
-    }
-    if !secure_git_output(
-        Some(repo_path),
-        &["status", "--porcelain=v1", "--untracked-files=all"],
-    )?
-    .is_empty()
-    {
-        return Err("pending preservation checkout must be clean".into());
     }
     let verification = secure_git_command(Some(repo_path))
         .args(["bundle", "verify"])
@@ -11184,21 +11570,25 @@ fn validate_local_jeryu(
     if repos.is_empty() {
         return Err("manifest has no repositories".into());
     }
+    let split_root = exact_absolute_path(
+        &string(&data, "split_root").ok_or("manifest is missing split_root")?,
+        "split_root",
+    )?;
+    physical_directory(&split_root, "local Jeryu split root")?;
+    if fs::canonicalize(&split_root)? != split_root {
+        return Err("local Jeryu split root is not already canonical".into());
+    }
     let mut errors = Vec::new();
     for raw in &repos {
         if !repo_is_onboarded(raw) {
             continue;
         }
         let repo = repo_from(raw)?;
-        if !repo.path.join(".git").exists() && !skip_remotes {
-            errors.push(format!(
-                "{}: missing git checkout at {}",
-                repo.name,
-                repo.path.display()
-            ));
-            continue;
-        }
         if !skip_remotes {
+            if let Err(error) = validate_physical_git_checkout_beneath(&repo.path, &split_root) {
+                errors.push(format!("{}: {error}", repo.name));
+                continue;
+            }
             let expected = declared_remote(raw)
                 .ok_or_else(|| format!("{} is missing a declared remote", repo.name))?;
             let remotes = git_remotes(&repo.path)?;
@@ -11222,10 +11612,6 @@ fn validate_local_jeryu(
         check_cargo_sources(&repo, &mut errors)?;
     }
     validate_nested_family_local(&data, skip_remotes, &mut errors)?;
-    let split_root = exact_absolute_path(
-        &string(&data, "split_root").ok_or("manifest is missing split_root")?,
-        "split_root",
-    )?;
     for (key, registration) in registered_nested_families(&data) {
         let result = if sealed_outer_projection {
             validate_registered_nested_family_declaration(key, registration, &split_root)
@@ -11237,20 +11623,10 @@ fn validate_local_jeryu(
         }
     }
     if !skip_remotes {
-        let split_root = repos
-            .first()
-            .and_then(|raw| string(raw, "path"))
-            .map(PathBuf::from)
-            .and_then(|p| p.parent().map(Path::to_path_buf))
-            .unwrap_or_else(|| root.parent().unwrap_or(&root).to_path_buf());
         for entry in fs::read_dir(&split_root)? {
             let path = entry?.path();
             if !path.is_dir() || !path.join(".git").exists() {
                 continue;
-            }
-            let remotes = git_remotes(&path)?;
-            if remotes.keys().any(|name| name != "origin") {
-                errors.push(format!("{}: expected only origin remote", path.display()));
             }
             let managed = managed_manifest_row_for_path(&data, &path);
             let expected = managed.and_then(declared_remote);
@@ -11269,6 +11645,26 @@ fn validate_local_jeryu(
                 errors.push(format!("{}: unmanaged git checkout", path.display()));
                 continue;
             }
+            let raw = managed.expect("expected remote came from one managed row");
+            let storage = if repo_is_onboarded(raw) {
+                validate_physical_git_checkout_beneath(&path, &split_root)
+            } else {
+                validate_physical_git_checkout_beneath_with_policy(&path, &split_root, true)
+            };
+            if let Err(error) = storage {
+                errors.push(format!("{}: {error}", path.display()));
+                continue;
+            }
+            let remotes = match git_remotes(&path) {
+                Ok(remotes) => remotes,
+                Err(error) => {
+                    errors.push(format!("{}: {error}", path.display()));
+                    continue;
+                }
+            };
+            if remotes.keys().any(|name| name != "origin") {
+                errors.push(format!("{}: expected only origin remote", path.display()));
+            }
             let url = match single_origin_url(&remotes) {
                 Ok(url) => url,
                 Err(error) => {
@@ -11276,7 +11672,6 @@ fn validate_local_jeryu(
                     continue;
                 }
             };
-            let raw = managed.expect("expected remote came from one managed row");
             if let Err(error) = validate_managed_origin(
                 raw,
                 &path,
@@ -11302,35 +11697,57 @@ fn validate_local_jeryu(
 fn git_remotes(
     root: &Path,
 ) -> Result<std::collections::BTreeMap<String, Vec<String>>, Box<dyn std::error::Error>> {
-    let output = Command::new("git")
-        .args(["-C", root.to_str().ok_or("non-UTF8 repo path")?, "remote"])
-        .output()?;
-    if !output.status.success() {
-        return Err(format!("cannot read remotes for {}", root.display()).into());
-    }
-    let names = String::from_utf8(output.stdout)?;
+    physical_directory(root, "managed checkout for remote discovery")?;
+    physical_directory(&root.join(".git"), "managed checkout Git directory")?;
+    reject_local_git_injection_with_policy(root, true)?;
+    let names = String::from_utf8(secure_git_output_bytes_bounded(
+        Some(root),
+        &["remote"],
+        MAX_LOCAL_GIT_REMOTE_BYTES,
+    )?)?;
     let mut remotes = std::collections::BTreeMap::new();
     for name in names.lines().filter(|name| !name.is_empty()) {
-        let output = Command::new("git")
-            .args([
-                "-C",
-                root.to_str().ok_or("non-UTF8 repo path")?,
-                "remote",
-                "get-url",
-                "--all",
-                name,
-            ])
-            .output()?;
-        if !output.status.success() {
-            return Err(format!("cannot read remote {name} for {}", root.display()).into());
+        if name.len() > 128
+            || name
+                .bytes()
+                .any(|byte| !(byte.is_ascii_alphanumeric() || matches!(byte, b'.' | b'_' | b'-')))
+        {
+            return Err("managed checkout contains an unsafe remote name".into());
         }
-        remotes.insert(
-            name.to_owned(),
-            String::from_utf8(output.stdout)?
-                .lines()
-                .map(str::to_owned)
-                .collect(),
-        );
+        let fetch = String::from_utf8(secure_git_output_bytes_bounded(
+            Some(root),
+            &["remote", "get-url", "--all", name],
+            MAX_LOCAL_GIT_REMOTE_BYTES,
+        )?)?;
+        let push = String::from_utf8(secure_git_output_bytes_bounded(
+            Some(root),
+            &["remote", "get-url", "--push", "--all", name],
+            MAX_LOCAL_GIT_REMOTE_BYTES,
+        )?)?;
+        let parse_urls = |value: &str| -> Result<Vec<String>, Box<dyn std::error::Error>> {
+            let urls = value.lines().map(str::to_owned).collect::<Vec<_>>();
+            if urls.is_empty()
+                || urls.len() > 8
+                || urls.iter().any(|url| {
+                    url.is_empty()
+                        || url.len() > 4096
+                        || url
+                            .bytes()
+                            .any(|byte| byte.is_ascii_control() || byte.is_ascii_whitespace())
+                })
+            {
+                return Err("managed checkout contains an unsafe or unbounded remote URL".into());
+            }
+            Ok(urls)
+        };
+        let fetch = parse_urls(&fetch)?;
+        let push = parse_urls(&push)?;
+        if fetch != push {
+            return Err("managed checkout remote fetch and push URLs differ".into());
+        }
+        if remotes.insert(name.to_owned(), fetch).is_some() {
+            return Err("managed checkout contains a duplicate remote name".into());
+        }
     }
     Ok(remotes)
 }
@@ -18134,6 +18551,212 @@ name = "two"
             &split_root
         )
         .is_err());
+    }
+
+    #[test]
+    fn pending_checkout_rejects_suppressed_or_hidden_tracked_bytes_without_writing() {
+        let root = TestDir::new("pending-origin-suppressed");
+        let split_root = root.path().join("family");
+        let bundle_root = split_root.join(".bundles");
+        fs::create_dir_all(&bundle_root).unwrap();
+        let (repo, _) = init_source(&split_root);
+        let bundle = bundle_root.join("source.bundle");
+        let mut create = Command::new("git");
+        create
+            .arg("-C")
+            .arg(&repo)
+            .args(["bundle", "create"])
+            .arg(&bundle)
+            .arg("--all");
+        command(create);
+        fs::set_permissions(&bundle, fs::Permissions::from_mode(0o444)).unwrap();
+        let bundle_text = bundle.to_str().unwrap();
+        let payload = repo.join("payload.txt");
+        let original = fs::read(&payload).unwrap();
+
+        validate_pending_preservation_origin(&repo, bundle_text, &split_root).unwrap();
+        run_git_strict(
+            &repo,
+            &["update-index", "--assume-unchanged", "payload.txt"],
+        )
+        .unwrap();
+        fs::write(&payload, b"assume-unchanged hidden bytes\n").unwrap();
+        assert!(
+            strict_git_output(&repo, &["status", "--porcelain", "--untracked-files=all"])
+                .unwrap()
+                .is_empty()
+        );
+        let hidden = fs::read(&payload).unwrap();
+        let error = validate_pending_preservation_origin(&repo, bundle_text, &split_root)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("assume-unchanged"));
+        assert_eq!(fs::read(&payload).unwrap(), hidden);
+        run_git_strict(
+            &repo,
+            &["update-index", "--no-assume-unchanged", "payload.txt"],
+        )
+        .unwrap();
+        fs::write(&payload, &original).unwrap();
+        validate_pending_preservation_origin(&repo, bundle_text, &split_root).unwrap();
+
+        run_git_strict(&repo, &["update-index", "--skip-worktree", "payload.txt"]).unwrap();
+        fs::write(&payload, b"skip-worktree hidden bytes\n").unwrap();
+        assert!(
+            strict_git_output(&repo, &["status", "--porcelain", "--untracked-files=all"])
+                .unwrap()
+                .is_empty()
+        );
+        let hidden = fs::read(&payload).unwrap();
+        let error = validate_pending_preservation_origin(&repo, bundle_text, &split_root)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("skip-worktree"));
+        assert_eq!(fs::read(&payload).unwrap(), hidden);
+        run_git_strict(
+            &repo,
+            &["update-index", "--no-skip-worktree", "payload.txt"],
+        )
+        .unwrap();
+        fs::write(&payload, &original).unwrap();
+        validate_pending_preservation_origin(&repo, bundle_text, &split_root).unwrap();
+
+        let stored_payload = repo.join("payload-physical-backup");
+        fs::rename(&payload, &stored_payload).unwrap();
+        symlink(&stored_payload, &payload).unwrap();
+        let error = validate_pending_preservation_origin(&repo, bundle_text, &split_root)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("symlink"));
+        assert!(fs::symlink_metadata(&payload)
+            .unwrap()
+            .file_type()
+            .is_symlink());
+        assert_eq!(fs::read(&stored_payload).unwrap(), original);
+        fs::remove_file(&payload).unwrap();
+        fs::rename(&stored_payload, &payload).unwrap();
+
+        fs::write(&payload, b"staged index bytes\n").unwrap();
+        run_git_strict(&repo, &["add", "payload.txt"]).unwrap();
+        let staged = fs::read(&payload).unwrap();
+        let error = validate_pending_preservation_origin(&repo, bundle_text, &split_root)
+            .unwrap_err()
+            .to_string();
+        assert!(error.contains("index does not exactly equal"));
+        assert_eq!(fs::read(&payload).unwrap(), staged);
+        run_git_strict(&repo, &["reset", "--", "payload.txt"]).unwrap();
+        fs::write(&payload, &original).unwrap();
+        validate_pending_preservation_origin(&repo, bundle_text, &split_root).unwrap();
+    }
+
+    #[test]
+    fn pending_checkout_requires_exact_physical_primary_git_storage() {
+        let root = TestDir::new("pending-origin-physical");
+        let split_root = root.path().join("family");
+        let (repo, _) = init_source(&split_root);
+        let payload_before = fs::read(repo.join("payload.txt")).unwrap();
+
+        validate_pending_checkout_custody(&repo, &split_root).unwrap();
+
+        let alias = split_root.join("source-alias");
+        symlink(&repo, &alias).unwrap();
+        assert!(validate_pending_checkout_custody(&alias, &split_root).is_err());
+        assert_eq!(fs::read(repo.join("payload.txt")).unwrap(), payload_before);
+        fs::remove_file(&alias).unwrap();
+
+        let dot_git = repo.join(".git");
+        let stored_git = repo.join(".git-primary");
+        fs::rename(&dot_git, &stored_git).unwrap();
+        fs::write(&dot_git, b"gitdir: .git-primary\n").unwrap();
+        assert!(validate_pending_checkout_custody(&repo, &split_root).is_err());
+        assert_eq!(fs::read(repo.join("payload.txt")).unwrap(), payload_before);
+        fs::remove_file(&dot_git).unwrap();
+        fs::rename(&stored_git, &dot_git).unwrap();
+        validate_pending_checkout_custody(&repo, &split_root).unwrap();
+
+        fs::create_dir(dot_git.join("worktrees")).unwrap();
+        assert!(validate_pending_checkout_custody(&repo, &split_root).is_err());
+        assert_eq!(fs::read(repo.join("payload.txt")).unwrap(), payload_before);
+        fs::remove_dir(dot_git.join("worktrees")).unwrap();
+
+        fs::write(dot_git.join("commondir"), b"../external-common\n").unwrap();
+        assert!(validate_pending_checkout_custody(&repo, &split_root).is_err());
+        assert_eq!(fs::read(repo.join("payload.txt")).unwrap(), payload_before);
+        fs::remove_file(dot_git.join("commondir")).unwrap();
+        validate_pending_checkout_custody(&repo, &split_root).unwrap();
+    }
+
+    #[test]
+    fn fixed_remote_discovery_ignores_hostile_path_and_global_config() {
+        const CHILD_REPO: &str = "JAIN_TEST_FIXED_REMOTE_REPO";
+        if let Some(repo) = env::var_os(CHILD_REPO) {
+            let remotes = git_remotes(Path::new(&repo)).unwrap();
+            assert_eq!(
+                remotes,
+                BTreeMap::from([(
+                    "origin".to_owned(),
+                    vec!["http://127.0.0.1:8787/git/veox/actual.git".to_owned()]
+                )])
+            );
+            return;
+        }
+
+        let root = TestDir::new("fixed-remote-discovery");
+        let (repo, _) = init_source(root.path());
+        run_git_strict(
+            &repo,
+            &[
+                "remote",
+                "add",
+                "origin",
+                "http://127.0.0.1:8787/git/veox/actual.git",
+            ],
+        )
+        .unwrap();
+        let hostile = root.path().join("hostile-bin");
+        fs::create_dir(&hostile).unwrap();
+        let wrapper = hostile.join("git");
+        fs::write(
+            &wrapper,
+            b"#!/bin/sh\ncase \"$*\" in\n  *\"remote get-url\"*) printf '%s\\n' 'http://127.0.0.1:8787/git/veox/spoofed.git' ;;\n  *\" remote\") printf '%s\\n' origin ;;\n  *) exec /usr/bin/git \"$@\" ;;\nesac\n",
+        )
+        .unwrap();
+        fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o755)).unwrap();
+        let hostile_config = root.path().join("hostile-global.gitconfig");
+        fs::write(
+            &hostile_config,
+            b"[url \"http://127.0.0.1:8787/git/veox/spoofed.git\"]\n\tinsteadOf = http://127.0.0.1:8787/git/veox/actual.git\n",
+        )
+        .unwrap();
+        let output = Command::new(env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "tests::fixed_remote_discovery_ignores_hostile_path_and_global_config",
+                "--nocapture",
+            ])
+            .env(CHILD_REPO, &repo)
+            .env("PATH", &hostile)
+            .env("GIT_CONFIG_GLOBAL", &hostile_config)
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "fixed-Git child failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+
+        let config = repo.join(".git/config");
+        let original = fs::read(&config).unwrap();
+        let mut injected = original.clone();
+        injected.extend_from_slice(b"[include]\n\tpath = /tmp/hostile.gitconfig\n");
+        fs::write(&config, &injected).unwrap();
+        assert!(git_remotes(&repo).is_err());
+        assert_eq!(fs::read(&config).unwrap(), injected);
+        fs::write(&config, original).unwrap();
+        assert_eq!(
+            git_remotes(&repo).unwrap()["origin"],
+            ["http://127.0.0.1:8787/git/veox/actual.git"]
+        );
     }
 
     #[test]

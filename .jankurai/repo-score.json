@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:f31acd5b4ff7fec8825296afdfe06dead86ee03cf4fa3c0827ab00e8c3c019d6",
-  "input_fingerprint": "sha256:76ce0b28a1f9c98690cebb033aefb7da5cab7f1e1258f85b622309619a3594b3",
+  "report_fingerprint": "sha256:084de883871b196da3e462340c02e85afbf6cc0db3cbc1fb6f7f2868a9e4e2bf",
+  "input_fingerprint": "sha256:6d14292501e7cbcbb005ce23d0389677212f7e2b4af7c727543c9555a146f6e4",
   "policy_fingerprint": "sha256:70c6074ed1ba9cddd1ca1da393b3719001ca8c27f216b8a00d26e9fd54f992a7",
   "manifest_fingerprints": {
     "owner_map": "sha256:8906e7de840f5494a011115f1c570db3ddbfee3d9a8e6fbe11e94ca6cf6adc56",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:f33b9715b6109208b44f6931c43f37e8da642dd67ff6faaad77be486954243a4"
   },
   "dirty_worktree": true,
-  "generated_at": "1784944712",
+  "generated_at": "1784949167",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1784944712",
-  "started_at": "1784944712",
-  "elapsed_ms": 6408,
+  "run_id": "1784949167",
+  "started_at": "1784949167",
+  "elapsed_ms": 6451,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,7 +54,7 @@
     }
   },
   "git": {
-    "head": "5259bb0",
+    "head": "235fcf8",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -1014,7 +1014,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-25T01:58:25.742868309+00:00",
+    "generated_at": "2026-07-25T03:12:40.933768048+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1650,8 +1650,8 @@
           {
             "path": "tools/splitctl/src/main.rs",
             "language": "rust",
-            "start_line": 1861,
-            "end_line": 1862,
+            "start_line": 1866,
+            "end_line": 1867,
             "unit_name": "valid_cargo_token"
           }
         ]
