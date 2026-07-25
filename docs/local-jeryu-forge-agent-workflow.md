@@ -18,6 +18,29 @@ forge at `http://127.0.0.1:8787`.
 - If `jeryu.*` tools are not exposed, use `cargo run --locked -- jeryu-local` or the
   `just jeryu-*` recipes from this control-plane repo.
 
+## Coordination Claims And Handoffs
+
+Check the live three-ledger state before claiming a checkout:
+
+```bash
+cd /home/ubuntu/jain-split/jain-split-ops
+just coordination-status
+```
+
+Stamp one bounded entry from `date -u`, then append it to all three ledgers in
+one guarded operation:
+
+```bash
+just coordination-append /absolute/path/to/entry.md \
+  /home/ubuntu/jain-split/target/coordination-receipts/<unique-id>.json
+```
+
+The command reports any damaged frozen release prefix or historical
+lag/divergence and rejects misaligned current tips, unsafe files, partial
+replay, or lock contention. Do not use separate `flock` calls. Post claims,
+milestones/blockers, results, and the final stopped-head handoff through the
+same guarded route.
+
 ## Read-Only Git And Forge Inspection
 
 Inspect the claimed Jain checkout without mutating refs:
@@ -74,6 +97,17 @@ sha=<commit-sha>
 cargo run --locked -- jeryu-local checks --repo veox/jain-core --sha "$sha" \
   --token-file /home/ubuntu/.jeryu/secrets/veox-owner-token
 ```
+
+For a manifest-wide exact-local-HEAD view, including latest-result-wins
+selection, matching proof summaries, score floor/baseline checks, and a
+phase/wave/name repair queue:
+
+```bash
+just quality-status /home/ubuntu/.jeryu/secrets/veox-owner-token
+```
+
+This command does not read `jain/.ci-status`; those summaries can describe an
+older checkout head and are not forge evidence.
 
 Merge a PR after the required check is green:
 

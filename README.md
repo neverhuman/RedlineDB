@@ -16,6 +16,8 @@ Start with [AGENTS.md](AGENTS.md) for agent instructions.
 ```bash
 just jeryu-ready
 just jeryu-repos
+just coordination-status
+just quality-status /home/ubuntu/.jeryu/secrets/veox-owner-token
 just fast
 just required
 just score
@@ -37,6 +39,10 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
 - `cargo run --locked -- materialize`: Rust contract materializer for the family.
 - `cargo run --locked -- jeryu-doctor`: local forge/remotes health check.
 - `cargo run --locked -- jeryu-local`: local PR/check REST wrapper for agents.
+- `cargo run --locked -- coordination-ledger`: frozen-prefix validation,
+  three-ledger synchronization reporting, and guarded all-lock append.
+- `cargo run --locked -- quality-status`: authenticated exact-local-HEAD
+  required/proof selection, ratchet validation, and deterministic repair queue.
 - `cargo run --locked -- validate-local-jeryu`: local-source policy validator.
 - `ops/ci/split-host-ci.sh`: local Jeryu required-check runner.
 - `ops/ci/HOST_CI_BOUNDARY.md`: root-owned sandbox, proof-evidence, result-seal,

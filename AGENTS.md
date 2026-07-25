@@ -35,6 +35,11 @@ Use the typed `splitctl jeryu-local` transport against the local loopback Jeryu
 forge. Pass credentials only by an explicit token-file path; never rely on an
 ambient credential store for release lifecycle operations.
 
+Before mutating this checkout, claim the branch and exact scope with one guarded
+`splitctl coordination-ledger --root /home/ubuntu/jain-split --entry-file <path>
+--apply` call. It holds and validates `RELEASE_V10.md`, `UPGRADE_CHAT.md`, and
+`DATA_SHARD_CHAT.md` together; three independent append commands are forbidden.
+
 Canonical family repo remote:
 `http://127.0.0.1:8787/git/veox/<repo>.git`. Historical `jeryu/*` and
 `jain-split/*` spellings remain valid only inside pinned Cargo dependency URLs.

@@ -20,3 +20,14 @@ caching through a temporary `GIT_CONFIG_GLOBAL`.
 `just required` runs shell syntax checks, Python compilation, materializer tests,
 manifest parsing, and the local-Jeryu policy validator. `just score` runs the
 Jankurai audit gate and fails on hard findings, score regressions, or new caps.
+
+Coordination claims and handoffs are a three-ledger transaction. Use
+`just coordination-status` before work and `just coordination-append <entry>
+<receipt>` for an append; the command validates the frozen release-plan prefix,
+holds all three locks in deterministic order, appends identical bytes, fsyncs,
+and reads them back.
+
+`just quality-status <token-file>` scans every manifest-managed checkout at its
+exact local HEAD. It uses authenticated forge check history and the unique
+latest `<repo>/required` plus `jankurai/proof` results; `.ci-status` files are
+never current quality evidence.

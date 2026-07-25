@@ -43,6 +43,15 @@ jeryu-pr-open-apply repo title head expected_head token_file base="main":
 managed-repos:
   cargo run --locked --quiet -- managed-repos --manifest repos.manifest.toml --json
 
+coordination-status:
+  cargo run --locked --quiet -- coordination-ledger --root /home/ubuntu/jain-split
+
+coordination-append entry_file receipt:
+  cargo run --locked --quiet -- coordination-ledger --root /home/ubuntu/jain-split --entry-file "{{entry_file}}" --receipt "{{receipt}}" --apply
+
+quality-status token_file jobs="4":
+  cargo run --locked --quiet -- quality-status --manifest repos.manifest.toml --token-file "{{token_file}}" --jobs "{{jobs}}"
+
 sync-derived:
   cargo run --locked --quiet -- sync-derived-manifests --manifest repos.manifest.toml
 
