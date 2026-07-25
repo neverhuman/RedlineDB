@@ -22,9 +22,26 @@ require_tool() {
 }
 
 require_jankurai() {
-  local binary="${JANKURAI_BIN:-$HOME/.cargo/bin/jankurai}"
-  [[ -x "$binary" ]] || {
-    printf 'pinned Jankurai binary is unavailable: %s\n' "$binary" >&2
+  local binary="${JANKURAI_BIN:-}" resolved
+  if [[ -z "$binary" ]]; then
+    binary="$(command -v jankurai || true)"
+  fi
+  [[ "$binary" == /* ]] || {
+    printf 'governed Jankurai path must be absolute\n' >&2
+    return 1
+  }
+  [[ -f "$binary" && ! -L "$binary" && -x "$binary" ]] || {
+    printf 'governed Jankurai must be an executable regular non-symlink: %s\n' \
+      "$binary" >&2
+    return 1
+  }
+  resolved="$(realpath -e -- "$binary")"
+  [[ "$resolved" == "$binary" ]] || {
+    printf 'governed Jankurai resolved outside its exact path\n' >&2
+    return 1
+  }
+  [[ "$(stat -c '%h' -- "$binary")" == 1 ]] || {
+    printf 'governed Jankurai must have exactly one filesystem link\n' >&2
     return 1
   }
   [[ "$($binary --version)" == "jankurai $JANKURAI_VERSION" ]] || {
@@ -33,5 +50,7 @@ require_jankurai() {
   }
   local binary_dir
   binary_dir="$(dirname "$binary")"
+  JANKURAI_BIN="$binary"
+  export JANKURAI_BIN
   export PATH="$binary_dir:$PATH"
 }
