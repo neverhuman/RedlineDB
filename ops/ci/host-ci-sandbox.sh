@@ -793,7 +793,7 @@ if [[ "$sibling_sources_required" == true ]]; then
       jain-xgboost jain-lightgbm jain-jable jain-battle-gpu jain-starforge
       jain-core jain-llm jain-agent jain-jnoccio jain-zyal jain-jailgun
       jain-research jain-report jain-tui jain-cli jain-web jain-python
-      jain-model-zoo jain-ops jain-smartcluster jain-shard jain-nexus
+      jain-model-zoo jain-ops jain-smartcluster jain-shard
       jain-deploy
     )
   fi
