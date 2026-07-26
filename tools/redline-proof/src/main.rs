@@ -534,7 +534,6 @@ fn expected_repo_release(name: &str) -> Option<(&'static str, i64)> {
         "redline" => Some(("4.1.0", 2)),
         "redline-core" => Some(("4.1.0", 5)),
         "redline-testing" => Some(("1.0.1", 1)),
-        "redline-web" => Some(("0.1.0", 1)),
         _ => None,
     }
 }
@@ -706,9 +705,9 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         .get("repo")
         .and_then(toml::Value::as_array)
         .ok_or_else(|| error("manifest must contain repository rows"))?;
-    if rows.len() != 4 {
+    if rows.len() != 3 {
         return Err(error(
-            "manifest must contain exactly four Redline repositories",
+            "manifest must contain exactly three Redline repositories",
         ));
     }
     let mut repos = Vec::new();
@@ -777,7 +776,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
         });
     }
     let names: BTreeSet<&str> = repos.iter().map(|repo| repo.name.as_str()).collect();
-    let expected = BTreeSet::from(["redline", "redline-core", "redline-testing", "redline-web"]);
+    let expected = BTreeSet::from(["redline", "redline-core", "redline-testing"]);
     if names != expected {
         return Err(error("manifest repository set is invalid"));
     }
@@ -983,7 +982,6 @@ fn validate_product_version(root: &Path, repo: &Repo) -> Result<()> {
         "redline" => fs::read_to_string(root.join("VERSION"))?.trim().to_owned(),
         "redline-core" => cargo_package_version(&root.join("crates/redlinedb/Cargo.toml"))?,
         "redline-testing" => cargo_package_version(&root.join("Cargo.toml"))?,
-        "redline-web" => cargo_package_version(&root.join("apps/api/Cargo.toml"))?,
         _ => {
             return Err(error(format!(
                 "{}: unsupported product version source",
@@ -1262,7 +1260,6 @@ fn ci_commands(repo: &Repo, checkout: &Path) -> Result<Vec<Vec<String>>> {
             vec!["bash", "scripts/ci-local.sh", "audit"],
             vec!["bash", "scripts/ci-local.sh", "release"],
         ],
-        "redline-web" => vec![vec!["bash", "scripts/ci-local.sh", "pr-ci"]],
         _ => Vec::new(),
     };
     if !checkout.join("scripts/ci-doctor.sh").is_file()
@@ -4804,10 +4801,6 @@ mod tests {
             identities.get("redline-testing"),
             Some(&("1.0.1", 1, "redline-testing-v1.0.1-jain.1"))
         );
-        assert_eq!(
-            identities.get("redline-web"),
-            Some(&("0.1.0", 1, "redline-web-v0.1.0-jain.1"))
-        );
     }
 
     #[test]
@@ -5308,12 +5301,11 @@ mod tests {
     #[test]
     fn derived_lock_uses_relocatable_paths_and_eligibility() {
         let root = TestDir::new("derived-lock");
-        let names = ["redline", "redline-core", "redline-testing", "redline-web"];
+        let names = ["redline", "redline-core", "redline-testing"];
         let tags = [
             "redline-v4.1.0-jain.2",
             "redline-core-v4.1.0-jain.2",
             "redline-testing-v1.0.1-jain.1",
-            "redline-web-v0.1.0-jain.1",
         ];
         let mut rows = Vec::new();
         for (index, (name, tag)) in names.iter().zip(tags).enumerate() {
@@ -5328,7 +5320,6 @@ mod tests {
                     product_version: match *name {
                         "redline" | "redline-core" => "4.1.0",
                         "redline-testing" => "1.0.1",
-                        "redline-web" => "0.1.0",
                         _ => unreachable!(),
                     }
                     .to_owned(),
