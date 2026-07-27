@@ -16,7 +16,7 @@ STRICT_TOOLS="${REDLINE_STRICT_TOOLS:-0}"
 # Governed auditor: caller environment and PATH never select release evidence.
 readonly JAIN_GOVERNED_JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
 readonly JAIN_GOVERNED_JANKURAI_VERSION="jankurai 1.6.11"
-readonly JAIN_GOVERNED_JANKURAI_SHA256="fdb42e5fa7d9851c0729e59bf1e582c895aa9cfc03a7175b420c6025d2fd014e"
+readonly JAIN_GOVERNED_JANKURAI_SHA256="96d99e6e7d8dc9cf23df1081edd1f975231456592f81d9405385219a2c7298aa"
 
 # Tool version pins (documented for ci-doctor / supply-chain parity).
 NODE_PIN="${REDLINE_NODE_PIN:-22}"
