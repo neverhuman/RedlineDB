@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Changed
+
+- Replaced the opt-in NUMA feature's C-backed `hwlocality` dependency with
+  Linux sysfs topology discovery and Rustix current-thread affinity. The
+  public helpers and default-feature one-node/no-op behavior are unchanged;
+  NUMA remains off by default pending genuine multi-node qualification.
+- Made the mandated CLI `--all-features` qualification build deterministic:
+  the exact all-three allocator combination uses the default mimalloc while
+  compiling every optional allocator dependency. Normal single-allocator
+  builds are unchanged, and zero or exactly two allocators remain rejected.
+
 ## [4.1.0] - 2026-05-29
 
 W7 startup optimization — eliminate cgroup walk from the volatile (in-memory)

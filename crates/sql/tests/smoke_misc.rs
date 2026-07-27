@@ -506,10 +506,7 @@ fn commit_failure_surfaces_maybe_committed_without_index_repair() {
     let err = conn
         .execute("INSERT INTO t VALUES (1, 'first')")
         .expect_err("commit must be ambiguous");
-    assert!(
-        format!("{err:?}").contains("commit outcome uncertain"),
-        "unexpected error from injected commit failure: {err:?}"
-    );
+    assert_eq!(err, redlinedb_sql::Error::CommitMaybeCommitted);
 
     // Disarm before the next statement; the durable row/index bytes
     // should remain visible and no repair path should run.

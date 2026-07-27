@@ -7,8 +7,10 @@ rust-version.workspace = true
 
 [features]
 default = ["alloc-mimalloc"]
-# WS-B4: mutually-exclusive global allocator selection. Exactly one of these
-# must be active; main.rs / bin/redlinedb-cli.rs enforce this via compile_error!.
+# WS-B4: normal builds select exactly one global allocator. The release
+# --all-features qualification combination selects the default mimalloc while
+# compiling all optional allocator dependency graphs; exact pairs remain
+# invalid. main.rs / bin/redlinedb-cli.rs enforce this contract.
 alloc-mimalloc = ["dep:mimalloc"]
 alloc-jemalloc = ["dep:tikv-jemallocator"]
 alloc-snmalloc = ["dep:snmalloc-rs"]

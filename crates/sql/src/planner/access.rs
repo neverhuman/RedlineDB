@@ -107,7 +107,7 @@ pub(crate) fn choose_access_path(
 /// can consume it today. If yes, extend `execute_select` and add a
 /// match arm here (returning `true`). If no, leave the planner unable
 /// to emit it.
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, test))]
 pub(crate) fn access_path_is_consumable_by_executor(access: &AccessPath) -> bool {
     match access {
         AccessPath::TableScan
