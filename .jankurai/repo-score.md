@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1785018563`
-- Started at: `1785018563`
-- Elapsed: `10049` ms
+- Run ID: `1785122307`
+- Started at: `1785122307`
+- Elapsed: `10121` ms
 - Scope: `full`
 - Raw score: `94`
 - Final score: `94`
@@ -93,7 +93,7 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/jeryu_client.rs:1699-1700, tools/splitctl/src/jeryu_client.rs:1755-1756` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/jeryu_client.rs:1891-1892, tools/splitctl/src/jeryu_client.rs:1906-1907` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `tools/splitctl/src/jeryu_client.rs:630-631, tools/splitctl/src/jeryu_client.rs:660-661` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `tools/splitctl/src/jeryu_client.rs:734-735, tools/splitctl/src/main.rs:1870-1871` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `tools/splitctl/src/jeryu_client.rs:734-735, tools/splitctl/src/main.rs:1880-1881` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `tools/splitctl/src/release_candidate.rs:1932-1933, tools/splitctl/src/release_candidate.rs:1939-1940` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `tools/splitctl/src/ci.rs:602-603, tools/splitctl/src/ci.rs:616-617` | `same body appears under different names across files` |
 

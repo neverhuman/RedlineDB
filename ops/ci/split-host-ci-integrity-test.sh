@@ -159,12 +159,27 @@ control="$tmp/control"
 control_remote="$tmp/jain-split-ops.git"
 split_root="$tmp/split"
 sandbox_family_root="$tmp/sandbox-family"
+typst_sha256=a852e595ba046074d1cb63fd9fed14e00f36031dee4d2ad330783c92e7982d45
+typst_fixture_source=/opt/jain-ci/authority/release-bin/typst
+if [[ ! -f "$typst_fixture_source" || -L "$typst_fixture_source" ]]; then
+  typst_fixture_source="$repo_root/../target/runtime-tools/sha256/$typst_sha256/typst"
+fi
+[[ -f "$typst_fixture_source" && ! -L "$typst_fixture_source" \
+  && "$(sha256sum -- "$typst_fixture_source" | cut -d' ' -f1)" \
+    == "$typst_sha256" \
+  && "$("$typst_fixture_source" --version)" \
+    == 'typst 0.15.0 (unknown commit)' ]] || {
+  printf 'governed Typst integrity-test fixture is unavailable or invalid\n' >&2
+  exit 1
+}
 pinned_advisory_commit="$(sed -n \
   's/^JAIN_PINNED_RUSTSEC_COMMIT="\([0-9a-f]\{40\}\)"$/\1/p' \
   "$repo_root/ops/ci/pinned-advisory.sh")"
 [[ "$pinned_advisory_commit" =~ ^[0-9a-f]{40}$ ]]
 mkdir -p "$sandbox_family_root/target" "$sandbox_family_root/jain-core" \
   "$sandbox_family_root/jain-redline"
+typst_fixture="$sandbox_family_root/target/runtime-tools/sha256/$typst_sha256/typst"
+install -D -m 0755 "$typst_fixture_source" "$typst_fixture"
 mkdir -p "$sandbox_family_root/target/bare-mirrors"
 git init --quiet --bare \
   "$sandbox_family_root/target/bare-mirrors/jain-core.git"
@@ -627,6 +642,31 @@ done
 sudo -n install -o root -g root -m 0600 \
   "$valid_detector_config" "$sandbox_config"
 
+# The only Typst source admitted to a release worker is the exact
+# content-addressed host file. Digest and path substitution must fail before a
+# caller request or forge operation can begin.
+install -m 0755 /usr/bin/false "$typst_fixture"
+if sudo -n "$sandbox" "$tmp/nonexistent-typst-request" \
+  >"$tmp/typst-tamper.log" 2>&1; then
+  printf 'sandbox accepted a replaced governed Typst source\n' >&2
+  exit 1
+fi
+grep -Fq 'governed Typst source digest mismatch' \
+  "$tmp/typst-tamper.log"
+install -m 0755 "$typst_fixture_source" "$typst_fixture"
+
+mv "$typst_fixture" "$typst_fixture.saved"
+ln -s /usr/bin/false "$typst_fixture"
+if sudo -n "$sandbox" "$tmp/nonexistent-typst-symlink-request" \
+  >"$tmp/typst-symlink.log" 2>&1; then
+  printf 'sandbox accepted a symlinked governed Typst source\n' >&2
+  exit 1
+fi
+grep -Fq 'governed Typst source path, type, or metadata mismatch' \
+  "$tmp/typst-symlink.log"
+rm "$typst_fixture"
+mv "$typst_fixture.saved" "$typst_fixture"
+
 # Root-installed security tools are part of the sealed broker authority. A
 # replaced binary must fail before the caller request or forge can be touched.
 sudo -n install -o root -g root -m 0555 \
@@ -784,6 +824,13 @@ if [[ "${JAIN_RELEASE_CI:-0}" == 1 ]]; then
   [[ "$(command -v jankurai)" \
     == /opt/jain-ci/authority/release-bin/jankurai ]]
   [[ "$(jankurai --version)" == 'jankurai 1.6.11' ]]
+  [[ "$(command -v typst)" \
+    == /opt/jain-ci/authority/release-bin/typst ]]
+  [[ "$(stat -c '%u:%g:%a:%h' -- "$(command -v typst)")" \
+    == '0:0:555:1' ]]
+  [[ "$(sha256sum -- "$(command -v typst)" | cut -d' ' -f1)" \
+    == a852e595ba046074d1cb63fd9fed14e00f36031dee4d2ad330783c92e7982d45 ]]
+  [[ "$(typst --version)" == 'typst 0.15.0 (unknown commit)' ]]
   mkdir -p target/jankurai/coverage target/security
   printf '{"schema_version":"fixture.coverage/v1","status":"pass"}\n' \
     >target/jankurai/coverage/coverage-audit.json

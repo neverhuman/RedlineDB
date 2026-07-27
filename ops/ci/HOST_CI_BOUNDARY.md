@@ -38,6 +38,15 @@ devices, heterogeneous capabilities, detector failure, or disagreement among
 the record, worker, native receipt, root result, and publisher fails closed.
 This does not grant GPU devices: `device_allow` remains exactly empty.
 
+Typst enters a release worker only through the content-addressed host path
+`target/runtime-tools/sha256/a852e595ba046074d1cb63fd9fed14e00f36031dee4d2ad330783c92e7982d45/typst`
+beneath the configured family root. Root rejects aliases, symlinks, unexpected
+ownership or mode, extra hard links, and digest substitution before creating a
+worker. It then copies the verified bytes to the read-only worker authority as
+root-owned mode `0555` and rechecks the metadata, SHA-256, and exact
+`typst 0.15.0 (unknown commit)` version before execution. No caller-selected
+Typst path or mutable `PATH` lookup crosses the boundary.
+
 Native evidence is written first to a unique per-request `tmpfs` capped at
 32 MiB and 64 inodes. The ledger is exactly 16 regular, single-link files,
 capped at 8 MiB per file and 16 MiB total. After the worker cgroup is dead, root

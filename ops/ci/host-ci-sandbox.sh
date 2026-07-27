@@ -111,6 +111,28 @@ validate_git_lfs() {
   printf '%s\n' "$path"
 }
 
+readonly JAIN_TYPST_VERSION='typst 0.15.0 (unknown commit)'
+readonly JAIN_TYPST_SHA256='a852e595ba046074d1cb63fd9fed14e00f36031dee4d2ad330783c92e7982d45'
+
+validate_typst_source() {
+  local root="$1" owner_group path resolved metadata digest
+  owner_group="$(stat -c '%u:%g' -- "$root" 2>/dev/null)" \
+    || fail 'cannot identify the family-root owner for governed Typst'
+  path="$root/target/runtime-tools/sha256/$JAIN_TYPST_SHA256/typst"
+  resolved="$(realpath -e -- "$path" 2>/dev/null)" \
+    || fail 'governed Typst source is unavailable'
+  metadata="$(stat -c '%u:%g:%a:%h' -- "$path" 2>/dev/null)" \
+    || fail 'cannot inspect governed Typst source'
+  [[ "$resolved" == "$path" && -f "$path" && ! -L "$path" \
+    && "$metadata" == "$owner_group:755:1" ]] \
+    || fail 'governed Typst source path, type, or metadata mismatch'
+  digest="$(sha256sum -- "$path" | cut -d' ' -f1)" \
+    || fail 'cannot hash governed Typst source'
+  [[ "$digest" == "$JAIN_TYPST_SHA256" ]] \
+    || fail 'governed Typst source digest mismatch'
+  printf '%s\n' "$path"
+}
+
 [[ "$(id -u)" == 0 ]] || fail 'must run as root'
 [[ "$#" == 1 ]] || fail 'expected one sandbox request path'
 request="$1"
@@ -235,6 +257,7 @@ grep -Fq 'is not allowed to run sudo' <<<"$worker_sudo" \
 
 family_root="$(realpath -e -- "$(jq -er '.family_root' "$config")")" \
   || fail 'family root unavailable'
+typst_source="$(validate_typst_source "$family_root")"
 worker_cache="$(realpath -e -- "$(jq -er '.worker_cache' "$config")")" \
   || fail 'worker cache unavailable'
 cargo_registry_cache_config="$(jq -er '.cargo_registry_cache' "$config")"
@@ -981,6 +1004,15 @@ install -o root -g root -m 0555 \
   "$jankurai_path" "$worker_authority/release-bin/jankurai"
 install -o root -g root -m 0555 \
   "$git_lfs_path" "$worker_authority/release-bin/git-lfs"
+install -o root -g root -m 0555 \
+  "$typst_source" "$worker_authority/release-bin/typst"
+[[ "$(stat -c '%u:%g:%a:%h' -- "$worker_authority/release-bin/typst")" \
+    == '0:0:555:1' \
+  && "$(sha256sum -- "$worker_authority/release-bin/typst" | cut -d' ' -f1)" \
+    == "$JAIN_TYPST_SHA256" \
+  && "$("$worker_authority/release-bin/typst" --version)" \
+    == "$JAIN_TYPST_VERSION" ]] \
+  || fail 'sealed Typst copy digest, metadata, or version mismatch'
 install -o root -g root -m 0555 \
   "$control_root/ops/ci/split-host-ci.sh" \
   "$worker_authority/.split-host-ci-reviewed"
