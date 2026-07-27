@@ -1,0 +1,71 @@
+{
+  "absence_readback": true,
+  "action": "created-and-verified-empty-repository",
+  "details_readback": {
+    "archived": false,
+    "created_at": "2026-07-27T13:10:27.412026750Z",
+    "default_branch": "main",
+    "description": "JAIR deterministic invention foundation (v10 program; dedicated repo per owner directive 2026-07-27)",
+    "disabled": false,
+    "full_name": "veox/jair-search",
+    "html_url": "/veox/jair-search",
+    "id": "039683c4-27d1-4a22-8142-2fcd856ffca3",
+    "name": "jair-search",
+    "owner": {
+      "login": "veox",
+      "type": "User",
+      "url": "/users/veox"
+    },
+    "private": true,
+    "updated_at": "2026-07-27T13:10:27.412026750Z",
+    "url": "/repos/veox/jair-search"
+  },
+  "external_state_changed": true,
+  "main_ref_absent": true,
+  "mode": "apply",
+  "mutation_attempted": true,
+  "operation": "jeryu-local repo-create",
+  "repository": "veox/jair-search",
+  "repository_identity": {
+    "clone_http_url": "/git/veox/jair-search.git",
+    "default_branch": "main",
+    "family": null,
+    "host": "jeryu",
+    "name": "jair-search",
+    "owner": "veox",
+    "visibility": "private"
+  },
+  "request": {
+    "body": {
+      "default_branch": "main",
+      "description": "JAIR deterministic invention foundation (v10 program; dedicated repo per owner directive 2026-07-27)",
+      "name": "jair-search",
+      "owner": "veox",
+      "private": true
+    },
+    "method": "POST",
+    "path": "/repos"
+  },
+  "response": {
+    "archived": false,
+    "created_at": "2026-07-27T13:10:27.412026750Z",
+    "default_branch": "main",
+    "description": "JAIR deterministic invention foundation (v10 program; dedicated repo per owner directive 2026-07-27)",
+    "disabled": false,
+    "full_name": "veox/jair-search",
+    "html_url": "/veox/jair-search",
+    "id": "039683c4-27d1-4a22-8142-2fcd856ffca3",
+    "name": "jair-search",
+    "owner": {
+      "login": "veox",
+      "type": "User",
+      "url": "/users/veox"
+    },
+    "private": true,
+    "updated_at": "2026-07-27T13:10:27.412026750Z",
+    "url": "/repos/veox/jair-search"
+  },
+  "schema_version": "jain.jeryu-repository-creation/v1",
+  "status": "pass",
+  "timestamp_unix": 1785157826
+}

@@ -1,0 +1,30 @@
+{
+  "archive_count_after": 2995,
+  "archive_count_before": 2990,
+  "crates": [
+    {
+      "crate": "clap-4.6.4.crate",
+      "sha256": "d91e0c145792ef73a6ad36d27c75ac09f1832222a3c209689d90f534685ee5b7"
+    },
+    {
+      "crate": "clap_derive-4.6.4.crate",
+      "sha256": "d012d2b9d65aca7f18f4d9878a045bc17899bba951561ba5ec3c2ba1eed9a061"
+    },
+    {
+      "crate": "libc-0.2.189.crate",
+      "sha256": "3eaf3ede3fee6db1a4c2ee091bf8a8b4dccdc6d17f656fb07896ee72867612f2"
+    },
+    {
+      "crate": "syn-3.0.3.crate",
+      "sha256": "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"
+    },
+    {
+      "crate": "zip-2.4.2.crate",
+      "sha256": "fabe6324e908f85a1c52063ce7aa26b68dcb7eb6dbc83a2d148403c9bc3eba50"
+    }
+  ],
+  "performed_by": "Claude Master-Conductor (root, HOST_CI_BOUNDARY contract)",
+  "purpose": "jain-jair sealed closure (JAIR program)",
+  "schema_version": "jain.cargo-registry-extension/v1",
+  "timestamp_utc": "2026-07-27T13:23:29Z"
+}

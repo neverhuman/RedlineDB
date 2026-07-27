@@ -1,0 +1,71 @@
+{
+  "absence_readback": true,
+  "action": "created-and-verified-empty-repository",
+  "details_readback": {
+    "archived": false,
+    "created_at": "2026-07-27T13:10:20.653230683Z",
+    "default_branch": "main",
+    "description": "JAIR deterministic invention foundation (v10 program; dedicated repo per owner directive 2026-07-27)",
+    "disabled": false,
+    "full_name": "veox/jain-jair",
+    "html_url": "/veox/jain-jair",
+    "id": "d0077823-7f67-459e-a96a-a6773197b56e",
+    "name": "jain-jair",
+    "owner": {
+      "login": "veox",
+      "type": "User",
+      "url": "/users/veox"
+    },
+    "private": true,
+    "updated_at": "2026-07-27T13:10:20.653230683Z",
+    "url": "/repos/veox/jain-jair"
+  },
+  "external_state_changed": true,
+  "main_ref_absent": true,
+  "mode": "apply",
+  "mutation_attempted": true,
+  "operation": "jeryu-local repo-create",
+  "repository": "veox/jain-jair",
+  "repository_identity": {
+    "clone_http_url": "/git/veox/jain-jair.git",
+    "default_branch": "main",
+    "family": null,
+    "host": "jeryu",
+    "name": "jain-jair",
+    "owner": "veox",
+    "visibility": "private"
+  },
+  "request": {
+    "body": {
+      "default_branch": "main",
+      "description": "JAIR deterministic invention foundation (v10 program; dedicated repo per owner directive 2026-07-27)",
+      "name": "jain-jair",
+      "owner": "veox",
+      "private": true
+    },
+    "method": "POST",
+    "path": "/repos"
+  },
+  "response": {
+    "archived": false,
+    "created_at": "2026-07-27T13:10:20.653230683Z",
+    "default_branch": "main",
+    "description": "JAIR deterministic invention foundation (v10 program; dedicated repo per owner directive 2026-07-27)",
+    "disabled": false,
+    "full_name": "veox/jain-jair",
+    "html_url": "/veox/jain-jair",
+    "id": "d0077823-7f67-459e-a96a-a6773197b56e",
+    "name": "jain-jair",
+    "owner": {
+      "login": "veox",
+      "type": "User",
+      "url": "/users/veox"
+    },
+    "private": true,
+    "updated_at": "2026-07-27T13:10:20.653230683Z",
+    "url": "/repos/veox/jain-jair"
+  },
+  "schema_version": "jain.jeryu-repository-creation/v1",
+  "status": "pass",
+  "timestamp_unix": 1785157817
+}
