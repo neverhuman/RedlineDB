@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://jain.local/schemas/release-authority-projection.schema.json",
   "title": "Jain release authority projection",
-  "description": "Closed, root-brokered v10 candidate metadata projected from the authenticated control-plane manifest.",
+  "description": "Closed, root-brokered v10 candidate metadata projected from the authenticated control-plane manifest. source_manifest_sha256 commits to that manifest in full, including the member release bindings it currently records; the projection alone asserts neither binding completeness nor release readiness.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -28,7 +28,8 @@
     },
     "source_manifest_sha256": {
       "type": "string",
-      "pattern": "^[0-9a-f]{64}$"
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "SHA-256 of the complete authenticated control-plane manifest, including all current member release bindings. It fixes which manifest was projected; it does not claim every member is bound."
     },
     "release_version": {
       "const": "10.0.0"

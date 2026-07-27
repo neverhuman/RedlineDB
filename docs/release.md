@@ -40,15 +40,17 @@ commit. Verify all three before writing a row:
 
 1. the member's `HEAD` is byte-identical to its **authenticated forge `main`** —
    a local `main` or `origin/main` ref may be stale and is not authority;
-2. exactly one release-series immutable tag resolves to that same commit;
+2. the intended next-unused immutable release tag resolves to that same commit,
+   confirmed by authenticated forge readback rather than local tag state;
 3. the checkout is clean, so the tree checksum describes a fixed object.
 
-Write four fields plus `identity_status = "bound"` and `onboarded = true`:
-`current_tag`/`immutable_tag`, `release_commit`, `release_tree`, and
-`release_checksum_sha256`. `release_tree` is `HEAD^{tree}`, and
-`release_checksum_sha256` is the SHA-256 of `git archive --format=tar <commit>`
-— the same command `splitctl` runs internally — so the four-way exactness check
-compares like for like rather than against a transcribed value.
+Write the complete identity, not a subset: `product_version`, `tag_revision`,
+`immutable_tag` and `current_tag` (identical), `release_commit`, `release_tree`,
+`release_checksum_sha256`, `identity_status = "bound"`, and `onboarded = true`.
+`release_tree` is `HEAD^{tree}`, and `release_checksum_sha256` is the SHA-256 of
+`git archive --format=tar <commit>` — the same command `splitctl` runs
+internally — so the exactness check compares like for like rather than against a
+transcribed value.
 
 Binding is the last step for a member and is deliberately separate from tagging,
 so an immutable tag can exist while authority still reads `pending`.

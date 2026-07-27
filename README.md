@@ -53,7 +53,8 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
 - `ops/ci/HOST_CI_BOUNDARY.md`: root-owned sandbox, proof-evidence, result-seal,
   and publication contract.
 - `docs/local-jeryu-forge-agent-workflow.md`: PR and status workflow.
-- `docs/release.md`: control-plane version, integrity, installation, and rollback policy.
+- `docs/release.md`: control-plane version, integrity, member-authority binding,
+  installation, and rollback policy.
 - `docs/release-runbook.md`: canonical v8.0.1 candidate, SmartCluster, Redline,
   artifact, canary, promotion, and rollback workflow.
 
