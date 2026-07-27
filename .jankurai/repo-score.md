@@ -7,12 +7,12 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1785021706`
-- Started at: `1785021706`
-- Elapsed: `2712` ms
+- Run ID: `1785165317`
+- Started at: `1785165317`
+- Elapsed: `4389` ms
 - Scope: `full`
-- Raw score: `90`
-- Final score: `90`
+- Raw score: `87`
+- Final score: `87`
 - Decision: `pass`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -99,7 +99,7 @@
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 80 | 9.60 | lockfile present; secret or dependency scan tooling found |
 | Code shape and semantic surface | 12 | 90 | 10.80 | no authored adopter product code files in scope |
-| Data truth and workflow safety | 8 | 90 | 7.20 | no adopter product DB surface; standards/tooling repo classification is explicit |
+| Data truth and workflow safety | 8 | 50 | 4.00 |  |
 | Observability and repair evidence | 8 | 57 | 4.56 | ops/observability directory present; repair receipts or raw artifact language found |
 | Context economy and agent instructions | 7 | 93 | 6.51 | root `AGENTS.md` present; root `AGENTS.md` stays short |
 | Jankurai tool adoption and CI replacement | 7 | 100 | 7.00 | control-plane files present; applicable=13 |
@@ -169,9 +169,9 @@ No audited runtime boundary reclassifications declared.
 ## Coverage Evidence
 
 - Artifact: `target/jankurai/coverage/coverage-audit.json`
-- Status: `missing`
-- Sources: total=`2` present=`0`
-- Findings: hard=`0` soft=`2`
+- Status: `pass`
+- Sources: total=`2` present=`2`
+- Findings: hard=`0` soft=`0`
 
 ## Findings
 
@@ -195,7 +195,17 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just fast`
    Fingerprint: `sha256:a256a7390d4b91a5b0a95d6f092e524c8f4080f27fe2b62e28cf0801343d0fef`
    Evidence: build acceleration markers found, targeted test/build commands found, locked dependency graph present, CI cache hint found
-3. `medium` `observability` `docs/testing.md`
+3. `medium` `data` `db/`
+   Rule: `HLT-006-DIRECT-DB-WRONG-LAYER`
+   Check: `HLT-006-DIRECT-DB-WRONG-LAYER:data` `soft` confidence `0.76`
+   Route: TLR `Contracts/data`, lane `db`, owner `tools`
+   Docs: `docs/audit-rubric.md#required-shape`
+   Reason: `Data truth and workflow safety` scored 50 below the standard floor of 85
+   Fix: move durable truth into migrations, constraints, adapters, and application-owned transactions
+   Rerun: `just fast`
+   Fingerprint: `sha256:6dc277f838aa42b508c136f6ba666d602ecefe226bc4c238b24388640ee21f82`
+   Evidence: Data truth and workflow safety scored 50
+4. `medium` `observability` `docs/testing.md`
    Rule: `HLT-017-OPAQUE-OBSERVABILITY`
    Check: `HLT-017-OPAQUE-OBSERVABILITY:observability` `soft` confidence `0.76`
    Route: TLR `Repair`, lane `observability`, owner `docs`
@@ -205,28 +215,6 @@ No audited runtime boundary reclassifications declared.
    Rerun: `just score`
    Fingerprint: `sha256:8ce018ddaa8c2b6ddef11b6784922e6befd60bb670ab8564e69cd26455aa44a6`
    Evidence: ops/observability directory present, repair receipts or raw artifact language found, repair-hint and receipt convention are documented, repair receipt guidance is documented
-4. `medium` `test` `tools/redline-proof/**/*.rs`
-   Rule: `HLT-008-FALSE-GREEN-RISK`
-   Check: `HLT-008-FALSE-GREEN-RISK:coverage-evidence` `soft` confidence `0.76`
-   Route: TLR `Verification`, lane `required`, owner `tools`
-   Docs: `docs/testing.md`
-   Matched term: `rust-control-tests`
-   Reason: coverage evidence artifact `target/jankurai/coverage/rust-tests.json`
-   Fix: run the `rust-control-tests` producer lane, write `target/jankurai/coverage/rust-tests.json`, then rerun `jankurai coverage audit`
-   Rerun: `just score`
-   Fingerprint: `sha256:e4696179bbe3d1e2055a456891a9cb98ff7e8d7f10723cb404a94000ffc8ea09`
-   Evidence: missing artifact candidate `target/jankurai/coverage/rust-tests.json`
-5. `medium` `security` `.github/**`
-   Rule: `HLT-016-SUPPLY-CHAIN-DRIFT`
-   Check: `HLT-016-SUPPLY-CHAIN-DRIFT:coverage-evidence` `soft` confidence `0.76`
-   Route: TLR `Security, secrets, agency`, lane `security`, owner `ops`
-   Docs: `docs/audit-rubric.md#top-level-risk-mapping`
-   Matched term: `security-evidence`
-   Reason: coverage evidence artifact `target/security/evidence.json`
-   Fix: run the `security-evidence` producer lane, write `target/security/evidence.json`, then rerun `jankurai coverage audit`
-   Rerun: `just security`
-   Fingerprint: `sha256:cac8df4736a15ac1525537c3c3d7f578ec9241fcd8d584cf12ef31a847016f72`
-   Evidence: missing artifact candidate `target/security/evidence.json`
 
 ## Policy
 
@@ -236,13 +224,11 @@ No audited runtime boundary reclassifications declared.
 
 ## Agent Fix Queue
 
-1. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
+1. `medium` `HLT-006-DIRECT-DB-WRONG-LAYER` `db/` - move durable truth into migrations, constraints, adapters, and application-owned transactions
+   Route: `Contracts/data`/`db`
+2. `medium` `HLT-018-PERF-CONCURRENCY-DRIFT` `Justfile` - add fast deterministic build/test targets, caches, and narrow proof lanes for agent iteration
    Route: `Verification`/`fast`
-2. `medium` `HLT-008-FALSE-GREEN-RISK` `tools/redline-proof/**/*.rs` - run the `rust-control-tests` producer lane, write `target/jankurai/coverage/rust-tests.json`, then rerun `jankurai coverage audit`
-   Route: `Verification`/`required`
 3. `medium` `HLT-017-OPAQUE-OBSERVABILITY` `docs/testing.md` - add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof
    Route: `Repair`/`observability`
-4. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/**` - run the `security-evidence` producer lane, write `target/security/evidence.json`, then rerun `jankurai coverage audit`
-   Route: `Security, secrets, agency`/`security`
-5. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
+4. `medium` `HLT-016-SUPPLY-CHAIN-DRIFT` `.github/workflows/jankurai.yml` - wire secret, dependency, provenance, and workflow scans into an operational CI lane
    Route: `Security, secrets, agency`/`security`

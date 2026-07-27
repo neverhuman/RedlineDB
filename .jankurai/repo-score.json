@@ -1,7 +1,7 @@
 {
-  "report_fingerprint": "sha256:a16580bdb357599d47a6259202d9ab2b9025dcc89ad6cd8c1a630959f6e3f9ce",
-  "input_fingerprint": "sha256:198fa9912f0417aad9e182896e34c1ba10389ef9dc9005e97e0697f26aec497b",
-  "policy_fingerprint": "sha256:e29ddbb7ec7bed306210ac0ba290b3886d210b93e45de6b8e0f873e01945315c",
+  "report_fingerprint": "sha256:0ced71b0908bdb8afa257b779973bbb8d8d9c158e33490c579f52d3eacfea953",
+  "input_fingerprint": "sha256:8ca9aed3cc664209fc23ceee35f0caca54288d9d97c8ca103fc1623dfc624abc",
+  "policy_fingerprint": "sha256:ee7b6aae33fb5ed85ec89a3b9d9221858fcc62ffaf7215e7fb70675781fa3574",
   "manifest_fingerprints": {
     "owner_map": "sha256:d539296fba6c8f01669314d2552a71d3efa2e6d34629cb968b1d748647e9c4e4",
     "test_map": "sha256:86d5d51bac65c2e6069129ba2435d6aff4b83a45c21ab3a24a268c14055800e2",
@@ -11,7 +11,7 @@
     "standard_version": "sha256:f7a56ea0a95fc9be14aa355b0604e104993a8c75e562a2fe03d0313cc53fbc3b"
   },
   "dirty_worktree": false,
-  "generated_at": "1785021706",
+  "generated_at": "1785165317",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,36 +25,36 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1785021706",
-  "started_at": "1785021706",
-  "elapsed_ms": 2712,
+  "run_id": "1785165317",
+  "started_at": "1785165317",
+  "elapsed_ms": 4389,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 90,
-  "raw_score": 90,
+  "score": 87,
+  "raw_score": 87,
   "decision": {
     "status": "pass",
     "minimum_score": 85,
     "passed": true,
     "hard_findings": 0,
-    "soft_findings": 5,
+    "soft_findings": 4,
     "ratchet": {
       "baseline_score": 86,
       "allowed_drop": 0,
       "passed": true,
-      "score_delta": 4,
-      "baseline_report_fingerprint": "sha256:7a193af97900dc7c8d6c3650bbdf82dbb17a0e26563a3a2c26dba85379f92bb5",
-      "baseline_input_fingerprint": "sha256:a4320f3cdc98f89ddc6035255b1a2798498294ebcf460c4e9fc3008544fc54c8",
-      "baseline_policy_fingerprint": "sha256:e29ddbb7ec7bed306210ac0ba290b3886d210b93e45de6b8e0f873e01945315c",
+      "score_delta": 1,
+      "baseline_report_fingerprint": "sha256:10aa6c241342edad9226920c0c3ba24f09dd3e4f6353bff4964750947d67fe73",
+      "baseline_input_fingerprint": "sha256:76ff41b55910967405f0714cf57fb1fad0002abb9c9f1c5fe86f3fb7ba6c678d",
+      "baseline_policy_fingerprint": "sha256:ee7b6aae33fb5ed85ec89a3b9d9221858fcc62ffaf7215e7fb70675781fa3574",
       "new_caps": [],
       "new_hard_findings": [],
       "policy_changed": false
     }
   },
   "git": {
-    "head": "b05504b",
+    "head": "4101884",
     "base": null,
     "changed_files": 0,
     "mode": "full",
@@ -341,11 +341,9 @@
     {
       "name": "Data truth and workflow safety",
       "weight": 8,
-      "score": 90,
-      "weighted_points": 7.2,
-      "evidence": [
-        "no adopter product DB surface; standards/tooling repo classification is explicit"
-      ],
+      "score": 50,
+      "weighted_points": 4.0,
+      "evidence": [],
       "notes": []
     },
     {
@@ -974,7 +972,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-25T23:21:43.606295848+00:00",
+    "generated_at": "2026-07-27T15:15:12.800741871+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1012,7 +1010,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 78,
+      "files_scanned": 81,
       "files_considered": 1,
       "active_files": 1,
       "exact_file_classes": 0,
@@ -1522,11 +1520,11 @@
   },
   "coverage_evidence": {
     "artifact": "target/jankurai/coverage/coverage-audit.json",
-    "status": "missing",
+    "status": "pass",
     "sources_total": 2,
-    "sources_present": 0,
+    "sources_present": 2,
     "hard_findings": 0,
-    "soft_findings": 2
+    "soft_findings": 0
   },
   "findings": [
     {
@@ -1579,6 +1577,27 @@
     },
     {
       "severity": "medium",
+      "category": "data",
+      "path": "db/",
+      "problem": "`Data truth and workflow safety` scored 50 below the standard floor of 85",
+      "agent_fix": "move durable truth into migrations, constraints, adapters, and application-owned transactions",
+      "evidence": [
+        "Data truth and workflow safety scored 50"
+      ],
+      "check_id": "HLT-006-DIRECT-DB-WRONG-LAYER:data",
+      "hardness": "soft",
+      "confidence": 0.76,
+      "evidence_kind": "sql",
+      "rerun_command": "just fast",
+      "fingerprint": "sha256:6dc277f838aa42b508c136f6ba666d602ecefe226bc4c238b24388640ee21f82",
+      "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+      "tlr": "Contracts/data",
+      "lane": "db",
+      "docs_url": "docs/audit-rubric.md#required-shape",
+      "owner": "tools"
+    },
+    {
+      "severity": "medium",
       "category": "observability",
       "path": "docs/testing.md",
       "problem": "`Observability and repair evidence` scored 57 below the standard floor of 85",
@@ -1600,55 +1619,19 @@
       "lane": "observability",
       "docs_url": "agent/JANKURAI_STANDARD.md#repair-receipts",
       "owner": "docs"
-    },
-    {
-      "severity": "medium",
-      "category": "test",
-      "path": "tools/redline-proof/**/*.rs",
-      "problem": "configured coverage/proof evidence artifact is missing",
-      "agent_fix": "run the `rust-control-tests` producer lane, write `target/jankurai/coverage/rust-tests.json`, then rerun `jankurai coverage audit`",
-      "evidence": [
-        "missing artifact candidate `target/jankurai/coverage/rust-tests.json`"
-      ],
-      "check_id": "HLT-008-FALSE-GREEN-RISK:coverage-evidence",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "test",
-      "rerun_command": "just score",
-      "fingerprint": "sha256:e4696179bbe3d1e2055a456891a9cb98ff7e8d7f10723cb404a94000ffc8ea09",
-      "rule_id": "HLT-008-FALSE-GREEN-RISK",
-      "tlr": "Verification",
-      "lane": "required",
-      "docs_url": "docs/testing.md",
-      "owner": "tools",
-      "matched_term": "rust-control-tests",
-      "reason": "coverage evidence artifact `target/jankurai/coverage/rust-tests.json`"
-    },
-    {
-      "severity": "medium",
-      "category": "security",
-      "path": ".github/**",
-      "problem": "configured coverage/proof evidence artifact is missing",
-      "agent_fix": "run the `security-evidence` producer lane, write `target/security/evidence.json`, then rerun `jankurai coverage audit`",
-      "evidence": [
-        "missing artifact candidate `target/security/evidence.json`"
-      ],
-      "check_id": "HLT-016-SUPPLY-CHAIN-DRIFT:coverage-evidence",
-      "hardness": "soft",
-      "confidence": 0.76,
-      "evidence_kind": "workflow-command",
-      "rerun_command": "just security",
-      "fingerprint": "sha256:cac8df4736a15ac1525537c3c3d7f578ec9241fcd8d584cf12ef31a847016f72",
-      "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "docs_url": "docs/audit-rubric.md#top-level-risk-mapping",
-      "owner": "ops",
-      "matched_term": "security-evidence",
-      "reason": "coverage evidence artifact `target/security/evidence.json`"
     }
   ],
   "agent_fix_queue": [
+    {
+      "path": "db/",
+      "priority": "medium",
+      "rule_id": "HLT-006-DIRECT-DB-WRONG-LAYER",
+      "tlr": "Contracts/data",
+      "lane": "db",
+      "owner": "tools",
+      "task": "move durable truth into migrations, constraints, adapters, and application-owned transactions",
+      "why": "`Data truth and workflow safety` scored 50 below the standard floor of 85"
+    },
     {
       "path": "Justfile",
       "priority": "medium",
@@ -1660,16 +1643,6 @@
       "why": "`Build speed signals` scored 70 below the standard floor of 85"
     },
     {
-      "path": "tools/redline-proof/**/*.rs",
-      "priority": "medium",
-      "rule_id": "HLT-008-FALSE-GREEN-RISK",
-      "tlr": "Verification",
-      "lane": "required",
-      "owner": "tools",
-      "task": "run the `rust-control-tests` producer lane, write `target/jankurai/coverage/rust-tests.json`, then rerun `jankurai coverage audit`",
-      "why": "configured coverage/proof evidence artifact is missing"
-    },
-    {
       "path": "docs/testing.md",
       "priority": "medium",
       "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
@@ -1678,16 +1651,6 @@
       "owner": "docs",
       "task": "add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof",
       "why": "`Observability and repair evidence` scored 57 below the standard floor of 85"
-    },
-    {
-      "path": ".github/**",
-      "priority": "medium",
-      "rule_id": "HLT-016-SUPPLY-CHAIN-DRIFT",
-      "tlr": "Security, secrets, agency",
-      "lane": "security",
-      "owner": "ops",
-      "task": "run the `security-evidence` producer lane, write `target/security/evidence.json`, then rerun `jankurai coverage audit`",
-      "why": "configured coverage/proof evidence artifact is missing"
     },
     {
       "path": ".github/workflows/jankurai.yml",
