@@ -285,6 +285,19 @@ engine_repository = "redline-core"
 engine_remote = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
 engine_identity_status = "pending"
 
+[[nested_families.redline.repository]]
+name = "redline-web"
+rollout_wave = 5
+path = "/home/ubuntu/jain-split/jain-redline/redline-web"
+jeryu_slug = "jeryu/redline-web"
+remote = "http://127.0.0.1:8787/git/jeryu/redline-web.git"
+required_check = "redline-web/required"
+default_branch = "main"
+identity_status = "bound"
+current_tag = "redline-web-v0.1.0-jain.1"
+inventory_status = "active"
+runtime_authority = "product"
+
 [[nested_families.redline.pending_repository]]
 name = "redline-central"
 remote = "http://127.0.0.1:8787/git/jeryu/redline-central.git"
