@@ -307,6 +307,7 @@ printf 'first advisory fixture\n' >"$source_db/README.md"
 git -C "$source_db" add README.md
 git -C "$source_db" commit -q -m 'first fixture'
 first_commit="$(git -C "$source_db" rev-parse HEAD)"
+first_tree="$(git -C "$source_db" rev-parse 'HEAD^{tree}')"
 printf 'second advisory fixture\n' >>"$source_db/README.md"
 git -C "$source_db" add README.md
 git -C "$source_db" commit -q -m 'second fixture'
@@ -370,12 +371,16 @@ expect_advisory_seed_rejected \
   linked-db "$advisory_root/linked-db" "$advisory_commit" "$advisory_tree" \
   'fixed cargo-deny advisory DB must be a physical checkout'
 expect_advisory_seed_rejected \
-  wrong-head "$source_db" "$first_commit" "$advisory_tree" \
-  'fixed cargo-deny advisory DB HEAD/tree/FETCH_HEAD/clean identity mismatch'
+  commit-tree-mismatch "$source_db" "$first_commit" "$advisory_tree" \
+  'fixed cargo-deny advisory DB pinned-object/lineage/clean identity mismatch'
+expect_advisory_seed_rejected \
+  absent-commit "$source_db" \
+  0000000000000000000000000000000000000000 "$advisory_tree" \
+  'fixed cargo-deny advisory DB pinned-object/lineage/clean identity mismatch'
 expect_advisory_seed_rejected \
   wrong-tree "$source_db" "$advisory_commit" \
   0000000000000000000000000000000000000000 \
-  'fixed cargo-deny advisory DB HEAD/tree/FETCH_HEAD/clean identity mismatch'
+  'fixed cargo-deny advisory DB pinned-object/lineage/clean identity mismatch'
 
 confused_source="$advisory_root/advisory-db"
 git clone -q --no-local --no-tags --single-branch --branch main \
@@ -385,14 +390,26 @@ mkdir "$confused_source/advisory-db-3157b0e258782691"
 printf 'host lock confusion fixture\n' >"$confused_source/db.lock"
 expect_advisory_seed_rejected \
   singular-dirty-path "$confused_source" "$advisory_commit" "$advisory_tree" \
-  'fixed cargo-deny advisory DB HEAD/tree/FETCH_HEAD/clean identity mismatch'
+  'fixed cargo-deny advisory DB pinned-object/lineage/clean identity mismatch'
+
+# The source checkout is allowed to have advanced past the pin: RustSec is a live
+# feed. What must hold is that the pinned commit is present, carries the pinned
+# tree, and is on the fetched main lineage. HEAD here sits at the second fixture
+# while the pin names the first.
+new_advisory_home advanced-source
+jain_seed_cargo_deny_advisory_db \
+  "$source_db" "$advisory_home" "$first_commit" "$first_tree" \
+  || fail 'advanced-source advisory DB fixture was rejected but must be accepted'
+[[ "$(git -C "$advisory_home/advisory-dbs/advisory-db-3157b0e258782691" \
+  rev-parse HEAD)" == "$first_commit" ]] \
+  || fail 'advanced-source advisory DB did not check out the pinned commit'
 
 new_advisory_home fetch-head
 jain_seed_cargo_deny_advisory_db \
   "$source_db" "$advisory_home" "$advisory_commit" "$advisory_tree"
 isolated_db="$advisory_home/advisory-dbs/advisory-db-3157b0e258782691"
 git -C "$isolated_db" fetch -q --no-tags "$source_db" "$first_commit"
-expect_advisory_verify_rejected fetch-head "$isolated_db" 'FETCH_HEAD identity mismatch'
+expect_advisory_verify_rejected fetch-head "$isolated_db" 'FETCH_HEAD lineage mismatch'
 
 new_advisory_home destination-link
 jain_seed_cargo_deny_advisory_db \
