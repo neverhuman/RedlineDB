@@ -24,6 +24,7 @@ readonly CARGO_DENY_DB="/home/ubuntu/.cargo/advisory-dbs/advisory-db-3157b0e2587
 readonly RUSTSEC_DB_COMMIT="9f3e138091487e69144f536d36976e427a7a3307"
 readonly RUSTSEC_DB_TREE="c33f1047906505cabcec7e21f2d99db5c6de8852"
 readonly HOST_CARGO_INDEX="/home/ubuntu/.cargo/registry/index/index.crates.io-1949cf8c6b5b557f"
+readonly LOCK_CLOSURE_INDEX_MANIFEST_SHA256="aac1119a086ca336165f570d5794853f0dfedb444ed4300cf13a77bac170ffad"
 readonly HOST_CARGO_CACHE_PARENT="/home/ubuntu/.cargo/registry/cache"
 readonly HOST_CARGO_CACHE="${HOST_CARGO_CACHE_PARENT}/index.crates.io-1949cf8c6b5b557f"
 
@@ -49,6 +50,7 @@ deny_home="$tmp/cargo-deny-home"
 mkdir -p "$deny_home"
 jain_seed_locked_cargo_registry_index \
   "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_INDEX" "$deny_home" \
+  "$LOCK_CLOSURE_INDEX_MANIFEST_SHA256" \
   || fail "no-index test: lock-closure crates.io index seed failed"
 jain_seed_locked_cargo_registry_closure \
   "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_CACHE_PARENT" "$HOST_CARGO_CACHE" \
@@ -81,6 +83,23 @@ jain_verify_cargo_deny_clean_log "$deny_log" || {
   cat "$deny_log" >&2
   fail "no-index test: cargo-deny output was not the exact passing summary"
 }
+
+# Content custody must still hold after the governed decision.
+jain_verify_locked_cargo_registry_index \
+  "$ROOT_DIR/Cargo.lock" \
+  "$deny_home/registry/index/$(basename -- "$HOST_CARGO_INDEX")" \
+  "$LOCK_CLOSURE_INDEX_MANIFEST_SHA256" \
+  || fail "no-index test: isolated index changed while cargo-deny ran"
+
+# A tampered selected entry must be rejected rather than silently accepted.
+tamper_home="$tmp/tamper-home"
+mkdir -p "$tamper_home"
+if jain_seed_locked_cargo_registry_index \
+  "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_INDEX" "$tamper_home" \
+  0000000000000000000000000000000000000000000000000000000000000000 \
+  >/dev/null 2>&1; then
+  fail "no-index test: a wrong closure manifest was accepted"
+fi
 
 # Yanked detection must be live, not silently degraded.
 ! grep -q "index-failure" "$deny_log" \

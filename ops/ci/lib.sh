@@ -488,8 +488,14 @@ jain_seed_locked_cargo_registry_index() {
   local lock_file="${1:?lock file is required}"
   local source_index="${2:?source registry index is required}"
   local cargo_home="${3:?isolated Cargo home is required}"
-  local destination name relative seeded=0
+  local expected_manifest="${4:?closure index manifest is required}"
+  local destination name relative seeded=0 actual
   local -a names=()
+
+  [[ "$expected_manifest" =~ ^[0-9a-f]{64}$ ]] || {
+    printf 'closure index manifest must be a full SHA-256\n' >&2
+    return 1
+  }
 
   [[ -f "$lock_file" && ! -L "$lock_file" ]] || {
     printf 'locked registry index seed requires a physical lock file: %s\n' \
@@ -501,6 +507,15 @@ jain_seed_locked_cargo_registry_index() {
     && -z "$(find "$source_index" -type l -print -quit)" ]] || {
     printf 'source crates.io index must be a physical symlink-free directory: %s\n' \
       "$source_index" >&2
+    return 1
+  }
+
+  # Content custody on the SOURCE closure before anything is copied.
+  actual="$(jain_cargo_index_closure_manifest_sha256 "$lock_file" "$source_index")" \
+    || return 1
+  [[ "$actual" == "$expected_manifest" ]] || {
+    printf 'source lock-closure index manifest mismatch: expected %s actual %s\n' \
+      "$expected_manifest" "$actual" >&2
     return 1
   }
 
@@ -547,7 +562,78 @@ jain_seed_locked_cargo_registry_index() {
     printf 'isolated crates.io index contains entries outside the lock closure\n' >&2
     return 1
   }
-  log "security: seeded lock-closure crates.io index entries=$seeded"
+  [[ -z "$(find "$destination" -type l -print -quit)" ]] || {
+    printf 'isolated crates.io index contains a symlink\n' >&2
+    return 1
+  }
+  # Content custody on the DESTINATION immediately after copying.
+  jain_verify_locked_cargo_registry_index \
+    "$lock_file" "$destination" "$expected_manifest" || return 1
+  log "security: seeded lock-closure crates.io index entries=$seeded manifest=$expected_manifest"
+}
+
+# Deterministic SHA-256 over ONLY the Cargo.lock-selected index entries: the
+# sorted relative paths and bytes of those entries, plus config.json. Unrelated
+# growth of the shared cache cannot move this value, while a legitimate upstream
+# change to a SELECTED crate's entry does -- which must then be refreshed by an
+# explicit reviewed manifest bump rather than silently changing a release
+# security decision.
+jain_cargo_index_closure_manifest_sha256() {
+  local lock_file="${1:?lock file is required}"
+  local index_root="${2:?index root is required}"
+  local name relative
+  local -a names=() relatives=()
+
+  [[ -f "$index_root/config.json" && ! -L "$index_root/config.json" ]] || {
+    printf 'crates.io index lacks a physical config.json: %s\n' "$index_root" >&2
+    return 1
+  }
+  mapfile -t names < <(
+    awk '/^name = "/ { gsub(/^name = "|"$/, ""); print }' "$lock_file" \
+      | LC_ALL=C sort -u
+  )
+  for name in "${names[@]}"; do
+    relative="$(jain_cargo_index_entry_path "$name")" || return 1
+    [[ -e "$index_root/.cache/$relative" ]] || continue
+    [[ -f "$index_root/.cache/$relative" && ! -L "$index_root/.cache/$relative" ]] || {
+      printf 'crates.io index entry is not a physical file: %s\n' "$relative" >&2
+      return 1
+    }
+    relatives+=("$relative")
+  done
+  [[ "${#relatives[@]}" -gt 0 ]] || {
+    printf 'no locked crate resolved to a crates.io index entry\n' >&2
+    return 1
+  }
+  {
+    printf 'config.json\n'
+    sha256sum -- "$index_root/config.json" | awk '{print $1}'
+    while IFS= read -r relative; do
+      printf '%s\n' "$relative"
+      sha256sum -- "$index_root/.cache/$relative" | awk '{print $1}'
+    done < <(printf '%s\n' "${relatives[@]}" | LC_ALL=C sort)
+  } | sha256sum | awk '{print $1}'
+}
+
+# Re-verify an already-materialised isolated index against the pinned closure
+# manifest. Used immediately after copying and again after cargo-deny has run, so
+# a mutation during the governed decision cannot pass unnoticed.
+jain_verify_locked_cargo_registry_index() {
+  local lock_file="${1:?lock file is required}"
+  local index_root="${2:?index root is required}"
+  local expected_manifest="${3:?closure index manifest is required}"
+  local actual
+  [[ -z "$(find "$index_root" -type l -print -quit)" ]] || {
+    printf 'isolated crates.io index contains a symlink\n' >&2
+    return 1
+  }
+  actual="$(jain_cargo_index_closure_manifest_sha256 "$lock_file" "$index_root")" \
+    || return 1
+  [[ "$actual" == "$expected_manifest" ]] || {
+    printf 'isolated lock-closure index manifest mismatch: expected %s actual %s\n' \
+      "$expected_manifest" "$actual" >&2
+    return 1
+  }
 }
 
 # Cargo's index path scheme for a crate name.

@@ -28,6 +28,10 @@ readonly HOST_CARGO_CACHE="${HOST_CARGO_CACHE_PARENT}/index.crates.io-1949cf8c6b
 # locked version is yanked, so the entries are scoped to committed lock bytes
 # rather than dropped.
 readonly HOST_CARGO_INDEX="/home/ubuntu/.cargo/registry/index/index.crates.io-1949cf8c6b5b557f"
+# SHA-256 over config.json plus the sorted relative paths and bytes of ONLY the
+# Cargo.lock-selected index entries. Unrelated shared-cache growth cannot move
+# it; an upstream change to a selected crate requires a reviewed bump here.
+readonly LOCK_CLOSURE_INDEX_MANIFEST_SHA256="aac1119a086ca336165f570d5794853f0dfedb444ed4300cf13a77bac170ffad"
 readonly EXPECTED_SECURITY_COMMANDS="gitleaks detect; cargo audit; cargo deny; npm audit; zizmor; syft"
 
 cargo_deny_home=""
@@ -107,6 +111,7 @@ CARGO_HOME="$cargo_cache_home" cargo metadata --locked --offline --format-versio
 cargo_deny_home="$(mktemp -d "$artifact_root/cargo-deny-home.XXXXXX")"
 jain_seed_locked_cargo_registry_index \
   "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_INDEX" "$cargo_deny_home" \
+  "$LOCK_CLOSURE_INDEX_MANIFEST_SHA256" \
   || fail "security: lock-closure crates.io index seed failed"
 jain_seed_locked_cargo_registry_closure \
   "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_CACHE_PARENT" "$HOST_CARGO_CACHE" \
@@ -122,6 +127,11 @@ if ! CARGO_HOME="$cargo_deny_home" "$CARGO_DENY_BIN" check \
   cat "$cargo_deny_log" >&2
   fail "security: cargo-deny failed; log preserved at $cargo_deny_log"
 fi
+jain_verify_locked_cargo_registry_index \
+  "$ROOT_DIR/Cargo.lock" \
+  "$cargo_deny_home/registry/index/$(basename -- "$HOST_CARGO_INDEX")" \
+  "$LOCK_CLOSURE_INDEX_MANIFEST_SHA256" \
+  || fail "security: isolated index changed while cargo-deny ran"
 jain_verify_cargo_deny_clean_log "$cargo_deny_log" || {
   cat "$cargo_deny_log" >&2
   fail "security: cargo-deny output was not the exact passing summary; log preserved at $cargo_deny_log"
