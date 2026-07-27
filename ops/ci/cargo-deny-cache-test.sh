@@ -363,6 +363,17 @@ jain_seed_cargo_deny_advisory_db \
 isolated_db="$advisory_home/advisory-dbs/advisory-db-3157b0e258782691"
 jain_verify_isolated_cargo_deny_db "$isolated_db" "$advisory_commit" "$advisory_tree"
 
+# The root worker disables hooks through inherited command-scope Git config.
+# That protective setting is not checkout-owned state and must not make an
+# otherwise closed source or isolated clone fail validation.
+new_advisory_home inherited-hooks-disabled
+GIT_CONFIG_COUNT=1 \
+GIT_CONFIG_KEY_0=core.hooksPath \
+GIT_CONFIG_VALUE_0=/dev/null \
+  jain_seed_cargo_deny_advisory_db \
+    "$source_db" "$advisory_home" "$advisory_commit" "$advisory_tree" \
+  || fail 'inherited disabled hooks advisory DB fixture was rejected'
+
 expect_advisory_seed_rejected \
   missing-db "$advisory_root/missing" "$advisory_commit" "$advisory_tree" \
   'fixed cargo-deny advisory DB must be a physical checkout'
@@ -381,6 +392,19 @@ expect_advisory_seed_rejected \
   wrong-tree "$source_db" "$advisory_commit" \
   0000000000000000000000000000000000000000 \
   'fixed cargo-deny advisory DB pinned-object/lineage/clean identity mismatch'
+
+source_hooks="$advisory_root/source-hooks"
+mkdir "$source_hooks"
+printf '#!/usr/bin/env bash\nexit 1\n' >"$source_hooks/post-checkout"
+chmod +x "$source_hooks/post-checkout"
+git -C "$source_db" config --local core.hooksPath "$source_hooks"
+GIT_CONFIG_COUNT=1 \
+GIT_CONFIG_KEY_0=core.hooksPath \
+GIT_CONFIG_VALUE_0=/dev/null \
+  expect_advisory_seed_rejected \
+    source-local-hooks "$source_db" "$advisory_commit" "$advisory_tree" \
+    'fixed cargo-deny advisory DB contains symlinks, alternates, or active hooks'
+git -C "$source_db" config --local --unset core.hooksPath
 
 confused_source="$advisory_root/advisory-db"
 git clone -q --no-local --no-tags --single-branch --branch main \
@@ -424,6 +448,17 @@ jain_seed_cargo_deny_advisory_db \
 isolated_db="$advisory_home/advisory-dbs/advisory-db-3157b0e258782691"
 printf '%s\n' "$source_db/.git/objects" >"$isolated_db/.git/objects/info/alternates"
 expect_advisory_verify_rejected alternates "$isolated_db" 'contains alternates or hooks'
+
+new_advisory_home local-hooks
+jain_seed_cargo_deny_advisory_db \
+  "$source_db" "$advisory_home" "$advisory_commit" "$advisory_tree"
+isolated_db="$advisory_home/advisory-dbs/advisory-db-3157b0e258782691"
+git -C "$isolated_db" config --local core.hooksPath "$source_hooks"
+GIT_CONFIG_COUNT=1 \
+GIT_CONFIG_KEY_0=core.hooksPath \
+GIT_CONFIG_VALUE_0=/dev/null \
+  expect_advisory_verify_rejected \
+    local-hooks "$isolated_db" 'contains alternates or hooks'
 
 new_advisory_home unexpected-ref
 jain_seed_cargo_deny_advisory_db \

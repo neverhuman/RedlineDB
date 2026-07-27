@@ -1389,7 +1389,7 @@ jain_verify_isolated_cargo_deny_db() {
   }
   [[ ! -e "$repository/.git/objects/info/alternates" \
     && -z "$(find "$repository/.git/hooks" -mindepth 1 -print -quit)" \
-    && -z "$(git -C "$repository" config --get core.hooksPath || true)" ]] || {
+    && -z "$(git -C "$repository" config --local --get core.hooksPath || true)" ]] || {
     printf 'isolated cargo-deny advisory DB contains alternates or hooks\n' >&2
     return 1
   }
@@ -1455,7 +1455,7 @@ jain_seed_cargo_deny_advisory_db() {
   [[ -z "$(find "$source_db" -type l -print -quit)" \
     && ! -e "$source_db/.git/objects/info/alternates" \
     && -z "$(find "$source_db/.git/hooks" -type f ! -name '*.sample' -print -quit)" \
-    && -z "$(git -C "$source_db" config --get core.hooksPath || true)" ]] || {
+    && -z "$(git -C "$source_db" config --local --get core.hooksPath || true)" ]] || {
     printf 'fixed cargo-deny advisory DB contains symlinks, alternates, or active hooks\n' >&2
     return 1
   }
