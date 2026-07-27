@@ -13,8 +13,36 @@ ARTIFACT_DIR="${ROOT_DIR}/target/jankurai"
 # this on the runners that have the full toolchain installed.
 STRICT_TOOLS="${REDLINE_STRICT_TOOLS:-0}"
 
+# Resolve a governed resource across the sealed worker and the developer host.
+# The sealed worker mounts its own authority under /opt/jain-ci and exports the
+# advisory sources; the host has neither. Absolute developer-home positions are
+# therefore invalid as pins -- they simply do not exist inside the worker, which
+# is what made the first sealed attempts die on their very first step. Candidates
+# are tried in order: explicit environment override, governed mount, host path.
+jain_first_present_path() {
+  local candidate
+  for candidate in "$@"; do
+    [[ -n "$candidate" ]] || continue
+    if [[ -f "$candidate" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+    if [[ -d "$candidate" ]] \
+      && [[ -n "$(find "$candidate" -mindepth 1 -print -quit 2>/dev/null)" ]]; then
+      printf '%s' "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
 # Governed auditor: caller environment and PATH never select release evidence.
-readonly JAIN_GOVERNED_JANKURAI_BIN="/home/ubuntu/.jeryu/bin/jankurai"
+JAIN_GOVERNED_JANKURAI_BIN="$(jain_first_present_path \
+  "${JANKURAI_BIN:-}" \
+  /opt/jain-ci/authority/release-bin/jankurai \
+  /usr/local/libexec/jain/jankurai \
+  /home/ubuntu/.jeryu/bin/jankurai || true)"
+readonly JAIN_GOVERNED_JANKURAI_BIN
 readonly JAIN_GOVERNED_JANKURAI_VERSION="jankurai 1.6.11"
 readonly JAIN_GOVERNED_JANKURAI_SHA256="96d99e6e7d8dc9cf23df1081edd1f975231456592f81d9405385219a2c7298aa"
 

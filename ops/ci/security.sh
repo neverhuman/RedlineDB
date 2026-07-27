@@ -4,22 +4,42 @@ set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd "$ROOT_DIR"
 
-readonly CARGO_AUDIT_BIN="/home/ubuntu/.cargo/bin/cargo-audit"
+CARGO_AUDIT_BIN="$(command -v cargo-audit 2>/dev/null || true)"
+[[ -n "$CARGO_AUDIT_BIN" ]] || CARGO_AUDIT_BIN="/home/ubuntu/.cargo/bin/cargo-audit"
+readonly CARGO_AUDIT_BIN
 readonly CARGO_AUDIT_SHA256="1a17ff4c0449d1924aacda8dd20c06dccc3cceeed4dd17a71523f672bf97b70b"
-readonly CARGO_DENY_BIN="/home/ubuntu/.cargo/bin/cargo-deny"
+CARGO_DENY_BIN="$(command -v cargo-deny 2>/dev/null || true)"
+[[ -n "$CARGO_DENY_BIN" ]] || CARGO_DENY_BIN="/home/ubuntu/.cargo/bin/cargo-deny"
+readonly CARGO_DENY_BIN
 readonly CARGO_DENY_SHA256="ef27c757f50d77c5c2d9114fbc6ad45d2b8903506cead473a70b8ee659ea7a18"
-readonly GITLEAKS_BIN="/home/ubuntu/.cargo/bin/gitleaks"
+GITLEAKS_BIN="$(command -v gitleaks 2>/dev/null || true)"
+[[ -n "$GITLEAKS_BIN" ]] || GITLEAKS_BIN="/home/ubuntu/.cargo/bin/gitleaks"
+readonly GITLEAKS_BIN
 readonly GITLEAKS_SHA256="50b742abd7daad8bbddb6301f3017efb680632d9a5b3b4d8f137b3aac250e359"
-readonly ZIZMOR_BIN="/home/ubuntu/.cargo/bin/zizmor"
+ZIZMOR_BIN="$(command -v zizmor 2>/dev/null || true)"
+[[ -n "$ZIZMOR_BIN" ]] || ZIZMOR_BIN="/home/ubuntu/.cargo/bin/zizmor"
+readonly ZIZMOR_BIN
 readonly ZIZMOR_SHA256="6eabb307e2c0c35aa3b397d35518db66106c6909f86e7e0d7d898bc6587aa7fc"
-readonly SYFT_BIN="/home/ubuntu/.local/bin/syft"
+SYFT_BIN="$(command -v syft 2>/dev/null || true)"
+[[ -n "$SYFT_BIN" ]] || SYFT_BIN="/home/ubuntu/.local/bin/syft"
+readonly SYFT_BIN
 readonly SYFT_SHA256="eb9714fb8e4b8f2a647e7bb312f1e0b9f83a7aa30418658bf46583cfa83d27d2"
 readonly SYFT_CONFIG="${ROOT_DIR}/ops/ci/syft.yaml"
-readonly RUSTSEC_DB="/home/ubuntu/.cargo/advisory-db"
+RUSTSEC_DB="$(jain_first_present_path \
+  "${JAIN_RUSTSEC_ADVISORY_SOURCE:-}" "${JAIN_PINNED_ADVISORY_DB:-}" \
+  "${JAIN_ADVISORY_DB:-}" /home/ubuntu/.cargo/advisory-db || true)"
+readonly RUSTSEC_DB
 readonly RUSTSEC_DB_COMMIT="9f3e138091487e69144f536d36976e427a7a3307"
 readonly RUSTSEC_DB_TREE="c33f1047906505cabcec7e21f2d99db5c6de8852"
-readonly CARGO_DENY_DB="/home/ubuntu/.cargo/advisory-dbs/advisory-db-3157b0e258782691"
-readonly HOST_CARGO_CACHE_PARENT="/home/ubuntu/.cargo/registry/cache"
+CARGO_DENY_DB="$(jain_first_present_path \
+  "${JAIN_CARGO_DENY_ADVISORY_DB:-}" \
+  /home/ubuntu/.cargo/advisory-dbs/advisory-db-3157b0e258782691 || true)"
+readonly CARGO_DENY_DB
+HOST_CARGO_REGISTRY="$(jain_first_present_path \
+  /opt/jain-ci/cargo-registry /var/lib/jain-host-ci/cargo-registry \
+  /home/ubuntu/.cargo/registry || true)"
+readonly HOST_CARGO_REGISTRY
+readonly HOST_CARGO_CACHE_PARENT="${HOST_CARGO_REGISTRY}/cache"
 readonly HOST_CARGO_CACHE="${HOST_CARGO_CACHE_PARENT}/index.crates.io-1949cf8c6b5b557f"
 # The crates.io index is seeded from the Cargo.lock closure only. The developer
 # cache is NOT an authoritative custody object -- it is shared and appendable, so
@@ -27,11 +47,11 @@ readonly HOST_CARGO_CACHE="${HOST_CARGO_CACHE_PARENT}/index.crates.io-1949cf8c6b
 # elsewhere on the host. cargo-deny still needs index entries to answer whether a
 # locked version is yanked, so the entries are scoped to committed lock bytes
 # rather than dropped.
-readonly HOST_CARGO_INDEX="/home/ubuntu/.cargo/registry/index/index.crates.io-1949cf8c6b5b557f"
+readonly HOST_CARGO_INDEX="${HOST_CARGO_REGISTRY}/index/index.crates.io-1949cf8c6b5b557f"
 # SHA-256 over config.json plus the sorted relative paths and bytes of ONLY the
 # Cargo.lock-selected index entries. Unrelated shared-cache growth cannot move
 # it; an upstream change to a selected crate requires a reviewed bump here.
-readonly LOCK_CLOSURE_INDEX_MANIFEST_SHA256="aac1119a086ca336165f570d5794853f0dfedb444ed4300cf13a77bac170ffad"
+readonly LOCK_CLOSURE_INDEX_MANIFEST_SHA256="45169acea56070f13e18ce19f2f4d3ec86abaec0cf47365b9f27b31505b2abb3"
 readonly EXPECTED_SECURITY_COMMANDS="gitleaks detect; cargo audit; cargo deny; npm audit; zizmor; syft"
 
 cargo_deny_home=""
