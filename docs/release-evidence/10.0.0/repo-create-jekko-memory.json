@@ -1,0 +1,71 @@
+{
+  "absence_readback": true,
+  "action": "created-and-verified-empty-repository",
+  "details_readback": {
+    "archived": false,
+    "created_at": "2026-07-27T12:57:31.541113205Z",
+    "default_branch": "main",
+    "description": "jekko family v10 onboarding (nested under jain authority)",
+    "disabled": false,
+    "full_name": "veox/jekko-memory",
+    "html_url": "/veox/jekko-memory",
+    "id": "d2639e29-45c3-4348-b686-bf00db932972",
+    "name": "jekko-memory",
+    "owner": {
+      "login": "veox",
+      "type": "User",
+      "url": "/users/veox"
+    },
+    "private": true,
+    "updated_at": "2026-07-27T12:57:31.541113205Z",
+    "url": "/repos/veox/jekko-memory"
+  },
+  "external_state_changed": true,
+  "main_ref_absent": true,
+  "mode": "apply",
+  "mutation_attempted": true,
+  "operation": "jeryu-local repo-create",
+  "repository": "veox/jekko-memory",
+  "repository_identity": {
+    "clone_http_url": "/git/veox/jekko-memory.git",
+    "default_branch": "main",
+    "family": null,
+    "host": "jeryu",
+    "name": "jekko-memory",
+    "owner": "veox",
+    "visibility": "private"
+  },
+  "request": {
+    "body": {
+      "default_branch": "main",
+      "description": "jekko family v10 onboarding (nested under jain authority)",
+      "name": "jekko-memory",
+      "owner": "veox",
+      "private": true
+    },
+    "method": "POST",
+    "path": "/repos"
+  },
+  "response": {
+    "archived": false,
+    "created_at": "2026-07-27T12:57:31.541113205Z",
+    "default_branch": "main",
+    "description": "jekko family v10 onboarding (nested under jain authority)",
+    "disabled": false,
+    "full_name": "veox/jekko-memory",
+    "html_url": "/veox/jekko-memory",
+    "id": "d2639e29-45c3-4348-b686-bf00db932972",
+    "name": "jekko-memory",
+    "owner": {
+      "login": "veox",
+      "type": "User",
+      "url": "/users/veox"
+    },
+    "private": true,
+    "updated_at": "2026-07-27T12:57:31.541113205Z",
+    "url": "/repos/veox/jekko-memory"
+  },
+  "schema_version": "jain.jeryu-repository-creation/v1",
+  "status": "pass",
+  "timestamp_unix": 1785157050
+}

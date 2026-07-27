@@ -1,0 +1,33 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "b12c4a148d8100283b207d34870307f395c73396",
+    "remote": "b12c4a148d8100283b207d34870307f395c73396",
+    "remote_main": "b12c4a148d8100283b207d34870307f395c73396"
+  },
+  "api_identity": {
+    "clone_http_url": "/git/veox/jain-split-ops.git",
+    "default_branch": "main",
+    "family": null,
+    "host": "jeryu",
+    "name": "jain-split-ops",
+    "owner": "veox",
+    "visibility": "private"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "b12c4a148d8100283b207d34870307f395c73396",
+  "commit_input": "b12c4a148d8100283b207d34870307f395c73396",
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "remote": "http://127.0.0.1:8787/git/veox/jain-split-ops.git",
+  "remote_main": "b12c4a148d8100283b207d34870307f395c73396",
+  "repository": "/home/ubuntu/jain-split/jain-split-ops",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-split-ops-v10.0.0-split.10",
+  "timestamp_unix": 1785153689,
+  "token_metadata_validated": true
+}

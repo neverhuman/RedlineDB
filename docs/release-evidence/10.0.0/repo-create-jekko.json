@@ -1,0 +1,71 @@
+{
+  "absence_readback": true,
+  "action": "created-and-verified-empty-repository",
+  "details_readback": {
+    "archived": false,
+    "created_at": "2026-07-27T12:56:15.306938801Z",
+    "default_branch": "main",
+    "description": "jekko family v10 onboarding (nested under jain authority)",
+    "disabled": false,
+    "full_name": "veox/jekko",
+    "html_url": "/veox/jekko",
+    "id": "4e9b266a-28b2-45cf-bc19-ee85aba47a39",
+    "name": "jekko",
+    "owner": {
+      "login": "veox",
+      "type": "User",
+      "url": "/users/veox"
+    },
+    "private": true,
+    "updated_at": "2026-07-27T12:56:15.306938801Z",
+    "url": "/repos/veox/jekko"
+  },
+  "external_state_changed": true,
+  "main_ref_absent": true,
+  "mode": "apply",
+  "mutation_attempted": true,
+  "operation": "jeryu-local repo-create",
+  "repository": "veox/jekko",
+  "repository_identity": {
+    "clone_http_url": "/git/veox/jekko.git",
+    "default_branch": "main",
+    "family": null,
+    "host": "jeryu",
+    "name": "jekko",
+    "owner": "veox",
+    "visibility": "private"
+  },
+  "request": {
+    "body": {
+      "default_branch": "main",
+      "description": "jekko family v10 onboarding (nested under jain authority)",
+      "name": "jekko",
+      "owner": "veox",
+      "private": true
+    },
+    "method": "POST",
+    "path": "/repos"
+  },
+  "response": {
+    "archived": false,
+    "created_at": "2026-07-27T12:56:15.306938801Z",
+    "default_branch": "main",
+    "description": "jekko family v10 onboarding (nested under jain authority)",
+    "disabled": false,
+    "full_name": "veox/jekko",
+    "html_url": "/veox/jekko",
+    "id": "4e9b266a-28b2-45cf-bc19-ee85aba47a39",
+    "name": "jekko",
+    "owner": {
+      "login": "veox",
+      "type": "User",
+      "url": "/users/veox"
+    },
+    "private": true,
+    "updated_at": "2026-07-27T12:56:15.306938801Z",
+    "url": "/repos/veox/jekko"
+  },
+  "schema_version": "jain.jeryu-repository-creation/v1",
+  "status": "pass",
+  "timestamp_unix": 1785156974
+}

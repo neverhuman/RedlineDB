@@ -1,0 +1,33 @@
+{
+  "action": "created-and-verified",
+  "after": {
+    "local": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5",
+    "remote": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5",
+    "remote_main": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5"
+  },
+  "api_identity": {
+    "clone_http_url": "/git/veox/jain-web.git",
+    "default_branch": "main",
+    "family": null,
+    "host": "jeryu",
+    "name": "jain-web",
+    "owner": "veox",
+    "visibility": "private"
+  },
+  "before": {
+    "local": null,
+    "remote": null
+  },
+  "commit": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5",
+  "commit_input": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5",
+  "mode": "apply",
+  "operation": "immutable-tag",
+  "remote": "http://127.0.0.1:8787/git/veox/jain-web.git",
+  "remote_main": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5",
+  "repository": "/home/ubuntu/jain-split/jain-web",
+  "schema_version": "jain.immutable-tag/v1",
+  "status": "pass",
+  "tag": "jain-web-v10.0.0-split.3",
+  "timestamp_unix": 1785155481,
+  "token_metadata_validated": true
+}

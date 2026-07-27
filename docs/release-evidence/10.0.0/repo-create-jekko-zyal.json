@@ -1,0 +1,71 @@
+{
+  "absence_readback": true,
+  "action": "created-and-verified-empty-repository",
+  "details_readback": {
+    "archived": false,
+    "created_at": "2026-07-27T12:58:08.493426676Z",
+    "default_branch": "main",
+    "description": "jekko family v10 onboarding (nested under jain authority)",
+    "disabled": false,
+    "full_name": "veox/jekko-zyal",
+    "html_url": "/veox/jekko-zyal",
+    "id": "4fb99bc5-96da-4fdb-8501-ebaddc74afb7",
+    "name": "jekko-zyal",
+    "owner": {
+      "login": "veox",
+      "type": "User",
+      "url": "/users/veox"
+    },
+    "private": true,
+    "updated_at": "2026-07-27T12:58:08.493426676Z",
+    "url": "/repos/veox/jekko-zyal"
+  },
+  "external_state_changed": true,
+  "main_ref_absent": true,
+  "mode": "apply",
+  "mutation_attempted": true,
+  "operation": "jeryu-local repo-create",
+  "repository": "veox/jekko-zyal",
+  "repository_identity": {
+    "clone_http_url": "/git/veox/jekko-zyal.git",
+    "default_branch": "main",
+    "family": null,
+    "host": "jeryu",
+    "name": "jekko-zyal",
+    "owner": "veox",
+    "visibility": "private"
+  },
+  "request": {
+    "body": {
+      "default_branch": "main",
+      "description": "jekko family v10 onboarding (nested under jain authority)",
+      "name": "jekko-zyal",
+      "owner": "veox",
+      "private": true
+    },
+    "method": "POST",
+    "path": "/repos"
+  },
+  "response": {
+    "archived": false,
+    "created_at": "2026-07-27T12:58:08.493426676Z",
+    "default_branch": "main",
+    "description": "jekko family v10 onboarding (nested under jain authority)",
+    "disabled": false,
+    "full_name": "veox/jekko-zyal",
+    "html_url": "/veox/jekko-zyal",
+    "id": "4fb99bc5-96da-4fdb-8501-ebaddc74afb7",
+    "name": "jekko-zyal",
+    "owner": {
+      "login": "veox",
+      "type": "User",
+      "url": "/users/veox"
+    },
+    "private": true,
+    "updated_at": "2026-07-27T12:58:08.493426676Z",
+    "url": "/repos/veox/jekko-zyal"
+  },
+  "schema_version": "jain.jeryu-repository-creation/v1",
+  "status": "pass",
+  "timestamp_unix": 1785157081
+}
