@@ -1,0 +1,15 @@
+{
+  "schema_version": "jain.npm-cache/v1",
+  "cache_root": "/var/lib/jain-host-ci/npm-cache/b9bd504731624758d62068cfe8994490a047d92f8e6a4902aebf294fe08f71d2",
+  "inventory_sha256": "b9bd504731624758d62068cfe8994490a047d92f8e6a4902aebf294fe08f71d2",
+  "file_count": 650,
+  "format": "cacache-v5",
+  "package_lock_path": "apps/web/package-lock.json",
+  "package_lock_sha256": "e10d9c83f7cd018666a0ad75c6bcd58a45975a60de8b3286a79a8a8a0525a32c",
+  "closure_sha256": "021888d65d1ae6093065bd275906cfaa0d9e5f7dc046407f17a4d5272813ff61",
+  "closure_count": 325,
+  "platform": "linux",
+  "arch": "x64",
+  "libc": "glibc",
+  "npm_version": "9.2.0"
+}

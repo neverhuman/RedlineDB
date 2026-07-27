@@ -84,6 +84,9 @@ paths=(
   ops/ci/native-runtime.sh
   ops/ci/pnpm-runtime.sh
   ops/ci/pnpm-store.lock.json
+  ops/ci/npm-runtime.sh
+  ops/ci/npm-cache.lock.json
+  ops/ci/npmrc.empty
   ops/ci/pinned-advisory.sh
   ops/ci/pinned-cargo-audit.sh
   ops/ci/pinned-cargo-deny.sh

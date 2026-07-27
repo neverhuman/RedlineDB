@@ -154,7 +154,8 @@ for path in \
   ops/ci/cargo-lock-closure.sh \
   ops/ci/native-build-tools.lock.json \
   ops/ci/native-runtime.sh ops/ci/pnpm-runtime.sh \
-  ops/ci/pnpm-store.lock.json ops/ci/pinned-advisory.sh \
+  ops/ci/pnpm-store.lock.json ops/ci/npm-runtime.sh \
+  ops/ci/npm-cache.lock.json ops/ci/npmrc.empty ops/ci/pinned-advisory.sh \
   ops/ci/pinned-cargo-audit.sh ops/ci/pinned-cargo-deny.sh \
   ops/ci/required.sh \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh \
@@ -198,6 +199,21 @@ grep -F 'NPM_CONFIG_OFFLINE=true' \
 grep -F 'NPM_CONFIG_PREFER_SYMLINKED_EXECUTABLES=false' \
   "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
   printf 'root sandbox does not prohibit pnpm executable symlinks\n' >&2
+  exit 1
+}
+grep -F 'jain_npm_cache_matches_lock' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not bind the npm cache to the exact product lock\n' >&2
+  exit 1
+}
+grep -F 'NPM_CONFIG_CACHE=$npm_cache_mount' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not expose the staged npm cache\n' >&2
+  exit 1
+}
+grep -F '"$repo" == redline-web' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not scope npm authority to Redline Web\n' >&2
   exit 1
 }
 grep -F 'git config --file "$sibling_git_config"' \

@@ -595,6 +595,8 @@ fi
 source "$control_root/ops/ci/native-runtime.sh"
 # shellcheck source=ops/ci/pnpm-runtime.sh
 source "$control_root/ops/ci/pnpm-runtime.sh"
+# shellcheck source=ops/ci/npm-runtime.sh
+source "$control_root/ops/ci/npm-runtime.sh"
 jain_validate_nvidia_smi_detector "$nvidia_smi_path" "$nvidia_smi_sha256" \
   || fail 'root NVIDIA detector digest or metadata mismatch'
 cuda_capability_record=""
@@ -838,6 +840,27 @@ if [[ "$repo" == jain-web ]]; then
   pnpm_store_mount="$(jain_stage_pnpm_store \
     "$pnpm_authority" "$pnpm_store_root" "$pnpm_stage_parent")" \
     || fail 'cannot stage authenticated pnpm store'
+fi
+
+npm_cache_mount=""
+if [[ "$repo" == redline-web ]]; then
+  npm_authority="$control_root/ops/ci/npm-cache.lock.json"
+  npm_cache_root="$(jq -er '.cache_root' "$npm_authority")" \
+    || fail 'npm cache root authority is missing'
+  [[ "$(/usr/bin/env -i PATH=/usr/bin:/bin \
+      LC_ALL=C HOME=/nonexistent /usr/bin/npm --version)" \
+      == "$(jq -er '.npm_version' "$npm_authority")" ]] \
+    || fail 'npm cache and executable authorities disagree'
+  jain_validate_npm_cache "$npm_authority" "$npm_cache_root" root \
+    || fail 'root npm cache validation failed'
+  jain_npm_cache_matches_lock \
+    "$npm_authority" "$npm_cache_root" "${arguments[3]}" root \
+    || fail 'product npm lockfile or closure differs from offline cache authority'
+  npm_stage_parent="$bootstrap_root/writable/npm-cache"
+  mkdir -m 0700 "$npm_stage_parent"
+  npm_cache_mount="$(jain_stage_npm_cache \
+    "$npm_authority" "$npm_cache_root" "$npm_stage_parent")" \
+    || fail 'cannot stage authenticated npm cache'
 fi
 
 # Sibling and nested-control source is release authority, not ambient developer
@@ -1323,6 +1346,17 @@ if [[ -n "$pnpm_store_mount" ]]; then
     --setenv=NPM_CONFIG_UPDATE_NOTIFIER=false
     --setenv=NPM_CONFIG_VERIFY_STORE_INTEGRITY=true
     --setenv=NPM_CONFIG_USERCONFIG=/dev/null
+    --setenv=NPM_CONFIG_GLOBALCONFIG=/dev/null
+  )
+fi
+if [[ -n "$npm_cache_mount" ]]; then
+  systemd_args+=(
+    --setenv="NPM_CONFIG_CACHE=$npm_cache_mount"
+    --setenv=NPM_CONFIG_OFFLINE=true
+    --setenv=NPM_CONFIG_UPDATE_NOTIFIER=false
+    --setenv=NPM_CONFIG_AUDIT=false
+    --setenv=NPM_CONFIG_FUND=false
+    --setenv=NPM_CONFIG_USERCONFIG=/opt/jain-ci/authority/control-plane/ops/ci/npmrc.empty
     --setenv=NPM_CONFIG_GLOBALCONFIG=/dev/null
   )
 fi

@@ -354,7 +354,8 @@ for boundary_file in \
   ops/ci/host-ci-sandbox.sh ops/ci/host-ci-boundary-preflight.sh \
   ops/ci/host-ci-inputs.sh ops/ci/host-ci-inputs-test.sh \
   ops/ci/cargo-lock-closure.sh \
-  ops/ci/native-runtime.sh ops/ci/pnpm-runtime.sh ops/ci/host-ci-evidence.sh \
+  ops/ci/native-runtime.sh ops/ci/pnpm-runtime.sh ops/ci/npm-runtime.sh \
+  ops/ci/host-ci-evidence.sh \
   ops/ci/host-ci-proof-evidence.sh \
   ops/ci/pinned-advisory.sh \
   ops/ci/required.sh \
@@ -366,6 +367,10 @@ install -D -m 0644 "$repo_root/ops/ci/native-build-tools.lock.json" \
   "$control/ops/ci/native-build-tools.lock.json"
 install -D -m 0644 "$repo_root/ops/ci/pnpm-store.lock.json" \
   "$control/ops/ci/pnpm-store.lock.json"
+install -D -m 0644 "$repo_root/ops/ci/npm-cache.lock.json" \
+  "$control/ops/ci/npm-cache.lock.json"
+install -D -m 0644 "$repo_root/ops/ci/npmrc.empty" \
+  "$control/ops/ci/npmrc.empty"
 # The adversarial matrix deliberately creates more than the production
 # retention window before its final inode-tamper variants. Keep those fixture
 # receipts long enough to exercise the original sealed success authority.
