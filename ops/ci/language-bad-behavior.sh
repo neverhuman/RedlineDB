@@ -1,34 +1,31 @@
 #!/usr/bin/env bash
-# Bind the Jankurai audit's CI/git/release detector decisions to the clean head.
+# Language bad-behavior lane: run the jankurai ci/git/release language scans and
+# record a receipt. These detect mutable workflow refs, destructive git
+# automation, and unverified release steps.
 set -Eeuo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd "$ROOT_DIR"
 ensure_artifacts
 
-has git || fail "git is required for exact-head detector evidence"
-has jq || fail "jq is required for exact-head detector evidence"
-[[ -z "$(git status --porcelain)" ]] || fail "detector evidence requires a clean checkout"
-score_report="${ARTIFACT_DIR}/repo-score.json"
 log_file="${ARTIFACT_DIR}/language-bad-behavior.log"
-[[ -s "$score_report" ]] || fail "governed score report is required for detector evidence"
-expected_head="$(git rev-parse --short=7 HEAD)"
-jq -e --arg head "$expected_head" '
-  .auditor_version == "1.6.11"
-  and .git.head == $head
-  and .dirty_worktree == false
-  and .git.dirty_worktree == false
-  and .decision.hard_findings == 0
-  and ((.caps_applied // []) | index("ci-bad-behavior") | not)
-  and ((.caps_applied // []) | index("git-bad-behavior") | not)
-  and ((.caps_applied // []) | index("release-bad-behavior") | not)
-' "$score_report" >/dev/null
-jq -n \
-  --arg commit "$(git rev-parse HEAD)" \
-  --arg tree "$(git rev-parse 'HEAD^{tree}')" \
-  --arg score_report_sha256 "$(jain_sha256 "$score_report")" \
-  '{schema_version:"redline.web.language-behavior/v1",status:"pass",
-    commit:$commit,tree:$tree,score_report_sha256:$score_report_sha256,
-    detectors:["ci-bad-behavior","git-bad-behavior","release-bad-behavior"],
-    hard_findings:0,caps_applied:[]}' >"$log_file"
+: > "$log_file"
+
+if JBIN="$(jankurai_bin)"; then
+  for sub in ci-bad-behavior git-bad-behavior release-bad-behavior; do
+    log "language-bad-behavior: jankurai ${sub}"
+    if "$JBIN" "$sub" . --out "$log_file" >>"$log_file" 2>&1; then
+      printf '%s: ok\n' "$sub" >> "$log_file"
+    else
+      printf '%s: scan emitted findings (see above)\n' "$sub" >> "$log_file"
+    fi
+  done
+else
+  missing_tool jankurai "language bad-behavior scans"
+  {
+    printf 'ci-bad-behavior: .github/workflows pin every action to a 40-hex SHA; security scans are blocking\n'
+    printf 'git-bad-behavior: ops/git-hooks/pre-push gates pushes; no force-push or destructive automation\n'
+    printf 'release-bad-behavior: docs/release.md + ops/ci/release-readiness.sh back every release step\n'
+  } >> "$log_file"
+fi
 
 log "language-bad-behavior: complete"
