@@ -27,6 +27,38 @@ Provider repositories land and receive immutable tags before downstream Cargo
 Git pins and locks are refreshed. The complete family order and receipt
 locations are defined in [`release-runbook.md`](release-runbook.md).
 
+## Authority binding
+
+Tagging a member repository does **not** bind it. `splitctl release-candidate`
+journals lifecycle transitions only; it never writes this manifest. A member's
+release identity enters authority through a reviewed control-plane change to
+[`repos.manifest.toml`](../repos.manifest.toml), which is the change class this
+document governs.
+
+A row may only be bound when the member repository is genuinely at its release
+commit. Verify all three before writing a row:
+
+1. the member's `HEAD` is byte-identical to its **authenticated forge `main`** —
+   a local `main` or `origin/main` ref may be stale and is not authority;
+2. exactly one release-series immutable tag resolves to that same commit;
+3. the checkout is clean, so the tree checksum describes a fixed object.
+
+Write four fields plus `identity_status = "bound"` and `onboarded = true`:
+`current_tag`/`immutable_tag`, `release_commit`, `release_tree`, and
+`release_checksum_sha256`. `release_tree` is `HEAD^{tree}`, and
+`release_checksum_sha256` is the SHA-256 of `git archive --format=tar <commit>`
+— the same command `splitctl` runs internally — so the four-way exactness check
+compares like for like rather than against a transcribed value.
+
+Binding is the last step for a member and is deliberately separate from tagging,
+so an immutable tag can exist while authority still reads `pending`.
+
+**Ordering constraint.** Every write to this manifest changes its SHA-256, and a
+nested family's CI receipt binds that exact digest. Manifest writes must
+therefore all land *before* a nested family's evidence window is opened;
+regenerating that evidence first and binding afterwards invalidates it and forces
+the window to be reopened.
+
 For a host-CI boundary change, source review must also prove
 `ops/ci/host-ci-integrity-test.sh` and the privilege-separated
 `ops/ci/split-host-ci-integrity-test.sh`. The latter exercises the real
