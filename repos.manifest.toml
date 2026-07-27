@@ -1,6 +1,6 @@
 schema_version = "1"
 release_version = "10.0.0"
-expected_repo_count = 27
+expected_repo_count = 30
 status = "candidate"
 formal_ga = false
 sagemaker = "N/A"
@@ -49,6 +49,9 @@ required_repos = [
   "jain-ops",
   "jain-deploy",
   "jain-shard",
+  "jain-platform",
+  "jain-router",
+  "jain-fabric",
 ]
 
 retired_paths = [
@@ -138,23 +141,53 @@ family_registered = true
 default_branch = "main"
 required_check = "jain-index/required"
 
-[[excluded_path]]
-path = "/home/ubuntu/jain-split/jain-fabric"
-name = "jain-fabric"
-owner = "fabric"
-reason = "reviewed canonical source pending governed repository creation and v9 authority onboarding"
-
-[[excluded_path]]
+[[repo]]
 path = "/home/ubuntu/jain-split/jain-platform"
 name = "jain-platform"
-owner = "platform"
-reason = "active protected Platform implementation pending a separate authority onboarding"
+github_slug = "neverhuman/jain-platform"
+jeryu_slug = "veox/jain-platform"
+profile = "rust-workspace"
+role = "platform"
+default_branch = "main"
+rollout_wave = 5
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = false
+identity_status = "pending"
+required_check = "jain-platform/required"
+note = "Distributed platform runtime; W0 full-census onboarding (owner-ratified 2026-07-27); pending first onboarding landing."
 
-[[excluded_path]]
+[[repo]]
 path = "/home/ubuntu/jain-split/jain-router"
 name = "jain-router"
-owner = "router"
-reason = "clean stopped repository pending protected Router onboarding after the host-CI broker repair"
+github_slug = "neverhuman/jain-router"
+jeryu_slug = "veox/jain-router"
+profile = "rust-workspace"
+role = "router"
+default_branch = "main"
+rollout_wave = 5
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = false
+identity_status = "pending"
+required_check = "jain-router/required"
+note = "C08 router daemon + model custody; W0 full-census onboarding; bootstrap-main targets the reviewed active-branch head, NOT the stale local main."
+
+[[repo]]
+path = "/home/ubuntu/jain-split/jain-fabric"
+name = "jain-fabric"
+github_slug = "neverhuman/jain-fabric"
+jeryu_slug = "veox/jain-fabric"
+profile = "rust-workspace"
+role = "fabric"
+default_branch = "main"
+rollout_wave = 5
+has_jeryu_std = true
+onboarded = false
+mirror_github_main = false
+identity_status = "pending"
+required_check = "jain-fabric/required"
+note = "Coordination fabric wire contracts; W0 full-census onboarding; forge repo created 2026-07-27 (receipted); merge additionally gated on git-servability (registry-ACL card)."
 
 [[repo]]
 path = "/home/ubuntu/jain-split/jain-shard"
@@ -177,6 +210,12 @@ path = "/home/ubuntu/jain-split/jankurai-tools-tui"
 name = "jankurai-tools-tui"
 owner = "jankurai"
 reason = "temporary source custody only; requires governed creation and onboarding through corrected AUTH-006/007/008, then removal from exclusions"
+
+[[excluded_path]]
+path = "/home/ubuntu/jain-split/dope"
+name = "dope"
+owner = "workspace-ops"
+reason = "custody-import staging target for veox/dope (owner-ratified commit-as-baseline); becomes a [[repo]] row after import, proof surface, and registry closure"
 
 [[excluded_path]]
 path = "/home/ubuntu/jain-split/redline-split-ops"
