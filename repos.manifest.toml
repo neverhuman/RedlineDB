@@ -121,7 +121,22 @@ reason = "separately governed site repository; not a managed Jain candidate prod
 path = "/home/ubuntu/jain-split/jain-index"
 name = "jain-index"
 owner = "workspace-ops"
-reason = "pending tooling-repository authority extension; not a managed product row"
+reason = "tooling repository governed by [[tooling_repo]]; excluded_path retained so splitctl managed-checkout scans stay green (dual listing is deliberate)"
+
+# Developer-tooling registration (W0 census, owner-ratified full release 2026-07-27).
+# splitctl ignores this section by design (manifest_repos unions repo+infrastructure only);
+# the consumer-side validator is jain-index/src/render.rs::validate_tooling_manifest.
+# No release fields may ever be added here (tooling repos are not tag targets until G-012).
+[[tooling_repo]]
+name = "jain-index"
+path = "/home/ubuntu/jain-split/jain-index"
+kind = "developer-tooling"
+forge_owner = "veox"
+forge_slug = "veox/jain-index"
+remote = "http://127.0.0.1:8787/git/veox/jain-index.git"
+family_registered = true
+default_branch = "main"
+required_check = "jain-index/required"
 
 [[excluded_path]]
 path = "/home/ubuntu/jain-split/jain-fabric"
