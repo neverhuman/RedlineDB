@@ -1,6 +1,9 @@
 [advisories]
 version = 2
-db-path = "~/.cargo/advisory-db"
+# No explicit db-path: use cargo-deny's default ($CARGO_HOME/advisory-dbs),
+# which the sealed offline host CI pre-stages. A hardcoded ~/.cargo/advisory-db
+# points at an unstaged location and makes the advisory scan fail closed in the
+# network-isolated sandbox.
 yanked = "warn"
 ignore = []
 

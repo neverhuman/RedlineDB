@@ -24,8 +24,14 @@ if ! command -v gitleaks >/dev/null 2>&1 \
     ci_install_gitleaks
 fi
 
-# Hard gate: cargo-audit must succeed for the lane to pass.
-cargo audit
+# Network-gated: cargo-audit reads FETCH_HEAD metadata from a fetchable
+# advisory-db, which the network-isolated sealed host CI cannot provide (it
+# stages the pinned db for cargo-deny only). Run it only when the family opts
+# into a network scan, matching the family security-lane contract; cargo-deny
+# below remains the always-on offline advisory gate.
+if [[ "${JAIN_SECURITY_NETWORK:-0}" == "1" ]]; then
+    cargo audit
+fi
 
 # Hard gate: dependency, license, and source policy must all pass.
 cargo deny --all-features check 2>&1 \
