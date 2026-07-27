@@ -11,6 +11,21 @@ member of `repos.manifest.toml` (so `splitctl materialize --force` never touches
 Each family member remains an independent git repo with its own CI and forge
 remote; this repo only orchestrates them.
 
+## Agent-readable map
+
+- Architecture and the parent/root-broker/worker trust flow:
+  [`docs/architecture.md`](docs/architecture.md).
+- Owned and prohibited repository boundaries:
+  [`docs/boundaries.md`](docs/boundaries.md).
+- Exact local, adversarial host-CI, and sealed verification lanes:
+  [`docs/testing.md`](docs/testing.md).
+- Reviewed lifecycle, evidence, monitoring, and rollback:
+  [`docs/release.md`](docs/release.md).
+- Generated versus hand-authored zones:
+  [`agent/generated-zones.toml`](agent/generated-zones.toml).
+- Governed Jankurai tool, floor, ratchet, and cap policy:
+  [`agent/audit-policy.toml`](agent/audit-policy.toml).
+
 ## Runtime contract (no symlinks, explicit roots)
 - The family root (where the sibling repos + `target/bare-mirrors/` live) is the
   EXPLICIT `JAIN_SPLIT_ROOT` (default `/home/ubuntu/jain-split`), never derived
