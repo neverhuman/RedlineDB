@@ -1,6 +1,7 @@
 {
   "workspace": "redline-web",
   "owners": {
+    ".artifacts/": "ops",
     ".github/": "ops",
     ".gitignore": "ops",
     ".jankurai/": "ops",

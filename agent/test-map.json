@@ -1,6 +1,10 @@
 {
   "workspace": "redline-web",
   "tests": {
+    ".artifacts/": {
+      "command": "bash ops/ci/security.sh",
+      "purpose": "verify the security lane's SBOM and scan evidence is regenerated from the exact head"
+    },
     ".github/": {
       "command": "bash ops/ci/fast.sh",
       "purpose": "verify workflow syntax and local-CI routing"
