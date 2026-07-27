@@ -196,6 +196,10 @@ jq -e '
   | select(.cuda_compute_capability | type == "string")
   | select(.python_wheelhouse_required | type == "boolean")
   | select(.python_wheelhouse_inventory_sha256 | test("^[0-9a-f]{64}$"))
+  | select(.release_authority_projection_path
+      == "/opt/jain-ci/authority/release-authority.json")
+  | select(.release_authority_projection_sha256
+      | test("^[0-9a-f]{64}$"))
   | select(.commit | test("^[0-9a-f]{40}$"))' "$REEXEC_STATE" >/dev/null \
   || exit 2
 SOURCE_OPS_ROOT="$(realpath -e -- "$(jq -er '.source_root' "$REEXEC_STATE")")" \
@@ -242,6 +246,12 @@ JAIN_PYTHON_WHEELHOUSE_REQUIRED="$(
 )" || exit 2
 JAIN_PYTHON_WHEELHOUSE_INVENTORY_SHA256="$(
   jq -er '.python_wheelhouse_inventory_sha256' "$REEXEC_STATE"
+)" || exit 2
+JAIN_RELEASE_AUTHORITY_STATE_PATH="$(
+  jq -er '.release_authority_projection_path' "$REEXEC_STATE"
+)" || exit 2
+JAIN_RELEASE_AUTHORITY_STATE_SHA256="$(
+  jq -er '.release_authority_projection_sha256' "$REEXEC_STATE"
 )" || exit 2
 [[ "$SOURCE_OPS_ROOT" == "$OPS_ROOT" \
   && "$OPS_ROOT" == /opt/jain-ci/authority/control-plane \
@@ -326,6 +336,47 @@ verify_exact_control_plane_integrity || {
 }
 
 CANONICAL_MANIFEST="$OPS_ROOT/repos.manifest.toml"
+[[ "${JAIN_RELEASE_AUTHORITY_PROJECTION:-}" \
+    == "$JAIN_RELEASE_AUTHORITY_STATE_PATH" \
+  && "$JAIN_RELEASE_AUTHORITY_STATE_PATH" \
+    == /opt/jain-ci/authority/release-authority.json \
+  && "${JAIN_RELEASE_AUTHORITY_PROJECTION_SHA256:-}" \
+    == "$JAIN_RELEASE_AUTHORITY_STATE_SHA256" \
+  && "$JAIN_RELEASE_AUTHORITY_STATE_SHA256" =~ ^[0-9a-f]{64}$ \
+  && -f "$JAIN_RELEASE_AUTHORITY_STATE_PATH" \
+  && ! -L "$JAIN_RELEASE_AUTHORITY_STATE_PATH" \
+  && "$(realpath -e -- "$JAIN_RELEASE_AUTHORITY_STATE_PATH")" \
+    == "$JAIN_RELEASE_AUTHORITY_STATE_PATH" \
+  && "$(stat -c '%u:%g:%a:%h' -- "$JAIN_RELEASE_AUTHORITY_STATE_PATH")" \
+    == '0:0:444:1' \
+  && "$(stat -c '%s' -- "$JAIN_RELEASE_AUTHORITY_STATE_PATH")" -ge 2 \
+  && "$(stat -c '%s' -- "$JAIN_RELEASE_AUTHORITY_STATE_PATH")" -le 4096 \
+  && "$(sha256sum -- "$JAIN_RELEASE_AUTHORITY_STATE_PATH" | cut -d' ' -f1)" \
+    == "$JAIN_RELEASE_AUTHORITY_STATE_SHA256" ]] || {
+  printf '[split-host-ci] release authority projection custody is invalid\n' >&2
+  exit 2
+}
+CANONICAL_MANIFEST_SHA256="$(
+  sha256sum -- "$CANONICAL_MANIFEST" | cut -d' ' -f1
+)"
+jq -e \
+  --arg control_commit "$CONTROL_PLANE_COMMIT" \
+  --arg source_manifest_sha256 "$CANONICAL_MANIFEST_SHA256" '
+  select(type == "object")
+  | select(keys == ["control_commit","family","formal_ga","release_version",
+      "rollback_target","schema_version","source_manifest_sha256","status"])
+  | select(.schema_version == "jain.release-authority-projection/v1")
+  | select(.family == "jain-split")
+  | select(.control_commit == $control_commit)
+  | select(.source_manifest_sha256 == $source_manifest_sha256)
+  | select(.release_version == "10.0.0")
+  | select(.status == "candidate")
+  | select(.formal_ga == false)
+  | select(.rollback_target == "8.0.1")
+  ' "$JAIN_RELEASE_AUTHORITY_STATE_PATH" >/dev/null || {
+  printf '[split-host-ci] release authority projection is invalid\n' >&2
+  exit 2
+}
 # shellcheck source=ops/ci/host-ci-inputs.sh
 source "$OPS_ROOT/ops/ci/host-ci-inputs.sh"
 # shellcheck source=ops/ci/native-runtime.sh

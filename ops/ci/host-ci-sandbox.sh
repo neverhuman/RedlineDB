@@ -408,6 +408,8 @@ for name in "${environment_names[@]}"; do
     && "$name" != JAIN_NATIVE_BUILD_TOOLS_ROOT \
     && "$name" != JAIN_PYTHON_WHEELHOUSE_REQUIRED \
     && "$name" != JAIN_PYTHON_WHEELHOUSE_INVENTORY_SHA256 \
+    && "$name" != JAIN_RELEASE_AUTHORITY_PROJECTION \
+    && "$name" != JAIN_RELEASE_AUTHORITY_PROJECTION_SHA256 \
     && "$name" != CUDA_COMPUTE_CAP \
     && "$name" != JAIN_SPLIT_OPS_ROOT \
     && "$name" != JAIN_HOST_CI_REEXEC_STATE \
@@ -508,6 +510,72 @@ IFS=$'\t' read -r protected_owner protected_check cuda_required \
 [[ "${arguments[0]}" == "$protected_owner" \
   && "${arguments[4]}" == "$protected_check" ]] \
   || fail 'requested owner/check differs from manifest authority'
+
+# Project candidate release identity only from the authenticated, exact control
+# checkout. The caller cannot supply or override these bytes or their digest.
+release_authority_manifest="$control_root/repos.manifest.toml"
+release_authority_manifest_sha256="$(
+  sha256sum -- "$release_authority_manifest" | cut -d' ' -f1
+)"
+release_authority_manifest_json="$(
+  "$splitctl_path" manifest --manifest "$release_authority_manifest" --json
+)" || fail 'cannot read authenticated release authority manifest'
+release_authority_values="$(
+  jq -er --arg manifest_sha "$release_authority_manifest_sha256" '
+    select(.canonical_manifest_sha256 == $manifest_sha)
+    | select(.family.name == "jain-split")
+    | select(.release_version == "10.0.0")
+    | select(.release_status == "candidate")
+    | select(.formal_ga == false)
+    | select(.rollback_target == "8.0.1")
+    | [.release_version, .release_status, (.formal_ga | tostring),
+        .rollback_target] | @tsv
+  ' <<<"$release_authority_manifest_json"
+)" || fail 'authenticated release authority is not the v10 candidate'
+IFS=$'\t' read -r release_version release_status release_formal_ga \
+  release_rollback_target <<<"$release_authority_values"
+release_authority_projection="$worker_authority/release-authority.json"
+jq -n \
+  --arg control_commit "$control_commit" \
+  --arg source_manifest_sha256 "$release_authority_manifest_sha256" \
+  --arg release_version "$release_version" \
+  --arg status "$release_status" \
+  --argjson formal_ga "$release_formal_ga" \
+  --arg rollback_target "$release_rollback_target" \
+  '{schema_version:"jain.release-authority-projection/v1",
+    family:"jain-split",control_commit:$control_commit,
+    source_manifest_sha256:$source_manifest_sha256,
+    release_version:$release_version,status:$status,formal_ga:$formal_ga,
+    rollback_target:$rollback_target}' \
+  >"$release_authority_projection"
+chmod 0444 "$release_authority_projection"
+chown root:root "$release_authority_projection"
+release_authority_projection_sha256="$(
+  sha256sum -- "$release_authority_projection" | cut -d' ' -f1
+)"
+[[ ! -L "$release_authority_projection" \
+  && "$(stat -c '%u:%g:%a:%h' -- "$release_authority_projection")" \
+    == '0:0:444:1' \
+  && "$(stat -c '%s' -- "$release_authority_projection")" -ge 2 \
+  && "$(stat -c '%s' -- "$release_authority_projection")" -le 4096 \
+  && "$release_authority_projection_sha256" =~ ^[0-9a-f]{64}$ ]] \
+  || fail 'unsafe release authority projection custody'
+jq -e \
+  --arg control_commit "$control_commit" \
+  --arg source_manifest_sha256 "$release_authority_manifest_sha256" '
+  select(type == "object")
+  | select(keys == ["control_commit","family","formal_ga","release_version",
+      "rollback_target","schema_version","source_manifest_sha256","status"])
+  | select(.schema_version == "jain.release-authority-projection/v1")
+  | select(.family == "jain-split")
+  | select(.control_commit == $control_commit)
+  | select(.source_manifest_sha256 == $source_manifest_sha256)
+  | select(.release_version == "10.0.0")
+  | select(.status == "candidate")
+  | select(.formal_ga == false)
+  | select(.rollback_target == "8.0.1")
+  ' "$release_authority_projection" >/dev/null \
+  || fail 'invalid release authority projection'
 python_wheelhouse_required=false
 if [[ "$repo" == jain-python ]]; then
   python_wheelhouse_required=true
@@ -1008,6 +1076,10 @@ jq -n --arg commit "$control_commit" --arg result "$worker_result" \
   --argjson cuda_required "$cuda_required" \
   --arg python_wheelhouse_sha "$python_wheelhouse_inventory_sha256" \
   --argjson python_wheelhouse_required "$python_wheelhouse_required" \
+  --arg release_authority_projection_path \
+    /opt/jain-ci/authority/release-authority.json \
+  --arg release_authority_projection_sha \
+    "$release_authority_projection_sha256" \
   '{schema_version:"jain.host-ci-reexec/v6",
     source_root:"/opt/jain-ci/authority/control-plane",
     exact_root:"/opt/jain-ci/authority/control-plane",
@@ -1024,6 +1096,8 @@ jq -n --arg commit "$control_commit" --arg result "$worker_result" \
     cuda_compute_capability:$cuda_cap,
     python_wheelhouse_required:$python_wheelhouse_required,
     python_wheelhouse_inventory_sha256:$python_wheelhouse_sha,
+    release_authority_projection_path:$release_authority_projection_path,
+    release_authority_projection_sha256:$release_authority_projection_sha,
     splitctl_path:"/opt/jain-ci/authority/splitctl"}' \
   >"$worker_authority/reexec-state.json"
 chmod 0444 "$worker_authority/reexec-state.json"
@@ -1219,6 +1293,8 @@ systemd_args=(
   --setenv=JAIN_GRYPE_DB_ROOT=/opt/jain-ci/grype-db
   --setenv="JAIN_GRYPE_DB_INVENTORY_SHA256=$grype_db_inventory_sha256"
   --setenv=GRYPE_DB_CACHE_DIR=/opt/jain-ci/grype-db
+  --setenv=JAIN_RELEASE_AUTHORITY_PROJECTION=/opt/jain-ci/authority/release-authority.json
+  --setenv="JAIN_RELEASE_AUTHORITY_PROJECTION_SHA256=$release_authority_projection_sha256"
   --setenv="JAIN_NATIVE_EVIDENCE_STAGING_ROOT=$evidence_staging_root"
   --setenv="JAIN_AUDIT_INPUT_STAGING_ROOT=$audit_input_staging_root"
 )

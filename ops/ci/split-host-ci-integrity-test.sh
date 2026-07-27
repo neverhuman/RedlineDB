@@ -877,6 +877,52 @@ MONITOR
   else
     rm -- "$JAIN_CARGO_DENY_ADVISORY_DB/.write-probe"
   fi
+  release_authority_projection_valid=0
+  release_authority_projection="${JAIN_RELEASE_AUTHORITY_PROJECTION:-}"
+  release_authority_manifest=/opt/jain-ci/authority/control-plane/repos.manifest.toml
+  release_authority_control_commit="$(
+    git -C /opt/jain-ci/authority/control-plane rev-parse 'HEAD^{commit}'
+  )"
+  release_authority_manifest_sha256="$(
+    sha256sum -- "$release_authority_manifest" | cut -d' ' -f1
+  )"
+  if [[ "$release_authority_projection" \
+      == /opt/jain-ci/authority/release-authority.json \
+    && -f "$release_authority_projection" \
+    && ! -L "$release_authority_projection" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$release_authority_projection")" \
+      == '0:0:444:1' \
+    && "${JAIN_RELEASE_AUTHORITY_PROJECTION_SHA256:-}" \
+      == "$(sha256sum -- "$release_authority_projection" | cut -d' ' -f1)" ]] \
+    && jq -e \
+      --arg control_commit "$release_authority_control_commit" \
+      --arg source_manifest_sha256 "$release_authority_manifest_sha256" '
+      select(type == "object")
+      | select(keys == ["control_commit","family","formal_ga","release_version",
+          "rollback_target","schema_version","source_manifest_sha256","status"])
+      | select(.schema_version == "jain.release-authority-projection/v1")
+      | select(.family == "jain-split")
+      | select(.control_commit == $control_commit)
+      | select(.source_manifest_sha256 == $source_manifest_sha256)
+      | select(.release_version == "10.0.0")
+      | select(.status == "candidate")
+      | select(.formal_ga == false)
+      | select(.rollback_target == "8.0.1")
+      ' "$release_authority_projection" >/dev/null; then
+    release_authority_projection_valid=1
+  fi
+  release_authority_projection_write_blocked=0
+  if ! printf 'tampered\n' >"$release_authority_projection" 2>/dev/null; then
+    release_authority_projection_write_blocked=1
+  fi
+  release_authority_projection_swap_blocked=0
+  if ! mv -- "$release_authority_projection" \
+      /opt/jain-ci/authority/release-authority.swap 2>/dev/null; then
+    release_authority_projection_swap_blocked=1
+  else
+    mv -- /opt/jain-ci/authority/release-authority.swap \
+      "$release_authority_projection"
+  fi
   global_safe_directories_exact=0
   mapfile -t safe_directories < <(
     git config --global --get-all safe.directory 2>/dev/null || true
@@ -972,6 +1018,12 @@ MONITOR
     "$advisory_db_swap_blocked" >>"$probe"
   printf 'boundary_advisory_db_write_blocked=%s\n' \
     "$advisory_db_write_blocked" >>"$probe"
+  printf 'boundary_release_authority_projection_valid=%s\n' \
+    "$release_authority_projection_valid" >>"$probe"
+  printf 'boundary_release_authority_projection_write_blocked=%s\n' \
+    "$release_authority_projection_write_blocked" >>"$probe"
+  printf 'boundary_release_authority_projection_swap_blocked=%s\n' \
+    "$release_authority_projection_swap_blocked" >>"$probe"
   printf 'boundary_global_safe_directories_exact=%s\n' \
     "$global_safe_directories_exact" >>"$probe"
   printf 'boundary_evidence_staging_bounded=%s\n' \
@@ -1314,6 +1366,9 @@ grep -Fq 'boundary_command_git_config_validated=1' "$success_log"
 grep -Fq 'boundary_advisory_lock_writable=1' "$success_log"
 grep -Fq 'boundary_advisory_db_swap_blocked=1' "$success_log"
 grep -Fq 'boundary_advisory_db_write_blocked=1' "$success_log"
+grep -Fq 'boundary_release_authority_projection_valid=1' "$success_log"
+grep -Fq 'boundary_release_authority_projection_write_blocked=1' "$success_log"
+grep -Fq 'boundary_release_authority_projection_swap_blocked=1' "$success_log"
 grep -Fq 'boundary_global_safe_directories_exact=1' "$success_log"
 grep -Fq 'boundary_evidence_staging_bounded=1' "$success_log"
 grep -Fq 'boundary_survivor_started=1' "$success_log"
@@ -1937,7 +1992,9 @@ chmod 0600 "$fd_attack_request"
 cp -- "$fd_attack_request" "$tmp/fixed-worker-environment-base.json"
 for fixed_key in JAIN_SPLIT_OPS_ROOT JAIN_HOST_CI_REEXEC_STATE \
   JAIN_HOST_CI_NETWORK_ISOLATED JAIN_PINNED_ADVISORY_DB JAIN_ADVISORY_DB \
-  JAIN_CARGO_DENY_ADVISORY_DB JAIN_CONTRACT_BASE_REF CUDA_COMPUTE_CAP; do
+  JAIN_CARGO_DENY_ADVISORY_DB JAIN_CONTRACT_BASE_REF \
+  JAIN_RELEASE_AUTHORITY_PROJECTION \
+  JAIN_RELEASE_AUTHORITY_PROJECTION_SHA256 CUDA_COMPUTE_CAP; do
   fixed_log="$tmp/fixed-worker-environment-$fixed_key.log"
   fixed_forge_offset="$(stat -c '%s' "$forge_log")"
   jq --arg key "$fixed_key" \
