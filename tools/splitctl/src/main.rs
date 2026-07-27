@@ -15179,7 +15179,7 @@ path = "/home/ubuntu/jain-split/jeryu-split/jeryu-release-ops"
 remote = "http://127.0.0.1:8787/git/jeryu/jeryu-release-ops.git"
 required_check = "jeryu-release-ops/required"
 identity_status = "bound"
-predecessor_tag = "jeryu-release-ops-v5.0.0-split.1"
+predecessor_tag = "jeryu-release-ops-v5.0.0-split.3"
 inventory_status = "active"
 runtime_authority = "control-plane"
 [nested_families.redline]
