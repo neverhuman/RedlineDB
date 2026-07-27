@@ -39,7 +39,7 @@ run_step "copy-code" \
   "$JBIN" copy-code . --json "${ARTIFACT_DIR}/copy-code.json" --md "${ARTIFACT_DIR}/copy-code.md"
 
 run_step "security evidence" \
-  "$JBIN" security run . --script ops/ci/security.sh --strict --profile release \
+  "$JBIN" security run . --script tools/security-lane.sh --strict --profile release \
     --out "${ARTIFACT_DIR}/security/evidence.json"
 
 run_step "language bad-behavior" bash ops/ci/language-bad-behavior.sh

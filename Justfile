@@ -107,7 +107,7 @@ copy-code:
     bash ops/ci/governed-jankurai.sh copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
 
 security-evidence:
-    bash ops/ci/governed-jankurai.sh security run . --script ops/ci/security.sh --strict --profile release --out target/jankurai/security/evidence.json
+    bash ops/ci/governed-jankurai.sh security run . --script tools/security-lane.sh --strict --profile release --out target/jankurai/security/evidence.json
 
 language-bad-behavior:
     bash ops/ci/language-bad-behavior.sh
