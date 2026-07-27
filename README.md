@@ -9,7 +9,12 @@ This repository owns the family manifest, Rust contract materializer, local Jery
 runner, validation scripts, and release/tag orchestration helpers. It is not a
 product member repo and is not listed in `repos.manifest.toml`.
 
-Start with [AGENTS.md](AGENTS.md) for agent instructions.
+Start with [AGENTS.md](AGENTS.md) for agent instructions and its concise
+agent-readable map. Durable detail is routed to
+[architecture](docs/architecture.md), [boundaries](docs/boundaries.md),
+[testing](docs/testing.md), and the reviewed
+[release/evidence lifecycle](docs/release.md); generated-zone and audit-policy
+authority remain in the linked `agent/*.toml` manifests rather than prose.
 
 ## Quick Start
 
