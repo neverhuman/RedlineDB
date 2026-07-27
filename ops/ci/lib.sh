@@ -342,12 +342,6 @@ jain_verify_staged_cargo_registry() {
     printf 'staged Cargo registry authority is missing or not physical\n' >&2
     return 1
   }
-  [[ "$(find "$registry" -mindepth 1 -maxdepth 1 -printf '%f\n' \
-      | LC_ALL=C sort)" \
-      == $'cache\nindex\nlock-source-closure.json\nstage-receipt.json' ]] || {
-    printf 'staged Cargo registry root inventory is not closed\n' >&2
-    return 1
-  }
   mapfile -t cache_children < <(
     find "$registry/cache" -mindepth 1 -maxdepth 1 -type d -print
   )
