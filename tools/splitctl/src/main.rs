@@ -549,7 +549,6 @@ fn locked_cargo_inputs(lock_path: &Path) -> Result<LockedCargoInputs, Box<dyn st
 }
 
 fn governed_locked_git_repository(source: &str) -> Option<&str> {
-    let source = source.strip_prefix("git+http://127.0.0.1:8787/git/")?;
     let (identity, commit) = source.rsplit_once('#')?;
     if identity.contains('#') || !is_full_hex(commit, 40) {
         return None;
@@ -558,14 +557,25 @@ fn governed_locked_git_repository(source: &str) -> Option<&str> {
     if repo_path.contains('?') || !valid_cargo_cache_component(tag) {
         return None;
     }
-    let mut components = repo_path.split('/');
-    let owner = components.next().unwrap_or_default();
-    let repo = components
-        .next()
-        .and_then(|value| value.strip_suffix(".git"))
-        .unwrap_or_default();
-    (components.next().is_none()
-        && matches!(owner, "veox" | "jeryu" | "jain-split" | "redline")
+    let repo = if let Some(repo_path) = repo_path.strip_prefix("git+http://127.0.0.1:8787/git/") {
+        let mut components = repo_path.split('/');
+        let owner = components.next().unwrap_or_default();
+        let repo = components
+            .next()
+            .and_then(|value| value.strip_suffix(".git"))
+            .unwrap_or_default();
+        if components.next().is_some()
+            || !matches!(owner, "veox" | "jeryu" | "jain-split" | "redline")
+        {
+            return None;
+        }
+        repo
+    } else {
+        repo_path
+            .strip_prefix("git+https://github.com/neverhuman/")?
+            .strip_suffix(".git")?
+    };
+    (!repo.contains('/')
         && valid_cargo_cache_component(repo)
         && !repo.starts_with('.')
         && !repo.ends_with('.')
@@ -13429,8 +13439,15 @@ mod tests {
             "git+http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.4#3567bdced0ca1fe3671c9ebda876c914e2fc2c9e",
             "git+http://127.0.0.1:8787/git/jain-split/jain-core.git?tag=jain-core-v8.0.1-split.1#aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
             "git+http://127.0.0.1:8787/git/redline/redline-testing.git?tag=redline-testing-v4.1.0-jain.1#bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+            "git+https://github.com/neverhuman/jeryu-ci-runner.git?tag=jeryu-ci-runner-v5.0.0-split.0#8bd66f1d2d71621996de8af260611f36da849fb8",
         ];
-        let expected_repositories = ["jain-math", "redline-core", "jain-core", "redline-testing"];
+        let expected_repositories = [
+            "jain-math",
+            "redline-core",
+            "jain-core",
+            "redline-testing",
+            "jeryu-ci-runner",
+        ];
         for (source, expected_repository) in accepted.into_iter().zip(expected_repositories) {
             assert!(
                 governed_locked_git_repository(source).is_some(),
@@ -13443,7 +13460,12 @@ mod tests {
         }
 
         let rejected = [
-            "git+https://github.com/neverhuman/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
+            "git+https://github.com/other/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
+            "git+https://gitlab.com/neverhuman/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
+            "git+https://github.com/neverhuman/nested/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
+            "git+https://github.com/neverhuman/jain-math.git?branch=main#da87246d8339fab457b576bf0c08c3d394b9c92b",
+            "git+https://github.com/neverhuman/jain-math.git?tag=wrong-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
+            "git+https://github.com/neverhuman/jain-math.git?tag=jain-math-v8.0.1-split.1#DA87246D8339FAB457B576BF0C08C3D394B9C92B",
             "git+http://127.0.0.1:8787/git/unknown/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b",
             "git+http://127.0.0.1:8787/git/veox/jain-math.git?branch=main#da87246d8339fab457b576bf0c08c3d394b9c92b",
             "git+http://127.0.0.1:8787/git/veox/jain-math.git?tag=jain-math-v8.0.1-split.1",
@@ -13468,7 +13490,7 @@ mod tests {
         fs::write(
             &fixture.lock,
             format!(
-                "{registry_lock}\n[[package]]\nname = \"feat-math\"\nversion = \"8.0.1\"\nsource = \"git+http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b\"\n\n[[package]]\nname = \"feat-math-alias\"\nversion = \"8.0.1\"\nsource = \"git+http://127.0.0.1:8787/git/veox/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b\"\n"
+                "{registry_lock}\n[[package]]\nname = \"feat-math\"\nversion = \"8.0.1\"\nsource = \"git+http://127.0.0.1:8787/git/jeryu/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b\"\n\n[[package]]\nname = \"feat-math-alias\"\nversion = \"8.0.1\"\nsource = \"git+http://127.0.0.1:8787/git/veox/jain-math.git?tag=jain-math-v8.0.1-split.1#da87246d8339fab457b576bf0c08c3d394b9c92b\"\n\n[[package]]\nname = \"jeryu-ci-runner\"\nversion = \"5.0.0\"\nsource = \"git+https://github.com/neverhuman/jeryu-ci-runner.git?tag=jeryu-ci-runner-v5.0.0-split.0#8bd66f1d2d71621996de8af260611f36da849fb8\"\n"
             ),
         )
         .unwrap();
@@ -13487,7 +13509,10 @@ mod tests {
             serde_json::from_slice(&fs::read(&fixture.receipt).unwrap()).unwrap();
         assert_eq!(receipt["package_count"], 1);
         assert_eq!(receipt["packages"][0]["name"], "demo");
-        assert_eq!(receipt["governed_git_repositories"], json!(["jain-math"]));
+        assert_eq!(
+            receipt["governed_git_repositories"],
+            json!(["jain-math", "jeryu-ci-runner"])
+        );
         assert_eq!(
             receipt["lock_sha256s"],
             json!([sha256_regular_file(&fixture.lock, "test Cargo lock").unwrap()])
