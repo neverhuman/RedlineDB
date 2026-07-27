@@ -5,23 +5,29 @@ source "$(dirname "${BASH_SOURCE[0]}")/common.sh"
 cd "$ROOT_DIR"
 
 CARGO_AUDIT_BIN="$(command -v cargo-audit 2>/dev/null || true)"
-[[ -n "$CARGO_AUDIT_BIN" ]] || CARGO_AUDIT_BIN="/home/ubuntu/.cargo/bin/cargo-audit"
+[[ -n "$CARGO_AUDIT_BIN" && -f "$CARGO_AUDIT_BIN" \
+  && ! -L "$CARGO_AUDIT_BIN" ]] \
+  || CARGO_AUDIT_BIN="/home/ubuntu/.cargo/bin/cargo-audit"
 readonly CARGO_AUDIT_BIN
 CARGO_AUDIT_IDENTITY="${JAIN_REAL_CARGO_AUDIT:-$CARGO_AUDIT_BIN}"
 readonly CARGO_AUDIT_IDENTITY
 readonly CARGO_AUDIT_SHA256="1a17ff4c0449d1924aacda8dd20c06dccc3cceeed4dd17a71523f672bf97b70b"
 CARGO_DENY_BIN="$(command -v cargo-deny 2>/dev/null || true)"
-[[ -n "$CARGO_DENY_BIN" ]] || CARGO_DENY_BIN="/home/ubuntu/.cargo/bin/cargo-deny"
+[[ -n "$CARGO_DENY_BIN" && -f "$CARGO_DENY_BIN" \
+  && ! -L "$CARGO_DENY_BIN" ]] \
+  || CARGO_DENY_BIN="/home/ubuntu/.cargo/bin/cargo-deny"
 readonly CARGO_DENY_BIN
 CARGO_DENY_IDENTITY="${JAIN_REAL_CARGO_DENY:-$CARGO_DENY_BIN}"
 readonly CARGO_DENY_IDENTITY
 readonly CARGO_DENY_SHA256="ef27c757f50d77c5c2d9114fbc6ad45d2b8903506cead473a70b8ee659ea7a18"
 GITLEAKS_BIN="$(command -v gitleaks 2>/dev/null || true)"
-[[ -n "$GITLEAKS_BIN" ]] || GITLEAKS_BIN="/home/ubuntu/.cargo/bin/gitleaks"
+[[ -n "$GITLEAKS_BIN" && -f "$GITLEAKS_BIN" && ! -L "$GITLEAKS_BIN" ]] \
+  || GITLEAKS_BIN="/home/ubuntu/.cargo/bin/gitleaks"
 readonly GITLEAKS_BIN
 readonly GITLEAKS_SHA256="50b742abd7daad8bbddb6301f3017efb680632d9a5b3b4d8f137b3aac250e359"
 ZIZMOR_BIN="$(command -v zizmor 2>/dev/null || true)"
-[[ -n "$ZIZMOR_BIN" ]] || ZIZMOR_BIN="/home/ubuntu/.cargo/bin/zizmor"
+[[ -n "$ZIZMOR_BIN" && -f "$ZIZMOR_BIN" && ! -L "$ZIZMOR_BIN" ]] \
+  || ZIZMOR_BIN="/home/ubuntu/.cargo/bin/zizmor"
 readonly ZIZMOR_BIN
 readonly ZIZMOR_SHA256="6eabb307e2c0c35aa3b397d35518db66106c6909f86e7e0d7d898bc6587aa7fc"
 SYFT_BIN="$(command -v syft 2>/dev/null || true)"
