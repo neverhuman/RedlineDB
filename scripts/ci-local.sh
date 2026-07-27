@@ -12,6 +12,8 @@
 #   scripts/ci-local.sh security           # cargo audit + cargo deny + gitleaks
 #   scripts/ci-local.sh audit              # full jankurai audit lane
 #   scripts/ci-local.sh score              # release score lane
+#   scripts/ci-local.sh contract-drift     # governed contract-drift lane
+#   scripts/ci-local.sh artifact-support   # release artifact smoke lane
 #   scripts/ci-local.sh dependency-review  # local dependency-review mirror
 #   scripts/ci-local.sh sqlite-parity-report # local SQLite parity report update
 #   scripts/ci-local.sh pr-gate            # PR freshness + staged jankurai gate
@@ -25,7 +27,7 @@ cd "$ROOT"
 
 usage() {
     cat >&2 <<'USAGE'
-usage: scripts/ci-local.sh {required|pr-ci|fast|security|audit|score|dependency-review|sqlite-parity-report|jankurai-tools|pr-gate|all}
+usage: scripts/ci-local.sh {required|pr-ci|fast|security|audit|score|contract-drift|artifact-support|dependency-review|sqlite-parity-report|jankurai-tools|pr-gate|all}
 
   required            run ops/ci/pr-ci.sh                 (canonical host-required lane)
   pr-ci              run the exact local mirror of .github/workflows/ci.yml
@@ -33,6 +35,8 @@ usage: scripts/ci-local.sh {required|pr-ci|fast|security|audit|score|dependency-
   security            run ops/ci/security.sh            (cargo audit + deny + gitleaks)
   audit               run ops/ci/jankurai-audit.sh      (full jankurai audit lane)
   score               run scripts/just/run.sh score    (release score lane)
+  contract-drift      run the governed Jankurai contract-drift lane
+  artifact-support    build, checksum, install, and smoke-test release artifacts
   dependency-review   run ops/ci/dependency-review.sh   (cargo deny advisories/bans/licenses/sources)
   sqlite-parity-report run ops/ci/sqlite-parity-report.sh update
   jankurai-tools      run every jankurai-tools matrix lane plus input-boundary cross-check
@@ -92,6 +96,12 @@ case "$1" in
         ;;
     score)
         bash "$ROOT/scripts/just/run.sh" score
+        ;;
+    contract-drift)
+        bash "$ROOT/ops/ci/jankurai-tools.sh" contract-drift
+        ;;
+    artifact-support)
+        bash "$ROOT/scripts/just/run.sh" release-binary-smoke
         ;;
     dependency-review)
         bash "$ROOT/ops/ci/dependency-review.sh"
