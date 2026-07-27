@@ -7,7 +7,7 @@ comes only from [`repos.manifest.toml`](../repos.manifest.toml). Candidate
 metadata remains `formal_ga = false`; this process does not authorize a
 production promotion.
 
-## Protected release process
+## Reviewed lifecycle
 
 1. Start from canonical protected `main`, preserve linear history, and commit
    only the reviewed control-plane delta.
@@ -27,7 +27,15 @@ Provider repositories land and receive immutable tags before downstream Cargo
 Git pins and locks are refreshed. The complete family order and receipt
 locations are defined in [`release-runbook.md`](release-runbook.md).
 
-## Integrity and proof evidence
+For a host-CI boundary change, source review must also prove
+`ops/ci/host-ci-integrity-test.sh` and the privilege-separated
+`ops/ci/split-host-ci-integrity-test.sh`. The latter exercises the real
+parent/root-broker/worker boundary, caller-input rejection, immutable mounts,
+namespace isolation, and one-shot publication. Installing reviewed broker
+bytes is not part of a source PR; it occurs only after the protected merge by
+the procedure in `ops/ci/HOST_CI_BOUNDARY.md`.
+
+## Evidence
 
 The release record binds the full commit and tree, deterministic archive
 SHA-256, manifest and policy digests, exact CI head, required-check readback, and
@@ -58,6 +66,24 @@ It seals the auditor report and validated
 status, and that status must also be read back. Repository, SHA, policy, auditor,
 score, ratchet, conformance, clean-tree, run, attempt, seal, or readback
 mismatches fail closed.
+
+The root sandbox derives `jain.release-authority-projection/v1` from the exact
+authenticated control-plane commit and its committed `repos.manifest.toml`.
+The closed projection binds the control commit, manifest SHA-256, Jain family,
+release `10.0.0`, `status=candidate`, `formal_ga=false`, and rollback `8.0.1`.
+It is exposed only as the physical, root-owned, mode-`0444`, single-link
+`/opt/jain-ci/authority/release-authority.json`; the worker receives that path
+and its SHA-256 from root-owned state. Caller-supplied path or checksum values,
+wrong or extra fields, a different manifest digest, mutable custody, and any
+GA/status/rollback change fail before product artifact evidence can pass.
+Product receipts bind the accepted projection digest; they do not turn
+candidate metadata into production authorization.
+
+Committed lifecycle evidence belongs under
+`docs/release-evidence/10.0.0/`. Ephemeral exact-head audit, sandbox, repair,
+and artifact outputs stay under `target/`; forge readback receipts identify the
+repository, full commit, check, attempt, and immutable tag rather than relying
+on a branch name or prose status.
 
 ## Installation and monitoring
 

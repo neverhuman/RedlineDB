@@ -16,6 +16,49 @@ For family-level proof, run each changed member repo's `just required` and
 `just score` from its own checkout, then post statuses through
 `ops/ci/split-host-ci.sh`.
 
+## Host-CI boundary tests
+
+Changes to `ops/ci/host-ci-sandbox.sh` or `ops/ci/split-host-ci.sh` require both
+boundary layers:
+
+```bash
+bash ops/ci/host-ci-integrity-test.sh
+bash ops/ci/split-host-ci-integrity-test.sh
+```
+
+The first is a fast structural contract test. The second is the privileged
+adversarial integration matrix: it installs disposable reviewed broker bytes,
+uses standalone no-local Git materialization, creates isolated PID/user/mount
+and network namespaces, exercises the worker, seals evidence, and verifies
+one-shot publication. Its temporary state is removed automatically.
+
+Release-authority coverage proves both success and hostile cases. The success
+probe checks the exact eight-key projection, control commit, committed manifest
+digest, candidate fields, root ownership, `0444` mode, single link, and
+root-supplied SHA-256. It also proves worker writes and renames are blocked.
+Crafted parent requests carrying either `JAIN_RELEASE_AUTHORITY_PROJECTION` or
+`JAIN_RELEASE_AUTHORITY_PROJECTION_SHA256` must be rejected before a worker or
+forge request starts. The Jain Ops consumer fixture additionally rejects a
+missing path, symlink, wrong custody or checksum, malformed/extra fields, and
+wrong release, status, formal-GA, or rollback values.
+
+## Sealed release verification
+
+Host-local `just required` checks the live checkout/remotes census and may
+correctly fail when another claimed repository is dirty, unmanaged, or pending
+custody. That is an external preflight result, not permission to skip a test or
+rewrite another agent's state. The authoritative PR check runs the same source
+from the configured root-sealed host-CI parent. There the worker validates the
+authenticated outer projection and does not treat mutable host checkout remotes
+as source authority.
+
+Before publication, run full and true `--changed-fast` Jankurai against the
+exact protected base. Both reports must pass the policy floor and ratchet with
+zero caps and zero hard findings. A full score cannot hide a changed-fast cap.
+After source review, one fresh root-sealed run must publish a common-root
+`jankurai/proof` and `<repo>/required` pair for the exact PR head; stale or
+mixed-attempt checks are not reusable.
+
 ## Release-candidate launch gates
 
 The 8.0.1 result remains a release candidate until a separately authorized
