@@ -261,6 +261,11 @@ mod tests {
     fn pins_current_thread_to_effective_node_and_restores_affinity() {
         let original = sched_getaffinity(None).unwrap();
         let _restore = RestoreAffinity(original);
+        if let Err(error) = sched_setaffinity(None, &original) {
+            eprintln!("skipping real affinity pin: sandbox denies sched_setaffinity: {error}");
+            assert_eq!(sched_getaffinity(None).unwrap(), original);
+            return;
+        }
         let nodes = effective_nodes_from_sysfs(Path::new(SYSFS_NODE_ROOT), &original).unwrap();
         let Some(first) = nodes.first() else {
             assert_eq!(numa_node_count(), 1);
