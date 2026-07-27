@@ -31,9 +31,10 @@ For a host-CI boundary change, source review must also prove
 `ops/ci/host-ci-integrity-test.sh` and the privilege-separated
 `ops/ci/split-host-ci-integrity-test.sh`. The latter exercises the real
 parent/root-broker/worker boundary, caller-input rejection, immutable mounts,
-namespace isolation, and one-shot publication. Installing reviewed broker
-bytes is not part of a source PR; it occurs only after the protected merge by
-the procedure in `ops/ci/HOST_CI_BOUNDARY.md`.
+namespace isolation, and one-shot publication. Outside the cycle-breaking
+self-check exception documented below, installing reviewed broker bytes is not
+part of a source PR; ordinary installation occurs only after the protected
+merge by the procedure in `ops/ci/HOST_CI_BOUNDARY.md`.
 
 ## Evidence
 
