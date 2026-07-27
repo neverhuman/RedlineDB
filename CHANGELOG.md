@@ -12,6 +12,9 @@
   the exact all-three allocator combination uses the default mimalloc while
   compiling every optional allocator dependency. Normal single-allocator
   builds are unchanged, and zero or exactly two allocators remain rejected.
+- Switched the existing snmalloc option from its default CMake backend to its
+  supported direct C++17 build, preserving wait-on-address behavior without
+  requiring CMake in the sealed release environment.
 
 ## [4.1.0] - 2026-05-29
 

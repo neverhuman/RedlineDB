@@ -27,10 +27,13 @@ memchr = "2"
 memmap2 = "0.9.11"
 mimalloc = { version = "0.1", default-features = false, optional = true }
 tikv-jemallocator = { version = "0.6", optional = true }
-# snmalloc-rs requires a working `cmake` and a C++17 toolchain at build time.
-# It is opt-in via the `alloc-snmalloc` feature so default builds (mimalloc) do
-# not regress on hosts without cmake.
-snmalloc-rs = { version = "0.3", optional = true }
+# Build snmalloc's Rust shim directly with the supported C++17 `cc` backend;
+# this avoids a CMake dependency while retaining wait-on-address behavior.
+snmalloc-rs = { version = "0.3", default-features = false, features = [
+    "build_cc",
+    "usecxx17",
+    "usewait-on-address",
+], optional = true }
 
 [dev-dependencies]
 assert_cmd = "2"
