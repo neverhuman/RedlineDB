@@ -12,6 +12,14 @@ This repo may edit:
 This repo should not own product source. Product changes belong in the matching
 split member repository, then flow through local Jeryu PRs and immutable tags.
 
+The control plane owns closed dependency-cache formats, validation, and
+root-side provisioning. A product repo owns its dependency lock. Redline Web's
+`apps/web/package-lock.json` is therefore an input to the
+`jain.npm-cache/v1` authority, not control-plane product source. The immutable
+root cache is never exposed writable; only its validated per-request copy
+crosses into the network-isolated worker. Ambient home-directory caches and
+network fallback remain outside the boundary.
+
 Generated member standards are changed through the Rust `splitctl` contract
 commands first (`cargo run --locked -- refresh-ci-contract`), then regenerated
 or manually ported with the same content. The old Python materializer is

@@ -50,6 +50,9 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
   required/proof selection, ratchet validation, and deterministic repair queue.
 - `cargo run --locked -- validate-local-jeryu`: local-source policy validator.
 - `ops/ci/split-host-ci.sh`: local Jeryu required-check runner.
+- `ops/ci/npm-cache.lock.json`: closed Redline Web npm authority; see
+  [boundaries](docs/boundaries.md) and
+  [release/rollback](docs/release.md) for custody and provisioning.
 - `ops/ci/HOST_CI_BOUNDARY.md`: root-owned sandbox, proof-evidence, result-seal,
   and publication contract.
 - `docs/local-jeryu-forge-agent-workflow.md`: PR and status workflow.
