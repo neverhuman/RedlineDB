@@ -1,0 +1,1046 @@
+{
+  "governed_git_repositories": [
+    "jain-core",
+    "jain-domain",
+    "jain-math",
+    "jain-starforge"
+  ],
+  "lock_count": 1,
+  "lock_sha256s": [
+    "d349590950ab13ee69dc21cfcebb8cc33fb252efa949b1d10e296ca10bd83b76"
+  ],
+  "package_count": 206,
+  "packages": [
+    {
+      "checksum": "320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa",
+      "name": "adler2",
+      "version": "2.0.1"
+    },
+    {
+      "checksum": "5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75",
+      "name": "ahash",
+      "version": "0.8.12"
+    },
+    {
+      "checksum": "ddd31a130427c27518df266943a5308ed92d4b226cc639f5a8f1002816174301",
+      "name": "aho-corasick",
+      "version": "1.1.4"
+    },
+    {
+      "checksum": "683d7910e743518b0e34f1186f92494becacb047c7b6bf616c96772180fef923",
+      "name": "allocator-api2",
+      "version": "0.2.21"
+    },
+    {
+      "checksum": "824a212faf96e9acacdbd09febd34438f8f711fb84e09a8916013cd7815ca28d",
+      "name": "anstream",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000",
+      "name": "anstyle",
+      "version": "1.0.14"
+    },
+    {
+      "checksum": "52ce7f38b242319f7cabaa6813055467063ecdc9d355bbb4ce0c68908cd8130e",
+      "name": "anstyle-parse",
+      "version": "1.0.0"
+    },
+    {
+      "checksum": "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc",
+      "name": "anstyle-query",
+      "version": "1.1.5"
+    },
+    {
+      "checksum": "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d",
+      "name": "anstyle-wincon",
+      "version": "3.0.11"
+    },
+    {
+      "checksum": "2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3",
+      "name": "anyhow",
+      "version": "1.0.103"
+    },
+    {
+      "checksum": "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53",
+      "name": "autocfg",
+      "version": "1.5.1"
+    },
+    {
+      "checksum": "9e1b586273c5702936fe7b7d6896644d8be71e6314cfe09d3167c95f712589e8",
+      "name": "base64",
+      "version": "0.13.1"
+    },
+    {
+      "checksum": "08807e080ed7f9d5433fa9b275196cfc35414f66a0c79d864dc51a0d825231a3",
+      "name": "bit-set",
+      "version": "0.8.0"
+    },
+    {
+      "checksum": "5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7",
+      "name": "bit-vec",
+      "version": "0.8.0"
+    },
+    {
+      "checksum": "b588b76d00fde79687d7646a9b5bdf3cc0f655e0bbd080335a95d7e96f3587da",
+      "name": "bitflags",
+      "version": "2.13.1"
+    },
+    {
+      "checksum": "46502ad458c9a52b69d4d4d32775c788b7a1b85e8bc9d482d92250fc0e3f8efe",
+      "name": "blake2",
+      "version": "0.10.6"
+    },
+    {
+      "checksum": "3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71",
+      "name": "block-buffer",
+      "version": "0.10.4"
+    },
+    {
+      "checksum": "72f5acc6cb2ba439de613abc23857ec3d78374d8ed5ac84e9d11336e87da8649",
+      "name": "bumpalo",
+      "version": "3.20.3"
+    },
+    {
+      "checksum": "d6aedf8ae72766347502cf3cb4f41cf5e9cc37d28bee90f1fdaaae15f9cf9424",
+      "name": "bytemuck",
+      "version": "1.25.1"
+    },
+    {
+      "checksum": "f65693059b6b9c588b9f62fed1cedbf0a8b805631457ea162d68f0de186f3de5",
+      "name": "bytemuck_derive",
+      "version": "1.11.0"
+    },
+    {
+      "checksum": "1fd0f2584146f6f2ef48085050886acf353beff7305ebd1ae69500e27c67f64b",
+      "name": "byteorder",
+      "version": "1.5.0"
+    },
+    {
+      "checksum": "fc652a48c352aef3ea3aed32080501cf3ef6ed5da78602a020c991775b0aff04",
+      "name": "bytes",
+      "version": "1.12.1"
+    },
+    {
+      "checksum": "5ecb245093b0f791b89d3420c3df9c6d49c60ab63ba54db896bf8a3baf486706",
+      "name": "candle-core",
+      "version": "0.11.0"
+    },
+    {
+      "checksum": "eaa10b6ccc365b33210ce404fbf45e60d3e0bdac1004463cf1052e6ee1c1739a",
+      "name": "candle-nn",
+      "version": "0.11.0"
+    },
+    {
+      "checksum": "dec551ab6e7578819132c713a93c022a05d60159dc86e7a7050223577484c55a",
+      "name": "castaway",
+      "version": "0.2.4"
+    },
+    {
+      "checksum": "e17dd265a7d0f31ef544e1b20e03add05d3b45b491b633b10d67145d2acc1a38",
+      "name": "cc",
+      "version": "1.2.67"
+    },
+    {
+      "checksum": "9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801",
+      "name": "cfg-if",
+      "version": "1.0.4"
+    },
+    {
+      "checksum": "dd059f9da4f5c36b3787f65d38ccaab1cc315f07b01f89abc8359ee6a8205011",
+      "name": "clap",
+      "version": "4.6.2"
+    },
+    {
+      "checksum": "f09628afdcc538b57f3c6341e9c8e9970f18e4a481690a64974d7023bd33548b",
+      "name": "clap_builder",
+      "version": "4.6.2"
+    },
+    {
+      "checksum": "f2ce8604710f6733aa641a2b3731eaa1e8b3d9973d5e3565da11800813f997a9",
+      "name": "clap_derive",
+      "version": "4.6.1"
+    },
+    {
+      "checksum": "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9",
+      "name": "clap_lex",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570",
+      "name": "colorchoice",
+      "version": "1.0.5"
+    },
+    {
+      "checksum": "9dfdd1c2274d9aa354115b09dc9a901d6c5576818cdf70d14cae2bdb47df00ab",
+      "name": "compact_str",
+      "version": "0.9.1"
+    },
+    {
+      "checksum": "59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280",
+      "name": "cpufeatures",
+      "version": "0.2.17"
+    },
+    {
+      "checksum": "9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511",
+      "name": "crc32fast",
+      "version": "1.5.0"
+    },
+    {
+      "checksum": "5181e0de7b61eb03a81e347d6dd8797bae9da5146707b51077e2d71a54ec0ceb",
+      "name": "crossbeam-deque",
+      "version": "0.8.7"
+    },
+    {
+      "checksum": "2d6914041f254d6e9176c01941b21115dcfb7089e55135a35411081bd106ef3f",
+      "name": "crossbeam-epoch",
+      "version": "0.9.20"
+    },
+    {
+      "checksum": "61803da095bee82a81bb1a452ecc25d3b2f1416d1897eb86430c6159ef717c17",
+      "name": "crossbeam-utils",
+      "version": "0.8.22"
+    },
+    {
+      "checksum": "460fbee9c2c2f33933d720630a6a0bac33ba7053db5344fac858d4b8952d77d5",
+      "name": "crunchy",
+      "version": "0.2.4"
+    },
+    {
+      "checksum": "78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a",
+      "name": "crypto-common",
+      "version": "0.1.7"
+    },
+    {
+      "checksum": "52cd9d68cf7efc6ddfaaee42e7288d3a99d613d4b50f76ce9827ae0c6e14f938",
+      "name": "csv",
+      "version": "1.4.0"
+    },
+    {
+      "checksum": "704a3c26996a80471189265814dbc2c257598b96b8a7feae2d31ace646bb9782",
+      "name": "csv-core",
+      "version": "0.1.13"
+    },
+    {
+      "checksum": "fc7f46116c46ff9ab3eb1597a45688b6715c6e628b5c133e288e709a29bcb4ee",
+      "name": "darling",
+      "version": "0.20.11"
+    },
+    {
+      "checksum": "0d00b9596d185e565c2207a0b01f8bd1a135483d02d9b7b0a54b11da8d53412e",
+      "name": "darling_core",
+      "version": "0.20.11"
+    },
+    {
+      "checksum": "fc34b93ccb385b40dc71c6fceac4b2ad23662c7eeb248cf10d529b7e055b6ead",
+      "name": "darling_macro",
+      "version": "0.20.11"
+    },
+    {
+      "checksum": "8b1e3a325bc115f096c8b77bbf027a7c2592230e70be2d985be950d3d5e60ebe",
+      "name": "dary_heap",
+      "version": "0.3.9"
+    },
+    {
+      "checksum": "507dfb09ea8b7fa618fcf76e953f4f5e192547945816d5358edffe39f6f94947",
+      "name": "derive_builder",
+      "version": "0.20.2"
+    },
+    {
+      "checksum": "2d5bcf7b024d6835cfb3d473887cd966994907effbe9227e8c8219824d06c4e8",
+      "name": "derive_builder_core",
+      "version": "0.20.2"
+    },
+    {
+      "checksum": "ab63b0e2bf4d5928aff72e83a7dace85d7bba5fe12dcc3c5a572d78caffd3f3c",
+      "name": "derive_builder_macro",
+      "version": "0.20.2"
+    },
+    {
+      "checksum": "9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292",
+      "name": "digest",
+      "version": "0.10.7"
+    },
+    {
+      "checksum": "1c4713e43e2886ba72b8271aa66c93d722116acf7a75555cce11dcde84388fe8",
+      "name": "dyn-stack",
+      "version": "0.13.2"
+    },
+    {
+      "checksum": "e1d926b4d407d372f141f93bb444696142c29d32962ccbd3531117cf3aa0bfa9",
+      "name": "dyn-stack-macros",
+      "version": "0.1.3"
+    },
+    {
+      "checksum": "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e",
+      "name": "either",
+      "version": "1.16.0"
+    },
+    {
+      "checksum": "a1e6a265c649f3f5979b601d26f1d05ada116434c87741c9493cb56218f76cbc",
+      "name": "enum-as-inner",
+      "version": "0.6.1"
+    },
+    {
+      "checksum": "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f",
+      "name": "equivalent",
+      "version": "1.0.2"
+    },
+    {
+      "checksum": "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb",
+      "name": "errno",
+      "version": "0.3.14"
+    },
+    {
+      "checksum": "d817e038c30374a4bcb22f94d0a8a0e216958d4c3dcde369b1439fec4bdda6e6",
+      "name": "esaxx-rs",
+      "version": "0.1.10"
+    },
+    {
+      "checksum": "9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6",
+      "name": "fastrand",
+      "version": "2.4.1"
+    },
+    {
+      "checksum": "5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582",
+      "name": "find-msvc-tools",
+      "version": "0.1.9"
+    },
+    {
+      "checksum": "843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c",
+      "name": "flate2",
+      "version": "1.1.9"
+    },
+    {
+      "checksum": "c2d1f04709a8ac06e8e8042875a3c466cc4832d3c1a18dbcb9dba3c6e83046bc",
+      "name": "float8",
+      "version": "0.7.0"
+    },
+    {
+      "checksum": "3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1",
+      "name": "fnv",
+      "version": "1.0.7"
+    },
+    {
+      "checksum": "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb",
+      "name": "foldhash",
+      "version": "0.2.0"
+    },
+    {
+      "checksum": "8b147ee9d1f6d097cef9ce628cd2ee62288d963e16fb287bd9286455b241382d",
+      "name": "futures",
+      "version": "0.3.32"
+    },
+    {
+      "checksum": "07bbe89c50d7a535e539b8c17bc0b49bdb77747034daa8087407d655f3f7cc1d",
+      "name": "futures-channel",
+      "version": "0.3.32"
+    },
+    {
+      "checksum": "7e3450815272ef58cec6d564423f6e755e25379b217b0bc688e295ba24df6b1d",
+      "name": "futures-core",
+      "version": "0.3.32"
+    },
+    {
+      "checksum": "baf29c38818342a3b26b5b923639e7b1f4a61fc5e76102d4b1981c6dc7a7579d",
+      "name": "futures-executor",
+      "version": "0.3.32"
+    },
+    {
+      "checksum": "cecba35d7ad927e23624b22ad55235f2239cfa44fd10428eecbeba6d6a717718",
+      "name": "futures-io",
+      "version": "0.3.32"
+    },
+    {
+      "checksum": "e835b70203e41293343137df5c0664546da5745f82ec9b84d40be8336958447b",
+      "name": "futures-macro",
+      "version": "0.3.32"
+    },
+    {
+      "checksum": "c39754e157331b013978ec91992bde1ac089843443c49cbc7f46150b0fad0893",
+      "name": "futures-sink",
+      "version": "0.3.32"
+    },
+    {
+      "checksum": "037711b3d59c33004d3856fbdc83b99d4ff37a24768fa1be9ce3538a1cde4393",
+      "name": "futures-task",
+      "version": "0.3.32"
+    },
+    {
+      "checksum": "389ca41296e6190b48053de0321d02a77f32f8a5d2461dd38762c0593805c6d6",
+      "name": "futures-util",
+      "version": "0.3.32"
+    },
+    {
+      "checksum": "aa0673db364b12263d103b68337a68fbecc541d6f6b61ba72fe438654709eacb",
+      "name": "gemm",
+      "version": "0.19.0"
+    },
+    {
+      "checksum": "086936dbdcb99e37aad81d320f98f670e53c1e55a98bee70573e83f95beb128c",
+      "name": "gemm-c32",
+      "version": "0.19.0"
+    },
+    {
+      "checksum": "20c8aeeeec425959bda4d9827664029ba1501a90a0d1e6228e48bef741db3a3f",
+      "name": "gemm-c64",
+      "version": "0.19.0"
+    },
+    {
+      "checksum": "88027625910cc9b1085aaaa1c4bc46bb3a36aad323452b33c25b5e4e7c8e2a3e",
+      "name": "gemm-common",
+      "version": "0.19.0"
+    },
+    {
+      "checksum": "e3df7a55202e6cd6739d82ae3399c8e0c7e1402859b30e4cb780e61525d9486e",
+      "name": "gemm-f16",
+      "version": "0.19.0"
+    },
+    {
+      "checksum": "02e0b8c9da1fbec6e3e3ab2ce6bc259ef18eb5f6f0d3e4edf54b75f9fd41a81c",
+      "name": "gemm-f32",
+      "version": "0.19.0"
+    },
+    {
+      "checksum": "056131e8f2a521bfab322f804ccd652520c79700d81209e9d9275bbdecaadc6a",
+      "name": "gemm-f64",
+      "version": "0.19.0"
+    },
+    {
+      "checksum": "85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a",
+      "name": "generic-array",
+      "version": "0.14.7"
+    },
+    {
+      "checksum": "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0",
+      "name": "getrandom",
+      "version": "0.2.17"
+    },
+    {
+      "checksum": "899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd",
+      "name": "getrandom",
+      "version": "0.3.4"
+    },
+    {
+      "checksum": "300e883d756b2e4ec94e02791f39b04b522276138852cfc41d9fb7e904106099",
+      "name": "getrandom",
+      "version": "0.4.3"
+    },
+    {
+      "checksum": "6ea2d84b969582b4b1864a92dc5d27cd2b77b622a8d79306834f1be5ba20d84b",
+      "name": "half",
+      "version": "2.7.1"
+    },
+    {
+      "checksum": "841d1cc9bed7f9236f321df977030373f4a4163ae1a7dbfe1a51a2c1a51d9100",
+      "name": "hashbrown",
+      "version": "0.16.1"
+    },
+    {
+      "checksum": "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a",
+      "name": "hashbrown",
+      "version": "0.17.1"
+    },
+    {
+      "checksum": "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea",
+      "name": "heck",
+      "version": "0.5.0"
+    },
+    {
+      "checksum": "fc0fef456e4baa96da950455cd02c081ca953b141298e41db3fc7e36b1da849c",
+      "name": "hermit-abi",
+      "version": "0.5.2"
+    },
+    {
+      "checksum": "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39",
+      "name": "ident_case",
+      "version": "1.0.1"
+    },
+    {
+      "checksum": "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9",
+      "name": "indexmap",
+      "version": "2.14.0"
+    },
+    {
+      "checksum": "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695",
+      "name": "is_terminal_polyfill",
+      "version": "1.70.2"
+    },
+    {
+      "checksum": "2b192c782037fadd9cfa75548310488aabdbf3d2da73885b31bd0abd03351285",
+      "name": "itertools",
+      "version": "0.14.0"
+    },
+    {
+      "checksum": "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682",
+      "name": "itoa",
+      "version": "1.0.18"
+    },
+    {
+      "checksum": "68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66",
+      "name": "libc",
+      "version": "0.2.186"
+    },
+    {
+      "checksum": "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981",
+      "name": "libm",
+      "version": "0.2.16"
+    },
+    {
+      "checksum": "32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53",
+      "name": "linux-raw-sys",
+      "version": "0.12.1"
+    },
+    {
+      "checksum": "0ceec5bc11778974d1bcb055b18002eba7f4b3518b6a0081b3af5f21666da9ad",
+      "name": "log",
+      "version": "0.4.33"
+    },
+    {
+      "checksum": "65049d7923698040cd0b1ddcced9b0eb14dd22c5f86ae59c3740eab64a676520",
+      "name": "macro_rules_attribute",
+      "version": "0.2.2"
+    },
+    {
+      "checksum": "670fdfda89751bc4a84ac13eaa63e205cf0fd22b4c9a5fbfa085b63c1f1d3a30",
+      "name": "macro_rules_attribute-proc_macro",
+      "version": "0.2.2"
+    },
+    {
+      "checksum": "cf8baf1c55e62ffcace7a9f06f4bd9cd3f0c4beb022d3b367256b91b87513d98",
+      "name": "memchr",
+      "version": "2.8.3"
+    },
+    {
+      "checksum": "d1219ed1b7f229ee7104d281dd01d6802fe28bb6e95d292942c4daacdeb798c0",
+      "name": "memmap2",
+      "version": "0.9.11"
+    },
+    {
+      "checksum": "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a",
+      "name": "minimal-lexical",
+      "version": "0.2.1"
+    },
+    {
+      "checksum": "1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316",
+      "name": "miniz_oxide",
+      "version": "0.8.9"
+    },
+    {
+      "checksum": "30d65c71f1ce40ab09135ce117d742b9f8a19ff91a41a8b57ed50bc2de59c427",
+      "name": "mio",
+      "version": "1.2.2"
+    },
+    {
+      "checksum": "3341a273f6c9d5bef1908f17b7267bbab0e95c9bf69a0d4dcf8e9e1b2c76ef67",
+      "name": "monostate",
+      "version": "0.1.18"
+    },
+    {
+      "checksum": "e4db6d5580af57bf992f59068d4ea26fd518574ff48d7639b255a36f9de6e7e9",
+      "name": "monostate-impl",
+      "version": "0.1.18"
+    },
+    {
+      "checksum": "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a",
+      "name": "nom",
+      "version": "7.1.3"
+    },
+    {
+      "checksum": "73f88a1307638156682bada9d7604135552957b7818057dcef22705b4d509495",
+      "name": "num-complex",
+      "version": "0.4.6"
+    },
+    {
+      "checksum": "071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841",
+      "name": "num-traits",
+      "version": "0.2.19"
+    },
+    {
+      "checksum": "91df4bbde75afed763b708b7eee1e8e7651e02d97f6d5dd763e89367e957b23b",
+      "name": "num_cpus",
+      "version": "1.17.0"
+    },
+    {
+      "checksum": "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50",
+      "name": "once_cell",
+      "version": "1.21.4"
+    },
+    {
+      "checksum": "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe",
+      "name": "once_cell_polyfill",
+      "version": "1.70.2"
+    },
+    {
+      "checksum": "0cc3cbf698f9438986c11a880c90a6d04b9de27575afd28bbf45b154b6c709e2",
+      "name": "onig",
+      "version": "6.5.3"
+    },
+    {
+      "checksum": "1e68317604e77e53b85896388e1a803c1d21b74c899ec9e5e1112db90735edd7",
+      "name": "onig_sys",
+      "version": "69.9.3"
+    },
+    {
+      "checksum": "b7d950ca161dc355eaf28f82b11345ed76c6e1f6eb1f4f4479e0323b9e2fbd0e",
+      "name": "ordered-float",
+      "version": "5.3.0"
+    },
+    {
+      "checksum": "57c0d7b74b563b49d38dae00a0c37d4d6de9b432382b2892f0574ddcae73fd0a",
+      "name": "paste",
+      "version": "1.0.15"
+    },
+    {
+      "checksum": "a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd",
+      "name": "pin-project-lite",
+      "version": "0.2.17"
+    },
+    {
+      "checksum": "19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e",
+      "name": "pkg-config",
+      "version": "0.3.33"
+    },
+    {
+      "checksum": "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9",
+      "name": "ppv-lite86",
+      "version": "0.2.21"
+    },
+    {
+      "checksum": "8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934",
+      "name": "proc-macro2",
+      "version": "1.0.106"
+    },
+    {
+      "checksum": "4b45fcc2344c680f5025fe57779faef368840d0bd1f42f216291f0dc4ace4744",
+      "name": "proptest",
+      "version": "1.11.0"
+    },
+    {
+      "checksum": "046aa45b989642ec2e4717c8e72d677b13edd831a4d3b6cf37d9a3e54912496a",
+      "name": "pulp",
+      "version": "0.22.3"
+    },
+    {
+      "checksum": "1d8f70e07b9c3962945a74e59ca1c511bba65b6419468acc217c457d93f3c740",
+      "name": "pulp-wasm-simd-flag",
+      "version": "0.1.1"
+    },
+    {
+      "checksum": "a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0",
+      "name": "quick-error",
+      "version": "1.2.3"
+    },
+    {
+      "checksum": "dfbc457d0c7a0759a614551b11a6409e5951f6c7537be1f1b7682b9ae9230368",
+      "name": "quote",
+      "version": "1.0.46"
+    },
+    {
+      "checksum": "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f",
+      "name": "r-efi",
+      "version": "5.3.0"
+    },
+    {
+      "checksum": "f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf",
+      "name": "r-efi",
+      "version": "6.0.0"
+    },
+    {
+      "checksum": "22f6172bdec972074665ed81ed53b71da00bfc44b65a753cfde883ec4c702a1a",
+      "name": "rand",
+      "version": "0.8.7"
+    },
+    {
+      "checksum": "b9ef1d0d795eb7d84685bca4f72f3649f064e6641543d3a8c415898726a57b41",
+      "name": "rand",
+      "version": "0.9.5"
+    },
+    {
+      "checksum": "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88",
+      "name": "rand_chacha",
+      "version": "0.3.1"
+    },
+    {
+      "checksum": "d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb",
+      "name": "rand_chacha",
+      "version": "0.9.0"
+    },
+    {
+      "checksum": "ec0be4795e2f6a28069bec0b5ff3e2ac9bafc99e6a9a7dc3547996c5c816922c",
+      "name": "rand_core",
+      "version": "0.6.4"
+    },
+    {
+      "checksum": "76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c",
+      "name": "rand_core",
+      "version": "0.9.5"
+    },
+    {
+      "checksum": "6a8615d50dcf34fa31f7ab52692afec947c4dd0ab803cc87cb3b0b4570ff7463",
+      "name": "rand_distr",
+      "version": "0.5.1"
+    },
+    {
+      "checksum": "513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a",
+      "name": "rand_xorshift",
+      "version": "0.4.0"
+    },
+    {
+      "checksum": "498cd0dc59d73224351ee52a95fee0f1a617a2eae0e7d9d720cc622c73a54186",
+      "name": "raw-cpuid",
+      "version": "11.6.0"
+    },
+    {
+      "checksum": "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d",
+      "name": "rayon",
+      "version": "1.12.0"
+    },
+    {
+      "checksum": "2964d0cf57a3e7a06e8183d14a8b527195c706b7983549cd5462d5aa3747438f",
+      "name": "rayon-cond",
+      "version": "0.4.0"
+    },
+    {
+      "checksum": "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91",
+      "name": "rayon-core",
+      "version": "1.13.0"
+    },
+    {
+      "checksum": "03251193000f4bd3b042892be858ee50e8b3719f2b08e5833ac4353724632430",
+      "name": "reborrow",
+      "version": "0.5.5"
+    },
+    {
+      "checksum": "f020237b6c8eed93db2e2cb53c00c60a8e1bc73da7d073199a1180401450218d",
+      "name": "regex",
+      "version": "1.13.1"
+    },
+    {
+      "checksum": "8fcfdb36bda0c880c5931cdc7a2bcdc8ba4556847b9d912bca70bc94708711ad",
+      "name": "regex-automata",
+      "version": "0.4.16"
+    },
+    {
+      "checksum": "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4",
+      "name": "regex-syntax",
+      "version": "0.8.11"
+    },
+    {
+      "checksum": "b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190",
+      "name": "rustix",
+      "version": "1.1.4"
+    },
+    {
+      "checksum": "cf54715a573b99ac80df0bc206da022bcd442c974952c7b9720069370852e21f",
+      "name": "rustversion",
+      "version": "1.0.23"
+    },
+    {
+      "checksum": "cc6bf79ff24e648f6da1f8d1f011e9cac26491b619e6b9280f2b47f1774e6ee2",
+      "name": "rusty-fork",
+      "version": "0.3.1"
+    },
+    {
+      "checksum": "a7c1c839d570d835527c9a5e4db7cb2198683a988cb9d7293fc8674e6bd58fc8",
+      "name": "ruzstd",
+      "version": "0.8.3"
+    },
+    {
+      "checksum": "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f",
+      "name": "ryu",
+      "version": "1.0.23"
+    },
+    {
+      "checksum": "79b079b829cb27a1c3c374341345ed2e8b2c0c839034522cee576c140bd7f846",
+      "name": "safetensors",
+      "version": "0.8.0"
+    },
+    {
+      "checksum": "93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502",
+      "name": "same-file",
+      "version": "1.0.6"
+    },
+    {
+      "checksum": "1bc711410fbe7399f390ca1c3b60ad0f53f80e95c5eb935e52268a0e2cd49acc",
+      "name": "seq-macro",
+      "version": "0.3.6"
+    },
+    {
+      "checksum": "9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e",
+      "name": "serde",
+      "version": "1.0.228"
+    },
+    {
+      "checksum": "41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad",
+      "name": "serde_core",
+      "version": "1.0.228"
+    },
+    {
+      "checksum": "d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79",
+      "name": "serde_derive",
+      "version": "1.0.228"
+    },
+    {
+      "checksum": "e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9",
+      "name": "serde_json",
+      "version": "1.0.150"
+    },
+    {
+      "checksum": "a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283",
+      "name": "sha2",
+      "version": "0.10.9"
+    },
+    {
+      "checksum": "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba",
+      "name": "shlex",
+      "version": "2.0.1"
+    },
+    {
+      "checksum": "c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b",
+      "name": "signal-hook-registry",
+      "version": "1.4.8"
+    },
+    {
+      "checksum": "3a219298ac11a56ea9a6d2120044824d6f01aeb034955e7af7bc16858527deea",
+      "name": "simd-adler32",
+      "version": "0.3.10"
+    },
+    {
+      "checksum": "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5",
+      "name": "slab",
+      "version": "0.4.12"
+    },
+    {
+      "checksum": "8ed6a63f02c8539c91a8685a86f4099661ba3da017932f6ebbea6de3f0fa7c90",
+      "name": "smallvec",
+      "version": "1.15.2"
+    },
+    {
+      "checksum": "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4",
+      "name": "socket2",
+      "version": "0.6.5"
+    },
+    {
+      "checksum": "5851699c4033c63636f7ea4cf7b7c1f1bf06d0cc03cfb42e711de5a5c46cf326",
+      "name": "spm_precompiled",
+      "version": "0.1.4"
+    },
+    {
+      "checksum": "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596",
+      "name": "stable_deref_trait",
+      "version": "1.2.1"
+    },
+    {
+      "checksum": "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f",
+      "name": "static_assertions",
+      "version": "1.1.0"
+    },
+    {
+      "checksum": "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f",
+      "name": "strsim",
+      "version": "0.11.1"
+    },
+    {
+      "checksum": "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292",
+      "name": "subtle",
+      "version": "2.6.1"
+    },
+    {
+      "checksum": "872831b642d1a07999a962a351ed35b955ea2cfc8f3862091e2a240a84f17297",
+      "name": "syn",
+      "version": "2.0.119"
+    },
+    {
+      "checksum": "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2",
+      "name": "synstructure",
+      "version": "0.13.2"
+    },
+    {
+      "checksum": "01198a2debb237c62b6826ec7081082d951f46dbb64b0e8c7649a452230d1dfc",
+      "name": "sysctl",
+      "version": "0.6.0"
+    },
+    {
+      "checksum": "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd",
+      "name": "tempfile",
+      "version": "3.27.0"
+    },
+    {
+      "checksum": "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52",
+      "name": "thiserror",
+      "version": "1.0.69"
+    },
+    {
+      "checksum": "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4",
+      "name": "thiserror",
+      "version": "2.0.18"
+    },
+    {
+      "checksum": "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1",
+      "name": "thiserror-impl",
+      "version": "1.0.69"
+    },
+    {
+      "checksum": "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5",
+      "name": "thiserror-impl",
+      "version": "2.0.18"
+    },
+    {
+      "checksum": "b238e22d44a15349529690fb07bd645cf58149a1b1e44d6cb5bd1641ff1a6223",
+      "name": "tokenizers",
+      "version": "0.22.2"
+    },
+    {
+      "checksum": "317fafbbe3f02fc663dad00ea6186197de963cd4190e86a26d8d0fae095539af",
+      "name": "tokio",
+      "version": "1.52.4"
+    },
+    {
+      "checksum": "385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496",
+      "name": "tokio-macros",
+      "version": "2.7.0"
+    },
+    {
+      "checksum": "9ea3136b675547379c4bd395ca6b938e5ad3c3d20fad76e7fe85f9e0d011419c",
+      "name": "twox-hash",
+      "version": "2.1.2"
+    },
+    {
+      "checksum": "8e28f89b80c87b8fb0cf04ab448d5dd0dd0ade2f8891bae878de66a75a28600e",
+      "name": "typed-path",
+      "version": "0.12.3"
+    },
+    {
+      "checksum": "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20",
+      "name": "typenum",
+      "version": "1.20.1"
+    },
+    {
+      "checksum": "eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94",
+      "name": "unarray",
+      "version": "0.1.4"
+    },
+    {
+      "checksum": "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75",
+      "name": "unicode-ident",
+      "version": "1.0.24"
+    },
+    {
+      "checksum": "43f613e4fa046e69818dd287fdc4bc78175ff20331479dab6e1b0f98d57062de",
+      "name": "unicode-normalization-alignments",
+      "version": "0.1.12"
+    },
+    {
+      "checksum": "c6f5d3c3b1bf09027a88a6bc961fc00497d651009560b5463668dc81b0fa87a8",
+      "name": "unicode-segmentation",
+      "version": "1.13.3"
+    },
+    {
+      "checksum": "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e",
+      "name": "unicode_categories",
+      "version": "0.1.1"
+    },
+    {
+      "checksum": "06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821",
+      "name": "utf8parse",
+      "version": "0.2.2"
+    },
+    {
+      "checksum": "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a",
+      "name": "version_check",
+      "version": "0.9.5"
+    },
+    {
+      "checksum": "09ac3b126d3914f9849036f826e054cbabdc8519970b8998ddaf3b5bd3c65f11",
+      "name": "wait-timeout",
+      "version": "0.2.1"
+    },
+    {
+      "checksum": "29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b",
+      "name": "walkdir",
+      "version": "2.5.0"
+    },
+    {
+      "checksum": "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b",
+      "name": "wasi",
+      "version": "0.11.1+wasi-snapshot-preview1"
+    },
+    {
+      "checksum": "b67efb37e106e55ce722a510d6b5f9c17f083e5fc79afc2badeb12cc313d9487",
+      "name": "wasip2",
+      "version": "1.0.4+wasi-0.2.12"
+    },
+    {
+      "checksum": "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22",
+      "name": "winapi-util",
+      "version": "0.1.11"
+    },
+    {
+      "checksum": "f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5",
+      "name": "windows-link",
+      "version": "0.2.1"
+    },
+    {
+      "checksum": "ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc",
+      "name": "windows-sys",
+      "version": "0.61.2"
+    },
+    {
+      "checksum": "1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e",
+      "name": "wit-bindgen",
+      "version": "0.57.1"
+    },
+    {
+      "checksum": "709fe23a0424b6a435d82152b1bd3fdfb0833487d5fa90d05d42762a9891fef5",
+      "name": "yoke",
+      "version": "0.8.3"
+    },
+    {
+      "checksum": "de844c262c8848816172cef550288e7dc6c7b7814b4ee56b3e1553f275f1858e",
+      "name": "yoke-derive",
+      "version": "0.8.2"
+    },
+    {
+      "checksum": "b7cbbc0a705a0fd05cc3676525980d2bf5a9bc4adac6d6475209a7887cf59d19",
+      "name": "zerocopy",
+      "version": "0.8.54"
+    },
+    {
+      "checksum": "e2e817b7b52d0c7358d3246da9d69935ebb18116b2b102b4230dac079b4862f5",
+      "name": "zerocopy-derive",
+      "version": "0.8.54"
+    },
+    {
+      "checksum": "0ec05a11813ea801ff6d75110ad09cd0824ddba17dfe17128ea0d5f68e6c5272",
+      "name": "zerofrom",
+      "version": "0.1.8"
+    },
+    {
+      "checksum": "11532158c46691caf0f2593ea8358fed6bbf68a0315e80aae9bd41fbade684a1",
+      "name": "zerofrom-derive",
+      "version": "0.1.7"
+    },
+    {
+      "checksum": "2d04a6b5381502aa6087c94c669499eb1602eb9c5e8198e534de571f7154809b",
+      "name": "zip",
+      "version": "8.6.0"
+    },
+    {
+      "checksum": "b142a20ec14a91d5bc708c1dc21b080c550113d8aa77afa29635673a65dd02c5",
+      "name": "zlib-rs",
+      "version": "0.6.6"
+    },
+    {
+      "checksum": "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b",
+      "name": "zmij",
+      "version": "1.0.23"
+    },
+    {
+      "checksum": "f05cd8797d63865425ff89b5c4a48804f35ba0ce8d125800027ad6017d2b5249",
+      "name": "zopfli",
+      "version": "0.8.3"
+    }
+  ],
+  "schema_version": "jain.locked-cargo-cache/v2"
+}

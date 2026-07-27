@@ -1,0 +1,91 @@
+{
+  "archive_count_after": 2990,
+  "archive_count_before": 2972,
+  "closure_receipts": [
+    "cargo-closure-stage-jain-platform.json",
+    "cargo-closure-stage-jain-router.json",
+    "cargo-closure-stage-jain-fabric.json",
+    "cargo-closure-stage-jain-nexus.json"
+  ],
+  "crates": [
+    {
+      "crate": "anyhow-1.0.104.crate",
+      "sha256": "330a5ed07fa54e4702c9d6c4174f74427fc0ef6e214bbd677ae50a5099946470"
+    },
+    {
+      "crate": "fastrand-2.5.0.crate",
+      "sha256": "da7c62ceae207dd37ea5b845da6a0696c799f85e97da1ab5b7910be3c1c80223"
+    },
+    {
+      "crate": "futures-core-0.3.33.crate",
+      "sha256": "2cd50c473c80f6d7c3670a752354b8e569b1a7cbfdc0419ec88e5edad85e0dc7"
+    },
+    {
+      "crate": "futures-task-0.3.33.crate",
+      "sha256": "b231ed28831efb4a61a08580c4bc233ec56bc009f4cd8f52da2c3cb97df0c109"
+    },
+    {
+      "crate": "futures-util-0.3.33.crate",
+      "sha256": "a77a90a256fce34da66415271e30f94ee91c57b04b8a2c042d9cf3220179deaa"
+    },
+    {
+      "crate": "libc-0.2.188.crate",
+      "sha256": "22053b6a34f84abc97f9129e61334f40174659a1b9bd18c970b83db6a9a6348b"
+    },
+    {
+      "crate": "proc-macro2-1.0.107.crate",
+      "sha256": "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
+    },
+    {
+      "crate": "quote-1.0.47.crate",
+      "sha256": "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
+    },
+    {
+      "crate": "serde-1.0.229.crate",
+      "sha256": "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
+    },
+    {
+      "crate": "serde_core-1.0.229.crate",
+      "sha256": "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48"
+    },
+    {
+      "crate": "serde_derive-1.0.229.crate",
+      "sha256": "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
+    },
+    {
+      "crate": "serde_json-1.0.151.crate",
+      "sha256": "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
+    },
+    {
+      "crate": "syn-3.0.0.crate",
+      "sha256": "f2fac314a64dc9a36e61a9eb4261a5e9bbfbc922b27e518af97bc32b926cf967"
+    },
+    {
+      "crate": "syn-3.0.2.crate",
+      "sha256": "a207d6d6a2b7fc470b80443726053f18a2481b7e1eee970597051596567987a3"
+    },
+    {
+      "crate": "thiserror-2.0.19.crate",
+      "sha256": "09a43598840e33d5b0331f38c5e30d13bb11c11210a4b58f0d9b18a5a5eefcd9"
+    },
+    {
+      "crate": "thiserror-impl-2.0.19.crate",
+      "sha256": "43cbfe0cf76104d42a574802844187e84a305e531ed54455f11fbde0f10541cd"
+    },
+    {
+      "crate": "zerocopy-0.8.55.crate",
+      "sha256": "b5a105cd7b140f6eeec8acff2ea38135d3cab283ada58540f629fe51e46696eb"
+    },
+    {
+      "crate": "zerocopy-derive-0.8.55.crate",
+      "sha256": "0fe976fb70c78cd64cccfe3a6fc142244e8a77b70959b30faf9d0ac37ee228eb"
+    }
+  ],
+  "index": "index.crates.io-1949cf8c6b5b557f",
+  "modes": "dirs 0555 root, files 0444 root",
+  "performed_by": "Claude Master-Conductor (root, per HOST_CI_BOUNDARY provisioning contract)",
+  "registry": "/var/lib/jain-host-ci/cargo-registry",
+  "schema_version": "jain.cargo-registry-extension/v1",
+  "source": "host cargo cache (checksummed crates.io archives)",
+  "timestamp_utc": "2026-07-27T07:48:44Z"
+}
