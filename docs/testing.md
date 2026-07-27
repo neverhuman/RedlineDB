@@ -39,7 +39,7 @@ lock without its mirror fails closed. Only normal two-consumer `proof-refresh`
 writes the authoritative lock, mirror, both sidecars, and operation receipt.
 
 The Jain.4 successor receipts remain verifiable historical artifacts, but they
-are not requirements for the current Jain.5 candidate:
+are not requirements for the current Jain.6 candidate:
 
 ```bash
 ./redlinectl successor-receipt-verify \
@@ -48,7 +48,7 @@ are not requirements for the current Jain.5 candidate:
 ```
 
 The first command verifies the closed historical receipt and Jain.4 identities.
-The second verifies current Jain.5 readiness and may legitimately report the
+The second verifies current Jain.6 readiness and may legitimately report the
 mirror-absent historical state. Neither command claims cutover eligibility.
 
 `just family-ci` is intentionally stronger: every child must be clean `main`,

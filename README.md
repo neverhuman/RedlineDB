@@ -98,7 +98,7 @@ fields (replace the values with their reviewed consumer check output):
   "status": "pass",
   "source_commit": "0123456789abcdef0123456789abcdef01234567",
   "required_check": "jain-split/redline-consumer",
-  "engine_tag": "redline-core-v4.1.0-jain.5",
+  "engine_tag": "redline-core-v4.1.0-jain.6",
   "engine_commit": "<family-ci redline-core commit>",
   "proof_lock_id": "redline-proof/v2/4.1.0/<family-ci redline-core commit>",
   "family_ci_receipt_sha256": "<family-ci receipt SHA256>",
@@ -145,7 +145,7 @@ transition tooling:
 
 `successor-receipt-verify` continues to checksum-verify those closed Jain.4
 artifacts and identities, but required and release-readiness gates do not
-require them for Jain.5. Current candidate readiness accepts the authoritative
+require them for Jain.6. Current candidate readiness accepts the authoritative
 historical lock without a compatibility mirror only while it is valid and
 explicitly ineligible; the transition state is
 `authoritative-only-historical`. Partial, mismatched, malformed, or eligible

@@ -532,7 +532,7 @@ fn toml_integer(table: &toml::value::Table, key: &str, context: &str) -> Result<
 fn expected_repo_release(name: &str) -> Option<(&'static str, i64)> {
     match name {
         "redline" => Some(("4.1.0", 2)),
-        "redline-core" => Some(("4.1.0", 5)),
+        "redline-core" => Some(("4.1.0", 6)),
         "redline-testing" => Some(("1.0.1", 1)),
         "redline-web" => Some(("0.1.0", 1)),
         _ => None,
@@ -701,7 +701,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
     {
         return Err(error("manifest control-plane identity is invalid"));
     }
-    validate_release_identity(control, "redline-split-ops", "split", RELEASE_VERSION, 0)?;
+    validate_release_identity(control, "redline-split-ops", "split", RELEASE_VERSION, 1)?;
     let rows = value
         .get("repo")
         .and_then(toml::Value::as_array)
@@ -4798,7 +4798,7 @@ mod tests {
         );
         assert_eq!(
             identities.get("redline-core"),
-            Some(&("4.1.0", 5, "redline-core-v4.1.0-jain.5"))
+            Some(&("4.1.0", 6, "redline-core-v4.1.0-jain.6"))
         );
         assert_eq!(
             identities.get("redline-testing"),
@@ -4811,7 +4811,7 @@ mod tests {
     }
 
     #[test]
-    fn current_jain5_authority_is_not_the_historical_jain4_successor() {
+    fn current_jain6_authority_is_not_the_historical_jain4_successor() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
         let lock = load_lock(&root.join("redline.lock.toml")).unwrap();

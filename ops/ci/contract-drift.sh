@@ -38,4 +38,4 @@ jq -n \
     cutover_eligible:$cutover_eligible
   }' >target/contract-drift/receipt.json
 
-printf 'Redline contract drift ok: physical Jain.5 authority and ineligible historical lock verified\n'
+printf 'Redline contract drift ok: physical Jain.6 authority and ineligible historical lock verified\n'

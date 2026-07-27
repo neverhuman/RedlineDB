@@ -14,6 +14,8 @@
   WAL stability, checkpoint, and reopen coverage passed protected CI.
 - Advanced the canonical Core identity to immutable `.jain.5` while retaining
   Jain.4 successor receipts as historical verification-only artifacts.
+- Advanced the canonical Core identity to immutable `.jain.6` after its sealed
+  Rust-only NUMA replacement passed default and all-feature release gates.
 - Made candidate readiness accept only a valid explicitly ineligible
   authoritative lock when the compatibility mirror is absent.
 - Replaced family-CI worktree isolation with marker-bound, automatically

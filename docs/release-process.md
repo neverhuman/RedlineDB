@@ -8,7 +8,7 @@ Jain 8.0.0 but does not itself push images, change routes, or promote production
 
 ## Required sequence
 
-1. Bind the exact Jain.5 Core tag, commit, and tree checksum in the manifest.
+1. Bind the exact Jain.6 Core tag, commit, and tree checksum in the manifest.
    `control-validate` must accept the authoritative historical lock.
    `review-lock-verify` may report `authoritative-only-historical` only when the
    compatibility mirror and sidecar are both absent and the authoritative proof

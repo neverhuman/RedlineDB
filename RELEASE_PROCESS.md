@@ -16,7 +16,7 @@ verification-only tooling:
   release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json
 ```
 
-Those receipts remain deliberately cutover-ineligible and are not Jain.5
+Those receipts remain deliberately cutover-ineligible and are not Jain.6
 readiness requirements. With the current mirror absent,
 `review-lock-verify` reports `authoritative-only-historical`; fresh family CI,
 both consumer proofs, normal proof refresh, and cutover verification remain
