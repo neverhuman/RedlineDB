@@ -42,6 +42,24 @@ forge request starts. The Jain Ops consumer fixture additionally rejects a
 missing path, symlink, wrong custody or checksum, malformed/extra fields, and
 wrong release, status, formal-GA, or rollback values.
 
+The Redline Web npm authority has a focused lane:
+
+```bash
+bash ops/ci/npm-runtime-test.sh
+bash ops/ci/host-ci-integrity-test.sh
+bash ops/ci/split-host-ci-integrity-test.sh
+```
+
+The runtime fixture builds two deterministic npm tarballs, derives a closed
+cache, validates and stages it, and runs `npm ci --offline` inside a new network
+namespace (or inside the already-isolated worker). It must also reject a changed
+lock, unknown authority fields, the wrong platform, missing or extra cache
+objects, tampered content, symlinks, hardlinks, a re-sealed wrong SHA-512, and
+a re-sealed URL-index mismatch. The integration matrix proves the same source
+is part of the root-owned publisher boundary. A local full lane may separately
+report foreign live-checkout census failures; do not change another checkout
+to make that census green.
+
 ## Sealed release verification
 
 Host-local `just required` checks the live checkout/remotes census and may

@@ -30,6 +30,24 @@ denied in the caller request and injected only after the root broker has
 authenticated and sealed them. The reviewed worker independently validates the
 mounted bytes before running any product lane.
 
+### Closed JavaScript dependency custody
+
+JavaScript packages follow the same authority boundary. Jain Web receives its
+exact-lock pnpm store. Redline Web receives a separate
+`jain.npm-cache/v1` CACache authority bound to its committed
+`apps/web/package-lock.json` and the Linux/x64/glibc closure. The closure
+identity includes each package path, registry URL, and SHA-512 integrity, so
+the same URL cannot be rebound to different bytes or silently satisfy a
+different lock.
+
+Root validates the closed cache inventory, every content digest, every
+canonical URL index, the exact lock digest, platform, and npm version before
+making a writable per-request copy. Only that copy is exposed through
+`NPM_CONFIG_CACHE`; `NPM_CONFIG_OFFLINE=true` and network isolation remain
+fail-closed. The immutable cache under `/var/lib/jain-host-ci/npm-cache/` is
+never mounted writable, and an ambient user npm cache is never a runtime
+source.
+
 ## Release-authority projection
 
 `repos.manifest.toml` is the sole source for Jain release version, candidate

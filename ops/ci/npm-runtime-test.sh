@@ -112,6 +112,40 @@ if jain_validate_npm_cache \
   printf 'npm cache accepted the wrong platform\n' >&2
   exit 1
 fi
+jq '.schema_version = "jain.npm-cache/v2"' \
+  "$authority" >"$tmp/wrong-schema.json"
+if jain_validate_npm_cache \
+  "$tmp/wrong-schema.json" "$cache" content 2>/dev/null; then
+  printf 'npm cache accepted the wrong authority schema\n' >&2
+  exit 1
+fi
+jq '.arch = "arm64"' "$authority" >"$tmp/wrong-arch.json"
+if jain_validate_npm_cache \
+  "$tmp/wrong-arch.json" "$cache" content 2>/dev/null; then
+  printf 'npm cache accepted the wrong architecture\n' >&2
+  exit 1
+fi
+jq '.libc = "musl"' "$authority" >"$tmp/wrong-libc.json"
+if jain_validate_npm_cache \
+  "$tmp/wrong-libc.json" "$cache" content 2>/dev/null; then
+  printf 'npm cache accepted the wrong libc\n' >&2
+  exit 1
+fi
+jq '.closure_count += 1' "$authority" >"$tmp/wrong-closure-count.json"
+if jain_npm_cache_matches_lock \
+  "$tmp/wrong-closure-count.json" "$cache" \
+  "$tmp/product" content 2>/dev/null; then
+  printf 'npm cache accepted the wrong closure object count\n' >&2
+  exit 1
+fi
+jq '.closure_sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"' \
+  "$authority" >"$tmp/wrong-closure-digest.json"
+if jain_npm_cache_matches_lock \
+  "$tmp/wrong-closure-digest.json" "$cache" \
+  "$tmp/product" content 2>/dev/null; then
+  printf 'npm cache accepted the wrong closure digest\n' >&2
+  exit 1
+fi
 
 inventory="$(jq -er '.inventory_sha256' "$authority")"
 hostile_parent="$tmp/hostile"
@@ -180,6 +214,32 @@ chmod -R a-w "$hardlink_cache"
 if jain_validate_npm_cache \
   "$authority" "$hardlink_cache" content 2>/dev/null; then
   printf 'npm cache accepted a hardlink\n' >&2
+  exit 1
+fi
+
+fifo_parent="$tmp/fifo"
+fifo_cache="$fifo_parent/$inventory"
+mkdir "$fifo_parent"
+cp -a "$cache" "$fifo_cache"
+chmod -R u+w "$fifo_cache"
+victim="$(find "$fifo_cache/_cacache/index-v5" -type f | head -n 1)"
+rm -- "$victim"
+mkfifo "$victim"
+chmod -R a-w "$fifo_cache"
+if jain_validate_npm_cache \
+  "$authority" "$fifo_cache" content 2>/dev/null; then
+  printf 'npm cache accepted a FIFO\n' >&2
+  exit 1
+fi
+
+staged_hostile="$tmp/staged-hostile"
+cp -a "$staged" "$staged_hostile"
+victim="$(find "$staged_hostile/_cacache/content-v2/sha512" \
+  -type f | head -n 1)"
+printf 'staged-tamper\n' >>"$victim"
+if jain_validate_staged_npm_cache \
+  "$authority" "$cache" "$staged_hostile" content 2>/dev/null; then
+  printf 'npm cache accepted a tampered staged copy\n' >&2
   exit 1
 fi
 

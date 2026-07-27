@@ -235,6 +235,31 @@
       "lane": "artifact-support",
       "purpose": "verify artifact-support evidence generation remains runnable"
     },
+    "ops/ci/npm-cache-authority.sh": {
+      "command": "bash ops/ci/npm-runtime-test.sh && bash ops/ci/host-ci-integrity-test.sh && bash ops/ci/split-host-ci-integrity-test.sh",
+      "lane": "required",
+      "purpose": "verify deterministic package-path/URL/SHA-512 closure construction and immutable cache validation"
+    },
+    "ops/ci/npm-cache.lock.json": {
+      "command": "bash ops/ci/npm-runtime-test.sh && bash ops/ci/host-ci-integrity-test.sh && bash ops/ci/split-host-ci-integrity-test.sh",
+      "lane": "required",
+      "purpose": "verify the committed Redline lock, platform closure, inventory, and npm identity"
+    },
+    "ops/ci/npm-runtime.sh": {
+      "command": "bash ops/ci/npm-runtime-test.sh && bash ops/ci/host-ci-integrity-test.sh && bash ops/ci/split-host-ci-integrity-test.sh",
+      "lane": "required",
+      "purpose": "verify immutable validation, semantic closure checks, and writable per-request staging"
+    },
+    "ops/ci/npm-runtime-test.sh": {
+      "command": "bash ops/ci/npm-runtime-test.sh",
+      "lane": "required",
+      "purpose": "verify offline install and hostile cache, lock, inode, digest, platform, and index rejection"
+    },
+    "ops/ci/npmrc.empty": {
+      "command": "bash ops/ci/npm-runtime-test.sh && bash ops/ci/host-ci-integrity-test.sh && bash ops/ci/split-host-ci-integrity-test.sh",
+      "lane": "required",
+      "purpose": "verify sealed npm ignores ambient user and global configuration"
+    },
     "ops/dev/": {
       "command": "just check",
       "lane": "check",

@@ -108,6 +108,27 @@ request. A failed proof POST prevents required publication. A later
 required/status failure consumes the request and leaves the PR blocked; the
 request is never replayed.
 
+### Redline Web npm cache authority
+
+`ops/ci/npm-cache.lock.json` binds the exact Redline Web package-lock digest,
+Linux/x64/glibc package-path/URL/integrity closure, canonical CACache
+inventory, and npm version. Build it only with
+`ops/ci/npm-cache-authority.sh` from an ordinary source cache into a new staging
+directory. The builder reads content-addressed blobs, verifies every SHA-512,
+and writes deterministic index records; the source cache itself is not copied
+or trusted as an index.
+
+Before merge, retain the generated directory named by `inventory_sha256` and
+prove `npm-runtime-test.sh`, both host-boundary tests, full Jankurai, and true
+changed-fast Jankurai. After protected merge, copy that exact directory to
+`/var/lib/jain-host-ci/npm-cache/<inventory_sha256>`, set root ownership,
+directories to `0555`, and files to `0444`, then validate it against the
+merged authority and exact Redline lock. Reinstall the ordinary merged-main
+broker and run the boundary preflight before accepting a request. A missing,
+mutable, mismatched, or incomplete cache blocks only the affected request; it
+never permits network fallback. Rollback restores the previous merged broker
+and leaves the new digest-addressed cache inert until separately removed.
+
 ## Rollback
 
 Keep the previous protected control-plane tag and installed configuration as
