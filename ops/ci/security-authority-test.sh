@@ -37,6 +37,166 @@ cleanup() {
 }
 trap cleanup EXIT
 
+rustsec_fixture="$tmp/rustsec"
+rustsec_source="$rustsec_fixture/source"
+mkdir -p "$rustsec_source"
+git -C "$rustsec_source" init -q -b main
+git -C "$rustsec_source" config user.name 'Redline Web CI Fixture'
+git -C "$rustsec_source" config user.email 'redline-web-ci@example.invalid'
+printf 'first RustSec fixture\n' >"$rustsec_source/README.md"
+git -C "$rustsec_source" add README.md
+git -C "$rustsec_source" commit -q -m 'first RustSec fixture'
+rustsec_first_commit="$(git -C "$rustsec_source" rev-parse HEAD)"
+rustsec_first_tree="$(git -C "$rustsec_source" rev-parse 'HEAD^{tree}')"
+printf 'second RustSec fixture\n' >>"$rustsec_source/README.md"
+git -C "$rustsec_source" add README.md
+git -C "$rustsec_source" commit -q -m 'second RustSec fixture'
+rustsec_commit="$(git -C "$rustsec_source" rev-parse HEAD)"
+rustsec_tree="$(git -C "$rustsec_source" rev-parse 'HEAD^{tree}')"
+git -C "$rustsec_source" remote add origin "$rustsec_source"
+git -C "$rustsec_source" fetch -q --no-tags origin refs/heads/main
+
+new_rustsec_snapshot() {
+  local destination="$1" commit="$2"
+  git clone -q --no-local --no-tags "$rustsec_source" "$destination"
+  git -C "$destination" checkout -q --detach "$commit"
+}
+
+expect_rustsec_rejected() {
+  local label="$1"
+  shift
+  if jain_resolve_rustsec_authority "$@" \
+    >"$rustsec_fixture/$label.stdout" 2>"$rustsec_fixture/$label.stderr"; then
+    fail "security-authority: hostile RustSec fixture was accepted: $label"
+  fi
+}
+
+expect_release_exports_rejected() {
+  local label="$1"
+  shift
+  if jain_resolve_release_rustsec_authority "$@" \
+    >"$rustsec_fixture/$label.stdout" 2>"$rustsec_fixture/$label.stderr"; then
+    fail "security-authority: hostile release RustSec exports were accepted: $label"
+  fi
+}
+
+release_audit="$rustsec_fixture/release-audit"
+release_deny="$rustsec_fixture/release-deny"
+new_rustsec_snapshot "$release_audit" "$rustsec_commit"
+new_rustsec_snapshot "$release_deny" "$rustsec_commit"
+git -C "$release_audit" remote remove origin
+git -C "$release_deny" remote remove origin
+rm -f -- "$release_audit/.git/FETCH_HEAD" "$release_deny/.git/FETCH_HEAD"
+rustsec_identity="$(jain_resolve_rustsec_authority \
+  release "$release_audit" "$release_deny" "$rustsec_commit" \
+  "$rustsec_first_commit" "$rustsec_first_tree")" \
+  || fail "security-authority: valid standalone RustSec pair was rejected"
+[[ "$rustsec_identity" == "$rustsec_commit"$'\t'"$rustsec_tree" ]] \
+  || fail "security-authority: release RustSec identity was not commit/tree bound"
+rustsec_identity="$(jain_resolve_release_rustsec_authority \
+  "$release_audit" "$release_audit" "$release_audit" "$release_deny" \
+  "$rustsec_commit" "$rustsec_first_commit" "$rustsec_first_tree")" \
+  || fail "security-authority: valid release RustSec exports were rejected"
+[[ "$rustsec_identity" == "$rustsec_commit"$'\t'"$rustsec_tree" ]] \
+  || fail "security-authority: release exports were not commit/tree bound"
+
+expect_rustsec_rejected release-missing-commit \
+  release "$release_audit" "$release_deny" "" \
+  "$rustsec_first_commit" "$rustsec_first_tree"
+expect_rustsec_rejected release-malformed-commit \
+  release "$release_audit" "$release_deny" ABCDEF \
+  "$rustsec_first_commit" "$rustsec_first_tree"
+expect_rustsec_rejected release-wrong-existing-commit \
+  release "$release_audit" "$release_deny" "$rustsec_first_commit" \
+  "$rustsec_first_commit" "$rustsec_first_tree"
+
+git -C "$release_deny" checkout -q --detach "$rustsec_first_commit"
+expect_rustsec_rejected release-audit-deny-mismatch \
+  release "$release_audit" "$release_deny" "$rustsec_commit" \
+  "$rustsec_first_commit" "$rustsec_first_tree"
+git -C "$release_deny" checkout -q --detach "$rustsec_commit"
+printf 'hostile dirty tree\n' >>"$release_audit/README.md"
+expect_rustsec_rejected release-dirty-tree \
+  release "$release_audit" "$release_deny" "$rustsec_commit" \
+  "$rustsec_first_commit" "$rustsec_first_tree"
+git -C "$release_audit" checkout -q -- README.md
+ln -s -- "$release_deny" "$rustsec_fixture/linked-release-db"
+expect_rustsec_rejected release-symlink-db \
+  release "$rustsec_fixture/linked-release-db" "$release_deny" \
+  "$rustsec_commit" "$rustsec_first_commit" "$rustsec_first_tree"
+expect_rustsec_rejected release-missing-db \
+  release "$rustsec_fixture/missing-release-db" "$release_deny" \
+  "$rustsec_commit" "$rustsec_first_commit" "$rustsec_first_tree"
+expect_rustsec_rejected release-aliased-db \
+  release "$release_audit" "$release_audit" "$rustsec_commit" \
+  "$rustsec_first_commit" "$rustsec_first_tree"
+expect_release_exports_rejected release-missing-source-export \
+  "" "$release_audit" "$release_audit" "$release_deny" \
+  "$rustsec_commit" "$rustsec_first_commit" "$rustsec_first_tree"
+expect_release_exports_rejected release-missing-pinned-export \
+  "$release_audit" "" "$release_audit" "$release_deny" \
+  "$rustsec_commit" "$rustsec_first_commit" "$rustsec_first_tree"
+expect_release_exports_rejected release-missing-advisory-export \
+  "$release_audit" "$release_audit" "" "$release_deny" \
+  "$rustsec_commit" "$rustsec_first_commit" "$rustsec_first_tree"
+expect_release_exports_rejected release-mismatched-source-export \
+  "$release_deny" "$release_audit" "$release_audit" "$release_deny" \
+  "$rustsec_commit" "$rustsec_first_commit" "$rustsec_first_tree"
+expect_release_exports_rejected release-mismatched-advisory-export \
+  "$release_audit" "$release_audit" "$release_deny" "$release_deny" \
+  "$rustsec_commit" "$rustsec_first_commit" "$rustsec_first_tree"
+
+release_git_link="$rustsec_fixture/release-git-link"
+new_rustsec_snapshot "$release_git_link" "$rustsec_commit"
+mv -- "$release_git_link/.git" "$release_git_link/git-metadata"
+ln -s -- git-metadata "$release_git_link/.git"
+expect_rustsec_rejected release-symlink-git \
+  release "$release_git_link" "$release_deny" "$rustsec_commit" \
+  "$rustsec_first_commit" "$rustsec_first_tree"
+
+local_deny="$rustsec_fixture/local-deny"
+new_rustsec_snapshot "$local_deny" "$rustsec_commit"
+git -C "$local_deny" checkout -q main
+git -C "$local_deny" fetch -q --no-tags origin refs/heads/main
+printf 'foreign local checkout state\n' >"$rustsec_source/FOREIGN.md"
+rustsec_identity="$(jain_resolve_rustsec_authority \
+  local "$rustsec_source" "$local_deny" \
+  0000000000000000000000000000000000000000 \
+  "$rustsec_first_commit" "$rustsec_first_tree")" \
+  || fail "security-authority: advanced local RustSec source was rejected"
+[[ "$rustsec_identity" == "$rustsec_first_commit"$'\t'"$rustsec_first_tree" ]] \
+  || fail "security-authority: hostile release export influenced local RustSec"
+rm -- "$rustsec_source/FOREIGN.md"
+expect_rustsec_rejected local-wrong-commit \
+  local "$rustsec_source" "$local_deny" "" \
+  0000000000000000000000000000000000000000 "$rustsec_first_tree"
+expect_rustsec_rejected local-wrong-tree \
+  local "$rustsec_source" "$local_deny" "" \
+  "$rustsec_first_commit" 0000000000000000000000000000000000000000
+
+local_seed_home="$rustsec_fixture/local-seed-home"
+mkdir "$local_seed_home"
+jain_seed_cargo_deny_advisory_db \
+  "$local_deny" "$local_seed_home" "$rustsec_first_commit" "$rustsec_first_tree" \
+  || fail "security-authority: advanced local cargo-deny lineage was rejected"
+
+git -C "$rustsec_source" checkout -q --orphan hostile-off-lineage
+printf 'off-lineage RustSec fixture\n' >"$rustsec_source/OFF_LINEAGE.md"
+git -C "$rustsec_source" add OFF_LINEAGE.md
+git -C "$rustsec_source" commit -q -m 'off-lineage RustSec fixture'
+off_lineage_commit="$(git -C "$rustsec_source" rev-parse HEAD)"
+off_lineage_tree="$(git -C "$rustsec_source" rev-parse 'HEAD^{tree}')"
+git -C "$rustsec_source" checkout -q main
+off_lineage_home="$rustsec_fixture/off-lineage-home"
+mkdir "$off_lineage_home"
+if jain_seed_cargo_deny_advisory_db \
+  "$rustsec_source" "$off_lineage_home" \
+  "$off_lineage_commit" "$off_lineage_tree" \
+  >"$rustsec_fixture/off-lineage.stdout" \
+  2>"$rustsec_fixture/off-lineage.stderr"; then
+  fail "security-authority: off-lineage local RustSec commit was accepted"
+fi
+
 complete_sbom="$tmp/complete.spdx.json"
 default_sbom="$tmp/default.spdx.json"
 SYFT_CHECK_FOR_APP_UPDATE=false \

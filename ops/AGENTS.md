@@ -11,5 +11,4 @@ GitHub Actions / local parity.
   gate is `bash ops/ci/pr-ci.sh`, which CI mirrors lane-for-lane.
 
 Keep workflow logic in `ops/ci/*.sh`; GitHub Actions only call those scripts.
-Security and audit receipts belong under `.artifacts/security/` or
-`target/jankurai/`.
+Security and audit receipts belong under `target/jankurai/security/`.

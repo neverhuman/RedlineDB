@@ -91,7 +91,7 @@
     },
     "ops/ci/security-authority-test.sh": {
       "command": "bash ops/ci/security-authority-test.sh",
-      "purpose": "reject incomplete npm SBOM coverage and missing, invalid, or unbound Grype authority"
+      "purpose": "reject invalid RustSec snapshot bindings, incomplete npm SBOM coverage, and missing, invalid, or unbound Grype authority"
     },
     "ops/ci/security.sh": {
       "command": "bash ops/ci/security-authority-test.sh && bash ops/ci/security.sh",

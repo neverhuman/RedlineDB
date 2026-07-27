@@ -43,8 +43,8 @@ RUSTSEC_DB="$(jain_first_present_path \
   "${JAIN_RUSTSEC_ADVISORY_SOURCE:-}" "${JAIN_PINNED_ADVISORY_DB:-}" \
   "${JAIN_ADVISORY_DB:-}" /home/ubuntu/.cargo/advisory-db || true)"
 readonly RUSTSEC_DB
-readonly RUSTSEC_DB_COMMIT="9f3e138091487e69144f536d36976e427a7a3307"
-readonly RUSTSEC_DB_TREE="c33f1047906505cabcec7e21f2d99db5c6de8852"
+readonly LOCAL_RUSTSEC_DB_COMMIT="6e3286f4efa8c142fb33e5ea4342c8db6693cf34"
+readonly LOCAL_RUSTSEC_DB_TREE="d12220aff0053a035739bec6e64aefbaafbf01a3"
 CARGO_DENY_DB="$(jain_first_present_path \
   "${JAIN_CARGO_DENY_ADVISORY_DB:-}" \
   /home/ubuntu/.cargo/advisory-dbs/advisory-db-3157b0e258782691 || true)"
@@ -142,6 +142,23 @@ for tool in cmp diff find git jq sha256sum realpath stat tar; do
   has "$tool" || fail "required local security tool is missing: $tool"
 done
 [[ -z "$(git status --porcelain)" ]] || fail "security evidence requires a clean checkout"
+if [[ "${JAIN_RELEASE_CI:-0}" == 1 ]]; then
+  rustsec_authority_mode=release
+  rustsec_identity="$(jain_resolve_release_rustsec_authority \
+    "${JAIN_RUSTSEC_ADVISORY_SOURCE:-}" "${JAIN_PINNED_ADVISORY_DB:-}" \
+    "${JAIN_ADVISORY_DB:-}" "${JAIN_CARGO_DENY_ADVISORY_DB:-}" \
+    "${JAIN_PINNED_ADVISORY_COMMIT:-}" \
+    "$LOCAL_RUSTSEC_DB_COMMIT" "$LOCAL_RUSTSEC_DB_TREE")" \
+    || fail "release RustSec commit/tree authority failed validation"
+else
+  rustsec_authority_mode=local
+  rustsec_identity="$(jain_resolve_rustsec_authority \
+    "$rustsec_authority_mode" "$RUSTSEC_DB" "$CARGO_DENY_DB" "" \
+    "$LOCAL_RUSTSEC_DB_COMMIT" "$LOCAL_RUSTSEC_DB_TREE")" \
+    || fail "local RustSec commit/tree authority failed validation"
+fi
+IFS=$'\t' read -r RUSTSEC_DB_COMMIT RUSTSEC_DB_TREE <<<"$rustsec_identity"
+readonly RUSTSEC_DB_COMMIT RUSTSEC_DB_TREE
 jain_verify_exact_executable cargo-audit "$CARGO_AUDIT_IDENTITY" "$CARGO_AUDIT_SHA256" || exit 1
 jain_verify_exact_executable cargo-deny "$CARGO_DENY_IDENTITY" "$CARGO_DENY_SHA256" || exit 1
 jain_verify_exact_executable gitleaks "$GITLEAKS_BIN" "$GITLEAKS_SHA256" || exit 1

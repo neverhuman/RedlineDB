@@ -102,6 +102,151 @@ jain_sha256() {
   sha256sum -- "${1:?file is required}" | awk '{print $1}'
 }
 
+# Resolve one commit object to its tree without trusting the checkout's mutable
+# HEAD. Local cargo-audit deliberately archives this exact object from a shared
+# source that may have advanced (or contain unrelated untracked files).
+jain_rustsec_object_tree() {
+  local repository="${1:?RustSec repository is required}"
+  local commit="${2:?RustSec commit is required}"
+  local tree
+
+  [[ "$commit" =~ ^[0-9a-f]{40}$ ]] || {
+    printf 'RustSec commit must be a lowercase full hash\n' >&2
+    return 1
+  }
+  [[ -d "$repository" && ! -L "$repository" \
+    && "$(realpath -e -- "$repository")" == "$repository" \
+    && -d "$repository/.git" && ! -L "$repository/.git" ]] || {
+    printf 'RustSec repository must be a physical checkout: %s\n' \
+      "$repository" >&2
+    return 1
+  }
+  [[ "$(git -C "$repository" cat-file -t "$commit" 2>/dev/null)" == commit ]] || {
+    printf 'RustSec commit object is unavailable: %s\n' "$commit" >&2
+    return 1
+  }
+  tree="$(git -C "$repository" rev-parse "${commit}^{tree}")" || return 1
+  [[ "$tree" =~ ^[0-9a-f]{40}$ ]] || {
+    printf 'RustSec commit did not resolve to a full tree hash\n' >&2
+    return 1
+  }
+  printf '%s' "$tree"
+}
+
+# Bind the two RustSec views used by cargo-audit and cargo-deny. Release mode
+# consumes the root-exported commit and requires two clean standalone detached
+# snapshots at that exact object. Local mode uses the product's reviewed
+# commit/tree while allowing the shared audit source HEAD to advance; the
+# existing cargo-deny seeder separately enforces clean upstream lineage.
+jain_resolve_rustsec_authority() {
+  local mode="${1:?RustSec authority mode is required}"
+  local audit_repository="${2:?cargo-audit RustSec repository is required}"
+  local deny_repository="${3:?cargo-deny RustSec repository is required}"
+  local release_commit="${4:-}"
+  local local_commit="${5:?local RustSec commit is required}"
+  local local_tree="${6:?local RustSec tree is required}"
+  local commit tree audit_tree deny_tree audit_real deny_real repository
+
+  [[ "$local_commit" =~ ^[0-9a-f]{40}$ \
+    && "$local_tree" =~ ^[0-9a-f]{40}$ ]] || {
+    printf 'local RustSec authority must use full commit and tree hashes\n' >&2
+    return 1
+  }
+  audit_real="$(realpath -e -- "$audit_repository" 2>/dev/null)" || {
+    printf 'cargo-audit RustSec authority is unavailable\n' >&2
+    return 1
+  }
+  deny_real="$(realpath -e -- "$deny_repository" 2>/dev/null)" || {
+    printf 'cargo-deny RustSec authority is unavailable\n' >&2
+    return 1
+  }
+  [[ "$audit_real" != "$deny_real" ]] || {
+    printf 'cargo-audit and cargo-deny RustSec authorities must be distinct\n' >&2
+    return 1
+  }
+
+  case "$mode" in
+    release)
+      [[ "$release_commit" =~ ^[0-9a-f]{40}$ ]] || {
+        printf 'release RustSec commit export must be a lowercase full hash\n' >&2
+        return 1
+      }
+      commit="$release_commit"
+      audit_tree="$(jain_rustsec_object_tree "$audit_repository" "$commit")" \
+        || return 1
+      deny_tree="$(jain_rustsec_object_tree "$deny_repository" "$commit")" \
+        || return 1
+      [[ "$audit_tree" == "$deny_tree" ]] || {
+        printf 'release RustSec audit and deny trees differ\n' >&2
+        return 1
+      }
+      for repository in "$audit_repository" "$deny_repository"; do
+        [[ -z "$(find "$repository" -type l -print -quit)" ]] || {
+          printf 'release RustSec snapshot contains a symlink: %s\n' \
+            "$repository" >&2
+          return 1
+        }
+        if git -C "$repository" symbolic-ref -q HEAD >/dev/null 2>&1; then
+          printf 'release RustSec snapshot HEAD must be detached: %s\n' \
+            "$repository" >&2
+          return 1
+        fi
+        [[ "$(git -C "$repository" rev-parse 'HEAD^{commit}')" == "$commit" \
+          && -z "$(git -C "$repository" status --porcelain=v1 \
+            --untracked-files=all)" ]] || {
+          printf 'release RustSec snapshot HEAD or cleanliness mismatch: %s\n' \
+            "$repository" >&2
+          return 1
+        }
+      done
+      tree="$audit_tree"
+      ;;
+    local)
+      commit="$local_commit"
+      audit_tree="$(jain_rustsec_object_tree "$audit_repository" "$commit")" \
+        || return 1
+      deny_tree="$(jain_rustsec_object_tree "$deny_repository" "$commit")" \
+        || return 1
+      [[ "$audit_tree" == "$local_tree" && "$deny_tree" == "$local_tree" ]] || {
+        printf 'local RustSec pinned object/tree identity mismatch\n' >&2
+        return 1
+      }
+      tree="$local_tree"
+      ;;
+    *)
+      printf 'RustSec authority mode must be local or release\n' >&2
+      return 1
+      ;;
+  esac
+
+  printf '%s\t%s\n' "$commit" "$tree"
+}
+
+# The release worker exports three names for one cargo-audit snapshot plus a
+# distinct cargo-deny snapshot. Validate those names before reducing them to
+# the shared commit/tree binder so missing or cross-wired root authority cannot
+# be hidden by first-present-path selection.
+jain_resolve_release_rustsec_authority() {
+  local source_repository="${1:-}"
+  local pinned_repository="${2:-}"
+  local advisory_repository="${3:-}"
+  local deny_repository="${4:-}"
+  local release_commit="${5:-}"
+  local local_commit="${6:?local RustSec commit is required}"
+  local local_tree="${7:?local RustSec tree is required}"
+
+  [[ -n "$source_repository" && -n "$pinned_repository" \
+    && -n "$advisory_repository" && -n "$deny_repository" \
+    && "$source_repository" == "$pinned_repository" \
+    && "$advisory_repository" == "$pinned_repository" ]] || {
+    printf 'release RustSec snapshot exports are missing or mismatched\n' >&2
+    return 1
+  }
+  jain_resolve_rustsec_authority \
+    release "$pinned_repository" "$deny_repository" "$release_commit" \
+    "$local_commit" "$local_tree"
+}
+
 # Compute and verify the closed two-file Grype v6 database inventory published
 # by the root control plane. The digest binds relative path, size, and bytes.
 jain_grype_db_inventory_sha256() {
