@@ -19,8 +19,9 @@ version source is `apps/api/Cargo.toml`.
 - ci-local parity: `ops/ci/*.sh` lanes sourced by a single `ops/ci/pr-ci.sh`
   gate, mirrored 1:1 by `.github/workflows/ci.yml`; pre-push hook, ci-doctor,
   and ci-local runner.
-- Security lane (`ops/ci/security.sh`): gitleaks, cargo-audit, cargo-deny, npm
-  audit, zizmor, SBOM — blocking in CI.
+- Security lane (`ops/ci/security.sh`): gitleaks, cargo-audit, cargo-deny,
+  zizmor, complete npm-lock Syft plus authenticated offline Grype, and a
+  separate whole-repository SBOM — blocking in CI.
 - jankurai tool-suite evidence lane and CI artifact upload.
 - Web e2e Playwright smoke + rendered-UX QA lane; design tokens.
 - `proptest` property tests for the input-boundary and read-only-authz guards.

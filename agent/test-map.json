@@ -89,6 +89,14 @@
       "command": "REDLINE_STRICT_TOOLS=1 bash ops/ci/pr-ci.sh",
       "purpose": "verify the full governed CI and evidence surface"
     },
+    "ops/ci/security-authority-test.sh": {
+      "command": "bash ops/ci/security-authority-test.sh",
+      "purpose": "reject incomplete npm SBOM coverage and missing, invalid, or unbound Grype authority"
+    },
+    "ops/ci/security.sh": {
+      "command": "bash ops/ci/security-authority-test.sh && bash ops/ci/security.sh",
+      "purpose": "verify the offline Cargo, RustSec, Syft, and Grype release evidence lane"
+    },
     "rust-toolchain.toml": {
       "command": "bash scripts/ci-doctor.sh",
       "purpose": "verify the Rust toolchain identity used by CI"

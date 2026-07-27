@@ -102,6 +102,374 @@ jain_sha256() {
   sha256sum -- "${1:?file is required}" | awk '{print $1}'
 }
 
+# Compute and verify the closed two-file Grype v6 database inventory published
+# by the root control plane. The digest binds relative path, size, and bytes.
+jain_grype_db_inventory_sha256() {
+  local root="${1:?Grype database root is required}"
+  local relative path actual_nodes
+
+  [[ -d "$root" && ! -L "$root" \
+    && "$(realpath -e -- "$root")" == "$root" ]] || {
+    printf 'Grype database root is missing or not physical: %s\n' "$root" >&2
+    return 1
+  }
+  actual_nodes="$(find "$root" -mindepth 1 -printf '%P\n' | LC_ALL=C sort)"
+  [[ "$actual_nodes" == $'6\n6/import.json\n6/vulnerability.db' \
+    && -z "$(find "$root" -mindepth 1 ! -type d ! -type f -print -quit)" ]] || {
+    printf 'Grype database inventory is empty, incomplete, or not closed\n' >&2
+    return 1
+  }
+  {
+    for relative in 6/import.json 6/vulnerability.db; do
+      path="$root/$relative"
+      [[ -f "$path" && ! -L "$path" ]] || {
+        printf 'Grype database file is not physical: %s\n' "$relative" >&2
+        return 1
+      }
+      printf '%s\t%s\t%s\n' "$relative" "$(stat -c %s -- "$path")" \
+        "$(jain_sha256 "$path")"
+    done
+  } | sha256sum | awk '{print $1}'
+}
+
+jain_verify_grype_db_authority() {
+  local root="${1:?Grype database root is required}"
+  local expected="${2:?Grype database inventory digest is required}"
+  local actual relative path
+
+  [[ "$expected" =~ ^[0-9a-f]{64}$ ]] || {
+    printf 'Grype database inventory digest must be a full SHA-256\n' >&2
+    return 1
+  }
+  actual="$(jain_grype_db_inventory_sha256 "$root")" || return 1
+  [[ "$actual" == "$expected" ]] || {
+    printf 'Grype database inventory digest mismatch: expected %s actual %s\n' \
+      "$expected" "$actual" >&2
+    return 1
+  }
+  [[ "$(stat -c '%u:%g:%a' -- "$root")" == '0:0:555' \
+    && "$(stat -c '%u:%g:%a' -- "$root/6")" == '0:0:555' ]] || {
+    printf 'Grype database directories are not immutable root authority\n' >&2
+    return 1
+  }
+  for relative in 6/import.json 6/vulnerability.db; do
+    path="$root/$relative"
+    [[ "$(stat -c '%u:%g:%a:%h' -- "$path")" == '0:0:444:1' ]] || {
+      printf 'Grype database file metadata is not immutable root authority: %s\n' \
+        "$relative" >&2
+      return 1
+    }
+  done
+}
+
+jain_verify_grype_db_status() {
+  local status_file="${1:?Grype database status is required}"
+  local root="${2:?Grype database root is required}"
+
+  [[ -f "$status_file" && ! -L "$status_file" ]] || {
+    printf 'Grype database status is missing or not physical\n' >&2
+    return 1
+  }
+  jq -e --arg root "$root" '
+    select(.valid == true)
+    | select(.schemaVersion | type == "string" and test("^v6\\."))
+    | select(.path == ($root + "/6/vulnerability.db"))
+  ' "$status_file" >/dev/null || {
+    printf 'Grype database status is invalid or unbound from its authority\n' >&2
+    return 1
+  }
+}
+
+jain_verify_grype_result() {
+  local result_file="${1:?Grype result is required}"
+
+  [[ -f "$result_file" && ! -L "$result_file" ]] || {
+    printf 'Grype result is missing or not physical\n' >&2
+    return 1
+  }
+  jq -e '
+    select(.matches | type == "array")
+    | select(
+        [.matches[]? | select(
+          .vulnerability.severity == "High"
+          or .vulnerability.severity == "Critical"
+        )] | length == 0
+      )
+  ' "$result_file" >/dev/null || {
+    printf 'Grype result is malformed or contains high/critical findings\n' >&2
+    return 1
+  }
+}
+
+# Compare the exact non-root package-lock multiset with the npm PURLs emitted
+# from a lock-file-only Syft scan. Duplicate name/version pairs are retained.
+jain_verify_npm_lock_sbom_closure() {
+  local lock_file="${1:?npm lock file is required}"
+  local sbom_file="${2:?npm lock SBOM is required}"
+  local expected_count="${3:?expected npm package count is required}"
+  local source_name="${4:?expected Syft source name is required}"
+  local expected_manifest="${5:?expected PURL manifest path is required}"
+  local actual_manifest="${6:?actual PURL manifest path is required}"
+  local root_purl actual_count
+
+  [[ "$expected_count" =~ ^[0-9]+$ && "$expected_count" -gt 0 ]] || {
+    printf 'expected npm package count must be positive\n' >&2
+    return 1
+  }
+  [[ -f "$lock_file" && ! -L "$lock_file" \
+    && -f "$sbom_file" && ! -L "$sbom_file" ]] || {
+    printf 'npm lock and SBOM inputs must be physical files\n' >&2
+    return 1
+  }
+  if ! jq -e --arg source_name "$source_name" '
+    .spdxVersion | startswith("SPDX-")
+  ' "$sbom_file" >/dev/null; then
+    printf 'npm lock SBOM is not valid SPDX JSON\n' >&2
+    return 1
+  fi
+  if ! jq -e --arg source_name "$source_name" '
+      .name == $source_name
+      and ([.packages[] | select(
+        .name == $source_name
+        and .primaryPackagePurpose == "FILE"
+      )] | length == 1)
+    ' "$sbom_file" >/dev/null; then
+    printf 'npm lock SBOM is not bound to the lock-file-only source\n' >&2
+    return 1
+  fi
+
+  root_purl="$(jq -er '
+    def npm_purl($name; $version):
+      "pkg:npm/" + (($name | @uri) | gsub("%2F"; "/"))
+      + "@" + ($version | @uri);
+    .packages[""]
+    | npm_purl(.name; .version)
+  ' "$lock_file")" || {
+    printf 'npm lock root identity is unavailable\n' >&2
+    return 1
+  }
+  jq -e --arg root_purl "$root_purl" --argjson expected "$expected_count" '
+    [.packages[]
+      | [.externalRefs[]?
+        | select(.referenceType == "purl")
+        | .referenceLocator
+        | select(startswith("pkg:npm/"))]] as $package_purls
+    | [$package_purls[][]] as $purls
+    | ($purls | length) == ($expected + 1)
+      and ([$package_purls[] | select(length > 0)] | length) == ($expected + 1)
+      and all($package_purls[] | select(length > 0); length == 1)
+      and ([$purls[] | select(. == $root_purl)] | length) == 1
+  ' "$sbom_file" >/dev/null || {
+    printf 'npm lock SBOM does not contain exactly one root and all npm PURLs\n' >&2
+    return 1
+  }
+  jq -er '
+    def npm_purl($name; $version):
+      "pkg:npm/" + (($name | @uri) | gsub("%2F"; "/"))
+      + "@" + ($version | @uri);
+    .packages
+    | to_entries[]
+    | select(.key != "")
+    | . as $entry
+    | ($entry.value.name // ($entry.key | sub("^.*node_modules/"; ""))) as $name
+    | npm_purl($name; $entry.value.version)
+  ' "$lock_file" | LC_ALL=C sort >"$expected_manifest"
+  jq -er --arg root_purl "$root_purl" '
+    .packages[]
+    | .externalRefs[]?
+    | select(.referenceType == "purl")
+    | .referenceLocator
+    | select(startswith("pkg:npm/") and . != $root_purl)
+  ' "$sbom_file" | LC_ALL=C sort >"$actual_manifest"
+
+  actual_count="$(wc -l <"$actual_manifest")"
+  [[ "$(wc -l <"$expected_manifest")" == "$expected_count" \
+    && "$actual_count" == "$expected_count" ]] || {
+    printf 'npm lock/SBOM closure count mismatch: expected %s actual %s\n' \
+      "$expected_count" "$actual_count" >&2
+    return 1
+  }
+  cmp -s -- "$expected_manifest" "$actual_manifest" || {
+    printf 'npm lock name/version multiset differs from Syft npm PURLs\n' >&2
+    diff -u -- "$expected_manifest" "$actual_manifest" >&2 || true
+    return 1
+  }
+}
+
+jain_staged_cargo_registry_inventory_sha256() {
+  local registry="${1:?staged Cargo registry is required}"
+  local path relative
+  local -a files=()
+
+  [[ -d "$registry/cache" && ! -L "$registry/cache" \
+    && -d "$registry/index" && ! -L "$registry/index" \
+    && -z "$(find "$registry/cache" "$registry/index" \
+      ! -type d ! -type f -print -quit)" ]] || {
+    printf 'staged Cargo registry cache/index is missing or has unsafe nodes\n' >&2
+    return 1
+  }
+  while IFS= read -r -d '' path; do
+    files+=("$path")
+  done < <(find "$registry/cache" "$registry/index" -type f -print0)
+  [[ "${#files[@]}" -gt 0 ]] || {
+    printf 'staged Cargo registry inventory is empty\n' >&2
+    return 1
+  }
+  {
+    while IFS= read -r path; do
+      relative="${path#"$registry"/}"
+      printf '%s\t%s\t%s\n' "$relative" "$(stat -c %s -- "$path")" \
+        "$(jain_sha256 "$path")"
+    done < <(printf '%s\n' "${files[@]}" | LC_ALL=C sort)
+  } | sha256sum | awk '{print $1}'
+}
+
+jain_verify_staged_cargo_registry() {
+  local lock_file="${1:?Cargo lock is required}"
+  local registry="${2:?staged Cargo registry is required}"
+  local index_manifest="${3:?selected index manifest is required}"
+  local receipt="$registry/stage-receipt.json"
+  local closure="$registry/lock-source-closure.json"
+  local lock_sha cache_root index_root package_count actual_count
+  local name version checksum archive relative path actual
+  local -a cache_children=() index_children=()
+  local -A staged_expected_archives=() staged_expected_index_entries=()
+
+  [[ -d "$registry" && ! -L "$registry" \
+    && "$(realpath -e -- "$registry")" == "$registry" \
+    && -f "$receipt" && ! -L "$receipt" \
+    && -f "$closure" && ! -L "$closure" ]] || {
+    printf 'staged Cargo registry authority is missing or not physical\n' >&2
+    return 1
+  }
+  [[ "$(find "$registry" -mindepth 1 -maxdepth 1 -printf '%f\n' \
+      | LC_ALL=C sort)" \
+      == $'cache\nindex\nlock-source-closure.json\nstage-receipt.json' ]] || {
+    printf 'staged Cargo registry root inventory is not closed\n' >&2
+    return 1
+  }
+  mapfile -t cache_children < <(
+    find "$registry/cache" -mindepth 1 -maxdepth 1 -type d -print
+  )
+  mapfile -t index_children < <(
+    find "$registry/index" -mindepth 1 -maxdepth 1 -type d -print
+  )
+  [[ "${#cache_children[@]}" == 1 && "${#index_children[@]}" == 1 \
+    && -z "$(find "$registry/cache" "$registry/index" \
+      -mindepth 1 -maxdepth 1 ! -type d -print -quit)" \
+    && -z "$(find "$registry/cache" "$registry/index" \
+      ! -type d ! -type f -print -quit)" ]] || {
+    printf 'staged Cargo registry must have one physical cache and index child\n' >&2
+    return 1
+  }
+  cache_root="${cache_children[0]}"
+  index_root="${index_children[0]}"
+  [[ "$(basename -- "$cache_root")" == "$(basename -- "$index_root")" ]] || {
+    printf 'staged Cargo cache and index authorities do not share an identity\n' >&2
+    return 1
+  }
+  [[ -z "$(find "$cache_root" -mindepth 1 -type d -print -quit)" ]] || {
+    printf 'staged Cargo archive cache must be a flat physical file set\n' >&2
+    return 1
+  }
+
+  jq -e '
+    select(.schema_version == "jain.locked-cargo-cache/v2")
+    | select(.lock_count == (.lock_sha256s | length))
+    | select(.lock_sha256s == (.lock_sha256s | sort | unique))
+    | select(.package_count == (.packages | length))
+    | select(.package_count > 0)
+    | select(.packages == (.packages | sort_by([.name, .version, .checksum])))
+    | select((.packages | length)
+        == (.packages | unique_by([.name, .version, .checksum]) | length))
+    | select(all(.packages[];
+        (.name | test("^[A-Za-z0-9_-]+$"))
+        and (.version | test("^[A-Za-z0-9.+_-]+$"))
+        and (.checksum | test("^[0-9a-f]{64}$"))))
+  ' "$receipt" >/dev/null || {
+    printf 'staged Cargo registry receipt is malformed or non-canonical\n' >&2
+    return 1
+  }
+  jq -e --slurpfile receipt "$receipt" '
+    select(.schema_version == "jain.cargo-lock-source-closure/v1")
+    | select($receipt | length == 1)
+    | select(.lock_count == $receipt[0].lock_count)
+    | select(.lock_sha256s == $receipt[0].lock_sha256s)
+  ' "$closure" >/dev/null || {
+    printf 'staged Cargo lock-source closure is unbound from its receipt\n' >&2
+    return 1
+  }
+  lock_sha="$(jain_sha256 "$lock_file")"
+  jq -e --arg lock_sha "$lock_sha" \
+    '.lock_sha256s | index($lock_sha) != null' "$receipt" >/dev/null || {
+    printf 'staged Cargo receipt does not include the product Cargo.lock\n' >&2
+    return 1
+  }
+
+  while IFS=$'\t' read -r name version checksum; do
+    archive="$name-$version.crate"
+    [[ -z "${staged_expected_archives[$archive]+x}" ]] || {
+      printf 'staged Cargo receipt contains a duplicate archive: %s\n' "$archive" >&2
+      return 1
+    }
+    staged_expected_archives["$archive"]="$checksum"
+    relative="$(jain_cargo_index_entry_path "$name")" || return 1
+    staged_expected_index_entries["$relative"]=1
+  done < <(jq -r '.packages[] | [.name,.version,.checksum] | @tsv' "$receipt")
+  package_count="$(jq -r '.package_count' "$receipt")"
+  [[ "${#staged_expected_archives[@]}" == "$package_count" ]] || {
+    printf 'staged Cargo receipt package identities are not one-to-one\n' >&2
+    return 1
+  }
+  actual_count=0
+  while IFS= read -r -d '' path; do
+    archive="$(basename -- "$path")"
+    [[ -n "${staged_expected_archives[$archive]+x}" \
+      && -f "$path" && ! -L "$path" ]] || {
+      printf 'staged Cargo cache contains an unreceipted archive: %s\n' "$archive" >&2
+      return 1
+    }
+    actual="$(jain_sha256 "$path")"
+    [[ "$actual" == "${staged_expected_archives[$archive]}" ]] || {
+      printf 'staged Cargo archive checksum differs from its receipt: %s\n' "$archive" >&2
+      return 1
+    }
+    actual_count=$((actual_count + 1))
+  done < <(find "$cache_root" -mindepth 1 -maxdepth 1 -type f -print0)
+  [[ "$actual_count" == "$package_count" ]] || {
+    printf 'staged Cargo cache file set differs from its receipt\n' >&2
+    return 1
+  }
+
+  [[ -f "$index_root/config.json" && ! -L "$index_root/config.json" ]] || {
+    printf 'staged Cargo index has no physical config.json\n' >&2
+    return 1
+  }
+  actual_count=0
+  while IFS= read -r -d '' path; do
+    relative="${path#"$index_root/.cache/"}"
+    [[ "$relative" != "$path" \
+      && -n "${staged_expected_index_entries[$relative]+x}" \
+      && -f "$path" && ! -L "$path" ]] || {
+      printf 'staged Cargo index contains an unreceipted entry: %s\n' "$relative" >&2
+      return 1
+    }
+    actual_count=$((actual_count + 1))
+  done < <(find "$index_root/.cache" -mindepth 1 -type f -print0)
+  [[ "$actual_count" == "${#staged_expected_index_entries[@]}" ]] || {
+    printf 'staged Cargo index path set differs from receipt package names\n' >&2
+    return 1
+  }
+
+  actual="$(jain_cargo_index_closure_manifest_sha256 \
+    "$lock_file" "$index_root")" || return 1
+  [[ "$actual" == "$index_manifest" ]] || {
+    printf 'staged Cargo selected-index manifest mismatch: expected %s actual %s\n' \
+      "$index_manifest" "$actual" >&2
+    return 1
+  }
+}
+
 jain_ci_dir_identity() {
   stat -Lc '%d:%i' -- "${1:?directory is required}"
 }
@@ -508,10 +876,11 @@ jain_seed_locked_cargo_archives() {
 # the host. Scoping the copy to the lockfile closure keeps the yanked check and
 # makes the seeded set a function of committed bytes.
 #
-# The index entry for a crate legitimately changes whenever any new version of that
-# crate is published upstream, so its CONTENT is deliberately not pinned. What is
-# enforced is completeness and exactness: every locked crate must have an entry, and
-# nothing outside the closure may be present.
+# A selected index entry can change when a new version of that crate is published.
+# Its reviewed content manifest is therefore pinned here, and an authority refresh
+# requires an explicit reviewed pin bump. Completeness and exactness are independent
+# controls: every locked registry crate must have an entry, and the isolated index
+# may contain no file, directory, symlink, or special node outside that closure.
 jain_seed_locked_cargo_registry_index() {
   local lock_file="${1:?lock file is required}"
   local source_index="${2:?source registry index is required}"
@@ -585,19 +954,41 @@ jain_seed_locked_cargo_registry_index() {
     printf 'no locked crate resolved to a crates.io index entry\n' >&2
     return 1
   }
-  # Exactness: nothing outside the lockfile closure may have been seeded.
-  [[ "$(find "$destination/.cache" -type f | wc -l)" -eq "$seeded" ]] || {
-    printf 'isolated crates.io index contains entries outside the lock closure\n' >&2
-    return 1
-  }
-  [[ -z "$(find "$destination" -type l -print -quit)" ]] || {
-    printf 'isolated crates.io index contains a symlink\n' >&2
-    return 1
-  }
-  # Content custody on the DESTINATION immediately after copying.
+  # Exact physical-set and content custody on the destination immediately after
+  # copying. The same verifier runs after cargo-deny to reject post-seed extras.
   jain_verify_locked_cargo_registry_index \
     "$lock_file" "$destination" "$expected_manifest" || return 1
   log "security: seeded lock-closure crates.io index entries=$seeded manifest=$expected_manifest"
+}
+
+jain_locked_cargo_index_expected_files() {
+  local lock_file="${1:?lock file is required}"
+  local index_root="${2:?index root is required}"
+  local records name relative
+  local -a names=() files=(config.json)
+
+  records="$(jain_locked_registry_package_records "$lock_file")" || return 1
+  mapfile -t names < <(
+    cut -f1 <<<"$records" | LC_ALL=C sort -u
+  )
+  [[ "${#names[@]}" -gt 0 ]] || {
+    printf 'Cargo.lock yielded no crates.io index names\n' >&2
+    return 1
+  }
+  [[ -f "$index_root/config.json" && ! -L "$index_root/config.json" ]] || {
+    printf 'crates.io index lacks a physical config.json: %s\n' "$index_root" >&2
+    return 1
+  }
+  for name in "${names[@]}"; do
+    relative="$(jain_cargo_index_entry_path "$name")" || return 1
+    [[ -f "$index_root/.cache/$relative" \
+      && ! -L "$index_root/.cache/$relative" ]] || {
+      printf 'crates.io index lacks a physical locked entry: %s\n' "$relative" >&2
+      return 1
+    }
+    files+=(".cache/$relative")
+  done
+  printf '%s\n' "${files[@]}" | LC_ALL=C sort
 }
 
 # Deterministic SHA-256 over ONLY the Cargo.lock-selected index entries: the
@@ -609,37 +1000,21 @@ jain_seed_locked_cargo_registry_index() {
 jain_cargo_index_closure_manifest_sha256() {
   local lock_file="${1:?lock file is required}"
   local index_root="${2:?index root is required}"
-  local name relative
-  local -a names=() relatives=()
+  local selected_files selected_file manifest_relative
+  local -a files=()
 
-  [[ -f "$index_root/config.json" && ! -L "$index_root/config.json" ]] || {
-    printf 'crates.io index lacks a physical config.json: %s\n' "$index_root" >&2
-    return 1
-  }
-  mapfile -t names < <(
-    awk '/^name = "/ { gsub(/^name = "|"$/, ""); print }' "$lock_file" \
-      | LC_ALL=C sort -u
-  )
-  for name in "${names[@]}"; do
-    relative="$(jain_cargo_index_entry_path "$name")" || return 1
-    [[ -e "$index_root/.cache/$relative" ]] || continue
-    [[ -f "$index_root/.cache/$relative" && ! -L "$index_root/.cache/$relative" ]] || {
-      printf 'crates.io index entry is not a physical file: %s\n' "$relative" >&2
-      return 1
-    }
-    relatives+=("$relative")
-  done
-  [[ "${#relatives[@]}" -gt 0 ]] || {
-    printf 'no locked crate resolved to a crates.io index entry\n' >&2
-    return 1
-  }
+  selected_files="$(jain_locked_cargo_index_expected_files \
+    "$lock_file" "$index_root")" || return 1
+  mapfile -t files <<<"$selected_files"
   {
     printf 'config.json\n'
     sha256sum -- "$index_root/config.json" | awk '{print $1}'
-    while IFS= read -r relative; do
-      printf '%s\n' "$relative"
-      sha256sum -- "$index_root/.cache/$relative" | awk '{print $1}'
-    done < <(printf '%s\n' "${relatives[@]}" | LC_ALL=C sort)
+    for selected_file in "${files[@]}"; do
+      [[ "$selected_file" == .cache/* ]] || continue
+      manifest_relative="${selected_file#.cache/}"
+      printf '%s\n' "$manifest_relative"
+      sha256sum -- "$index_root/$selected_file" | awk '{print $1}'
+    done
   } | sha256sum | awk '{print $1}'
 }
 
@@ -650,11 +1025,47 @@ jain_verify_locked_cargo_registry_index() {
   local lock_file="${1:?lock file is required}"
   local index_root="${2:?index root is required}"
   local expected_manifest="${3:?closure index manifest is required}"
-  local actual
-  [[ -z "$(find "$index_root" -type l -print -quit)" ]] || {
-    printf 'isolated crates.io index contains a symlink\n' >&2
+  local actual expected_files actual_files expected_dirs actual_dirs
+  local file_path directory
+  local -a files=()
+  local -A directory_set=()
+
+  [[ -d "$index_root" && ! -L "$index_root" \
+    && "$(realpath -e -- "$index_root")" == "$index_root" ]] || {
+    printf 'isolated crates.io index is not a physical directory\n' >&2
     return 1
   }
+  [[ -z "$(find "$index_root" -mindepth 1 ! -type d ! -type f -print -quit)" ]] || {
+    printf 'isolated crates.io index contains a symlink or special node\n' >&2
+    return 1
+  }
+  expected_files="$(jain_locked_cargo_index_expected_files \
+    "$lock_file" "$index_root")" || return 1
+  actual_files="$(find "$index_root" -mindepth 1 -type f -printf '%P\n' \
+    | LC_ALL=C sort)"
+  [[ "$actual_files" == "$expected_files" ]] || {
+    printf 'isolated crates.io index file set differs from the lock closure\n' >&2
+    return 1
+  }
+
+  mapfile -t files <<<"$expected_files"
+  for file_path in "${files[@]}"; do
+    directory="$(dirname -- "$file_path")"
+    while [[ "$directory" != "." ]]; do
+      directory_set["$directory"]=1
+      directory="$(dirname -- "$directory")"
+    done
+  done
+  expected_dirs="$(
+    printf '%s\n' "${!directory_set[@]}" | LC_ALL=C sort
+  )"
+  actual_dirs="$(find "$index_root" -mindepth 1 -type d -printf '%P\n' \
+    | LC_ALL=C sort)"
+  [[ "$actual_dirs" == "$expected_dirs" ]] || {
+    printf 'isolated crates.io index directory set differs from the lock closure\n' >&2
+    return 1
+  }
+
   actual="$(jain_cargo_index_closure_manifest_sha256 "$lock_file" "$index_root")" \
     || return 1
   [[ "$actual" == "$expected_manifest" ]] || {
@@ -692,7 +1103,6 @@ jain_seed_locked_cargo_registry_closure() {
       return 1
     }
     pairs+=("$package" "$version")
-    expected_archives+=("$package-$version.crate")
   done <<<"$records"
   ((${#pairs[@]} > 0)) || {
     printf 'locked registry closure is empty\n' >&2

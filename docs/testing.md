@@ -17,7 +17,7 @@ and check your toolchain with `bash scripts/ci-doctor.sh`.
 | fast | `ops/ci/fast.sh` | shell syntax, `cargo fmt`/`check`, npm lockfile, actionlint |
 | frontend | `ops/ci/web.sh` | `tsc`, eslint, vitest unit/component tests, `vite build` |
 | backend | `ops/ci/backend.sh` | `cargo fmt`/`clippy -D warnings`/`test`, release build |
-| security | `ops/ci/security.sh` | gitleaks, cargo-audit, cargo-deny, npm audit, zizmor, SBOM |
+| security | `ops/ci/security.sh` | gitleaks, pinned RustSec/deny, zizmor, complete npm-lock Syft + authenticated Grype, separate whole-repo SBOM |
 | web e2e | `ops/ci/e2e.sh` | Playwright smoke against the **built binary** + axe a11y |
 | jankurai | `ops/ci/jankurai.sh` | exact governed Jankurai 1.6.11, clean-head score/proof plus exact-head Playwright/Axe evidence → ignored `target/jankurai/**` evidence |
 | cost-budget | `ops/ci/cost-budget.sh` | zero-spend budget + stop conditions receipt |

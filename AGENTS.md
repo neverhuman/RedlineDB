@@ -18,9 +18,13 @@ operations, release).
   `--target-bin` CLI).
 - **Stay independent.** No workspace spanning sibling repos. `ops/ci/pr-ci.sh` is
   the green gate.
-- **jankurai standard.** Audit only with regular non-symlink
-  `/home/ubuntu/.jeryu/bin/jankurai` at governed version 1.6.11 and its pinned
-  digest; caller environment and `PATH` never select evidence. `just score`.
+- **jankurai standard.** Audit only with the governed regular non-symlink
+  Jankurai position (release authority mount, installed host position, then the
+  developer position) at version 1.6.11 and its pinned digest; an unverified
+  `PATH` entry never selects evidence. `just score`.
+- **Offline advisory authority.** Release security consumes only the fresh
+  root-staged Cargo registry and authenticated Grype v6 database. npm is
+  lock/install integrity only; `npm audit --offline` is not advisory evidence.
 - **MR-only.** Land via a jeryu PR (`gh pr create` → `jeryu.propose_patch`);
   `main` advances on forge merge and mirrors to `github.com/neverhuman/redline-web`.
 

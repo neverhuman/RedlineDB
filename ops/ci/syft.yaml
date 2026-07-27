@@ -9,3 +9,4 @@ java:
   use-network: false
 javascript:
   search-remote-licenses: false
+  include-dev-dependencies: true

@@ -32,12 +32,27 @@ bound parameters, never interpolated.
 
 ## Supply chain
 
-`ops/ci/security.sh` is blocking and network-free. It verifies exact local tool
-bytes, archives the exact pinned RustSec Git commit into an isolated local
-snapshot and audits it without fetching, runs
-`cargo-deny` with fetching disabled and warnings denied, uses the offline npm
-advisory cache, requires zero offline Zizmor findings, and runs pinned Syft with
-its update check disabled. Source evidence stays at
+`ops/ci/security.sh` is blocking and network-free. It verifies exact tool
+bytes and audits the exact pinned RustSec Git commit without fetching. Local
+runs archive it into an isolated snapshot; release runs invoke the verified
+root-installed wrappers over the root-staged physical databases. The lane runs
+`cargo-deny` with fetching disabled and warnings denied, requires zero offline
+Zizmor findings, and runs pinned Syft with updates disabled. In release mode,
+Cargo evidence uses only the fresh root-staged `$CARGO_HOME/registry`; its exact
+receipt, archive/index set, selected-content manifest, and full inventory are
+verified before and after `cargo-deny`. Local governed and developer-cache runs
+use separate reviewed index manifests and are identified in the evidence.
+
+JavaScript advisory coverage scans only `apps/web/package-lock.json` with dev
+dependencies enabled. The sorted multiset of all 376 non-root lock entries must
+equal the 376 non-root npm PURLs in that SBOM before update-disabled Grype scans
+it against the closed, root-owned v6 database. The database inventory, status,
+schema, path, and result are retained and zero High/Critical findings are
+required. The whole-repository SBOM is separate and never feeds this npm gate.
+`npm ci --no-audit` remains lock/install integrity; `npm audit --offline` is not
+advisory evidence because an empty cache can report a false clean result.
+
+Source evidence stays at
 `target/jankurai/security/source-evidence.json`; the governed Jankurai release
 wrapper writes its separate strict receipt beside it. Both are bound to the
 exact commit and tree. Every GitHub Action is pinned to a

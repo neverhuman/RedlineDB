@@ -61,8 +61,8 @@ jobs:
       - name: Contract drift (OpenAPI <-> Rust DTOs <-> TS DTOs)
         run: bash ops/ci/contract-drift.sh
 
-  # Security lane — a required, blocking gate: secret scan, dependency
-  # advisories, license/source policy, npm audit, workflow lint, SBOM.
+  # Security lane — a required, blocking gate: secret scan, RustSec policy,
+  # complete npm-lock SBOM, authenticated offline Grype, workflow lint, SBOM.
   security:
     name: security (scan + supply-chain)
     runs-on: ubuntu-24.04
@@ -73,8 +73,8 @@ jobs:
           persist-credentials: false
       - uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2.8.1
-      - name: "Pinned local security evidence: gitleaks RustSec deny npm zizmor Syft"
-        run: REDLINE_SECURITY_COMMANDS='gitleaks detect; cargo audit; cargo deny; npm audit; zizmor; syft' bash ops/ci/security.sh
+      - name: "Pinned local security evidence: gitleaks RustSec deny zizmor Syft Grype"
+        run: REDLINE_SECURITY_COMMANDS='gitleaks detect; cargo audit; cargo deny; zizmor; syft; grype' bash ops/ci/security.sh
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: always()
         with:

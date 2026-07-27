@@ -30,9 +30,10 @@ that tag is created.
 
 - `Cargo.lock` and `apps/web/package-lock.json` pin the dependency graph.
 - `ops/ci/security.sh` runs pinned, fully local gitleaks, cargo-audit,
-  cargo-deny, npm audit, zizmor, and Syft checks without updates or network
-  fetches. It writes the SPDX SBOM and bound evidence under
-  `target/jankurai/security/`.
+  cargo-deny, zizmor, Syft, and authenticated Grype checks without updates or
+  network fetches. npm is used only for lock/install integrity. The lane writes
+  separate whole-repository and complete npm-lock SPDX SBOMs plus bound
+  evidence under `target/jankurai/security/`.
 - Every external GitHub Action is pinned to a 40-hex commit SHA.
 - Release evidence receipts: `target/jankurai/release-readiness.json` and
   `target/jankurai/cost-budget.json`.
