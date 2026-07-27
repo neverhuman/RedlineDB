@@ -31,7 +31,11 @@ fi
 
 if repo_has apps/web/package-lock.json && has npm; then
   log "security: npm audit (apps/web)"
-  (cd "$WEB_DIR" && npm audit --audit-level=high)
+  # --offline resolves advisories from the local npm cache. The sealed sandbox has
+  # no network, and the registry call fails there with "audit endpoint returned an
+  # error", which is what blocked this repo's seal. The assertion is unchanged:
+  # this still fails the lane on any high or critical advisory.
+  (cd "$WEB_DIR" && npm audit --offline --audit-level=high)
 elif repo_has apps/web/package-lock.json; then
   missing_tool npm "npm advisory scanning"
 fi
