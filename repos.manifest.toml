@@ -212,6 +212,18 @@ owner = "jankurai"
 reason = "temporary source custody only; requires governed creation and onboarding through corrected AUTH-006/007/008, then removal from exclusions"
 
 [[excluded_path]]
+path = "/home/ubuntu/jain-split/jain-jair"
+name = "jain-jair"
+owner = "jair"
+reason = "JAIR deterministic invention foundation under active construction (owner directive 2026-07-27); staged exclusion until proof surface + registry closure admit a pending row"
+
+[[excluded_path]]
+path = "/home/ubuntu/jain-split/jair-search"
+name = "jair-search"
+owner = "jair"
+reason = "dedicated jair-search evolution-engine repository (owner directive 2026-07-27); forge repo created, checkout pending"
+
+[[excluded_path]]
 path = "/home/ubuntu/jain-split/dope"
 name = "dope"
 owner = "workspace-ops"
