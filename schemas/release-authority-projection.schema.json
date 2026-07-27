@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/release-authority-projection.schema.json",
+  "title": "Jain release authority projection",
+  "description": "Closed, root-brokered v10 candidate metadata projected from the authenticated control-plane manifest.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "family",
+    "control_commit",
+    "source_manifest_sha256",
+    "release_version",
+    "status",
+    "formal_ga",
+    "rollback_target"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "jain.release-authority-projection/v1"
+    },
+    "family": {
+      "const": "jain-split"
+    },
+    "control_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "source_manifest_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "release_version": {
+      "const": "10.0.0"
+    },
+    "status": {
+      "const": "candidate"
+    },
+    "formal_ga": {
+      "const": false
+    },
+    "rollback_target": {
+      "const": "8.0.1"
+    }
+  }
+}
