@@ -1,5 +1,9 @@
 # Jankurai audit policy for redline-web.
 minimum_score = 85
+# Governed tool identity. splitctl (main.rs:4336-4339,4468) requires both fields and
+# matches them exactly against the auditor executable release used by the sealed run.
+required_tool = "jankurai"
+required_tool_version = "1.6.11"
 fail_on = ["critical", "high"]
 advisory_on = ["medium", "low"]
 

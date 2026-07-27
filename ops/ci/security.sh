@@ -29,7 +29,9 @@ elif repo_has Cargo.toml; then
   warn "skipping cargo-deny: Cargo workspace metadata not ready"
 fi
 
-if repo_has apps/web/package-lock.json && has npm; then
+if [[ "${JAIN_SECURITY_NETWORK:-0}" != "1" ]]; then
+  warn "skipping npm audit: needs the live registry; set JAIN_SECURITY_NETWORK=1 to run it"
+elif repo_has apps/web/package-lock.json && has npm; then
   log "security: npm audit (apps/web)"
   (cd "$WEB_DIR" && npm audit --audit-level=high)
 elif repo_has apps/web/package-lock.json; then
