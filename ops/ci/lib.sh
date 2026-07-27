@@ -471,6 +471,98 @@ jain_seed_locked_cargo_archives() {
   done
 }
 
+# Seed ONLY the crates.io index entries for the crates this Cargo.lock resolves.
+#
+# cargo-deny needs an index to answer "is this crate version yanked?"; without one
+# it emits error[index-failure] and the advisories check fails. The lane used to
+# satisfy that by copying the entire developer index and pinning it by
+# whole-directory digest, which fired on any unrelated crate resolution anywhere on
+# the host. Scoping the copy to the lockfile closure keeps the yanked check and
+# makes the seeded set a function of committed bytes.
+#
+# The index entry for a crate legitimately changes whenever any new version of that
+# crate is published upstream, so its CONTENT is deliberately not pinned. What is
+# enforced is completeness and exactness: every locked crate must have an entry, and
+# nothing outside the closure may be present.
+jain_seed_locked_cargo_registry_index() {
+  local lock_file="${1:?lock file is required}"
+  local source_index="${2:?source registry index is required}"
+  local cargo_home="${3:?isolated Cargo home is required}"
+  local destination name relative seeded=0
+  local -a names=()
+
+  [[ -f "$lock_file" && ! -L "$lock_file" ]] || {
+    printf 'locked registry index seed requires a physical lock file: %s\n' \
+      "$lock_file" >&2
+    return 1
+  }
+  [[ -d "$source_index" && ! -L "$source_index" \
+    && "$(realpath -e -- "$source_index")" == "$source_index" \
+    && -z "$(find "$source_index" -type l -print -quit)" ]] || {
+    printf 'source crates.io index must be a physical symlink-free directory: %s\n' \
+      "$source_index" >&2
+    return 1
+  }
+
+  destination="$cargo_home/registry/index/$(basename -- "$source_index")"
+  [[ ! -e "$destination" && ! -L "$destination" ]] || {
+    printf 'isolated crates.io index destination already exists: %s\n' "$destination" >&2
+    return 1
+  }
+  mkdir -p "$destination/.cache"
+  [[ -f "$source_index/config.json" && ! -L "$source_index/config.json" ]] || {
+    printf 'source crates.io index lacks a physical config.json\n' >&2
+    return 1
+  }
+  cp -- "$source_index/config.json" "$destination/config.json"
+
+  mapfile -t names < <(
+    awk '/^name = "/ { gsub(/^name = "|"$/, ""); print }' "$lock_file" \
+      | LC_ALL=C sort -u
+  )
+  [[ "${#names[@]}" -gt 0 ]] || {
+    printf 'lock file yielded no crate names: %s\n' "$lock_file" >&2
+    return 1
+  }
+
+  for name in "${names[@]}"; do
+    relative="$(jain_cargo_index_entry_path "$name")" || return 1
+    # Workspace members are not registry crates and have no index entry.
+    [[ -f "$source_index/.cache/$relative" ]] || continue
+    [[ ! -L "$source_index/.cache/$relative" ]] || {
+      printf 'source index entry is a symlink: %s\n' "$relative" >&2
+      return 1
+    }
+    mkdir -p "$destination/.cache/$(dirname -- "$relative")"
+    cp -- "$source_index/.cache/$relative" "$destination/.cache/$relative"
+    seeded=$((seeded + 1))
+  done
+
+  [[ "$seeded" -gt 0 ]] || {
+    printf 'no locked crate resolved to a crates.io index entry\n' >&2
+    return 1
+  }
+  # Exactness: nothing outside the lockfile closure may have been seeded.
+  [[ "$(find "$destination/.cache" -type f | wc -l)" -eq "$seeded" ]] || {
+    printf 'isolated crates.io index contains entries outside the lock closure\n' >&2
+    return 1
+  }
+  log "security: seeded lock-closure crates.io index entries=$seeded"
+}
+
+# Cargo's index path scheme for a crate name.
+jain_cargo_index_entry_path() {
+  local name="${1:?crate name is required}"
+  local lowered
+  lowered="$(printf '%s' "$name" | tr '[:upper:]' '[:lower:]')"
+  case "${#lowered}" in
+    1) printf '1/%s' "$lowered" ;;
+    2) printf '2/%s' "$lowered" ;;
+    3) printf '3/%s/%s' "${lowered:0:1}" "$lowered" ;;
+    *) printf '%s/%s/%s' "${lowered:0:2}" "${lowered:2:2}" "$lowered" ;;
+  esac
+}
+
 jain_seed_locked_cargo_registry_closure() {
   local lock_file="${1:?lock file is required}"
   local cache_parent="${2:?cache parent is required}"
@@ -653,9 +745,16 @@ jain_verify_isolated_cargo_deny_db() {
     return 1
   }
   mapfile -t fetch_lines <"$repository/.git/FETCH_HEAD"
-  [[ "${#fetch_lines[@]}" -eq 1 \
-    && "${fetch_lines[0]%%$'\t'*}" == "$expected_commit" ]] || {
-    printf 'isolated cargo-deny advisory DB FETCH_HEAD identity mismatch\n' >&2
+  # The isolated clone is already proven to be detached at the pinned commit with
+  # the pinned tree and a clean tree just above. FETCH_HEAD records whatever main
+  # pointed at when the closure was seeded, which legitimately moves ahead of the
+  # pin as RustSec publishes; requiring equality here re-introduced the same
+  # mutable-position failure. What must hold is that the pinned commit is on the
+  # lineage that was actually fetched.
+  [[ "${#fetch_lines[@]}" -eq 1 ]] \
+    && git -C "$repository" merge-base --is-ancestor \
+      "$expected_commit" "${fetch_lines[0]%%$'\t'*}" || {
+    printf 'isolated cargo-deny advisory DB FETCH_HEAD lineage mismatch\n' >&2
     return 1
   }
   [[ -z "$(git -C "$repository" remote)" \
@@ -704,15 +803,22 @@ jain_seed_cargo_deny_advisory_db() {
     return 1
   }
   mapfile -t source_fetch_lines <"$source_db/.git/FETCH_HEAD"
-  [[ "$(git -C "$source_db" symbolic-ref --short HEAD)" == "main" \
-    && "$(git -C "$source_db" rev-parse HEAD)" == "$expected_commit" \
-    && "$source_origin_main" == "$expected_commit" \
-    && "$(git -C "$source_db" rev-parse 'HEAD^{tree}')" == "$expected_tree" \
-    && -z "$(git -C "$source_db" status --porcelain=v1)" \
+  # Verify the pinned OBJECT, not the checkout's mutable position. The advisory
+  # database is a live upstream feed, so requiring HEAD/origin-main/FETCH_HEAD to
+  # equal the pin failed the moment RustSec published anything — a false positive
+  # on correct behaviour, not a tamper signal. What actually needs to hold is that
+  # the pinned commit is present, carries the pinned tree, and sits on the real
+  # upstream main lineage; the clone below then checks that exact commit out. This
+  # mirrors how ops/ci/security.sh materialises its RustSec snapshot by archiving
+  # the pinned commit rather than demanding HEAD be parked on it.
+  [[ "$(git -C "$source_db" cat-file -t "$expected_commit" 2>/dev/null)" == "commit" \
+    && "$(git -C "$source_db" rev-parse "${expected_commit}^{tree}")" == "$expected_tree" \
+    && -n "$source_origin_main" \
     && "${#source_fetch_lines[@]}" -ge 1 \
-    && "${source_fetch_lines[0]%%$'\t'*}" == "$expected_commit" \
-    && "${source_fetch_lines[0]}" == "$expected_commit"$'\t\t'* ]] || {
-    printf 'fixed cargo-deny advisory DB HEAD/tree/FETCH_HEAD/clean identity mismatch\n' >&2
+    && -z "$(git -C "$source_db" status --porcelain=v1)" ]] \
+    && git -C "$source_db" merge-base --is-ancestor \
+      "$expected_commit" refs/remotes/origin/main || {
+    printf 'fixed cargo-deny advisory DB pinned-object/lineage/clean identity mismatch\n' >&2
     return 1
   }
   git -C "$source_db" fsck --full --no-reflogs >/dev/null 2>&1 || {

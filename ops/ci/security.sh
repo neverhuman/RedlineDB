@@ -21,8 +21,13 @@ readonly RUSTSEC_DB_TREE="c33f1047906505cabcec7e21f2d99db5c6de8852"
 readonly CARGO_DENY_DB="/home/ubuntu/.cargo/advisory-dbs/advisory-db-3157b0e258782691"
 readonly HOST_CARGO_CACHE_PARENT="/home/ubuntu/.cargo/registry/cache"
 readonly HOST_CARGO_CACHE="${HOST_CARGO_CACHE_PARENT}/index.crates.io-1949cf8c6b5b557f"
+# The crates.io index is seeded from the Cargo.lock closure only. The developer
+# cache is NOT an authoritative custody object -- it is shared and appendable, so
+# the whole-directory digest pin this replaces fired on ordinary resolution
+# elsewhere on the host. cargo-deny still needs index entries to answer whether a
+# locked version is yanked, so the entries are scoped to committed lock bytes
+# rather than dropped.
 readonly HOST_CARGO_INDEX="/home/ubuntu/.cargo/registry/index/index.crates.io-1949cf8c6b5b557f"
-readonly HOST_CARGO_INDEX_MANIFEST_SHA256="8008bd5c203bae7ed4721b5977f51b87118d46686f30e6019a2f025347831e00"
 readonly EXPECTED_SECURITY_COMMANDS="gitleaks detect; cargo audit; cargo deny; npm audit; zizmor; syft"
 
 cargo_deny_home=""
@@ -100,9 +105,9 @@ cargo_metadata="$artifact_root/cargo-metadata.json"
 CARGO_HOME="$cargo_cache_home" cargo metadata --locked --offline --format-version 1 \
   >"$cargo_metadata"
 cargo_deny_home="$(mktemp -d "$artifact_root/cargo-deny-home.XXXXXX")"
-jain_seed_cargo_registry_index \
-  "$HOST_CARGO_INDEX" "$cargo_deny_home" "$HOST_CARGO_INDEX_MANIFEST_SHA256" \
-  || fail "security: exact isolated crates.io index seed failed"
+jain_seed_locked_cargo_registry_index \
+  "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_INDEX" "$cargo_deny_home" \
+  || fail "security: lock-closure crates.io index seed failed"
 jain_seed_locked_cargo_registry_closure \
   "$ROOT_DIR/Cargo.lock" "$HOST_CARGO_CACHE_PARENT" "$HOST_CARGO_CACHE" \
   "$cargo_deny_home" \

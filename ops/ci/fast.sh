@@ -14,6 +14,7 @@ bash ops/ci/governed-jankurai-test.sh
 
 log "fast: cargo-deny locked archive cache hostile tests"
 bash ops/ci/cargo-deny-cache-test.sh
+bash ops/ci/security-no-index-test.sh
 
 log "fast: checking CI language boundary"
 cargo fmt --manifest-path tools/release-control/Cargo.toml -- --check
