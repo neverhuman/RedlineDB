@@ -90,9 +90,17 @@ on a branch name or prose status.
 Publisher installation is a separate post-merge authority action. It must use
 the clean protected-merged source and the procedure in
 [`HOST_CI_BOUNDARY.md`](../ops/ci/HOST_CI_BOUNDARY.md), then verify the
-installed sandbox configuration protocol is v7 and run the boundary preflight.
-A source or PR lane must not install or execute the unmerged publisher, migrate
-the forge credential, or publish product checks.
+installed sandbox configuration protocol is v8 and run the boundary preflight.
+The sole pre-merge exception is the documented control-plane self-check:
+after independent exact-head review, a distinct authority owner may install
+only the reviewed sandbox and bind its published ref, exact commit, and an
+expiry no more than two hours ahead in both root configs. The publisher must
+remain byte-identical to protected `main`; no unmerged publisher bytes may be
+installed or executed. Failure restores ordinary-main authority immediately;
+a protected fast-forward is followed by an ordinary-main reinstall, preflight,
+and live readback with all bootstrap fields removed. The source author and
+unprivileged PR worker must not migrate the forge credential or publish product
+checks.
 
 After installation, monitor proof and required-check readbacks for every
 request. A failed proof POST prevents required publication. A later
