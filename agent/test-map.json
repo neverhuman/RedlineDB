@@ -310,6 +310,11 @@
       "lane": "check",
       "purpose": "verify helper scripts parse and stay locally reproducible"
     },
+    "schemas/npm-cache-authority.schema.json": {
+      "command": "jq empty schemas/npm-cache-authority.schema.json && bash ops/ci/npm-runtime-test.sh && just score",
+      "lane": "score",
+      "purpose": "verify the authority schema parses and runtime rejects shape, closure, and cache-custody violations"
+    },
     "schemas/": {
       "command": "just score",
       "lane": "score",

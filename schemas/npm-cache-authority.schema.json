@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/npm-cache-authority.schema.json",
+  "title": "Jain closed npm cache authority",
+  "description": "Structural contract for a Redline Web npm cache. Runtime validation additionally proves cache_root matches inventory_sha256 and recomputes the lock, closure, inventory, content, and URL-index identities.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "format",
+    "cache_root",
+    "inventory_sha256",
+    "file_count",
+    "closure_count",
+    "closure_sha256",
+    "package_lock_path",
+    "package_lock_sha256",
+    "platform",
+    "arch",
+    "libc",
+    "npm_version"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "jain.npm-cache/v1"
+    },
+    "format": {
+      "const": "cacache-v5"
+    },
+    "cache_root": {
+      "type": "string",
+      "pattern": "^/var/lib/jain-host-ci/npm-cache/[0-9a-f]{64}$"
+    },
+    "inventory_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "file_count": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "closure_count": {
+      "type": "integer",
+      "minimum": 2
+    },
+    "closure_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "package_lock_path": {
+      "const": "apps/web/package-lock.json"
+    },
+    "package_lock_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "platform": {
+      "const": "linux"
+    },
+    "arch": {
+      "const": "x64"
+    },
+    "libc": {
+      "const": "glibc"
+    },
+    "npm_version": {
+      "const": "9.2.0"
+    }
+  }
+}
