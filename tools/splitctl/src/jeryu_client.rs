@@ -583,6 +583,7 @@ where
         match write(remaining, bytes) {
             Ok(0) => return Err(JeryuError::new("local Jeryu request write returned zero")),
             Ok(written) => bytes = &bytes[written..],
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
             Err(error)
                 if matches!(
                     error.kind(),
@@ -597,6 +598,28 @@ where
         }
     }
     Ok(())
+}
+
+fn read_with_deadline<F>(deadline: Instant, mut read: F) -> Result<usize>
+where
+    F: FnMut(Duration) -> io::Result<usize>,
+{
+    loop {
+        let remaining = remaining_until(deadline, "response")?.min(IO_TIMEOUT);
+        match read(remaining) {
+            Ok(count) => return Ok(count),
+            Err(error) if error.kind() == io::ErrorKind::Interrupted => continue,
+            Err(error)
+                if matches!(
+                    error.kind(),
+                    io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+                ) =>
+            {
+                return Err(JeryuError::new("local Jeryu response deadline exceeded"))
+            }
+            Err(error) => return Err(error.into()),
+        }
+    }
 }
 
 impl PublishFailure {
@@ -1061,21 +1084,10 @@ fn read_more(stream: &mut TcpStream, bytes: &mut Vec<u8>, deadline: Instant) -> 
     if bytes.len() >= MAX_WIRE_BYTES {
         return Err(JeryuError::new("local Jeryu response is oversized"));
     }
-    let remaining = deadline
-        .checked_duration_since(Instant::now())
-        .filter(|remaining| !remaining.is_zero())
-        .ok_or_else(|| JeryuError::new("local Jeryu response deadline exceeded"))?;
-    stream.set_read_timeout(Some(remaining.min(IO_TIMEOUT)))?;
     let mut buffer = [0_u8; 8192];
-    let count = stream.read(&mut buffer).map_err(|error| {
-        if matches!(
-            error.kind(),
-            io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
-        ) {
-            JeryuError::new("local Jeryu response deadline exceeded")
-        } else {
-            error.into()
-        }
+    let count = read_with_deadline(deadline, |remaining| {
+        stream.set_read_timeout(Some(remaining))?;
+        stream.read(&mut buffer)
     })?;
     if count == 0 {
         return Ok(false);
@@ -1875,6 +1887,53 @@ mod tests {
         .unwrap_err();
         assert!(error.to_string().contains("deadline exceeded"));
         assert!(writes < 128);
+        assert!(started.elapsed() < Duration::from_millis(100));
+    }
+
+    #[test]
+    fn request_write_retries_interrupted_io() {
+        let mut attempts = 0;
+        write_all_with_deadline(
+            &[0_u8; 8],
+            Instant::now() + Duration::from_secs(1),
+            |_remaining, bytes| {
+                attempts += 1;
+                if attempts == 1 {
+                    Err(io::Error::from(io::ErrorKind::Interrupted))
+                } else {
+                    Ok(bytes.len())
+                }
+            },
+        )
+        .unwrap();
+        assert_eq!(attempts, 2);
+    }
+
+    #[test]
+    fn response_read_retries_interrupted_io_without_resetting_deadline() {
+        let mut attempts = 0;
+        let count = read_with_deadline(Instant::now() + Duration::from_secs(1), |_remaining| {
+            attempts += 1;
+            if attempts == 1 {
+                Err(io::Error::from(io::ErrorKind::Interrupted))
+            } else {
+                Ok(7)
+            }
+        })
+        .unwrap();
+        assert_eq!(count, 7);
+        assert_eq!(attempts, 2);
+
+        let started = Instant::now();
+        let mut interrupts = 0;
+        let error = read_with_deadline(started + Duration::from_millis(20), |_remaining| {
+            interrupts += 1;
+            thread::sleep(Duration::from_millis(6));
+            Err(io::Error::from(io::ErrorKind::Interrupted))
+        })
+        .unwrap_err();
+        assert!(error.to_string().contains("deadline exceeded"));
+        assert!(interrupts < 10);
         assert!(started.elapsed() < Duration::from_millis(100));
     }
 
