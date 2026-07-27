@@ -1,5 +1,5 @@
 {
-  "action": "created-and-verified",
+  "action": "verified-existing",
   "after": {
     "local": "b12c4a148d8100283b207d34870307f395c73396",
     "remote": "b12c4a148d8100283b207d34870307f395c73396",
@@ -15,8 +15,8 @@
     "visibility": "private"
   },
   "before": {
-    "local": null,
-    "remote": null
+    "local": "b12c4a148d8100283b207d34870307f395c73396",
+    "remote": "b12c4a148d8100283b207d34870307f395c73396"
   },
   "commit": "b12c4a148d8100283b207d34870307f395c73396",
   "commit_input": "b12c4a148d8100283b207d34870307f395c73396",
@@ -28,6 +28,6 @@
   "schema_version": "jain.immutable-tag/v1",
   "status": "pass",
   "tag": "jain-split-ops-v10.0.0-split.10",
-  "timestamp_unix": 1785153689,
+  "timestamp_unix": 1785157682,
   "token_metadata_validated": true
 }

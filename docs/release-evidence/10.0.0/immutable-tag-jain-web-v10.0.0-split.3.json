@@ -1,5 +1,5 @@
 {
-  "action": "created-and-verified",
+  "action": "verified-existing",
   "after": {
     "local": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5",
     "remote": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5",
@@ -15,8 +15,8 @@
     "visibility": "private"
   },
   "before": {
-    "local": null,
-    "remote": null
+    "local": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5",
+    "remote": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5"
   },
   "commit": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5",
   "commit_input": "d92e8ba173ec5de181fad9214c76deaa1e55dbe5",
@@ -28,6 +28,6 @@
   "schema_version": "jain.immutable-tag/v1",
   "status": "pass",
   "tag": "jain-web-v10.0.0-split.3",
-  "timestamp_unix": 1785155481,
+  "timestamp_unix": 1785157676,
   "token_metadata_validated": true
 }
