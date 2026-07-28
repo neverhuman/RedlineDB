@@ -5298,19 +5298,60 @@ mod tests {
     #[test]
     fn historical_jain4_receipts_remain_verifiable_but_are_not_readiness_gates() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let manifest = root.join("repos.manifest.toml");
-        let authoritative = root.join("redline.lock.toml");
-        let fixture = TestDir::new("historical-jain4-current-mirror");
-        let current_mirror = fixture.path().join("redline.lock.toml");
-        fs::copy(&authoritative, &current_mirror).unwrap();
-        fs::copy(checksum_path(&authoritative), checksum_path(&current_mirror)).unwrap();
+        let source_evidence = root.join("release-evidence/8.0.0");
+        let fixture = TestDir::new("historical-jain4-receipts");
+        let control = fixture.path().join("redline-split-ops");
+        let evidence = control.join("release-evidence/8.0.0");
+        fs::create_dir_all(&evidence).unwrap();
+        let manifest = control.join("repos.manifest.toml");
+        fs::copy(root.join("repos.manifest.toml"), &manifest).unwrap();
+        let predecessor = "redline-lock-jain3-predecessor.toml";
+        fs::copy(
+            source_evidence.join(predecessor),
+            evidence.join(predecessor),
+        )
+        .unwrap();
+        fs::copy(
+            checksum_path(&source_evidence.join(predecessor)),
+            checksum_path(&evidence.join(predecessor)),
+        )
+        .unwrap();
+        let predecessor_bytes = fs::read(evidence.join(predecessor)).unwrap();
+        let predecessor_value: toml::Value = std::str::from_utf8(&predecessor_bytes)
+            .unwrap()
+            .parse()
+            .unwrap();
+        let historical = render_historical_successor_lock(
+            std::str::from_utf8(&predecessor_bytes).unwrap(),
+            &predecessor_value,
+        )
+        .unwrap();
+        let authoritative = control.join("redline.lock.toml");
+        let digest = sha256_bytes(&historical);
+        fs::write(&authoritative, historical).unwrap();
+        fs::write(
+            checksum_path(&authoritative),
+            format!("{digest}  redline.lock.toml\n"),
+        )
+        .unwrap();
+        let historical_mirror = fixture.path().join("redline-split/redline.lock.toml");
         for receipt in [
             "redline-proof-successor-jain4-prepared.json",
             "redline-proof-successor-jain4-reconciled.json",
         ] {
-            let path = root.join("release-evidence/8.0.0").join(receipt);
-            let value = successor_receipt_verify(&path, &manifest, &authoritative, &current_mirror)
-                .unwrap();
+            fs::copy(source_evidence.join(receipt), evidence.join(receipt)).unwrap();
+            fs::copy(
+                checksum_path(&source_evidence.join(receipt)),
+                checksum_path(&evidence.join(receipt)),
+            )
+            .unwrap();
+            let value = successor_receipt_verify(
+                &evidence.join(receipt),
+                &manifest,
+                &authoritative,
+                &historical_mirror,
+            )
+            .unwrap();
             assert_eq!(
                 value
                     .get("successor_engine_tag")
@@ -5325,8 +5366,8 @@ mod tests {
             );
         }
         assert_eq!(
-            review_lock_verify(&manifest, &authoritative, &current_mirror).unwrap(),
-            "synchronized"
+            review_lock_verify(&manifest, &authoritative, &historical_mirror).unwrap(),
+            "authoritative-only-historical"
         );
     }
 
