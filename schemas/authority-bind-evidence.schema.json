@@ -10,8 +10,7 @@
     "immutable_tag",
     "release_commit",
     "release_tree",
-    "archive_sha256",
-    "route"
+    "archive_sha256"
   ],
   "properties": {
     "member": {
@@ -42,7 +41,7 @@
         "reviewer",
         "merger"
       ],
-      "description": "Distinct identities of the reviewed route; author, reviewer and merger must all differ.",
+      "description": "Distinct identities of the reviewed route, recorded when the bind author witnessed them; author, reviewer and merger must all differ when present. A row without a route rests on its forge identity plus the sealed receipt named in the record prose; it does not assert route provenance.",
       "properties": {
         "author": {
           "type": "string",

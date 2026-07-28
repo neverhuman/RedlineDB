@@ -1,0 +1,49 @@
+{
+  "schema": "jain.authority-bind-evidence/v1",
+  "records": [
+    {
+      "member": "jain-report",
+      "immutable_tag": "jain-report-v10.0.0-split.0",
+      "release_commit": "bd9824f77ec7e343500d964fb1b0b62c41b21c0d",
+      "release_tree": "3766efc54c67efee144b95d23378e370c3edfec0",
+      "archive_sha256": "06ee0029a8f0720947492be46a36449e60a4085da5b12e3316c9315c76afdf33",
+      "route": {
+        "author": "Claude Master-Conductor",
+        "reviewer": "Codex Curie-JainReport-Review-95",
+        "approver": "Codex Curie-JainReport-Review-95",
+        "merger": "Codex Hopper-JainReport-Life-105"
+      }
+    },
+    {
+      "member": "jain-core",
+      "immutable_tag": "jain-core-v10.0.0-split.1",
+      "release_commit": "93c0b3fe6d3ebeb104ee348bfe8006418ec26724",
+      "release_tree": "b320033003a64f9a0b5ed3ecae773190983f717e",
+      "archive_sha256": "c72e19695490510b43c60b35fc53a521c82bb92c272365e74d39abeacf405781"
+    },
+    {
+      "member": "jain-ops",
+      "immutable_tag": "jain-ops-v10.0.0-split.0",
+      "release_commit": "a9d060743ff30c0dfd80ca2d672d001efa85c335",
+      "release_tree": "9462cf19422977cb55c7d873b7a327c9b9988945",
+      "archive_sha256": "3f1753493dac50ec4715a32b30858de0fb9d3bed6066e59be448fed7ba0f01e3",
+      "route": {
+        "author": "Codex Faraday-OpsMaps-110",
+        "reviewer": "Codex Curie-OpsMaps-116",
+        "merger": "Codex Gauss-OpsLifecycle-125"
+      }
+    },
+    {
+      "member": "jain-jnoccio",
+      "immutable_tag": "jain-jnoccio-v10.0.0-split.0",
+      "release_commit": "c1b25ec087b602385ab4e3ac61089903ae56643f",
+      "release_tree": "ff66f4c071ab2721e99763ecafb15bbc7b50867f",
+      "archive_sha256": "75a84ff466d941242d51b585e05e58ef44cf5e0fefae81aa1fb346b04fd73461",
+      "route": {
+        "author": "Codex Mendel-JnoccioFix-117",
+        "reviewer": "Codex Feynman-JnoccioReview-120",
+        "merger": "Codex Euler-JnoccioLifecycle-129"
+      }
+    }
+  ]
+}
