@@ -3,19 +3,40 @@ family = "redline-split"
 parent_family = "independent"
 engine_package = "redlinedb"
 engine_version = "4.1.0"
-engine_tag = "redline-core-v4.1.0-jain.3"
-engine_commit = "7137a1ee2d04be4eb6931d99ff78b8a52c827900"
+engine_tag = "redline-core-v4.1.0-jain.6"
+engine_commit = "d0de59930141baffcfa2b514480e75b14627f24d"
 parity_harness_commit = "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea"
-proof_lock_id = "redline-proof/v2/4.1.0/7137a1ee2d04be4eb6931d99ff78b8a52c827900"
+proof_lock_id = "redline-proof/v2/4.1.0/d0de59930141baffcfa2b514480e75b14627f24d"
 consumers = ["jain-split", "jeryu-split"]
 
 [proof]
-parity_status = "historical-only-until-refreshed"
-accepted_core_evidence_sha256 = "aff39201db5e6d47cd35f3b614e9e4c9ea7b5d551b2f29ec201c4ead66a7659b"
-accepted_testing_manifest_sha256 = "344a02924857765d45c2f5317c5a92e016fa976d71c11a0207051e30d6c588ba"
+parity_status = "accepted"
+generated_at = "2026-07-28T12:07:10Z"
+fresh_until = "2026-07-29T12:07:10Z"
+family_ci_receipt = "release-evidence/8.0.0/redline-family-ci-jain6-web2-r3.json"
+family_ci_receipt_sha256 = "c61221a861e3be5d47758b5d1386f1124b21e5eae4b809ba7c46f836e526ae36"
+proof_refresh_receipt = "release-evidence/8.0.0/redline-proof-refresh-jain6-web2-r3.json"
+accepted_core_evidence_sha256 = "c63c466c950030e5efbf7970c67bff5353bee238e2ebd87fb288cbd8e82b4abf"
+accepted_testing_manifest_sha256 = "721b67215df7e4cd73cf25b29728307aef29c49b4434eddcd44d9821fab98064"
 required_consumer_evidence = ["jain-split", "jeryu-split"]
-accepted_consumer_evidence = []
-cutover_eligible = false
+accepted_consumer_evidence = ["jain-split", "jeryu-split"]
+cutover_eligible = true
+
+[[proof.consumer_evidence]]
+consumer = "jain-split"
+path = "release-evidence/8.0.0/jain-consumer-jain6-web2-r3.json"
+sha256 = "83a4a4e24654f9790d122a9c8f3e9fa44ee3b8eada8083446292b292438f3ad3"
+generated_at = "2026-07-28T12:06:01Z"
+source_commit = "80f061093ac5792bf1a4614cabc4eeec0167827c"
+required_check = "jain-split/redline-consumer"
+
+[[proof.consumer_evidence]]
+consumer = "jeryu-split"
+path = "release-evidence/8.0.0/jeryu-consumer-jain6-web2-r3.json"
+sha256 = "01ab3da7d09cb799d0a31004cfc20b98d114e42d1e5ea2973b47000d1b3e6a33"
+generated_at = "2026-07-28T12:06:11Z"
+source_commit = "3e64db430f685330f19617575fe4a13c42ccc2ba"
+required_check = "jeryu-split/redline-consumer"
 
 [[repo]]
 name = "redline"
@@ -36,17 +57,17 @@ remote_tag_verified = true
 [[repo]]
 name = "redline-core"
 product_version = "4.1.0"
-tag_revision = 3
-tag = "redline-core-v4.1.0-jain.3"
-commit = "7137a1ee2d04be4eb6931d99ff78b8a52c827900"
-checksum_sha256 = "baec7cb2c084ffa5c3f10770ff62e8cadf869d7e19e21db849effd47e0871d83"
+tag_revision = 6
+tag = "redline-core-v4.1.0-jain.6"
+commit = "d0de59930141baffcfa2b514480e75b14627f24d"
+checksum_sha256 = "6dfd1a6d4fa160643b901b633f1a613c78fa51eed83c7e0b5360309ae1fcab2f"
 github = "https://github.com/neverhuman/redline-core.git"
 jeryu = "http://127.0.0.1:8787/git/jeryu/redline-core.git"
 required_check = "redline-core/required"
 protection_policy = "immutable-main-v1"
-tag_object = "7137a1ee2d04be4eb6931d99ff78b8a52c827900"
+tag_object = "d0de59930141baffcfa2b514480e75b14627f24d"
 tag_object_type = "commit"
-tag_subject = "ci(proof): align release controls with current Jankurai"
+tag_subject = "ci: complete release hook surface"
 remote_tag_verified = true
 
 [[repo]]
@@ -68,15 +89,15 @@ remote_tag_verified = true
 [[repo]]
 name = "redline-web"
 product_version = "0.1.0"
-tag_revision = 1
-tag = "redline-web-v0.1.0-jain.1"
-commit = "09fd93be10238cd85abc164b0b01cf0f681ea304"
-checksum_sha256 = "27fef5fd44ad897dbaa244963312b6861e0c54b951ddb4f645f715fbf417c8a9"
+tag_revision = 2
+tag = "redline-web-v0.1.0-jain.2"
+commit = "215fd9fc9008e4943973598754d591d39c621598"
+checksum_sha256 = "0aa807a7d8f13bdbfbc33cf7cb1c94deda98ca6c6516eae12ab9313a3b9b5082"
 github = "https://github.com/neverhuman/redline-web.git"
 jeryu = "http://127.0.0.1:8787/git/jeryu/redline-web.git"
 required_check = "redline-web/required"
 protection_policy = "immutable-main-v1"
-tag_object = "09fd93be10238cd85abc164b0b01cf0f681ea304"
+tag_object = "215fd9fc9008e4943973598754d591d39c621598"
 tag_object_type = "commit"
-tag_subject = "release(redline-web): finish Rust-only corrective candidate"
+tag_subject = "fix(ci): expose sealed release lanes"
 remote_tag_verified = true
