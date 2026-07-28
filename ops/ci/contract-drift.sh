@@ -8,9 +8,19 @@ cd "$repo_root"
 
 mkdir -p target/contract-drift
 "$repo_root/redlinectl" control-validate
-"$repo_root/redlinectl" review-lock-verify
 readiness_receipt="target/contract-drift/readiness.json"
-"$repo_root/redlinectl" release-receipt "$readiness_receipt"
+mirror="$repo_root/../redline.lock.toml"
+mirror_sidecar="${mirror}.sha256"
+if [[ ! -e "$mirror" && ! -L "$mirror" && ! -e "$mirror_sidecar" && ! -L "$mirror_sidecar" ]]; then
+  "$repo_root/redlinectl" release-receipt --standalone "$readiness_receipt"
+  expected_transition_state="standalone-authoritative"
+  expected_cutover_eligible="false"
+else
+  "$repo_root/redlinectl" review-lock-verify
+  "$repo_root/redlinectl" release-receipt "$readiness_receipt"
+  expected_transition_state="synchronized"
+  expected_cutover_eligible="true"
+fi
 
 head_sha="$(git rev-parse --verify 'HEAD^{commit}')"
 manifest_sha="$(sha256sum repos.manifest.toml | awk '{print $1}')"
@@ -18,8 +28,8 @@ lock_path="$repo_root/redline.lock.toml"
 lock_sha="$(sha256sum "$lock_path" | awk '{print $1}')"
 transition_state="$(jq -er '.transition_state' "$readiness_receipt")"
 cutover_eligible="$(jq -r '.cutover_eligible' "$readiness_receipt")"
-[[ "$transition_state" == "authoritative-only-historical" \
-  && "$cutover_eligible" == "false" ]]
+[[ "$transition_state" == "$expected_transition_state" \
+  && "$cutover_eligible" == "$expected_cutover_eligible" ]]
 
 jq -n \
   --arg head_sha "$head_sha" \
@@ -38,4 +48,5 @@ jq -n \
     cutover_eligible:$cutover_eligible
   }' >target/contract-drift/receipt.json
 
-printf 'Redline contract drift ok: physical Jain.6 authority and ineligible historical lock verified\n'
+printf 'Redline contract drift ok: Jain.6 authority state=%s cutover=%s\n' \
+  "$transition_state" "$cutover_eligible"
