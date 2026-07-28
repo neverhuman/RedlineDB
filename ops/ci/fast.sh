@@ -11,6 +11,7 @@ done < <(find scripts ops/ci ops/git-hooks -type f -name '*.sh' 2>/dev/null | so
 
 log "fast: governed Jankurai hostile identity tests"
 bash ops/ci/governed-jankurai-test.sh
+bash ops/ci/proof-base-contract-test.sh
 
 log "fast: cargo-deny locked archive cache hostile tests"
 bash ops/ci/cargo-deny-cache-test.sh

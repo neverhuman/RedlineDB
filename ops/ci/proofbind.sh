@@ -10,9 +10,22 @@ has git || fail "git is required for exact-head proofbind evidence"
 has jq || fail "jq is required for exact-head proofbind evidence"
 [[ -z "$(git status --porcelain)" ]] || fail "proofbind requires a clean checkout"
 JBIN="$(jankurai_bin)" || fail "governed Jankurai identity verification failed"
-base_ref="${JANKURAI_BASE_REF:-origin/main}"
-git rev-parse --verify "${base_ref}^{commit}" >/dev/null \
+if [[ "${JAIN_RELEASE_CI:-0}" == "1" ]]; then
+  : "${JAIN_CONTRACT_BASE_REF:?release proof base commit is required}"
+  base_ref="$JAIN_CONTRACT_BASE_REF"
+  [[ "$base_ref" =~ ^[0-9a-f]{40}$ ]] \
+    || fail "release proof base must be a full lowercase commit: ${base_ref}"
+else
+  base_ref="${JANKURAI_BASE_REF:-origin/main}"
+fi
+base_commit="$(git rev-parse --verify "${base_ref}^{commit}" 2>/dev/null)" \
   || fail "proofbind base is not a local commit: ${base_ref}"
+if [[ "${JAIN_RELEASE_CI:-0}" == "1" && "$base_commit" != "$base_ref" ]]; then
+  fail "release proof base must resolve to itself: ${base_ref} -> ${base_commit}"
+fi
+base_ref="$base_commit"
+git merge-base --is-ancestor "$base_ref" HEAD \
+  || fail "proofbind base is not an ancestor of HEAD: ${base_ref}"
 
 changed_paths=()
 while IFS= read -r -d '' path; do
