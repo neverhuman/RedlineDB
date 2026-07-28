@@ -55,6 +55,14 @@ transcribed value.
 Binding is the last step for a member and is deliberately separate from tagging,
 so an immutable tag can exist while authority still reads `pending`.
 
+Every bind change carries its committed lifecycle record under
+[`docs/release-evidence/10.0.0/`](release-evidence/10.0.0/): one file per batch
+naming each bound member's immutable tag, release commit, tree, archive
+SHA-256, and the distinct identities of its reviewed route. The manifest row
+asserts the identity; the evidence record proves how it was derived and by
+whom it was reviewed, in-tree, at the same head. A bind change without its
+evidence record is incomplete.
+
 **Ordering constraint.** Every write to this manifest changes its SHA-256, and a
 nested family's CI receipt binds that exact digest. Manifest writes must
 therefore all land *before* a nested family's evidence window is opened;
