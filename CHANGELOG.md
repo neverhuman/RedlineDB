@@ -16,6 +16,8 @@
   Jain.4 successor receipts as historical verification-only artifacts.
 - Advanced the canonical Core identity to immutable `.jain.6` after its sealed
   Rust-only NUMA replacement passed default and all-feature release gates.
+- Advanced the canonical Web identity to immutable `.jain.2` after its sealed
+  required, browser E2E, artifact, and governed audit lanes passed.
 - Made candidate readiness accept only a valid explicitly ineligible
   authoritative lock when the compatibility mirror is absent.
 - Replaced family-CI worktree isolation with marker-bound, automatically

@@ -534,7 +534,7 @@ fn expected_repo_release(name: &str) -> Option<(&'static str, i64)> {
         "redline" => Some(("4.1.0", 2)),
         "redline-core" => Some(("4.1.0", 6)),
         "redline-testing" => Some(("1.0.1", 1)),
-        "redline-web" => Some(("0.1.0", 1)),
+        "redline-web" => Some(("0.1.0", 2)),
         _ => None,
     }
 }
@@ -701,7 +701,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
     {
         return Err(error("manifest control-plane identity is invalid"));
     }
-    validate_release_identity(control, "redline-split-ops", "split", RELEASE_VERSION, 1)?;
+    validate_release_identity(control, "redline-split-ops", "split", RELEASE_VERSION, 2)?;
     let rows = value
         .get("repo")
         .and_then(toml::Value::as_array)
@@ -3897,6 +3897,16 @@ fn historical_jain4_manifest(manifest_path: &Path) -> Result<Manifest> {
     core.current_tag = HISTORICAL_JAIN4_TAG.to_owned();
     core.release_commit = HISTORICAL_JAIN4_COMMIT.to_owned();
     core.release_checksum_sha256 = HISTORICAL_JAIN4_CHECKSUM_SHA256.to_owned();
+    let web = manifest
+        .repos
+        .iter_mut()
+        .find(|repo| repo.name == "redline-web")
+        .ok_or_else(|| error("redline-web is missing from historical successor manifest"))?;
+    web.tag_revision = 1;
+    web.current_tag = "redline-web-v0.1.0-jain.1".to_owned();
+    web.release_commit = "09fd93be10238cd85abc164b0b01cf0f681ea304".to_owned();
+    web.release_checksum_sha256 =
+        "27fef5fd44ad897dbaa244963312b6861e0c54b951ddb4f645f715fbf417c8a9".to_owned();
     Ok(manifest)
 }
 
@@ -4806,7 +4816,22 @@ mod tests {
         );
         assert_eq!(
             identities.get("redline-web"),
-            Some(&("0.1.0", 1, "redline-web-v0.1.0-jain.1"))
+            Some(&("0.1.0", 2, "redline-web-v0.1.0-jain.2"))
+        );
+        let raw: toml::Value = fs::read_to_string(root.join("repos.manifest.toml"))
+            .unwrap()
+            .parse()
+            .unwrap();
+        let core = raw
+            .get("repo")
+            .and_then(toml::Value::as_array)
+            .unwrap()
+            .iter()
+            .find(|repo| repo.get("name").and_then(toml::Value::as_str) == Some("redline-core"))
+            .unwrap();
+        assert_eq!(
+            core.get("release_tree").and_then(toml::Value::as_str),
+            Some("333cd8aeffd0755547c0ecaa65e1d750ddd6d260")
         );
     }
 
