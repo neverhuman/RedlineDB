@@ -22,6 +22,7 @@ fi
 git merge-base --is-ancestor "$base_commit" "$head_commit" \
   || fail "proof-base contract fixture base is not an ancestor"
 
+mkdir -p "${ROOT_DIR}/target"
 test_root="$(mktemp -d "${ROOT_DIR}/target/proof-base-contract.XXXXXX")"
 cleanup() {
   [[ "$test_root" == "${ROOT_DIR}"/target/proof-base-contract.* ]] \
