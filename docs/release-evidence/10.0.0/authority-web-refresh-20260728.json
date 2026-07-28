@@ -1,0 +1,12 @@
+{
+  "schema": "jain.authority-bind-evidence/v1",
+  "records": [
+    {
+      "member": "jain-web",
+      "immutable_tag": "jain-web-v10.0.0-split.5",
+      "release_commit": "80f061093ac5792bf1a4614cabc4eeec0167827c",
+      "release_tree": "c14dbb5d97c89a068ca35e5bfd6f4c1081aab8df",
+      "archive_sha256": "fb2ee466fc4be13b2798683f03387bf44e6a9e7924bfb47d9532ae6a7eaa4ae0"
+    }
+  ]
+}
