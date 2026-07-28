@@ -18,8 +18,13 @@ its exactness check.
 | jain-ops | jain-ops-v10.0.0-split.0 | a9d060743ff30c0dfd80ca2d672d001efa85c335 | 9462cf19422977cb55c7d873b7a327c9b9988945 | 3f1753493dac50ec4715a32b30858de0fb9d3bed6066e59be448fed7ba0f01e3 |
 | jain-jnoccio | jain-jnoccio-v10.0.0-split.0 | c1b25ec087b602385ab4e3ac61089903ae56643f | ff66f4c071ab2721e99763ecafb15bbc7b50867f | 75a84ff466d941242d51b585e05e58ef44cf5e0fefae81aa1fb346b04fd73461 |
 
-Reviewed-route provenance, from the coordination board (all four completed the
-full lifecycle with distinct author/reviewer/approver/merger identities):
+Reviewed-route provenance, from the coordination board. Report, ops and
+jnoccio completed tonight's full lifecycle with distinct identities as listed;
+jain-core's route predates this record's author's visibility, so its row rests
+on the pre-existing sealed receipt and forge tag identity rather than asserting
+route provenance it cannot witness. The machine-readable twin of this record is
+`authority-binds-20260728.json`, conforming to
+`schemas/authority-bind-evidence.schema.json`:
 
 - jain-report: authored Claude; approved Curie-95; sealed under ReleaseOps
   claim 396; merged/tagged Hopper-105.
