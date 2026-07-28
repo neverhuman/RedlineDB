@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "jain.authority-bind-evidence/v1",
+  "title": "Jain authority-bind evidence record",
+  "description": "Machine-checkable shape of one bound member's lifecycle evidence, as recorded per batch under docs/release-evidence/10.0.0/authority-binds-*.md. Every field is independently verifiable against the authenticated forge: main and the immutable tag must resolve to release_commit; release_tree is commit^{tree}; archive_sha256 is sha256 of `git archive --format=tar <commit>`, the same derivation splitctl applies in its exactness check.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "member",
+    "immutable_tag",
+    "release_commit",
+    "release_tree",
+    "archive_sha256",
+    "route"
+  ],
+  "properties": {
+    "member": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]+$"
+    },
+    "immutable_tag": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]+-v[0-9]+\\.[0-9]+\\.[0-9]+-(split|jain)\\.[0-9]+$"
+    },
+    "release_commit": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "release_tree": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{40}$"
+    },
+    "archive_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "route": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "author",
+        "reviewer",
+        "merger"
+      ],
+      "description": "Distinct identities of the reviewed route; author, reviewer and merger must all differ.",
+      "properties": {
+        "author": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewer": {
+          "type": "string",
+          "minLength": 1
+        },
+        "approver": {
+          "type": "string",
+          "minLength": 1
+        },
+        "merger": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}
