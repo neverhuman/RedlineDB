@@ -94,6 +94,7 @@ forge-equal release verification. These fields are diagnostic only and never
 relax a failed gate.
 
 Each expected exception records its `purpose`, `reason`, `common fixes`, and a
-local `repair_hint`, plus the owning lane, preserved artifact or receipt, and
-rerun command. Unexpected exceptions remain fatal; they are never converted
-into a warning, silent fallback, or eligibility waiver.
+local `repair_hint`. `agent/test-map.json` separately records the owning lane
+and rerun command, while checksummed evidence preserves any durable artifact or
+receipt. Unexpected exceptions remain fatal; they are never converted into a
+warning, silent fallback, or eligibility waiver.
