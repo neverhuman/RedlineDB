@@ -73,10 +73,14 @@ jq -n --arg request_id "$sibling_sha64" --arg control "$sibling_sha40" \
    request_id:$request_id,control_plane_commit:$control,
    owner:"veox",repository:"jain-deploy",head_sha:$head,
    required_check:"jain-deploy/required",reference:"refs/heads/main",
+   deploy_source_lock_sha256:$inventory,
    sources:[{repository:"jain-core",owner:"veox",
      remote:"http://127.0.0.1:8787/git/veox/jain-core.git",
      reference:"refs/heads/main",commit:$commit,tree:$tree,
      inventory_sha256:$inventory,entry_count:1,mount_path:"/family/jain-core",
+     release_tag_status:"bound",
+     release_tag_ref:"refs/tags/jain-core-v8.0.1-split.1",
+     release_tag_commit:$commit,
      contract_tag_ref:"",contract_tag_object:"",contract_tag_commit:""}]}' \
   >"$sibling_fixture"
 filter_args=(--arg request_id "$sibling_sha64" --arg control "$sibling_sha40" \
@@ -96,10 +100,39 @@ jq -e "${filter_args[@]}" "$sibling_filter" \
   printf 'production sibling-source filter rejected an exact contract tuple\n' >&2
   exit 1
 }
+jq '
+  .sources[0].release_tag_status="pending"
+  | .sources[0].release_tag_ref=""
+  | .sources[0].release_tag_commit=""
+' "$sibling_fixture" >"$sibling_fixture.pending"
+jq -e "${filter_args[@]}" "$sibling_filter" \
+  "$sibling_fixture.pending" >/dev/null || {
+  printf 'production sibling-source filter rejected an exact pending tuple\n' >&2
+  exit 1
+}
+jq '
+  .sources[0].repository="jain-shard"
+  | .sources[0].remote=
+      "http://127.0.0.1:8787/git/veox/jain-shard.git"
+  | .sources[0].mount_path="/family/jain-shard"
+  | .sources[0].release_tag_status="absent"
+  | .sources[0].release_tag_ref=""
+  | .sources[0].release_tag_commit=""
+' "$sibling_fixture" >"$sibling_fixture.absent"
+jq -e "${filter_args[@]}" "$sibling_filter" \
+  "$sibling_fixture.absent" >/dev/null || {
+  printf 'production sibling-source filter rejected an exact absent tuple\n' >&2
+  exit 1
+}
 for mutation in \
   '.unexpected=true' \
   '.sources[0].unexpected=true' \
   '.sources[0].mount_path="/family/jain-deploy"' \
+  'del(.deploy_source_lock_sha256)' \
+  'del(.sources[0].release_tag_commit)' \
+  '.sources[0].release_tag_ref=""' \
+  '.sources[0].release_tag_ref="refs/tags/jain-math-v8.0.1-split.1"' \
+  '.sources[0].release_tag_status="pending"' \
   '.sources[0].contract_tag_ref="refs/tags/jain-core-v7.0.1-split.5"' \
   '.sources[0].contract_tag_ref="refs/tags/jain-core-v7.0.1-split.5" | .sources[0].contract_tag_object="short" | .sources[0].contract_tag_commit="short"'; do
   jq "$mutation" "$sibling_fixture" >"$sibling_fixture.hostile"
@@ -118,11 +151,15 @@ redline_filter_args=(--arg request_id "$sibling_sha64" \
 jq '
   .repository="jain"
   | .required_check="jain/required"
+  | .deploy_source_lock_sha256=""
   | .sources[0].repository="redline-split-ops"
   | .sources[0].owner="jeryu"
   | .sources[0].remote=
       "http://127.0.0.1:8787/git/jeryu/redline-split-ops.git"
   | .sources[0].mount_path="/family/jain-redline/redline-split-ops"
+  | .sources[0].release_tag_status="not-applicable"
+  | .sources[0].release_tag_ref=""
+  | .sources[0].release_tag_commit=""
 ' "$sibling_fixture" >"$sibling_fixture.redline"
 jq -e "${redline_filter_args[@]}" "$sibling_filter" \
   "$sibling_fixture.redline" >/dev/null || {
@@ -322,6 +359,28 @@ for boundary in host-ci-sandbox.sh split-host-ci.sh host-ci-publisher.sh; do
     exit 1
   }
 done
+for deploy_tag_binding in \
+  'host-ci-deploy-source-lock' \
+  '--retain-exact-release-tag-ref' \
+  '--retain-exact-release-tag-commit' \
+  'deploy_source_lock_sha256' \
+  'release_tag_status' \
+  'release_tag_ref' \
+  'release_tag_commit'; do
+  grep -F -- "$deploy_tag_binding" \
+    "$repo_root/ops/ci/host-ci-sandbox.sh" \
+    "$repo_root/ops/ci/split-host-ci.sh" \
+    "$repo_root/ops/ci/host-ci-publisher.sh" >/dev/null || {
+    printf 'host CI omits deploy sibling tag binding: %s\n' \
+      "$deploy_tag_binding" >&2
+    exit 1
+  }
+done
+grep -F 'sibling release tag moved before publication' \
+  "$repo_root/ops/ci/host-ci-publisher.sh" >/dev/null || {
+  printf 'root publisher does not reject deploy sibling tag drift\n' >&2
+  exit 1
+}
 for publisher_nested_binding in \
   '"$repo" == jain' \
   '.repository == "redline-split-ops"' \

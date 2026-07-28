@@ -761,6 +761,71 @@ git -C "${arguments[3]}" -c filter.lfs.process= -c filter.lfs.clean= \
 validate_product_release_tag_checkout "${arguments[3]}" \
   || fail 'product worker checkout release-tag mismatch'
 
+# Deploy source tags come only from the exact tracked release lock in the
+# authenticated product object. Sibling-local version metadata can advance
+# independently and is not authority for this deploy head.
+deploy_source_lock_sha256=""
+deploy_source_lock_authority=""
+if [[ "$repo" == jain-deploy ]]; then
+  deploy_source_lock="$product_authority/jain-split.lock.toml"
+  [[ -f "$deploy_source_lock" && ! -L "$deploy_source_lock" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$deploy_source_lock" 2>/dev/null)" \
+      == '0:0:644:1' \
+    && "$(stat -c '%s' -- "$deploy_source_lock")" -le 1048576 ]] \
+    || fail 'deploy source lock is not a bounded authenticated product file'
+  deploy_source_lock_blob="$("${safe_git[@]}" -C "$product_authority" \
+    rev-parse --verify "${arguments[2]}:jain-split.lock.toml")" \
+    || fail 'deploy source lock is not tracked at the exact product head'
+  [[ "$deploy_source_lock_blob" =~ ^[0-9a-f]{40}$ \
+    && "$("${safe_git[@]}" -C "$product_authority" hash-object --no-filters -- \
+      "$deploy_source_lock")" == "$deploy_source_lock_blob" ]] \
+    || fail 'deploy source lock differs from the exact product object'
+  deploy_source_lock_authority="$("$splitctl_path" \
+    host-ci-deploy-source-lock --lock "$deploy_source_lock")" \
+    || fail 'cannot derive exact deploy source-lock authority'
+  deploy_source_lock_sha256="$(sha256sum -- "$deploy_source_lock" \
+    | cut -d' ' -f1)"
+  jq -e --arg lock_sha "$deploy_source_lock_sha256" '
+    select((keys | sort) == (["lock_sha256","schema_version","sources"] | sort))
+    | select(.schema_version == "jain.host-ci-deploy-source-lock/v1")
+    | select(.lock_sha256 == $lock_sha)
+    | select((.sources | type) == "array" and (.sources | length) > 0)
+    | select(.sources == (.sources | sort_by(.repository)))
+    | select((.sources | map(.repository) | unique | length)
+        == (.sources | length))
+    | select([.sources[] | select(.repository == "jain-deploy")]
+        == [{
+          repository:"jain-deploy",status:"pending",
+          release_tag_ref:"",release_tag_commit:""
+        }])
+    | select([.sources[] | select(.repository == "jain-shard")]
+        | length == 0)
+    | select(all(.sources[];
+        (keys | sort) == ([
+          "release_tag_commit","release_tag_ref","repository","status"
+        ] | sort)
+        and (.repository | test("^[a-z0-9][a-z0-9-]*$"))
+        and (
+          (
+            .status == "pending"
+            and .release_tag_ref == ""
+            and .release_tag_commit == ""
+          )
+          or
+          (
+            .status == "bound"
+            and (.repository as $source
+              | .release_tag_ref
+              | startswith("refs/tags/" + $source + "-v"))
+            and (.release_tag_ref
+              | test("-v[0-9A-Za-z.-]+-split\\.[0-9]+$"))
+            and (.release_tag_commit | test("^[0-9a-f]{40}$"))
+          )
+        )
+      ))' <<<"$deploy_source_lock_authority" >/dev/null \
+    || fail 'deploy source-lock authority has an invalid closed shape'
+fi
+
 # A product contract mirror may deliberately bind an older producer object.
 # Root reads the exact tracked MIRROR.md from the authenticated product checkout
 # and later asks only the jain-core materializer to retain that exact object via
@@ -952,6 +1017,42 @@ if [[ "$sibling_sources_required" == true ]]; then
       --repo "$sibling_owner/$sibling" --remote "$sibling_remote" \
       --ref refs/heads/main --resolve-ref-head \
       --destination "$sibling_checkout" --token-file "$token_file")
+    sibling_release_tag_status=not-applicable
+    sibling_release_tag_ref=""
+    sibling_release_tag_commit=""
+    if [[ "$repo" == jain-deploy ]]; then
+      sibling_release_binding="$(jq -er --arg sibling "$sibling" '
+        [.sources[] | select(.repository == $sibling)]
+        | if length == 0 then
+            if $sibling == "jain-shard" then
+              ["absent","",""]
+            else
+              error("deploy source-lock repository is missing")
+            end
+          elif length == 1 then
+            [.[0].status,.[0].release_tag_ref,.[0].release_tag_commit]
+          else
+            error("duplicate deploy source-lock repository")
+          end
+        | @tsv' <<<"$deploy_source_lock_authority")" \
+        || fail "cannot resolve deploy source-lock authority: $sibling"
+      IFS=$'\t' read -r sibling_release_tag_status \
+        sibling_release_tag_ref sibling_release_tag_commit \
+        <<<"$sibling_release_binding"
+      if [[ "$sibling_release_tag_status" == bound ]]; then
+        sibling_materialize_args+=(
+          --retain-exact-release-tag-ref "$sibling_release_tag_ref"
+          --retain-exact-release-tag-commit "$sibling_release_tag_commit"
+        )
+      else
+        [[ "$sibling_release_tag_status" == pending \
+          || "$sibling_release_tag_status" == absent ]] \
+          || fail "invalid deploy source-lock state: $sibling"
+        [[ -z "$sibling_release_tag_ref" \
+          && -z "$sibling_release_tag_commit" ]] \
+          || fail "unbound deploy source carried a release tag: $sibling"
+      fi
+    fi
     if [[ "$sibling" == jain-core && -n "$contract_ancestor_object" ]]; then
       sibling_materialize_args+=(
         --retain-ancestor-tag-object "$contract_ancestor_object"
@@ -965,16 +1066,24 @@ if [[ "$sibling_sources_required" == true ]]; then
        | select(.repository == ($owner + "/" + $sibling))
        | select(.reference == "refs/heads/main" and .status == "pass")
        | select(.commit | test("^[0-9a-f]{40}$"))
+       | select(.release_tag_ref | type == "string")
+       | select(.release_tag_commit | type == "string")
        | select(.ancestor_tag_ref | type == "string")
        | select(.ancestor_tag_object | type == "string")
        | select(.ancestor_tag_commit | type == "string")
-       | [.commit,.ancestor_tag_ref,.ancestor_tag_object,.ancestor_tag_commit]
+       | [.commit,.release_tag_ref,.release_tag_commit,
+          .ancestor_tag_ref,.ancestor_tag_object,.ancestor_tag_commit]
        | @tsv' \
       <<<"$sibling_materialization")" \
       || fail "invalid sibling materialization receipt: $sibling"
-    IFS=$'\t' read -r sibling_commit sibling_contract_tag_ref \
+    IFS=$'\t' read -r sibling_commit materialized_release_tag_ref \
+      materialized_release_tag_commit sibling_contract_tag_ref \
       sibling_contract_tag_object sibling_contract_tag_commit \
       <<<"$sibling_binding"
+    [[ "$materialized_release_tag_ref" == "$sibling_release_tag_ref" \
+      && "$materialized_release_tag_commit" \
+        == "$sibling_release_tag_commit" ]] \
+      || fail "sibling release tag differs from deploy lock: $sibling"
     if [[ "$sibling" == jain-core && -n "$contract_ancestor_object" ]]; then
       [[ "$sibling_contract_tag_ref" \
           =~ ^refs/tags/jain-core-v[0-9A-Za-z.-]+-split\.[0-9]+$ \
@@ -1003,11 +1112,40 @@ if [[ "$sibling_sources_required" == true ]]; then
       && "$sibling_entry_count" =~ ^[0-9]+$ \
       && -z "$("${safe_git[@]}" -C "$sibling_checkout" remote)" ]] \
       || fail "sibling source is not isolated authority: $sibling"
+    sibling_retained_tags="$("${safe_git[@]}" -C "$sibling_checkout" \
+      for-each-ref --format='%(refname)' refs/tags)" \
+      || fail "cannot enumerate sibling release tags: $sibling"
+    if [[ "$sibling_release_tag_status" == bound ]]; then
+      [[ "$repo" == jain-deploy \
+        && "$sibling_release_tag_ref" \
+          =~ ^refs/tags/${sibling}-v[0-9A-Za-z.-]+-split\.[0-9]+$ \
+        && "$sibling_release_tag_commit" =~ ^[0-9a-f]{40}$ \
+        && "$("${safe_git[@]}" -C "$sibling_checkout" rev-parse --verify \
+          "$sibling_release_tag_ref")" == "$sibling_release_tag_commit" \
+        && "$("${safe_git[@]}" -C "$sibling_checkout" rev-parse --verify \
+          "$sibling_release_tag_ref^{commit}")" \
+          == "$sibling_release_tag_commit" ]] \
+        && "${safe_git[@]}" -C "$sibling_checkout" merge-base --is-ancestor \
+          "$sibling_release_tag_commit" "$sibling_commit" \
+        || fail "sibling release tag is not exact lock authority: $sibling"
+    else
+      [[ -z "$sibling_release_tag_ref" \
+        && -z "$sibling_release_tag_commit" ]] \
+        || fail "unbound sibling retained release-tag identity: $sibling"
+    fi
+    expected_sibling_tags="$({
+      printf '%s\n' "$sibling_release_tag_ref" "$sibling_contract_tag_ref"
+    } | sed '/^$/d' | LC_ALL=C sort -u)"
+    [[ "$sibling_retained_tags" == "$expected_sibling_tags" ]] \
+      || fail "sibling retained a missing or extra release tag: $sibling"
     jq -nc --arg repository "$sibling" --arg owner "$sibling_owner" \
       --arg remote "$sibling_remote" --arg reference refs/heads/main \
       --arg commit "$sibling_commit" --arg tree "$sibling_tree" \
       --arg inventory "$sibling_inventory_sha256" \
       --arg mount_path "$sibling_mount_path" \
+      --arg release_tag_status "$sibling_release_tag_status" \
+      --arg release_tag_ref "$sibling_release_tag_ref" \
+      --arg release_tag_commit "$sibling_release_tag_commit" \
       --arg contract_tag_ref "$sibling_contract_tag_ref" \
       --arg contract_tag_object "$sibling_contract_tag_object" \
       --arg contract_tag_commit "$sibling_contract_tag_commit" \
@@ -1015,7 +1153,10 @@ if [[ "$sibling_sources_required" == true ]]; then
       '{repository:$repository,owner:$owner,remote:$remote,
         reference:$reference,commit:$commit,tree:$tree,
         inventory_sha256:$inventory,entry_count:$entry_count,
-        mount_path:$mount_path,contract_tag_ref:$contract_tag_ref,
+        mount_path:$mount_path,release_tag_status:$release_tag_status,
+        release_tag_ref:$release_tag_ref,
+        release_tag_commit:$release_tag_commit,
+        contract_tag_ref:$contract_tag_ref,
         contract_tag_object:$contract_tag_object,
         contract_tag_commit:$contract_tag_commit}' >>"$sibling_entries" \
       || fail "cannot record sibling source authority: $sibling"
@@ -1027,10 +1168,13 @@ if [[ "$sibling_sources_required" == true ]]; then
   jq -s --arg request_id "$request_id" --arg control "$control_commit" \
     --arg owner "${arguments[0]}" --arg repository "$repo" \
     --arg head "${arguments[2]}" --arg check "${arguments[4]}" \
+    --arg deploy_source_lock_sha "$deploy_source_lock_sha256" \
     '{schema_version:"jain.host-ci-sibling-sources/v1",
       request_id:$request_id,control_plane_commit:$control,
       owner:$owner,repository:$repository,head_sha:$head,required_check:$check,
-      reference:"refs/heads/main",sources:(sort_by(.repository))}' \
+      reference:"refs/heads/main",
+      deploy_source_lock_sha256:$deploy_source_lock_sha,
+      sources:(sort_by(.repository))}' \
     "$sibling_entries" >"$sibling_sources_path" \
     || fail 'cannot seal sibling source inventory'
   chmod 0444 "$sibling_sources_path"

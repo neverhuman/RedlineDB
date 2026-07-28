@@ -33,14 +33,26 @@ jain_contract_source_object() {
 jain_sibling_sources_filter() {
   cat <<'JQ'
 select((keys | sort) == ([
-  "control_plane_commit", "head_sha", "owner", "reference", "repository",
-  "request_id", "required_check", "schema_version", "sources"
+  "control_plane_commit", "deploy_source_lock_sha256", "head_sha", "owner",
+  "reference", "repository", "request_id", "required_check",
+  "schema_version", "sources"
 ] | sort))
 | select(.schema_version == "jain.host-ci-sibling-sources/v1")
 | select(.request_id == $request_id and .control_plane_commit == $control)
 | select(.owner == $owner and .repository == $repository)
 | select(.head_sha == $head and .required_check == $check)
 | select(.reference == "refs/heads/main")
+| select(
+    (
+      $repository == "jain-deploy"
+      and (.deploy_source_lock_sha256 | test("^[0-9a-f]{64}$"))
+    )
+    or
+    (
+      $repository != "jain-deploy"
+      and .deploy_source_lock_sha256 == ""
+    )
+  )
 | select((.sources | type) == "array" and (.sources | length) > 0)
 | select(.sources == (.sources | sort_by(.repository)))
 | select((.sources | map(.repository) | unique | length)
@@ -49,7 +61,8 @@ select((keys | sort) == ([
     (keys | sort) == ([
       "commit", "contract_tag_commit", "contract_tag_object",
       "contract_tag_ref", "entry_count", "inventory_sha256", "mount_path",
-      "owner", "reference", "remote", "repository", "tree"
+      "owner", "reference", "release_tag_commit", "release_tag_ref",
+      "release_tag_status", "remote", "repository", "tree"
     ] | sort)
     and (.repository | test("^[a-z0-9][a-z0-9-]*$"))
     and (
@@ -74,6 +87,39 @@ select((keys | sort) == ([
     and (.tree | test("^[0-9a-f]{40}$"))
     and (.inventory_sha256 | test("^[0-9a-f]{64}$"))
     and (.entry_count | type) == "number" and .entry_count >= 0
+    and (.release_tag_status | type == "string")
+    and (.release_tag_ref | type == "string")
+    and (.release_tag_commit | type == "string")
+    and (
+      (
+        $repository == "jain-deploy"
+        and (
+          (
+            (.release_tag_status == "pending"
+              or .release_tag_status == "absent")
+            and .release_tag_ref == ""
+            and .release_tag_commit == ""
+          )
+          or
+          (
+            .release_tag_status == "bound"
+            and (.repository as $source
+              | .release_tag_ref
+              | startswith("refs/tags/" + $source + "-v"))
+            and (.release_tag_ref
+              | test("-v[0-9A-Za-z.-]+-split\\.[0-9]+$"))
+            and (.release_tag_commit | test("^[0-9a-f]{40}$"))
+          )
+        )
+      )
+      or
+      (
+        $repository != "jain-deploy"
+        and .release_tag_status == "not-applicable"
+        and .release_tag_ref == ""
+        and .release_tag_commit == ""
+      )
+    )
     and (.contract_tag_ref | type == "string")
     and (.contract_tag_object | type == "string")
     and (.contract_tag_commit | type == "string")
@@ -781,6 +827,36 @@ fi
 # because its required lane delegates validation there. Ambient canonical HEAD
 # and working-tree state are never source authority.
 if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
+  worker_deploy_source_lock_sha="$(
+    jq -er '.deploy_source_lock_sha256' "$JAIN_SIBLING_SOURCES_PATH"
+  )" || native_setup_failure 'sealed sibling authority lacks deploy lock binding' 1
+  if [[ "$REPO" == jain-deploy ]]; then
+    worker_deploy_source_lock="$wt/jain-split.lock.toml"
+    [[ "$worker_deploy_source_lock_sha" =~ ^[0-9a-f]{64}$ \
+      && -f "$worker_deploy_source_lock" \
+      && ! -L "$worker_deploy_source_lock" \
+      && "$(stat -c '%u:%g:%a:%h' -- \
+        "$worker_deploy_source_lock" 2>/dev/null)" \
+        == "$(id -u):$(id -g):644:1" \
+      && "$(stat -c '%s' -- "$worker_deploy_source_lock")" -le 1048576 \
+      && "$(sha256sum -- "$worker_deploy_source_lock" | cut -d' ' -f1)" \
+        == "$worker_deploy_source_lock_sha" ]] \
+      || native_setup_failure \
+        'worker deploy source lock differs from sealed authority' 1
+    worker_deploy_lock_blob="$(git -C "$wt" rev-parse --verify \
+      "$SHA:jain-split.lock.toml")" \
+      || native_setup_failure \
+        'worker deploy source lock is not tracked at the exact head' 1
+    [[ "$worker_deploy_lock_blob" =~ ^[0-9a-f]{40}$ \
+      && "$(git -C "$wt" hash-object --no-filters -- \
+        "$worker_deploy_source_lock")" == "$worker_deploy_lock_blob" ]] \
+      || native_setup_failure \
+        'worker deploy source lock differs from the exact product object' 1
+  else
+    [[ -z "$worker_deploy_source_lock_sha" ]] \
+      || native_setup_failure \
+        'non-deploy worker received deploy source-lock authority' 1
+  fi
   worker_contract_ancestor_object=""
   worker_contract_mirror="$wt/contracts/MIRROR.md"
   if [[ -e "$worker_contract_mirror" ]]; then
@@ -820,11 +896,13 @@ if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
       [.sources[] | select(.repository == $sibling)]
       | select(length == 1) | .[0]
       | [.commit,.tree,.inventory_sha256,(.entry_count | tostring),.mount_path,
+         .release_tag_status,.release_tag_ref,.release_tag_commit,
          .contract_tag_ref,.contract_tag_object,.contract_tag_commit]
       | @tsv' "$JAIN_SIBLING_SOURCES_PATH")" \
       || native_setup_failure "missing sealed sibling authority: $sib" 1
     IFS=$'\t' read -r sib_sha sib_tree sib_inventory_sha \
-      sib_entry_count sib_mount_path sib_contract_tag_ref \
+      sib_entry_count sib_mount_path sib_release_tag_status \
+      sib_release_tag_ref sib_release_tag_commit sib_contract_tag_ref \
       sib_contract_tag_object sib_contract_tag_commit <<<"$sibling_binding"
     sib_path="$SPLIT_ROOT/$sib"
     if [[ "$sib" == redline-split-ops ]]; then
@@ -861,12 +939,39 @@ if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
     actual_sib_tags="$("${safe_sibling_git[@]}" -C "$sib_path" \
       for-each-ref --format='%(refname)' refs/tags)" \
       || native_setup_failure "cannot enumerate sibling tags $sib" 1
+    if [[ "$sib_release_tag_status" == bound ]]; then
+      [[ "$REPO" == jain-deploy \
+        && "$sib_release_tag_ref" \
+          =~ ^refs/tags/${sib}-v[0-9A-Za-z.-]+-split\.[0-9]+$ \
+        && "$sib_release_tag_commit" =~ ^[0-9a-f]{40}$ \
+        && "$("${safe_sibling_git[@]}" -C "$sib_path" rev-parse --verify \
+          "$sib_release_tag_ref")" == "$sib_release_tag_commit" \
+        && "$("${safe_sibling_git[@]}" -C "$sib_path" rev-parse --verify \
+          "$sib_release_tag_ref^{commit}")" == "$sib_release_tag_commit" ]] \
+        && "${safe_sibling_git[@]}" -C "$sib_path" merge-base --is-ancestor \
+          "$sib_release_tag_commit" "$sib_sha" \
+        || native_setup_failure \
+          "sealed sibling release tag differs from deploy lock: $sib" 1
+    else
+      if [[ "$REPO" == jain-deploy ]]; then
+        [[ "$sib_release_tag_status" == pending \
+          || "$sib_release_tag_status" == absent ]] \
+          || native_setup_failure \
+            "sealed sibling has invalid deploy lock status: $sib" 1
+      else
+        [[ "$sib_release_tag_status" == not-applicable ]] \
+          || native_setup_failure \
+            "non-deploy sibling has release-tag authority: $sib" 1
+      fi
+      [[ -z "$sib_release_tag_ref" && -z "$sib_release_tag_commit" ]] \
+        || native_setup_failure \
+          "unbound sibling retained release-tag identity: $sib" 1
+    fi
     if [[ "$sib" == jain-core && -n "$worker_contract_ancestor_object" ]]; then
       [[ "$sib_contract_tag_ref" \
           =~ ^refs/tags/jain-core-v[0-9A-Za-z.-]+-split\.[0-9]+$ \
         && "$sib_contract_tag_object" == "$worker_contract_ancestor_object" \
         && "$sib_contract_tag_commit" =~ ^[0-9a-f]{40}$ \
-        && "$actual_sib_tags" == "$sib_contract_tag_ref" \
         && "$("${safe_sibling_git[@]}" -C "$sib_path" rev-parse --verify \
           "$sib_contract_tag_ref")" == "$sib_contract_tag_object" \
         && "$("${safe_sibling_git[@]}" -C "$sib_path" cat-file -t \
@@ -879,10 +984,16 @@ if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
           'sealed Core contract tag differs from product authority' 1
     else
       [[ -z "$sib_contract_tag_ref" && -z "$sib_contract_tag_object" \
-        && -z "$sib_contract_tag_commit" && -z "$actual_sib_tags" ]] \
+        && -z "$sib_contract_tag_commit" ]] \
         || native_setup_failure \
           "sibling retained an undeclared contract tag: $sib" 1
     fi
+    expected_sib_tags="$({
+      printf '%s\n' "$sib_release_tag_ref" "$sib_contract_tag_ref"
+    } | sed '/^$/d' | LC_ALL=C sort -u)"
+    [[ "$actual_sib_tags" == "$expected_sib_tags" ]] \
+      || native_setup_failure \
+        "sibling retained a missing or extra sealed tag: $sib" 1
     [[ "$actual_sib_sha" == "$sib_sha" \
       && "$actual_sib_tree" == "$sib_tree" \
       && "$actual_sib_inventory" == "$sib_inventory_sha" \
@@ -905,7 +1016,7 @@ if [[ "$JAIN_SIBLING_SOURCES_REQUIRED" == true ]]; then
     [[ "$(git -C "$tmp/$sib" for-each-ref --format='%(refname)' refs/tags)" \
       == "$actual_sib_tags" ]] \
       || native_setup_failure \
-        "isolated sibling contract tags differ from sealed source: $sib" 1
+        "isolated sibling tags differ from sealed source: $sib" 1
     sibling_seen=$((sibling_seen + 1))
   done
   [[ "$sibling_seen" \

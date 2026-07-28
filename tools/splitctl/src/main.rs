@@ -53,6 +53,34 @@ const MAX_LOCAL_GIT_REMOTE_BYTES: usize = 64 * 1024;
 const MAX_TRACKED_INVENTORY_BYTES: usize = 64 * 1024 * 1024;
 const MAX_TRACKED_FILE_BYTES: u64 = 512 * 1024 * 1024;
 const MAX_TRACKED_TREE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+const HOST_CI_DEPLOY_LOCK_REPOSITORIES: [&str; 26] = [
+    "jain",
+    "jain-agent",
+    "jain-battle-gpu",
+    "jain-catboost",
+    "jain-cli",
+    "jain-contracts",
+    "jain-core",
+    "jain-deploy",
+    "jain-docs",
+    "jain-domain",
+    "jain-jable",
+    "jain-jailgun",
+    "jain-jnoccio",
+    "jain-lightgbm",
+    "jain-llm",
+    "jain-math",
+    "jain-model-zoo",
+    "jain-ops",
+    "jain-python",
+    "jain-report",
+    "jain-research",
+    "jain-starforge",
+    "jain-tui",
+    "jain-web",
+    "jain-xgboost",
+    "jain-zyal",
+];
 
 /// Resolve the control-plane checkout at runtime so release binaries do not
 /// embed the physical path of the checkout that compiled them. Commands are
@@ -254,6 +282,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("manifest") => manifest_command(args.collect())?,
         Some("managed-repos") => managed_repos_command(args.collect())?,
         Some("host-ci-authority") => host_ci_authority_command(args.collect())?,
+        Some("host-ci-deploy-source-lock") => {
+            host_ci_deploy_source_lock_command(args.collect())?
+        }
         Some("release-cargo-commands") => release_cargo_commands_command(args.collect())?,
         Some("sync-derived-manifests") => sync_derived_manifests_command(args.collect())?,
         Some("jankurai-evidence") => jankurai_evidence_command(args.collect())?,
@@ -274,7 +305,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Some("reconcile") => reconcile(args.collect())?,
         Some("bump-version") => bump_version(args.collect())?,
         Some("--version") | Some("version") => println!("splitctl 0.1.0"),
-        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | ci-plan --repo NAME --head SHA --base SHA --profile presubmit|release-full [--output PATH] [--calibration --build-jobs 4|8|16|24|32 --fleet-concurrency 2|4|6|8] | ci-run --plan PATH --receipt PATH | ci-performance --evidence-root PATH [--output PATH] | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--sealed-outer-projection] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-candidate [--manifest PATH] [--repo NAME]... [--journal PATH --token-file PATH --apply] [--receipt PATH] | coordination-ledger --root PATH [--entry-file PATH [--apply]] [--receipt PATH] | quality-status --manifest PATH --token-file PATH [--repo NAME]... [--jobs N] | release-status [--manifest PATH] [--appliance-canary-aggregate PATH --appliance-canary-verifier-receipt PATH --token-file PATH] [--json PATH] | validate-appliance-promotion --aggregate PATH --verifier-receipt PATH --token-file PATH [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
+        _ => return Err("usage: splitctl refresh-ci-contract [--repo NAME]... | materialize [--repo NAME]... | host-ci-snapshot-request --source PATH --destination PATH --expected-uid UID --expected-gid GID --max-bytes BYTES | cargo-cache-stage --lock PATH [--lock PATH]... --source PATH --destination PATH --receipt PATH --expected-source-uid UID --expected-source-gid GID | ci-plan --repo NAME --head SHA --base SHA --profile presubmit|release-full [--output PATH] [--calibration --build-jobs 4|8|16|24|32 --fleet-concurrency 2|4|6|8] | ci-run --plan PATH --receipt PATH | ci-performance --evidence-root PATH [--output PATH] | manifest [--manifest PATH] [--json] | managed-repos [--manifest PATH] --json | host-ci-authority [--manifest PATH] --repo NAME | host-ci-deploy-source-lock --lock PATH | release-cargo-commands [--manifest PATH] --repo NAME | sync-derived-manifests [--manifest PATH] [--target NAME]... [--receipt PATH] [--apply] | jankurai-evidence --repository NAME --commit SHA --worktree PATH --report-root PATH --report PATH --auditor PATH --attempt-id ID --lane-conclusion success|failure [--lane-failure-reason REASON] --clean-tracked-tree-start BOOL --receipt PATH | validate-manifest [--manifest PATH] [--check-paths] [--check-derived] | validate-local-jeryu [--manifest PATH] [--skip-remotes] [--sealed-outer-projection] | validate-family [--manifest PATH] [--json PATH] | validate-family-lock [--manifest PATH] [--lock PATH] | regenerate-lock [--manifest PATH] [--output PATH] --apply | release-preflight [--manifest PATH] [--json PATH] | release-snapshot [--manifest PATH] [--json PATH] | release-candidate [--manifest PATH] [--repo NAME]... [--journal PATH --token-file PATH --apply] [--receipt PATH] | coordination-ledger --root PATH [--entry-file PATH [--apply]] [--receipt PATH] | quality-status --manifest PATH --token-file PATH [--repo NAME]... [--jobs N] | release-status [--manifest PATH] [--appliance-canary-aggregate PATH --appliance-canary-verifier-receipt PATH --token-file PATH] [--json PATH] | validate-appliance-promotion --aggregate PATH --verifier-receipt PATH --token-file PATH [--json PATH] | bootstrap-main --repo PATH --remote URL --reviewed-commit SHA [--receipt PATH] [--apply] | immutable-tag --repo PATH --remote URL --tag TAG --commit SHA --token-file PATH [--receipt PATH] [--apply] | verify-worktrees [--manifest PATH] [--receipt PATH] | preflight [--manifest PATH] [--json PATH] | source-coverage [--manifest PATH] [--json] | seal-source-inventory [--manifest PATH] --source-root PATH [--apply] | python-boundary | jeryu-doctor [--manifest PATH] | reconcile [--manifest PATH] [--base-ref REF] [--apply] [--json PATH] | bump-version [--manifest PATH] --from VERSION --new VERSION --rewrite-split-tags".into()),
     }
     Ok(())
 }
@@ -1637,6 +1668,292 @@ fn host_ci_authority(data: &toml::Value, repo_name: &str) -> Result<JsonValue, S
         "required_check": required_check,
         "remote": remote,
         "release_cuda_compute_capability_required": release_cuda_compute_capability_required,
+    }))
+}
+
+fn host_ci_deploy_source_lock_command(args: Vec<String>) -> Result<(), Box<dyn std::error::Error>> {
+    let mut lock = None;
+    let mut iter = args.into_iter();
+    while let Some(arg) = iter.next() {
+        match arg.as_str() {
+            "--lock" => lock = Some(PathBuf::from(iter.next().ok_or("--lock needs a path")?)),
+            value => {
+                return Err(format!("unknown host-ci-deploy-source-lock argument: {value}").into())
+            }
+        }
+    }
+    let lock = lock.ok_or("host-ci-deploy-source-lock requires --lock")?;
+    println!(
+        "{}",
+        serde_json::to_string_pretty(&host_ci_deploy_source_lock(&lock)?)?
+    );
+    Ok(())
+}
+
+fn host_ci_deploy_source_lock(lock: &Path) -> Result<JsonValue, Box<dyn std::error::Error>> {
+    let before = physical_regular_file(lock, "deploy source lock")?;
+    if before.nlink() != 1 || before.len() == 0 || before.len() > 1024 * 1024 {
+        return Err("deploy source lock is not a bounded single-link file".into());
+    }
+    let mut input = fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC | libc::O_NONBLOCK)
+        .open(lock)?;
+    let opened = input.metadata()?;
+    if !opened.file_type().is_file()
+        || opened.dev() != before.dev()
+        || opened.ino() != before.ino()
+        || opened.nlink() != 1
+        || opened.len() != before.len()
+    {
+        return Err("deploy source lock changed while opening".into());
+    }
+    let mut bytes = Vec::with_capacity(opened.len() as usize);
+    input.read_to_end(&mut bytes)?;
+    let after = input.metadata()?;
+    let path_after = physical_regular_file(lock, "deploy source lock")?;
+    if bytes.len() as u64 != opened.len()
+        || after.dev() != opened.dev()
+        || after.ino() != opened.ino()
+        || after.len() != opened.len()
+        || path_after.dev() != opened.dev()
+        || path_after.ino() != opened.ino()
+        || path_after.nlink() != 1
+    {
+        return Err("deploy source lock changed while reading".into());
+    }
+    let text = std::str::from_utf8(&bytes)?;
+    let data: toml::Value = text.parse()?;
+    let table = data
+        .as_table()
+        .ok_or("deploy source lock is not a TOML table")?;
+    let keys = table.keys().map(String::as_str).collect::<BTreeSet<_>>();
+    let expected_keys = [
+        "dependency_resolution",
+        "family",
+        "family_repo_count",
+        "generator_version",
+        "infrastructure_repo",
+        "infrastructure_repo_count",
+        "nested",
+        "release",
+        "repo",
+        "schema_version",
+        "source",
+        "source_commit",
+        "source_manifest_sha256",
+    ]
+    .into_iter()
+    .collect::<BTreeSet<_>>();
+    if keys != expected_keys {
+        return Err("deploy source lock has unknown or missing top-level fields".into());
+    }
+    if string(&data, "schema_version").as_deref() != Some("1.0.0")
+        || string(&data, "family").as_deref() != Some("jain")
+        || string(&data, "dependency_resolution").as_deref() != Some("immutable-git-tag")
+    {
+        return Err("deploy source lock identity differs from host authority".into());
+    }
+    let repositories = data
+        .get("repo")
+        .and_then(toml::Value::as_array)
+        .ok_or("deploy source lock has no [[repo]] entries")?;
+    let infrastructure = data
+        .get("infrastructure_repo")
+        .and_then(toml::Value::as_array)
+        .ok_or("deploy source lock has no [[infrastructure_repo]] entries")?;
+    if data
+        .get("family_repo_count")
+        .and_then(toml::Value::as_integer)
+        != Some(HOST_CI_DEPLOY_LOCK_REPOSITORIES.len() as i64)
+        || repositories.len() != HOST_CI_DEPLOY_LOCK_REPOSITORIES.len()
+        || data
+            .get("infrastructure_repo_count")
+            .and_then(toml::Value::as_integer)
+            != Some(1)
+        || infrastructure.len() != 1
+    {
+        return Err("deploy source lock repository counts differ from authority".into());
+    }
+    for key in ["release", "generator_version", "source"] {
+        let value = string(&data, key)
+            .ok_or_else(|| format!("deploy source lock {key} is not a string"))?;
+        if value.trim().is_empty() || value.chars().any(char::is_control) {
+            return Err(format!("deploy source lock {key} is empty or unsafe").into());
+        }
+    }
+    let source_manifest_sha256 = string(&data, "source_manifest_sha256")
+        .ok_or("deploy source lock source_manifest_sha256 is not a string")?;
+    if source_manifest_sha256.len() != 64
+        || !source_manifest_sha256
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit())
+        || source_manifest_sha256
+            .bytes()
+            .any(|byte| byte.is_ascii_uppercase())
+    {
+        return Err("deploy source lock source_manifest_sha256 is not lowercase SHA-256".into());
+    }
+    let source_commit =
+        string(&data, "source_commit").ok_or("deploy source lock source_commit is not a string")?;
+    if !is_full_sha(&source_commit) || source_commit.bytes().any(|byte| byte.is_ascii_uppercase()) {
+        return Err("deploy source lock source_commit is not a lowercase full SHA".into());
+    }
+    let nested = data
+        .get("nested")
+        .and_then(toml::Value::as_table)
+        .ok_or("deploy source lock nested authority is missing")?;
+    if nested.keys().map(String::as_str).collect::<BTreeSet<_>>()
+        != ["redline"].into_iter().collect()
+    {
+        return Err("deploy source lock nested authority is not closed".into());
+    }
+    let redline = nested["redline"]
+        .as_table()
+        .ok_or("deploy source lock Redline authority is not a table")?;
+    if redline.keys().map(String::as_str).collect::<BTreeSet<_>>()
+        != [
+            "consumer",
+            "engine_commit",
+            "engine_tag",
+            "family",
+            "lock",
+            "proof_lock_id",
+        ]
+        .into_iter()
+        .collect()
+        || redline.values().any(|value| {
+            value
+                .as_str()
+                .is_none_or(|text| text.trim().is_empty() || text.chars().any(char::is_control))
+        })
+    {
+        return Err("deploy source lock Redline authority is not closed".into());
+    }
+    let redline_engine_commit = redline["engine_commit"]
+        .as_str()
+        .ok_or("deploy source lock Redline engine commit is not a string")?;
+    if redline["family"].as_str() != Some("redline-split")
+        || redline["consumer"].as_str() != Some("jain-split")
+        || redline["lock"].as_str() != Some("../redline-split-ops/redline.lock.toml")
+        || !redline["engine_tag"]
+            .as_str()
+            .is_some_and(|tag| tag.starts_with("redline-core-v"))
+        || !redline["proof_lock_id"]
+            .as_str()
+            .is_some_and(|proof| proof.starts_with("redline-proof/v2/"))
+        || !is_full_sha(redline_engine_commit)
+        || redline_engine_commit
+            .bytes()
+            .any(|byte| byte.is_ascii_uppercase())
+    {
+        return Err("deploy source lock Redline identity differs from authority".into());
+    }
+    let mut sources = BTreeMap::new();
+    for (entry, infrastructure_entry) in repositories
+        .iter()
+        .map(|entry| (entry, false))
+        .chain(infrastructure.iter().map(|entry| (entry, true)))
+    {
+        let entry_table = entry
+            .as_table()
+            .ok_or("deploy source lock repository entry is not a table")?;
+        let entry_keys = entry_table
+            .keys()
+            .map(String::as_str)
+            .collect::<BTreeSet<_>>();
+        let expected_entry_keys = if infrastructure_entry {
+            [
+                "commit",
+                "family_registered",
+                "forge_owner",
+                "github",
+                "jeryu",
+                "kind",
+                "repo",
+                "required_check",
+                "tag",
+            ]
+            .into_iter()
+            .collect()
+        } else {
+            ["commit", "github", "jeryu", "repo", "required_check", "tag"]
+                .into_iter()
+                .collect()
+        };
+        if entry_keys != expected_entry_keys {
+            return Err("deploy source lock repository entry is not closed".into());
+        }
+        let repository =
+            string(entry, "repo").ok_or("deploy source lock entry has no repository identity")?;
+        validate_jeryu_repo_slug(&format!("veox/{repository}"))?;
+        let expected_check = format!("{repository}/required");
+        let github = string(entry, "github");
+        let jeryu = string(entry, "jeryu");
+        let safe_metadata = |value: Option<&str>| {
+            value.is_some_and(|text| !text.trim().is_empty() && !text.chars().any(char::is_control))
+        };
+        if string(entry, "required_check").as_deref() != Some(expected_check.as_str())
+            || !safe_metadata(github.as_deref())
+            || !safe_metadata(jeryu.as_deref())
+        {
+            return Err(format!(
+                "deploy source lock repository metadata is incomplete: {repository}"
+            )
+            .into());
+        }
+        if infrastructure_entry
+            && (repository != "jain-smartcluster"
+                || string(entry, "kind").as_deref() != Some("required-infrastructure")
+                || string(entry, "forge_owner").as_deref() != Some("jain-split")
+                || entry
+                    .get("family_registered")
+                    .and_then(toml::Value::as_bool)
+                    != Some(false))
+        {
+            return Err("deploy source lock infrastructure identity differs from authority".into());
+        }
+        let tag = string(entry, "tag")
+            .ok_or_else(|| format!("deploy source lock entry has no tag: {repository}"))?;
+        let release_tag_ref = format!("refs/tags/{tag}");
+        validate_ancestor_tag_ref(&format!("veox/{repository}"), &release_tag_ref)?;
+        let commit = string(entry, "commit")
+            .ok_or_else(|| format!("deploy source lock entry has no commit: {repository}"))?;
+        let (status, bound_ref, bound_commit) = if commit == "PENDING" {
+            ("pending", String::new(), String::new())
+        } else {
+            if !is_full_sha(&commit) || commit.chars().any(|ch| ch.is_ascii_uppercase()) {
+                return Err(format!(
+                    "deploy source lock commit is not lowercase full SHA: {repository}"
+                )
+                .into());
+            }
+            ("bound", release_tag_ref, commit)
+        };
+        let source = json!({
+            "repository": repository,
+            "status": status,
+            "release_tag_ref": bound_ref,
+            "release_tag_commit": bound_commit,
+        });
+        if sources.insert(repository.clone(), source).is_some() {
+            return Err(format!("deploy source lock duplicates repository: {repository}").into());
+        }
+    }
+    let actual_repositories = sources
+        .keys()
+        .filter(|repository| repository.as_str() != "jain-smartcluster")
+        .map(String::as_str)
+        .collect::<BTreeSet<_>>();
+    if actual_repositories != HOST_CI_DEPLOY_LOCK_REPOSITORIES.into_iter().collect()
+        || !sources.contains_key("jain-smartcluster")
+    {
+        return Err("deploy source lock repository set differs from authority".into());
+    }
+    Ok(json!({
+        "schema_version": "jain.host-ci-deploy-source-lock/v1",
+        "lock_sha256": format!("{:x}", Sha256::digest(&bytes)),
+        "sources": sources.into_values().collect::<Vec<_>>(),
     }))
 }
 
@@ -7891,6 +8208,8 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     let mut token_file = None;
     let mut retain_origin = false;
     let mut retain_declared_release_tag = false;
+    let mut retain_exact_release_tag_ref = None;
+    let mut retain_exact_release_tag_commit = None;
     let mut retain_ancestor_tag_object = None;
     let mut git_lfs_path = None;
     let mut git_lfs_sha256 = None;
@@ -7924,6 +8243,18 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
             }
             "--retain-origin" => retain_origin = true,
             "--retain-declared-release-tag" => retain_declared_release_tag = true,
+            "--retain-exact-release-tag-ref" => {
+                retain_exact_release_tag_ref = Some(
+                    iter.next()
+                        .ok_or("--retain-exact-release-tag-ref needs a ref")?,
+                )
+            }
+            "--retain-exact-release-tag-commit" => {
+                retain_exact_release_tag_commit = Some(
+                    iter.next()
+                        .ok_or("--retain-exact-release-tag-commit needs a SHA")?,
+                )
+            }
             "--retain-ancestor-tag-object" => {
                 if retain_ancestor_tag_object.is_some() {
                     return Err("git-materialize accepts one ancestor tag object".into());
@@ -7943,6 +8274,25 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     validate_jeryu_repo_slug(&repo)?;
     validate_materialization_remote(&repo, &remote)?;
     drop(JeryuClient::from_token_file(&token_file)?);
+    let exact_release_tag = match (
+        retain_exact_release_tag_ref,
+        retain_exact_release_tag_commit,
+    ) {
+        (None, None) => None,
+        (Some(reference), Some(commit)) => {
+            if retain_declared_release_tag {
+                return Err("git-materialize accepts only one release-tag authority mode".into());
+            }
+            validate_ancestor_tag_ref(&repo, &reference)?;
+            if !is_full_sha(&commit) || commit.chars().any(|ch| ch.is_ascii_uppercase()) {
+                return Err(
+                    "--retain-exact-release-tag-commit must be a lowercase full SHA".into(),
+                );
+            }
+            Some((reference, commit))
+        }
+        _ => return Err("exact release-tag ref and commit must be supplied together".into()),
+    };
     if resolve_ref_head && expected_head.is_some() {
         return Err("git-materialize accepts only one head authority mode".into());
     }
@@ -8026,43 +8376,59 @@ fn jeryu_git_materialize(args: Vec<String>) -> Result<(), Box<dyn std::error::Er
     }
     let mut release_tag_ref = String::new();
     let mut release_tag_commit = String::new();
-    if retain_declared_release_tag {
-        if let Some(tag) = declared_standard_version_tag(&repo, &destination)? {
-            let tag_ref = format!("refs/tags/{tag}");
-            if let Some(advertised_tag) = secure_ls_remote_at(&remote, &tag_ref, &token_file)? {
-                let tag_refspec = format!("{tag_ref}:{tag_ref}");
-                secure_materialization_git_status(
-                    &destination,
-                    &remote,
-                    &token_file,
-                    &["fetch", "--quiet", "--no-tags", &remote, &tag_refspec],
-                )?;
-                let local_tag =
-                    secure_git_output(Some(&destination), &["rev-parse", "--verify", &tag_ref])?;
-                let local_commit = secure_git_output(
-                    Some(&destination),
-                    &["rev-parse", "--verify", &format!("{tag_ref}^{{commit}}")],
-                )?;
-                if local_tag != advertised_tag || local_commit != advertised_tag {
-                    return Err(
-                        "declared release tag is not an exact lightweight commit tag".into(),
-                    );
-                }
-                validate_materialization_object_tree(&destination, &tag_ref)?;
-                if !secure_git_status(
-                    Some(&destination),
-                    &["merge-base", "--is-ancestor", &local_commit, &expected_head],
-                )? {
-                    return Err("declared release tag is not an ancestor of product head".into());
-                }
-                if secure_ls_remote_at(&remote, &tag_ref, &token_file)?.as_deref()
-                    != Some(advertised_tag.as_str())
-                {
-                    return Err("declared release tag moved during fetch".into());
-                }
-                release_tag_ref = tag_ref;
-                release_tag_commit = local_commit;
+    let requested_release_tag = if let Some((reference, commit)) = exact_release_tag {
+        Some((reference, Some(commit)))
+    } else if retain_declared_release_tag {
+        declared_standard_version_tag(&repo, &destination)?
+            .map(|tag| (format!("refs/tags/{tag}"), None))
+    } else {
+        None
+    };
+    if let Some((tag_ref, expected_commit)) = requested_release_tag {
+        if let Some(advertised_tag) = secure_ls_remote_at(&remote, &tag_ref, &token_file)? {
+            if expected_commit
+                .as_deref()
+                .is_some_and(|commit| advertised_tag != commit)
+            {
+                return Err("exact release tag differs from the locked commit".into());
             }
+            let tag_refspec = format!("{tag_ref}:{tag_ref}");
+            secure_materialization_git_status(
+                &destination,
+                &remote,
+                &token_file,
+                &["fetch", "--quiet", "--no-tags", &remote, &tag_refspec],
+            )?;
+            let local_tag =
+                secure_git_output(Some(&destination), &["rev-parse", "--verify", &tag_ref])?;
+            let local_commit = secure_git_output(
+                Some(&destination),
+                &["rev-parse", "--verify", &format!("{tag_ref}^{{commit}}")],
+            )?;
+            if local_tag != advertised_tag
+                || local_commit != advertised_tag
+                || expected_commit
+                    .as_deref()
+                    .is_some_and(|commit| local_commit != commit)
+            {
+                return Err("release tag is not the exact locked lightweight commit tag".into());
+            }
+            validate_materialization_object_tree(&destination, &tag_ref)?;
+            if !secure_git_status(
+                Some(&destination),
+                &["merge-base", "--is-ancestor", &local_commit, &expected_head],
+            )? {
+                return Err("declared release tag is not an ancestor of product head".into());
+            }
+            if secure_ls_remote_at(&remote, &tag_ref, &token_file)?.as_deref()
+                != Some(advertised_tag.as_str())
+            {
+                return Err("declared release tag moved during fetch".into());
+            }
+            release_tag_ref = tag_ref;
+            release_tag_commit = local_commit;
+        } else if expected_commit.is_some() {
+            return Err("exact release tag is absent from the authenticated remote".into());
         }
     }
     let mut ancestor_tag_ref = String::new();
@@ -14972,6 +15338,183 @@ release_cuda_compute_capability_required = "yes"
     }
 
     #[test]
+    fn host_ci_deploy_source_lock_closes_bound_and_pending_tag_authority() {
+        let root = TestDir::new("host-ci-deploy-source-lock");
+        let lock = root.path().join("jain-split.lock.toml");
+        let valid_lock = || {
+            let mut text = r#"
+schema_version = "1.0.0"
+family = "jain"
+release = "8.0.0-split.0"
+generator_version = "splitctl 0.1.0"
+family_repo_count = 26
+infrastructure_repo_count = 1
+dependency_resolution = "immutable-git-tag"
+source = "repos.manifest.toml"
+source_manifest_sha256 = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+source_commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+
+[nested.redline]
+family = "redline-split"
+consumer = "jain-split"
+lock = "../redline-split-ops/redline.lock.toml"
+engine_tag = "redline-core-v4.1.0-jain.1"
+engine_commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+proof_lock_id = "redline-proof/v2/4.1.0/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+"#
+            .to_owned();
+            for repository in HOST_CI_DEPLOY_LOCK_REPOSITORIES {
+                let (tag, commit) = if repository == "jain-domain" {
+                    (
+                        "jain-domain-v8.0.1-split.1".to_owned(),
+                        "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                    )
+                } else {
+                    (format!("{repository}-v8.0.0-split.0"), "PENDING")
+                };
+                text.push_str(&format!(
+                    r#"
+
+[[repo]]
+repo = "{repository}"
+tag = "{tag}"
+commit = "{commit}"
+github = "https://example.invalid/{repository}.git"
+jeryu = "http://127.0.0.1:8787/git/jeryu/{repository}.git"
+required_check = "{repository}/required"
+"#
+                ));
+            }
+            text.push_str(
+                r#"
+
+[[infrastructure_repo]]
+repo = "jain-smartcluster"
+tag = "jain-smartcluster-v8.0.0-split.0"
+commit = "PENDING"
+github = "https://example.invalid/jain-smartcluster.git"
+jeryu = "http://127.0.0.1:8787/git/jain-split/jain-smartcluster.git"
+required_check = "jain-smartcluster/required"
+kind = "required-infrastructure"
+forge_owner = "jain-split"
+family_registered = false
+"#,
+            );
+            text
+        };
+        let valid = valid_lock();
+        fs::write(&lock, &valid).unwrap();
+        let authority = host_ci_deploy_source_lock(&lock).unwrap();
+        assert_eq!(
+            authority["schema_version"],
+            "jain.host-ci-deploy-source-lock/v1"
+        );
+        assert_eq!(
+            authority["sources"][9],
+            json!({
+                "repository": "jain-domain",
+                "status": "bound",
+                "release_tag_ref": "refs/tags/jain-domain-v8.0.1-split.1",
+                "release_tag_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            })
+        );
+        assert_eq!(authority["sources"][22]["status"], "pending");
+        assert_eq!(authority["sources"][22]["release_tag_ref"], "");
+
+        fs::write(
+            &lock,
+            valid.replacen(
+                "tag = \"jain-domain-v8.0.1-split.1\"",
+                "tag = \"jain-math-v8.0.1-split.1\"",
+                1,
+            ),
+        )
+        .unwrap();
+        assert!(host_ci_deploy_source_lock(&lock).is_err());
+
+        fs::write(
+            &lock,
+            valid.replacen("family_repo_count = 26", "family_repo_count = 25", 1),
+        )
+        .unwrap();
+        assert!(host_ci_deploy_source_lock(&lock).is_err());
+
+        fs::write(&lock, format!("{valid}\nunexpected = true\n")).unwrap();
+        assert!(host_ci_deploy_source_lock(&lock).is_err());
+        fs::write(
+            &lock,
+            valid.replacen("repo = \"jain-domain\"", "repo = \"jain-unknown\"", 1),
+        )
+        .unwrap();
+        assert!(host_ci_deploy_source_lock(&lock).is_err());
+        fs::write(
+            &lock,
+            valid.replacen(
+                "commit = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\ngithub",
+                "commit = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"\nunknown = true\ngithub",
+                1,
+            ),
+        )
+        .unwrap();
+        assert!(host_ci_deploy_source_lock(&lock).is_err());
+        let domain_block = r#"
+
+[[repo]]
+repo = "jain-domain"
+tag = "jain-domain-v8.0.1-split.1"
+commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+github = "https://example.invalid/jain-domain.git"
+jeryu = "http://127.0.0.1:8787/git/jeryu/jain-domain.git"
+required_check = "jain-domain/required"
+"#;
+        fs::write(&lock, valid.replacen(domain_block, "", 1)).unwrap();
+        assert!(host_ci_deploy_source_lock(&lock).is_err());
+        fs::write(&lock, format!("{valid}{domain_block}")).unwrap();
+        assert!(host_ci_deploy_source_lock(&lock).is_err());
+
+        fs::write(&lock, &valid).unwrap();
+        let linked = root.path().join("hardlink.toml");
+        fs::hard_link(&lock, &linked).unwrap();
+        assert!(host_ci_deploy_source_lock(&lock).is_err());
+        assert!(host_ci_deploy_source_lock(&linked).is_err());
+        fs::remove_file(&linked).unwrap();
+        let symlink = root.path().join("symlink.toml");
+        std::os::unix::fs::symlink(&lock, &symlink).unwrap();
+        assert!(host_ci_deploy_source_lock(&symlink).is_err());
+        let physical_parent = root.path().join("physical-parent");
+        fs::create_dir(&physical_parent).unwrap();
+        let physical_lock = physical_parent.join("jain-split.lock.toml");
+        fs::write(&physical_lock, &valid).unwrap();
+        let parent_symlink = root.path().join("parent-symlink");
+        std::os::unix::fs::symlink(&physical_parent, &parent_symlink).unwrap();
+        assert!(host_ci_deploy_source_lock(&parent_symlink.join("jain-split.lock.toml")).is_err());
+        let empty = root.path().join("empty.toml");
+        fs::write(&empty, b"").unwrap();
+        assert!(host_ci_deploy_source_lock(&empty).is_err());
+        let oversized = root.path().join("oversized.toml");
+        fs::write(&oversized, vec![b'x'; 1024 * 1024 + 1]).unwrap();
+        assert!(host_ci_deploy_source_lock(&oversized).is_err());
+
+        fs::write(&lock, &valid).unwrap();
+        let first = host_ci_deploy_source_lock(&lock).unwrap();
+        fs::write(
+            &lock,
+            valid.replacen(
+                "tag = \"jain-domain-v8.0.1-split.1\"\ncommit = \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"",
+                "tag = \"jain-domain-v8.0.1-split.1\"\ncommit = \"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\"",
+                1,
+            ),
+        )
+        .unwrap();
+        let replacement = host_ci_deploy_source_lock(&lock).unwrap();
+        assert_ne!(first["lock_sha256"], replacement["lock_sha256"]);
+        assert_ne!(
+            first["sources"][9]["release_tag_commit"],
+            replacement["sources"][9]["release_tag_commit"]
+        );
+    }
+
+    #[test]
     fn registered_nested_family_declaration_rejects_aliases_and_duplicate_identity() {
         let manifest: toml::Value = fs::read_to_string(
             PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml"),
@@ -16467,6 +17010,12 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         run_git_strict(&source, &["add", "successor"]).unwrap();
         run_git_strict(&source, &["commit", "-m", "reviewed successor"]).unwrap();
         let head = resolve_commit(&source, "HEAD").unwrap();
+        let extra_tag = "example-v8.0.1-split.2";
+        run_git_strict(
+            &source,
+            &["update-ref", &format!("refs/tags/{extra_tag}"), &baseline],
+        )
+        .unwrap();
         let remote = init_bare(root.path());
         run_git_strict(
             &source,
@@ -16475,6 +17024,7 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
                 remote.to_str().unwrap(),
                 &format!("{head}:refs/heads/main"),
                 &format!("refs/tags/{tag}:refs/tags/{tag}"),
+                &format!("refs/tags/{extra_tag}:refs/tags/{extra_tag}"),
             ],
         )
         .unwrap();
@@ -16516,6 +17066,38 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             format!("refs/tags/{tag}")
         );
 
+        let exact_args = |destination: &Path, commit: &str| {
+            vec![
+                "git-materialize".to_owned(),
+                "--repo".to_owned(),
+                "jeryu/example".to_owned(),
+                "--remote".to_owned(),
+                remote.display().to_string(),
+                "--ref".to_owned(),
+                "refs/heads/main".to_owned(),
+                "--expected-head".to_owned(),
+                head.clone(),
+                "--destination".to_owned(),
+                destination.display().to_string(),
+                "--token-file".to_owned(),
+                token_file.display().to_string(),
+                "--retain-exact-release-tag-ref".to_owned(),
+                format!("refs/tags/{tag}"),
+                "--retain-exact-release-tag-commit".to_owned(),
+                commit.to_owned(),
+            ]
+        };
+        let exact = root.path().join("exact");
+        jeryu_git_materialize(exact_args(&exact, &baseline)).unwrap();
+        assert_eq!(
+            strict_git_output(
+                &exact,
+                &["for-each-ref", "--format=%(refname)", "refs/tags"]
+            )
+            .unwrap(),
+            format!("refs/tags/{tag}")
+        );
+
         run_git_strict(&source, &["update-ref", &format!("refs/tags/{tag}"), &head]).unwrap();
         run_git_strict(
             &source,
@@ -16541,6 +17123,9 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
             token_file.display().to_string(),
         ])
         .is_err());
+        let moved = root.path().join("moved");
+        assert!(jeryu_git_materialize(exact_args(&moved, &baseline)).is_err());
+        assert!(!moved.exists());
 
         run_git_strict(
             &source,
@@ -16559,6 +17144,37 @@ release_feature_sets = [["gpu"], ["gpu", "gpu-dynamic-loading"]]
         )
         .unwrap()
         .is_empty());
+        let exact_absent = root.path().join("exact-absent");
+        assert!(jeryu_git_materialize(exact_args(&exact_absent, &baseline)).is_err());
+        assert!(!exact_absent.exists());
+
+        run_git_strict(
+            &source,
+            &["tag", "-a", "-f", tag, "-m", "annotated release", &baseline],
+        )
+        .unwrap();
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                "--force",
+                remote.to_str().unwrap(),
+                &format!("refs/tags/{tag}:refs/tags/{tag}"),
+            ],
+        )
+        .unwrap();
+        let annotated = root.path().join("annotated");
+        assert!(jeryu_git_materialize(exact_args(&annotated, &baseline)).is_err());
+        assert!(!annotated.exists());
+        run_git_strict(
+            &source,
+            &[
+                "push",
+                remote.to_str().unwrap(),
+                &format!(":refs/tags/{tag}"),
+            ],
+        )
+        .unwrap();
 
         let tree = strict_git_output(&source, &["rev-parse", "HEAD^{tree}"]).unwrap();
         let unrelated = strict_git_output(

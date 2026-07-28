@@ -266,6 +266,17 @@ set; the isolated worker recomputes that closure from the read-only authority
 mounts and requires it to match the aggregate cache-stage receipt before any
 product test runs.
 
+Jain Deploy sibling tags are selected only by the bounded, tracked
+`jain-split.lock.toml` at the authenticated Deploy head. Root parses that
+exact object with the reviewed `splitctl`, retains only non-`PENDING`
+lightweight tag/commit pairs after authenticated forge readback, and binds the
+lock digest plus every retained pair into the sibling-source receipt. The
+worker revalidates the tracked lock, exact tag union, commit ancestry, and
+tagless `PENDING` siblings. Before a successful publication, root revalidates
+the immutable sibling checkout and reads back every retained tag from the
+forge. Other products keep tag-free sibling materializations except for the
+separately declared Core contract tag object.
+
 The request root must be on an executable filesystem because the sandbox copies
 the digest-pinned controller and reviewed runner beneath it before binding that
 authority read-only into the worker. Both preflight and sandbox reject a
