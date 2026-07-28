@@ -12,7 +12,18 @@ JBIN="$(jankurai_bin)" || fail "governed Jankurai identity verification failed"
 [[ -z "$(git status --porcelain)" ]] || fail "Jankurai proof requires a clean checkout at start"
 
 status=0
-base_ref="${JANKURAI_BASE_REF:-origin/main}"
+if [[ "${JAIN_RELEASE_CI:-0}" == "1" ]]; then
+  : "${JAIN_CONTRACT_BASE_REF:?release proof base commit is required}"
+  base_ref="$JAIN_CONTRACT_BASE_REF"
+  [[ "$base_ref" =~ ^[0-9a-f]{40}$ ]] \
+    || fail "release proof base must be a full lowercase commit: ${base_ref}"
+else
+  base_ref="${JANKURAI_BASE_REF:-origin/main}"
+fi
+base_ref="$(git rev-parse --verify "${base_ref}^{commit}" 2>/dev/null)" \
+  || fail "proof base is not a local commit: ${base_ref}"
+git merge-base --is-ancestor "$base_ref" HEAD \
+  || fail "proof base is not an ancestor of HEAD: ${base_ref}"
 
 run_step() {
   local name="$1"; shift
