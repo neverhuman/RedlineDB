@@ -36,7 +36,7 @@ if jain_host_ci_python_wheelhouse_inventory \
   exit 1
 fi
 chmod 0755 "$wheelhouse"
-rm -- "$wheelhouse/linked-1.0-py3-none-any.whl"
+rm -f -- "$wheelhouse/linked-1.0-py3-none-any.whl"
 chmod 0555 "$wheelhouse"
 
 source_root="$tmp/source"
