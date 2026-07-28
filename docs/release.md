@@ -15,12 +15,15 @@ SBOM integrity evidence is produced by `just security`.
 
 The authorized corrective family identities are
 `redline-core-v4.1.0-jain.6`, `redline-v4.1.0-jain.2`,
-`redline-testing-v1.0.1-jain.1`, and `redline-web-v0.1.0-jain.1`. Earlier tags
+`redline-testing-v1.0.1-jain.1`, and `redline-web-v0.1.0-jain.2`. Earlier tags
 remain immutable. Before proof refresh, every manifest commit and release-tree
 SHA256 must be exact and must match the reviewed main commit and immutable tag.
 The reviewed Core Jain.6 identity is commit
 `d0de59930141baffcfa2b514480e75b14627f24d` with release-tree SHA-256
 `6dfd1a6d4fa160643b901b633f1a613c78fa51eed83c7e0b5360309ae1fcab2f`.
+The reviewed Web Jain.2 identity is commit
+`215fd9fc9008e4943973598754d591d39c621598` with release-tree SHA-256
+`0aa807a7d8f13bdbfbc33cf7cb1c94deda98ca6c6516eae12ab9313a3b9b5082`.
 Both Jain and Jeryu consumer receipts are mandatory; proof refresh has no waiver
 or single-consumer acceptance path. Until fresh receipts produce the lock pair,
 the tracked Jain.3 authoritative lock is intentionally historical and
