@@ -29,6 +29,12 @@ The reviewed Core Jain.6 identity is commit
 The reviewed Web Jain.2 identity is commit
 `215fd9fc9008e4943973598754d591d39c621598` with release-tree SHA-256
 `0aa807a7d8f13bdbfbc33cf7cb1c94deda98ca6c6516eae12ab9313a3b9b5082`.
+Its governed prior-release authority is immutable
+`redline-web-v0.1.0-jain.1` at
+`09fd93be10238cd85abc164b0b01cf0f681ea304`, archive SHA-256
+`27fef5fd44ad897dbaa244963312b6861e0c54b951ddb4f645f715fbf417c8a9`.
+Family CI fails closed unless the remote tag metadata, deterministic archive,
+and strict prior-to-current ancestry all match; only Web receives this base.
 Both Jain and Jeryu consumer receipts are mandatory; proof refresh has no waiver
 or single-consumer acceptance path. Until fresh receipts produce the lock pair,
 the tracked Jain.3 authoritative lock is intentionally historical and

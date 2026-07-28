@@ -483,6 +483,13 @@ fn require_fresh(timestamp: DateTime<Utc>, now: DateTime<Utc>, field: &str) -> R
 }
 
 #[derive(Clone, Debug)]
+struct PriorRelease {
+    tag: String,
+    commit: String,
+    checksum_sha256: String,
+}
+
+#[derive(Clone, Debug)]
 struct Repo {
     name: String,
     path: PathBuf,
@@ -493,6 +500,7 @@ struct Repo {
     current_tag: String,
     release_commit: String,
     release_checksum_sha256: String,
+    prior_release: Option<PriorRelease>,
     protection_policy: String,
     required_check: String,
     default_branch: String,
@@ -520,6 +528,21 @@ fn toml_string(table: &toml::value::Table, key: &str, context: &str) -> Result<S
         .filter(|v| !v.is_empty())
         .map(str::to_owned)
         .ok_or_else(|| error(format!("{context} lacks {key}")))
+}
+
+fn optional_toml_string(
+    table: &toml::value::Table,
+    key: &str,
+    context: &str,
+) -> Result<Option<String>> {
+    match table.get(key) {
+        None => Ok(None),
+        Some(value) => value
+            .as_str()
+            .filter(|raw| !raw.is_empty())
+            .map(|raw| Some(raw.to_owned()))
+            .ok_or_else(|| error(format!("{context} has invalid {key}"))),
+    }
 }
 
 fn toml_integer(table: &toml::value::Table, key: &str, context: &str) -> Result<i64> {
@@ -750,6 +773,43 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             expected_product_version,
             expected_revision,
         )?;
+        let prior_tag = optional_toml_string(table, "prior_release_tag", &name)?;
+        let prior_commit = optional_toml_string(table, "prior_release_commit", &name)?;
+        let prior_checksum = optional_toml_string(table, "prior_release_checksum_sha256", &name)?;
+        let prior_release = match (name.as_str(), prior_tag, prior_commit, prior_checksum) {
+            ("redline-web", Some(tag), Some(commit), Some(checksum_sha256)) => {
+                let prior_revision = tag_revision
+                    .checked_sub(1)
+                    .ok_or_else(|| error("redline-web prior revision underflow"))?;
+                let expected_tag = format!("redline-web-v{product_version}-jain.{prior_revision}");
+                if tag != expected_tag {
+                    return Err(error(format!(
+                        "redline-web: prior_release_tag must be {expected_tag}, found {tag}"
+                    )));
+                }
+                if !is_sha1(&commit) || !is_sha256(&checksum_sha256) {
+                    return Err(error(
+                        "redline-web: prior release commit/checksum must be full lowercase SHA-1/SHA-256 values",
+                    ));
+                }
+                Some(PriorRelease {
+                    tag,
+                    commit,
+                    checksum_sha256,
+                })
+            }
+            ("redline-web", _, _, _) => {
+                return Err(error(
+                    "redline-web: prior release tag, commit, and checksum must be present together",
+                ))
+            }
+            (_, None, None, None) => None,
+            _ => {
+                return Err(error(format!(
+                    "{name}: prior release authority is allowed only on redline-web"
+                )))
+            }
+        };
         let jeryu_slug = toml_string(table, "jeryu_slug", "manifest repository")?;
         let remote = toml_string(table, "remote", "manifest repository")?;
         let expected_remote = format!(
@@ -771,6 +831,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             current_tag,
             release_commit,
             release_checksum_sha256,
+            prior_release,
             protection_policy,
             required_check: toml_string(table, "required_check", "manifest repository")?,
             default_branch,
@@ -1122,6 +1183,49 @@ fn tag_metadata(root: &Path, tag: &str, require_remote: bool) -> Result<TagMetad
     })
 }
 
+fn authenticate_prior_release(root: &Path, repo: &Repo, current_commit: &str) -> Result<()> {
+    let Some(prior) = repo.prior_release.as_ref() else {
+        return Ok(());
+    };
+    if prior.commit == current_commit {
+        return Err(error(format!(
+            "{}: prior release commit must differ from current commit",
+            repo.name
+        )));
+    }
+    let metadata = tag_metadata(root, &prior.tag, true)?;
+    if metadata.commit != prior.commit {
+        return Err(error(format!(
+            "{}: prior tag {} resolves to {}, expected {}",
+            repo.name, prior.tag, metadata.commit, prior.commit
+        )));
+    }
+    let checksum = git_tree_checksum(root, &prior.commit)?;
+    if checksum != prior.checksum_sha256 {
+        return Err(error(format!(
+            "{}: prior release archive checksum differs from manifest",
+            repo.name
+        )));
+    }
+    let status = isolated_git()
+        .arg("--no-replace-objects")
+        .arg("-C")
+        .arg(root)
+        .args(["merge-base", "--is-ancestor", &prior.commit, current_commit])
+        .status()?;
+    match status.code() {
+        Some(0) => Ok(()),
+        Some(1) => Err(error(format!(
+            "{}: prior release {} is not an ancestor of current commit {current_commit}",
+            repo.name, prior.commit
+        ))),
+        _ => Err(error(format!(
+            "{}: prior release ancestry command failed with {status}",
+            repo.name
+        ))),
+    }
+}
+
 fn metadata_json(value: &TagMetadata) -> JsonValue {
     json!({
         "object": value.object,
@@ -1202,6 +1306,7 @@ fn current_reviewed_state(
             )));
         }
     }
+    authenticate_prior_release(&root, repo, &commit)?;
     let metadata = if local_tag_exists(&root, &repo.current_tag)? {
         let found = tag_metadata(&root, &repo.current_tag, false)?;
         if found.commit != commit {
@@ -1345,11 +1450,48 @@ impl TestingArtifact {
     }
 }
 
-fn configure_family_child(command: &mut Command) -> &mut Command {
-    command
-        .env_remove("RUSTUP_TOOLCHAIN")
-        .env("REDLINE_STRICT_TOOLS", "1")
-        .env("CI", "true")
+const FAMILY_CHILD_SCRUB_ENV: [&str; 10] = [
+    "RUSTUP_TOOLCHAIN",
+    "CARGO_TARGET_DIR",
+    "JAIN_RELEASE_CI",
+    "JAIN_CONTRACT_BASE_REF",
+    "JANKURAI_BASE_REF",
+    "RUSTFLAGS",
+    "CARGO_ENCODED_RUSTFLAGS",
+    "CARGO_BUILD_TARGET",
+    "RUSTC_WRAPPER",
+    "RUSTC_WORKSPACE_WRAPPER",
+];
+
+fn configure_family_child<'a>(command: &'a mut Command, repo: &Repo) -> Result<&'a mut Command> {
+    for name in FAMILY_CHILD_SCRUB_ENV {
+        command.env_remove(name);
+    }
+    let profile_overrides: Vec<_> = command
+        .get_envs()
+        .map(|(name, _)| name.to_os_string())
+        .chain(env::vars_os().map(|(name, _)| name))
+        .filter(|name| {
+            name.to_str()
+                .is_some_and(|value| value.starts_with("CARGO_PROFILE_"))
+        })
+        .collect();
+    for name in profile_overrides {
+        command.env_remove(name);
+    }
+    if repo.name == "redline-web" {
+        let prior = repo
+            .prior_release
+            .as_ref()
+            .ok_or_else(|| error("redline-web lacks authenticated prior release authority"))?;
+        command.env("JANKURAI_BASE_REF", &prior.commit);
+    } else if repo.prior_release.is_some() {
+        return Err(error(format!(
+            "{}: prior release routing is allowed only for redline-web",
+            repo.name
+        )));
+    }
+    Ok(command.env("REDLINE_STRICT_TOOLS", "1").env("CI", "true"))
 }
 
 fn file_url(path: &Path) -> Result<String> {
@@ -1536,7 +1678,7 @@ fn stage_testing_artifact(
         let stdout = log.try_clone()?;
         let stderr = log.try_clone()?;
         let mut process = Command::new(command[0]);
-        configure_family_child(&mut process);
+        configure_family_child(&mut process, repo)?;
         let result = process
             .args(&command[1..])
             .current_dir(&checkout)
@@ -1736,7 +1878,7 @@ fn family_ci(manifest_path: &Path, receipt: &Path) -> Result<()> {
                             let stdout = log.try_clone()?;
                             let stderr = log.try_clone()?;
                             let mut process = Command::new(&command[0]);
-                            configure_family_child(&mut process);
+                            configure_family_child(&mut process, repo)?;
                             if repo.name == "redline-core" {
                                 configure_redline_core_artifact(&mut process, &artifact)?;
                             }
@@ -3907,6 +4049,7 @@ fn historical_jain4_manifest(manifest_path: &Path) -> Result<Manifest> {
     web.release_commit = "09fd93be10238cd85abc164b0b01cf0f681ea304".to_owned();
     web.release_checksum_sha256 =
         "27fef5fd44ad897dbaa244963312b6861e0c54b951ddb4f645f715fbf417c8a9".to_owned();
+    web.prior_release = None;
     Ok(manifest)
 }
 
@@ -4633,6 +4776,7 @@ mod tests {
             current_tag: "redline-testing-v1.0.1-jain.1".to_owned(),
             release_commit: "a".repeat(40),
             release_checksum_sha256: "b".repeat(64),
+            prior_release: None,
             protection_policy: RELEASE_PROTECTION_POLICY.to_owned(),
             required_check: "redline-testing/required".to_owned(),
             default_branch: "main".to_owned(),
@@ -4678,14 +4822,182 @@ mod tests {
 
     #[test]
     fn family_child_scrubs_control_toolchain_override() {
+        let repo = testing_repo();
         let mut command = Command::new("true");
-        configure_family_child(&mut command);
-        assert_eq!(command_env(&command, "RUSTUP_TOOLCHAIN"), Some(None));
+        command.env("TMPDIR", "/physical/transaction/tmp");
+        for name in FAMILY_CHILD_SCRUB_ENV {
+            command.env(name, "hostile");
+        }
+        command.env("CARGO_PROFILE_RELEASE_LTO", "fat");
+        configure_family_child(&mut command, &repo).unwrap();
+        for name in FAMILY_CHILD_SCRUB_ENV {
+            assert_eq!(command_env(&command, name), Some(None), "{name}");
+        }
+        assert_eq!(
+            command_env(&command, "CARGO_PROFILE_RELEASE_LTO"),
+            Some(None)
+        );
+        assert_eq!(
+            command_env(&command, "TMPDIR"),
+            Some(Some("/physical/transaction/tmp".to_owned()))
+        );
         assert_eq!(
             command_env(&command, "REDLINE_STRICT_TOOLS"),
             Some(Some("1".to_owned()))
         );
         assert_eq!(command_env(&command, "CI"), Some(Some("true".to_owned())));
+    }
+
+    #[test]
+    fn family_child_routes_only_web_to_authenticated_prior_commit() {
+        let prior_commit = "9".repeat(40);
+        let web = Repo {
+            name: "redline-web".to_owned(),
+            path: PathBuf::from("../redline-web"),
+            github_slug: "neverhuman/redline-web".to_owned(),
+            remote: format!("{LOCAL_JERYU_BASE}jeryu/redline-web.git"),
+            product_version: "0.1.0".to_owned(),
+            tag_revision: 2,
+            current_tag: "redline-web-v0.1.0-jain.2".to_owned(),
+            release_commit: "a".repeat(40),
+            release_checksum_sha256: "b".repeat(64),
+            prior_release: Some(PriorRelease {
+                tag: "redline-web-v0.1.0-jain.1".to_owned(),
+                commit: prior_commit.clone(),
+                checksum_sha256: "c".repeat(64),
+            }),
+            protection_policy: RELEASE_PROTECTION_POLICY.to_owned(),
+            required_check: "redline-web/required".to_owned(),
+            default_branch: "main".to_owned(),
+        };
+        let mut command = Command::new("true");
+        command.env("JAIN_CONTRACT_BASE_REF", "hostile");
+        command.env("JANKURAI_BASE_REF", "hostile");
+        configure_family_child(&mut command, &web).unwrap();
+        assert_eq!(
+            command_env(&command, "JANKURAI_BASE_REF"),
+            Some(Some(prior_commit))
+        );
+        assert_eq!(command_env(&command, "JAIN_CONTRACT_BASE_REF"), Some(None));
+
+        let mut testing = Command::new("true");
+        configure_family_child(&mut testing, &testing_repo()).unwrap();
+        assert_eq!(command_env(&testing, "JANKURAI_BASE_REF"), Some(None));
+        assert_eq!(command_env(&testing, "JAIN_CONTRACT_BASE_REF"), Some(None));
+    }
+
+    #[test]
+    fn prior_release_authentication_binds_remote_tag_archive_and_ancestry() {
+        let fixture = TestDir::new("prior-release-auth");
+        let origin = fixture.path().join("origin.git");
+        let source = fixture.path().join("source");
+        fs::create_dir_all(&origin).unwrap();
+        fs::create_dir_all(&source).unwrap();
+        git(&origin, &["init", "--bare"]).unwrap();
+        git(&source, &["init", "--initial-branch=main"]).unwrap();
+        git(&source, &["config", "user.name", "Redline Test"]).unwrap();
+        git(&source, &["config", "user.email", "redline-test@localhost"]).unwrap();
+        fs::write(source.join("state"), b"prior\n").unwrap();
+        git(&source, &["add", "state"]).unwrap();
+        git(&source, &["commit", "-m", "prior"]).unwrap();
+        let prior_commit = git(&source, &["rev-parse", "HEAD"]).unwrap();
+        let prior_tag = "redline-web-v0.1.0-jain.1";
+        git(&source, &["tag", prior_tag, &prior_commit]).unwrap();
+        fs::write(source.join("state"), b"current\n").unwrap();
+        git(&source, &["add", "state"]).unwrap();
+        git(&source, &["commit", "-m", "current"]).unwrap();
+        let current_commit = git(&source, &["rev-parse", "HEAD"]).unwrap();
+        git(
+            &source,
+            &["remote", "add", "origin", &origin.to_string_lossy()],
+        )
+        .unwrap();
+        git(&source, &["push", "origin", "main"]).unwrap();
+        git(
+            &source,
+            &["push", "origin", &format!("refs/tags/{prior_tag}")],
+        )
+        .unwrap();
+        let checksum_sha256 = git_tree_checksum(&source, &prior_commit).unwrap();
+        let repo = Repo {
+            name: "redline-web".to_owned(),
+            path: PathBuf::from("../redline-web"),
+            github_slug: "neverhuman/redline-web".to_owned(),
+            remote: origin.to_string_lossy().into_owned(),
+            product_version: "0.1.0".to_owned(),
+            tag_revision: 2,
+            current_tag: "redline-web-v0.1.0-jain.2".to_owned(),
+            release_commit: current_commit.clone(),
+            release_checksum_sha256: "b".repeat(64),
+            prior_release: Some(PriorRelease {
+                tag: prior_tag.to_owned(),
+                commit: prior_commit.clone(),
+                checksum_sha256,
+            }),
+            protection_policy: RELEASE_PROTECTION_POLICY.to_owned(),
+            required_check: "redline-web/required".to_owned(),
+            default_branch: "main".to_owned(),
+        };
+        authenticate_prior_release(&source, &repo, &current_commit).unwrap();
+
+        let mut bad_checksum = repo.clone();
+        bad_checksum.prior_release.as_mut().unwrap().checksum_sha256 = "0".repeat(64);
+        assert!(
+            authenticate_prior_release(&source, &bad_checksum, &current_commit)
+                .unwrap_err()
+                .to_string()
+                .contains("archive checksum differs")
+        );
+
+        let prior_tree = git(&source, &["rev-parse", &format!("{prior_commit}^{{tree}}")]).unwrap();
+        let unrelated = git(
+            &source,
+            &["commit-tree", &prior_tree, "-m", "unrelated current"],
+        )
+        .unwrap();
+        assert!(authenticate_prior_release(&source, &repo, &unrelated)
+            .unwrap_err()
+            .to_string()
+            .contains("is not an ancestor"));
+
+        let replacement = git(
+            &source,
+            &[
+                "commit-tree",
+                &prior_tree,
+                "-p",
+                &prior_commit,
+                "-m",
+                "replacement current",
+            ],
+        )
+        .unwrap();
+        git(&source, &["replace", &unrelated, &replacement]).unwrap();
+        assert!(isolated_git()
+            .arg("-C")
+            .arg(&source)
+            .args(["merge-base", "--is-ancestor", &prior_commit, &unrelated])
+            .status()
+            .unwrap()
+            .success());
+        assert!(authenticate_prior_release(&source, &repo, &unrelated)
+            .unwrap_err()
+            .to_string()
+            .contains("is not an ancestor"));
+
+        git(
+            &origin,
+            &[
+                "update-ref",
+                &format!("refs/tags/{prior_tag}"),
+                &current_commit,
+            ],
+        )
+        .unwrap();
+        assert!(authenticate_prior_release(&source, &repo, &current_commit)
+            .unwrap_err()
+            .to_string()
+            .contains("origin tag object"));
     }
 
     #[test]
@@ -4818,6 +5130,23 @@ mod tests {
             identities.get("redline-web"),
             Some(&("0.1.0", 2, "redline-web-v0.1.0-jain.2"))
         );
+        let web = manifest
+            .repos
+            .iter()
+            .find(|repo| repo.name == "redline-web")
+            .unwrap();
+        let prior = web.prior_release.as_ref().unwrap();
+        assert_eq!(prior.tag, "redline-web-v0.1.0-jain.1");
+        assert_eq!(prior.commit, "09fd93be10238cd85abc164b0b01cf0f681ea304");
+        assert_eq!(
+            prior.checksum_sha256,
+            "27fef5fd44ad897dbaa244963312b6861e0c54b951ddb4f645f715fbf417c8a9"
+        );
+        assert!(manifest
+            .repos
+            .iter()
+            .filter(|repo| repo.name != "redline-web")
+            .all(|repo| repo.prior_release.is_none()));
         let raw: toml::Value = fs::read_to_string(root.join("repos.manifest.toml"))
             .unwrap()
             .parse()
@@ -4888,6 +5217,13 @@ mod tests {
     fn successor_transition_reconciles_only_the_exact_reviewed_lock() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let manifest = historical_jain4_manifest(&root.join("repos.manifest.toml")).unwrap();
+        assert!(manifest
+            .repos
+            .iter()
+            .find(|repo| repo.name == "redline-web")
+            .unwrap()
+            .prior_release
+            .is_none());
         let predecessor =
             fs::read(root.join("release-evidence/8.0.0/redline-lock-jain3-predecessor.toml"))
                 .unwrap();
@@ -5011,6 +5347,56 @@ mod tests {
             .unwrap_err()
             .to_string()
             .contains("current_tag must be redline-v4.1.0-jain.2"));
+    }
+
+    #[test]
+    fn manifest_requires_exact_web_prior_release_authority() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let canonical = fs::read_to_string(source).unwrap();
+        let fixture = TestDir::new("web-prior-authority");
+        let path = fixture.path().join("repos.manifest.toml");
+        for (name, changed, expected) in [
+            (
+                "partial-triplet",
+                canonical.replace(
+                    "prior_release_commit = \"09fd93be10238cd85abc164b0b01cf0f681ea304\"\n",
+                    "",
+                ),
+                "must be present together",
+            ),
+            (
+                "wrong-tag",
+                canonical.replace(
+                    "prior_release_tag = \"redline-web-v0.1.0-jain.1\"",
+                    "prior_release_tag = \"redline-web-v0.1.0-jain.0\"",
+                ),
+                "prior_release_tag must be redline-web-v0.1.0-jain.1",
+            ),
+            (
+                "malformed-commit",
+                canonical.replace(
+                    "prior_release_commit = \"09fd93be10238cd85abc164b0b01cf0f681ea304\"",
+                    "prior_release_commit = \"PENDING\"",
+                ),
+                "must be full lowercase SHA-1/SHA-256",
+            ),
+            (
+                "non-web-prior",
+                canonical.replacen(
+                    "current_tag = \"redline-v4.1.0-jain.2\"\n",
+                    "current_tag = \"redline-v4.1.0-jain.2\"\nprior_release_tag = \"redline-v4.1.0-jain.1\"\n",
+                    1,
+                ),
+                "prior release authority is allowed only on redline-web",
+            ),
+        ] {
+            fs::write(&path, changed).unwrap();
+            let failure = load_manifest(&path).unwrap_err().to_string();
+            assert!(
+                failure.contains(expected),
+                "{name} produced unexpected failure: {failure}"
+            );
+        }
     }
 
     #[test]
@@ -5376,6 +5762,7 @@ mod tests {
                     current_tag: tag.to_owned(),
                     release_commit: commit.clone(),
                     release_checksum_sha256: "f".repeat(64),
+                    prior_release: None,
                     protection_policy: RELEASE_PROTECTION_POLICY.to_owned(),
                     required_check: format!("{name}/required"),
                     default_branch: "main".to_owned(),

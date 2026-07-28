@@ -36,7 +36,7 @@ security:
 score:
   #!/usr/bin/env bash
   set -euo pipefail
-  export PATH="$HOME/.cargo/bin:$PATH"
+  export PATH="$HOME/.jeryu/bin:$PATH"
   test "$(jankurai --version)" = "jankurai 1.6.11"
   mkdir -p .jankurai target/jankurai/coverage
   install -m 0644 agent/jankurai-baseline.json target/jankurai/accepted-baseline.json

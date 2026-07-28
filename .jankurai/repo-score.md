@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1785165317`
-- Started at: `1785165317`
-- Elapsed: `4389` ms
+- Run ID: `1785237014`
+- Started at: `1785237014`
+- Elapsed: `3034` ms
 - Scope: `full`
 - Raw score: `87`
 - Final score: `87`
@@ -70,9 +70,9 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`8` files=`1`
+- Status: `review` hard=`0` warning=`6` files=`1`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`21` tokens=`55` bytes=`601`
+- Duplicate volume: lines=`19` tokens=`46` bytes=`528`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
@@ -81,14 +81,12 @@
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 7 | 20 | `tools/redline-proof/src/main.rs:2904-2911, tools/redline-proof/src/main.rs:2986-2993` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 9 | `tools/redline-proof/src/main.rs:2970-2975, tools/redline-proof/src/main.rs:3060-3065` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 8 | `tools/redline-proof/src/main.rs:2745-2749, tools/redline-proof/src/main.rs:2812-2816` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `tools/redline-proof/src/main.rs:1430-1431, tools/redline-proof/src/main.rs:3288-3289, tools/redline-proof/src/main.rs:3301-3302` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 8 | `tools/redline-proof/src/main.rs:971-972, tools/redline-proof/src/main.rs:3278-3279` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/redline-proof/src/main.rs:1609-1610, tools/redline-proof/src/main.rs:2357-2358` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/redline-proof/src/main.rs:293-294, tools/redline-proof/src/main.rs:1355-1356` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `tools/redline-proof/src/main.rs:516-517, tools/redline-proof/src/main.rs:525-526` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 7 | 20 | `tools/redline-proof/src/main.rs:3046-3053, tools/redline-proof/src/main.rs:3128-3135` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 9 | `tools/redline-proof/src/main.rs:3112-3117, tools/redline-proof/src/main.rs:3202-3207` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 4 | 8 | `tools/redline-proof/src/main.rs:2887-2891, tools/redline-proof/src/main.rs:2954-2958` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/redline-proof/src/main.rs:1751-1752, tools/redline-proof/src/main.rs:2499-2500` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `tools/redline-proof/src/main.rs:293-294, tools/redline-proof/src/main.rs:1497-1498` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `tools/redline-proof/src/main.rs:524-525, tools/redline-proof/src/main.rs:548-549` | `same body appears under different names across files` |
 
 ## Dimensions
 

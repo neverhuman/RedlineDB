@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:0ced71b0908bdb8afa257b779973bbb8d8d9c158e33490c579f52d3eacfea953",
-  "input_fingerprint": "sha256:8ca9aed3cc664209fc23ceee35f0caca54288d9d97c8ca103fc1623dfc624abc",
+  "report_fingerprint": "sha256:0547f1d2e004a69532915a31113b5744bc500977c46d4d0f0c697cbc5310489d",
+  "input_fingerprint": "sha256:98edb4f9de9b82b11dda666ac356951e4ceefe6121d9ef83a91e4f63c0f47bc5",
   "policy_fingerprint": "sha256:ee7b6aae33fb5ed85ec89a3b9d9221858fcc62ffaf7215e7fb70675781fa3574",
   "manifest_fingerprints": {
     "owner_map": "sha256:d539296fba6c8f01669314d2552a71d3efa2e6d34629cb968b1d748647e9c4e4",
@@ -10,8 +10,8 @@
     "proof_lanes": "sha256:0f90587c471b00e4ff17e57632a271650e430bbac67ced986a9f9582b92bd9d7",
     "standard_version": "sha256:f7a56ea0a95fc9be14aa355b0604e104993a8c75e562a2fe03d0313cc53fbc3b"
   },
-  "dirty_worktree": false,
-  "generated_at": "1785165317",
+  "dirty_worktree": true,
+  "generated_at": "1785237014",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,9 +25,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1785165317",
-  "started_at": "1785165317",
-  "elapsed_ms": 4389,
+  "run_id": "1785237014",
+  "started_at": "1785237014",
+  "elapsed_ms": 3034,
   "scope": {
     "mode": "full",
     "paths": []
@@ -54,11 +54,11 @@
     }
   },
   "git": {
-    "head": "4101884",
+    "head": "ef045a5",
     "base": null,
     "changed_files": 0,
     "mode": "full",
-    "dirty_worktree": false
+    "dirty_worktree": true
   },
   "policy": {
     "path": "./agent/audit-policy.toml",
@@ -972,7 +972,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-27T15:15:12.800741871+00:00",
+    "generated_at": "2026-07-28T11:10:11.144575436+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1010,20 +1010,20 @@
       ]
     },
     "summary": {
-      "files_scanned": 81,
+      "files_scanned": 95,
       "files_considered": 1,
       "active_files": 1,
       "exact_file_classes": 0,
       "hard_classes": 0,
-      "warning_classes": 8,
+      "warning_classes": 6,
       "hard_instances": 0,
-      "warning_instances": 17,
-      "duplicate_lines": 21,
-      "duplicate_tokens": 55,
-      "duplicate_bytes": 601,
-      "total_redundant_lines": 22,
-      "total_redundant_tokens": 56,
-      "total_redundant_bytes": 610
+      "warning_instances": 12,
+      "duplicate_lines": 19,
+      "duplicate_tokens": 46,
+      "duplicate_bytes": 528,
+      "total_redundant_lines": 19,
+      "total_redundant_tokens": 46,
+      "total_redundant_bytes": 528
     },
     "classes": [
       {
@@ -1048,15 +1048,15 @@
           {
             "path": "tools/redline-proof/src/main.rs",
             "language": "rust",
-            "start_line": 2904,
-            "end_line": 2911,
+            "start_line": 3046,
+            "end_line": 3053,
             "unit_name": "proof_refresh_prepare_successor_with"
           },
           {
             "path": "tools/redline-proof/src/main.rs",
             "language": "rust",
-            "start_line": 2986,
-            "end_line": 2993,
+            "start_line": 3128,
+            "end_line": 3135,
             "unit_name": "proof_refresh_reconcile_successor_with"
           }
         ]
@@ -1083,15 +1083,15 @@
           {
             "path": "tools/redline-proof/src/main.rs",
             "language": "rust",
-            "start_line": 2970,
-            "end_line": 2975,
+            "start_line": 3112,
+            "end_line": 3117,
             "unit_name": "proof_refresh_prepare_successor"
           },
           {
             "path": "tools/redline-proof/src/main.rs",
             "language": "rust",
-            "start_line": 3060,
-            "end_line": 3065,
+            "start_line": 3202,
+            "end_line": 3207,
             "unit_name": "proof_refresh_reconcile_successor"
           }
         ]
@@ -1118,93 +1118,16 @@
           {
             "path": "tools/redline-proof/src/main.rs",
             "language": "rust",
-            "start_line": 2745,
-            "end_line": 2749,
+            "start_line": 2887,
+            "end_line": 2891,
             "unit_name": "validate_bound_predecessor_identity"
           },
           {
             "path": "tools/redline-proof/src/main.rs",
             "language": "rust",
-            "start_line": 2812,
-            "end_line": 2816,
+            "start_line": 2954,
+            "end_line": 2958,
             "unit_name": "validate_bound_predecessor"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-ab80b0029566ed53",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 1,
-        "duplicate_bytes": 9,
-        "instance_count": 3,
-        "total_redundant_lines": 2,
-        "total_redundant_tokens": 2,
-        "total_redundant_bytes": 18,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "b8606a3ff8947e15",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "tools/redline-proof/src/main.rs",
-            "language": "rust",
-            "start_line": 1430,
-            "end_line": 1431,
-            "unit_name": "manifest_string"
-          },
-          {
-            "path": "tools/redline-proof/src/main.rs",
-            "language": "rust",
-            "start_line": 3288,
-            "end_line": 3289,
-            "unit_name": "lock_entries"
-          },
-          {
-            "path": "tools/redline-proof/src/main.rs",
-            "language": "rust",
-            "start_line": 3301,
-            "end_line": 3302,
-            "unit_name": "proof_table"
-          }
-        ]
-      },
-      {
-        "id": "copy-code-body-rust-ae539803ef46ea6a",
-        "kind": "exact_unit_different_name",
-        "severity": "warning",
-        "confidence": "medium",
-        "language": "rust",
-        "duplicate_lines": 1,
-        "duplicate_tokens": 8,
-        "duplicate_bytes": 64,
-        "instance_count": 2,
-        "total_redundant_lines": 1,
-        "total_redundant_tokens": 8,
-        "total_redundant_bytes": 64,
-        "effective_severity": "warning",
-        "hard_fail": false,
-        "fingerprint": "893a65d7ed8e1996",
-        "reason": "same body appears under different names across files",
-        "recommended_action": "choose one owner for the shared body or intentionally differentiate the behavior",
-        "instances": [
-          {
-            "path": "tools/redline-proof/src/main.rs",
-            "language": "rust",
-            "start_line": 971,
-            "end_line": 972,
-            "unit_name": "cargo_package_version"
-          },
-          {
-            "path": "tools/redline-proof/src/main.rs",
-            "language": "rust",
-            "start_line": 3278,
-            "end_line": 3279,
-            "unit_name": "load_lock"
           }
         ]
       },
@@ -1230,15 +1153,15 @@
           {
             "path": "tools/redline-proof/src/main.rs",
             "language": "rust",
-            "start_line": 1609,
-            "end_line": 1610,
+            "start_line": 1751,
+            "end_line": 1752,
             "unit_name": "family_ci"
           },
           {
             "path": "tools/redline-proof/src/main.rs",
             "language": "rust",
-            "start_line": 2357,
-            "end_line": 2358,
+            "start_line": 2499,
+            "end_line": 2500,
             "unit_name": "checked_tag_rows"
           }
         ]
@@ -1272,8 +1195,8 @@
           {
             "path": "tools/redline-proof/src/main.rs",
             "language": "rust",
-            "start_line": 1355,
-            "end_line": 1356,
+            "start_line": 1497,
+            "end_line": 1498,
             "unit_name": "file_url"
           }
         ]
@@ -1300,15 +1223,15 @@
           {
             "path": "tools/redline-proof/src/main.rs",
             "language": "rust",
-            "start_line": 516,
-            "end_line": 517,
+            "start_line": 524,
+            "end_line": 525,
             "unit_name": "toml_string"
           },
           {
             "path": "tools/redline-proof/src/main.rs",
             "language": "rust",
-            "start_line": 525,
-            "end_line": 526,
+            "start_line": 548,
+            "end_line": 549,
             "unit_name": "toml_integer"
           }
         ]

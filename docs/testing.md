@@ -62,9 +62,16 @@ detached HEAD, and the canonical Jeryu origin. Sandbox cleanup requires its
 private marker, runs after successful or failed child commands, and refuses
 symlinked root components. Family CI never registers a Git worktree.
 Child commands use each repository's pinned toolchain, never the control
-plane's `RUSTUP_TOOLCHAIN` override. Before Core CI, the runner builds the exact
-reviewed Redline Testing release package locally, verifies its commit, manifest,
-binary, and hashes, and records that binding under Core's dependency artifacts.
+plane's `RUSTUP_TOOLCHAIN` override. The runner also removes inherited release,
+base-ref, Cargo-target, Rust flag/wrapper/target, and `CARGO_PROFILE_*`
+overrides before every child. It preserves the transaction's physical `TMPDIR`
+and normal tool homes. Web alone receives `JANKURAI_BASE_REF`, derived from the
+manifest's authenticated prior immutable tag, commit, and archive checksum
+after remote-tag and strict-ancestry verification. Other children receive no
+release or base override. Before Core CI, the runner builds the exact reviewed
+Redline Testing release package with its clone-local target, verifies its
+commit, manifest, binary, and hashes, and records that binding under Core's
+dependency artifacts.
 
 Common repair signatures:
 

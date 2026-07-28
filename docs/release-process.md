@@ -16,7 +16,11 @@ Jain 8.0.0 but does not itself push images, change routes, or promote production
    verifiable history, not current readiness requirements.
 2. Run `bash ops/ci/quality-gates.sh` on the exact reviewed control commit.
 3. Run `just family-ci` with all child repositories clean, on `main`, and equal
-   to local Jeryu. Preserve the receipt, checksum sidecar, and named logs.
+   to local Jeryu. Web's full changed surface must use the authenticated
+   `redline-web-v0.1.0-jain.1` commit as its governed base for Jain.2; the
+   runner verifies the prior tag, archive checksum, and strict ancestry before
+   injecting that base into Web alone. Preserve the receipt, checksum sidecar,
+   and named logs.
 4. Create the immutable successor tag, then verify every local, Jeryu, and
    mirror tag resolves the manifest commit and
    release-tree checksum. Immutable tags are never recreated or moved.
