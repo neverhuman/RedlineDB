@@ -121,9 +121,338 @@ jain_host_ci_verify_proof_payload() {
         end)' "$receipt" >/dev/null || return 1
 }
 
+# Revalidates deploy release-tag authority in both root processes that consume
+# promoted proof evidence. During promotion, root_request is the sandbox-owned
+# request root. During publication, request_dir is the protected publisher's
+# view of that same immutable request. Exactly one context must exist.
+jain_host_ci_verify_deploy_source_tags() (
+  local owner="${1:?owner is required}" repo="${2:?repository is required}"
+  local head="${3:?head SHA is required}" check="${4:?check is required}"
+  local sandbox_root_present=0 publisher_root_present=0 authority_root
+  local deploy_lock deploy_lock_sha deploy_lock_blob deploy_lock_authority
+  local sibling_row sibling sibling_owner sibling_remote sibling_commit
+  local sibling_stage
+  local release_status release_ref release_commit contract_ref contract_object
+  local contract_commit retained_tags expected_tags
+  local -a expected_safe_git=(git -c core.fsmonitor=false \
+    -c core.hooksPath=/dev/null -c core.untrackedCache=false \
+    -c diff.external=)
+
+  jain_host_ci_deploy_source_tags_fail() {
+    printf '[host-ci-proof-evidence] %s\n' "$*" >&2
+    exit 1
+  }
+
+  [[ "$repo" == jain-deploy ]] || return 0
+  [[ "$(id -u)" == 0 \
+    && "$owner" =~ ^[a-z0-9][a-z0-9-]*$ \
+    && "$head" =~ ^[0-9a-f]{40}$ \
+    && "$check" == jain-deploy/required ]] \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof identity is malformed'
+
+  [[ ${root_request+x} ]] && sandbox_root_present=1
+  [[ ${request_dir+x} ]] && publisher_root_present=1
+  (( sandbox_root_present + publisher_root_present == 1 )) \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof requires exactly one root request authority'
+  if (( sandbox_root_present == 1 )); then
+    authority_root="$root_request"
+  else
+    authority_root="$request_dir"
+  fi
+
+  for required_global in product_authority sibling_sources_path request_id \
+    control_commit splitctl_path token_file family_root; do
+    [[ ${!required_global+x} && -n "${!required_global}" ]] \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof lacks required authority: $required_global"
+  done
+  declare -p safe_git >/dev/null 2>&1 \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof lacks the reviewed Git command'
+  [[ "$(declare -p safe_git)" == 'declare -a safe_git='* \
+    && "${#safe_git[@]}" == "${#expected_safe_git[@]}" \
+    && "${safe_git[*]}" == "${expected_safe_git[*]}" ]] \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof Git command differs from reviewed authority'
+
+  [[ "$authority_root" == /* && -d "$authority_root" \
+    && ! -L "$authority_root" \
+    && "$product_authority" == "$authority_root/product-authority" \
+    && "$sibling_sources_path" \
+      == "$authority_root/worker-authority/sibling-sources.json" \
+    && "$request_id" =~ ^[0-9a-f]{64}$ \
+    && "$control_commit" =~ ^[0-9a-f]{40}$ \
+    && "$family_root" == /* && -d "$family_root" && ! -L "$family_root" \
+    && -f "$splitctl_path" && ! -L "$splitctl_path" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$splitctl_path" 2>/dev/null)" \
+      == '0:0:500:1' \
+    && -f "$token_file" && ! -L "$token_file" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$token_file" 2>/dev/null)" \
+      == '0:0:600:1' ]] \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof paths or root identities are not exact authority'
+
+  [[ -d "$product_authority/.git" && ! -L "$product_authority" \
+    && ! -L "$product_authority/.git" \
+    && -f "$sibling_sources_path" && ! -L "$sibling_sources_path" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$sibling_sources_path" 2>/dev/null)" \
+      == '0:0:444:1' ]] \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof source inventory is not immutable root authority'
+
+  jq -e --arg request_id "$request_id" --arg control "$control_commit" \
+    --arg owner "$owner" --arg head "$head" --arg check "$check" \
+    --arg family_root "$family_root" '
+    select((keys | sort) == ([
+      "control_plane_commit","deploy_source_lock_sha256","head_sha","owner",
+      "reference","repository","request_id","required_check",
+      "schema_version","sources"
+    ] | sort))
+    | select(.schema_version == "jain.host-ci-sibling-sources/v1")
+    | select(.request_id == $request_id and .control_plane_commit == $control)
+    | select(.owner == $owner and .repository == "jain-deploy")
+    | select(.head_sha == $head and .required_check == $check)
+    | select(.reference == "refs/heads/main")
+    | select(.deploy_source_lock_sha256 | test("^[0-9a-f]{64}$"))
+    | select((.sources | type) == "array" and (.sources | length) > 0)
+    | select(.sources == (.sources | sort_by(.repository)))
+    | select((.sources | map(.repository) | unique | length)
+        == (.sources | length))
+    | select(all(.sources[];
+        (keys | sort) == ([
+          "commit","contract_tag_commit","contract_tag_object",
+          "contract_tag_ref","entry_count","inventory_sha256","mount_path",
+          "owner","reference","release_tag_commit","release_tag_ref",
+          "release_tag_status","remote","repository","tree"
+        ] | sort)
+        and (.repository | test("^[a-z0-9][a-z0-9-]*$"))
+        and (
+          (
+            .repository == "redline-split-ops"
+            and (.owner == "jeryu" or .owner == "veox")
+            and .remote == ("http://127.0.0.1:8787/git/" + .owner
+              + "/redline-split-ops.git")
+            and .mount_path
+              == ($family_root + "/jain-redline/redline-split-ops")
+          )
+          or
+          (
+            .repository != "redline-split-ops"
+            and .owner == "veox"
+            and .remote == ("http://127.0.0.1:8787/git/veox/"
+              + .repository + ".git")
+            and .mount_path == ($family_root + "/" + .repository)
+          )
+        )
+        and .reference == "refs/heads/main"
+        and (.commit | test("^[0-9a-f]{40}$"))
+        and (.tree | test("^[0-9a-f]{40}$"))
+        and (.inventory_sha256 | test("^[0-9a-f]{64}$"))
+        and (.entry_count | type) == "number" and .entry_count >= 0
+        and (
+          (
+            (.release_tag_status == "pending"
+              or .release_tag_status == "absent")
+            and .release_tag_ref == ""
+            and .release_tag_commit == ""
+          )
+          or
+          (
+            .release_tag_status == "bound"
+            and (.repository as $source
+              | .release_tag_ref
+              | startswith("refs/tags/" + $source + "-v"))
+            and (.release_tag_ref
+              | test("-v[0-9A-Za-z.-]+-split\\.[0-9]+$"))
+            and (.release_tag_commit | test("^[0-9a-f]{40}$"))
+          )
+        )
+        and (
+          (
+            .contract_tag_ref == ""
+            and .contract_tag_object == ""
+            and .contract_tag_commit == ""
+          )
+          or
+          (
+            .repository == "jain-core"
+            and (.contract_tag_ref
+              | test("^refs/tags/jain-core-v[0-9A-Za-z.-]+-split\\.[0-9]+$"))
+            and (.contract_tag_object | test("^[0-9a-f]{40}$"))
+            and (.contract_tag_commit | test("^[0-9a-f]{40}$"))
+          )
+        )
+      ))' "$sibling_sources_path" >/dev/null \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof source inventory has an invalid closed shape'
+
+  deploy_lock="$product_authority/jain-split.lock.toml"
+  deploy_lock_sha="$(jq -er '.deploy_source_lock_sha256' \
+    "$sibling_sources_path")" \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof source inventory lacks its lock digest'
+  [[ -f "$deploy_lock" && ! -L "$deploy_lock" \
+    && "$(stat -c '%u:%g:%a:%h' -- "$deploy_lock" 2>/dev/null)" \
+      == '0:0:644:1' \
+    && "$(stat -c '%s' -- "$deploy_lock")" -le 1048576 \
+    && "$(sha256sum -- "$deploy_lock" | cut -d' ' -f1)" \
+      == "$deploy_lock_sha" ]] \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof source lock is missing or changed'
+  deploy_lock_blob="$("${safe_git[@]}" -C "$product_authority" \
+    rev-parse --verify "$head:jain-split.lock.toml")" \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof source lock is not tracked at the exact head'
+  deploy_lock_authority="$("$splitctl_path" host-ci-deploy-source-lock \
+    --lock "$deploy_lock")" \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof cannot reparse its source lock'
+  [[ "$deploy_lock_blob" =~ ^[0-9a-f]{40}$ \
+    && "$("${safe_git[@]}" -C "$product_authority" \
+      hash-object --no-filters -- "$deploy_lock")" == "$deploy_lock_blob" \
+    && "$(jq -er '.lock_sha256' <<<"$deploy_lock_authority")" \
+      == "$deploy_lock_sha" ]] \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof source lock differs from product authority'
+  jq -e --argjson lock_authority "$deploy_lock_authority" '
+    (
+      [.sources[] | {
+        repository,
+        status:.release_tag_status,
+        release_tag_ref,
+        release_tag_commit
+      }]
+      | sort_by(.repository)
+    ) == (
+      (
+        [$lock_authority.sources[]
+          | select(.repository != "jain-deploy")]
+        + [{
+          repository:"jain-shard",
+          status:"absent",
+          release_tag_ref:"",
+          release_tag_commit:""
+        }]
+      )
+      | sort_by(.repository)
+    )' "$sibling_sources_path" >/dev/null \
+    || jain_host_ci_deploy_source_tags_fail \
+      'deploy proof release-tag tuples differ from the tracked lock'
+
+  while IFS= read -r sibling_row; do
+    sibling="$(jq -er '.repository' <<<"$sibling_row")" \
+      || jain_host_ci_deploy_source_tags_fail \
+        'deploy proof cannot read a sibling repository'
+    sibling_owner="$(jq -er '.owner' <<<"$sibling_row")" \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof cannot read sibling owner: $sibling"
+    sibling_remote="$(jq -er '.remote' <<<"$sibling_row")" \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof cannot read sibling remote: $sibling"
+    sibling_commit="$(jq -er '.commit' <<<"$sibling_row")" \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof cannot read sibling commit: $sibling"
+    release_status="$(jq -er '.release_tag_status' <<<"$sibling_row")" \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof cannot read sibling release status: $sibling"
+    release_ref="$(jq -er '.release_tag_ref' <<<"$sibling_row")" \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof cannot read sibling release ref: $sibling"
+    release_commit="$(jq -er '.release_tag_commit' <<<"$sibling_row")" \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof cannot read sibling release commit: $sibling"
+    contract_ref="$(jq -er '.contract_tag_ref' <<<"$sibling_row")" \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof cannot read sibling contract ref: $sibling"
+    contract_object="$(jq -er '.contract_tag_object' <<<"$sibling_row")" \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof cannot read sibling contract object: $sibling"
+    contract_commit="$(jq -er '.contract_tag_commit' <<<"$sibling_row")" \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof cannot read sibling contract commit: $sibling"
+    sibling_stage="$authority_root/worker-authority/sibling-checkouts/$sibling"
+    [[ -d "$sibling_stage/.git" && ! -L "$sibling_stage" \
+      && ! -L "$sibling_stage/.git" \
+      && "$("${safe_git[@]}" -C "$sibling_stage" \
+        rev-parse --verify 'HEAD^{commit}')" == "$sibling_commit" \
+      && -z "$("${safe_git[@]}" -C "$sibling_stage" remote)" \
+      && -z "$("${safe_git[@]}" -C "$sibling_stage" \
+        status --porcelain=v1 --untracked-files=all)" ]] \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof sibling checkout changed: $sibling"
+    retained_tags="$("${safe_git[@]}" -C "$sibling_stage" \
+      for-each-ref --format='%(refname)' refs/tags)" \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof cannot enumerate sibling tags: $sibling"
+    if [[ "$release_status" == bound ]]; then
+      [[ "$release_ref" \
+          =~ ^refs/tags/${sibling}-v[0-9A-Za-z.-]+-split\.[0-9]+$ \
+        && "$release_commit" =~ ^[0-9a-f]{40}$ \
+        && "$("${safe_git[@]}" -C "$sibling_stage" rev-parse --verify \
+          "$release_ref")" == "$release_commit" \
+        && "$("${safe_git[@]}" -C "$sibling_stage" rev-parse --verify \
+          "$release_ref^{commit}")" == "$release_commit" ]] \
+        && "${safe_git[@]}" -C "$sibling_stage" merge-base --is-ancestor \
+          "$release_commit" "$sibling_commit" \
+        || jain_host_ci_deploy_source_tags_fail \
+          "deploy proof release tag changed: $sibling"
+    else
+      [[ "$release_status" == pending || "$release_status" == absent ]] \
+        && [[ -z "$release_ref" && -z "$release_commit" ]] \
+        || jain_host_ci_deploy_source_tags_fail \
+          "deploy proof unbound release tuple changed: $sibling"
+    fi
+    if [[ -n "$contract_ref" ]]; then
+      [[ "$sibling" == jain-core \
+        && "$contract_ref" \
+          =~ ^refs/tags/jain-core-v[0-9A-Za-z.-]+-split\.[0-9]+$ \
+        && "$contract_object" =~ ^[0-9a-f]{40}$ \
+        && "$contract_commit" =~ ^[0-9a-f]{40}$ \
+        && "$("${safe_git[@]}" -C "$sibling_stage" rev-parse --verify \
+          "$contract_ref")" == "$contract_object" \
+        && "$("${safe_git[@]}" -C "$sibling_stage" cat-file -t \
+          "$contract_object")" == tag \
+        && "$("${safe_git[@]}" -C "$sibling_stage" rev-parse --verify \
+          "$contract_ref^{commit}")" == "$contract_commit" ]] \
+        && "${safe_git[@]}" -C "$sibling_stage" merge-base --is-ancestor \
+          "$contract_commit" "$sibling_commit" \
+        || jain_host_ci_deploy_source_tags_fail \
+          'deploy proof Core contract tag changed'
+    else
+      [[ -z "$contract_object" && -z "$contract_commit" ]] \
+        || jain_host_ci_deploy_source_tags_fail \
+          'deploy proof carried a partial Core contract tag'
+    fi
+    expected_tags="$({
+      printf '%s\n' "$release_ref" "$contract_ref"
+    } | sed '/^$/d' | LC_ALL=C sort -u)"
+    [[ "$retained_tags" == "$expected_tags" ]] \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof sibling retained a missing or extra tag: $sibling"
+    "$splitctl_path" jeryu-local ref-readback \
+      --repo "$sibling_owner/$sibling" --remote "$sibling_remote" \
+      --ref refs/heads/main --expected-head "$sibling_commit" \
+      --token-file "$token_file" >/dev/null \
+      || jain_host_ci_deploy_source_tags_fail \
+        "deploy proof sibling protected main moved: $sibling"
+    if [[ -n "$release_ref" ]]; then
+      "$splitctl_path" jeryu-local ref-readback \
+        --repo "$sibling_owner/$sibling" --remote "$sibling_remote" \
+        --ref "$release_ref" --expected-head "$release_commit" \
+        --token-file "$token_file" >/dev/null \
+        || jain_host_ci_deploy_source_tags_fail \
+          "deploy proof sibling release tag moved: $sibling"
+    fi
+  done < <(jq -c '.sources[]' "$sibling_sources_path")
+)
+
 jain_host_ci_verify_promoted_proof_evidence() {
   local evidence_dir="${1:?proof evidence directory is required}"
   shift
+  local owner="${1:?owner is required}" repo="${2:?repository is required}"
+  local head="${3:?head SHA is required}" check="${4:?check is required}"
   local file
   [[ -d "$evidence_dir" && ! -L "$evidence_dir" \
     && "$(stat -c '%u:%g:%a' -- "$evidence_dir")" == '0:0:500' ]] \
@@ -134,7 +463,8 @@ jain_host_ci_verify_promoted_proof_evidence() {
     [[ "$(stat -c '%u:%g:%a:%h' -- "$evidence_dir/$file")" \
       == '0:0:400:1' ]] || return 1
   done
-  jain_host_ci_verify_proof_payload "$evidence_dir" "$@"
+  jain_host_ci_verify_proof_payload "$evidence_dir" "$@" || return 1
+  jain_host_ci_verify_deploy_source_tags "$owner" "$repo" "$head" "$check"
 }
 
 jain_host_ci_ensure_proof_store_dir() {

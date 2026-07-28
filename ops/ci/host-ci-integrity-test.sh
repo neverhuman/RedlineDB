@@ -370,17 +370,93 @@ for deploy_tag_binding in \
   grep -F -- "$deploy_tag_binding" \
     "$repo_root/ops/ci/host-ci-sandbox.sh" \
     "$repo_root/ops/ci/split-host-ci.sh" \
-    "$repo_root/ops/ci/host-ci-publisher.sh" >/dev/null || {
+    "$repo_root/ops/ci/host-ci-proof-evidence.sh" >/dev/null || {
     printf 'host CI omits deploy sibling tag binding: %s\n' \
       "$deploy_tag_binding" >&2
     exit 1
   }
 done
-grep -F 'sibling release tag moved before publication' \
-  "$repo_root/ops/ci/host-ci-publisher.sh" >/dev/null || {
-  printf 'root publisher does not reject deploy sibling tag drift\n' >&2
+for proof_binding in \
+  'sandbox_root_present + publisher_root_present == 1' \
+  'jain_host_ci_verify_deploy_source_tags "$owner" "$repo" "$head" "$check"' \
+  'deploy proof sibling protected main moved' \
+  'deploy proof sibling release tag moved'; do
+  grep -F -- "$proof_binding" \
+    "$repo_root/ops/ci/host-ci-proof-evidence.sh" >/dev/null || {
+    printf 'promoted proof omits deploy publication binding: %s\n' \
+      "$proof_binding" >&2
+    exit 1
+  }
+done
+if grep -Fq 'deploy_source_lock_sha256' \
+  "$repo_root/ops/ci/host-ci-publisher.sh"; then
+  printf 'protected publisher contains unmergeable candidate deploy logic\n' >&2
   exit 1
-}
+fi
+proof_helper="$repo_root/ops/ci/host-ci-proof-evidence.sh"
+if ! bash -c '
+  source "$1"
+  jain_host_ci_verify_deploy_source_tags \
+    veox jain-report 0123456789abcdef0123456789abcdef01234567 \
+    jain-report/required
+' _ "$proof_helper"; then
+  printf 'non-deploy proof unexpectedly requires deploy tag authority\n' >&2
+  exit 1
+fi
+for root_context in neither both missing-authority; do
+  if bash -c '
+    source "$1"
+    id() { [[ "${1:-}" == -u ]] && printf "0\n"; }
+    case "$2" in
+      both) root_request=/root/a; request_dir=/root/b ;;
+      missing-authority) root_request=/root/a ;;
+    esac
+    jain_host_ci_verify_deploy_source_tags \
+      veox jain-deploy 0123456789abcdef0123456789abcdef01234567 \
+      jain-deploy/required
+  ' _ "$proof_helper" "$root_context" >/dev/null 2>&1; then
+    printf 'deploy proof accepted incomplete root context: %s\n' \
+      "$root_context" >&2
+    exit 1
+  fi
+done
+proof_hook_fixture="$tmp/proof-hook"
+mkdir -p "$proof_hook_fixture"
+printf '{}\n' >"$proof_hook_fixture/receipt.json"
+printf '{}\n' >"$proof_hook_fixture/report.json"
+if ! bash -c '
+  set -euo pipefail
+  source "$1"
+  stat() {
+    case "$*" in
+      *"%u:%g:%a:%h"*) printf "0:0:400:1\n" ;;
+      *"%u:%g:%a"*) printf "0:0:500\n" ;;
+      *) return 1 ;;
+    esac
+  }
+  jain_host_ci_verify_proof_payload() { return 0; }
+  hook_called=""
+  jain_host_ci_verify_deploy_source_tags() {
+    hook_called="$*"
+    return 29
+  }
+  set +e
+  jain_host_ci_verify_promoted_proof_evidence "$2" \
+    veox jain-deploy 0123456789abcdef0123456789abcdef01234567 \
+    jain-deploy/required attempt \
+    aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa pass \
+    >"$3"
+  hook_rc=$?
+  set -e
+  [[ "$hook_rc" == 29 \
+    && "$hook_called" == \
+      "veox jain-deploy 0123456789abcdef0123456789abcdef01234567 jain-deploy/required" \
+    && ! -s "$3" ]]
+' _ "$proof_helper" "$proof_hook_fixture" "$tmp/proof-hook.stdout"; then
+  printf 'promoted proof did not invoke deploy verification fail-closed and silently\n' \
+    >&2
+  exit 1
+fi
 for publisher_nested_binding in \
   '"$repo" == jain' \
   '.repository == "redline-split-ops"' \

@@ -104,12 +104,330 @@ cleanup() {
   fi
   sudo -n rm -rf -- "$native_evidence_root" 2>/dev/null || true
   sudo -n rm -rf -- "$proof_evidence_root" 2>/dev/null || true
-  sudo -n rm -rf -- "$control_remote" 2>/dev/null || true
+  if [[ -n "${control_remote:-}" ]]; then
+    sudo -n rm -rf -- "$control_remote" 2>/dev/null || true
+  fi
   sudo -n rm -rf -- "$product_forge_root" 2>/dev/null || true
+  sudo -n rm -rf -- "$tmp/deploy-proof-root" 2>/dev/null || true
   rm -rf -- "$tmp"
   return "$cleanup_rc"
 }
 trap cleanup EXIT
+
+# The deploy proof helper is authenticated candidate control, but is consumed
+# once by the root sandbox and again by the protected-main publisher. Exercise
+# both exact request roots against one immutable fixture and prove every hostile
+# state fails before a publication command can be reached.
+sudo -n /bin/bash -s -- \
+  "$repo_root" "$tmp/deploy-proof-root" <<'DEPLOY_PROOF_ROOT'
+set -euo pipefail
+
+repo_root="$1"
+fixture="$2"
+authority_root="$fixture/request"
+family_root="$fixture/family"
+product_authority="$authority_root/product-authority"
+sibling_stage_root="$authority_root/worker-authority/sibling-checkouts"
+sibling_sources_path="$authority_root/worker-authority/sibling-sources.json"
+stub_root="$fixture/stub"
+splitctl_path="$stub_root/splitctl"
+token_file="$stub_root/token"
+request_id="$(printf 'b%.0s' {1..64})"
+control_commit="$(printf 'c%.0s' {1..40})"
+mkdir -p "$product_authority" "$sibling_stage_root" "$family_root" "$stub_root"
+
+git init --quiet "$product_authority"
+git -C "$product_authority" config user.name 'Deploy Proof Product'
+git -C "$product_authority" config user.email deploy-proof-product@example.invalid
+printf 'fixture deploy source lock\n' \
+  >"$product_authority/jain-split.lock.toml"
+git -C "$product_authority" add jain-split.lock.toml
+git -C "$product_authority" commit --quiet -m lock
+head_sha="$(git -C "$product_authority" rev-parse HEAD)"
+lock_sha="$(sha256sum "$product_authority/jain-split.lock.toml" \
+  | cut -d' ' -f1)"
+
+domain_stage="$sibling_stage_root/jain-domain"
+git init --quiet "$domain_stage"
+git -C "$domain_stage" config user.name 'Deploy Proof Domain'
+git -C "$domain_stage" config user.email deploy-proof-domain@example.invalid
+printf 'release\n' >"$domain_stage/payload"
+git -C "$domain_stage" add payload
+git -C "$domain_stage" commit --quiet -m release
+domain_release="$(git -C "$domain_stage" rev-parse HEAD)"
+domain_release_ref=refs/tags/jain-domain-v8.0.1-split.1
+git -C "$domain_stage" tag "${domain_release_ref#refs/tags/}" "$domain_release"
+printf 'main\n' >>"$domain_stage/payload"
+git -C "$domain_stage" commit --quiet -am main
+domain_commit="$(git -C "$domain_stage" rev-parse HEAD)"
+domain_tree="$(git -C "$domain_stage" rev-parse 'HEAD^{tree}')"
+
+shard_stage="$sibling_stage_root/jain-shard"
+git init --quiet "$shard_stage"
+git -C "$shard_stage" config user.name 'Deploy Proof Shard'
+git -C "$shard_stage" config user.email deploy-proof-shard@example.invalid
+printf 'main\n' >"$shard_stage/payload"
+git -C "$shard_stage" add payload
+git -C "$shard_stage" commit --quiet -m main
+shard_commit="$(git -C "$shard_stage" rev-parse HEAD)"
+shard_tree="$(git -C "$shard_stage" rev-parse 'HEAD^{tree}')"
+inventory_sha="$(printf 'd%.0s' {1..64})"
+
+write_lock_authority() {
+  local release_commit="$1"
+  jq -n --arg lock_sha "$lock_sha" \
+    --arg release_ref "$domain_release_ref" \
+    --arg release_commit "$release_commit" '
+    {
+      schema_version:"jain.host-ci-deploy-source-lock/v1",
+      lock_sha256:$lock_sha,
+      sources:[
+        {
+          repository:"jain-deploy",status:"pending",
+          release_tag_ref:"",release_tag_commit:""
+        },
+        {
+          repository:"jain-domain",status:"bound",
+          release_tag_ref:$release_ref,
+          release_tag_commit:$release_commit
+        }
+      ]
+    }' >"$stub_root/lock-authority.json"
+}
+
+write_inventory() {
+  local release_commit="$1"
+  jq -n --arg request "$request_id" --arg control "$control_commit" \
+    --arg head "$head_sha" --arg lock_sha "$lock_sha" \
+    --arg family "$family_root" --arg inventory "$inventory_sha" \
+    --arg domain_commit "$domain_commit" --arg domain_tree "$domain_tree" \
+    --arg shard_commit "$shard_commit" --arg shard_tree "$shard_tree" \
+    --arg release_ref "$domain_release_ref" \
+    --arg release_commit "$release_commit" '
+    {
+      schema_version:"jain.host-ci-sibling-sources/v1",
+      request_id:$request,
+      control_plane_commit:$control,
+      owner:"veox",
+      repository:"jain-deploy",
+      head_sha:$head,
+      required_check:"jain-deploy/required",
+      reference:"refs/heads/main",
+      deploy_source_lock_sha256:$lock_sha,
+      sources:[
+        {
+          repository:"jain-domain",owner:"veox",
+          remote:"http://127.0.0.1:8787/git/veox/jain-domain.git",
+          reference:"refs/heads/main",commit:$domain_commit,tree:$domain_tree,
+          inventory_sha256:$inventory,entry_count:1,
+          mount_path:($family + "/jain-domain"),
+          release_tag_status:"bound",release_tag_ref:$release_ref,
+          release_tag_commit:$release_commit,
+          contract_tag_ref:"",contract_tag_object:"",
+          contract_tag_commit:""
+        },
+        {
+          repository:"jain-shard",owner:"veox",
+          remote:"http://127.0.0.1:8787/git/veox/jain-shard.git",
+          reference:"refs/heads/main",commit:$shard_commit,tree:$shard_tree,
+          inventory_sha256:$inventory,entry_count:1,
+          mount_path:($family + "/jain-shard"),
+          release_tag_status:"absent",release_tag_ref:"",
+          release_tag_commit:"",contract_tag_ref:"",
+          contract_tag_object:"",contract_tag_commit:""
+        }
+      ]
+    }' >"$sibling_sources_path"
+  chmod 0444 "$sibling_sources_path"
+}
+
+write_lock_authority "$domain_release"
+write_inventory "$domain_release"
+chmod 0444 "$stub_root/lock-authority.json"
+printf 'fixture-token\n' >"$token_file"
+chmod 0600 "$token_file"
+cat >"$splitctl_path" <<'SPLITCTL_STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+stub_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+case "${1:-}" in
+  host-ci-deploy-source-lock)
+    cat "$stub_root/lock-authority.json"
+    ;;
+  jeryu-local)
+    [[ "${2:-}" == ref-readback ]] || exit 91
+    shift 2
+    repository="" ref="" expected=""
+    while [[ "$#" -gt 0 ]]; do
+      case "$1" in
+        --repo) repository="$2"; shift 2 ;;
+        --remote) shift 2 ;;
+        --ref) ref="$2"; shift 2 ;;
+        --expected-head) expected="$2"; shift 2 ;;
+        --token-file) shift 2 ;;
+        *) exit 92 ;;
+      esac
+    done
+    printf '%s\t%s\t%s\n' "$repository" "$ref" "$expected" \
+      >>"$stub_root/readback.log"
+    [[ ! -e "$stub_root/move-main" || "$ref" != refs/heads/main ]] \
+      || exit 93
+    [[ ! -e "$stub_root/move-tag" || "$ref" != refs/tags/* ]] \
+      || exit 94
+    ;;
+  jeryu-publish-host-ci)
+    : >"$stub_root/post-attempted"
+    exit 95
+    ;;
+  *)
+    exit 96
+    ;;
+esac
+SPLITCTL_STUB
+chmod 0500 "$splitctl_path"
+
+# shellcheck source=ops/ci/host-ci-proof-evidence.sh
+source "$repo_root/ops/ci/host-ci-proof-evidence.sh"
+safe_git=(git -c core.fsmonitor=false -c core.hooksPath=/dev/null \
+  -c core.untrackedCache=false -c diff.external=)
+
+verify_sandbox() (
+  unset request_dir
+  root_request="$authority_root"
+  jain_host_ci_verify_deploy_source_tags \
+    veox jain-deploy "$head_sha" jain-deploy/required
+)
+
+verify_publisher() (
+  unset root_request
+  request_dir="$authority_root"
+  jain_host_ci_verify_deploy_source_tags \
+    veox jain-deploy "$head_sha" jain-deploy/required
+)
+
+publish_after_verify_publisher() {
+  verify_publisher || return 1
+  "$splitctl_path" jeryu-publish-host-ci
+}
+
+assert_rejected() {
+  local label="$1"
+  shift
+  if "$@" >/dev/null 2>&1; then
+    printf 'deploy proof accepted hostile state: %s\n' "$label" >&2
+    exit 1
+  fi
+}
+
+sandbox_output="$(verify_sandbox)"
+publisher_output="$(verify_publisher)"
+[[ -z "$sandbox_output" && -z "$publisher_output" ]]
+[[ "$(wc -l <"$stub_root/readback.log" | tr -d ' ')" == 6 ]]
+
+assert_rejected both-roots bash -c '
+  source "$1"
+  safe_git=(git -c core.fsmonitor=false -c core.hooksPath=/dev/null
+    -c core.untrackedCache=false -c diff.external=)
+  root_request="$2"; request_dir="$2"
+  product_authority="$2/product-authority"
+  sibling_sources_path="$2/worker-authority/sibling-sources.json"
+  request_id="$3"; control_commit="$4"; splitctl_path="$5"
+  token_file="$6"; family_root="$7"
+  jain_host_ci_verify_deploy_source_tags \
+    veox jain-deploy "$8" jain-deploy/required
+' _ "$repo_root/ops/ci/host-ci-proof-evidence.sh" "$authority_root" \
+  "$request_id" "$control_commit" "$splitctl_path" "$token_file" \
+  "$family_root" "$head_sha"
+assert_rejected neither-root bash -c '
+  source "$1"
+  jain_host_ci_verify_deploy_source_tags \
+    veox jain-deploy "$2" jain-deploy/required
+' _ "$repo_root/ops/ci/host-ci-proof-evidence.sh" "$head_sha"
+assert_rejected missing-global bash -c '
+  source "$1"
+  safe_git=(git -c core.fsmonitor=false -c core.hooksPath=/dev/null
+    -c core.untrackedCache=false -c diff.external=)
+  root_request="$2"; product_authority="$2/product-authority"
+  sibling_sources_path="$2/worker-authority/sibling-sources.json"
+  request_id="$3"; control_commit="$4"; splitctl_path="$5"
+  family_root="$6"
+  jain_host_ci_verify_deploy_source_tags \
+    veox jain-deploy "$7" jain-deploy/required
+' _ "$repo_root/ops/ci/host-ci-proof-evidence.sh" "$authority_root" \
+  "$request_id" "$control_commit" "$splitctl_path" "$family_root" "$head_sha"
+
+cp "$sibling_sources_path" "$fixture/inventory.clean"
+chmod 0644 "$sibling_sources_path"
+jq '.deploy_source_lock_sha256 =
+  "0000000000000000000000000000000000000000000000000000000000000000"' \
+  "$fixture/inventory.clean" >"$sibling_sources_path"
+chmod 0444 "$sibling_sources_path"
+assert_rejected lock-digest verify_sandbox
+cp "$fixture/inventory.clean" "$sibling_sources_path"
+chmod 0444 "$sibling_sources_path"
+
+chmod 0644 "$sibling_sources_path"
+jq '.sources[0].release_tag_commit =
+  "0000000000000000000000000000000000000000"' \
+  "$fixture/inventory.clean" >"$sibling_sources_path"
+chmod 0444 "$sibling_sources_path"
+assert_rejected tuple-mismatch verify_publisher
+cp "$fixture/inventory.clean" "$sibling_sources_path"
+chmod 0444 "$sibling_sources_path"
+
+chmod 0644 "$sibling_sources_path"
+jq 'del(.sources[0])' "$fixture/inventory.clean" >"$sibling_sources_path"
+chmod 0444 "$sibling_sources_path"
+assert_rejected missing-tuple verify_sandbox
+cp "$fixture/inventory.clean" "$sibling_sources_path"
+chmod 0444 "$sibling_sources_path"
+
+chmod 0644 "$sibling_sources_path"
+jq '.sources += [(.sources[1]
+  | .repository="jain-unknown"
+  | .remote="http://127.0.0.1:8787/git/veox/jain-unknown.git"
+  | .mount_path=($family + "/jain-unknown")
+  | .release_tag_status="pending")]' --arg family "$family_root" \
+  "$fixture/inventory.clean" >"$sibling_sources_path"
+chmod 0444 "$sibling_sources_path"
+assert_rejected extra-tuple verify_publisher
+cp "$fixture/inventory.clean" "$sibling_sources_path"
+chmod 0444 "$sibling_sources_path"
+
+git -C "$shard_stage" tag jain-shard-v8.0.1-split.99
+assert_rejected extra-local-tag verify_sandbox
+git -C "$shard_stage" tag -d jain-shard-v8.0.1-split.99 >/dev/null
+git -C "$domain_stage" tag -d "${domain_release_ref#refs/tags/}" >/dev/null
+assert_rejected missing-local-tag verify_publisher
+git -C "$domain_stage" tag "${domain_release_ref#refs/tags/}" "$domain_release"
+
+unrelated_commit="$(printf 'unrelated\n' \
+  | git -C "$domain_stage" commit-tree "$domain_tree")"
+git -C "$domain_stage" tag -f "${domain_release_ref#refs/tags/}" \
+  "$unrelated_commit" >/dev/null
+chmod 0644 "$stub_root/lock-authority.json"
+write_lock_authority "$unrelated_commit"
+chmod 0444 "$stub_root/lock-authority.json"
+write_inventory "$unrelated_commit"
+assert_rejected nonancestor-release-tag verify_sandbox
+git -C "$domain_stage" tag -f "${domain_release_ref#refs/tags/}" \
+  "$domain_release" >/dev/null
+chmod 0644 "$stub_root/lock-authority.json"
+write_lock_authority "$domain_release"
+chmod 0444 "$stub_root/lock-authority.json"
+write_inventory "$domain_release"
+
+: >"$stub_root/move-main"
+assert_rejected moved-remote-main verify_publisher
+rm "$stub_root/move-main"
+: >"$stub_root/move-tag"
+assert_rejected moved-remote-tag-before-post publish_after_verify_publisher
+[[ ! -e "$stub_root/post-attempted" ]]
+rm "$stub_root/move-tag"
+
+[[ ! -e "$stub_root/post-attempted" ]]
+printf 'dual-context deploy proof authority ok\n'
+DEPLOY_PROOF_ROOT
 
 # Worker mode must reject a widened or ambiguous command-scope Git
 # configuration before it reads reexec state or invokes Git. The complete
@@ -419,12 +737,34 @@ git -C "$control" commit --quiet -m 'fixture reviewed host-CI boundary'
 git -C "$control" switch -C main --quiet
 git -C "$control" remote set-url origin "$control_remote"
 git -C "$control" push --quiet -u origin main
-control_commit="$(git -C "$control" rev-parse HEAD)"
+protected_control_commit="$(git -C "$control" rev-parse HEAD)"
 bootstrap_control_ref=refs/heads/codex/host-ci-bootstrap-test
+git -C "$control" switch --quiet -c codex/host-ci-bootstrap-test
+printf '\n# Candidate-only sandbox fixture; publisher and splitctl remain main.\n' \
+  >>"$control/ops/ci/host-ci-sandbox.sh"
+printf '\n# Candidate-only promoted-proof fixture.\n' \
+  >>"$control/ops/ci/host-ci-proof-evidence.sh"
+git -C "$control" add \
+  ops/ci/host-ci-sandbox.sh ops/ci/host-ci-proof-evidence.sh
+git -C "$control" commit --quiet -m 'fixture candidate sandbox authority'
+control_commit="$(git -C "$control" rev-parse HEAD)"
+[[ "$control_commit" != "$protected_control_commit" ]] || {
+  printf 'bootstrap fixture did not create a distinct candidate commit\n' >&2
+  exit 1
+}
+git -C "$control" diff --exit-code "$protected_control_commit" "$control_commit" \
+  -- ops/ci/host-ci-publisher.sh tools/splitctl/src >/dev/null || {
+  printf 'bootstrap fixture changed protected publisher or splitctl authority\n' >&2
+  exit 1
+}
+if git -C "$control" diff --quiet "$protected_control_commit" "$control_commit" \
+  -- ops/ci/host-ci-sandbox.sh; then
+  printf 'bootstrap fixture did not exercise a candidate sandbox byte\n' >&2
+  exit 1
+fi
 git -C "$control" push --quiet origin \
   "$control_commit:$bootstrap_control_ref"
-git -C "$control" switch --quiet -c codex/host-ci-bootstrap-test \
-  --track origin/codex/host-ci-bootstrap-test
+git -C "$control" branch --set-upstream-to=origin/codex/host-ci-bootstrap-test
 export JAIN_HOST_CI_BOOTSTRAP_REF="$bootstrap_control_ref"
 bootstrap_expires_at="$(( $(date +%s) + 3600 ))"
 sudo -n chown -R root:root "$control_remote"
@@ -1136,6 +1476,63 @@ for bootstrap_case in missing-commit wrong-commit expired overlong \
   sudo -n install -o root -g root -m 0600 \
     "$valid_sandbox_config" "$sandbox_config"
 done
+
+# A real distinct candidate may change the sandbox and authenticated helper,
+# but never the protected publisher during bootstrap. Mutating only the
+# candidate publisher must stop at the broker-byte comparison, before worker
+# startup or any forge publication.
+hostile_control="$tmp/hostile-publisher-control"
+hostile_control_ref=refs/heads/codex/host-ci-publisher-mutation-test
+sudo -n git clone --quiet --no-local \
+  --branch codex/host-ci-bootstrap-test "$control_remote" "$hostile_control"
+sudo -n chown -R "$(id -u):$(id -g)" "$hostile_control"
+git -C "$hostile_control" switch --quiet \
+  -c codex/host-ci-publisher-mutation-test
+printf '\n# Hostile candidate publisher mutation.\n' \
+  >>"$hostile_control/ops/ci/host-ci-publisher.sh"
+git -C "$hostile_control" add ops/ci/host-ci-publisher.sh
+git -C "$hostile_control" \
+  -c user.name='Hostile Publisher Fixture' \
+  -c user.email=hostile-publisher@example.invalid \
+  commit --quiet -m 'fixture hostile publisher mutation'
+hostile_control_commit="$(git -C "$hostile_control" rev-parse HEAD)"
+sudo -n git -c safe.directory="$hostile_control" -C "$hostile_control" \
+  push --quiet origin "$hostile_control_commit:$hostile_control_ref"
+sudo -n git -c safe.directory="$hostile_control" -C "$hostile_control" \
+  fetch --quiet origin \
+  "$hostile_control_ref:refs/remotes/origin/codex/host-ci-publisher-mutation-test"
+sudo -n chown -R "$(id -u):$(id -g)" "$hostile_control"
+jq --arg ref "$hostile_control_ref" \
+  --arg commit "$hostile_control_commit" \
+  '.control_ref=$ref | .bootstrap_commit=$commit | .retain_requests=false' \
+  "$valid_sandbox_config" >"$tmp/hostile-publisher-config.json"
+sudo -n install -o root -g root -m 0600 \
+  "$tmp/hostile-publisher-config.json" "$sandbox_config"
+hostile_publisher_offset="$(stat -c '%s' "$forge_log")"
+if JAIN_HOST_CI_BOOTSTRAP_REF="$hostile_control_ref" \
+  JAIN_HOST_CI_SANDBOX="$sandbox" \
+  JAIN_SPLIT_ROOT="$sandbox_family_root" \
+    "$hostile_control/ops/ci/split-host-ci.sh" \
+      veox jain-report "$product_sha" "$product" jain-report/required \
+      >"$tmp/hostile-publisher.log" 2>&1; then
+  printf 'bootstrap accepted a candidate publisher mutation\n' >&2
+  exit 1
+fi
+grep -Fq 'installed brokers do not match reviewed main' \
+  "$tmp/hostile-publisher.log" || {
+  cat "$tmp/hostile-publisher.log" >&2
+  printf 'candidate publisher mutation did not fail at the broker boundary\n' \
+    >&2
+  exit 1
+}
+[[ "$(stat -c '%s' "$forge_log")" == "$hostile_publisher_offset" ]] || {
+  printf 'candidate publisher mutation reached forge publication\n' >&2
+  exit 1
+}
+sudo -n install -o root -g root -m 0600 \
+  "$valid_sandbox_config" "$sandbox_config"
+sudo -n git --git-dir="$control_remote" update-ref -d "$hostile_control_ref"
+rm -rf -- "$hostile_control"
 
 # A caller-local commit is not product authority. Keeping it as the caller's
 # HEAD also proves the successful run below is staged from the forge ref.
