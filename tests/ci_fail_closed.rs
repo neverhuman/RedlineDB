@@ -16,6 +16,52 @@ fn control_plane_test_maps_are_identical() {
 }
 
 #[test]
+fn audit_policy_mirrors_bind_the_governed_floor_and_tool() {
+    let canonical = repo_file(".jankurai/audit-policy.toml");
+    assert_eq!(canonical, repo_file("agent/audit-policy.toml"));
+
+    for declaration in [
+        "mode = \"advisory\"",
+        "minimum_score = 85",
+        "required_tool = \"jankurai\"",
+        "required_tool_version = \"1.6.11\"",
+    ] {
+        assert_eq!(
+            canonical
+                .lines()
+                .filter(|line| *line == declaration)
+                .count(),
+            1,
+            "audit policy must contain exactly one `{declaration}` declaration"
+        );
+    }
+
+    let baseline: serde_json::Value =
+        serde_json::from_str(&repo_file(".jankurai/baselines/accepted-baseline.json"))
+            .expect("valid accepted baseline");
+    assert!(baseline["score"].as_u64().is_some_and(|score| score >= 86));
+    assert_eq!(baseline["decision"]["minimum_score"].as_u64(), Some(85));
+    assert_eq!(baseline["decision"]["hard_findings"].as_u64(), Some(0));
+    assert_eq!(
+        baseline["decision"]["ratchet"]["allowed_drop"].as_u64(),
+        Some(0)
+    );
+    assert_eq!(baseline["caps_applied"].as_array().map(Vec::len), Some(0));
+    assert_eq!(
+        baseline["decision"]["ratchet"]["new_caps"]
+            .as_array()
+            .map(Vec::len),
+        Some(0)
+    );
+    assert_eq!(
+        baseline["decision"]["ratchet"]["new_hard_findings"]
+            .as_array()
+            .map(Vec::len),
+        Some(0)
+    );
+}
+
+#[test]
 fn agent_proof_lanes_cover_every_test_route() {
     let test_map: serde_json::Value =
         serde_json::from_str(&repo_file("agent/test-map.json")).expect("valid agent test map");
