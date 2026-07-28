@@ -18,6 +18,8 @@
   Rust-only NUMA replacement passed default and all-feature release gates.
 - Advanced the canonical Web identity to immutable `.jain.2` after its sealed
   required, browser E2E, artifact, and governed audit lanes passed.
+- Prepared control-plane `.split.3` to carry the fresh family, two-consumer,
+  proof-refresh, and derived cutover-lock transaction through protected review.
 - Made candidate readiness accept only a valid explicitly ineligible
   authoritative lock when the compatibility mirror is absent.
 - Replaced family-CI worktree isolation with marker-bound, automatically

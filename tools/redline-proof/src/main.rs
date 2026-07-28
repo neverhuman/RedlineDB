@@ -701,7 +701,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
     {
         return Err(error("manifest control-plane identity is invalid"));
     }
-    validate_release_identity(control, "redline-split-ops", "split", RELEASE_VERSION, 2)?;
+    validate_release_identity(control, "redline-split-ops", "split", RELEASE_VERSION, 3)?;
     let rows = value
         .get("repo")
         .and_then(toml::Value::as_array)
@@ -4822,6 +4822,17 @@ mod tests {
             .unwrap()
             .parse()
             .unwrap();
+        let control = raw.get("control_plane").unwrap();
+        assert_eq!(
+            control
+                .get("tag_revision")
+                .and_then(toml::Value::as_integer),
+            Some(3)
+        );
+        assert_eq!(
+            control.get("current_tag").and_then(toml::Value::as_str),
+            Some("redline-split-ops-v8.0.0-split.3")
+        );
         let core = raw
             .get("repo")
             .and_then(toml::Value::as_array)
