@@ -93,7 +93,7 @@ fixes require producer regeneration, immutable-tag preservation, and clean
 forge-equal release verification. These fields are diagnostic only and never
 relax a failed gate.
 
-Expected exceptions use the same agent-readable shape: name the exact
-exception, owning lane, preserved artifact or receipt, and rerun command.
-Unexpected exceptions remain fatal; they are never converted into a warning,
-silent fallback, or eligibility waiver.
+Each expected exception records its `purpose`, `reason`, `common fixes`, and a
+local `repair_hint`, plus the owning lane, preserved artifact or receipt, and
+rerun command. Unexpected exceptions remain fatal; they are never converted
+into a warning, silent fallback, or eligibility waiver.
