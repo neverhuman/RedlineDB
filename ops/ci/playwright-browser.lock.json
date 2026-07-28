@@ -1,0 +1,46 @@
+{
+  "schema_version": "jain.playwright-browser-cache/v1",
+  "format": "playwright-browser-cache-v1",
+  "cache_root": "/var/lib/jain-host-ci/playwright-browsers/68f8a66e0af422265d599af1afe609a1f96be169a35de12a1ac11052a7de22c9",
+  "inventory_sha256": "68f8a66e0af422265d599af1afe609a1f96be169a35de12a1ac11052a7de22c9",
+  "file_count": 595,
+  "directory_count": 18,
+  "total_bytes": 669473303,
+  "package_lock_path": "apps/web/package-lock.json",
+  "package_lock_sha256": "e10d9c83f7cd018666a0ad75c6bcd58a45975a60de8b3286a79a8a8a0525a32c",
+  "platform": "linux",
+  "arch": "x64",
+  "libc": "glibc",
+  "playwright_core_version": "1.60.0",
+  "playwright_core_integrity": "sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA==",
+  "browsers_json_sha256": "af53e32ffe35a024ddb34563700956b01ada00ac7e9270ba5df0604ec57e38e1",
+  "artifacts": [
+    {
+      "name": "chromium",
+      "revision": "1223",
+      "browser_version": "148.0.7778.96",
+      "cache_dir": "chromium-1223",
+      "executable": "chrome-linux64/chrome",
+      "executable_sha256": "adc1c21ceed5c2a67184766376fe816ac03e556cc0ca3f782e8212235fe05c6f",
+      "executable_size": 276917464
+    },
+    {
+      "name": "chromium-headless-shell",
+      "revision": "1223",
+      "browser_version": "148.0.7778.96",
+      "cache_dir": "chromium_headless_shell-1223",
+      "executable": "chrome-headless-shell-linux64/chrome-headless-shell",
+      "executable_sha256": "7b8e92dca0acf9c24b5974507b3031d6bd18cc009cd431c2595e521430ea747a",
+      "executable_size": 188087520
+    },
+    {
+      "name": "ffmpeg",
+      "revision": "1011",
+      "browser_version": "",
+      "cache_dir": "ffmpeg-1011",
+      "executable": "ffmpeg-linux",
+      "executable_sha256": "460d44f3416005662f528d4b92e7b94ace924e8a0288106d3803b73c56eaadc8",
+      "executable_size": 5101056
+    }
+  ]
+}

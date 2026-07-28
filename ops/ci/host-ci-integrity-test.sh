@@ -155,7 +155,9 @@ for path in \
   ops/ci/native-build-tools.lock.json \
   ops/ci/native-runtime.sh ops/ci/pnpm-runtime.sh \
   ops/ci/pnpm-store.lock.json ops/ci/npm-runtime.sh \
-  ops/ci/npm-cache.lock.json ops/ci/npmrc.empty ops/ci/pinned-advisory.sh \
+  ops/ci/npm-cache.lock.json ops/ci/npmrc.empty \
+  ops/ci/playwright-browser-runtime.sh \
+  ops/ci/playwright-browser.lock.json ops/ci/pinned-advisory.sh \
   ops/ci/pinned-cargo-audit.sh ops/ci/pinned-cargo-deny.sh \
   ops/ci/required.sh \
   ops/ci/split-host-ci-parent.sh ops/ci/split-host-ci.sh \
@@ -214,6 +216,26 @@ grep -F 'NPM_CONFIG_CACHE=$npm_cache_mount' \
 grep -F '"$repo" == redline-web' \
   "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
   printf 'root sandbox does not scope npm authority to Redline Web\n' >&2
+  exit 1
+}
+grep -F 'jain_playwright_browser_cache_matches_lock' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not bind Playwright browsers to the product lock\n' >&2
+  exit 1
+}
+grep -F 'BindReadOnlyPaths=$playwright_browser_root/$cache_dir:$playwright_browser_mount/$cache_dir' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not bind Playwright payloads read-only\n' >&2
+  exit 1
+}
+grep -F 'PLAYWRIGHT_BROWSERS_PATH=$playwright_browser_mount' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not expose the sealed Playwright browser path\n' >&2
+  exit 1
+}
+grep -F 'PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1' \
+  "$repo_root/ops/ci/host-ci-sandbox.sh" >/dev/null || {
+  printf 'root sandbox does not prohibit Playwright browser downloads\n' >&2
   exit 1
 }
 grep -F 'git config --file "$sibling_git_config"' \

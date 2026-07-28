@@ -260,6 +260,31 @@
       "lane": "required",
       "purpose": "verify sealed npm ignores ambient user and global configuration"
     },
+    "ops/ci/playwright-browser-authority.sh": {
+      "command": "bash ops/ci/playwright-browser-runtime-test.sh && bash ops/ci/host-ci-integrity-test.sh && bash ops/ci/split-host-ci-integrity-test.sh",
+      "lane": "required",
+      "purpose": "verify the exact Redline Playwright lock and Chromium revision produce a closed immutable browser cache"
+    },
+    "ops/ci/playwright-browser.lock.json": {
+      "command": "bash ops/ci/playwright-browser-runtime-test.sh && bash ops/ci/host-ci-integrity-test.sh && bash ops/ci/split-host-ci-integrity-test.sh",
+      "lane": "required",
+      "purpose": "verify the committed browser revisions, product lock, platform, and inventory authority"
+    },
+    "ops/ci/playwright-browser-launch-smoke.cjs": {
+      "command": "bash ops/ci/playwright-browser-runtime-test.sh",
+      "lane": "required",
+      "purpose": "provide the real private-network Chromium launch probe used against retained authority bytes"
+    },
+    "ops/ci/playwright-browser-runtime.sh": {
+      "command": "bash ops/ci/playwright-browser-runtime-test.sh && bash ops/ci/host-ci-integrity-test.sh && bash ops/ci/split-host-ci-integrity-test.sh",
+      "lane": "required",
+      "purpose": "verify immutable Chromium validation and product-lock binding"
+    },
+    "ops/ci/playwright-browser-runtime-test.sh": {
+      "command": "bash ops/ci/playwright-browser-runtime-test.sh",
+      "lane": "required",
+      "purpose": "verify browser authority success plus lock, platform, revision, inode, mode, inventory, and tamper rejection"
+    },
     "ops/dev/": {
       "command": "just check",
       "lane": "check",
@@ -314,6 +339,11 @@
       "command": "jq empty schemas/npm-cache-authority.schema.json && bash ops/ci/npm-runtime-test.sh && just score",
       "lane": "score",
       "purpose": "verify the authority schema parses and runtime rejects shape, closure, and cache-custody violations"
+    },
+    "schemas/playwright-browser-authority.schema.json": {
+      "command": "jq empty schemas/playwright-browser-authority.schema.json && bash ops/ci/playwright-browser-runtime-test.sh && just score",
+      "lane": "score",
+      "purpose": "verify the browser authority schema and hostile runtime custody cases"
     },
     "schemas/": {
       "command": "just score",

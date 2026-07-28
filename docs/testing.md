@@ -60,6 +60,25 @@ is part of the root-owned publisher boundary. A local full lane may separately
 report foreign live-checkout census failures; do not change another checkout
 to make that census green.
 
+The Redline Web Playwright browser authority has a focused hostile lane:
+
+```bash
+bash ops/ci/playwright-browser-runtime-test.sh
+bash ops/ci/host-ci-integrity-test.sh
+bash ops/ci/split-host-ci-integrity-test.sh
+```
+
+It rejects unknown fields, wrong schema/platform/architecture/libc/version or
+revision, a changed product lock, missing or extra nodes, content tampering,
+symlinks, hardlinks, bad modes, and absent installation markers. Before
+publication, retained real authority bytes must additionally pass
+`playwright install chromium` and a real Chromium page assertion inside a new
+private network namespace, using a writable empty registry with each payload
+directory mounted read-only. The test also confirms mutable
+`DEPENDENCIES_VALIDATED` markers are absent, directory counts are closed, no
+empty directory is accepted, and the Playwright npm tar's `browsers.json`
+matches the authority.
+
 ## Sealed release verification
 
 Host-local `just required` checks the live checkout/remotes census and may

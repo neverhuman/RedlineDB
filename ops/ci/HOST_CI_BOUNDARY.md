@@ -199,6 +199,18 @@ receives that directory read-only at
 mount. Both root and worker recompute the inventory before product code runs.
 No host-CI path downloads or reconstructs missing wheels.
 
+Redline Web also requires the root-owned browser cache declared by
+`ops/ci/playwright-browser.lock.json`. Provision its exact digest directory
+beneath `/var/lib/jain-host-ci/playwright-browsers/` with root-owned `0555`
+directories, `0555` executables, and `0444` data files. The sandbox recomputes
+the complete inventory and binds it to the exact product package lock before a
+worker starts, including the Playwright npm tar's `browsers.json` and primary
+executable identities. Mutable `DEPENDENCIES_VALIDATED` markers are excluded,
+forcing the request-local dependency check. Playwright needs to write
+`__dirlock` and `.links`, so the
+worker receives a request-local writable empty registry while each validated
+browser payload directory is bind-mounted into it read-only.
+
 The v8 sandbox config also requires the canonical root-owned, mode-0755,
 single-link `/usr/bin/nvidia-smi` and its exact digest. Root invokes it only for
 the four reviewed CUDA release policies. Keep `device_allow` empty; detector

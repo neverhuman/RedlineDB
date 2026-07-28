@@ -26,3 +26,9 @@ home-directory cache or make network access a fallback. Run the matching
 `*-runtime-test.sh`, `host-ci-integrity-test.sh`, and the privileged
 `split-host-ci-integrity-test.sh`; the focused runtime fixture must prove a
 fresh install with the network namespace disconnected.
+
+Executable browser payloads are the deliberate exception to writable cache
+copies: validate the complete immutable Playwright authority, provide only a
+writable request-local registry for Playwright metadata, and bind each exact
+browser payload directory into it read-only. Never execute browser binaries as
+root during validation.

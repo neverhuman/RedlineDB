@@ -48,6 +48,17 @@ fail-closed. The immutable cache under `/var/lib/jain-host-ci/npm-cache/` is
 never mounted writable, and an ambient user npm cache is never a runtime
 source.
 
+Redline Web browser E2E uses a separate
+`jain.playwright-browser-cache/v1` authority bound to the same exact package
+lock, Playwright 1.60.0, Chromium revision 1223, headless-shell revision 1223,
+ffmpeg revision 1011, and the Linux/x64/glibc inventory. Root validates all
+595 files, 18 directories, modes, links, sizes, and digests. Mutable
+`DEPENDENCIES_VALIDATED` markers are excluded so each request performs the
+dependency check. Each request receives a writable empty Playwright registry
+only for `__dirlock` and `.links`; the three
+digest-addressed browser payload directories are bind-mounted into it
+read-only. The worker remains network-isolated with browser downloads disabled.
+
 ## Release-authority projection
 
 `repos.manifest.toml` is the sole source for Jain release version, candidate

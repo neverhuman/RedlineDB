@@ -1,0 +1,174 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/playwright-browser-authority.schema.json",
+  "title": "Jain closed Playwright browser authority",
+  "description": "Structural contract for the Redline Web Chromium cache. Runtime validation additionally proves the exact product lock, browser revisions, executable paths, immutable inventory, custody, modes, links, and content digests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "format",
+    "cache_root",
+    "inventory_sha256",
+    "file_count",
+    "directory_count",
+    "total_bytes",
+    "package_lock_path",
+    "package_lock_sha256",
+    "platform",
+    "arch",
+    "libc",
+    "playwright_core_version",
+    "playwright_core_integrity",
+    "browsers_json_sha256",
+    "artifacts"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": "jain.playwright-browser-cache/v1"
+    },
+    "format": {
+      "const": "playwright-browser-cache-v1"
+    },
+    "cache_root": {
+      "type": "string",
+      "pattern": "^/var/lib/jain-host-ci/playwright-browsers/[0-9a-f]{64}$"
+    },
+    "inventory_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "file_count": {
+      "type": "integer",
+      "minimum": 4
+    },
+    "directory_count": {
+      "type": "integer",
+      "minimum": 3
+    },
+    "total_bytes": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "package_lock_path": {
+      "const": "apps/web/package-lock.json"
+    },
+    "package_lock_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "platform": {
+      "const": "linux"
+    },
+    "arch": {
+      "const": "x64"
+    },
+    "libc": {
+      "const": "glibc"
+    },
+    "playwright_core_version": {
+      "const": "1.60.0"
+    },
+    "playwright_core_integrity": {
+      "const": "sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA=="
+    },
+    "browsers_json_sha256": {
+      "const": "af53e32ffe35a024ddb34563700956b01ada00ac7e9270ba5df0604ec57e38e1"
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 3,
+      "prefixItems": [
+        {
+          "$ref": "#/$defs/chromium"
+        },
+        {
+          "$ref": "#/$defs/chromiumHeadlessShell"
+        },
+        {
+          "$ref": "#/$defs/ffmpeg"
+        }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "executableSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "executableSize": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "chromium": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "revision",
+        "browser_version",
+        "cache_dir",
+        "executable",
+        "executable_sha256",
+        "executable_size"
+      ],
+      "properties": {
+        "name": {"const": "chromium"},
+        "revision": {"const": "1223"},
+        "browser_version": {"const": "148.0.7778.96"},
+        "cache_dir": {"const": "chromium-1223"},
+        "executable": {"const": "chrome-linux64/chrome"},
+        "executable_sha256": {"$ref": "#/$defs/executableSha256"},
+        "executable_size": {"$ref": "#/$defs/executableSize"}
+      }
+    },
+    "chromiumHeadlessShell": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "revision",
+        "browser_version",
+        "cache_dir",
+        "executable",
+        "executable_sha256",
+        "executable_size"
+      ],
+      "properties": {
+        "name": {"const": "chromium-headless-shell"},
+        "revision": {"const": "1223"},
+        "browser_version": {"const": "148.0.7778.96"},
+        "cache_dir": {"const": "chromium_headless_shell-1223"},
+        "executable": {
+          "const": "chrome-headless-shell-linux64/chrome-headless-shell"
+        },
+        "executable_sha256": {"$ref": "#/$defs/executableSha256"},
+        "executable_size": {"$ref": "#/$defs/executableSize"}
+      }
+    },
+    "ffmpeg": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "revision",
+        "browser_version",
+        "cache_dir",
+        "executable",
+        "executable_sha256",
+        "executable_size"
+      ],
+      "properties": {
+        "name": {"const": "ffmpeg"},
+        "revision": {"const": "1011"},
+        "browser_version": {"const": ""},
+        "cache_dir": {"const": "ffmpeg-1011"},
+        "executable": {"const": "ffmpeg-linux"},
+        "executable_sha256": {"$ref": "#/$defs/executableSha256"},
+        "executable_size": {"$ref": "#/$defs/executableSize"}
+      }
+    }
+  }
+}

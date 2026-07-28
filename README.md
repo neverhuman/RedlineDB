@@ -53,6 +53,9 @@ Bare mirrors are only a CI cache created by the host runner through a temporary
 - `ops/ci/npm-cache.lock.json`: closed Redline Web npm authority; see
   [boundaries](docs/boundaries.md) and
   [release/rollback](docs/release.md) for custody and provisioning.
+- `ops/ci/playwright-browser.lock.json`: closed Redline Web Playwright
+  Chromium authority, bound to its exact npm lock and Linux/x64/glibc browser
+  revisions.
 - `ops/ci/HOST_CI_BOUNDARY.md`: root-owned sandbox, proof-evidence, result-seal,
   and publication contract.
 - `docs/local-jeryu-forge-agent-workflow.md`: PR and status workflow.

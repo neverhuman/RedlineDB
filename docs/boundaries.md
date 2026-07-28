@@ -20,6 +20,12 @@ root cache is never exposed writable; only its validated per-request copy
 crosses into the network-isolated worker. Ambient home-directory caches and
 network fallback remain outside the boundary.
 
+Playwright browser binaries follow the same custody rule. The control plane
+owns their closed authority, validation, immutable root cache, and read-only
+request mounts. Redline Web owns the package lock that selects Playwright.
+Only the small request-local Playwright registry is writable; browser payloads
+never come from an ambient home directory and are never downloaded by host CI.
+
 Generated member standards are changed through the Rust `splitctl` contract
 commands first (`cargo run --locked -- refresh-ci-contract`), then regenerated
 or manually ported with the same content. The old Python materializer is

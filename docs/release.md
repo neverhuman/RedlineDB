@@ -163,6 +163,28 @@ mutable, mismatched, or incomplete cache blocks only the affected request; it
 never permits network fallback. Rollback restores the previous merged broker
 and leaves the new digest-addressed cache inert until separately removed.
 
+### Redline Web Playwright browser authority
+
+`ops/ci/playwright-browser.lock.json` binds the exact Redline Web package-lock,
+Playwright 1.60.0, Chromium/headless-shell revision 1223, ffmpeg revision 1011,
+the npm-tar `browsers.json` descriptor, Linux/x64/glibc, directory and byte
+counts, primary executable identities, and the complete path/mode/size/SHA-256
+inventory. Mutable dependency-validation markers are excluded. Build it only
+with `ops/ci/playwright-browser-authority.sh` into a new staging directory.
+Retain the generated directory named by
+`inventory_sha256` and prove the focused hostile test, both host-boundary
+tests, a real private-network browser launch, full Jankurai, and true
+changed-fast Jankurai.
+
+After protected merge, copy that exact directory without reflinks to
+`/var/lib/jain-host-ci/playwright-browsers/<inventory_sha256>`, set root
+ownership, directories to `0555`, executable files to `0555`, and all other
+files to `0444`, then validate it against the merged authority and exact
+Redline lock. Reinstall ordinary merged-main broker bytes and run preflight.
+Each Redline request gets a writable empty Playwright registry, with only the
+validated immutable payload subdirectories mounted read-only. A missing or
+mismatched browser cache blocks the request and never enables a download.
+
 ## Rollback
 
 Keep the previous protected control-plane tag and installed configuration as

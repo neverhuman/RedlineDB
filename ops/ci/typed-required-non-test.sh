@@ -25,6 +25,7 @@ case "${1:-}" in
     bash ops/ci/native-runtime-test.sh
     bash ops/ci/pnpm-runtime-test.sh
     bash ops/ci/npm-runtime-test.sh
+    bash ops/ci/playwright-browser-runtime-test.sh
     bash ops/ci/host-ci-inputs-test.sh
     bash ops/ci/native-materializer-test.sh
     bash ops/ci/host-ci-integrity-test.sh

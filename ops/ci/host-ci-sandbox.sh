@@ -597,6 +597,8 @@ source "$control_root/ops/ci/native-runtime.sh"
 source "$control_root/ops/ci/pnpm-runtime.sh"
 # shellcheck source=ops/ci/npm-runtime.sh
 source "$control_root/ops/ci/npm-runtime.sh"
+# shellcheck source=ops/ci/playwright-browser-runtime.sh
+source "$control_root/ops/ci/playwright-browser-runtime.sh"
 jain_validate_nvidia_smi_detector "$nvidia_smi_path" "$nvidia_smi_sha256" \
   || fail 'root NVIDIA detector digest or metadata mismatch'
 cuda_capability_record=""
@@ -861,6 +863,31 @@ if [[ "$repo" == redline-web ]]; then
   npm_cache_mount="$(jain_stage_npm_cache \
     "$npm_authority" "$npm_cache_root" "$npm_stage_parent")" \
     || fail 'cannot stage authenticated npm cache'
+fi
+
+playwright_browser_root=""
+playwright_browser_mount=""
+playwright_browser_bind_args=()
+if [[ "$repo" == redline-web ]]; then
+  playwright_browser_authority="$control_root/ops/ci/playwright-browser.lock.json"
+  playwright_browser_root="$(
+    jq -er '.cache_root' "$playwright_browser_authority"
+  )" || fail 'Playwright browser cache root authority is missing'
+  jain_validate_playwright_browser_cache \
+    "$playwright_browser_authority" "$playwright_browser_root" root \
+    || fail 'root Playwright browser cache validation failed'
+  jain_playwright_browser_cache_matches_lock \
+    "$playwright_browser_authority" "$playwright_browser_root" \
+    "${arguments[3]}" "$npm_cache_root" root \
+    || fail 'product Playwright lock or browser revision differs from authority'
+  playwright_browser_mount="$bootstrap_root/writable/playwright-browsers/${playwright_browser_root##*/}"
+  mkdir -m 0700 -p "$playwright_browser_mount"
+  while IFS= read -r cache_dir; do
+    mkdir -m 0700 "$playwright_browser_mount/$cache_dir"
+    playwright_browser_bind_args+=(
+      --property="BindReadOnlyPaths=$playwright_browser_root/$cache_dir:$playwright_browser_mount/$cache_dir"
+    )
+  done < <(jq -r '.artifacts[].cache_dir' "$playwright_browser_authority")
 fi
 
 # Sibling and nested-control source is release authority, not ambient developer
@@ -1358,6 +1385,13 @@ if [[ -n "$npm_cache_mount" ]]; then
     --setenv=NPM_CONFIG_FUND=false
     --setenv=NPM_CONFIG_USERCONFIG=/opt/jain-ci/authority/control-plane/ops/ci/npmrc.empty
     --setenv=NPM_CONFIG_GLOBALCONFIG=/dev/null
+  )
+fi
+if [[ -n "$playwright_browser_root" ]]; then
+  systemd_args+=(
+    "${playwright_browser_bind_args[@]}"
+    --setenv="PLAYWRIGHT_BROWSERS_PATH=$playwright_browser_mount"
+    --setenv=PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
   )
 fi
 if [[ "$cuda_required" == true ]]; then
