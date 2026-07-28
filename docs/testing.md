@@ -130,3 +130,21 @@ Every failing lane should leave a repair receipt or raw artifact under
 - `common fixes`: rerun `just fast`, then `just required`, then `just score`
   after changing split generator, manifest, or CI files.
 - `rerun command`: the exact `just ...` command that reproduces the failure.
+
+## Verifying an authority-bind evidence record
+
+Each `docs/release-evidence/10.0.0/authority-binds-*.md` row is mechanically
+checkable; a reviewer verifies rather than trusts it:
+
+1. `git ls-remote http://127.0.0.1:8787/git/<owner>/<member>.git refs/heads/main`
+   must equal the recorded release commit.
+2. `git ls-remote ... refs/tags/<immutable tag>` must resolve to the same commit.
+3. In the member checkout: `git rev-parse <commit>^{tree}` must equal the
+   recorded tree, and `git archive --format=tar <commit> | sha256sum` the
+   recorded archive digest — the same derivation `splitctl` applies in its
+   exactness check, so the comparison is like for like.
+4. The named route identities must appear on the coordination board with the
+   author, reviewer, approver, and merger all distinct.
+
+A row that fails any step is evidence of a stale or wrong bind, exactly the
+class the jain-web split.2→split.4 refresh corrected on 2026-07-28.
