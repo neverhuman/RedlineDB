@@ -4200,7 +4200,33 @@ fn successor_receipt_verify(
     Ok(receipt)
 }
 
-fn release_receipt(path: &Path, paths: &Paths) -> Result<()> {
+fn release_lock_state(paths: &Paths, standalone: bool) -> Result<(&'static str, bool)> {
+    if standalone {
+        let mirror_present =
+            regular_file_present(&paths.mirror, "Redline compatibility lock mirror")?;
+        let mirror_sidecar = checksum_path(&paths.mirror);
+        let sidecar_present =
+            regular_file_present(&mirror_sidecar, "Redline compatibility lock checksum")?;
+        if mirror_present || sidecar_present {
+            return Err(error(
+                "standalone release receipt requires compatibility mirror and checksum to be absent",
+            ));
+        }
+        verify_lock(&paths.manifest, &paths.lock, None)?;
+        return Ok(("standalone-authoritative", false));
+    }
+
+    let transition_state = review_lock_verify(&paths.manifest, &paths.lock, &paths.mirror)?;
+    let lock = load_lock(&paths.lock)?;
+    let cutover_eligible = proof_table(&lock)?
+        .get("cutover_eligible")
+        .and_then(toml::Value::as_bool)
+        == Some(true)
+        && transition_state == "synchronized";
+    Ok((transition_state, cutover_eligible))
+}
+
+fn release_receipt(path: &Path, paths: &Paths, standalone: bool) -> Result<()> {
     let security = paths.root.join("target/security/evidence.json");
     verify_checksum(&security)?;
     let security_value = read_json(&security)?;
@@ -4209,13 +4235,7 @@ fn release_receipt(path: &Path, paths: &Paths) -> Result<()> {
             "release readiness requires passing security evidence",
         ));
     }
-    let transition_state = review_lock_verify(&paths.manifest, &paths.lock, &paths.mirror)?;
-    let lock = load_lock(&paths.lock)?;
-    let cutover_eligible = proof_table(&lock)?
-        .get("cutover_eligible")
-        .and_then(toml::Value::as_bool)
-        == Some(true)
-        && transition_state == "synchronized";
+    let (transition_state, cutover_eligible) = release_lock_state(paths, standalone)?;
     let payload = json!({
         "schema_version": "redline.release-readiness/v1",
         "family": FAMILY,
@@ -4616,10 +4636,16 @@ fn real_main() -> Result<()> {
             security_receipt(Path::new(&args[0]), &paths.root)
         }
         "release-receipt" => {
-            if args.len() != 1 {
-                return Err(error("release-receipt requires one output path"));
-            }
-            release_receipt(Path::new(&args[0]), &paths)
+            let (standalone, output) = match args.as_slice() {
+                [output] => (false, output),
+                [flag, output] if flag == "--standalone" => (true, output),
+                _ => {
+                    return Err(error(
+                        "release-receipt accepts optional --standalone and one output path",
+                    ))
+                }
+            };
+            release_receipt(Path::new(output), &paths, standalone)
         }
         "clone" => {
             let dry_run = if args == ["--dry-run"] { true } else if args.is_empty() { false } else { return Err(error("clone accepts only --dry-run")); };
@@ -4627,7 +4653,7 @@ fn real_main() -> Result<()> {
         }
         "update" => { if !args.is_empty() { return Err(error("update accepts no arguments")); } clone_or_update(&paths.manifest, false) }
         "--version" | "version" => { println!("redline-proof 0.1.0"); Ok(()) }
-        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|control-validate|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt OUTPUT|doctor}")),
+        _ => Err(error("usage: redlinectl {clone [--dry-run]|update|control-validate|validate|lock-verify|review-lock-verify|family-ci [--receipt PATH]|proof-refresh --prepare-successor [--receipt PATH]|proof-refresh --reconcile-successor [--receipt PATH]|proof-refresh --family-ci PATH --jain-evidence PATH --jeryu-evidence PATH [--receipt PATH]|successor-receipt-verify RECEIPT|consumer-verify LOCK|remote-verify|cutover-verify|audit-verify REPORT|test-receipt OUTPUT|security-receipt OUTPUT|release-receipt [--standalone] OUTPUT|doctor}")),
     }
 }
 
@@ -5480,6 +5506,49 @@ mod tests {
                 "{name} produced unexpected failure: {failure}"
             );
         }
+    }
+
+    #[test]
+    fn standalone_release_readiness_never_claims_cutover() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let fixture = TestDir::new("standalone-release-readiness");
+        let control = fixture.path().join("redline-split-ops");
+        fs::create_dir_all(&control).unwrap();
+        for name in [
+            "repos.manifest.toml",
+            "redline.lock.toml",
+            "redline.lock.toml.sha256",
+        ] {
+            fs::copy(source.join(name), control.join(name)).unwrap();
+        }
+        let paths = Paths {
+            manifest: control.join("repos.manifest.toml"),
+            lock: control.join("redline.lock.toml"),
+            mirror: fixture.path().join("redline.lock.toml"),
+            root: control,
+        };
+        assert_eq!(
+            release_lock_state(&paths, true).unwrap(),
+            ("standalone-authoritative", false)
+        );
+        assert!(
+            review_lock_verify(&paths.manifest, &paths.lock, &paths.mirror)
+                .unwrap_err()
+                .to_string()
+                .contains("eligible authoritative Redline lock requires")
+        );
+
+        fs::copy(&paths.lock, &paths.mirror).unwrap();
+        assert!(release_lock_state(&paths, true)
+            .unwrap_err()
+            .to_string()
+            .contains("mirror and checksum to be absent"));
+        fs::remove_file(&paths.mirror).unwrap();
+        fs::copy(checksum_path(&paths.lock), checksum_path(&paths.mirror)).unwrap();
+        assert!(release_lock_state(&paths, true)
+            .unwrap_err()
+            .to_string()
+            .contains("mirror and checksum to be absent"));
     }
 
     #[test]

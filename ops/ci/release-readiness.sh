@@ -10,4 +10,10 @@ for path in Cargo.toml Cargo.lock CHANGELOG.md RELEASE_PROCESS.md ROLLBACK.md do
   }
 done
 ./redlinectl control-validate
-./redlinectl release-receipt target/release-evidence/redline-release-readiness.json
+mirror="$repo_root/../redline.lock.toml"
+mirror_sidecar="${mirror}.sha256"
+if [[ ! -e "$mirror" && ! -L "$mirror" && ! -e "$mirror_sidecar" && ! -L "$mirror_sidecar" ]]; then
+  ./redlinectl release-receipt --standalone target/release-evidence/redline-release-readiness.json
+else
+  ./redlinectl release-receipt target/release-evidence/redline-release-readiness.json
+fi
