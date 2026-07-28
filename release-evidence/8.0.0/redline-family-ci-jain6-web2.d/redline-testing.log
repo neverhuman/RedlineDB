@@ -1,0 +1,140 @@
+$ bash scripts/ci-local.sh pr-ci
+audit policy mirror: .jankurai/audit-policy.toml == agent/audit-policy.toml OK
+cargo build (47 crates compiled)
+Finished `dev` profile [unoptimized + debuginfo] target(s) in 32.54s
+cargo test: 47 passed, 1 ignored (8 suites, 3.10s)
+cargo test: 10 passed (1 suite, 0.03s)
+{"ok":true,"product":"redline-testing","product_version":"1.0.1","tag_revision":1,"tag":"redline-testing-v1.0.1-jain.1"}
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+   Compiling object v0.37.3
+   Compiling memchr v2.8.0
+   Compiling version_check v0.9.5
+   Compiling libc v0.2.186
+   Compiling typenum v1.20.0
+   Compiling cfg-if v1.0.4
+   Compiling utf8parse v0.2.2
+   Compiling serde_core v1.0.228
+   Compiling colorchoice v1.0.5
+   Compiling anstyle-query v1.1.5
+   Compiling zmij v1.0.21
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle v1.0.14
+   Compiling serde_json v1.0.150
+   Compiling clap_lex v1.1.0
+   Compiling serde v1.0.228
+   Compiling anyhow v1.0.103
+   Compiling heck v0.5.0
+   Compiling strsim v0.11.1
+   Compiling redline-testing v1.0.1 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-testing)
+   Compiling anstyle-parse v1.0.0
+   Compiling itoa v1.0.18
+   Compiling log v0.4.30
+   Compiling cpufeatures v0.2.17
+   Compiling cc v1.2.62
+   Compiling generic-array v0.14.7
+   Compiling anstream v1.0.0
+   Compiling clap_builder v4.6.0
+   Compiling stacker v0.1.24
+   Compiling syn v2.0.117
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling recursive-proc-macro-impl v0.1.1
+   Compiling serde_derive v1.0.228
+   Compiling clap_derive v4.6.1
+   Compiling ar_archive_writer v0.5.1
+   Compiling psm v0.1.31
+   Compiling recursive v0.1.1
+   Compiling sqlparser v0.61.0
+   Compiling clap v4.6.1
+    Finished `release` profile [optimized] target(s) in 1m 32s
+release package: dist/redline-testing-1.0.1-linux-x86_64.tar.gz
+release manifest: dist/redline-testing-1.0.1-linux-x86_64/release-manifest.json
+artifact_hashes count: 38
+[redline-ci] security: gitleaks secret scan
+[90m8:31AM[0m [32mINF[0m scan completed in 879ms
+[90m8:31AM[0m [32mINF[0m no leaks found
+    Fetching advisory database from `https://github.com/RustSec/advisory-db.git`
+      Loaded 1170 security advisories (from /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-testing/.cargo/advisory-db)
+    Updating crates.io index
+    Scanning Cargo.lock for vulnerabilities (109 crate dependencies)
+warning[license-not-encountered]: license was not encountered
+   ┌─ /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-testing/deny.toml:17:6
+   │
+17 │     "BSD-2-Clause",
+   │      ━━━━━━━━━━━━ unmatched license allowance
+
+warning[license-not-encountered]: license was not encountered
+   ┌─ /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-testing/deny.toml:18:6
+   │
+18 │     "BSD-3-Clause",
+   │      ━━━━━━━━━━━━ unmatched license allowance
+
+warning[license-not-encountered]: license was not encountered
+   ┌─ /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-testing/deny.toml:19:6
+   │
+19 │     "ISC",
+   │      ━━━ unmatched license allowance
+
+warning[license-not-encountered]: license was not encountered
+   ┌─ /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-testing/deny.toml:21:6
+   │
+21 │     "MIT-0",
+   │      ━━━━━ unmatched license allowance
+
+warning[license-not-encountered]: license was not encountered
+   ┌─ /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-testing/deny.toml:23:6
+   │
+23 │     "Unicode-DFS-2016",
+   │      ━━━━━━━━━━━━━━━━ unmatched license allowance
+
+warning[license-not-encountered]: license was not encountered
+   ┌─ /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-testing/deny.toml:24:6
+   │
+24 │     "Zlib",
+   │      ━━━━ unmatched license allowance
+
+advisories ok, bans ok, licenses ok, sources ok
+[redline-ci] security: zizmor workflow lint
+ INFO zizmor: 🌈 zizmor v1.25.2
+ INFO audit: zizmor: 🌈 completed .github/workflows/ci.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/release.yml
+ INFO audit: zizmor: 🌈 completed .github/workflows/security-audit.yml
+No findings to report. Good job! (1 ignored, 24 suppressed)
+[redline-ci] security: SBOM generation
+[0000]  WARN no explicit name and version provided for directory source, deriving artifact ID from the given path (which is not ideal)
+[redline-ci] security: complete
+$ bash scripts/ci-local.sh jankurai
+[redline-ci] jankurai: audit
+[smart] full scan — --full requested
+score=86 raw=86 caps=0 findings=5
+[redline-ci] jankurai: copy-code
+copy-code status=review hard=0 warning=5 classes=5 json=target/jankurai/copy-code.json md=target/jankurai/copy-code.md
+[redline-ci] jankurai: rust witness build
+witness graph written: 2 crates, 116 pub items indexed
+[redline-ci] jankurai: security evidence (strict, ci profile)
+[redline-ci] jankurai: language bad-behavior evidence
+[redline-ci] language-bad-behavior: recording ci/git/release scan receipt
+[redline-ci] language-bad-behavior: complete
+[redline-ci] jankurai: cost budget
+[redline-ci] cost-budget: validating zero-spend manifest
+[redline-ci] cost-budget: complete
+[redline-ci] jankurai: release readiness
+[redline-ci] release-readiness: validating launch-gate evidence
+[redline-ci] release-readiness: complete
+[redline-ci] jankurai: proof routing
+[redline-ci] jankurai: proofbind verify
+[redline-ci] jankurai: proofmark rust
+$ bash scripts/ci-local.sh audit
+cargo test: 47 passed, 1 ignored (8 suites, 3.48s)
+$ bash scripts/ci-local.sh release
+{"ok":true,"product":"redline-testing","product_version":"1.0.1","tag_revision":1,"tag":"redline-testing-v1.0.1-jain.1"}
+    Finished `release` profile [optimized] target(s) in 0.16s
+release package: dist/redline-testing-1.0.1-linux-x86_64.tar.gz
+release manifest: dist/redline-testing-1.0.1-linux-x86_64/release-manifest.json
+artifact_hashes count: 38
