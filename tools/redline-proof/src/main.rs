@@ -5300,7 +5300,10 @@ mod tests {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let manifest = root.join("repos.manifest.toml");
         let authoritative = root.join("redline.lock.toml");
-        let current_mirror = root.join("../redline.lock.toml");
+        let fixture = TestDir::new("historical-jain4-current-mirror");
+        let current_mirror = fixture.path().join("redline.lock.toml");
+        fs::copy(&authoritative, &current_mirror).unwrap();
+        fs::copy(checksum_path(&authoritative), checksum_path(&current_mirror)).unwrap();
         for receipt in [
             "redline-proof-successor-jain4-prepared.json",
             "redline-proof-successor-jain4-reconciled.json",
