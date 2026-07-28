@@ -275,8 +275,6 @@ for critical in repos.manifest.toml ops/ci/host-ci-publisher.sh \
   ops/ci/native-runtime.sh \
   ops/ci/pnpm-runtime.sh ops/ci/pnpm-store.lock.json \
   ops/ci/npm-runtime.sh ops/ci/npm-cache.lock.json ops/ci/npmrc.empty \
-  ops/ci/playwright-browser-runtime.sh \
-  ops/ci/playwright-browser.lock.json \
   ops/ci/host-ci-evidence.sh ops/ci/host-ci-proof-evidence.sh \
   ops/ci/required.sh ops/ci/typed-required-non-test.sh \
   contracts/ci-plan.schema.json contracts/ci-lane-result.schema.json \
