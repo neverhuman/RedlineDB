@@ -1,6 +1,6 @@
 {
-  "report_fingerprint": "sha256:0547f1d2e004a69532915a31113b5744bc500977c46d4d0f0c697cbc5310489d",
-  "input_fingerprint": "sha256:98edb4f9de9b82b11dda666ac356951e4ceefe6121d9ef83a91e4f63c0f47bc5",
+  "report_fingerprint": "sha256:7907a69c16fa667b6e8272c2540c32303c26420f9062b755dd0dcd9e4c045ebe",
+  "input_fingerprint": "sha256:fcd4f453332cb6b8d43c3c85e2fa3d5971d21ae1c1f5b0ef42f2d637b3cda2bb",
   "policy_fingerprint": "sha256:ee7b6aae33fb5ed85ec89a3b9d9221858fcc62ffaf7215e7fb70675781fa3574",
   "manifest_fingerprints": {
     "owner_map": "sha256:d539296fba6c8f01669314d2552a71d3efa2e6d34629cb968b1d748647e9c4e4",
@@ -10,8 +10,8 @@
     "proof_lanes": "sha256:0f90587c471b00e4ff17e57632a271650e430bbac67ced986a9f9582b92bd9d7",
     "standard_version": "sha256:f7a56ea0a95fc9be14aa355b0604e104993a8c75e562a2fe03d0313cc53fbc3b"
   },
-  "dirty_worktree": true,
-  "generated_at": "1785237014",
+  "dirty_worktree": false,
+  "generated_at": "1785241212",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
@@ -25,15 +25,15 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1785237014",
-  "started_at": "1785237014",
-  "elapsed_ms": 3034,
+  "run_id": "1785241212",
+  "started_at": "1785241212",
+  "elapsed_ms": 2469,
   "scope": {
     "mode": "full",
     "paths": []
   },
-  "score": 87,
-  "raw_score": 87,
+  "score": 89,
+  "raw_score": 89,
   "decision": {
     "status": "pass",
     "minimum_score": 85,
@@ -44,7 +44,7 @@
       "baseline_score": 86,
       "allowed_drop": 0,
       "passed": true,
-      "score_delta": 1,
+      "score_delta": 3,
       "baseline_report_fingerprint": "sha256:10aa6c241342edad9226920c0c3ba24f09dd3e4f6353bff4964750947d67fe73",
       "baseline_input_fingerprint": "sha256:76ff41b55910967405f0714cf57fb1fad0002abb9c9f1c5fe86f3fb7ba6c678d",
       "baseline_policy_fingerprint": "sha256:ee7b6aae33fb5ed85ec89a3b9d9221858fcc62ffaf7215e7fb70675781fa3574",
@@ -54,11 +54,11 @@
     }
   },
   "git": {
-    "head": "ef045a5",
+    "head": "bb210d7",
     "base": null,
     "changed_files": 0,
     "mode": "full",
-    "dirty_worktree": true
+    "dirty_worktree": false
   },
   "policy": {
     "path": "./agent/audit-policy.toml",
@@ -349,17 +349,16 @@
     {
       "name": "Observability and repair evidence",
       "weight": 8,
-      "score": 57,
-      "weighted_points": 4.56,
+      "score": 81,
+      "weighted_points": 6.48,
       "evidence": [
         "ops/observability directory present",
         "repair receipts or raw artifact language found",
+        "agent-friendly exception pattern found",
         "repair-hint and receipt convention are documented",
         "repair receipt guidance is documented"
       ],
-      "notes": [
-        "no agent-friendly exception pattern found"
-      ]
+      "notes": []
     },
     {
       "name": "Context economy and agent instructions",
@@ -972,7 +971,7 @@
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-28T11:10:11.144575436+00:00",
+    "generated_at": "2026-07-28T12:20:10.183231344+00:00",
     "repo": ".",
     "auditor_version": "1.6.11",
     "status": "review",
@@ -1010,7 +1009,7 @@
       ]
     },
     "summary": {
-      "files_scanned": 95,
+      "files_scanned": 110,
       "files_considered": 1,
       "active_files": 1,
       "exact_file_classes": 0,
@@ -1523,20 +1522,20 @@
       "severity": "medium",
       "category": "observability",
       "path": "docs/testing.md",
-      "problem": "`Observability and repair evidence` scored 57 below the standard floor of 85",
+      "problem": "`Observability and repair evidence` scored 81 below the standard floor of 85",
       "agent_fix": "add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof",
       "evidence": [
         "ops/observability directory present",
         "repair receipts or raw artifact language found",
-        "repair-hint and receipt convention are documented",
-        "repair receipt guidance is documented"
+        "agent-friendly exception pattern found",
+        "repair-hint and receipt convention are documented"
       ],
       "check_id": "HLT-017-OPAQUE-OBSERVABILITY:observability",
       "hardness": "soft",
       "confidence": 0.76,
       "evidence_kind": "repository-scan",
       "rerun_command": "just score",
-      "fingerprint": "sha256:8ce018ddaa8c2b6ddef11b6784922e6befd60bb670ab8564e69cd26455aa44a6",
+      "fingerprint": "sha256:32a557e34c3317159b29be5db73dbff23f456d7ff2cff22b9363c020f56a593c",
       "rule_id": "HLT-017-OPAQUE-OBSERVABILITY",
       "tlr": "Repair",
       "lane": "observability",
@@ -1573,7 +1572,7 @@
       "lane": "observability",
       "owner": "docs",
       "task": "add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof",
-      "why": "`Observability and repair evidence` scored 57 below the standard floor of 85"
+      "why": "`Observability and repair evidence` scored 81 below the standard floor of 85"
     },
     {
       "path": ".github/workflows/jankurai.yml",

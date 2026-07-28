@@ -7,12 +7,12 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1785237014`
-- Started at: `1785237014`
-- Elapsed: `3034` ms
+- Run ID: `1785241212`
+- Started at: `1785241212`
+- Elapsed: `2469` ms
 - Scope: `full`
-- Raw score: `87`
-- Final score: `87`
+- Raw score: `89`
+- Final score: `89`
 - Decision: `pass`
 - Minimum score: `85`
 - Caps applied: `none`
@@ -98,7 +98,7 @@
 | Security and supply-chain posture | 12 | 80 | 9.60 | lockfile present; secret or dependency scan tooling found |
 | Code shape and semantic surface | 12 | 90 | 10.80 | no authored adopter product code files in scope |
 | Data truth and workflow safety | 8 | 50 | 4.00 |  |
-| Observability and repair evidence | 8 | 57 | 4.56 | ops/observability directory present; repair receipts or raw artifact language found |
+| Observability and repair evidence | 8 | 81 | 6.48 | ops/observability directory present; repair receipts or raw artifact language found |
 | Context economy and agent instructions | 7 | 93 | 6.51 | root `AGENTS.md` present; root `AGENTS.md` stays short |
 | Jankurai tool adoption and CI replacement | 7 | 100 | 7.00 | control-plane files present; applicable=13 |
 | Python containment and polyglot hygiene | 4 | 100 | 4.00 | no Python files in scope |
@@ -208,11 +208,11 @@ No audited runtime boundary reclassifications declared.
    Check: `HLT-017-OPAQUE-OBSERVABILITY:observability` `soft` confidence `0.76`
    Route: TLR `Repair`, lane `observability`, owner `docs`
    Docs: `agent/JANKURAI_STANDARD.md#repair-receipts`
-   Reason: `Observability and repair evidence` scored 57 below the standard floor of 85
+   Reason: `Observability and repair evidence` scored 81 below the standard floor of 85
    Fix: add structured errors, telemetry, and repair receipts that tell the next agent where to rerun proof
    Rerun: `just score`
-   Fingerprint: `sha256:8ce018ddaa8c2b6ddef11b6784922e6befd60bb670ab8564e69cd26455aa44a6`
-   Evidence: ops/observability directory present, repair receipts or raw artifact language found, repair-hint and receipt convention are documented, repair receipt guidance is documented
+   Fingerprint: `sha256:32a557e34c3317159b29be5db73dbff23f456d7ff2cff22b9363c020f56a593c`
+   Evidence: ops/observability directory present, repair receipts or raw artifact language found, agent-friendly exception pattern found, repair-hint and receipt convention are documented
 
 ## Policy
 
