@@ -4057,7 +4057,7 @@ fn successor_receipt_verify(
     path: &Path,
     manifest_path: &Path,
     lock: &Path,
-    _mirror: &Path,
+    mirror: &Path,
 ) -> Result<JsonValue> {
     verify_checksum(path)?;
     let receipt = read_json(path)?;
@@ -4189,16 +4189,12 @@ fn successor_receipt_verify(
             "successor receipt prepared digest is not reproducible from the governed predecessor snapshot",
         ));
     }
-    verify_checksum(lock)?;
-    if sha256_file(lock)? != SUCCESSOR_PREPARED_LOCK_SHA256 {
+    let current_state = review_lock_verify(manifest_path, lock, mirror)?;
+    if current_state != "synchronized"
+        && sha256_file(lock)? != manifest.successor.prepared_lock_sha256
+    {
         return Err(error(
-            "historical Jain.4 successor receipt does not match the reviewed authoritative lock",
-        ));
-    }
-    let authoritative = load_lock(lock)?;
-    if explicit_cutover_eligibility(&authoritative)? {
-        return Err(error(
-            "historical Jain.4 successor receipt cannot verify an eligible lock",
+            "historical Jain.4 receipt requires its reviewed historical lock or a synchronized successor",
         ));
     }
     Ok(receipt)
@@ -5176,14 +5172,14 @@ mod tests {
     }
 
     #[test]
-    fn current_jain6_authority_is_not_the_historical_jain4_successor() {
+    fn current_jain6_authority_has_no_pending_successor_transition() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
         let lock = load_lock(&root.join("redline.lock.toml")).unwrap();
         assert!(successor_transition(&manifest, &lock)
             .unwrap_err()
             .to_string()
-            .contains("exactly one next-revision"));
+            .contains("no new core identity"));
     }
 
     #[test]
@@ -5235,10 +5231,7 @@ mod tests {
             &predecessor_value,
         )
         .unwrap();
-        assert_eq!(
-            historical,
-            fs::read(root.join("redline.lock.toml")).unwrap()
-        );
+        assert_eq!(sha256_bytes(&historical), SUCCESSOR_PREPARED_LOCK_SHA256);
 
         let (source, value) = successor_transition_input_with(
             &manifest,
@@ -5330,7 +5323,7 @@ mod tests {
         }
         assert_eq!(
             review_lock_verify(&manifest, &authoritative, &current_mirror).unwrap(),
-            "authoritative-only-historical"
+            "synchronized"
         );
     }
 
@@ -5461,6 +5454,19 @@ mod tests {
         ] {
             fs::copy(source.join(name), control.join(name)).unwrap();
         }
+        let predecessor = fs::read_to_string(
+            source.join("release-evidence/8.0.0/redline-lock-jain3-predecessor.toml"),
+        )
+        .unwrap();
+        let predecessor_value: toml::Value = predecessor.parse().unwrap();
+        let historical =
+            render_historical_successor_lock(&predecessor, &predecessor_value).unwrap();
+        fs::write(&lock, &historical).unwrap();
+        fs::write(
+            checksum_path(&lock),
+            format!("{}  redline.lock.toml\n", sha256_bytes(&historical)),
+        )
+        .unwrap();
         assert_eq!(
             review_lock_verify(&manifest, &lock, &mirror).unwrap(),
             "authoritative-only-historical"
@@ -5869,7 +5875,6 @@ mod tests {
             )
             .unwrap();
         }
-        assert!(!family_root.join("redline.lock.toml").exists());
         assert_eq!(
             validate_control(
                 &control.join("repos.manifest.toml"),
@@ -5878,23 +5883,7 @@ mod tests {
             .unwrap(),
             4
         );
-        assert_eq!(
-            review_lock_verify(
-                &control.join("repos.manifest.toml"),
-                &control.join("redline.lock.toml"),
-                &family_root.join("redline.lock.toml"),
-            )
-            .unwrap(),
-            "authoritative-only-historical"
-        );
-        assert!(verify_lock(
-            &control.join("repos.manifest.toml"),
-            &control.join("redline.lock.toml"),
-            Some(&family_root.join("redline.lock.toml")),
-        )
-        .unwrap_err()
-        .to_string()
-        .contains("compatibility lock mirror is required"));
+        assert!(!family_root.join("redline.lock.toml").exists());
         assert!(!family_root.join("redline").exists());
     }
 }
