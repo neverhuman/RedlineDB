@@ -43,3 +43,19 @@ migration_path = "Keep Kafka behind generated event contracts and observable Rus
 root_paths = ["db"]
 migration_paths = ["db/migrations"]
 constraint_paths = ["db/constraints"]
+
+[[input_boundary]]
+id = "wal-archive"
+kind = "native-durable-prefix-and-verified-receipt"
+ingress_paths = ["crates/kernel/src/wal/archive.rs", "crates/kernel/src/wal/manager/storage/write.rs"]
+request_contract = "exact timeline and durable LSN bounds, bounded byte budget, neutral receipt verifier, and explicit checkpoint/replication-slot/required-archive horizons"
+authz = "only a verifier-accepted receipt for the exact sealed range may advance the native fsynced contiguous watermark; gaps, replay, timeline mismatch, or unverified durability fail closed"
+data_isolation = "Redline owns WAL bytes, native fsync, retention, and recovery; callers own archive transport and durable receipt verification; foreground strict commit never waits for archive transport"
+
+[[input_boundary]]
+id = "physical-backup"
+kind = "verified-native-directory-backup"
+ingress_paths = ["crates/redlinedb/src/phase8.rs"]
+request_contract = "public physical manifest, canonical relative regular-file enumeration, exact tree hash, explicit LSN/CSN recovery target, and new-or-empty native destination"
+authz = "manifest traversal, symlink, special file, multiple link, missing/corrupt bytes, non-empty destination, and overwrite attempts fail before restore publication"
+data_isolation = "backup and restore operate only on caller-selected native roots; no existing destination custody is deleted or overwritten"

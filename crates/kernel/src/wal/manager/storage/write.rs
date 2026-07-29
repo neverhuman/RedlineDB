@@ -2,7 +2,7 @@ use std::path::Path;
 
 use crate::format::{Lsn, TxId};
 use crate::io::{FileHandle, FileSystem, StdFileSystem};
-use crate::wal::{WAL_HEADER_LEN, WalRecord, WalRecordKind};
+use crate::wal::{WAL_HEADER_LEN, WalRecord, WalRecordKind, WalRetentionHorizons};
 use crate::{Error, Result};
 
 use super::*;
@@ -27,6 +27,13 @@ impl WalManager<StdFileSystem> {
     pub fn prune_segments_below_checkpoint_lsn(&mut self, checkpoint_lsn: Lsn) -> Result<usize> {
         let keep_segment = segment_for_lsn(checkpoint_lsn, self.config.segment_bytes);
         self.prune_segments_below(keep_segment)
+    }
+
+    pub fn prune_segments_below_horizons(
+        &mut self,
+        horizons: WalRetentionHorizons,
+    ) -> Result<usize> {
+        self.prune_segments_below_checkpoint_lsn(horizons.recycle_lsn())
     }
 
     pub fn prune_segments_below(&mut self, segment: u64) -> Result<usize> {

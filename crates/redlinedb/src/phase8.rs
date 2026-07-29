@@ -1,6 +1,6 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -19,7 +19,7 @@ pub const BACKUP_DIR: &str = "backups";
 pub const SLOT_DIR: &str = "replication_slots";
 pub const ARCHIVE_DIR: &str = "archive";
 pub const RETENTION_FILE: &str = "retention.json";
-const MANIFEST_FILE: &str = "backup-manifest.json";
+pub const PHYSICAL_BACKUP_MANIFEST_FILE: &str = "backup-manifest.json";
 const COMPLETE_FILE: &str = "complete.marker";
 const RESTORE_COMPLETE_FILE: &str = "restore.complete";
 const FORMAT_VERSION: u32 = 1;
@@ -140,24 +140,31 @@ struct IdentityFile {
     archive_mode: ArchiveMode,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
-struct PhysicalBackupManifest {
-    format_version: u32,
-    backup_id: u128,
-    db_id: u128,
-    timeline: u64,
-    parent_timeline: Option<u64>,
-    fork_lsn: Option<u64>,
-    page_size: usize,
-    wal_segment_bytes: u64,
-    required_wal_start: u64,
-    stop_lsn: u64,
-    stop_csn: u64,
-    included_wal: bool,
-    archive_mode: ArchiveMode,
-    created_unix_nanos: u128,
-    files: Vec<String>,
-    tree_hash: String,
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PhysicalBackupManifest {
+    pub format_version: u32,
+    pub backup_id: u128,
+    pub db_id: u128,
+    pub timeline: u64,
+    pub parent_timeline: Option<u64>,
+    pub fork_lsn: Option<u64>,
+    pub page_size: usize,
+    pub wal_segment_bytes: u64,
+    pub required_wal_start: u64,
+    pub stop_lsn: u64,
+    pub stop_csn: u64,
+    pub included_wal: bool,
+    pub archive_mode: ArchiveMode,
+    pub created_unix_nanos: u128,
+    pub files: Vec<String>,
+    pub tree_hash: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct VerifiedBackupFile {
+    pub relative_path: String,
+    pub byte_len: u64,
+    pub sha256: String,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -188,15 +195,12 @@ pub fn backup_physical_to_path(
     let backup_id = next_backup_id();
     let dst = dst.as_ref();
 
-    if dst.exists() {
-        fs::remove_dir_all(dst)?;
-    }
-    fs::create_dir_all(dst)?;
+    prepare_empty_directory(dst, "physical backup destination is not empty")?;
 
     let files = collect_files(src, &|path| should_copy_path(path, dst))?;
     let mut bytes_copied = 0_u64;
     for rel in &files {
-        bytes_copied += copy_file(src, dst, rel)?;
+        bytes_copied += copy_file_exclusive(src, dst, rel)?;
     }
 
     let tree_hash = hash_tree(dst, &files)?;
@@ -221,7 +225,7 @@ pub fn backup_physical_to_path(
             .collect::<Vec<_>>(),
         tree_hash,
     };
-    let manifest_path = phase8_path(dst).join(MANIFEST_FILE);
+    let manifest_path = phase8_path(dst).join(PHYSICAL_BACKUP_MANIFEST_FILE);
     write_json_atomic(&manifest_path, &manifest)?;
     write_text_atomic(&phase8_path(dst).join(COMPLETE_FILE), "ok\n")?;
 
@@ -243,24 +247,13 @@ pub fn restore_from_backup(
     let start = Instant::now();
     let src = src.as_ref();
     let dst = dst.as_ref();
-    let manifest: PhysicalBackupManifest = read_json(phase8_path(src).join(MANIFEST_FILE))?;
-    if manifest.format_version != FORMAT_VERSION {
-        return Err(Error::new(
-            ErrorCode::Unsupported,
-            "unsupported backup format",
-        ));
-    }
-    if hash_tree(src, &manifest_file_list(src, &manifest)?)? != manifest.tree_hash {
-        return Err(Error::new(ErrorCode::Corrupt, "backup tree hash mismatch"));
-    }
-    if dst.exists() {
-        fs::remove_dir_all(dst)?;
-    }
-    fs::create_dir_all(dst)?;
+    let manifest = physical_backup_manifest(src)?;
+    let verified_files = verify_physical_backup(src)?;
+    prepare_empty_directory(dst, "restore destination is not empty")?;
 
     let mut bytes_copied = 0_u64;
-    for rel in &manifest.files {
-        bytes_copied += copy_file(src, dst, &PathBuf::from(rel))?;
+    for file in &verified_files {
+        bytes_copied += copy_file_exclusive(src, dst, Path::new(&file.relative_path))?;
     }
     let mut restored_identity = load_identity_or_init(dst)?;
     restored_identity.db_id = next_db_id();
@@ -270,7 +263,10 @@ pub fn restore_from_backup(
         restored_identity.fork_lsn = match options.target {
             SqlRecoveryTarget::Latest => Some(manifest.stop_lsn),
             SqlRecoveryTarget::Lsn(lsn) => Some(lsn.0),
-            SqlRecoveryTarget::Csn(csn) => Some(csn.0),
+            // CSNs and LSNs are different domains. A CSN-targeted restore
+            // replays from this backup's durable WAL boundary, while the CSN
+            // itself is carried by the recovery target below.
+            SqlRecoveryTarget::Csn(_) => Some(manifest.stop_lsn),
         };
     }
     write_json_atomic(&identity_path(dst), &restored_identity)?;
@@ -295,7 +291,7 @@ pub fn restore_from_backup(
         target_lsn: match options.target {
             SqlRecoveryTarget::Latest => manifest.stop_lsn,
             SqlRecoveryTarget::Lsn(lsn) => lsn.0,
-            SqlRecoveryTarget::Csn(csn) => csn.0,
+            SqlRecoveryTarget::Csn(_) => manifest.stop_lsn,
         },
         target_csn: match options.target {
             SqlRecoveryTarget::Latest => manifest.stop_csn,
@@ -304,6 +300,73 @@ pub fn restore_from_backup(
         },
         new_timeline: restored_identity.timeline,
     })
+}
+
+pub fn physical_backup_manifest(src: impl AsRef<Path>) -> Result<PhysicalBackupManifest> {
+    let manifest: PhysicalBackupManifest =
+        read_json(phase8_path(src.as_ref()).join(PHYSICAL_BACKUP_MANIFEST_FILE))?;
+    if manifest.format_version != FORMAT_VERSION {
+        return Err(Error::new(
+            ErrorCode::Unsupported,
+            "unsupported backup format",
+        ));
+    }
+    if manifest.timeline == 0
+        || manifest.page_size == 0
+        || manifest.wal_segment_bytes == 0
+        || manifest.required_wal_start > manifest.stop_lsn
+        || manifest.files.is_empty()
+        || manifest.tree_hash.len() != 64
+        || !manifest
+            .tree_hash
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "invalid physical backup manifest",
+        ));
+    }
+    Ok(manifest)
+}
+
+pub fn verify_physical_backup(src: impl AsRef<Path>) -> Result<Vec<VerifiedBackupFile>> {
+    let src = src.as_ref();
+    let manifest = physical_backup_manifest(src)?;
+    verify_complete_marker(src)?;
+    let paths = manifest_file_list(src, &manifest)?;
+    let mut verified = Vec::with_capacity(paths.len());
+    let mut tree_hasher = Sha256::new();
+    for path in paths {
+        let relative_path = rel_to_string(&path);
+        tree_hasher.update(relative_path.as_bytes());
+        let full_path = src.join(&path);
+        verify_regular_path(src, &path)?;
+        let mut file = File::open(&full_path)?;
+        let mut file_hasher = Sha256::new();
+        let mut byte_len = 0_u64;
+        let mut buf = [0_u8; 8192];
+        loop {
+            let read = file.read(&mut buf)?;
+            if read == 0 {
+                break;
+            }
+            byte_len = byte_len
+                .checked_add(read as u64)
+                .ok_or_else(|| Error::new(ErrorCode::TooBig, "backup file is too large"))?;
+            file_hasher.update(&buf[..read]);
+            tree_hasher.update(&buf[..read]);
+        }
+        verified.push(VerifiedBackupFile {
+            relative_path,
+            byte_len,
+            sha256: format!("{:x}", file_hasher.finalize()),
+        });
+    }
+    if format!("{:x}", tree_hasher.finalize()) != manifest.tree_hash {
+        return Err(Error::new(ErrorCode::Corrupt, "backup tree hash mismatch"));
+    }
+    Ok(verified)
 }
 
 pub fn create_physical_slot(db: &Database, name: &str, active: bool) -> Result<ReplicationSlot> {
@@ -509,13 +572,17 @@ fn should_copy_path(path: &Path, backup_root: &Path) -> bool {
     true
 }
 
-fn copy_file(src_root: &Path, dst_root: &Path, rel: &Path) -> Result<u64> {
+fn copy_file_exclusive(src_root: &Path, dst_root: &Path, rel: &Path) -> Result<u64> {
+    verify_regular_path(src_root, rel)?;
     let src = src_root.join(rel);
     let dst = dst_root.join(rel);
     if let Some(parent) = dst.parent() {
         fs::create_dir_all(parent)?;
     }
-    let bytes = fs::copy(&src, &dst)?;
+    let mut input = File::open(src)?;
+    let mut output = OpenOptions::new().create_new(true).write(true).open(dst)?;
+    let bytes = std::io::copy(&mut input, &mut output)?;
+    output.sync_all()?;
     Ok(bytes)
 }
 
@@ -537,11 +604,112 @@ fn hash_tree(root: &Path, files: &[PathBuf]) -> Result<String> {
 }
 
 fn manifest_file_list(_root: &Path, manifest: &PhysicalBackupManifest) -> Result<Vec<PathBuf>> {
-    Ok(manifest.files.iter().map(PathBuf::from).collect())
+    let mut paths = Vec::with_capacity(manifest.files.len());
+    let mut previous = None;
+    for raw in &manifest.files {
+        let path = validate_backup_relative_path(raw)?;
+        if previous.as_ref().is_some_and(|value| value >= &path) {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "backup manifest paths are not canonical",
+            ));
+        }
+        previous = Some(path.clone());
+        paths.push(path);
+    }
+    Ok(paths)
 }
 
 fn rel_to_string(rel: &Path) -> String {
     rel.to_string_lossy().replace('\\', "/")
+}
+
+fn validate_backup_relative_path(raw: &str) -> Result<PathBuf> {
+    if raw.is_empty() || raw.contains('\\') || raw.as_bytes().contains(&0) {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "invalid backup manifest path",
+        ));
+    }
+    let path = PathBuf::from(raw);
+    if path.is_absolute()
+        || path
+            .components()
+            .any(|component| !matches!(component, Component::Normal(_)))
+        || rel_to_string(&path) != raw
+    {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "invalid backup manifest path",
+        ));
+    }
+    Ok(path)
+}
+
+fn verify_complete_marker(root: &Path) -> Result<()> {
+    let marker = phase8_path(root).join(COMPLETE_FILE);
+    let metadata = fs::symlink_metadata(&marker)?;
+    if !metadata.file_type().is_file() || fs::read_to_string(marker)? != "ok\n" {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "physical backup is incomplete",
+        ));
+    }
+    Ok(())
+}
+
+fn verify_regular_path(root: &Path, rel: &Path) -> Result<()> {
+    let root_metadata = fs::symlink_metadata(root)?;
+    if !root_metadata.file_type().is_dir() {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "backup root is not a native directory",
+        ));
+    }
+    let mut current = root.to_path_buf();
+    let component_count = rel.components().count();
+    for (index, component) in rel.components().enumerate() {
+        let Component::Normal(name) = component else {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "invalid backup manifest path",
+            ));
+        };
+        current.push(name);
+        let metadata = fs::symlink_metadata(&current)?;
+        let is_last = index + 1 == component_count;
+        if (is_last && !metadata.file_type().is_file())
+            || (!is_last && !metadata.file_type().is_dir())
+        {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "backup manifest entry is not a regular file",
+            ));
+        }
+        #[cfg(unix)]
+        if is_last {
+            use std::os::unix::fs::MetadataExt as _;
+            if metadata.nlink() != 1 {
+                return Err(Error::new(
+                    ErrorCode::Corrupt,
+                    "backup manifest entry has multiple links",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn prepare_empty_directory(path: &Path, message: &'static str) -> Result<()> {
+    if path.exists() {
+        let metadata = fs::symlink_metadata(path)?;
+        if !metadata.file_type().is_dir() || fs::read_dir(path)?.next().is_some() {
+            return Err(Error::new(ErrorCode::Busy, message));
+        }
+        return Ok(());
+    }
+    fs::create_dir_all(path)?;
+    Ok(())
 }
 
 fn next_db_id() -> u128 {

@@ -38,7 +38,16 @@ dependency.
   per page; corruption produces `Error::InvalidChecksum`, which
   escalates to `DomainError` via `Error::into_domain`.
 - WAL: `crates/kernel/src/wal/`. Group commit lanes, semantic
-  combiner, archive/retention.
+  combiner, archive/retention. `wal::archive` exposes bounded
+  durable-prefix reads and a native fsynced contiguous watermark.
+  Archive transport remains injected: only a neutral verifier-accepted
+  receipt for the exact `SealedWalRange` can advance that watermark.
+  Strict foreground commits continue to wait only for native WAL fsync.
+- Physical backup: `crates/redlinedb/src/phase8.rs`. The public manifest
+  enumerates canonical relative regular files and their aggregate tree
+  identity. Verification rejects missing, corrupt, linked, symlinked, or
+  special entries before restore; restore publishes only into a new or
+  empty native directory and never deletes existing custody.
 - Catalog: `crates/kernel/src/catalog/`.
 - Vector indexes: `crates/kernel/src/vector/{flat,hnsw,diskann}/`.
 - JSONB: `crates/kernel/src/json/`.

@@ -47,11 +47,18 @@ pub use options::{
 };
 pub use params::Params;
 pub use phase8::{
-    ArchiveMode, ArchiveStats, PhysicalBackupOptions, PhysicalBackupStats, ReplicationSlot,
-    ReplicationSlotStats, RestoreOptions, RestoreStats, RetentionHorizon, SlotKind, WalLevel,
+    ArchiveMode, ArchiveStats, PHYSICAL_BACKUP_MANIFEST_FILE, PhysicalBackupManifest,
+    PhysicalBackupOptions, PhysicalBackupStats, ReplicationSlot, ReplicationSlotStats,
+    RestoreOptions, RestoreStats, RetentionHorizon, SlotKind, VerifiedBackupFile, WalLevel,
 };
 pub use redlinedb_kernel::engine::CommitDurability;
 pub use redlinedb_kernel::format::{BackupId, Csn, DbId, Lsn, TimelineId, WalSegmentNo};
+pub use redlinedb_kernel::wal::{
+    ARCHIVE_LAG_ALERT_AFTER_MS, ARCHIVE_SEAL_AFTER_MS, ARCHIVE_SEAL_BYTES, ArchiveLag,
+    ArchiveReceiptVerifier, ArchiveSealPolicy, ArchiveWatermark, DurableWalPrefix, SealedWalRange,
+    VerifiedArchiveReceipt, WalRetentionHorizons, advance_archive_watermark, archive_lag,
+    archive_watermark, read_durable_prefix,
+};
 pub use redlinedb_sql::BeginMode;
 pub use redlinedb_sql::RecoveryTarget;
 pub use redlinedb_sql::{

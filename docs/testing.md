@@ -32,6 +32,8 @@ readable repair receipts.
 | `cli-shell`                          | CLI compatibility tests for the shell/batch front end.                                                |
 | `kernel-check`                       | Targeted `redlinedb-kernel` compile proof.                                                            |
 | `kernel-test`                        | Targeted `redlinedb-kernel` test proof.                                                                |
+| `wal-archive`                        | Bounded durable-prefix reads, 16-MiB/5-second sealing, 30-second lag boundary, verifier-gated contiguous watermark, and minimum-horizon pruning. |
+| `physical-backup`                    | Public physical manifest verification, corrupt/path/link hostiles, non-destructive native restore, and exact recovery targets. |
 | `sql-check`                          | Targeted `redlinedb-sql` compile proof.                                                               |
 | `sql-test`                           | Targeted `redlinedb-sql` test proof.                                                                   |
 | `beyond-sqlite-manifest`             | Verifies the beyond-SQLite backlog ranking, source tips, owners, and proof-lane routing.               |

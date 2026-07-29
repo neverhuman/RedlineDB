@@ -2,3 +2,13 @@
 name = "evidence-processor"
 command = "rtk cargo test -p redlinedb-bench --bin evidence_processor --locked"
 purpose = "validate external Redline Testing evidence and pinned suite identities in Rust"
+
+[[lane]]
+name = "wal-archive"
+command = "rtk cargo test -p redlinedb-kernel --test wal_archive_tests --locked"
+purpose = "prove bounded durable-prefix reads, exact seal and lag thresholds, verified contiguous watermark advancement, and minimum-horizon pruning"
+
+[[lane]]
+name = "physical-backup"
+command = "rtk cargo test -p redlinedb --test phase8 --locked"
+purpose = "prove public manifest verification, hostile path and corruption rejection, non-destructive native restore, and exact LSN/CSN recovery"

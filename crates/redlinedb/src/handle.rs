@@ -245,6 +245,18 @@ impl Database {
         phase8::restore_from_backup(src, dst, options)
     }
 
+    pub fn physical_backup_manifest(
+        src: impl AsRef<Path>,
+    ) -> Result<phase8::PhysicalBackupManifest> {
+        phase8::physical_backup_manifest(src)
+    }
+
+    pub fn verify_physical_backup(
+        src: impl AsRef<Path>,
+    ) -> Result<Vec<phase8::VerifiedBackupFile>> {
+        phase8::verify_physical_backup(src)
+    }
+
     pub fn create_physical_slot(&self, name: &str) -> Result<ReplicationSlot> {
         phase8::create_physical_slot(self, name, true)
     }

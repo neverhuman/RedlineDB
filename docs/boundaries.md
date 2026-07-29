@@ -43,6 +43,18 @@ can detect new violations.
    of the public Rust API. Downstream consumers must not reach
    into `redlinedb-kernel` or `redlinedb-sql` directly; doing so
    bypasses the boundary contracts.
+6. **Archive verification is injected**: Redline owns WAL bytes,
+   native fsync, the contiguous archive watermark, and pruning
+   horizons. It does not depend on a storage product or transport.
+   A caller supplies an `ArchiveReceiptVerifier`; only its success for
+   the exact `SealedWalRange` can advance the fsynced watermark. The
+   default seal policy is 16 MiB or five seconds after the first
+   unarchived durable byte, and lag alerts only after 30 seconds.
+7. **Backup restore is non-destructive**: a physical manifest contains
+   only canonical relative regular-file paths. Verification rejects
+   traversal, links, special files, missing bytes, and tree-hash drift.
+   Restore accepts only a new or empty native directory, so an existing
+   database or rollback copy is never deleted or overwritten.
 
 ## Errors cross boundaries via `DomainError`
 

@@ -54,6 +54,16 @@ name = "kernel-test"
 purpose = "targeted redlinedb-kernel test proof"
 
 [[lane]]
+command = "rtk cargo test -p redlinedb-kernel --test wal_archive_tests --locked"
+name = "wal-archive"
+purpose = "bounded durable-prefix reads, exact seal and lag thresholds, verified contiguous watermark advancement, and minimum-horizon pruning"
+
+[[lane]]
+command = "rtk cargo test -p redlinedb --test phase8 --locked"
+name = "physical-backup"
+purpose = "public manifest verification, hostile path and corruption rejection, non-destructive native restore, and exact LSN/CSN recovery"
+
+[[lane]]
 command = "just redline-testing-official"
 name = "redline-testing-official"
 purpose = "external official conformance and benchmark gate routed through the verified redline-testing release artifact"

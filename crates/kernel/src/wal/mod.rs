@@ -1,3 +1,4 @@
+pub mod archive;
 #[cfg(feature = "wal_cross_lane_coalescer")]
 pub mod coalescer;
 pub mod combiner;
@@ -10,6 +11,7 @@ pub(crate) mod policy;
 pub mod record;
 pub mod segment;
 
+pub use archive::*;
 pub use lanes::{LaneRoundRobin, WalLaneCoordinator, WalLaneRecoveryReport};
 pub use manager::*;
 pub use payload::*;

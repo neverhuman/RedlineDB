@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+### Added
+
+- Added Jain-independent sealed-WAL archive primitives: bounded durable-prefix
+  reads, a 16 MiB-or-five-second seal policy, verifier-gated contiguous native
+  watermarks, a 30-second lag alert boundary, and pruning at the minimum
+  checkpoint, replication-slot, and required-archive horizon. Strict commits
+  still wait only for native WAL fsync.
+- Exposed physical-backup manifests and verified regular-file enumeration.
+  Backup and restore now reject traversal, links, corruption, and non-empty
+  destinations instead of deleting or overwriting native rollback custody.
+
 ### Changed
 
 - Replaced the opt-in NUMA feature's C-backed `hwlocality` dependency with
