@@ -3,7 +3,7 @@
   "tests": {
     "crates/kernel/src/wal/archive.rs": {"command": "rtk cargo test -p redlinedb-kernel --test wal_archive_tests --locked", "purpose": "prove bounded durable-prefix reads, verified contiguous watermark advancement, seal/lag thresholds, and archive-safe pruning"},
     "crates/kernel/tests/wal_archive_tests.rs": {"command": "rtk cargo test -p redlinedb-kernel --test wal_archive_tests --locked", "purpose": "prove WAL archive receipt, range, lag, and retention hostiles"},
-    "crates/redlinedb/src/phase8.rs": {"command": "rtk cargo test -p redlinedb --test phase8 --locked", "purpose": "prove public physical manifests, verified enumeration, and non-destructive native restore"},
+    "crates/redlinedb/src/phase8.rs": {"command": "rtk cargo test -p redlinedb --lib phase8::tests --locked", "purpose": "prove retained descriptor restore, source file and ancestor swap rejection, and destination identity fencing"},
     "crates/redlinedb/tests/phase8.rs": {"command": "rtk cargo test -p redlinedb --test phase8 --locked", "purpose": "prove corrupt, hostile, symlinked, and existing-custody backup negatives"},
     ".agents/": {"command": "rtk bash scripts/ci-local.sh required", "purpose": "verify agent context through the canonical host-required lane"},
     ".cargo/": {"command": "rtk bash scripts/ci-local.sh required", "purpose": "verify workspace configuration through the canonical host-required lane"},

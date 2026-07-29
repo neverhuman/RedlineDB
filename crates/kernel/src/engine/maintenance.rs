@@ -201,6 +201,20 @@ impl Engine {
     }
 
     pub fn checkpoint_with_stats(&self) -> Result<CheckpointStats> {
+        self.checkpoint_with_retention_horizons(None)
+    }
+
+    pub fn checkpoint_with_wal_retention(
+        &self,
+        horizons: crate::wal::WalRetentionHorizons,
+    ) -> Result<CheckpointStats> {
+        self.checkpoint_with_retention_horizons(Some(horizons))
+    }
+
+    fn checkpoint_with_retention_horizons(
+        &self,
+        retention: Option<crate::wal::WalRetentionHorizons>,
+    ) -> Result<CheckpointStats> {
         if self.volatile {
             return Ok(CheckpointStats {
                 control: ControlFile::default(),
@@ -236,8 +250,13 @@ impl Engine {
         let next = self
             .control
             .write_next(*checkpoint, durable_lsn, page_count)?;
-        self.wal
-            .prune_segments_below_checkpoint_lsn(next.checkpoint_lsn)?;
+        if let Some(mut horizons) = retention {
+            // The checkpoint horizon is established by this exact durable
+            // control generation. Callers only supply the independently
+            // owned slot and archive horizons.
+            horizons.checkpoint_lsn = next.checkpoint_lsn;
+            self.wal.prune_segments_below_horizons(horizons)?;
+        }
         *checkpoint = Some(next);
         Ok(CheckpointStats {
             control: next,

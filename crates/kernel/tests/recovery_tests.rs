@@ -1,6 +1,6 @@
 use redlinedb_kernel::Error;
 use redlinedb_kernel::engine::{CommitOutcome, Engine, EngineConfig};
-use redlinedb_kernel::format::{Csn, RelId, RowId};
+use redlinedb_kernel::format::{Csn, Lsn, RelId, RowId};
 use redlinedb_kernel::txn::Isolation;
 use redlinedb_kernel::wal::{WalConfig, WalPayload};
 use std::fs::OpenOptions;
@@ -450,7 +450,14 @@ fn checkpoint_prunes_stale_wal_segments() {
     }
 
     let baseline_count = rows.len();
-    let checkpoint = engine.checkpoint().unwrap();
+    let checkpoint = engine
+        .checkpoint_with_wal_retention(redlinedb_kernel::wal::WalRetentionHorizons {
+            checkpoint_lsn: Lsn::ZERO,
+            replication_slot_lsn: Lsn(u64::MAX),
+            required_archive_lsn: Lsn(u64::MAX),
+        })
+        .unwrap()
+        .control;
     assert!(checkpoint.checkpoint_lsn.0 > 0);
 
     let mut tx = engine.begin(Isolation::Snapshot).unwrap();
@@ -477,6 +484,37 @@ fn checkpoint_prunes_stale_wal_segments() {
     assert_eq!(
         reopened.get(&mut tx, fresh_row).unwrap(),
         Some(b"after-checkpoint".to_vec())
+    );
+}
+
+#[test]
+fn checkpoint_pruning_obeys_slot_and_archive_horizons() {
+    let mut config = config();
+    config.wal.segment_bytes = 65_536;
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config.clone()).unwrap();
+
+    while wal_segment_count(temp.path().join("wal").as_path()).len() < 3 {
+        let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+        engine.insert(&mut tx, vec![7; 4096]).unwrap();
+        engine.commit(tx).unwrap();
+    }
+    let before = wal_segment_count(temp.path().join("wal").as_path());
+    assert_eq!(before.first().copied(), Some(1));
+
+    let checkpoint = engine
+        .checkpoint_with_wal_retention(redlinedb_kernel::wal::WalRetentionHorizons {
+            checkpoint_lsn: Lsn(u64::MAX),
+            replication_slot_lsn: Lsn::ZERO,
+            required_archive_lsn: Lsn(u64::MAX),
+        })
+        .unwrap();
+    assert!(checkpoint.control.checkpoint_lsn.0 >= config.wal.segment_bytes * 2);
+    assert_eq!(
+        wal_segment_count(temp.path().join("wal").as_path())
+            .first()
+            .copied(),
+        Some(1)
     );
 }
 

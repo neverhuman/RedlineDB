@@ -271,3 +271,30 @@ fn archive_and_retention_stats_are_available() {
     let retention = db.retention_horizon().expect("retention");
     assert!(retention.catalog_csn >= retention.vacuum_csn);
 }
+
+#[test]
+fn required_archive_mode_fails_closed_on_unavailable_watermark() {
+    let dir = tempdir().expect("tempdir");
+    let path = dir.path().join("required-archive.db");
+    let db = Database::create(&path).expect("create db");
+    let mut conn = db.connect().expect("connect");
+    conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY)", ())
+        .expect("create");
+    conn.execute("INSERT INTO t VALUES (1)", ())
+        .expect("insert");
+    db.set_archive_mode(ArchiveMode::RequiredLocal)
+        .expect("required mode");
+
+    db.checkpoint()
+        .expect("missing watermark preserves all WAL");
+    assert_eq!(
+        db.retention_horizon().expect("retention").wal_recycle_lsn,
+        0
+    );
+
+    let state = path.join("phase8/archive/state");
+    fs::create_dir_all(&state).expect("state");
+    fs::write(state.join("archive.watermark"), b"corrupt").expect("corrupt watermark");
+    let error = db.checkpoint().expect_err("corrupt required watermark");
+    assert_eq!(error.code(), redlinedb::ErrorCode::Error);
+}

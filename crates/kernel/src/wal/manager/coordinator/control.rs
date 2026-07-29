@@ -46,12 +46,15 @@ impl WalCoordinator {
         }
     }
 
-    pub fn prune_segments_below_checkpoint_lsn(&self, checkpoint_lsn: Lsn) -> Result<usize> {
+    pub fn prune_segments_below_horizons(
+        &self,
+        horizons: crate::wal::WalRetentionHorizons,
+    ) -> Result<usize> {
         if self.volatile {
-            let _ = checkpoint_lsn;
+            let _ = horizons;
             return Ok(0);
         }
-        let keep_segment = segment_for_lsn(checkpoint_lsn, self.config.segment_bytes);
+        let keep_segment = segment_for_lsn(horizons.recycle_lsn(), self.config.segment_bytes);
         let active_segment = self
             .shared
             .state
@@ -71,6 +74,14 @@ impl WalCoordinator {
             }
         }
         Ok(removed)
+    }
+
+    pub fn prune_segments_below_checkpoint_lsn(&self, checkpoint_lsn: Lsn) -> Result<usize> {
+        self.prune_segments_below_horizons(crate::wal::WalRetentionHorizons {
+            checkpoint_lsn,
+            replication_slot_lsn: checkpoint_lsn,
+            required_archive_lsn: checkpoint_lsn,
+        })
     }
 }
 

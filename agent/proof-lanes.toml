@@ -12,3 +12,8 @@ purpose = "prove bounded durable-prefix reads, exact seal and lag thresholds, ve
 name = "physical-backup"
 command = "rtk cargo test -p redlinedb --test phase8 --locked"
 purpose = "prove public manifest verification, hostile path and corruption rejection, non-destructive native restore, and exact LSN/CSN recovery"
+
+[[lane]]
+name = "physical-backup-races"
+command = "rtk cargo test -p redlinedb --lib phase8::tests --locked"
+purpose = "prove retained source descriptors, source file and ancestor swap rejection, and destination identity fencing before restore publication"

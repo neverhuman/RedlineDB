@@ -1,4 +1,6 @@
 use std::fs;
+use std::sync::{Arc, Barrier};
+use std::thread;
 
 use redlinedb_kernel::format::{Lsn, TimelineId, TxId};
 use redlinedb_kernel::wal::{
@@ -64,11 +66,8 @@ fn watermark_requires_verified_contiguous_receipts() {
     );
     assert!(archive_watermark(temp.path(), TimelineId(2)).is_err());
 
-    let replay = advance_archive_watermark(temp.path(), &first).expect_err("replay");
-    assert_eq!(
-        replay,
-        Error::CorruptWal("archive receipt is not contiguous")
-    );
+    let replay = advance_archive_watermark(temp.path(), &first).expect("idempotent replay");
+    assert_eq!(replay, watermark);
     let gap =
         VerifiedArchiveReceipt::verify(sealed(101, 200, 2), b"durable", &verifier).expect("verify");
     assert_eq!(
@@ -92,7 +91,7 @@ fn symlinked_watermark_never_becomes_native_authority() {
     let external = temp.path().join("external");
     fs::write(
         &external,
-        "version=1\ntimeline=1\narchived_lsn=100\ngeneration=1\nreceipt_sha256=\
+        "version=2\ntimeline=1\nprevious_lsn=0\narchived_lsn=100\ngeneration=1\nreceipt_sha256=\
          aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n",
     )
     .expect("external");
@@ -100,6 +99,126 @@ fn symlinked_watermark_never_becomes_native_authority() {
     fs::create_dir(&state).expect("state");
     symlink(&external, state.join("archive.watermark")).expect("symlink");
     assert!(archive_watermark(&state, TimelineId(1)).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn symlinked_state_root_never_receives_watermark_authority() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new().expect("tempdir");
+    let external = temp.path().join("external-state");
+    fs::create_dir(&external).expect("external state");
+    let linked = temp.path().join("linked-state");
+    symlink(&external, &linked).expect("state symlink");
+    let receipt =
+        VerifiedArchiveReceipt::verify(sealed(0, 100, 1), b"durable", &ExactReceipt(b"durable"))
+            .expect("verify");
+
+    assert!(advance_archive_watermark(&linked, &receipt).is_err());
+    assert!(!external.join("archive.watermark").exists());
+}
+
+#[test]
+fn watermark_recovers_fsynced_pre_rename_intent() {
+    let temp = TempDir::new().expect("tempdir");
+    let receipt =
+        VerifiedArchiveReceipt::verify(sealed(0, 100, 1), b"durable", &ExactReceipt(b"durable"))
+            .expect("verify");
+    let digest = receipt
+        .receipt_sha256()
+        .iter()
+        .map(|byte| format!("{byte:02x}"))
+        .collect::<String>();
+    fs::write(
+        temp.path().join("archive.watermark.next"),
+        format!(
+            "version=2\ntimeline=1\nprevious_lsn=0\narchived_lsn=100\ngeneration=1\nreceipt_sha256={digest}\n"
+        ),
+    )
+    .expect("pending intent");
+
+    let recovered = advance_archive_watermark(temp.path(), &receipt).expect("recover");
+    assert_eq!(recovered.archived_lsn, Lsn(100));
+    assert_eq!(recovered.generation, 1);
+    assert!(!temp.path().join("archive.watermark.next").exists());
+}
+
+#[test]
+fn watermark_discards_partial_pre_fsync_intent_and_retries() {
+    let temp = TempDir::new().expect("tempdir");
+    fs::write(
+        temp.path().join("archive.watermark.next"),
+        b"version=2\ntimeline=1\nprevious_lsn=",
+    )
+    .expect("partial intent");
+    let receipt =
+        VerifiedArchiveReceipt::verify(sealed(0, 100, 1), b"durable", &ExactReceipt(b"durable"))
+            .expect("verify");
+
+    let watermark = advance_archive_watermark(temp.path(), &receipt).expect("retry");
+    assert_eq!(watermark.archived_lsn, Lsn(100));
+    assert_eq!(watermark.generation, 1);
+}
+
+#[test]
+fn concurrent_watermark_cas_admits_exactly_one_conflicting_receipt() {
+    let temp = Arc::new(TempDir::new().expect("tempdir"));
+    let barrier = Arc::new(Barrier::new(2));
+    let mut threads = Vec::new();
+    for receipt_bytes in [b"left".as_slice(), b"right".as_slice()] {
+        let temp = Arc::clone(&temp);
+        let barrier = Arc::clone(&barrier);
+        threads.push(thread::spawn(move || {
+            let receipt = VerifiedArchiveReceipt::verify(
+                sealed(0, 100, 1),
+                receipt_bytes,
+                &ExactReceipt(receipt_bytes),
+            )
+            .expect("verify");
+            barrier.wait();
+            advance_archive_watermark(temp.path(), &receipt)
+        }));
+    }
+    let results = threads
+        .into_iter()
+        .map(|thread| thread.join().expect("join"))
+        .collect::<Vec<_>>();
+    assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+    assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+    assert_eq!(
+        archive_watermark(temp.path(), TimelineId(1))
+            .expect("watermark")
+            .generation,
+        1
+    );
+}
+
+#[test]
+fn concurrent_exact_replay_is_idempotent_across_instances() {
+    let temp = Arc::new(TempDir::new().expect("tempdir"));
+    let barrier = Arc::new(Barrier::new(2));
+    let mut threads = Vec::new();
+    for _ in 0..2 {
+        let temp = Arc::clone(&temp);
+        let barrier = Arc::clone(&barrier);
+        threads.push(thread::spawn(move || {
+            let receipt = VerifiedArchiveReceipt::verify(
+                sealed(0, 100, 1),
+                b"durable",
+                &ExactReceipt(b"durable"),
+            )
+            .expect("verify");
+            barrier.wait();
+            advance_archive_watermark(temp.path(), &receipt).expect("idempotent advance")
+        }));
+    }
+    let watermarks = threads
+        .into_iter()
+        .map(|thread| thread.join().expect("join"))
+        .collect::<Vec<_>>();
+    assert_eq!(watermarks[0], watermarks[1]);
+    assert_eq!(watermarks[0].generation, 1);
 }
 
 #[test]

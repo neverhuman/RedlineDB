@@ -16,7 +16,7 @@ use crate::options::{
     DatabaseStats, Durability, OpenOptions, TxBenchStats, VacuumStats, WalBenchStats,
 };
 use crate::phase8::{
-    self, ArchiveStats, PhysicalBackupOptions, PhysicalBackupStats, ReplicationSlot,
+    self, ArchiveMode, ArchiveStats, PhysicalBackupOptions, PhysicalBackupStats, ReplicationSlot,
     ReplicationSlotStats, RestoreOptions, RestoreStats, RetentionHorizon,
 };
 use crate::registry;
@@ -125,8 +125,9 @@ impl Database {
     }
 
     pub fn checkpoint(&self) -> Result<CheckpointStats> {
-        let checkpoint = self.inner.db.checkpoint()?;
-        let _ = phase8::update_retention(self);
+        let retention = phase8::wal_retention_horizons(self)?;
+        let checkpoint = self.inner.db.checkpoint_with_wal_retention(retention)?;
+        phase8::update_retention(self)?;
         Ok(CheckpointStats {
             generation: checkpoint.control.generation,
             checkpoint_lsn: checkpoint.control.checkpoint_lsn.0,
@@ -271,6 +272,10 @@ impl Database {
 
     pub fn archive_stats(&self) -> Result<ArchiveStats> {
         phase8::archive_stats(self)
+    }
+
+    pub fn set_archive_mode(&self, mode: ArchiveMode) -> Result<()> {
+        phase8::set_archive_mode(self, mode)
     }
 
     pub fn replication_slots(&self) -> Result<Vec<ReplicationSlotStats>> {

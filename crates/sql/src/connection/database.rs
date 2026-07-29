@@ -354,6 +354,13 @@ impl Database {
         Ok(self.engine.checkpoint_with_stats()?)
     }
 
+    pub fn checkpoint_with_wal_retention(
+        &self,
+        horizons: redlinedb_kernel::wal::WalRetentionHorizons,
+    ) -> Result<CheckpointStats> {
+        Ok(self.engine.checkpoint_with_wal_retention(horizons)?)
+    }
+
     pub fn vacuum(&self) -> Result<VacuumStats> {
         Ok(self.engine.vacuum()?)
     }

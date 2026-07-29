@@ -1729,6 +1729,7 @@ dependencies = [
  "crossbeam-queue",
  "crossbeam-utils",
  "fail",
+ "libc",
  "parking_lot",
  "proptest",
  "redlinedb-domain",

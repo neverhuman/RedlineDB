@@ -1,6 +1,9 @@
+use std::ffi::{CStr, CString};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::path::{Component, Path, PathBuf};
+use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
+use std::path::{Component, Path};
 
 use sha2::{Digest, Sha256};
 
@@ -14,7 +17,9 @@ pub const ARCHIVE_SEAL_AFTER_MS: u64 = 5_000;
 pub const ARCHIVE_LAG_ALERT_AFTER_MS: u64 = 30_000;
 
 const WATERMARK_FILE: &str = "archive.watermark";
-const WATERMARK_VERSION: u16 = 1;
+const WATERMARK_PENDING_FILE: &str = "archive.watermark.next";
+const WATERMARK_LOCK_FILE: &str = "archive.watermark.lock";
+const WATERMARK_VERSION: u16 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ArchiveSealPolicy {
@@ -212,6 +217,13 @@ pub struct ArchiveWatermark {
     pub generation: u64,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct WatermarkState {
+    watermark: ArchiveWatermark,
+    previous_lsn: Lsn,
+    receipt_sha256: [u8; 32],
+}
+
 pub fn archive_watermark(
     state_dir: impl AsRef<Path>,
     timeline: TimelineId,
@@ -219,22 +231,15 @@ pub fn archive_watermark(
     if timeline == TimelineId::ZERO {
         return Err(Error::CorruptWal("archive timeline must be nonzero"));
     }
-    let path = watermark_path(state_dir.as_ref())?;
-    let metadata = match fs::symlink_metadata(&path) {
-        Ok(metadata) => metadata,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(ArchiveWatermark {
-                timeline,
-                archived_lsn: Lsn::ZERO,
-                generation: 0,
-            });
+    validate_state_dir(state_dir.as_ref())?;
+    let state = match open_state_dir(state_dir.as_ref(), false) {
+        Ok(state) => state,
+        Err(Error::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(empty_watermark(timeline).watermark);
         }
-        Err(error) => return Err(error.into()),
+        Err(error) => return Err(error),
     };
-    if !metadata.file_type().is_file() {
-        return Err(Error::CorruptWal("archive watermark is not a regular file"));
-    }
-    decode_watermark(&fs::read_to_string(path)?, timeline)
+    Ok(read_watermark(&state, timeline)?.watermark)
 }
 
 pub fn advance_archive_watermark(
@@ -242,23 +247,38 @@ pub fn advance_archive_watermark(
     receipt: &VerifiedArchiveReceipt,
 ) -> Result<ArchiveWatermark> {
     let state_dir = state_dir.as_ref();
-    let current = archive_watermark(state_dir, receipt.range.timeline)?;
-    if current.archived_lsn != receipt.range.start_lsn {
+    validate_state_dir(state_dir)?;
+    let state = open_state_dir(state_dir, true)?;
+    let _lock = lock_watermark(&state)?;
+    let current = recover_pending_watermark(&state, receipt.range.timeline)?;
+    if current.watermark.generation > 0
+        && current.previous_lsn == receipt.range.start_lsn
+        && current.watermark.archived_lsn == receipt.range.end_lsn
+        && current.receipt_sha256 == receipt.receipt_sha256
+    {
+        return Ok(current.watermark);
+    }
+    if current.watermark.archived_lsn != receipt.range.start_lsn {
         return Err(Error::CorruptWal("archive receipt is not contiguous"));
     }
-    let next = ArchiveWatermark {
-        timeline: current.timeline,
-        archived_lsn: receipt.range.end_lsn,
-        generation: current
-            .generation
-            .checked_add(1)
-            .ok_or(Error::CorruptWal("archive watermark generation overflow"))?,
+    let next = WatermarkState {
+        watermark: ArchiveWatermark {
+            timeline: current.watermark.timeline,
+            archived_lsn: receipt.range.end_lsn,
+            generation: current
+                .watermark
+                .generation
+                .checked_add(1)
+                .ok_or(Error::CorruptWal("archive watermark generation overflow"))?,
+        },
+        previous_lsn: current.watermark.archived_lsn,
+        receipt_sha256: receipt.receipt_sha256,
     };
-    write_watermark(state_dir, next, receipt.receipt_sha256)?;
-    Ok(next)
+    write_watermark(&state, next)?;
+    Ok(next.watermark)
 }
 
-fn watermark_path(state_dir: &Path) -> Result<PathBuf> {
+fn validate_state_dir(state_dir: &Path) -> Result<()> {
     if state_dir.components().any(|component| {
         matches!(
             component,
@@ -267,43 +287,208 @@ fn watermark_path(state_dir: &Path) -> Result<PathBuf> {
     }) {
         return Err(Error::CorruptWal("invalid archive state directory"));
     }
-    Ok(state_dir.join(WATERMARK_FILE))
+    Ok(())
 }
 
-fn write_watermark(
-    state_dir: &Path,
-    watermark: ArchiveWatermark,
-    receipt_sha256: [u8; 32],
-) -> Result<()> {
-    fs::create_dir_all(state_dir)?;
-    let state_metadata = fs::symlink_metadata(state_dir)?;
-    if !state_metadata.file_type().is_dir() {
+fn empty_watermark(timeline: TimelineId) -> WatermarkState {
+    WatermarkState {
+        watermark: ArchiveWatermark {
+            timeline,
+            archived_lsn: Lsn::ZERO,
+            generation: 0,
+        },
+        previous_lsn: Lsn::ZERO,
+        receipt_sha256: [0; 32],
+    }
+}
+
+fn open_state_dir(state_dir: &Path, create: bool) -> Result<File> {
+    if create {
+        fs::create_dir_all(state_dir)?;
+    }
+    let state = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(state_dir)?;
+    if !state.metadata()?.file_type().is_dir() {
         return Err(Error::CorruptWal(
             "archive state root is not a native directory",
         ));
     }
-    let path = watermark_path(state_dir)?;
-    let tmp = state_dir.join(format!("{WATERMARK_FILE}.{}.tmp", watermark.generation));
-    let text = format!(
-        "version={WATERMARK_VERSION}\ntimeline={}\narchived_lsn={}\ngeneration={}\nreceipt_sha256={}\n",
-        watermark.timeline.0,
-        watermark.archived_lsn.0,
-        watermark.generation,
-        encode_hex(&receipt_sha256)
-    );
-    {
-        let mut file = OpenOptions::new().create_new(true).write(true).open(&tmp)?;
-        file.write_all(text.as_bytes())?;
-        file.sync_all()?;
+    Ok(state)
+}
+
+fn c_name(name: &str) -> Result<CString> {
+    CString::new(name.as_bytes()).map_err(|_| Error::CorruptWal("invalid archive state filename"))
+}
+
+fn openat(
+    state: &File,
+    name: &CStr,
+    flags: libc::c_int,
+    mode: libc::mode_t,
+) -> std::io::Result<File> {
+    // SAFETY: `state` is an open directory descriptor and `name` is a
+    // NUL-terminated single component retained for the duration of the call.
+    let fd = unsafe { libc::openat(state.as_raw_fd(), name.as_ptr(), flags, mode) };
+    if fd < 0 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        // SAFETY: a successful `openat` returns a new owned descriptor.
+        Ok(unsafe { File::from_raw_fd(fd) })
     }
-    fs::rename(&tmp, &path)?;
-    File::open(state_dir)?.sync_all()?;
+}
+
+fn read_named_file(state: &File, name: &str) -> Result<Option<File>> {
+    let name = c_name(name)?;
+    let file = match openat(
+        state,
+        &name,
+        libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        0,
+    ) {
+        Ok(file) => file,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(error) => return Err(error.into()),
+    };
+    let metadata = file.metadata()?;
+    if !metadata.file_type().is_file() || metadata.nlink() != 1 {
+        return Err(Error::CorruptWal("archive watermark is not a regular file"));
+    }
+    Ok(Some(file))
+}
+
+fn read_watermark(state: &File, timeline: TimelineId) -> Result<WatermarkState> {
+    let Some(mut file) = read_named_file(state, WATERMARK_FILE)? else {
+        return Ok(empty_watermark(timeline));
+    };
+    let mut text = String::new();
+    file.read_to_string(&mut text)?;
+    decode_watermark(&text, timeline)
+}
+
+fn lock_watermark(state: &File) -> Result<File> {
+    let name = c_name(WATERMARK_LOCK_FILE)?;
+    let lock = openat(
+        state,
+        &name,
+        libc::O_RDWR | libc::O_CREAT | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+        0o600,
+    )?;
+    let metadata = lock.metadata()?;
+    if !metadata.file_type().is_file() || metadata.nlink() != 1 {
+        return Err(Error::CorruptWal(
+            "archive watermark lock is not a regular file",
+        ));
+    }
+    // SAFETY: `lock` owns a valid descriptor. `flock` does not retain the
+    // pointer state and the lock is released when this descriptor is dropped.
+    if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX) } != 0 {
+        return Err(std::io::Error::last_os_error().into());
+    }
+    Ok(lock)
+}
+
+fn renameat(state: &File, old: &str, new: &str) -> Result<()> {
+    let old = c_name(old)?;
+    let new = c_name(new)?;
+    // SAFETY: both names are NUL-terminated single components and both
+    // directory descriptors remain open for the complete operation.
+    if unsafe {
+        libc::renameat(
+            state.as_raw_fd(),
+            old.as_ptr(),
+            state.as_raw_fd(),
+            new.as_ptr(),
+        )
+    } != 0
+    {
+        return Err(std::io::Error::last_os_error().into());
+    }
     Ok(())
 }
 
-fn decode_watermark(text: &str, expected_timeline: TimelineId) -> Result<ArchiveWatermark> {
+fn unlinkat(state: &File, name: &str) -> Result<()> {
+    let name = c_name(name)?;
+    // SAFETY: `name` is a retained NUL-terminated component and `state`
+    // remains an open directory descriptor for the complete call.
+    if unsafe { libc::unlinkat(state.as_raw_fd(), name.as_ptr(), 0) } != 0 {
+        let error = std::io::Error::last_os_error();
+        if error.kind() != std::io::ErrorKind::NotFound {
+            return Err(error.into());
+        }
+    }
+    Ok(())
+}
+
+fn recover_pending_watermark(state: &File, timeline: TimelineId) -> Result<WatermarkState> {
+    let current = read_watermark(state, timeline)?;
+    let Some(mut pending_file) = read_named_file(state, WATERMARK_PENDING_FILE)? else {
+        return Ok(current);
+    };
+    let mut text = String::new();
+    pending_file.read_to_string(&mut text)?;
+    let pending = match decode_watermark(&text, timeline) {
+        Ok(pending) => pending,
+        Err(Error::CorruptWal(_)) => {
+            // A crash can leave a created-but-not-fsynced intent containing
+            // only a prefix. It has never become authority and is safe to
+            // discard while holding the cross-process lock.
+            drop(pending_file);
+            unlinkat(state, WATERMARK_PENDING_FILE)?;
+            state.sync_all()?;
+            return Ok(current);
+        }
+        Err(error) => return Err(error),
+    };
+    if pending.watermark.generation
+        != current
+            .watermark
+            .generation
+            .checked_add(1)
+            .ok_or(Error::CorruptWal("archive watermark generation overflow"))?
+        || pending.previous_lsn != current.watermark.archived_lsn
+        || pending.watermark.archived_lsn <= pending.previous_lsn
+    {
+        return Err(Error::CorruptWal(
+            "stale archive watermark intent conflicts with native state",
+        ));
+    }
+    renameat(state, WATERMARK_PENDING_FILE, WATERMARK_FILE)?;
+    state.sync_all()?;
+    Ok(pending)
+}
+
+fn write_watermark(state: &File, watermark: WatermarkState) -> Result<()> {
+    let text = format!(
+        "version={WATERMARK_VERSION}\ntimeline={}\nprevious_lsn={}\narchived_lsn={}\ngeneration={}\nreceipt_sha256={}\n",
+        watermark.watermark.timeline.0,
+        watermark.previous_lsn.0,
+        watermark.watermark.archived_lsn.0,
+        watermark.watermark.generation,
+        encode_hex(&watermark.receipt_sha256)
+    );
+    {
+        let name = c_name(WATERMARK_PENDING_FILE)?;
+        let mut file = openat(
+            state,
+            &name,
+            libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0o600,
+        )?;
+        file.write_all(text.as_bytes())?;
+        file.sync_all()?;
+    }
+    state.sync_all()?;
+    renameat(state, WATERMARK_PENDING_FILE, WATERMARK_FILE)?;
+    state.sync_all()?;
+    Ok(())
+}
+
+fn decode_watermark(text: &str, expected_timeline: TimelineId) -> Result<WatermarkState> {
     let mut version = None;
     let mut timeline = None;
+    let mut previous_lsn = None;
     let mut archived_lsn = None;
     let mut generation = None;
     let mut receipt_sha256 = None;
@@ -314,6 +499,7 @@ fn decode_watermark(text: &str, expected_timeline: TimelineId) -> Result<Archive
         match key {
             "version" => version = value.parse::<u16>().ok(),
             "timeline" => timeline = value.parse::<u64>().ok().map(TimelineId),
+            "previous_lsn" => previous_lsn = value.parse::<u64>().ok().map(Lsn),
             "archived_lsn" => archived_lsn = value.parse::<u64>().ok().map(Lsn),
             "generation" => generation = value.parse::<u64>().ok(),
             "receipt_sha256" => receipt_sha256 = decode_hex_32(value),
@@ -326,10 +512,15 @@ fn decode_watermark(text: &str, expected_timeline: TimelineId) -> Result<Archive
     {
         return Err(Error::CorruptWal("invalid archive watermark"));
     }
-    Ok(ArchiveWatermark {
-        timeline: expected_timeline,
-        archived_lsn: archived_lsn.ok_or(Error::CorruptWal("missing archived lsn"))?,
-        generation: generation.ok_or(Error::CorruptWal("missing archive generation"))?,
+    Ok(WatermarkState {
+        watermark: ArchiveWatermark {
+            timeline: expected_timeline,
+            archived_lsn: archived_lsn.ok_or(Error::CorruptWal("missing archived lsn"))?,
+            generation: generation.ok_or(Error::CorruptWal("missing archive generation"))?,
+        },
+        previous_lsn: previous_lsn.ok_or(Error::CorruptWal("missing previous archived lsn"))?,
+        receipt_sha256: receipt_sha256
+            .ok_or(Error::CorruptWal("missing archive receipt digest"))?,
     })
 }
 
