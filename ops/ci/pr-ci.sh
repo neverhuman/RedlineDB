@@ -21,7 +21,9 @@ ci_run cargo fmt --check
 ci_run cargo check --locked
 ci_run cargo test --locked
 ci_run cargo test --locked -p xtask
-ci_run scripts/release-package.sh
+ci_run tests/release_lanes_hostile.sh
+ci_run env REDLINE_TESTING_RELEASE_TAG="${REDLINE_TESTING_RELEASE_TAG:-redline-testing-v1.0.1-jain.2}" \
+    scripts/release-package.sh
 
 # Security evidence is part of the required lane. Missing scanners fail closed
 # so a runner cannot report success from a partial tool installation.

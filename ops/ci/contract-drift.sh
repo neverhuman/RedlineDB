@@ -35,7 +35,8 @@ if [ "$schema_count" -eq 0 ]; then
     fail "no tracked JSON schemas found"
 fi
 
-ci_run scripts/release-package.sh
+candidate_tag="${REDLINE_TESTING_RELEASE_TAG:-redline-testing-v${expected_version}-jain.2}"
+ci_run env REDLINE_TESTING_RELEASE_TAG="$candidate_tag" scripts/release-package.sh
 
 target_name="linux-x86_64"
 package="redline-testing-${expected_version}-${target_name}"
@@ -57,8 +58,11 @@ ci_run jq -e \
         and .version == $version
         and .target == $target
         and (.release_commit | test("^[0-9a-f]{40}$"))
+        and (.release_tree | test("^[0-9a-f]{40}$"))
         and (.release_tag | test("^redline-testing-v1\\.0\\.1-jain\\.[1-9][0-9]*$"))
+        and (.release_tag_state == "planned" or .release_tag_state == "live")
         and (.tag_revision | type == "number" and . >= 1 and floor == .)
+        and (.source_archive_sha256 | test("^[0-9a-f]{64}$"))
         and .binary == "bin/redline-testing"
         and (.binary_sha256 | test("^[0-9a-f]{64}$"))
         and .tarball_sha256_source == ".sha256 sidecar"
@@ -66,6 +70,8 @@ ci_run jq -e \
         and ([.artifact_hashes[] | test("^[0-9a-f]{64}$")] | all)
         and .generated_by == "scripts/release-package.sh"
     ' "$manifest" >/dev/null
+
+ci_run ops/ci/verify-release-inventory.sh "$package_dir" "$tarball"
 
 binary_path="${package_dir}/$(jq -er '.binary' "$manifest")"
 binary_expected="$(jq -er '.binary_sha256' "$manifest")"
@@ -106,17 +112,30 @@ receipt_dir="target/jankurai/contract-drift"
 mkdir -p "$receipt_dir"
 manifest_sha="$(sha256sum "$manifest" | awk '{print $1}')"
 tarball_sha="$(sha256sum "$tarball" | awk '{print $1}')"
+release_commit="$(jq -er '.release_commit' "$manifest")"
+release_tree="$(jq -er '.release_tree' "$manifest")"
+release_tag="$(jq -er '.release_tag' "$manifest")"
+release_tag_state="$(jq -er '.release_tag_state' "$manifest")"
+source_archive_sha="$(jq -er '.source_archive_sha256' "$manifest")"
 ci_run jq -n \
-    --arg head_sha "$(git rev-parse HEAD)" \
+    --arg head_sha "$release_commit" \
+    --arg tree_sha "$release_tree" \
+    --arg release_tag "$release_tag" \
+    --arg release_tag_state "$release_tag_state" \
+    --arg source_archive_sha256 "$source_archive_sha" \
     --arg package_version "$expected_version" \
     --arg manifest_sha256 "$manifest_sha" \
     --arg tarball_sha256 "$tarball_sha" \
     --argjson schema_count "$schema_count" \
     --argjson artifact_count "$declared_count" \
     '{
-        schema_version: "redline.testing.contract-drift/v1",
+        schema_version: "redline.testing.contract-drift/v2",
         status: "pass",
         head_sha: $head_sha,
+        tree_sha: $tree_sha,
+        release_tag: $release_tag,
+        release_tag_state: $release_tag_state,
+        source_archive_sha256: $source_archive_sha256,
         package_version: $package_version,
         schema_count: $schema_count,
         artifact_count: $artifact_count,

@@ -6,16 +6,25 @@ surface; GitHub Releases is the public download host. The release workflow is:
 
 1. **Version source.** `Cargo.toml` `[package].version` is the canonical
    version. `CHANGELOG.md` is the human-facing log of what changed.
-2. **Local rehearsal.** Run `just release-local`. This drives
+2. **Local rehearsal.** Supply an explicit next-unused candidate identity, for
+   example `REDLINE_TESTING_RELEASE_TAG=redline-testing-v1.0.1-jain.2 just
+   release-local`. The candidate is recorded as `planned` until that exact tag
+   exists at the exact source commit; an occupied tag at any other commit is a
+   hard failure. This drives
    `scripts/release-package.sh` which:
    - runs `cargo build --release --locked`
    - copies the binary + every corpus / metadata / schema / template file
      into `dist/redline-testing-<version>-linux-x86_64/`
    - SHA-256-hashes every file (except `release-manifest.json` itself and
-     `bin/redline-testing`, which has its own top-level `binary_sha256`)
+     the exactly-one physical `bin/redline-testing`, which has its own
+     top-level `binary_sha256`)
      via `find ... | xargs sha256sum | jq` — glob-driven so new corpus shards
      auto-appear without editing the recipe
-   - writes `dist/redline-testing-<version>-linux-x86_64/release-manifest.json`
+   - binds the exact commit, tree, deterministic source-archive digest, tag,
+     and live-or-planned tag state in
+     `dist/redline-testing-<version>-linux-x86_64/release-manifest.json`
+   - rejects extra, linked, special, duplicate, or non-canonical package and
+     normalized tar members
    - emits the tarball + `.sha256` sidecar in `dist/`
 3. **Integrity check.** `cargo test --locked --test release_manifest_integrity`
    recomputes every bundled file's SHA-256 against the manifest. If a file is
@@ -23,8 +32,8 @@ surface; GitHub Releases is the public download host. The release workflow is:
    test fails loudly. It runs as part of `just pr-ci`.
 4. **Tag the release.** The Redline family controller creates the manifest-bound
    immutable tag with compare-and-swap semantics. The authorized corrective
-   identity for this candidate is `redline-testing-v1.0.1-jain.1`; the older
-   `.0` tag is never moved. The GitHub release workflow validates that the
+   identity is always the next unused `redline-testing-v1.0.1-jain.N`; existing
+   tags are never moved or assigned to different bytes. The GitHub release workflow validates that the
    tagged commit's `Cargo.toml` product version matches the tag before it builds
    and can also be started manually against an existing tag ref.
 5. **CI build + attestation.** The GitHub release workflow re-runs `pr-ci`,

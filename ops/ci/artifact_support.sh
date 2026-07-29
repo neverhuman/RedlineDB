@@ -8,6 +8,7 @@ cd "$repo_root"
 out_dir="$repo_root/target/artifact-support"
 rm -rf "$out_dir"
 mkdir -p "$out_dir/logs" "$out_dir/receipts" "$out_dir/bundles"
+source_identity_receipt="$out_dir/source-identity.json"
 
 say() { printf '[artifact-support] %s\n' "$*" >&2; }
 
@@ -110,7 +111,7 @@ bundle_evidence() {
     --group=0 \
     --numeric-owner \
     -cf - \
-    -C "$out_dir" context.json manifest.json logs receipts \
+    -C "$out_dir" context.json manifest.json source-identity.json logs receipts \
     | gzip -n >"$bundle"
   bundle_sha="$(sha256sum "$bundle" | awk '{print $1}')"
   printf '%s  %s\n' "$bundle_sha" "$(basename "$bundle")" \
@@ -118,9 +119,13 @@ bundle_evidence() {
 }
 
 entrypoint="$(pick_ci_entrypoint)" || { say "no supported CI entrypoint"; exit 91; }
+ops/ci/source-identity.sh snapshot "$source_identity_receipt"
 if run_ci "$entrypoint" >"$out_dir/logs/ci.log" 2>&1; then
+  ops/ci/source-identity.sh verify "$source_identity_receipt"
   write_json_files "$entrypoint"
+  ops/ci/source-identity.sh verify "$source_identity_receipt"
   bundle_evidence
+  ops/ci/source-identity.sh verify "$source_identity_receipt"
   say "unsigned artifact support review evidence ready at $out_dir"
 else
   rc=$?

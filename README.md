@@ -212,11 +212,13 @@ templates/README.sqlite-parity.md
 ```
 
 Tagged GitHub releases are built by [.github/workflows/release.yml](.github/workflows/release.yml),
-which reruns `pr-ci`, packages the tarball via `just release-local`, attests
+which reruns `pr-ci`, packages the tarball with an explicit immutable candidate
+tag identity, attests
 the tarball + `.sha256` + `release-manifest.json`, and publishes the assets
 with `gh release create --verify-tag`. Jain corrective tags use the immutable
-`redline-testing-v<product-version>-jain.<revision>` identity; this release
-candidate is `redline-testing-v1.0.1-jain.1`.
+`redline-testing-v<product-version>-jain.<revision>` identity; rehearsals bind
+the exact next-unused live-or-planned tag without pretending a planned tag
+already exists.
 
 ---
 

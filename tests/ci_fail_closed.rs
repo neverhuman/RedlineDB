@@ -226,12 +226,16 @@ fn contract_drift_lane_binds_the_exact_release_package() {
 
     for invariant in [
         "expected_version=\"1.0.1\"",
+        "REDLINE_TESTING_RELEASE_TAG",
         "git ls-files 'schemas/*.json'",
         "scripts/release-package.sh",
+        "verify-release-inventory.sh",
         "release_manifest_integrity",
         "sha256sum -c \"$sidecar\"",
         "release inventory mismatch",
-        "redline.testing.contract-drift/v1",
+        "redline.testing.contract-drift/v2",
+        "release_tag_state",
+        "source_archive_sha256",
     ] {
         assert!(
             lane.contains(invariant),
@@ -259,6 +263,8 @@ fn artifact_support_is_unsigned_network_free_review_evidence() {
         );
     }
     for deterministic in [
+        "source-identity.sh snapshot",
+        "source-identity.sh verify",
         "git show -s --format=%cI HEAD",
         "git show -s --format=%ct HEAD",
         "tar --sort=name",
@@ -269,6 +275,35 @@ fn artifact_support_is_unsigned_network_free_review_evidence() {
             "artifact-support lost `{deterministic}`"
         );
     }
+    assert!(lane.contains("source-identity.json"));
+}
+
+#[test]
+fn release_package_requires_bound_identity_and_closed_inventory() {
+    let lane = repo_file("scripts/release-package.sh");
+
+    for invariant in [
+        "set GITHUB_REF_NAME or REDLINE_TESTING_RELEASE_TAG explicitly",
+        "source-identity.sh snapshot",
+        "source-identity.sh verify",
+        "release-tag-identity.sh",
+        "verify-release-inventory.sh",
+        "release_tree",
+        "release_tag_state",
+        "source_archive_sha256",
+    ] {
+        assert!(
+            lane.contains(invariant),
+            "release package lost `{invariant}`"
+        );
+    }
+    assert!(!lane.contains("jain.1}}"));
+}
+
+#[test]
+fn required_lane_runs_hostile_release_fixtures() {
+    let required = repo_file("ops/ci/pr-ci.sh");
+    assert!(required.contains("tests/release_lanes_hostile.sh"));
 }
 
 #[test]

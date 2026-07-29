@@ -8,6 +8,7 @@
 //! `cargo test` in a fresh checkout, before invoking `just release-local`).
 
 use std::fs;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
@@ -53,6 +54,25 @@ fn release_manifest_enumerates_every_bundled_file() {
         .and_then(|v| v.as_object())
         .expect("release-manifest.json missing artifact_hashes object");
     assert_eq!(manifest["version"], env!("CARGO_PKG_VERSION"));
+    assert!(
+        manifest["release_commit"]
+            .as_str()
+            .is_some_and(|value| value.len() == 40)
+    );
+    assert!(
+        manifest["release_tree"]
+            .as_str()
+            .is_some_and(|value| value.len() == 40)
+    );
+    assert!(
+        manifest["source_archive_sha256"]
+            .as_str()
+            .is_some_and(|value| value.len() == 64)
+    );
+    assert!(matches!(
+        manifest["release_tag_state"].as_str(),
+        Some("planned" | "live")
+    ));
     assert_eq!(
         manifest["release_tag"],
         format!(
@@ -68,8 +88,27 @@ fn release_manifest_enumerates_every_bundled_file() {
         "release manifest requires a positive corrective tag revision"
     );
 
+    let bin = pkg.join("bin");
+    let bin_entries: Vec<_> = fs::read_dir(&bin)
+        .expect("read closed bin inventory")
+        .collect::<Result<_, _>>()
+        .expect("read every bin entry");
+    assert_eq!(bin_entries.len(), 1, "bin inventory must contain one entry");
+    assert_eq!(
+        bin_entries[0].file_name(),
+        "redline-testing",
+        "unexpected binary inventory member"
+    );
+    let binary_metadata = fs::symlink_metadata(bin.join("redline-testing"))
+        .expect("stat bin/redline-testing without following links");
+    assert!(
+        binary_metadata.file_type().is_file(),
+        "binary must be a physical regular file"
+    );
+    assert_eq!(binary_metadata.nlink(), 1, "binary must be single-link");
+
     // Walk every file under dist/<package>/ EXCEPT release-manifest.json itself
-    // and bin/redline-testing (which is hashed separately via binary_sha256).
+    // and the exactly-one binary (which is hashed via binary_sha256).
     let mut on_disk: Vec<(String, String)> = Vec::new();
     walk(&pkg, &pkg, &mut on_disk);
     for (rel, sha) in &on_disk {
@@ -105,9 +144,19 @@ fn walk(root: &Path, dir: &Path, acc: &mut Vec<(String, String)>) {
     for entry in fs::read_dir(dir).expect("read dist dir") {
         let entry = entry.expect("dist entry");
         let path = entry.path();
-        if path.is_dir() {
+        let metadata = fs::symlink_metadata(&path).expect("lstat dist entry");
+        assert!(
+            !metadata.file_type().is_symlink(),
+            "symlink is forbidden in release inventory: {path:?}"
+        );
+        if metadata.is_dir() {
             walk(root, &path, acc);
-        } else if path.is_file() {
+        } else if metadata.is_file() {
+            assert_eq!(
+                metadata.nlink(),
+                1,
+                "hard link is forbidden in release inventory: {path:?}"
+            );
             let rel = path
                 .strip_prefix(root)
                 .expect("strip prefix")
@@ -115,6 +164,8 @@ fn walk(root: &Path, dir: &Path, acc: &mut Vec<(String, String)>) {
                 .into_owned();
             let sha = sha256_of(&path);
             acc.push((rel, sha));
+        } else {
+            panic!("special file is forbidden in release inventory: {path:?}");
         }
     }
 }
