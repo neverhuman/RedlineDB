@@ -451,7 +451,7 @@ fn recover_pending_watermark(state: &File, timeline: TimelineId) -> Result<Water
         || pending.watermark.archived_lsn <= pending.previous_lsn
     {
         return Err(Error::CorruptWal(
-            "stale archive watermark intent conflicts with native state",
+            "archive watermark intent conflicts with native state",
         ));
     }
     renameat(state, WATERMARK_PENDING_FILE, WATERMARK_FILE)?;
