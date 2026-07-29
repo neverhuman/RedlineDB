@@ -2,8 +2,9 @@
 
 ## Owns
 
-- `ops/ci/*.sh` — the CI lane scripts (fast/validate, security, jankurai,
-  language-bad-behavior, cost-budget, release-readiness, release).
+- `ops/ci/*.sh` — the CI lane scripts (fast/validate, security, score,
+  contract-drift, artifact-support, jankurai, language-bad-behavior,
+  cost-budget, release-readiness, release).
 - `ops/ci/lib.sh` — shared lane helpers (`log`/`has`/`run_if_has`/tool pins).
 - `ops/git-hooks/*` — the mandatory local pre-push gate.
 - `ops/observability/` — repair-receipt and telemetry notes.
@@ -20,5 +21,8 @@
 
 - Validate: `bash ops/ci/pr-ci.sh`
 - Security: `bash ops/ci/security.sh`
+- Score: `bash ops/ci/score.sh`
+- Contract drift: `bash ops/ci/contract-drift.sh`
+- Artifact support: `bash ops/ci/artifact_support.sh` (unsigned review evidence)
 - Jankurai evidence: `bash ops/ci/jankurai.sh` (artifacts under `target/jankurai/**`)
 - Doctor: `bash scripts/ci-doctor.sh`

@@ -173,6 +173,105 @@ fn required_lane_runs_security_with_strict_tool_checks() {
 }
 
 #[test]
+fn local_dispatcher_exposes_the_standard_release_lanes() {
+    let dispatcher = repo_file("scripts/ci-local.sh");
+
+    for (lane, script) in [
+        ("score", "ops/ci/score.sh"),
+        ("contract-drift", "ops/ci/contract-drift.sh"),
+        ("artifact-support", "ops/ci/artifact_support.sh"),
+    ] {
+        assert!(
+            dispatcher.contains(&format!("{lane})")),
+            "dispatcher is missing the {lane} route"
+        );
+        assert!(
+            dispatcher.contains(&format!("bash \"$repo_root/{script}\"")),
+            "dispatcher does not delegate {lane} to {script}"
+        );
+        assert!(
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join(script)
+                .is_file(),
+            "release lane script is missing: {script}"
+        );
+    }
+}
+
+#[test]
+fn score_lane_is_version_pinned_and_fail_closed() {
+    let lane = repo_file("ops/ci/score.sh");
+
+    for invariant in [
+        "jankurai 1.6.11",
+        "--mode ratchet",
+        "--baseline .jankurai/baselines/accepted-baseline.json",
+        "--policy agent/audit-policy.toml",
+        ".score >= 85",
+        ".decision.status == \"pass\"",
+        ".decision.hard_findings == 0",
+        ".decision.ratchet.allowed_drop == 0",
+        ".decision.ratchet.passed == true",
+        ".caps_applied | type == \"array\" and length == 0",
+        "(.blockers // []) | type == \"array\" and length == 0",
+    ] {
+        assert!(lane.contains(invariant), "score lane lost `{invariant}`");
+    }
+    assert!(!lane.contains("|| true"));
+}
+
+#[test]
+fn contract_drift_lane_binds_the_exact_release_package() {
+    let lane = repo_file("ops/ci/contract-drift.sh");
+
+    for invariant in [
+        "expected_version=\"1.0.1\"",
+        "git ls-files 'schemas/*.json'",
+        "scripts/release-package.sh",
+        "release_manifest_integrity",
+        "sha256sum -c \"$sidecar\"",
+        "release inventory mismatch",
+        "redline.testing.contract-drift/v1",
+    ] {
+        assert!(
+            lane.contains(invariant),
+            "contract-drift lane lost `{invariant}`"
+        );
+    }
+    assert!(!lane.contains("|| true"));
+}
+
+#[test]
+fn artifact_support_is_unsigned_network_free_review_evidence() {
+    let lane = repo_file("ops/ci/artifact_support.sh");
+
+    for forbidden in [
+        "SIGNRAIL",
+        "SignRail",
+        "ED25519_SEED",
+        "cargo install",
+        "https://github.com",
+        "sign-release",
+    ] {
+        assert!(
+            !lane.contains(forbidden),
+            "artifact-support must not contain `{forbidden}`"
+        );
+    }
+    for deterministic in [
+        "git show -s --format=%cI HEAD",
+        "git show -s --format=%ct HEAD",
+        "tar --sort=name",
+        "gzip -n",
+    ] {
+        assert!(
+            lane.contains(deterministic),
+            "artifact-support lost `{deterministic}`"
+        );
+    }
+}
+
+#[test]
 fn jankurai_lane_routes_existing_paths_from_diffs_or_clean_snapshots() {
     let lane = repo_file("ops/ci/jankurai.sh");
 

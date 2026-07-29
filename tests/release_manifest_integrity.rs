@@ -16,23 +16,11 @@ fn repo_root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
 
-fn find_package_dir() -> Option<PathBuf> {
-    let dist = repo_root().join("dist");
-    if !dist.is_dir() {
-        return None;
-    }
-    for entry in fs::read_dir(&dist).ok()? {
-        let path = entry.ok()?.path();
-        if path.is_dir()
-            && path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .is_some_and(|n| n.starts_with("redline-testing-"))
-        {
-            return Some(path);
-        }
-    }
-    None
+fn package_dir() -> PathBuf {
+    repo_root().join(format!(
+        "dist/redline-testing-{}-linux-x86_64",
+        env!("CARGO_PKG_VERSION")
+    ))
 }
 
 fn sha256_of(path: &Path) -> String {
@@ -42,13 +30,14 @@ fn sha256_of(path: &Path) -> String {
 
 #[test]
 fn release_manifest_enumerates_every_bundled_file() {
-    let Some(pkg) = find_package_dir() else {
+    let pkg = package_dir();
+    if !pkg.is_dir() {
         eprintln!(
-            "skipping release_manifest_integrity: no dist/redline-testing-* dir; \
+            "skipping release_manifest_integrity: no exact package directory {pkg:?}; \
              run `just release-local` first"
         );
         return;
-    };
+    }
     let manifest_path = pkg.join("release-manifest.json");
     let manifest_raw = match fs::read_to_string(&manifest_path) {
         Ok(s) => s,
