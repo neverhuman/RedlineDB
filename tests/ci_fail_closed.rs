@@ -317,6 +317,23 @@ fn required_lane_runs_hostile_release_fixtures() {
 }
 
 #[test]
+fn one_command_verify_runs_complete_release_proof() {
+    let verify = repo_file("justfile");
+
+    for lane in [
+        "ops/ci/pr-ci.sh",
+        "ops/ci/contract-drift.sh",
+        "ops/ci/artifact_support.sh",
+        "ops/ci/jankurai.sh",
+        "ops/ci/score.sh",
+    ] {
+        assert!(verify.contains(lane), "verify target lost `{lane}`");
+    }
+    assert!(verify.contains("REDLINE_STRICT_TOOLS=1"));
+    assert!(verify.contains("REDLINE_TESTING_RELEASE_TAG="));
+}
+
+#[test]
 fn jankurai_lane_routes_existing_paths_from_diffs_or_clean_snapshots() {
     let lane = repo_file("ops/ci/jankurai.sh");
 
