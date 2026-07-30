@@ -17,6 +17,7 @@
     "binary_sha256",
     "tarball_sha256_source",
     "artifact_hashes",
+    "build_inputs",
     "generated_by"
   ],
   "properties": {
@@ -41,6 +42,61 @@
         "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\r\\n\\t]+$"
       },
       "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+    },
+    "build_inputs": {
+      "type": "object",
+      "required": [
+        "source_mode",
+        "cargo_path",
+        "cargo_sha256",
+        "cargo_version_sha256",
+        "rustc_path",
+        "rustc_sha256",
+        "rustc_version_sha256",
+        "cargo_config_sha256",
+        "cargo_lock_sha256",
+        "cargo_registry_source",
+        "cargo_registry_receipt_sha256",
+        "cargo_stage_tool_sha256",
+        "environment_sha256"
+      ],
+      "properties": {
+        "source_mode": { "const": "sanitized-no-local" },
+        "cargo_path": { "type": "string", "pattern": "^/" },
+        "cargo_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "cargo_version_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "rustc_path": { "type": "string", "pattern": "^/" },
+        "rustc_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "rustc_version_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cargo_config_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cargo_lock_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cargo_registry_source": { "type": "string", "pattern": "^/" },
+        "cargo_registry_receipt_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cargo_stage_tool_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "environment_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false
     },
     "generated_by": { "const": "scripts/release-package.sh" }
   },
