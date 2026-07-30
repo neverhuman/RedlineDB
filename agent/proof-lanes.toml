@@ -17,3 +17,8 @@ purpose = "prove public manifest verification, hostile path and corruption rejec
 name = "physical-backup-races"
 command = "rtk cargo test -p redlinedb --lib phase8::tests --locked"
 purpose = "prove retained source descriptors, source file and ancestor swap rejection, and destination identity fencing before restore publication"
+
+[[lane]]
+name = "required"
+command = "rtk bash scripts/ci-local.sh required"
+purpose = "prove generic source, policy, and documentation changes through the canonical host-required lane"
