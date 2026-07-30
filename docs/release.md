@@ -12,19 +12,31 @@ surface; GitHub Releases is the public download host. The release workflow is:
    exists at the exact source commit; an occupied tag at any other commit is a
    hard failure. This drives
    `scripts/release-package.sh` which:
-   - runs `cargo build --release --locked`
+   - creates an automatically removed `git clone --no-local` detached at the
+     exact clean commit and runs `cargo build --release --locked` there with an
+     empty environment, fixed tool paths, an isolated Cargo home, the exact
+     Cargo.lock closure staged from the root-owned offline registry, and an
+     external target directory; ignored local
+     `.cargo` or other checkout state is never a build input
    - copies the binary + every corpus / metadata / schema / template file
      into `dist/redline-testing-<version>-linux-x86_64/`
    - SHA-256-hashes every file (except `release-manifest.json` itself and
      the exactly-one physical `bin/redline-testing`, which has its own
      top-level `binary_sha256`)
-     via `find ... | xargs sha256sum | jq` — glob-driven so new corpus shards
-     auto-appear without editing the recipe
-   - binds the exact commit, tree, deterministic source-archive digest, tag,
-     and live-or-planned tag state in
+     via NUL-delimited byte-safe sorting and per-file hashing — glob-driven so
+     new corpus shards auto-appear without editing the recipe; ambiguous paths
+     are rejected
+   - binds the exact commit, tree, deterministic source-archive digest,
+     local/forge tag objects, live-or-planned tag state, tool digests, Cargo
+     configuration, lock/cache staging receipt, and sanitized environment in
      `dist/redline-testing-<version>-linux-x86_64/release-manifest.json`
-   - rejects extra, linked, special, duplicate, or non-canonical package and
-     normalized tar members
+   - validates that emitted manifest against the tracked deny-unknown Draft
+     2020-12 schema, rejecting missing, extra, or wrongly typed evidence
+   - emits a source-epoch-normalized deterministic tar/gzip stream; retains one
+     no-follow archive descriptor through exact member-content comparison and
+     sidecar digest publication, rejecting pathname replacement
+   - rejects extra, linked, special, duplicate, altered, or non-canonical
+     package and normalized tar members
    - emits the tarball + `.sha256` sidecar in `dist/`
 3. **Integrity check.** `cargo test --locked --test release_manifest_integrity`
    recomputes every bundled file's SHA-256 against the manifest. If a file is
