@@ -103,8 +103,8 @@ run_step "jankurai: release readiness" \
 
 log "jankurai: proof routing"
 jankurai_exact proof . "${proofbind_changed_args[@]}" \
-    --plan-out target/jankurai/proof-routing.json \
-    --plan-md target/jankurai/proof-routing.md
+    --out target/jankurai/proof-routing.json \
+    --md target/jankurai/proof-routing.md
 
 log "jankurai: initial Proofbind obligations"
 jankurai_exact proofbind verify . "${proofbind_changed_args[@]}" \
