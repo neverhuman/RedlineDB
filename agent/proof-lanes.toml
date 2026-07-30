@@ -59,6 +59,11 @@ command = "rtk cargo test --locked --test release_manifest_integrity"
 purpose = "verify packaged contracts and release hashes"
 
 [[lane]]
+name = "jankurai-evidence-hostile"
+command = "rtk bash tests/jankurai_evidence_hostile.sh"
+purpose = "reject malformed, vacuous, review, unavailable, substituted-head, and missing-negative Jankurai receipts"
+
+[[lane]]
 name = "beyond-postgres-reference"
 command = "rtk cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact"
 purpose = "self-compare every beyond-SQLite case through PostgreSQL"

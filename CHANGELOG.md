@@ -9,6 +9,10 @@ for the publish + attestation flow.
 
 ### Changed
 
+- Made strict Jankurai proof adoption fail closed on the complete
+  exact-head Proofbind and Proofmark receipts, including non-vacuous
+  obligations, real changed-line coverage, focused mutation evidence, and
+  input-boundary/tool-supply negative proofs.
 - Bound Jain release packaging to the Cargo product version through the Rust
   `xtask validate-release-tag` gate and the authorized immutable corrective tag
   `redline-testing-v1.0.1-jain.1`; the existing `.0` tag remains unchanged.

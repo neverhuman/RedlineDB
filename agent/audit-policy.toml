@@ -4,9 +4,8 @@
 # artifacts consumed by RedlineDB CI. It is NOT itself a product binary, so
 # this policy stays advisory: we register decisions here rather than gate CI.
 #
-# When tightening to a ratcheted gate later, set `mode = "ratchet"`, populate
-# `minimum_score`, and generate `.jankurai/accepted-baseline.json` via
-# `jankurai audit . --baseline`.
+# The repository stays advisory while still declaring the exact governed
+# score floor and auditor identity required by exact-SHA proof verification.
 #
 # MIRROR: this file must stay byte-identical to `agent/audit-policy.toml`
 # (jankurai 1.5.1 reads from `agent/audit-policy.toml`; we keep the canonical
@@ -14,6 +13,9 @@
 # mirror in `pr-ci`. The redlineDB sibling repo uses the same pattern.
 
 mode = "advisory"
+minimum_score = 85
+required_tool = "jankurai"
+required_tool_version = "1.6.11"
 
 # Rules disabled at the source. The detectors below either fire on paths /
 # components that don't exist in this Rust-only CLI repo (stack misdetection

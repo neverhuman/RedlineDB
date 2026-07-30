@@ -109,6 +109,10 @@
       "command": "rtk just release-local",
       "purpose": "verify report templates remain packaged and hashed"
     },
+    "tests/jankurai_evidence_hostile.sh": {
+      "command": "rtk bash tests/jankurai_evidence_hostile.sh",
+      "purpose": "prove Proofbind and Proofmark receipt validation rejects malformed, vacuous, review, unavailable, substituted-head, and missing-negative evidence"
+    },
     "tests/": {
       "command": "rtk cargo test --locked",
       "purpose": "verify Rust integration tests for parity, release integrity, timing, and CI contracts"

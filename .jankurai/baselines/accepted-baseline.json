@@ -1,19 +1,19 @@
 {
-  "report_fingerprint": "sha256:4dbb07d28d807f3352f79acc8680ae71e441641275b986db463b46c6e3b21040",
-  "input_fingerprint": "sha256:270250188be5a26063602c884268518df55c4a4236cb3caee682e5bf4e6f15c8",
-  "policy_fingerprint": "sha256:aa9e9260f253b02f374d03d29f585e9238f7b42e8d5b1922e592539df0fafd97",
+  "report_fingerprint": "sha256:1e609d6b8ee04b994cd5a7b503bca9b754c7116a47ca0ee4327797626165fc84",
+  "input_fingerprint": "sha256:40ef2134487f691d7caddc08913413258e15d01146aaffab5dec0a969d0cb426",
+  "policy_fingerprint": "sha256:f22a55a370e66668b95fe2afc29dde1a10b584ab563e55a5055b0c82921cdb62",
   "manifest_fingerprints": {
     "owner_map": "sha256:1ac4bc3f1863c2ec3d6d0e10ad085099ef902119fcfbcbd93dabefab2e0ccf22",
     "test_map": "sha256:ec2c90858943dce35b6c7c9a549e956bfd849b7e368d1ec319207201d2cc5f1f",
     "boundaries": "sha256:67b057b21a2bed89255281afc269b8887eda7f2f5327b3792b5026a29a2ce144",
     "proof_lanes": "sha256:64a0c7f6a6ac5ecfdfc0d80caf3ace89ed5ff3606acb68a1199dd40bc1066c4b"
   },
-  "dirty_worktree": true,
-  "generated_at": "1783904596",
+  "dirty_worktree": false,
+  "generated_at": "1785247490",
   "schema_url": "schemas/repo-score.schema.json",
   "standard": "jankurai",
   "standard_version": "0.9.0",
-  "auditor_version": "1.6.10",
+  "auditor_version": "1.6.11",
   "schema_version": "1.9.0",
   "paper_edition": "2026.05-ed8",
   "target_stack_id": "rust-ts-vite-react-postgres-bounded-python",
@@ -23,9 +23,9 @@
   "conformance_decision": "pass",
   "conformance_blockers": [],
   "repo": ".",
-  "run_id": "1783904596",
-  "started_at": "1783904596",
-  "elapsed_ms": 748,
+  "run_id": "1785247490",
+  "started_at": "1785247490",
+  "elapsed_ms": 754,
   "scope": {
     "mode": "full",
     "paths": []
@@ -43,29 +43,29 @@
       "allowed_drop": 0,
       "passed": true,
       "score_delta": 0,
-      "baseline_report_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_input_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
-      "baseline_policy_fingerprint": "sha256:0000000000000000000000000000000000000000000000000000000000000000",
+      "baseline_report_fingerprint": "sha256:9c2c8063a600696fe12ef899b3d91a139d2c3ed644099f07650f5cc7e3fe6840",
+      "baseline_input_fingerprint": "sha256:40ef2134487f691d7caddc08913413258e15d01146aaffab5dec0a969d0cb426",
+      "baseline_policy_fingerprint": "sha256:f22a55a370e66668b95fe2afc29dde1a10b584ab563e55a5055b0c82921cdb62",
       "new_caps": [],
       "new_hard_findings": [],
       "policy_changed": false
     }
   },
   "git": {
-    "head": "68a427c",
+    "head": "8a70338",
     "base": null,
     "changed_files": 0,
     "mode": "full",
-    "dirty_worktree": true
+    "dirty_worktree": false
   },
   "policy": {
     "path": "./agent/audit-policy.toml",
     "minimum_score": 85,
     "fail_on": [],
     "advisory_on": [],
-    "mode": "standard",
+    "mode": "ratchet",
     "standard_version": "0.9.0",
-    "auditor_version": "1.6.10",
+    "auditor_version": "1.6.11",
     "schema_version": "1.9.0",
     "paper_edition": "2026.05-ed8",
     "target_stack": "rust-ts-vite-react-postgres-bounded-python"
@@ -305,13 +305,9 @@
         "jankurai audit lane found in CI",
         "web e2e lane present or no web surface",
         "rendered UX QA lane present or no web surface",
-        "Rust property/integration tests present or no Rust surface",
-        "proofbind artifact found: surfaces=7 missing=7 high_or_critical_missing=7 verdict=review"
+        "Rust property/integration tests present or no Rust surface"
       ],
-      "notes": [
-        "proofbind reports 7 unresolved obligation(s)",
-        "proofbind reports 7 missing high/critical semantic proof obligation(s)"
-      ]
+      "notes": []
     },
     {
       "name": "Security and supply-chain posture",
@@ -993,32 +989,16 @@
     },
     "missing": []
   },
-  "security_evidence": {
-    "artifact": {
-      "path": "target/jankurai/security/evidence.json",
-      "envelope_exit_code": 0,
-      "elapsed_ms": 6809,
-      "wrapper_strict": true,
-      "profile": "ci",
-      "commands_ran": 1,
-      "commands_skipped": 0,
-      "commands_failed": 0,
-      "required_commands_skipped": 0,
-      "required_commands_failed": 0,
-      "blocking_commands": [],
-      "generated_at": "1783904564",
-      "git_head": "68a427c65cffa1a5b6745aaf996e320462ccac3a"
-    }
-  },
+  "security_evidence": {},
   "boundaries": {
     "reclassifications": []
   },
   "copy_code": {
     "schema_version": "1.1.0",
     "generated_by": "jankurai copy-code",
-    "generated_at": "2026-07-13T01:03:15.436406798+00:00",
+    "generated_at": "2026-07-28T14:04:49.685285352+00:00",
     "repo": ".",
-    "auditor_version": "1.6.10",
+    "auditor_version": "1.6.11",
     "status": "review",
     "policy": {
       "active_source_only": true,

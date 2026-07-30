@@ -8,27 +8,97 @@
     "version",
     "target",
     "release_commit",
+    "release_tree",
     "release_tag",
+    "release_tag_state",
     "tag_revision",
+    "source_archive_sha256",
     "binary",
     "binary_sha256",
+    "tarball_sha256_source",
     "artifact_hashes",
+    "build_inputs",
     "generated_by"
   ],
   "properties": {
     "name": { "const": "redline-testing" },
     "version": { "type": "string" },
     "target": { "type": "string" },
-    "release_commit": { "type": "string" },
-    "release_tag": { "type": "string" },
+    "release_commit": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "release_tree": { "type": "string", "pattern": "^[0-9a-f]{40}$" },
+    "release_tag": {
+      "type": "string",
+      "pattern": "^redline-testing-v1\\.0\\.1-jain\\.[1-9][0-9]*$"
+    },
+    "release_tag_state": { "enum": ["planned", "live"] },
     "tag_revision": { "type": "integer", "minimum": 1 },
-    "binary": { "type": "string" },
+    "source_archive_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "binary": { "const": "bin/redline-testing" },
     "binary_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "tarball_sha256_source": { "const": ".sha256 sidecar" },
     "artifact_hashes": {
       "type": "object",
+      "propertyNames": {
+        "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))[^\\r\\n\\t]+$"
+      },
       "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
     },
-    "generated_by": { "type": "string" }
+    "build_inputs": {
+      "type": "object",
+      "required": [
+        "source_mode",
+        "cargo_path",
+        "cargo_sha256",
+        "cargo_version_sha256",
+        "rustc_path",
+        "rustc_sha256",
+        "rustc_version_sha256",
+        "cargo_config_sha256",
+        "cargo_lock_sha256",
+        "cargo_registry_source",
+        "cargo_registry_receipt_sha256",
+        "cargo_stage_tool_sha256",
+        "environment_sha256"
+      ],
+      "properties": {
+        "source_mode": { "const": "sanitized-no-local" },
+        "cargo_path": { "type": "string", "pattern": "^/" },
+        "cargo_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "cargo_version_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "rustc_path": { "type": "string", "pattern": "^/" },
+        "rustc_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "rustc_version_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cargo_config_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cargo_lock_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cargo_registry_source": { "type": "string", "pattern": "^/" },
+        "cargo_registry_receipt_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "cargo_stage_tool_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "environment_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "generated_by": { "const": "scripts/release-package.sh" }
   },
-  "additionalProperties": true
+  "additionalProperties": false
 }

@@ -16,7 +16,10 @@ bash ops/ci/pr-ci.sh         # the single validate command (fmt, check, test, pa
 |---|---|---|
 | fast / validate | `bash ops/ci/pr-ci.sh` | fmt, `cargo check`, `cargo test --locked`, release packaging |
 | security | `bash ops/ci/security.sh` | gitleaks secret scan, `cargo audit`, `cargo deny`, zizmor, SBOM |
-| jankurai | `bash ops/ci/jankurai.sh` | audit, copy-code, rust-witness, security evidence, cost/release receipts |
+| score | `bash ops/ci/score.sh` | governed Jankurai 1.6.11 score, floor, findings, caps, blockers, and accepted-baseline ratchet |
+| contract drift | `bash ops/ci/contract-drift.sh` | tracked schemas plus exact 1.0.1 package, local/forge immutable live-or-planned tag identity, sanitized build inputs, repeated deterministic archive identity, schema-valid evidence, closed binary/archive content, and digests |
+| artifact support | `bash ops/ci/artifact_support.sh` | clean commit/tree-bound unsigned review evidence with a deterministic source-archive digest and stable pre/post identity checks; release signing remains a separate release workflow gate |
+| jankurai | `REDLINE_STRICT_TOOLS=1 bash ops/ci/jankurai.sh` | exact-head routed receipts, non-vacuous required Proofbind, covered/mutated Proofmark, closed receipt validation, and the audit/copy/security/readiness evidence |
 | ship-gate | `cargo run -p xtask -- ship-gate` | each SQLite-parity shard self-compares against `sqlite3` |
 | beyond-postgres | `cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact` | every published case passes the `psql` ↔ `psql` oracle self-compare with zero skips |
 
@@ -35,6 +38,18 @@ Runtime errors are modeled by the typed `HarnessError` surface in
 `common_fixes`, `docs_url`, and `repair_hint`, so a failing run tells the next
 agent exactly where to rerun proof. Jankurai evidence (audit score, security
 evidence, copy-code, witness graph) is written under `target/jankurai/**`.
+Strict runs also require `target/jankurai/proofbind/obligations.json` to bind
+the full source head with at least one fully satisfied obligation and a
+`pass` verdict. Proofmark must cover every changed Rust line, kill every
+focused receipt-contract mutation, and include the governed negative proofs
+for input-boundary and tool-supply obligations. The closed validator rejects
+unknown fields, substituted heads, vacuous obligations, review verdicts,
+unavailable coverage/mutation, and missing negative evidence.
+Artifact-support review evidence is intentionally unsigned and network-free;
+release artifact signing and provenance remain governed by the release
+workflow and are not synthesized by a required-check worker. The lane refuses
+dirty tracked, staged, or untracked source and revalidates the exact HEAD, tree,
+and deterministic source-archive digest after CI and evidence generation.
 
 ## Cost budget
 

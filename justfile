@@ -27,8 +27,15 @@ test-fast:
     cargo nextest run --workspace --no-fail-fast
     cargo test -p redline-testing --doc
 
-# Full verification mirror of the primary CI validation pipeline.
-verify: pr-ci
+# One-command complete source-release proof. This deliberately extends the
+# protected required lane with reproducibility, review-artifact, proof-routing,
+# release-readiness, and governed score/ratchet evidence.
+verify:
+    env REDLINE_TESTING_RELEASE_TAG="${REDLINE_TESTING_RELEASE_TAG:-redline-testing-v1.0.1-jain.2}" bash ops/ci/pr-ci.sh
+    env REDLINE_TESTING_RELEASE_TAG="${REDLINE_TESTING_RELEASE_TAG:-redline-testing-v1.0.1-jain.2}" bash ops/ci/contract-drift.sh
+    bash ops/ci/artifact_support.sh
+    env REDLINE_STRICT_TOOLS=1 bash ops/ci/jankurai.sh
+    bash ops/ci/score.sh
 
 pr-ci:
     bash ops/ci/pr-ci.sh
