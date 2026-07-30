@@ -35,6 +35,7 @@ jankurai_exact() {
 base_ref="${JANKURAI_BASE_REF:-origin/main}"
 proofbind_changed_file="target/jankurai/proofbind-existing-paths"
 proofbind_changed_args=()
+proofmark_changed_args=()
 
 if ! git diff --diff-filter=d --name-only -z "${base_ref}...HEAD" >"$proofbind_changed_file"; then
     fail "cannot resolve proof paths from ${base_ref}...HEAD"
@@ -50,9 +51,15 @@ if [ ! -s "$proofbind_changed_file" ]; then
 fi
 while IFS= read -r -d '' changed_path; do
     proofbind_changed_args+=(--changed "$changed_path")
+    if [[ "$changed_path" == *.rs ]]; then
+        proofmark_changed_args+=(--changed "$changed_path")
+    fi
 done <"$proofbind_changed_file"
 if [ "${#proofbind_changed_args[@]}" -eq 0 ]; then
     fail "proofbind has no existing changed paths to verify"
+fi
+if [ "${#proofmark_changed_args[@]}" -eq 0 ]; then
+    fail "proofmark has no changed Rust paths to verify"
 fi
 
 run_step() {
@@ -107,7 +114,7 @@ jankurai_exact proof . "${proofbind_changed_args[@]}" \
     --md target/jankurai/proof-routing.md
 
 log "jankurai: initial Proofbind obligations"
-jankurai_exact proofbind verify . "${proofbind_changed_args[@]}" \
+jankurai_exact proofbind verify . "${proofmark_changed_args[@]}" \
     --mode advisory \
     --out target/jankurai/proofbind/surface-witness-initial.json \
     --obligations-out target/jankurai/proofbind/obligations-initial.json \
@@ -121,10 +128,10 @@ if [ "$STRICT_TOOLS" = "1" ]; then
 fi
 
 log "jankurai: ${proofmark_mode} Proofmark"
-jankurai_exact proofmark rust . "${proofbind_changed_args[@]}" \
+jankurai_exact proofmark rust . "${proofmark_changed_args[@]}" \
     --mode "$proofmark_mode" \
     --obligations target/jankurai/proofbind/obligations-initial.json \
-    --coverage target/jankurai/evidence-contract/lcov.info \
+    --coverage target/jankurai/evidence-contract/coverage.json \
     --mutation target/jankurai/evidence-contract/mutation.json \
     --negative-proof HLT-023-INPUT-BOUNDARY-GAP \
     --negative-proof HLT-024-AGENT-TOOL-SUPPLY-GAP \

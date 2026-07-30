@@ -6,7 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$repo_root/ops/ci/lib.sh"
 cd "$repo_root"
 
-for tool in cargo jq sha256sum stat tee; do
+for tool in cargo jq sha256sum stat tee wc; do
   has "$tool" || fail "missing required Jankurai evidence tool: $tool"
 done
 actual_llvm_cov="$(cargo llvm-cov --version)"
@@ -24,7 +24,8 @@ tree="$(git rev-parse --verify 'HEAD^{tree}')"
 }
 
 evidence_root=target/jankurai/evidence-contract
-coverage="$evidence_root/lcov.info"
+raw_coverage="$evidence_root/llvm-coverage.json"
+coverage="$evidence_root/coverage.json"
 mutation="$evidence_root/mutation.json"
 negative="$evidence_root/negative-proof.json"
 hostile_log="$evidence_root/hostile.log"
@@ -35,10 +36,63 @@ JANKURAI_EVIDENCE_MUTATION_OUT="$mutation" \
   bash tests/jankurai_evidence_hostile.sh | tee "$hostile_log"
 
 log "jankurai evidence: real Rust coverage"
-CARGO_TARGET_DIR="$repo_root/target/llvm-cov-target" \
-  cargo llvm-cov --locked --workspace --lcov --output-path "$coverage"
+cargo llvm-cov --locked --workspace --json --output-path "$raw_coverage"
 
-for artifact in "$coverage" "$mutation" "$hostile_log"; do
+ci_contract_lines="$(wc -l <tests/ci_fail_closed.rs)"
+manifest_contract_lines="$(wc -l <tests/release_manifest_integrity.rs)"
+jq \
+  --argjson ci_contract_lines "$ci_contract_lines" \
+  --argjson manifest_contract_lines "$manifest_contract_lines" \
+  '
+  def source_line_count:
+    if (.filename | endswith("/tests/ci_fail_closed.rs")) then
+      $ci_contract_lines
+    elif (.filename | endswith("/tests/release_manifest_integrity.rs")) then
+      $manifest_contract_lines
+    else
+      error("unrecognized proof coverage source")
+    end;
+  def normalized_file:
+    ([.segments[] | select(.[3] == true) | .[0]] | unique) as $executable
+    | ([.segments[] | select(.[3] == true and .[2] > 0) | .[0]] | unique) as $hit
+    | source_line_count as $last
+    | {
+        filename,
+        covered_lines: [
+          range(1; $last + 1) as $line
+          | select(
+              ($executable | index($line)) == null
+              or ($hit | index($line)) != null
+            )
+          | $line
+        ]
+      };
+  {
+    files: [
+      .data[].files[]
+      | select(
+          (.filename | endswith("/tests/ci_fail_closed.rs"))
+          or (.filename | endswith("/tests/release_manifest_integrity.rs"))
+        )
+      | normalized_file
+    ]
+  }
+  ' "$raw_coverage" >"$coverage"
+jq -e '
+  (.files | length) == 2
+  and ([.files[].filename | select(endswith("/tests/ci_fail_closed.rs"))]
+    | length) == 1
+  and ([.files[].filename
+    | select(endswith("/tests/release_manifest_integrity.rs"))]
+    | length) == 1
+  and all(.files[]; (.covered_lines | length) > 0)
+' "$coverage" >/dev/null
+
+# Proofmark has no non-executable-line state. The normalized generic report
+# preserves every real zero-count executable line as uncovered while treating
+# comments, imports, blanks, and macro continuations without an LLVM segment
+# as not applicable.
+for artifact in "$raw_coverage" "$coverage" "$mutation" "$hostile_log"; do
   [[ -f "$artifact" && ! -L "$artifact" && -s "$artifact" ]] || {
     fail "Jankurai evidence artifact is missing, aliased, or empty: $artifact"
   }
@@ -48,6 +102,7 @@ for artifact in "$coverage" "$mutation" "$hostile_log"; do
 done
 
 coverage_sha256="$(sha256sum "$coverage" | awk '{print $1}')"
+raw_coverage_sha256="$(sha256sum "$raw_coverage" | awk '{print $1}')"
 mutation_sha256="$(sha256sum "$mutation" | awk '{print $1}')"
 hostile_sha256="$(sha256sum "$hostile_log" | awk '{print $1}')"
 validator_sha256="$(sha256sum ops/ci/validate-jankurai-evidence.sh | awk '{print $1}')"
@@ -58,6 +113,8 @@ jq -n \
   --arg tree "$tree" \
   --arg coverage "$coverage" \
   --arg coverage_sha256 "$coverage_sha256" \
+  --arg raw_coverage "$raw_coverage" \
+  --arg raw_coverage_sha256 "$raw_coverage_sha256" \
   --arg mutation "$mutation" \
   --arg mutation_sha256 "$mutation_sha256" \
   --arg hostile_log "$hostile_log" \
@@ -86,7 +143,10 @@ jq -n \
     coverage: {
       status: "pass",
       artifact: $coverage,
-      artifact_sha256: $coverage_sha256
+      artifact_sha256: $coverage_sha256,
+      raw_artifact: $raw_coverage,
+      raw_artifact_sha256: $raw_coverage_sha256,
+      normalization: "non-executable lines are not applicable; zero-count executable lines remain uncovered"
     },
     mutation: {
       status: "pass",
@@ -123,6 +183,9 @@ jq -e --arg commit "$commit" --arg tree "$tree" '
   and (.hostile.log_sha256 | test("^[0-9a-f]{64}$"))
   and .coverage.status == "pass"
   and (.coverage.artifact_sha256 | test("^[0-9a-f]{64}$"))
+  and (.coverage.raw_artifact_sha256 | test("^[0-9a-f]{64}$"))
+  and .coverage.normalization ==
+    "non-executable lines are not applicable; zero-count executable lines remain uncovered"
   and .mutation.status == "pass"
   and .mutation.killed >= 10
   and .mutation.survived == 0

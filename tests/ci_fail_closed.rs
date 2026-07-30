@@ -365,11 +365,10 @@ fn jankurai_lane_routes_existing_paths_from_diffs_or_clean_snapshots() {
     assert!(lane.contains("git diff --diff-filter=d --name-only -z"));
     assert!(lane.contains("git diff-tree --no-commit-id --name-only -r -z --diff-filter=d HEAD"));
     assert!(lane.contains("proofbind verify . \"${proofbind_changed_args[@]}\""));
-    assert!(lane.contains("proofmark rust . \"${proofbind_changed_args[@]}\""));
     assert!(lane.contains("fail \"proofbind has no existing changed paths to verify\""));
     assert!(lane.contains("--mode required"));
     assert!(lane.contains("--proof-receipts target/jankurai/proof-receipts/final"));
-    assert!(lane.contains("--coverage target/jankurai/evidence-contract/lcov.info"));
+    assert!(lane.contains("--coverage target/jankurai/evidence-contract/coverage.json"));
     assert!(lane.contains("--mutation target/jankurai/evidence-contract/mutation.json"));
     assert!(lane.contains("--negative-proof HLT-023-INPUT-BOUNDARY-GAP"));
     assert!(lane.contains("--negative-proof HLT-024-AGENT-TOOL-SUPPLY-GAP"));
@@ -394,7 +393,12 @@ fn jankurai_lane_routes_existing_paths_from_diffs_or_clean_snapshots() {
         );
     }
 
-    assert!(proof.contains("cargo llvm-cov --locked --workspace --lcov"));
+    assert!(lane.contains("proofmark_changed_args+=(--changed"));
+    assert!(lane.contains("proofbind verify . \"${proofmark_changed_args[@]}\""));
+    assert!(lane.contains("proofmark rust . \"${proofmark_changed_args[@]}\""));
+    assert!(proof.contains("cargo llvm-cov --locked --workspace --json"));
+    assert!(proof.contains("select(.[3] == true and .[2] > 0)"));
+    assert!(proof.contains("zero-count executable lines remain uncovered"));
     assert!(proof.contains("source_state: \"clean-committed\""));
     assert!(proof.contains(".mutation.killed >= 10"));
     assert!(hostile.contains("reject_mutation proofbind vacuous"));
