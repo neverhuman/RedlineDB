@@ -6,27 +6,11 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 out_dir="$repo_root/target/artifact-support"
-rm -rf "$out_dir"
-mkdir -p "$out_dir/logs" "$out_dir/receipts" "$out_dir/bundles" "$out_dir/signrail"
+repro_dir="$repo_root/target/artifact-support-repro"
+rm -rf "$out_dir" "$repro_dir"
+mkdir -p "$out_dir/logs" "$out_dir/receipts" "$out_dir/bundles"
 
 say() { printf '[artifact-support] %s\n' "$*" >&2; }
-
-sha256_text() {
-  printf '%s' "$1" | sha256sum | awk '{print "sha256:" $1}'
-}
-
-sha256_file_prefixed() {
-  local path="$1"
-  if [[ -f "$path" ]]; then
-    sha256sum "$path" | awk '{print "sha256:" $1}'
-  else
-    printf 'sha256:%s' "$(printf '' | sha256sum | awk '{print $1}')"
-  fi
-}
-
-current_sha() {
-  git rev-parse HEAD
-}
 
 just_has() {
   command -v just >/dev/null 2>&1 || return 1
@@ -99,88 +83,70 @@ run_ci() {
   esac
 }
 
-repo_slug_from_remote() {
-  local url slug
-  url="$(git remote get-url github 2>/dev/null || git remote get-url gh 2>/dev/null || git remote get-url origin 2>/dev/null || true)"
-  slug="$(printf '%s' "$url" | sed -E 's#^git@github.com:##; s#^https://github.com/##; s#^ssh://git@github.com/##; s#\.git$##')"
-  if [[ "$slug" == */* && "$slug" != http:* && "$slug" != ssh:* ]]; then
-    printf '%s' "$slug"
-  else
-    printf 'neverhuman/%s' "$(basename "$repo_root")"
-  fi
-}
-
 write_json_files() {
   local entrypoint="$1"
+  local destination="$2"
   bash tools/evidence-processor/run.sh artifact-metadata \
-    --out-dir "$out_dir" \
+    --out-dir "$destination" \
     --entrypoint "$entrypoint" \
     --workers "$workers"
 }
 
 bundle_evidence() {
-  tar -czf "$out_dir/bundles/artifact-support-evidence.tar.gz" \
-    -C "$out_dir" context.json manifest.json logs receipts
+  local evidence_dir="$1"
+  local bundle source_epoch bundle_sha
+  bundle="$evidence_dir/bundles/artifact-support-evidence.tar.gz"
+  source_epoch="$(git show -s --format=%ct HEAD)"
+  mkdir -p "$evidence_dir/bundles"
+  tar --sort=name \
+    --mtime="@${source_epoch}" \
+    --owner=0 \
+    --group=0 \
+    --numeric-owner \
+    -cf - \
+    -C "$evidence_dir" context.json manifest.json logs receipts \
+    | gzip -n >"$bundle"
+  bundle_sha="$(sha256sum "$bundle" | awk '{print $1}')"
+  printf '%s  %s\n' "$bundle_sha" "$(basename "$bundle")" \
+    >"$evidence_dir/bundles/artifact-support-evidence.tar.gz.sha256"
 }
 
-run_signrail() {
-  if [[ -n "${JERYU_SIGNRAIL_BIN:-}" ]]; then
-    "$JERYU_SIGNRAIL_BIN" "$@"
-  elif command -v jeryu-signrail >/dev/null 2>&1; then
-    jeryu-signrail "$@"
-  elif command -v jeryu_signrail >/dev/null 2>&1; then
-    jeryu_signrail "$@"
-  elif [[ -f /home/ubuntu/jeryu/crates/jeryu-signrail/Cargo.toml ]]; then
-    cargo run -q --manifest-path /home/ubuntu/jeryu/crates/jeryu-signrail/Cargo.toml -- "$@"
-  else
-    cargo install --locked --git https://github.com/neverhuman/jeryu jeryu-signrail
-    jeryu-signrail "$@"
-  fi
-}
+verify_reproducible_evidence() {
+  local entrypoint="$1"
+  local relative_path bundle_sha
 
-sign_bundle() {
-  local bundle repo_slug sha version rollback_target tree_sha ci_ir_hash runner_rootfs_digest toolchain_material toolchain_digest cargo_lock_digest
-  bundle="$out_dir/bundles/artifact-support-evidence.tar.gz"
-  [[ -f "$bundle" ]] || { say "missing bundle: $bundle"; return 1; }
-  [[ -n "${JERYU_SIGNRAIL_ED25519_SEED:-${SIGNRAIL_ED25519_SEED:-}}" ]] || {
-    say "JERYU_SIGNRAIL_ED25519_SEED or SIGNRAIL_ED25519_SEED is required"
-    return 1
-  }
-  repo_slug="${GITHUB_REPOSITORY:-$(repo_slug_from_remote)}"
-  sha="$(current_sha)"
-  version="${SIGNRAIL_RELEASE_VERSION:-$sha}"
-  rollback_target="${SIGNRAIL_ROLLBACK_TARGET:-$(git rev-parse HEAD^ 2>/dev/null || printf '%s' "$sha")}"
-  tree_sha="$(git rev-parse 'HEAD^{tree}')"
-  ci_ir_hash="$(sha256_file_prefixed "$out_dir/manifest.json")"
-  runner_rootfs_digest="$(sha256_text "$(uname -a)|${ImageOS:-local}|${ImageVersion:-local}")"
-  toolchain_material="$(rustc -Vv 2>/dev/null || true; cargo -V 2>/dev/null || true; node --version 2>/dev/null || true; npm --version 2>/dev/null || true)"
-  toolchain_digest="$(sha256_text "$toolchain_material")"
-  cargo_lock_digest="$(sha256_file_prefixed Cargo.lock)"
-  run_signrail sign-release \
-    --artifact "$bundle" \
-    --repo "$repo_slug" \
-    --sha "$sha" \
-    --tree-sha "$tree_sha" \
-    --version "$version" \
-    --rollback-target "$rollback_target" \
-    --test-status "normal-ci-and-artifact-support-passed" \
-    --store-root "${SIGNRAIL_STORE_ROOT:-${HOME}/.local/share/jeryu/signrail}" \
-    --out-dir "$out_dir/signrail" \
-    --stage local \
-    --stage dev-canary \
-    --stage prod \
-    --ci-ir-hash "$ci_ir_hash" \
-    --runner-rootfs-digest "$runner_rootfs_digest" \
-    --toolchain-digest "$toolchain_digest" \
-    --cargo-lock-digest "$cargo_lock_digest"
+  mkdir -p "$repro_dir/logs" "$repro_dir/receipts" "$repro_dir/bundles"
+  install -m 0644 "$out_dir/logs/ci.log" "$repro_dir/logs/ci.log"
+  write_json_files "$entrypoint" "$repro_dir"
+  bundle_evidence "$repro_dir"
+
+  for relative_path in \
+    context.json \
+    manifest.json \
+    receipts/local-ci.json \
+    bundles/artifact-support-evidence.tar.gz \
+    bundles/artifact-support-evidence.tar.gz.sha256
+  do
+    if ! cmp -s "$out_dir/$relative_path" "$repro_dir/$relative_path"; then
+      say "reproducibility mismatch: $relative_path"
+      return 92
+    fi
+  done
+
+  bundle_sha="$(sha256sum "$out_dir/bundles/artifact-support-evidence.tar.gz" | awk '{print $1}')"
+  printf '{\n  "schema_version": "redline.artifact-reproducibility/v1",\n  "status": "pass",\n  "source_commit": "%s",\n  "bundle_sha256": "%s",\n  "build_count": 2\n}\n' \
+    "$(git rev-parse HEAD)" \
+    "$bundle_sha" \
+    >"$out_dir/receipts/reproducibility.json"
+  rm -rf "$repro_dir"
 }
 
 entrypoint="$(pick_ci_entrypoint)" || { say "no supported CI entrypoint"; exit 91; }
 if run_ci "$entrypoint" >"$out_dir/logs/ci.log" 2>&1; then
-  write_json_files "$entrypoint"
-  bundle_evidence
-  sign_bundle
-  say "artifact support evidence ready at $out_dir"
+  write_json_files "$entrypoint" "$out_dir"
+  bundle_evidence "$out_dir"
+  verify_reproducible_evidence "$entrypoint"
+  say "unsigned artifact support review evidence ready at $out_dir"
 else
   rc=$?
   say "CI failed; log: $out_dir/logs/ci.log"

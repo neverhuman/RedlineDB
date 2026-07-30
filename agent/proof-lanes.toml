@@ -1,0 +1,39 @@
+[[lane]]
+name = "fast"
+command = "just fast"
+purpose = "deterministic workspace formatting, compile, and test proof"
+
+[[lane]]
+name = "required"
+command = "bash scripts/ci-local.sh required"
+purpose = "complete protected-source proof surface"
+
+[[lane]]
+name = "security"
+command = "bash scripts/ci-local.sh security"
+purpose = "hard-gated dependency, secret, SBOM, and workflow-lint proof"
+
+[[lane]]
+name = "score"
+command = "bash scripts/ci-local.sh score"
+purpose = "protected-main score and ratchet proof"
+
+[[lane]]
+name = "contract-drift"
+command = "bash scripts/ci-local.sh contract-drift"
+purpose = "artifact-verified public-contract drift proof"
+
+[[lane]]
+name = "artifact-support"
+command = "bash scripts/ci-local.sh artifact-support"
+purpose = "two-build reproducible unsigned review-evidence proof"
+
+[[lane]]
+name = "release-lane-interface"
+command = "bash scripts/check-release-lane-interface.sh"
+purpose = "closed dispatcher, lane custody, and fail-closed invariant proof"
+
+[[lane]]
+name = "evidence-processor"
+command = "bash ops/ci/evidence-processor.sh"
+purpose = "locked Rust evidence-processor unit and hostile proof"

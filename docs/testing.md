@@ -17,6 +17,9 @@ readable repair receipts.
 | `verify`                             | Alias for the root validation gate.                                                                   |
 | `fast`                               | Workspace fmt, file-size policy, type-check, and full unit/integration test sweep. Uses `scripts/sccache_wrapper.sh`, which falls back cleanly when local `sccache` is absent. Quick iteration lane, not the pre-push gate. |
 | `pr-ci`                              | Exact local mirror of `.github/workflows/ci.yml`: preflight, test shards, the verified `redline-testing-official` gate, and `official-evidence-guard`. Run with `scripts/ci-local.sh pr-ci`. |
+| `score`                              | Target-only ratchet audit against the reviewed main baseline; requires floor 85, zero caps/hard findings/blockers, and no score drop. |
+| `contract-drift`                     | Network-free thin-hub contract-drift proof from the artifact-verified tool-adoption object and both reviewed manifests. |
+| `artifact-support`                   | Commit-bound unsigned review-evidence bundle with normalized archive metadata; release signing stays in the release workflow. |
 | `fast-check`                         | Workspace compile proof for the default health lane.                                                  |
 | `fast-test`                          | Workspace test proof for the default health lane.                                                     |
 | `hygiene`                            | Format and file-size only; cheapest pre-commit gate.                                                  |

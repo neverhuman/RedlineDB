@@ -1,0 +1,321 @@
+{
+  "workspace": "redline",
+  "tests": {
+    ".agents/": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify agent instructions and workflows remain governed by the current routing surface"
+    },
+    ".agents/**": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify agent instructions and workflows remain governed by the current routing surface"
+    },
+    ".bundles/": {
+      "command": "bash scripts/ci-local.sh artifact-support",
+      "purpose": "verify preserved legacy custody evidence remains non-authoritative and checksum-bound"
+    },
+    ".bundles/**": {
+      "command": "bash scripts/ci-local.sh artifact-support",
+      "purpose": "verify preserved legacy custody evidence remains non-authoritative and checksum-bound"
+    },
+    ".cargo/": {
+      "command": "just fast",
+      "purpose": "verify Cargo configuration through the deterministic workspace lane"
+    },
+    ".cursor/": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify editor agent adapters remain routed to the governed instructions"
+    },
+    ".editorconfig": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify repository editing policy remains routed"
+    },
+    ".github/": {
+      "command": "bash scripts/ci-local.sh security",
+      "purpose": "verify workflow syntax and security policy fail closed"
+    },
+    ".gitlab-ci.yml": {
+      "command": "bash scripts/ci-local.sh security",
+      "purpose": "verify retained CI configuration remains governed by the hard security lane"
+    },
+    ".gitignore": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "keep current agent-routing manifests tracked and visible"
+    },
+    ".jankurai/": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify governed audit configuration and reviewed baselines remain parseable"
+    },
+    ".jankurai/**": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify governed audit configuration and reviewed baselines remain parseable"
+    },
+    "AGENTS.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify agent routing stays visible to the governed audit"
+    },
+    "AGENT_CHAT.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained repository coordination guidance remains routed"
+    },
+    "CHANGELOG.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify the prospective release identity remains documented"
+    },
+    "CLAUDE.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify alternate agent adapters remain routed to the canonical instructions"
+    },
+    "CONTRIBUTING.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify contributor guidance remains visible to the governed audit"
+    },
+    "Cargo.lock": {
+      "command": "bash scripts/ci-local.sh security",
+      "purpose": "verify the locked dependency graph and SBOM"
+    },
+    "Cargo.toml": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "compile and test the complete workspace"
+    },
+    "EXTERNAL_REVIEW_MASTER_PROMPT.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained external-review guidance remains routed"
+    },
+    "EXTERNAL_REVIEW_SUPERPROMPT.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained external-review guidance remains routed"
+    },
+    "FEATURE_GAPS.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify the retained gap inventory remains visible to the governed audit"
+    },
+    "GEMINI.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify alternate agent adapters remain routed to the canonical instructions"
+    },
+    "Justfile": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify canonical local proof recipes remain executable"
+    },
+    "LICENSE": {
+      "command": "bash scripts/ci-local.sh security",
+      "purpose": "verify license policy remains included in the supply-chain lane"
+    },
+    "README-jankurai-scaffold.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained audit-scaffold guidance remains routed"
+    },
+    "README.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify root navigation remains agent-readable"
+    },
+    "VERSION": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify the hub compatibility-track version remains routed"
+    },
+    "SECURITY.md": {
+      "command": "bash scripts/ci-local.sh security",
+      "purpose": "verify security policy through the hard-gated scanner lane"
+    },
+    "agent/": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "validate current composed-diff ownership and proof routing"
+    },
+    "agent/**": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "validate current composed-diff ownership and proof routing"
+    },
+    "apps/": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify retained application surfaces cannot bypass the thin-hub guard"
+    },
+    "apps/**": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify retained application surfaces cannot bypass the thin-hub guard"
+    },
+    "assets/": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify documentation assets remain routed and reviewable"
+    },
+    "assets/**": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify documentation assets remain routed and reviewable"
+    },
+    "benchmark-results/": {
+      "command": "bash scripts/ci-local.sh artifact-support",
+      "purpose": "verify retained benchmark evidence remains separate from current unsigned review artifacts"
+    },
+    "benchmark-results/**": {
+      "command": "bash scripts/ci-local.sh artifact-support",
+      "purpose": "verify retained benchmark evidence remains separate from current unsigned review artifacts"
+    },
+    "branch_recovery_ledger.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained branch recovery evidence remains governed"
+    },
+    "contracts/": {
+      "command": "bash scripts/ci-local.sh contract-drift",
+      "purpose": "verify public contracts against artifact-verified evidence"
+    },
+    "contracts/**": {
+      "command": "bash scripts/ci-local.sh contract-drift",
+      "purpose": "verify public contracts against artifact-verified evidence"
+    },
+    "db/": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify the thin hub retains its explicit no-database boundary"
+    },
+    "db/**": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify the thin hub retains its explicit no-database boundary"
+    },
+    "deny.toml": {
+      "command": "bash scripts/ci-local.sh security",
+      "purpose": "verify the dependency policy remains enforced as a hard gate"
+    },
+    "crates/": {
+      "command": "just fast",
+      "purpose": "compile and test product Rust behavior"
+    },
+    "crates/**": {
+      "command": "just fast",
+      "purpose": "compile and test product Rust behavior"
+    },
+    "docs/": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify agent-readable architecture, boundary, testing, and release guidance"
+    },
+    "docs/**": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify agent-readable architecture, boundary, testing, and release guidance"
+    },
+    "docs/release.md": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify version, evidence, candidate, and rollback release controls"
+    },
+    "install.sh": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify retained installation entrypoints cannot reintroduce engine ownership"
+    },
+    "just/": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify included proof recipes remain executable through the canonical dispatcher"
+    },
+    "just/**": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify included proof recipes remain executable through the canonical dispatcher"
+    },
+    "metadata/": {
+      "command": "bash scripts/ci-local.sh artifact-support",
+      "purpose": "verify retained metadata remains separate from commit-bound review evidence"
+    },
+    "metadata/**": {
+      "command": "bash scripts/ci-local.sh artifact-support",
+      "purpose": "verify retained metadata remains separate from commit-bound review evidence"
+    },
+    "ops/AGENTS.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify ops ownership and proof-lane guidance"
+    },
+    "ops/ci/artifact_support.sh": {
+      "command": "bash scripts/ci-local.sh artifact-support",
+      "purpose": "build and compare two commit-bound unsigned evidence bundles"
+    },
+    "ops/ci/contract-drift.sh": {
+      "command": "bash scripts/ci-local.sh contract-drift",
+      "purpose": "verify artifact-backed contract drift evidence"
+    },
+    "ops/ci/pr-ci.sh": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "run the complete protected-source proof surface"
+    },
+    "ops/ci/score.sh": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify the protected-main score ratchet"
+    },
+    "ops/ci/security.sh": {
+      "command": "bash scripts/ci-local.sh security",
+      "purpose": "require every scanner, SBOM, and workflow-lint command to pass"
+    },
+    "ops/": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify operational proof surfaces"
+    },
+    "ops/**": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify operational proof surfaces"
+    },
+    "paper/": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained papers and their evidence remain governed documentation"
+    },
+    "paper/**": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained papers and their evidence remain governed documentation"
+    },
+    "python/": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify retained non-source material cannot violate the Rust-only policy"
+    },
+    "python/**": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify retained non-source material cannot violate the Rust-only policy"
+    },
+    "rust-toolchain.toml": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify the pinned Rust toolchain builds the bundled control utility"
+    },
+    "scripts/check-release-lane-interface.sh": {
+      "command": "bash scripts/check-release-lane-interface.sh",
+      "purpose": "reject missing, mutable, signing-capable, or fail-open standard lanes"
+    },
+    "scripts/ci-local.sh": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify the closed standard-lane dispatcher"
+    },
+    "scripts/": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify executable repository scripts"
+    },
+    "scripts/**": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify executable repository scripts"
+    },
+    "speed_up_workplan_FINAL.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained engineering workplans remain governed documentation"
+    },
+    "speed_up_workplan_pending.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained engineering workplans remain governed documentation"
+    },
+    "super_tasks.md": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained task inventories remain governed documentation"
+    },
+    "tips/": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained design notes remain governed documentation"
+    },
+    "tips/**": {
+      "command": "bash scripts/ci-local.sh score",
+      "purpose": "verify retained design notes remain governed documentation"
+    },
+    "tools/evidence-processor/": {
+      "command": "bash ops/ci/evidence-processor.sh",
+      "purpose": "test deterministic Rust-owned artifact metadata generation"
+    },
+    "tools/evidence-processor/**": {
+      "command": "bash ops/ci/evidence-processor.sh",
+      "purpose": "test deterministic Rust-owned artifact metadata generation"
+    },
+    "tools/": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify bundled control tools"
+    },
+    "tools/**": {
+      "command": "bash scripts/ci-local.sh required",
+      "purpose": "verify bundled control tools"
+    }
+  }
+}

@@ -30,6 +30,8 @@ jobs:
         run: |
           rustup toolchain install 1.95.0 --profile minimal
           rustup default 1.95.0
+      - name: Run hard-gated security lane
+        run: bash scripts/ci-local.sh security
       - name: Run canonical thin-hub audit
         run: bash ops/ci/jankurai-audit.sh
       - name: Upload SARIF to code scanning
