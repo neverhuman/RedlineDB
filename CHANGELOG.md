@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Add closed standard `required`, `security`, `score`, `contract-drift`, and
+  reproducible unsigned `artifact-support` lanes for the prospective
+  `redline-v4.1.0-jain.3` hub successor.
+
 ## [4.1.0] - 2026-05-29
 
 W7 startup optimization — eliminate cgroup walk from the volatile (in-memory)

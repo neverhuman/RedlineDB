@@ -2,13 +2,10 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
-    time::SystemTime,
 };
 
 use anyhow::{Context, Result, anyhow, bail};
 use serde_json::{Value, json};
-
-use crate::clock::utc_timestamp;
 
 #[derive(Debug)]
 struct Config {
@@ -31,7 +28,7 @@ pub(crate) fn run(args: &[String]) -> Result<()> {
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| anyhow!("artifact-metadata: repository name is not valid UTF-8"))?;
-    let generated_at = utc_timestamp(SystemTime::now())?;
+    let generated_at = git_output(&repo_root, &["show", "-s", "--format=%cI", "HEAD"])?;
     let documents = documents(
         repo,
         &sha,

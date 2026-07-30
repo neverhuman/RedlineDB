@@ -42,6 +42,9 @@ agent/*
 !agent/JANKURAI_STANDARD.md
 !agent/audit-policy.toml
 !agent/boundaries.toml
+!agent/owner-map.json
+!agent/proof-lanes.toml
+!agent/test-map.json
 !agent/tool-adoption.toml
 :memory:/
 FUCKIT.md

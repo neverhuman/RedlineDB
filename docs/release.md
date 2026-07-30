@@ -24,9 +24,12 @@ it does not authorize moving an existing hub tag.
 
 1. Start from a clean branch whose base is the current Jeryu `main` head. The
    checkout must have exactly one managed `origin` pointing to Jeryu.
-2. Run `just check`, then the pinned Jankurai audit and security lane from a
-   clean detached snapshot. The thin-hub guard must prove that no Cargo
-   workspace or engine source has returned.
+2. Read the compatibility-track version from [`VERSION`](../VERSION), then run
+   `bash scripts/ci-local.sh required`, `security`, `score`, `contract-drift`,
+   and `artifact-support`. The thin-hub guard must prove that no Cargo
+   workspace or engine source has returned. Every security command is a hard
+   gate, and artifact support must compare two byte-identical commit-derived
+   evidence bundles.
 3. Run the Redline family CI through `redline-split-ops`. Its proof-refresh
    command must consume fresh core, testing, web, hub, and Jain-consumer
    receipts. Never edit `redline.lock.toml` by hand.

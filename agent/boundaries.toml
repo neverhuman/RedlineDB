@@ -1,6 +1,43 @@
+schema_version = "1.0.0"
+workspace = "redline"
+profile = "family-hub"
+required_check = "redline/required"
+
 [stack]
 id = "shell-docs-family-hub"
 version = "1.0.0"
+
+[split]
+cross_repo_dependency_policy = "protected-family-siblings-through-redline-split-ops"
+local_path_patches = false
+
+cargo_members = [
+  "tools/evidence-processor",
+]
+
+[contracts]
+role = "release-evidence-metadata-producer"
+canonical_repo = "redline"
+mirror_check = "bash scripts/ci-local.sh contract-drift"
+
+[data]
+durable_truth = "none; this family hub only emits rebuildable review evidence"
+database = "not-applicable"
+database_boundary = "db/README.md"
+
+[db]
+root_paths = ["db/"]
+migration_paths = []
+constraint_paths = []
+
+[release]
+status = "candidate"
+formal_ga = false
+production_applied = false
+rollback_target = "8.0.1"
+
+[python]
+allowed_non_product_paths = []
 
 [queues]
 adapter_paths = []

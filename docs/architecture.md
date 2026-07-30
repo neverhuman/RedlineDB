@@ -53,6 +53,21 @@ dependency.
   test or run; follow `docs_url` and `repair_hint` to the named
   proof lane.
 
+## Release proof surfaces
+
+`scripts/ci-local.sh` is the closed local dispatcher for `required`,
+`security`, `score`, `contract-drift`, and unsigned `artifact-support`
+proof. Security scanners, SBOM production, and workflow linting are
+hard gates. Artifact metadata derives its time from the immutable Git
+commit, and artifact support independently assembles and compares two
+byte-identical normalized bundles before publishing its local receipt.
+
+The historical `.jankurai/` manifests remain the full repository audit
+configuration. The current `agent/{owner-map.json,test-map.json,
+proof-lanes.toml}` files are the composed-diff routing surface consumed
+by `jankurai diff-audit`; they intentionally fail closed when a changed
+path has no named executable lane.
+
 ## Where to start (agent router)
 
 1. `AGENTS.md` (root) for the rules.
