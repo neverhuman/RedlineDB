@@ -50,6 +50,19 @@ for artifact in "$package_dir" "$manifest" "$tarball" "$sidecar"; do
     fi
 done
 
+first_manifest_sha="$(sha256sum "$manifest" | awk '{print $1}')"
+first_tarball_sha="$(sha256sum "$tarball" | awk '{print $1}')"
+ci_run env REDLINE_TESTING_RELEASE_TAG="$candidate_tag" scripts/release-package.sh
+second_manifest_sha="$(sha256sum "$manifest" | awk '{print $1}')"
+second_tarball_sha="$(sha256sum "$tarball" | awk '{print $1}')"
+if [[ "$first_manifest_sha" != "$second_manifest_sha" \
+    || "$first_tarball_sha" != "$second_tarball_sha" ]]; then
+    fail "release package is not reproducible across consecutive sanitized builds"
+fi
+
+ci_run ops/ci/validate-release-manifest.sh \
+    schemas/release-manifest.schema.json "$manifest"
+
 ci_run jq -e \
     --arg version "$expected_version" \
     --arg target "$target_name" \
@@ -68,10 +81,14 @@ ci_run jq -e \
         and .tarball_sha256_source == ".sha256 sidecar"
         and (.artifact_hashes | type == "object" and length > 0)
         and ([.artifact_hashes[] | test("^[0-9a-f]{64}$")] | all)
+        and .build_inputs.source_mode == "sanitized-no-local"
+        and (.build_inputs.vendor_inventory_sha256
+            | test("^[0-9a-f]{64}$"))
+        and (.build_inputs.environment_sha256 | test("^[0-9a-f]{64}$"))
         and .generated_by == "scripts/release-package.sh"
     ' "$manifest" >/dev/null
 
-ci_run ops/ci/verify-release-inventory.sh "$package_dir" "$tarball"
+ci_run ops/ci/verify-release-inventory.sh "$package_dir" "$tarball" "$sidecar"
 
 binary_path="${package_dir}/$(jq -er '.binary' "$manifest")"
 binary_expected="$(jq -er '.binary_sha256' "$manifest")"
@@ -104,7 +121,8 @@ while IFS=$'\t' read -r relative expected_sha; do
     fi
 done < <(jq -r '.artifact_hashes | to_entries[] | [.key, .value] | @tsv' "$manifest")
 
-ci_run sha256sum -c "$sidecar"
+ci_run bash -c 'cd "$1" && sha256sum -c "$2"' _ \
+    "$(dirname "$sidecar")" "$(basename "$sidecar")"
 ci_run cargo test --locked --test release_manifest_integrity \
     release_manifest_enumerates_every_bundled_file -- --exact
 
