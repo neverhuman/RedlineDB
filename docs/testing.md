@@ -17,7 +17,7 @@ bash ops/ci/pr-ci.sh         # the single validate command (fmt, check, test, pa
 | fast / validate | `bash ops/ci/pr-ci.sh` | fmt, `cargo check`, `cargo test --locked`, release packaging |
 | security | `bash ops/ci/security.sh` | gitleaks secret scan, `cargo audit`, `cargo deny`, zizmor, SBOM |
 | score | `bash ops/ci/score.sh` | governed Jankurai 1.6.11 score, floor, findings, caps, blockers, and accepted-baseline ratchet |
-| contract drift | `bash ops/ci/contract-drift.sh` | tracked schemas plus exact 1.0.1 package, immutable live-or-planned tag identity, closed binary/archive inventory, and digests |
+| contract drift | `bash ops/ci/contract-drift.sh` | tracked schemas plus exact 1.0.1 package, local/forge immutable live-or-planned tag identity, sanitized build inputs, repeated deterministic archive identity, schema-valid evidence, closed binary/archive content, and digests |
 | artifact support | `bash ops/ci/artifact_support.sh` | clean commit/tree-bound unsigned review evidence with a deterministic source-archive digest and stable pre/post identity checks; release signing remains a separate release workflow gate |
 | jankurai | `bash ops/ci/jankurai.sh` | audit, copy-code, rust-witness, security evidence, cost/release receipts |
 | ship-gate | `cargo run -p xtask -- ship-gate` | each SQLite-parity shard self-compares against `sqlite3` |
