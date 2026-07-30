@@ -7,7 +7,7 @@ commands = [
 
 [lane.release-local]
 commands = [
-  "rtk just release-local",
+  "rtk env REDLINE_TESTING_RELEASE_TAG=redline-testing-v1.0.1-jain.2 just release-local",
 ]
 
 [lane.pr-ci]

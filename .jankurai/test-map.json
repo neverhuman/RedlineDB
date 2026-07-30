@@ -78,7 +78,7 @@
       "purpose": "verify secret scanning remains fail closed"
     },
     "justfile": {
-      "command": "rtk just release-local",
+      "command": "rtk env REDLINE_TESTING_RELEASE_TAG=redline-testing-v1.0.1-jain.2 just release-local",
       "purpose": "verify the local release tarball and checksum"
     },
     "metadata/": {
@@ -106,7 +106,7 @@
       "purpose": "verify the runner logic and CLI contract"
     },
     "templates/": {
-      "command": "rtk just release-local",
+      "command": "rtk env REDLINE_TESTING_RELEASE_TAG=redline-testing-v1.0.1-jain.2 just release-local",
       "purpose": "verify report templates remain packaged and hashed"
     },
     "tests/jankurai_evidence_hostile.sh": {
