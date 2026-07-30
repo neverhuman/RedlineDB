@@ -6,7 +6,7 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 . "$repo_root/ops/ci/lib.sh"
 cd "$repo_root"
 
-for tool in cargo jq sha256sum stat tee wc; do
+for tool in cargo jq rustc sha256sum stat tee wc; do
   has "$tool" || fail "missing required Jankurai evidence tool: $tool"
 done
 actual_llvm_cov="$(cargo llvm-cov --version)"
@@ -36,7 +36,43 @@ JANKURAI_EVIDENCE_MUTATION_OUT="$mutation" \
   bash tests/jankurai_evidence_hostile.sh | tee "$hostile_log"
 
 log "jankurai evidence: real Rust coverage"
-cargo llvm-cov --locked --workspace --json --output-path "$raw_coverage"
+cargo llvm-cov --locked --workspace --no-report
+
+shopt -s nullglob
+ci_contract_candidates=(target/llvm-cov-target/debug/deps/ci_fail_closed-*)
+manifest_contract_candidates=(
+  target/llvm-cov-target/debug/deps/release_manifest_integrity-*
+)
+shopt -u nullglob
+ci_contract_bins=()
+manifest_contract_bins=()
+for candidate in "${ci_contract_candidates[@]}"; do
+  [[ -f "$candidate" && -x "$candidate" ]] && ci_contract_bins+=("$candidate")
+done
+for candidate in "${manifest_contract_candidates[@]}"; do
+  [[ -f "$candidate" && -x "$candidate" ]] &&
+    manifest_contract_bins+=("$candidate")
+done
+[[ "${#ci_contract_bins[@]}" == 1 &&
+  "${#manifest_contract_bins[@]}" == 1 ]] || {
+  fail "expected one executable object for each Jankurai integration contract"
+}
+
+llvm_bin="$(dirname "$(rustc --print target-libdir)")/bin"
+llvm_cov="$llvm_bin/llvm-cov"
+profdata=target/llvm-cov-target/redline-testing.profdata
+[[ -x "$llvm_cov" && -f "$profdata" && ! -L "$profdata" &&
+  -s "$profdata" ]] || {
+  fail "rustc-matched llvm-cov or merged Redline Testing profile is unavailable"
+}
+for object in "${ci_contract_bins[0]}" "${manifest_contract_bins[0]}"; do
+  [[ ! -L "$object" && "$(stat -c '%h' "$object")" == 1 ]] || {
+    fail "instrumented integration-test object is aliased or linked: $object"
+  }
+done
+"$llvm_cov" export "${ci_contract_bins[0]}" \
+  -object "${manifest_contract_bins[0]}" \
+  -instr-profile="$profdata" >"$raw_coverage"
 
 ci_contract_lines="$(wc -l <tests/ci_fail_closed.rs)"
 manifest_contract_lines="$(wc -l <tests/release_manifest_integrity.rs)"

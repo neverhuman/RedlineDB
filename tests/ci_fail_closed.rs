@@ -396,7 +396,11 @@ fn jankurai_lane_routes_existing_paths_from_diffs_or_clean_snapshots() {
     assert!(lane.contains("proofmark_changed_args+=(--changed"));
     assert!(lane.contains("proofbind verify . \"${proofmark_changed_args[@]}\""));
     assert!(lane.contains("proofmark rust . \"${proofmark_changed_args[@]}\""));
-    assert!(proof.contains("cargo llvm-cov --locked --workspace --json"));
+    assert!(proof.contains("cargo llvm-cov --locked --workspace --no-report"));
+    assert!(proof.contains("ci_fail_closed-*"));
+    assert!(proof.contains("release_manifest_integrity-*"));
+    assert!(proof.contains("\"$llvm_cov\" export"));
+    assert!(proof.contains("-instr-profile=\"$profdata\""));
     assert!(proof.contains("select(.[3] == true and .[2] > 0)"));
     assert!(proof.contains("zero-count executable lines remain uncovered"));
     assert!(proof.contains("source_state: \"clean-committed\""));
