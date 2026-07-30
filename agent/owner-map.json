@@ -44,6 +44,7 @@
     "reference/": "reference",
     "rust-toolchain.toml": "workspace",
     "rustfmt.toml": "workspace",
+    "schemas/": "contracts",
     "scripts/": "ops",
     "speed_up_workplan_FINAL.md": "control-plane",
     "speed_up_workplan_pending.md": "control-plane",

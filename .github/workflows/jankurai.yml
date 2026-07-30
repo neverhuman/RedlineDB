@@ -1,5 +1,10 @@
 name: jankurai
 
+# This hosted workflow is an informational mirror. Jain release authority is
+# the root-sealed local Jeryu `redline-core/required` check.
+# Security lane: secret scanning, dependency review, and workflow linting are
+# hard gates; failure stops evidence publication.
+
 on:
   pull_request:
   push:
@@ -189,6 +194,7 @@ jobs:
             target/jankurai/governed-jankurai-test.log
 
   security:
+    name: Security — secrets, dependencies, SBOM, and workflow lint
     # Hard gate end-to-end. Mirrors the local `just security` recipe so
     # the same evidence runs in both places. Audit reference:
     # HLT-016 supply-chain-drift, HLT-034 ci-bad-behavior.
@@ -227,7 +233,10 @@ jobs:
       # so CI and local (`scripts/ci-local.sh security`, `just security`)
       # run identical hard-gated commands and preserve their evidence logs.
       - name: security lane (ops/ci/security.sh)
-        run: bash ops/ci/security.sh
+        run: |
+          cargo audit --version
+          gitleaks detect --source . --redact --no-banner
+          bash ops/ci/security.sh
 
   dependency-review:
     # Reproducible full-graph dependency review on PRs. Rejects vulnerable,

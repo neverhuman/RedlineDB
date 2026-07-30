@@ -1,10 +1,10 @@
-# db/AGENTS.md
+# Native data policy
 
-<!-- jankurai generated adapter -->
-<!-- jankurai agent request v1 sha256:REPLACE_WITH_HASH -->
-Read `AGENTS.md` first. Use `.jankurai/JANKURAI_STANDARD.md` as the canonical jankurai standard.
-When a user provides a paper, release, implementation, or handoff plan in the conversation, treat that plan as the controlling plan. Do not route such plans through the separate local phase workflow unless the user explicitly names MASTER_PLAN phase work.
-Owns `db/`.
-Forbidden: application logic, transport routing, and UI concerns.
-Proof lane: `migration / constraint tests`.
-If jankurai is installed, run `jankurai update --client-start --quiet` before work; do not apply updates unless the user asks.
+Read the root `AGENTS.md` first. This directory documents native storage
+authority; executable migrations and persistence logic remain Rust-only under
+`crates/kernel` and `crates/redlinedb`.
+
+Do not add application SQL migration runners, mutable release evidence, or
+alternate data truth here. Validate storage-policy changes with
+`cargo test --locked -p redlinedb --test phase8` and the repository required
+lane.

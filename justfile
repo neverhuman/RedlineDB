@@ -24,4 +24,5 @@ test:
   ./scripts/just/run.sh fast-test
 
 verify:
-  ./scripts/just/run.sh check
+  # One command must exercise the same hard release gate as protected CI.
+  ./scripts/ci-local.sh required

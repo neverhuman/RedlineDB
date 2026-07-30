@@ -8,6 +8,7 @@ use std::error::Error;
 use std::fmt;
 
 #[derive(Debug)]
+#[must_use = "domain errors must be returned or recorded with their repair context"]
 pub struct DomainError {
     pub purpose: &'static str,
     pub reason: String,

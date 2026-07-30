@@ -5,6 +5,15 @@ Cross-referenced from `CHANGELOG.md`, `.github/workflows/jankurai.yml`,
 and the security lane in `justfile`. Audit reference: HLT-025
 release-readiness, HLT-016 supply-chain drift.
 
+## Jain candidate authority
+
+For the Jain v10 train, the local Jeryu forge and the root-sealed
+`redline-core/required` check are authoritative. Candidate metadata remains
+`status=candidate`, `formal_ga=false`, rollback `8.0.1`, and
+`ATOMICSOUL_PUSH=0`. A green source PR never authorizes merge, an immutable
+engine tag, Redline consumer-proof refresh, customer traffic, or GA; those are
+separate guarded lifecycle steps.
+
 ## Version source
 
 The release crates are published as a five-crate chain pinned at the

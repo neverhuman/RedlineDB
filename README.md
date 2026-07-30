@@ -22,6 +22,9 @@
 RedlineDB is an embedded SQL engine written in Rust. It keeps the SQLite-facing
 API familiar while replacing the storage core with MVCC, a concurrent B-tree,
 group-commit WAL, and crash recovery designed for multi-writer workloads.
+Agent and operator documentation is indexed in [docs/README.md](docs/README.md),
+including architecture, boundaries, proof lanes, release controls, and reviewed
+native exceptions.
 
 ## What's new in v4.0.9 → v4.1.0 (W7 startup optimization)
 

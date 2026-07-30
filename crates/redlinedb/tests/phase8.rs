@@ -43,6 +43,42 @@ fn physical_backup_restore_roundtrip() {
         verified.iter().map(|file| file.byte_len).sum::<u64>()
     );
     assert!(verified.iter().all(|file| file.sha256.len() == 64));
+    let schema: serde_json::Value = serde_json::from_str(include_str!(
+        "../../../schemas/physical-backup-manifest.schema.json"
+    ))
+    .expect("parse physical backup schema");
+    let mut required = schema["required"]
+        .as_array()
+        .expect("schema required")
+        .iter()
+        .map(|value| value.as_str().expect("required field").to_owned())
+        .collect::<Vec<_>>();
+    let manifest_value = serde_json::to_value(&manifest).expect("serialize manifest");
+    let mut manifest_fields = manifest_value
+        .as_object()
+        .expect("manifest object")
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    required.sort();
+    manifest_fields.sort();
+    assert_eq!(required, manifest_fields);
+    let mut declared_file_fields = schema["$defs"]["file"]["required"]
+        .as_array()
+        .expect("file required")
+        .iter()
+        .map(|value| value.as_str().expect("file field").to_owned())
+        .collect::<Vec<_>>();
+    let mut file_fields = serde_json::to_value(&verified[0])
+        .expect("serialize verified file")
+        .as_object()
+        .expect("verified file object")
+        .keys()
+        .cloned()
+        .collect::<Vec<_>>();
+    declared_file_fields.sort();
+    file_fields.sort();
+    assert_eq!(declared_file_fields, file_fields);
 
     let restore_stats =
         Database::restore_from_backup(&backup, &dst, RestoreOptions::default()).expect("restore");

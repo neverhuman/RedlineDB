@@ -1,0 +1,95 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://neverhuman.org/schemas/redlinedb/physical-backup-manifest-v1.json",
+  "title": "RedlineDB physical backup manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format_version",
+    "backup_id",
+    "db_id",
+    "timeline",
+    "parent_timeline",
+    "fork_lsn",
+    "page_size",
+    "wal_segment_bytes",
+    "required_wal_start",
+    "stop_lsn",
+    "stop_csn",
+    "included_wal",
+    "archive_mode",
+    "created_unix_nanos",
+    "files",
+    "file_entries",
+    "total_bytes",
+    "tree_hash"
+  ],
+  "properties": {
+    "format_version": { "const": 1 },
+    "backup_id": { "type": "integer", "minimum": 0 },
+    "db_id": { "type": "integer", "minimum": 0 },
+    "timeline": { "type": "integer", "minimum": 0 },
+    "parent_timeline": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "fork_lsn": {
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "page_size": { "type": "integer", "minimum": 1 },
+    "wal_segment_bytes": { "type": "integer", "minimum": 1 },
+    "required_wal_start": { "type": "integer", "minimum": 0 },
+    "stop_lsn": { "type": "integer", "minimum": 0 },
+    "stop_csn": { "type": "integer", "minimum": 0 },
+    "included_wal": { "type": "boolean" },
+    "archive_mode": {
+      "enum": ["Off", "Local", "RequiredLocal"]
+    },
+    "created_unix_nanos": { "type": "integer", "minimum": 0 },
+    "files": {
+      "type": "array",
+      "maxItems": 1000000,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "file_entries": {
+      "type": "array",
+      "maxItems": 1000000,
+      "items": { "$ref": "#/$defs/file" }
+    },
+    "total_bytes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 17592186044416
+    },
+    "tree_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "$defs": {
+    "file": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relative_path", "byte_len", "sha256"],
+      "properties": {
+        "relative_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "byte_len": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 1099511627776
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    }
+  }
+}
