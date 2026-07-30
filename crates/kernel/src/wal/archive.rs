@@ -84,7 +84,7 @@ impl SealedWalRange {
         if self.timeline == TimelineId::ZERO
             || self.start_lsn >= self.end_lsn
             || self.byte_len == 0
-            || self.byte_len > self.end_lsn.0.saturating_sub(self.start_lsn.0)
+            || self.byte_len != self.end_lsn.0.saturating_sub(self.start_lsn.0)
             || self.sha256.iter().all(|byte| *byte == 0)
         {
             return Err(Error::CorruptWal("invalid sealed wal range"));
@@ -122,34 +122,50 @@ pub fn read_durable_prefix(
     while cursor < durable_lsn && bytes.len() < max_bytes {
         let segment = segment_for_lsn(cursor, segment_bytes);
         let path = segment_path(wal_dir, segment);
-        let metadata = fs::symlink_metadata(&path)?;
-        if !metadata.file_type().is_file() {
-            return Err(Error::CorruptWal("wal segment is not a regular file"));
+        let mut file = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(&path)?;
+        let metadata = file.metadata()?;
+        if !metadata.file_type().is_file() || metadata.nlink() != 1 {
+            return Err(Error::CorruptWal(
+                "wal segment is not a native regular file",
+            ));
         }
-        let mut file = File::open(&path)?;
         let file_len = metadata.len();
+        if file_len > segment_bytes
+            || (file_len > 0 && metadata.blocks().saturating_mul(512) < file_len)
+        {
+            return Err(Error::CorruptWal("wal segment has invalid physical extent"));
+        }
+        let segment_start = segment
+            .0
+            .checked_sub(1)
+            .and_then(|value| value.checked_mul(segment_bytes))
+            .ok_or(Error::CorruptWal("wal segment address overflow"))?;
+        let segment_end = segment_start
+            .checked_add(segment_bytes)
+            .ok_or(Error::CorruptWal("wal segment address overflow"))?;
+        let required_end = durable_lsn.0.min(segment_end);
+        let required_len = required_end.saturating_sub(segment_start);
+        if file_len < required_len {
+            return Err(Error::CorruptWal("wal segment contains an address gap"));
+        }
         let offset = offset_for_lsn(cursor, segment_bytes);
-        if offset > file_len {
+        if offset >= required_len {
             return Err(Error::CorruptWal("wal range starts beyond segment bytes"));
         }
-        if offset == file_len {
-            cursor = next_segment_lsn(segment.0, segment_bytes)?;
-            continue;
-        }
 
-        let address_remaining = durable_lsn.0.saturating_sub(cursor.0);
-        let available = file_len.saturating_sub(offset);
+        let address_remaining = required_end.saturating_sub(cursor.0);
         let capacity = (max_bytes - bytes.len()) as u64;
-        let take = available.min(address_remaining).min(capacity);
+        let take = address_remaining.min(capacity);
         file.seek(SeekFrom::Start(offset))?;
         let start_len = bytes.len();
         bytes.resize(start_len + take as usize, 0);
         file.read_exact(&mut bytes[start_len..])?;
         cursor = Lsn(cursor.0.saturating_add(take));
 
-        if take == available && cursor < durable_lsn && bytes.len() < max_bytes {
-            cursor = next_segment_lsn(segment.0, segment_bytes)?;
-        }
+        revalidate_segment_file(&path, &file, &metadata, file_len)?;
     }
 
     if bytes.is_empty() {
@@ -167,11 +183,27 @@ pub fn read_durable_prefix(
     Ok(Some(DurableWalPrefix { range, bytes }))
 }
 
-fn next_segment_lsn(segment: u64, segment_bytes: u64) -> Result<Lsn> {
-    segment
-        .checked_mul(segment_bytes)
-        .map(Lsn)
-        .ok_or(Error::CorruptWal("wal segment address overflow"))
+fn revalidate_segment_file(
+    path: &Path,
+    file: &File,
+    initial_metadata: &fs::Metadata,
+    initial_len: u64,
+) -> Result<()> {
+    let path_metadata = fs::symlink_metadata(path)?;
+    let final_metadata = file.metadata()?;
+    if !path_metadata.file_type().is_file()
+        || path_metadata.dev() != initial_metadata.dev()
+        || path_metadata.ino() != initial_metadata.ino()
+        || final_metadata.dev() != initial_metadata.dev()
+        || final_metadata.ino() != initial_metadata.ino()
+        || final_metadata.len() != initial_len
+        || final_metadata.nlink() != 1
+    {
+        return Err(Error::CorruptWal(
+            "wal segment identity changed while reading",
+        ));
+    }
+    Ok(())
 }
 
 pub trait ArchiveReceiptVerifier {
@@ -557,5 +589,31 @@ impl WalRetentionHorizons {
         self.checkpoint_lsn
             .min(self.replication_slot_lsn)
             .min(self.required_archive_lsn)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retained_segment_rejects_path_replacement() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let path = temp.path().join("00000000000000000001.wal");
+        fs::write(&path, [1_u8; 128]).expect("segment");
+        let file = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(&path)
+            .expect("retained segment");
+        let metadata = file.metadata().expect("metadata");
+
+        fs::rename(&path, temp.path().join("held.wal")).expect("hold original");
+        fs::write(&path, [2_u8; 128]).expect("replacement");
+        assert_eq!(
+            revalidate_segment_file(&path, &file, &metadata, metadata.len())
+                .expect_err("replacement must fail"),
+            Error::CorruptWal("wal segment identity changed while reading")
+        );
     }
 }

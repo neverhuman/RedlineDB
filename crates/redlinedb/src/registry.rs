@@ -116,6 +116,9 @@ pub(crate) struct DatabaseEntry {
     pub path: PathBuf,
     pub interrupt: Arc<AtomicBool>,
     pub busy_timeout: Mutex<Duration>,
+    /// Serializes the retention-policy snapshot with WAL pruning and every
+    /// supported archive-mode or replication-slot mutation.
+    pub retention_lock: Mutex<()>,
     /// Per-database Rayon pool for future intra-query parallel operators.
     /// `None` when the caller opted out (`rayon_threads = Some(0|1)`) so
     /// operators take the serial path. The pool is built with `.build()`
@@ -295,6 +298,7 @@ fn create_ephemeral_database_inner(
         path: path.clone(),
         interrupt: Arc::new(AtomicBool::new(false)),
         busy_timeout: Mutex::new(options.busy_timeout),
+        retention_lock: Mutex::new(()),
         rayon_pool,
     });
     let mut registry = registry().lock().expect("registry poisoned");
@@ -400,6 +404,7 @@ fn open_database_at(
         path: path.clone(),
         interrupt: Arc::new(AtomicBool::new(false)),
         busy_timeout: Mutex::new(options.busy_timeout),
+        retention_lock: Mutex::new(()),
         rayon_pool,
     });
     let mut registry = registry().lock().expect("registry poisoned");

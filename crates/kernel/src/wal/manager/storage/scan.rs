@@ -57,6 +57,24 @@ impl<Fs: FileSystem> WalReader<Fs> {
 
                 let mut header = vec![0; WAL_HEADER_LEN];
                 file.read_exact_at(offset, &mut header)?;
+                if header.iter().all(|byte| *byte == 0) {
+                    let mut cursor = offset;
+                    let mut zeros = [0_u8; 8192];
+                    while cursor < file_len {
+                        let take = (file_len - cursor).min(zeros.len() as u64) as usize;
+                        file.read_exact_at(cursor, &mut zeros[..take])?;
+                        if zeros[..take].iter().any(|byte| *byte != 0) {
+                            return Err(Error::CorruptWal(
+                                "nonzero bytes follow wal segment padding",
+                            ));
+                        }
+                        cursor += take as u64;
+                    }
+                    if is_last_segment {
+                        stopped_at_tail = true;
+                    }
+                    break;
+                }
                 let payload_len = read_u32(&header, 12)? as u64;
                 let record_len = match (WAL_HEADER_LEN as u64).checked_add(payload_len) {
                     Some(record_len) => record_len,

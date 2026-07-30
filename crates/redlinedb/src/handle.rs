@@ -125,6 +125,7 @@ impl Database {
     }
 
     pub fn checkpoint(&self) -> Result<CheckpointStats> {
+        let _retention_guard = phase8::lock_retention_authority(self)?;
         let retention = phase8::wal_retention_horizons(self)?;
         let checkpoint = self.inner.db.checkpoint_with_wal_retention(retention)?;
         phase8::update_retention(self)?;

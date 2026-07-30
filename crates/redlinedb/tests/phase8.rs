@@ -37,6 +37,11 @@ fn physical_backup_restore_roundtrip() {
     let manifest = Database::physical_backup_manifest(&backup).expect("manifest");
     let verified = Database::verify_physical_backup(&backup).expect("verify backup");
     assert_eq!(manifest.files.len(), verified.len());
+    assert_eq!(manifest.file_entries, verified);
+    assert_eq!(
+        manifest.total_bytes,
+        verified.iter().map(|file| file.byte_len).sum::<u64>()
+    );
     assert!(verified.iter().all(|file| file.sha256.len() == 64));
 
     let restore_stats =
@@ -207,6 +212,29 @@ fn verification_rejects_corrupt_and_hostile_manifest_files() {
     )
     .expect("write hostile manifest");
     assert!(Database::verify_physical_backup(&second_backup).is_err());
+
+    let oversized_backup = dir.path().join("oversized");
+    db.backup_physical_to_path(&oversized_backup, PhysicalBackupOptions::default())
+        .expect("oversized manifest backup");
+    let manifest_path = oversized_backup
+        .join("phase8")
+        .join(PHYSICAL_BACKUP_MANIFEST_FILE);
+    let mut manifest: serde_json::Value =
+        serde_json::from_slice(&fs::read(&manifest_path).expect("read manifest"))
+            .expect("parse manifest");
+    manifest["file_entries"][0]["byte_len"] = serde_json::Value::from((1_u64 << 40) + 1);
+    fs::write(
+        &manifest_path,
+        serde_json::to_vec_pretty(&manifest).expect("encode manifest"),
+    )
+    .expect("write oversized manifest");
+    assert!(Database::verify_physical_backup(&oversized_backup).is_err());
+
+    let extra_backup = dir.path().join("extra");
+    db.backup_physical_to_path(&extra_backup, PhysicalBackupOptions::default())
+        .expect("extra-file backup");
+    fs::write(extra_backup.join("undeclared"), b"extra").expect("extra file");
+    assert!(Database::verify_physical_backup(&extra_backup).is_err());
 }
 
 #[cfg(unix)]
@@ -252,6 +280,38 @@ fn slots_are_persisted_and_listed() {
     let slots = db.replication_slots().expect("replication slots");
     assert_eq!(slots.len(), 1);
     assert_eq!(slots[0].name, "logical-a");
+}
+
+#[cfg(unix)]
+#[test]
+fn slots_reject_invalid_names_foreign_authority_and_non_native_entries() {
+    let dir = tempdir().expect("tempdir");
+    let path = dir.path().join("hostile-slots.db");
+    let db = Database::create(&path).expect("create db");
+    assert!(db.create_physical_slot("../escape").is_err());
+
+    db.create_physical_slot("physical-a")
+        .expect("physical slot");
+    let slot_dir = path.join("phase8/replication_slots");
+    let slot_path = slot_dir.join("physical-a.json");
+    let original = fs::read(&slot_path).expect("slot bytes");
+    let mut slot: serde_json::Value =
+        serde_json::from_slice(&original).expect("parse slot authority");
+    slot["format_version"] = serde_json::Value::from(2);
+    fs::write(
+        &slot_path,
+        serde_json::to_vec_pretty(&slot).expect("encode hostile slot"),
+    )
+    .expect("write hostile slot");
+    assert!(db.replication_slots().is_err());
+
+    fs::write(&slot_path, &original).expect("restore slot");
+    fs::hard_link(&slot_path, slot_dir.join("duplicate.json")).expect("hard link");
+    assert!(db.replication_slots().is_err());
+    fs::remove_file(slot_dir.join("duplicate.json")).expect("remove hard link");
+
+    fs::create_dir(slot_dir.join("undeclared")).expect("undeclared directory");
+    assert!(db.replication_slots().is_err());
 }
 
 #[test]

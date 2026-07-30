@@ -240,11 +240,58 @@ fn verifier_rejection_never_reaches_the_watermark() {
 }
 
 #[test]
+fn sealed_range_requires_exact_address_span() {
+    let mut range = sealed(10, 20, 1);
+    range.byte_len = 9;
+    assert_eq!(
+        range.validate().expect_err("short range must fail"),
+        Error::CorruptWal("invalid sealed wal range")
+    );
+}
+
+#[test]
 fn durable_prefix_rejects_missing_native_segments() {
     let temp = TempDir::new().expect("tempdir");
     let error = read_durable_prefix(temp.path(), 128, TimelineId(1), Lsn::ZERO, Lsn(1), 1)
         .expect_err("missing segment");
     assert!(matches!(error, Error::Io(_)));
+}
+
+#[test]
+fn durable_prefix_rejects_short_nonfinal_segment() {
+    let temp = TempDir::new().expect("tempdir");
+    fs::write(temp.path().join("00000000000000000001.wal"), [7_u8; 64]).expect("short segment");
+    fs::write(temp.path().join("00000000000000000002.wal"), [8_u8; 1]).expect("next segment");
+
+    let error = read_durable_prefix(temp.path(), 128, TimelineId(1), Lsn::ZERO, Lsn(129), 129)
+        .expect_err("address gap must fail");
+    assert_eq!(
+        error,
+        Error::CorruptWal("wal segment contains an address gap")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn durable_prefix_rejects_symlinked_or_sparse_segment() {
+    use std::os::unix::fs::symlink;
+
+    let linked = TempDir::new().expect("tempdir");
+    let external = linked.path().join("external");
+    fs::write(&external, [1_u8; 8]).expect("external");
+    symlink(&external, linked.path().join("00000000000000000001.wal")).expect("symlink");
+    assert!(read_durable_prefix(linked.path(), 128, TimelineId(1), Lsn::ZERO, Lsn(8), 8).is_err());
+
+    let sparse = TempDir::new().expect("tempdir");
+    let file =
+        fs::File::create(sparse.path().join("00000000000000000001.wal")).expect("sparse segment");
+    file.set_len(128).expect("sparse length");
+    let error = read_durable_prefix(sparse.path(), 128, TimelineId(1), Lsn::ZERO, Lsn(128), 128)
+        .expect_err("sparse extent must fail");
+    assert_eq!(
+        error,
+        Error::CorruptWal("wal segment has invalid physical extent")
+    );
 }
 
 #[test]

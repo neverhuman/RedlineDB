@@ -236,6 +236,16 @@ impl<Fs: FileSystem> WalManager<Fs> {
     }
 
     fn rotate_segment(&mut self) -> Result<()> {
+        // Materialize the unused tail before advancing the logical address.
+        // Archive readers bind every LSN in a sealed range to physical bytes;
+        // a short non-final segment would otherwise create an unarchived gap.
+        let zeros = [0_u8; 8192];
+        let mut offset = self.active_offset;
+        while offset < self.config.segment_bytes {
+            let take = (self.config.segment_bytes - offset).min(zeros.len() as u64) as usize;
+            self.active_file.write_all_at(offset, &zeros[..take])?;
+            offset += take as u64;
+        }
         self.active_file.sync_data()?;
         // Lane BH P1 #7: rotation also performs an fdatasync to
         // make the trailing block durable before swapping segment

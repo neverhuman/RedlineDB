@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::ffi::{CStr, CString};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -5,6 +6,7 @@ use std::os::fd::{AsRawFd, FromRawFd};
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
+use std::sync::MutexGuard;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use serde::{Deserialize, Serialize};
@@ -29,6 +31,10 @@ const COMPLETE_FILE: &str = "complete.marker";
 const RESTORE_COMPLETE_FILE: &str = "restore.complete";
 const ARCHIVE_STATE_DIR: &str = "state";
 const FORMAT_VERSION: u32 = 1;
+const MAX_SLOT_FILE_BYTES: u64 = 64 * 1024;
+const MAX_BACKUP_FILES: usize = 1_000_000;
+const MAX_BACKUP_FILE_BYTES: u64 = 1 << 40;
+const MAX_BACKUP_TOTAL_BYTES: u64 = 16 << 40;
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ArchiveMode {
@@ -163,6 +169,8 @@ pub struct PhysicalBackupManifest {
     pub archive_mode: ArchiveMode,
     pub created_unix_nanos: u128,
     pub files: Vec<String>,
+    pub file_entries: Vec<VerifiedBackupFile>,
+    pub total_bytes: u64,
     pub tree_hash: String,
 }
 
@@ -206,6 +214,13 @@ struct OpenedBackup {
     files: Vec<OpenedBackupFile>,
 }
 
+struct OpenedDestinationFile {
+    verified: VerifiedBackupFile,
+    file: File,
+    dev: u64,
+    ino: u64,
+}
+
 pub fn backup_physical_to_path(
     db: &Database,
     dst: impl AsRef<Path>,
@@ -222,13 +237,33 @@ pub fn backup_physical_to_path(
 
     prepare_empty_directory(dst, "physical backup destination is not empty")?;
 
+    let source_root = NativeRoot::open(src)?;
+    let backup_root = NativeRoot::open(dst)?;
     let files = collect_files(src, &|path| should_copy_path(path, dst))?;
     let mut bytes_copied = 0_u64;
     for rel in &files {
-        bytes_copied += copy_file_exclusive(src, dst, rel)?;
+        bytes_copied = bytes_copied
+            .checked_add(copy_file_exclusive(&source_root, &backup_root, rel)?)
+            .ok_or_else(|| Error::new(ErrorCode::TooBig, "backup byte total overflow"))?;
+        if bytes_copied > MAX_BACKUP_TOTAL_BYTES {
+            return Err(Error::new(
+                ErrorCode::TooBig,
+                "backup exceeds the closed aggregate limit",
+            ));
+        }
     }
 
-    let tree_hash = hash_tree(dst, &files)?;
+    source_root.revalidate_path(src)?;
+    backup_root.revalidate_path(dst)?;
+    verify_closed_inventory(&backup_root, &files)?;
+    let (file_entries, total_bytes, tree_hash) = verify_files_for_manifest(&backup_root, &files)?;
+    backup_root.revalidate_path(dst)?;
+    if total_bytes != bytes_copied {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "physical backup byte count changed before manifest publication",
+        ));
+    }
     let manifest = PhysicalBackupManifest {
         format_version: FORMAT_VERSION,
         backup_id: backup_id.0,
@@ -248,11 +283,18 @@ pub fn backup_physical_to_path(
             .iter()
             .map(|path| rel_to_string(path))
             .collect::<Vec<_>>(),
+        file_entries,
+        total_bytes,
         tree_hash,
     };
     let manifest_path = phase8_path(dst).join(PHYSICAL_BACKUP_MANIFEST_FILE);
     write_json_atomic(&manifest_path, &manifest)?;
     write_text_atomic(&phase8_path(dst).join(COMPLETE_FILE), "ok\n")?;
+    let mut final_inventory = files.clone();
+    final_inventory.push(Path::new(PHASE8_DIR).join(PHYSICAL_BACKUP_MANIFEST_FILE));
+    final_inventory.push(Path::new(PHASE8_DIR).join(COMPLETE_FILE));
+    backup_root.revalidate_path(dst)?;
+    verify_closed_inventory(&backup_root, &final_inventory)?;
 
     Ok(PhysicalBackupStats {
         files_copied: files.len() as u64,
@@ -278,11 +320,17 @@ pub fn restore_from_backup(
     let destination = NativeRoot::open(dst)?;
 
     let mut bytes_copied = 0_u64;
+    let mut destination_files = Vec::with_capacity(backup.files.len());
     for file in &mut backup.files {
         backup.root.revalidate_file(file)?;
-        bytes_copied += copy_opened_file(file, &destination)?;
+        let copied = copy_opened_file(file, &destination)?;
+        bytes_copied = bytes_copied
+            .checked_add(copied.verified.byte_len)
+            .ok_or_else(|| Error::new(ErrorCode::TooBig, "restore byte total overflow"))?;
+        destination_files.push(copied);
     }
-    verify_copied_files(&destination, &backup.files)?;
+    let mut destination_inventory = manifest_file_list(src, &manifest)?;
+    verify_destination_files(&destination, &mut destination_files, &destination_inventory)?;
     backup.root.revalidate_path(src)?;
     destination.revalidate_path(dst)?;
 
@@ -305,6 +353,12 @@ pub fn restore_from_backup(
         };
     }
     write_json_atomic(&identity_path(&retained_dst), &restored_identity)?;
+    refresh_destination_file(
+        &destination,
+        &mut destination_files,
+        &Path::new(PHASE8_DIR).join(IDENTITY_FILE),
+    )?;
+    verify_destination_files(&destination, &mut destination_files, &destination_inventory)?;
 
     let recovery_target = match options.target {
         SqlRecoveryTarget::Latest => RecoveryTarget::Latest,
@@ -322,11 +376,23 @@ pub fn restore_from_backup(
     )?;
 
     destination.revalidate_path(dst)?;
-    verify_native_tree(&retained_dst)?;
+    match retain_destination_file(&destination, Path::new("owner.lock")) {
+        Ok(owner_lock) => {
+            destination_inventory.push(PathBuf::from("owner.lock"));
+            destination_files.push(owner_lock);
+        }
+        Err(error) if error.code() == ErrorCode::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    verify_destination_files(&destination, &mut destination_files, &destination_inventory)?;
     write_text_atomic(
         &phase8_path(&retained_dst).join(RESTORE_COMPLETE_FILE),
         "ok\n",
     )?;
+    let restore_marker = Path::new(PHASE8_DIR).join(RESTORE_COMPLETE_FILE);
+    destination_files.push(retain_destination_file(&destination, &restore_marker)?);
+    destination_inventory.push(restore_marker);
+    verify_destination_files(&destination, &mut destination_files, &destination_inventory)?;
     destination.revalidate_path(dst)?;
     Ok(RestoreStats {
         files_copied: manifest.files.len() as u64,
@@ -368,6 +434,9 @@ fn physical_backup_manifest_from_root(root: &NativeRoot) -> Result<PhysicalBacku
         || manifest.wal_segment_bytes == 0
         || manifest.required_wal_start > manifest.stop_lsn
         || manifest.files.is_empty()
+        || manifest.files.len() > MAX_BACKUP_FILES
+        || manifest.file_entries.len() != manifest.files.len()
+        || manifest.total_bytes > MAX_BACKUP_TOTAL_BYTES
         || manifest.tree_hash.len() != 64
         || !manifest
             .tree_hash
@@ -377,6 +446,31 @@ fn physical_backup_manifest_from_root(root: &NativeRoot) -> Result<PhysicalBacku
         return Err(Error::new(
             ErrorCode::Corrupt,
             "invalid physical backup manifest",
+        ));
+    }
+    let mut declared_total = 0_u64;
+    for (path, entry) in manifest.files.iter().zip(&manifest.file_entries) {
+        if path != &entry.relative_path
+            || entry.byte_len > MAX_BACKUP_FILE_BYTES
+            || entry.sha256.len() != 64
+            || !entry
+                .sha256
+                .bytes()
+                .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "invalid physical backup file authority",
+            ));
+        }
+        declared_total = declared_total
+            .checked_add(entry.byte_len)
+            .ok_or_else(|| Error::new(ErrorCode::TooBig, "backup byte total overflow"))?;
+    }
+    if declared_total != manifest.total_bytes {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "physical backup byte total mismatch",
         ));
     }
     Ok(manifest)
@@ -395,37 +489,69 @@ fn open_verified_backup(src: &Path) -> Result<OpenedBackup> {
     let manifest = physical_backup_manifest_from_root(&root)?;
     verify_complete_marker_from_root(&root)?;
     let paths = manifest_file_list(src, &manifest)?;
+    let mut expected_inventory = paths.clone();
+    expected_inventory.push(Path::new(PHASE8_DIR).join(PHYSICAL_BACKUP_MANIFEST_FILE));
+    expected_inventory.push(Path::new(PHASE8_DIR).join(COMPLETE_FILE));
+    verify_closed_inventory(&root, &expected_inventory)?;
     let mut files = Vec::with_capacity(paths.len());
     let mut tree_hasher = Sha256::new();
-    for path in paths {
+    let mut total_bytes = 0_u64;
+    for (path, expected) in paths.into_iter().zip(&manifest.file_entries) {
         let relative_path = rel_to_string(&path);
         tree_hasher.update(relative_path.as_bytes());
         let mut file = root.open_regular_file(&path)?;
         let metadata = file.metadata()?;
+        if metadata.len() != expected.byte_len || expected.relative_path != relative_path {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "backup file size or path differs from manifest",
+            ));
+        }
         let mut file_hasher = Sha256::new();
-        let mut byte_len = 0_u64;
+        let mut remaining = expected.byte_len;
         let mut buf = [0_u8; 8192];
-        loop {
-            let read = file.read(&mut buf)?;
+        while remaining > 0 {
+            let take = remaining.min(buf.len() as u64) as usize;
+            let read = file.read(&mut buf[..take])?;
             if read == 0 {
-                break;
+                return Err(Error::new(
+                    ErrorCode::Corrupt,
+                    "backup file ended before its declared size",
+                ));
             }
-            byte_len = byte_len
-                .checked_add(read as u64)
-                .ok_or_else(|| Error::new(ErrorCode::TooBig, "backup file is too large"))?;
             file_hasher.update(&buf[..read]);
             tree_hasher.update(&buf[..read]);
+            remaining -= read as u64;
         }
+        let mut extra = [0_u8; 1];
+        if file.read(&mut extra)? != 0 {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "backup file exceeds its declared size",
+            ));
+        }
+        let digest = format!("{:x}", file_hasher.finalize());
+        if digest != expected.sha256 {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "backup file digest differs from manifest",
+            ));
+        }
+        total_bytes = total_bytes
+            .checked_add(expected.byte_len)
+            .ok_or_else(|| Error::new(ErrorCode::TooBig, "backup byte total overflow"))?;
         files.push(OpenedBackupFile {
-            verified: VerifiedBackupFile {
-                relative_path,
-                byte_len,
-                sha256: format!("{:x}", file_hasher.finalize()),
-            },
+            verified: expected.clone(),
             file,
             dev: metadata.dev(),
             ino: metadata.ino(),
         });
+    }
+    if total_bytes != manifest.total_bytes {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "verified backup byte total mismatch",
+        ));
     }
     if format!("{:x}", tree_hasher.finalize()) != manifest.tree_hash {
         return Err(Error::new(ErrorCode::Corrupt, "backup tree hash mismatch"));
@@ -434,6 +560,7 @@ fn open_verified_backup(src: &Path) -> Result<OpenedBackup> {
         root.revalidate_file(file)?;
     }
     root.revalidate_path(src)?;
+    verify_closed_inventory(&root, &expected_inventory)?;
     Ok(OpenedBackup {
         root,
         manifest,
@@ -442,6 +569,8 @@ fn open_verified_backup(src: &Path) -> Result<OpenedBackup> {
 }
 
 pub fn create_physical_slot(db: &Database, name: &str, active: bool) -> Result<ReplicationSlot> {
+    let _retention_guard = lock_retention_authority(db)?;
+    validate_slot_name(name)?;
     let identity = load_identity_or_init(db.path())?;
     let stats = db.inner.db.stats().map_err(Error::from)?;
     let tx_stats = db.inner.db.tx_status_stats();
@@ -463,6 +592,8 @@ pub fn create_physical_slot(db: &Database, name: &str, active: bool) -> Result<R
 }
 
 pub fn create_logical_slot(db: &Database, name: &str, active: bool) -> Result<ReplicationSlot> {
+    let _retention_guard = lock_retention_authority(db)?;
+    validate_slot_name(name)?;
     let identity = load_identity_or_init(db.path())?;
     let stats = db.inner.db.stats().map_err(Error::from)?;
     let tx_stats = db.inner.db.tx_status_stats();
@@ -484,6 +615,8 @@ pub fn create_logical_slot(db: &Database, name: &str, active: bool) -> Result<Re
 }
 
 pub fn drop_replication_slot(db: &Database, name: &str) -> Result<()> {
+    let _retention_guard = lock_retention_authority(db)?;
+    validate_slot_name(name)?;
     let path = slot_path(db.path(), name);
     if path.exists() {
         fs::remove_file(path)?;
@@ -498,12 +631,75 @@ pub fn replication_slots(db: &Database) -> Result<Vec<ReplicationSlotStats>> {
     if !dir.exists() {
         return Ok(slots);
     }
-    for entry in fs::read_dir(dir)? {
+    let identity = load_identity_or_init(db.path())?;
+    let slots_root = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+        .open(&dir)?;
+    let root_metadata = slots_root.metadata()?;
+    if !root_metadata.file_type().is_dir() {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "replication slot root is not a native directory",
+        ));
+    }
+    let retained_dir = PathBuf::from(format!("/proc/self/fd/{}", slots_root.as_raw_fd()));
+    for entry in fs::read_dir(&retained_dir)? {
         let entry = entry?;
-        if entry.file_type()?.is_file() {
-            let slot: SlotFile = read_json(entry.path())?;
-            slots.push(slot.stats);
+        if !entry.file_type()?.is_file() {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "replication slot directory contains an undeclared entry",
+            ));
         }
+        let file_name = entry
+            .file_name()
+            .into_string()
+            .map_err(|_| Error::new(ErrorCode::Corrupt, "replication slot name is not UTF-8"))?;
+        let mut file = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(entry.path())?;
+        let metadata = file.metadata()?;
+        if !metadata.file_type().is_file() || metadata.nlink() != 1 {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "replication slot is not a native single-link file",
+            ));
+        }
+        let slot: SlotFile = read_bounded_json(&mut file, MAX_SLOT_FILE_BYTES)?;
+        validate_slot_file(&file_name, &slot, &identity)?;
+        let final_metadata = file.metadata()?;
+        let reopened = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(entry.path())?;
+        let reopened_metadata = reopened.metadata()?;
+        if final_metadata.dev() != metadata.dev()
+            || final_metadata.ino() != metadata.ino()
+            || final_metadata.len() != metadata.len()
+            || final_metadata.nlink() != 1
+            || reopened_metadata.dev() != metadata.dev()
+            || reopened_metadata.ino() != metadata.ino()
+            || reopened_metadata.len() != metadata.len()
+            || reopened_metadata.nlink() != 1
+        {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "replication slot changed while reading",
+            ));
+        }
+        slots.push(slot.stats);
+    }
+    let final_root = fs::symlink_metadata(&dir)?;
+    if !final_root.file_type().is_dir()
+        || final_root.dev() != root_metadata.dev()
+        || final_root.ino() != root_metadata.ino()
+    {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "replication slot root identity changed",
+        ));
     }
     slots.sort_by(|left, right| left.name.cmp(&right.name));
     Ok(slots)
@@ -552,6 +748,7 @@ pub fn archive_stats(db: &Database) -> Result<ArchiveStats> {
 }
 
 pub fn set_archive_mode(db: &Database, mode: ArchiveMode) -> Result<()> {
+    let _retention_guard = lock_retention_authority(db)?;
     let mut identity = load_identity_or_init(db.path())?;
     identity.archive_mode = mode;
     write_json_atomic(&identity_path(db.path()), &identity)
@@ -597,6 +794,13 @@ pub(crate) fn wal_retention_horizons(db: &Database) -> Result<WalRetentionHorizo
         replication_slot_lsn: Lsn(replication_slot_lsn),
         required_archive_lsn: Lsn(required_archive_lsn),
     })
+}
+
+pub(crate) fn lock_retention_authority(db: &Database) -> Result<MutexGuard<'_, ()>> {
+    db.inner
+        .retention_lock
+        .lock()
+        .map_err(|_| Error::new(ErrorCode::Error, "retention authority lock poisoned"))
 }
 
 fn retention_from_state(db: &Database) -> Result<RetentionHorizon> {
@@ -659,6 +863,12 @@ fn collect_files_recursive(
                 continue;
             }
             out.push(rel);
+            if out.len() > MAX_BACKUP_FILES {
+                return Err(Error::new(
+                    ErrorCode::TooBig,
+                    "backup file count exceeds the closed limit",
+                ));
+            }
         }
     }
     Ok(())
@@ -674,18 +884,53 @@ fn should_copy_path(path: &Path, backup_root: &Path) -> bool {
     true
 }
 
-fn copy_file_exclusive(src_root: &Path, dst_root: &Path, rel: &Path) -> Result<u64> {
-    verify_regular_path(src_root, rel)?;
-    let src = src_root.join(rel);
-    let dst = dst_root.join(rel);
-    if let Some(parent) = dst.parent() {
-        fs::create_dir_all(parent)?;
+fn copy_file_exclusive(source: &NativeRoot, destination: &NativeRoot, rel: &Path) -> Result<u64> {
+    let mut input = source.open_regular_file(rel)?;
+    let metadata = input.metadata()?;
+    if metadata.len() > MAX_BACKUP_FILE_BYTES {
+        return Err(Error::new(
+            ErrorCode::TooBig,
+            "backup source file exceeds the closed per-file limit",
+        ));
     }
-    let mut input = File::open(src)?;
-    let mut output = OpenOptions::new().create_new(true).write(true).open(dst)?;
-    let bytes = std::io::copy(&mut input, &mut output)?;
+    let mut output = destination.create_regular_file(rel)?;
+    let mut remaining = metadata.len();
+    let mut buffer = [0_u8; 8192];
+    while remaining > 0 {
+        let take = remaining.min(buffer.len() as u64) as usize;
+        let read = input.read(&mut buffer[..take])?;
+        if read == 0 {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "backup source file ended while copying",
+            ));
+        }
+        output.write_all(&buffer[..read])?;
+        remaining -= read as u64;
+    }
+    let mut extra = [0_u8; 1];
+    if input.read(&mut extra)? != 0 {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "backup source file grew beyond its bounded size",
+        ));
+    }
     output.sync_all()?;
-    Ok(bytes)
+    let final_source = input.metadata()?;
+    let final_output = output.metadata()?;
+    if final_source.dev() != metadata.dev()
+        || final_source.ino() != metadata.ino()
+        || final_source.len() != metadata.len()
+        || final_source.nlink() != 1
+        || final_output.len() != metadata.len()
+        || final_output.nlink() != 1
+    {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "backup source or destination changed while copying",
+        ));
+    }
+    Ok(metadata.len())
 }
 
 impl NativeRoot {
@@ -779,7 +1024,7 @@ impl NativeRoot {
         let output = openat_component(
             &parent,
             file_name,
-            libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
             0o600,
         )?;
         parent.sync_all()?;
@@ -787,12 +1032,34 @@ impl NativeRoot {
     }
 
     fn revalidate_file(&self, file: &OpenedBackupFile) -> Result<()> {
-        let reopened = self.open_regular_file(Path::new(&file.verified.relative_path))?;
+        self.revalidate_opened_file(
+            Path::new(&file.verified.relative_path),
+            &file.file,
+            file.dev,
+            file.ino,
+        )
+    }
+
+    fn revalidate_opened_file(
+        &self,
+        relative_path: &Path,
+        file: &File,
+        dev: u64,
+        ino: u64,
+    ) -> Result<()> {
+        let reopened = self.open_regular_file(relative_path)?;
         let metadata = reopened.metadata()?;
-        if metadata.dev() != file.dev || metadata.ino() != file.ino {
+        let retained_metadata = file.metadata()?;
+        if metadata.dev() != dev
+            || metadata.ino() != ino
+            || retained_metadata.dev() != dev
+            || retained_metadata.ino() != ino
+            || metadata.nlink() != 1
+            || retained_metadata.nlink() != 1
+        {
             return Err(Error::new(
                 ErrorCode::Corrupt,
-                "backup file identity changed after verification",
+                "retained file identity changed after verification",
             ));
         }
         Ok(())
@@ -860,53 +1127,87 @@ fn mkdirat_component(parent: &File, component: &std::ffi::OsStr) -> Result<()> {
     Ok(())
 }
 
-fn copy_opened_file(file: &mut OpenedBackupFile, destination: &NativeRoot) -> Result<u64> {
+fn copy_opened_file(
+    file: &mut OpenedBackupFile,
+    destination: &NativeRoot,
+) -> Result<OpenedDestinationFile> {
     file.file.seek(SeekFrom::Start(0))?;
     let mut output = destination.create_regular_file(Path::new(&file.verified.relative_path))?;
     let mut hasher = Sha256::new();
-    let mut byte_len = 0_u64;
+    let mut remaining = file.verified.byte_len;
     let mut buffer = [0_u8; 8192];
-    loop {
-        let read = file.file.read(&mut buffer)?;
+    while remaining > 0 {
+        let take = remaining.min(buffer.len() as u64) as usize;
+        let read = file.file.read(&mut buffer[..take])?;
         if read == 0 {
-            break;
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "backup file ended while restoring",
+            ));
         }
         output.write_all(&buffer[..read])?;
         hasher.update(&buffer[..read]);
-        byte_len = byte_len
-            .checked_add(read as u64)
-            .ok_or_else(|| Error::new(ErrorCode::TooBig, "backup file is too large"))?;
+        remaining -= read as u64;
     }
-    if byte_len != file.verified.byte_len
-        || format!("{:x}", hasher.finalize()) != file.verified.sha256
-    {
+    let mut extra = [0_u8; 1];
+    if file.file.read(&mut extra)? != 0 {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "backup file grew beyond its verified size",
+        ));
+    }
+    if format!("{:x}", hasher.finalize()) != file.verified.sha256 {
         return Err(Error::new(
             ErrorCode::Corrupt,
             "backup file changed while restoring",
         ));
     }
     output.sync_all()?;
-    Ok(byte_len)
+    let metadata = output.metadata()?;
+    if metadata.len() != file.verified.byte_len || metadata.nlink() != 1 {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "restored file size or custody is invalid",
+        ));
+    }
+    Ok(OpenedDestinationFile {
+        verified: file.verified.clone(),
+        file: output,
+        dev: metadata.dev(),
+        ino: metadata.ino(),
+    })
 }
 
-fn verify_copied_files(destination: &NativeRoot, files: &[OpenedBackupFile]) -> Result<()> {
+fn verify_destination_files(
+    destination: &NativeRoot,
+    files: &mut [OpenedDestinationFile],
+    expected_inventory: &[PathBuf],
+) -> Result<()> {
     for expected in files {
-        let mut file =
-            destination.open_regular_file(Path::new(&expected.verified.relative_path))?;
+        destination.revalidate_opened_file(
+            Path::new(&expected.verified.relative_path),
+            &expected.file,
+            expected.dev,
+            expected.ino,
+        )?;
+        expected.file.seek(SeekFrom::Start(0))?;
         let mut hasher = Sha256::new();
-        let mut byte_len = 0_u64;
+        let mut remaining = expected.verified.byte_len;
         let mut buffer = [0_u8; 8192];
-        loop {
-            let read = file.read(&mut buffer)?;
+        while remaining > 0 {
+            let take = remaining.min(buffer.len() as u64) as usize;
+            let read = expected.file.read(&mut buffer[..take])?;
             if read == 0 {
-                break;
+                return Err(Error::new(
+                    ErrorCode::Corrupt,
+                    "restored file ended before its retained size",
+                ));
             }
             hasher.update(&buffer[..read]);
-            byte_len = byte_len
-                .checked_add(read as u64)
-                .ok_or_else(|| Error::new(ErrorCode::TooBig, "restore file is too large"))?;
+            remaining -= read as u64;
         }
-        if byte_len != expected.verified.byte_len
+        let mut extra = [0_u8; 1];
+        if expected.file.read(&mut extra)? != 0
             || format!("{:x}", hasher.finalize()) != expected.verified.sha256
         {
             return Err(Error::new(
@@ -914,48 +1215,199 @@ fn verify_copied_files(destination: &NativeRoot, files: &[OpenedBackupFile]) -> 
                 "restored file does not match verified backup bytes",
             ));
         }
+        destination.revalidate_opened_file(
+            Path::new(&expected.verified.relative_path),
+            &expected.file,
+            expected.dev,
+            expected.ino,
+        )?;
     }
+    verify_closed_inventory(destination, expected_inventory)?;
     destination.dir.sync_all()?;
     Ok(())
 }
 
-fn verify_native_tree(root: &Path) -> Result<()> {
-    for entry in fs::read_dir(root)? {
-        let entry = entry?;
-        let metadata = fs::symlink_metadata(entry.path())?;
-        if metadata.file_type().is_dir() {
-            verify_native_tree(&entry.path())?;
-        } else if !metadata.file_type().is_file() || metadata.nlink() != 1 {
+fn refresh_destination_file(
+    destination: &NativeRoot,
+    files: &mut [OpenedDestinationFile],
+    relative_path: &Path,
+) -> Result<()> {
+    let target = files
+        .iter_mut()
+        .find(|file| Path::new(&file.verified.relative_path) == relative_path)
+        .ok_or_else(|| {
+            Error::new(
+                ErrorCode::Corrupt,
+                "restore transformation targets an undeclared file",
+            )
+        })?;
+    let mut file = destination.open_regular_file(relative_path)?;
+    let metadata = file.metadata()?;
+    if metadata.len() > MAX_BACKUP_FILE_BYTES {
+        return Err(Error::new(
+            ErrorCode::TooBig,
+            "transformed restore file exceeds the closed limit",
+        ));
+    }
+    let mut hasher = Sha256::new();
+    let mut remaining = metadata.len();
+    let mut buffer = [0_u8; 8192];
+    while remaining > 0 {
+        let take = remaining.min(buffer.len() as u64) as usize;
+        let read = file.read(&mut buffer[..take])?;
+        if read == 0 {
             return Err(Error::new(
                 ErrorCode::Corrupt,
-                "restore tree contains a non-native entry",
+                "transformed restore file ended early",
             ));
         }
+        hasher.update(&buffer[..read]);
+        remaining -= read as u64;
     }
+    let mut extra = [0_u8; 1];
+    if file.read(&mut extra)? != 0 {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "transformed restore file grew while retaining custody",
+        ));
+    }
+    target.verified.byte_len = metadata.len();
+    target.verified.sha256 = format!("{:x}", hasher.finalize());
+    target.file = file;
+    target.dev = metadata.dev();
+    target.ino = metadata.ino();
     Ok(())
 }
 
-fn hash_tree(root: &Path, files: &[PathBuf]) -> Result<String> {
+fn retain_destination_file(
+    destination: &NativeRoot,
+    relative_path: &Path,
+) -> Result<OpenedDestinationFile> {
+    let mut file = destination.open_regular_file(relative_path)?;
+    let metadata = file.metadata()?;
+    if metadata.len() > MAX_BACKUP_FILE_BYTES {
+        return Err(Error::new(
+            ErrorCode::TooBig,
+            "runtime restore file exceeds the closed limit",
+        ));
+    }
     let mut hasher = Sha256::new();
+    let mut remaining = metadata.len();
+    let mut buffer = [0_u8; 8192];
+    while remaining > 0 {
+        let take = remaining.min(buffer.len() as u64) as usize;
+        let read = file.read(&mut buffer[..take])?;
+        if read == 0 {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "runtime restore file ended early",
+            ));
+        }
+        hasher.update(&buffer[..read]);
+        remaining -= read as u64;
+    }
+    let mut extra = [0_u8; 1];
+    if file.read(&mut extra)? != 0 {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "runtime restore file grew while retaining custody",
+        ));
+    }
+    destination.revalidate_opened_file(relative_path, &file, metadata.dev(), metadata.ino())?;
+    Ok(OpenedDestinationFile {
+        verified: VerifiedBackupFile {
+            relative_path: rel_to_string(relative_path),
+            byte_len: metadata.len(),
+            sha256: format!("{:x}", hasher.finalize()),
+        },
+        file,
+        dev: metadata.dev(),
+        ino: metadata.ino(),
+    })
+}
+
+fn verify_files_for_manifest(
+    root: &NativeRoot,
+    files: &[PathBuf],
+) -> Result<(Vec<VerifiedBackupFile>, u64, String)> {
+    if files.is_empty() || files.len() > MAX_BACKUP_FILES {
+        return Err(Error::new(
+            ErrorCode::TooBig,
+            "backup file count is outside the closed limit",
+        ));
+    }
+    let mut tree_hasher = Sha256::new();
+    let mut entries = Vec::with_capacity(files.len());
+    let mut total_bytes = 0_u64;
     for rel in files {
-        hasher.update(rel_to_string(rel).as_bytes());
-        let mut file = File::open(root.join(rel))?;
+        let relative_path = rel_to_string(rel);
+        tree_hasher.update(relative_path.as_bytes());
+        let mut file = root.open_regular_file(rel)?;
+        let metadata = file.metadata()?;
+        if metadata.len() > MAX_BACKUP_FILE_BYTES {
+            return Err(Error::new(
+                ErrorCode::TooBig,
+                "backup file exceeds the closed per-file limit",
+            ));
+        }
+        let mut file_hasher = Sha256::new();
+        let mut byte_len = 0_u64;
         let mut buf = [0_u8; 8192];
         loop {
             let read = file.read(&mut buf)?;
             if read == 0 {
                 break;
             }
-            hasher.update(&buf[..read]);
+            byte_len = byte_len
+                .checked_add(read as u64)
+                .ok_or_else(|| Error::new(ErrorCode::TooBig, "backup file size overflow"))?;
+            if byte_len > MAX_BACKUP_FILE_BYTES {
+                return Err(Error::new(
+                    ErrorCode::TooBig,
+                    "backup file exceeds the closed per-file limit",
+                ));
+            }
+            file_hasher.update(&buf[..read]);
+            tree_hasher.update(&buf[..read]);
         }
+        if byte_len != metadata.len() {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "backup file changed while building the manifest",
+            ));
+        }
+        total_bytes = total_bytes
+            .checked_add(byte_len)
+            .ok_or_else(|| Error::new(ErrorCode::TooBig, "backup byte total overflow"))?;
+        if total_bytes > MAX_BACKUP_TOTAL_BYTES {
+            return Err(Error::new(
+                ErrorCode::TooBig,
+                "backup exceeds the closed aggregate limit",
+            ));
+        }
+        entries.push(VerifiedBackupFile {
+            relative_path,
+            byte_len,
+            sha256: format!("{:x}", file_hasher.finalize()),
+        });
     }
-    Ok(format!("{:x}", hasher.finalize()))
+    Ok((
+        entries,
+        total_bytes,
+        format!("{:x}", tree_hasher.finalize()),
+    ))
 }
 
 fn manifest_file_list(_root: &Path, manifest: &PhysicalBackupManifest) -> Result<Vec<PathBuf>> {
     let mut paths = Vec::with_capacity(manifest.files.len());
     let mut previous = None;
-    for raw in &manifest.files {
+    for (raw, entry) in manifest.files.iter().zip(&manifest.file_entries) {
+        if raw != &entry.relative_path {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "backup manifest file authorities disagree",
+            ));
+        }
         let path = validate_backup_relative_path(raw)?;
         if previous.as_ref().is_some_and(|value| value >= &path) {
             return Err(Error::new(
@@ -967,6 +1419,75 @@ fn manifest_file_list(_root: &Path, manifest: &PhysicalBackupManifest) -> Result
         paths.push(path);
     }
     Ok(paths)
+}
+
+fn verify_closed_inventory(root: &NativeRoot, expected_files: &[PathBuf]) -> Result<()> {
+    let expected_files = expected_files
+        .iter()
+        .map(|path| rel_to_string(path))
+        .collect::<BTreeSet<_>>();
+    let mut expected_dirs = BTreeSet::new();
+    for path in expected_files.iter().map(Path::new) {
+        let mut parent = path.parent();
+        while let Some(value) = parent {
+            if value.as_os_str().is_empty() {
+                break;
+            }
+            expected_dirs.insert(rel_to_string(value));
+            parent = value.parent();
+        }
+    }
+    let mut actual_files = BTreeSet::new();
+    collect_native_inventory(
+        &root.proc_path(),
+        Path::new(""),
+        &expected_dirs,
+        &mut actual_files,
+    )?;
+    if actual_files != expected_files {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "native file inventory differs from the closed manifest",
+        ));
+    }
+    Ok(())
+}
+
+fn collect_native_inventory(
+    current: &Path,
+    relative: &Path,
+    expected_dirs: &BTreeSet<String>,
+    files: &mut BTreeSet<String>,
+) -> Result<()> {
+    for entry in fs::read_dir(current)? {
+        let entry = entry?;
+        let child_relative = relative.join(entry.file_name());
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() {
+            let key = rel_to_string(&child_relative);
+            if !expected_dirs.contains(&key) {
+                return Err(Error::new(
+                    ErrorCode::Corrupt,
+                    "native inventory contains an undeclared directory",
+                ));
+            }
+            collect_native_inventory(&entry.path(), &child_relative, expected_dirs, files)?;
+        } else if file_type.is_file() {
+            let metadata = entry.metadata()?;
+            if metadata.nlink() != 1 || !files.insert(rel_to_string(&child_relative)) {
+                return Err(Error::new(
+                    ErrorCode::Corrupt,
+                    "native inventory contains a non-native or duplicate file",
+                ));
+            }
+        } else {
+            return Err(Error::new(
+                ErrorCode::Corrupt,
+                "native inventory contains an undeclared entry type",
+            ));
+        }
+    }
+    Ok(())
 }
 
 fn rel_to_string(rel: &Path) -> String {
@@ -1004,48 +1525,6 @@ fn verify_complete_marker_from_root(root: &NativeRoot) -> Result<()> {
             ErrorCode::Corrupt,
             "physical backup is incomplete",
         ));
-    }
-    Ok(())
-}
-
-fn verify_regular_path(root: &Path, rel: &Path) -> Result<()> {
-    let root_metadata = fs::symlink_metadata(root)?;
-    if !root_metadata.file_type().is_dir() {
-        return Err(Error::new(
-            ErrorCode::Corrupt,
-            "backup root is not a native directory",
-        ));
-    }
-    let mut current = root.to_path_buf();
-    let component_count = rel.components().count();
-    for (index, component) in rel.components().enumerate() {
-        let Component::Normal(name) = component else {
-            return Err(Error::new(
-                ErrorCode::Corrupt,
-                "invalid backup manifest path",
-            ));
-        };
-        current.push(name);
-        let metadata = fs::symlink_metadata(&current)?;
-        let is_last = index + 1 == component_count;
-        if (is_last && !metadata.file_type().is_file())
-            || (!is_last && !metadata.file_type().is_dir())
-        {
-            return Err(Error::new(
-                ErrorCode::Corrupt,
-                "backup manifest entry is not a regular file",
-            ));
-        }
-        #[cfg(unix)]
-        if is_last {
-            use std::os::unix::fs::MetadataExt as _;
-            if metadata.nlink() != 1 {
-                return Err(Error::new(
-                    ErrorCode::Corrupt,
-                    "backup manifest entry has multiple links",
-                ));
-            }
-        }
     }
     Ok(())
 }
@@ -1105,6 +1584,45 @@ fn slot_path(root: &Path, name: &str) -> PathBuf {
     slots_dir(root).join(format!("{name}.json"))
 }
 
+fn validate_slot_name(name: &str) -> Result<()> {
+    if name.is_empty()
+        || name.len() > 128
+        || !name
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'-' | b'_'))
+    {
+        return Err(Error::new(
+            ErrorCode::Misuse,
+            "invalid replication slot name",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_slot_file(file_name: &str, slot: &SlotFile, identity: &IdentityFile) -> Result<()> {
+    validate_slot_name(&slot.stats.name).map_err(|_| {
+        Error::new(
+            ErrorCode::Corrupt,
+            "invalid persisted replication slot name",
+        )
+    })?;
+    if slot.format_version != FORMAT_VERSION
+        || slot.created_unix_nanos == 0
+        || file_name != format!("{}.json", slot.stats.name)
+        || slot.stats.slot_id == 0
+        || slot.stats.database_id != identity.db_id
+        || slot.stats.timeline != identity.timeline
+        || slot.stats.confirmed_flush_lsn < slot.stats.restart_lsn
+        || slot.stats.confirmed_flush_csn < slot.stats.restart_csn
+    {
+        return Err(Error::new(
+            ErrorCode::Corrupt,
+            "replication slot identity is invalid",
+        ));
+    }
+    Ok(())
+}
+
 fn retention_path(root: &Path) -> PathBuf {
     phase8_path(root).join(RETENTION_FILE)
 }
@@ -1129,6 +1647,7 @@ fn load_identity_or_init(root: &Path) -> Result<IdentityFile> {
 }
 
 fn persist_slot(root: &Path, slot: &ReplicationSlotStats) -> Result<()> {
+    validate_slot_name(&slot.name)?;
     fs::create_dir_all(slots_dir(root))?;
     let path = slot_path(root, &slot.name);
     let file = SlotFile {
@@ -1197,6 +1716,20 @@ fn read_json<T: for<'de> Deserialize<'de>, P: AsRef<Path>>(path: P) -> Result<T>
     Ok(serde_json::from_slice(&bytes)?)
 }
 
+fn read_bounded_json<T: for<'de> Deserialize<'de>>(file: &mut File, max_bytes: u64) -> Result<T> {
+    file.seek(SeekFrom::Start(0))?;
+    let mut bytes = Vec::new();
+    file.take(max_bytes.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > max_bytes {
+        return Err(Error::new(
+            ErrorCode::TooBig,
+            "JSON authority file is too large",
+        ));
+    }
+    Ok(serde_json::from_slice(&bytes)?)
+}
+
 fn sync_dir(path: &Path) -> Result<()> {
     let file = File::open(path)?;
     file.sync_all()?;
@@ -1258,6 +1791,37 @@ mod tests {
     }
 
     #[test]
+    fn growing_source_is_rejected_before_excess_reaches_destination() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let src = temp.path().join("src");
+        let dst = temp.path().join("dst");
+        fs::create_dir(&src).expect("src");
+        fs::create_dir(&dst).expect("dst");
+        fs::write(src.join("data"), b"verified").expect("verified");
+        let source = NativeRoot::open(&src).expect("source root");
+        let mut opened = opened_file(&source, Path::new("data"));
+        OpenOptions::new()
+            .append(true)
+            .open(src.join("data"))
+            .expect("append handle")
+            .write_all(b"-excess")
+            .expect("grow source");
+
+        let destination = NativeRoot::open(&dst).expect("destination root");
+        assert_eq!(
+            copy_opened_file(&mut opened, &destination)
+                .err()
+                .expect("growth must fail")
+                .code(),
+            ErrorCode::Corrupt
+        );
+        assert_eq!(
+            fs::read(dst.join("data")).expect("bounded output"),
+            b"verified"
+        );
+    }
+
+    #[test]
     fn source_ancestor_swap_is_rejected_before_restore_copy() {
         let temp = tempfile::tempdir().expect("tempdir");
         let src = temp.path().join("src");
@@ -1294,6 +1858,81 @@ mod tests {
                 .expect_err("destination swap must be rejected")
                 .code(),
             ErrorCode::Corrupt
+        );
+    }
+
+    #[test]
+    fn retained_destination_rejects_mutation_replacement_and_extra_files() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let src = temp.path().join("src");
+        let dst = temp.path().join("dst");
+        fs::create_dir(&src).expect("src");
+        fs::create_dir(&dst).expect("dst");
+        fs::write(src.join("data"), b"verified").expect("verified");
+        let source = NativeRoot::open(&src).expect("source root");
+        let mut source_file = opened_file(&source, Path::new("data"));
+        let destination = NativeRoot::open(&dst).expect("destination root");
+        let mut copied =
+            vec![copy_opened_file(&mut source_file, &destination).expect("copy retained")];
+        let inventory = vec![PathBuf::from("data")];
+        verify_destination_files(&destination, &mut copied, &inventory).expect("verify");
+
+        fs::write(dst.join("extra"), b"undeclared").expect("extra");
+        assert_eq!(
+            verify_destination_files(&destination, &mut copied, &inventory)
+                .expect_err("extra file must fail")
+                .code(),
+            ErrorCode::Corrupt
+        );
+        fs::remove_file(dst.join("extra")).expect("remove extra");
+
+        fs::write(dst.join("data"), b"mutated!").expect("mutate in place");
+        assert_eq!(
+            verify_destination_files(&destination, &mut copied, &inventory)
+                .expect_err("mutation must fail")
+                .code(),
+            ErrorCode::Corrupt
+        );
+
+        fs::rename(dst.join("data"), dst.join("data.held")).expect("hold inode");
+        fs::write(dst.join("data"), b"verified").expect("replacement");
+        assert_eq!(
+            verify_destination_files(&destination, &mut copied, &inventory)
+                .expect_err("replacement must fail")
+                .code(),
+            ErrorCode::Corrupt
+        );
+    }
+
+    #[test]
+    fn retention_policy_mutators_and_checkpoint_share_a_fail_closed_lock() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(temp.path().join("retention")).expect("database");
+        let poison = db.clone();
+        std::thread::spawn(move || {
+            let _guard = poison.inner.retention_lock.lock().expect("retention lock");
+            panic!("poison retention authority");
+        })
+        .join()
+        .expect_err("thread must poison lock");
+
+        assert_eq!(
+            db.set_archive_mode(ArchiveMode::RequiredLocal)
+                .expect_err("archive mutator must acquire lock")
+                .code(),
+            ErrorCode::Error
+        );
+        assert_eq!(
+            db.create_physical_slot("blocked")
+                .expect_err("slot mutator must acquire lock")
+                .code(),
+            ErrorCode::Error
+        );
+        assert_eq!(
+            db.checkpoint()
+                .expect_err("checkpoint must acquire the same lock")
+                .code(),
+            ErrorCode::Error
         );
     }
 }
