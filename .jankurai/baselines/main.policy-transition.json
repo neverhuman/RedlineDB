@@ -1,0 +1,15 @@
+{
+  "schema_version": "redline.jankurai-policy-transition/v1",
+  "protected_main_commit": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+  "protected_main_tree": "0299b7163c427ea0a2de8853d65e75723e425a3e",
+  "previous_baseline_sha256": "39a743d596b8e4306cbc49844595141f367528bd08cb8918e7abc19629f2ae90",
+  "previous_policy_fingerprint": "sha256:affaf294fc444a2dc116f4046213e166d7f8474be08d78d6278feb240d9a2c00",
+  "current_policy_fingerprint": "sha256:2fc3f645808f6d6f42c6db94f7ccf6f74d8ff912962a9714d911e2ac0dd00efe",
+  "refreshed_baseline_sha256": "af6db7ae7cacc27770c94479610a44d64ed8bc026de0f5458fb6b8180349d356",
+  "refreshed_report_fingerprint": "sha256:aeca59086b670936cf278969367cc70b9b2c9d65b18463f2de69ceb7187a4308",
+  "refreshed_input_fingerprint": "sha256:6672ca5a821184927e051d133fa3a87c6a58158dc647563a85aac834a19e0457",
+  "auditor_version": "1.6.11",
+  "standard_version": "0.9.0",
+  "generation_command": "jankurai audit . --full --mode advisory --json <out>.json --md <out>.md --policy agent/audit-policy.toml --no-score-history",
+  "generated_from_clean_protected_main": true
+}

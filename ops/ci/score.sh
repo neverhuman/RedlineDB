@@ -15,31 +15,59 @@ command -v jq >/dev/null 2>&1 \
     || fail "jq is required to validate score evidence"
 bash scripts/check_audit_policy_mirror.sh
 
+transition=".jankurai/baselines/main.policy-transition.json"
+baseline=".jankurai/baselines/main.repo-score.json"
+for evidence in "$transition" "$baseline"; do
+    [ -f "$evidence" ] && [ ! -L "$evidence" ] \
+        || fail "$evidence must be a physical file"
+done
+
+policy_sha="sha256:$(sha256sum agent/audit-policy.toml | awk '{print $1}')"
+baseline_sha="$(sha256sum "$baseline" | awk '{print $1}')"
+jq -e \
+    --arg policy_sha "$policy_sha" \
+    --arg baseline_sha "$baseline_sha" \
+    '
+        .schema_version == "redline.jankurai-policy-transition/v1"
+        and .protected_main_commit
+            == "cdb1c5a4d4629ff555cfca9d8994c818e070c571"
+        and .protected_main_tree
+            == "0299b7163c427ea0a2de8853d65e75723e425a3e"
+        and .previous_policy_fingerprint
+            == "sha256:affaf294fc444a2dc116f4046213e166d7f8474be08d78d6278feb240d9a2c00"
+        and .current_policy_fingerprint == $policy_sha
+        and .refreshed_baseline_sha256 == $baseline_sha
+    ' "$transition" >/dev/null \
+    || fail "reviewed main policy transition evidence is invalid"
+jq -e --arg policy_sha "$policy_sha" '
+    .git.head == "cdb1c5a"
+    and .git.dirty_worktree == false
+    and .scope.mode == "full"
+    and .policy_fingerprint == $policy_sha
+    and .score >= 85
+    and .raw_score >= 85
+    and .decision.passed == true
+    and .decision.hard_findings == 0
+    and (.caps_applied | type == "array" and length == 0)
+' "$baseline" >/dev/null \
+    || fail "reviewed protected-main baseline is invalid"
+
 mkdir -p target/jankurai
 install -m 0644 \
-    .jankurai/baselines/main.repo-score.json \
+    "$baseline" \
     target/jankurai/accepted-baseline.json
 rm -f target/jankurai/audit-state.json \
     target/jankurai/repo-score.json \
     target/jankurai/repo-score.md
 
-audit_rc=0
 jankurai audit . \
     --mode ratchet \
     --baseline target/jankurai/accepted-baseline.json \
     --json target/jankurai/repo-score.json \
     --md target/jankurai/repo-score.md \
     --policy agent/audit-policy.toml \
-    --no-score-history \
-    || audit_rc=$?
+    --no-score-history
 
-if [ "$audit_rc" -ne 0 ]; then
-    bash tools/evidence-processor/run.sh \
-        jankurai-ratchet target/jankurai/repo-score.json
-    printf '[redline-score] reviewed policy transition accepted by locked Rust ratchet gate\n'
-fi
-
-policy_sha="sha256:$(sha256sum agent/audit-policy.toml | awk '{print $1}')"
 jq -e --arg policy_sha "$policy_sha" '
     .score >= 85
     and .raw_score >= 85
@@ -52,20 +80,11 @@ jq -e --arg policy_sha "$policy_sha" '
     and (.decision.ratchet.new_hard_findings | type == "array" and length == 0)
     and ((.blockers // []) | type == "array" and length == 0)
     and .policy_fingerprint == $policy_sha
-    and (
-        (
-            .decision.status == "pass"
-            and .decision.passed == true
-            and .decision.ratchet.passed == true
-        )
-        or
-        (
-            .decision.status == "fail"
-            and .decision.passed == false
-            and .decision.ratchet.passed == false
-            and .decision.ratchet.policy_changed == true
-        )
-    )
+    and .decision.status == "pass"
+    and .decision.passed == true
+    and .decision.ratchet.passed == true
+    and .decision.ratchet.policy_changed == false
+    and .decision.ratchet.baseline_policy_fingerprint == $policy_sha
 ' target/jankurai/repo-score.json >/dev/null
 
 score="$(jq -er '.score' target/jankurai/repo-score.json)"

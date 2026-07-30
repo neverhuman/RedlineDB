@@ -175,18 +175,48 @@ fn jankurai_ratchet_acceptable(report: &Value) -> Result<bool> {
     let minimum = optional_number(decision, "minimum_score", 85.0, "jankurai-ratchet decision")?;
     let hard_findings =
         optional_number(decision, "hard_findings", 1.0, "jankurai-ratchet decision")?;
+    let status = required_string(decision, "status", "jankurai-ratchet decision")?;
+    let passed = required_bool(decision, "passed", "jankurai-ratchet decision")?;
+    let ratchet_passed = required_bool(ratchet, "passed", "jankurai-ratchet decision.ratchet")?;
+    let policy_changed = required_bool(
+        ratchet,
+        "policy_changed",
+        "jankurai-ratchet decision.ratchet",
+    )?;
     let score_delta = optional_number(
         ratchet,
         "score_delta",
         -1.0,
         "jankurai-ratchet decision.ratchet",
     )?;
-    Ok(score >= minimum
+    Ok(status == "pass"
+        && passed
+        && ratchet_passed
+        && !policy_changed
+        && score >= minimum
         && hard_findings == 0.0
         && !report.get("caps_applied").is_some_and(json_truthy)
         && !ratchet.get("new_caps").is_some_and(json_truthy)
         && !ratchet.get("new_hard_findings").is_some_and(json_truthy)
         && score_delta >= 0.0)
+}
+
+fn required_string<'a>(
+    document: &'a Map<String, Value>,
+    name: &str,
+    context: &str,
+) -> Result<&'a str> {
+    document
+        .get(name)
+        .and_then(Value::as_str)
+        .ok_or_else(|| anyhow!("{context}: {name} is not a string"))
+}
+
+fn required_bool(document: &Map<String, Value>, name: &str, context: &str) -> Result<bool> {
+    document
+        .get(name)
+        .and_then(Value::as_bool)
+        .ok_or_else(|| anyhow!("{context}: {name} is not a boolean"))
 }
 
 fn optional_object<'a>(
@@ -290,9 +320,13 @@ mod tests {
             "score": 90,
             "caps_applied": [],
             "decision": {
+                "status": "pass",
+                "passed": true,
                 "minimum_score": 85,
                 "hard_findings": 0,
                 "ratchet": {
+                    "passed": true,
+                    "policy_changed": false,
                     "score_delta": 0,
                     "new_caps": [],
                     "new_hard_findings": [],
@@ -303,7 +337,16 @@ mod tests {
 
         let missing_hard_findings = json!({
             "score": 90,
-            "decision": {"minimum_score": 85, "ratchet": {"score_delta": 0}}
+            "decision": {
+                "status": "pass",
+                "passed": true,
+                "minimum_score": 85,
+                "ratchet": {
+                    "passed": true,
+                    "policy_changed": false,
+                    "score_delta": 0
+                }
+            }
         });
         assert!(!jankurai_ratchet_acceptable(&missing_hard_findings).unwrap());
 
@@ -314,5 +357,41 @@ mod tests {
                 .to_string()
                 .contains("score is not a number")
         );
+    }
+
+    #[test]
+    fn rejects_failed_or_policy_changed_jankurai_decisions() {
+        let accepted = json!({
+            "score": 90,
+            "caps_applied": [],
+            "decision": {
+                "status": "pass",
+                "passed": true,
+                "minimum_score": 85,
+                "hard_findings": 0,
+                "ratchet": {
+                    "passed": true,
+                    "policy_changed": false,
+                    "score_delta": 0,
+                    "new_caps": [],
+                    "new_hard_findings": [],
+                }
+            }
+        });
+
+        for pointer in [
+            "/decision/status",
+            "/decision/passed",
+            "/decision/ratchet/passed",
+            "/decision/ratchet/policy_changed",
+        ] {
+            let mut rejected = accepted.clone();
+            *rejected.pointer_mut(pointer).unwrap() = match pointer {
+                "/decision/status" => json!("fail"),
+                "/decision/ratchet/policy_changed" => json!(true),
+                _ => json!(false),
+            };
+            assert!(!jankurai_ratchet_acceptable(&rejected).unwrap());
+        }
     }
 }

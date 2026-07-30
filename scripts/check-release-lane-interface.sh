@@ -33,7 +33,12 @@ for invariant in \
     '.jankurai/baselines/main.repo-score.json' \
     '.score >= 85' \
     '.decision.hard_findings == 0' \
-    '.decision.ratchet.allowed_drop == 0'
+    '.decision.ratchet.allowed_drop == 0' \
+    '.decision.status == "pass"' \
+    '.decision.passed == true' \
+    '.decision.ratchet.passed == true' \
+    '.decision.ratchet.policy_changed == false' \
+    'main.policy-transition.json'
 do
     grep -Fq -- "$invariant" <<<"$score_lane" \
         || fail "score lane lost invariant: $invariant"
@@ -86,5 +91,16 @@ grep -Fq 'gzip -n' <<<"$artifact_lane" \
     || fail "artifact-support must normalize gzip metadata"
 grep -Fq -- "--mode='u+rwX,go+rX,go-w,a-s'" <<<"$artifact_lane" \
     || fail "artifact-support must normalize archive modes"
+for invariant in \
+    'git clone --no-local --no-hardlinks --no-tags' \
+    'build_count: 2' \
+    'logs/build-1.log' \
+    'logs/build-2.log'
+do
+    grep -Fq -- "$invariant" <<<"$artifact_lane" \
+        || fail "artifact-support lost independent-build invariant: $invariant"
+done
+! grep -Fq 'install -m 0644 "$out_dir/logs/' <<<"$artifact_lane" \
+    || fail "artifact-support must not copy a prior log into an alleged build"
 
 printf 'release lane interface: pass\n'
