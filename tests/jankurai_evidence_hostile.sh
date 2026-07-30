@@ -115,7 +115,7 @@ jq -n --arg head "$head_sha" '{
   repo_root: ".",
   rules_covered: [{
     rule_id: "HLT-023-INPUT-BOUNDARY-GAP",
-    status: "pass"
+    status: "covered"
   }],
   schema_version: "1.0.0",
   standard_version: "0.7.0"
@@ -144,6 +144,7 @@ reject_mutation proofbind missing-obligation '.obligations[0].satisfied = false 
 
 reject_mutation proofmark extra-field '.extensions.proofmark.unexpected = true' "$proofmark"
 reject_mutation proofmark wrong-head '.git_head = "ffffffffffffffffffffffffffffffffffffffff"' "$proofmark"
+reject_mutation proofmark invalid-rule-status '.rules_covered[0].status = "pass"' "$proofmark"
 reject_mutation proofmark unavailable-coverage '.extensions.proofmark.coverage.source = "unavailable" | .extensions.proofmark.coverage.status = "unavailable"' "$proofmark"
 reject_mutation proofmark unavailable-mutation '.extensions.proofmark.mutation.source = "unavailable" | .extensions.proofmark.mutation.status = "unavailable"' "$proofmark"
 reject_mutation proofmark missing-negative '.extensions.proofmark.obligation_results[0].negative_proof_status = "missing"' "$proofmark"

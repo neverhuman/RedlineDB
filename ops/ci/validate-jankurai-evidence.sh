@@ -116,7 +116,7 @@ validate_proofmark() {
       (keys | sort) == ["rule_id", "status"]
       and (.rule_id | type) == "string"
       and (.rule_id | length) > 0
-      and .status == "pass"))
+      and .status == "covered"))
     and (.extensions | keys) == ["proofmark"]
     and (.extensions.proofmark | keys | sort) == [
       "changed_units", "coverage", "mutation", "obligation_results",
