@@ -20,30 +20,3 @@ path = "corpus/beyond_sqlite/generated_manifest.json"
 read_only = false
 source = "Hand-curated beyond-SQLite oracle cases (validated via psql↔psql self-compare)"
 command = "manual authoring; ship-gate enforces self-compare green"
-
-# YAML rule files are the inputs to the xtask generator for matrix-product
-# shards (math×inputs, datetime×modifiers, affinity matrix, CAST matrix,
-# window-frame matrix, PRAGMA sweep, JSON path matrix).
-[[zone]]
-path = "corpus/sqlite_parity/rules/"
-read_only = false
-source = "YAML rule files driving xtask matrix-product shard generation"
-command = "manual authoring; xtask `generate --check` enforces drift-free output"
-
-[[zone]]
-path = "dist/redline-testing-1.0.1-linux-x86_64.tar.gz"
-read_only = false
-source = "local release package"
-command = "just release-local"
-
-[[zone]]
-path = "dist/redline-testing-1.0.1-linux-x86_64.tar.gz.sha256"
-read_only = false
-source = "local release checksum"
-command = "just release-local"
-
-[[zone]]
-path = "dist/release-manifest.json"
-read_only = false
-source = "local release manifest"
-command = "just release-local"

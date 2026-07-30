@@ -340,8 +340,10 @@ fn generated_zone_authority_is_current_and_mirrored() {
     let preflight = repo_file("scripts/check_audit_policy_mirror.sh");
 
     assert_eq!(active, documented);
-    assert!(active.contains("redline-testing-1.0.1-linux-x86_64.tar.gz"));
-    assert!(!active.contains("redline-testing-0.1.2"));
+    assert!(active.contains("corpus/sqlite_parity/generated_manifest.json"));
+    assert!(active.contains("corpus/beyond_sqlite/generated_manifest.json"));
+    assert!(!active.contains("corpus/sqlite_parity/rules/"));
+    assert!(!active.contains("dist/"));
     assert!(preflight.contains("\"generated zones\""));
     assert!(preflight.contains("\".jankurai/generated-zones.toml\""));
     assert!(preflight.contains("\"agent/generated-zones.toml\""));
