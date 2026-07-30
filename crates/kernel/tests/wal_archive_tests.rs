@@ -119,6 +119,25 @@ fn symlinked_state_root_never_receives_watermark_authority() {
     assert!(!external.join("archive.watermark").exists());
 }
 
+#[cfg(unix)]
+#[test]
+fn symlinked_state_ancestor_never_receives_watermark_authority() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new().expect("tempdir");
+    let external = temp.path().join("external");
+    fs::create_dir(&external).expect("external");
+    let linked = temp.path().join("linked");
+    symlink(&external, &linked).expect("ancestor symlink");
+    let state = linked.join("state");
+    let receipt =
+        VerifiedArchiveReceipt::verify(sealed(0, 100, 1), b"durable", &ExactReceipt(b"durable"))
+            .expect("verify");
+
+    assert!(advance_archive_watermark(&state, &receipt).is_err());
+    assert!(!external.join("state").exists());
+}
+
 #[test]
 fn watermark_recovers_fsynced_pre_rename_intent() {
     let temp = TempDir::new().expect("tempdir");
@@ -291,6 +310,24 @@ fn durable_prefix_rejects_symlinked_or_sparse_segment() {
     assert_eq!(
         error,
         Error::CorruptWal("wal segment has invalid physical extent")
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn durable_prefix_rejects_symlinked_wal_ancestor() {
+    use std::os::unix::fs::symlink;
+
+    let temp = TempDir::new().expect("tempdir");
+    let external = temp.path().join("external");
+    let external_wal = external.join("wal");
+    fs::create_dir_all(&external_wal).expect("external wal");
+    fs::write(external_wal.join("00000000000000000001.wal"), [7_u8; 8]).expect("external segment");
+    let linked = temp.path().join("linked");
+    symlink(&external, &linked).expect("ancestor symlink");
+
+    assert!(
+        read_durable_prefix(linked.join("wal"), 128, TimelineId(1), Lsn::ZERO, Lsn(8), 8,).is_err()
     );
 }
 

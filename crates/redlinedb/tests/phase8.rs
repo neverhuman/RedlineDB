@@ -293,6 +293,109 @@ fn verification_rejects_symlinked_backup_entries() {
     assert!(Database::verify_physical_backup(&backup).is_err());
 }
 
+#[cfg(unix)]
+#[test]
+fn physical_backup_rejects_symlinked_destination_ancestor() {
+    use std::os::unix::fs::symlink;
+
+    let dir = tempdir().expect("tempdir");
+    let src = dir.path().join("source");
+    let db = Database::create(&src).expect("create db");
+    let external = dir.path().join("external");
+    fs::create_dir(&external).expect("external");
+    fs::write(external.join("sentinel"), b"keep").expect("sentinel");
+    let linked = dir.path().join("linked");
+    symlink(&external, &linked).expect("ancestor symlink");
+
+    assert!(
+        db.backup_physical_to_path(linked.join("backup"), PhysicalBackupOptions::default(),)
+            .is_err()
+    );
+    assert!(!external.join("backup").exists());
+    assert_eq!(
+        fs::read(external.join("sentinel")).expect("sentinel"),
+        b"keep"
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn physical_backup_verification_rejects_symlinked_source_ancestor() {
+    use std::os::unix::fs::symlink;
+
+    let dir = tempdir().expect("tempdir");
+    let src = dir.path().join("source");
+    let db = Database::create(&src).expect("create db");
+    let external = dir.path().join("external");
+    fs::create_dir(&external).expect("external");
+    let backup = external.join("backup");
+    db.backup_physical_to_path(&backup, PhysicalBackupOptions::default())
+        .expect("backup");
+    let linked = dir.path().join("linked");
+    symlink(&external, &linked).expect("ancestor symlink");
+
+    assert!(Database::verify_physical_backup(linked.join("backup")).is_err());
+}
+
+#[cfg(unix)]
+#[test]
+fn physical_restore_rejects_symlinked_destination_ancestor() {
+    use std::os::unix::fs::symlink;
+
+    let dir = tempdir().expect("tempdir");
+    let src = dir.path().join("source");
+    let backup = dir.path().join("backup");
+    let db = Database::create(&src).expect("create db");
+    db.backup_physical_to_path(&backup, PhysicalBackupOptions::default())
+        .expect("backup");
+    let external = dir.path().join("external");
+    fs::create_dir(&external).expect("external");
+    fs::write(external.join("sentinel"), b"keep").expect("sentinel");
+    let linked = dir.path().join("linked");
+    symlink(&external, &linked).expect("ancestor symlink");
+
+    assert!(
+        Database::restore_from_backup(&backup, linked.join("restore"), RestoreOptions::default(),)
+            .is_err()
+    );
+    assert!(!external.join("restore").exists());
+    assert_eq!(
+        fs::read(external.join("sentinel")).expect("sentinel"),
+        b"keep"
+    );
+}
+
+#[test]
+fn physical_backup_authority_ingress_is_bounded_before_parsing() {
+    let dir = tempdir().expect("tempdir");
+    let src = dir.path().join("source");
+    let manifest_backup = dir.path().join("manifest-backup");
+    let marker_backup = dir.path().join("marker-backup");
+    let db = Database::create(&src).expect("create db");
+
+    db.backup_physical_to_path(&manifest_backup, PhysicalBackupOptions::default())
+        .expect("manifest backup");
+    fs::write(
+        manifest_backup
+            .join("phase8")
+            .join(PHYSICAL_BACKUP_MANIFEST_FILE),
+        vec![b' '; 16 * 1024 * 1024 + 1],
+    )
+    .expect("oversize manifest");
+    let error = Database::verify_physical_backup(&manifest_backup).expect_err("oversize manifest");
+    assert_eq!(error.code(), redlinedb::ErrorCode::TooBig);
+
+    db.backup_physical_to_path(&marker_backup, PhysicalBackupOptions::default())
+        .expect("marker backup");
+    fs::write(
+        marker_backup.join("phase8").join("complete.marker"),
+        vec![b'x'; 17],
+    )
+    .expect("oversize marker");
+    let error = Database::verify_physical_backup(&marker_backup).expect_err("oversize marker");
+    assert_eq!(error.code(), redlinedb::ErrorCode::TooBig);
+}
+
 #[test]
 fn slots_are_persisted_and_listed() {
     let dir = tempdir().expect("tempdir");

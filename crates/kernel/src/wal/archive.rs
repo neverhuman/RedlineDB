@@ -2,6 +2,7 @@ use std::ffi::{CStr, CString};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::fd::{AsRawFd, FromRawFd};
+use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path};
 
@@ -114,18 +115,26 @@ pub fn read_durable_prefix(
         return Ok(None);
     }
 
-    let wal_dir = wal_dir.as_ref();
+    let wal_dir = NativeDirectory::open(wal_dir.as_ref(), false)?;
+    wal_dir.revalidate()?;
     let mut cursor = start_lsn;
     let address_bytes =
         usize::try_from(durable_lsn.0.saturating_sub(start_lsn.0)).unwrap_or(usize::MAX);
     let mut bytes = Vec::with_capacity(max_bytes.min(address_bytes));
     while cursor < durable_lsn && bytes.len() < max_bytes {
         let segment = segment_for_lsn(cursor, segment_bytes);
-        let path = segment_path(wal_dir, segment);
-        let mut file = OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
-            .open(&path)?;
+        let path = segment_path(Path::new(""), segment);
+        let name = path
+            .file_name()
+            .ok_or(Error::CorruptWal("invalid wal segment name"))?;
+        let name = CString::new(name.as_bytes())
+            .map_err(|_| Error::CorruptWal("invalid wal segment name"))?;
+        let mut file = openat(
+            &wal_dir.dir,
+            &name,
+            libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0,
+        )?;
         let metadata = file.metadata()?;
         if !metadata.file_type().is_file() || metadata.nlink() != 1 {
             return Err(Error::CorruptWal(
@@ -165,7 +174,13 @@ pub fn read_durable_prefix(
         file.read_exact(&mut bytes[start_len..])?;
         cursor = Lsn(cursor.0.saturating_add(take));
 
-        revalidate_segment_file(&path, &file, &metadata, file_len)?;
+        revalidate_named_file(&wal_dir, &name, &file, &metadata)?;
+        let final_metadata = file.metadata()?;
+        if final_metadata.len() != file_len {
+            return Err(Error::CorruptWal(
+                "wal segment identity changed while reading",
+            ));
+        }
     }
 
     if bytes.is_empty() {
@@ -183,26 +198,27 @@ pub fn read_durable_prefix(
     Ok(Some(DurableWalPrefix { range, bytes }))
 }
 
-fn revalidate_segment_file(
-    path: &Path,
+fn revalidate_named_file(
+    directory: &NativeDirectory,
+    name: &CStr,
     file: &File,
     initial_metadata: &fs::Metadata,
-    initial_len: u64,
 ) -> Result<()> {
-    let path_metadata = fs::symlink_metadata(path)?;
+    directory.revalidate()?;
+    let path_metadata = statat(&directory.dir, name)?;
     let final_metadata = file.metadata()?;
-    if !path_metadata.file_type().is_file()
-        || path_metadata.dev() != initial_metadata.dev()
-        || path_metadata.ino() != initial_metadata.ino()
+    if path_metadata.st_mode & libc::S_IFMT != libc::S_IFREG
+        || path_metadata.st_dev as u64 != initial_metadata.dev()
+        || path_metadata.st_ino as u64 != initial_metadata.ino()
         || final_metadata.dev() != initial_metadata.dev()
         || final_metadata.ino() != initial_metadata.ino()
-        || final_metadata.len() != initial_len
         || final_metadata.nlink() != 1
     {
         return Err(Error::CorruptWal(
             "wal segment identity changed while reading",
         ));
     }
+    directory.revalidate()?;
     Ok(())
 }
 
@@ -254,6 +270,20 @@ struct WatermarkState {
     watermark: ArchiveWatermark,
     previous_lsn: Lsn,
     receipt_sha256: [u8; 32],
+}
+
+struct DirectoryBinding {
+    parent: File,
+    name: CString,
+    dev: u64,
+    ino: u64,
+}
+
+struct NativeDirectory {
+    dir: File,
+    dev: u64,
+    ino: u64,
+    bindings: Vec<DirectoryBinding>,
 }
 
 pub fn archive_watermark(
@@ -334,20 +364,93 @@ fn empty_watermark(timeline: TimelineId) -> WatermarkState {
     }
 }
 
-fn open_state_dir(state_dir: &Path, create: bool) -> Result<File> {
-    if create {
-        fs::create_dir_all(state_dir)?;
+impl NativeDirectory {
+    fn open(path: &Path, create: bool) -> Result<Self> {
+        if path.as_os_str().is_empty() {
+            return Err(Error::CorruptWal("invalid native directory path"));
+        }
+        let start = if path.is_absolute() { "/" } else { "." };
+        let mut directory = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
+            .open(start)?;
+        let mut bindings = Vec::new();
+        for component in path.components() {
+            let component = match component {
+                Component::RootDir | Component::CurDir => continue,
+                Component::Normal(component) => component,
+                Component::ParentDir | Component::Prefix(_) => {
+                    return Err(Error::CorruptWal("invalid native directory path"));
+                }
+            };
+            let name = CString::new(component.as_bytes())
+                .map_err(|_| Error::CorruptWal("invalid native directory path"))?;
+            let flags = libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC;
+            let opened = match openat(&directory, &name, flags, 0) {
+                Ok(opened) => opened,
+                Err(error) if create && error.kind() == std::io::ErrorKind::NotFound => {
+                    mkdirat(&directory, &name)?;
+                    directory.sync_all()?;
+                    openat(&directory, &name, flags, 0)?
+                }
+                Err(error) => return Err(error.into()),
+            };
+            let metadata = opened.metadata()?;
+            let observed = statat(&directory, &name)?;
+            if !metadata.file_type().is_dir()
+                || observed.st_mode & libc::S_IFMT != libc::S_IFDIR
+                || observed.st_dev as u64 != metadata.dev()
+                || observed.st_ino as u64 != metadata.ino()
+            {
+                return Err(Error::CorruptWal("native directory ancestry is not stable"));
+            }
+            bindings.push(DirectoryBinding {
+                parent: directory,
+                name,
+                dev: metadata.dev(),
+                ino: metadata.ino(),
+            });
+            directory = opened;
+        }
+        let metadata = directory.metadata()?;
+        if !metadata.file_type().is_dir() {
+            return Err(Error::CorruptWal(
+                "native directory path is not a directory",
+            ));
+        }
+        let native = Self {
+            dir: directory,
+            dev: metadata.dev(),
+            ino: metadata.ino(),
+            bindings,
+        };
+        native.revalidate()?;
+        Ok(native)
     }
-    let state = OpenOptions::new()
-        .read(true)
-        .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
-        .open(state_dir)?;
-    if !state.metadata()?.file_type().is_dir() {
-        return Err(Error::CorruptWal(
-            "archive state root is not a native directory",
-        ));
+
+    fn revalidate(&self) -> Result<()> {
+        for binding in &self.bindings {
+            let observed = statat(&binding.parent, &binding.name)?;
+            if observed.st_mode & libc::S_IFMT != libc::S_IFDIR
+                || observed.st_dev as u64 != binding.dev
+                || observed.st_ino as u64 != binding.ino
+            {
+                return Err(Error::CorruptWal("native directory ancestry changed"));
+            }
+        }
+        let metadata = self.dir.metadata()?;
+        if !metadata.file_type().is_dir()
+            || metadata.dev() != self.dev
+            || metadata.ino() != self.ino
+        {
+            return Err(Error::CorruptWal("native directory ancestry changed"));
+        }
+        Ok(())
     }
-    Ok(state)
+}
+
+fn open_state_dir(state_dir: &Path, create: bool) -> Result<NativeDirectory> {
+    NativeDirectory::open(state_dir, create)
 }
 
 fn c_name(name: &str) -> Result<CString> {
@@ -355,14 +458,14 @@ fn c_name(name: &str) -> Result<CString> {
 }
 
 fn openat(
-    state: &File,
+    directory: &File,
     name: &CStr,
     flags: libc::c_int,
     mode: libc::mode_t,
 ) -> std::io::Result<File> {
-    // SAFETY: `state` is an open directory descriptor and `name` is a
+    // SAFETY: `directory` is an open directory descriptor and `name` is a
     // NUL-terminated single component retained for the duration of the call.
-    let fd = unsafe { libc::openat(state.as_raw_fd(), name.as_ptr(), flags, mode) };
+    let fd = unsafe { libc::openat(directory.as_raw_fd(), name.as_ptr(), flags, mode) };
     if fd < 0 {
         Err(std::io::Error::last_os_error())
     } else {
@@ -371,10 +474,43 @@ fn openat(
     }
 }
 
-fn read_named_file(state: &File, name: &str) -> Result<Option<File>> {
+fn mkdirat(directory: &File, name: &CStr) -> std::io::Result<()> {
+    // SAFETY: `directory` remains open and `name` is a retained,
+    // NUL-terminated single component for the duration of the call.
+    if unsafe { libc::mkdirat(directory.as_raw_fd(), name.as_ptr(), 0o700) } != 0 {
+        let error = std::io::Error::last_os_error();
+        if error.kind() != std::io::ErrorKind::AlreadyExists {
+            return Err(error);
+        }
+    }
+    Ok(())
+}
+
+fn statat(directory: &File, name: &CStr) -> std::io::Result<libc::stat> {
+    // SAFETY: `libc::stat` is a C data record whose all-zero bit pattern is
+    // valid; `fstatat` overwrites it on success.
+    let mut stat = unsafe { std::mem::zeroed::<libc::stat>() };
+    // SAFETY: `directory` remains open, `name` is NUL-terminated, and
+    // `stat` points to writable storage initialized by successful `fstatat`.
+    if unsafe {
+        libc::fstatat(
+            directory.as_raw_fd(),
+            name.as_ptr(),
+            &mut stat,
+            libc::AT_SYMLINK_NOFOLLOW,
+        )
+    } != 0
+    {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(stat)
+    }
+}
+
+fn read_named_file(state: &NativeDirectory, name: &str) -> Result<Option<File>> {
     let name = c_name(name)?;
     let file = match openat(
-        state,
+        &state.dir,
         &name,
         libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
         0,
@@ -387,10 +523,11 @@ fn read_named_file(state: &File, name: &str) -> Result<Option<File>> {
     if !metadata.file_type().is_file() || metadata.nlink() != 1 {
         return Err(Error::CorruptWal("archive watermark is not a regular file"));
     }
+    revalidate_named_file(state, &name, &file, &metadata)?;
     Ok(Some(file))
 }
 
-fn read_watermark(state: &File, timeline: TimelineId) -> Result<WatermarkState> {
+fn read_watermark(state: &NativeDirectory, timeline: TimelineId) -> Result<WatermarkState> {
     let Some(mut file) = read_named_file(state, WATERMARK_FILE)? else {
         return Ok(empty_watermark(timeline));
     };
@@ -399,10 +536,10 @@ fn read_watermark(state: &File, timeline: TimelineId) -> Result<WatermarkState> 
     decode_watermark(&text, timeline)
 }
 
-fn lock_watermark(state: &File) -> Result<File> {
+fn lock_watermark(state: &NativeDirectory) -> Result<File> {
     let name = c_name(WATERMARK_LOCK_FILE)?;
     let lock = openat(
-        state,
+        &state.dir,
         &name,
         libc::O_RDWR | libc::O_CREAT | libc::O_NOFOLLOW | libc::O_CLOEXEC,
         0o600,
@@ -413,6 +550,7 @@ fn lock_watermark(state: &File) -> Result<File> {
             "archive watermark lock is not a regular file",
         ));
     }
+    revalidate_named_file(state, &name, &lock, &metadata)?;
     // SAFETY: `lock` owns a valid descriptor. `flock` does not retain the
     // pointer state and the lock is released when this descriptor is dropped.
     if unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX) } != 0 {
@@ -421,39 +559,46 @@ fn lock_watermark(state: &File) -> Result<File> {
     Ok(lock)
 }
 
-fn renameat(state: &File, old: &str, new: &str) -> Result<()> {
+fn renameat(state: &NativeDirectory, old: &str, new: &str) -> Result<()> {
+    state.revalidate()?;
     let old = c_name(old)?;
     let new = c_name(new)?;
     // SAFETY: both names are NUL-terminated single components and both
     // directory descriptors remain open for the complete operation.
     if unsafe {
         libc::renameat(
-            state.as_raw_fd(),
+            state.dir.as_raw_fd(),
             old.as_ptr(),
-            state.as_raw_fd(),
+            state.dir.as_raw_fd(),
             new.as_ptr(),
         )
     } != 0
     {
         return Err(std::io::Error::last_os_error().into());
     }
+    state.revalidate()?;
     Ok(())
 }
 
-fn unlinkat(state: &File, name: &str) -> Result<()> {
+fn unlinkat(state: &NativeDirectory, name: &str) -> Result<()> {
+    state.revalidate()?;
     let name = c_name(name)?;
     // SAFETY: `name` is a retained NUL-terminated component and `state`
     // remains an open directory descriptor for the complete call.
-    if unsafe { libc::unlinkat(state.as_raw_fd(), name.as_ptr(), 0) } != 0 {
+    if unsafe { libc::unlinkat(state.dir.as_raw_fd(), name.as_ptr(), 0) } != 0 {
         let error = std::io::Error::last_os_error();
         if error.kind() != std::io::ErrorKind::NotFound {
             return Err(error.into());
         }
     }
+    state.revalidate()?;
     Ok(())
 }
 
-fn recover_pending_watermark(state: &File, timeline: TimelineId) -> Result<WatermarkState> {
+fn recover_pending_watermark(
+    state: &NativeDirectory,
+    timeline: TimelineId,
+) -> Result<WatermarkState> {
     let current = read_watermark(state, timeline)?;
     let Some(mut pending_file) = read_named_file(state, WATERMARK_PENDING_FILE)? else {
         return Ok(current);
@@ -468,7 +613,7 @@ fn recover_pending_watermark(state: &File, timeline: TimelineId) -> Result<Water
             // discard while holding the cross-process lock.
             drop(pending_file);
             unlinkat(state, WATERMARK_PENDING_FILE)?;
-            state.sync_all()?;
+            state.dir.sync_all()?;
             return Ok(current);
         }
         Err(error) => return Err(error),
@@ -487,11 +632,11 @@ fn recover_pending_watermark(state: &File, timeline: TimelineId) -> Result<Water
         ));
     }
     renameat(state, WATERMARK_PENDING_FILE, WATERMARK_FILE)?;
-    state.sync_all()?;
+    state.dir.sync_all()?;
     Ok(pending)
 }
 
-fn write_watermark(state: &File, watermark: WatermarkState) -> Result<()> {
+fn write_watermark(state: &NativeDirectory, watermark: WatermarkState) -> Result<()> {
     let text = format!(
         "version={WATERMARK_VERSION}\ntimeline={}\nprevious_lsn={}\narchived_lsn={}\ngeneration={}\nreceipt_sha256={}\n",
         watermark.watermark.timeline.0,
@@ -503,7 +648,7 @@ fn write_watermark(state: &File, watermark: WatermarkState) -> Result<()> {
     {
         let name = c_name(WATERMARK_PENDING_FILE)?;
         let mut file = openat(
-            state,
+            &state.dir,
             &name,
             libc::O_WRONLY | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
             0o600,
@@ -511,9 +656,11 @@ fn write_watermark(state: &File, watermark: WatermarkState) -> Result<()> {
         file.write_all(text.as_bytes())?;
         file.sync_all()?;
     }
-    state.sync_all()?;
+    state.revalidate()?;
+    state.dir.sync_all()?;
     renameat(state, WATERMARK_PENDING_FILE, WATERMARK_FILE)?;
-    state.sync_all()?;
+    state.dir.sync_all()?;
+    state.revalidate()?;
     Ok(())
 }
 
@@ -601,19 +748,55 @@ mod tests {
         let temp = tempfile::tempdir().expect("tempdir");
         let path = temp.path().join("00000000000000000001.wal");
         fs::write(&path, [1_u8; 128]).expect("segment");
-        let file = OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_NOFOLLOW | libc::O_CLOEXEC)
-            .open(&path)
-            .expect("retained segment");
+        let directory = NativeDirectory::open(temp.path(), false).expect("native directory");
+        let name = c_name("00000000000000000001.wal").expect("name");
+        let file = openat(
+            &directory.dir,
+            &name,
+            libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC,
+            0,
+        )
+        .expect("retained segment");
         let metadata = file.metadata().expect("metadata");
 
         fs::rename(&path, temp.path().join("held.wal")).expect("hold original");
         fs::write(&path, [2_u8; 128]).expect("replacement");
         assert_eq!(
-            revalidate_segment_file(&path, &file, &metadata, metadata.len())
+            revalidate_named_file(&directory, &name, &file, &metadata)
                 .expect_err("replacement must fail"),
             Error::CorruptWal("wal segment identity changed while reading")
         );
+    }
+
+    #[test]
+    fn retained_directory_rejects_ancestor_replacement() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let parent = temp.path().join("parent");
+        let directory_path = parent.join("wal");
+        fs::create_dir_all(&directory_path).expect("directory");
+        let directory = NativeDirectory::open(&directory_path, false).expect("native directory");
+
+        let held = temp.path().join("held-parent");
+        fs::rename(&parent, &held).expect("hold original ancestry");
+        fs::create_dir_all(&directory_path).expect("replacement ancestry");
+
+        assert_eq!(
+            directory
+                .revalidate()
+                .expect_err("ancestor replacement must fail"),
+            Error::CorruptWal("native directory ancestry changed")
+        );
+    }
+
+    #[test]
+    fn native_directory_retains_current_and_filesystem_roots() {
+        NativeDirectory::open(Path::new("."), false)
+            .expect("current directory")
+            .revalidate()
+            .expect("current directory binding");
+        NativeDirectory::open(Path::new("/"), false)
+            .expect("filesystem root")
+            .revalidate()
+            .expect("filesystem root binding");
     }
 }

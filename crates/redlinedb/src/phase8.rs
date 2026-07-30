@@ -1,9 +1,7 @@
 use std::collections::BTreeSet;
-use std::ffi::{CStr, CString};
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
-use std::os::fd::{AsRawFd, FromRawFd};
-use std::os::unix::ffi::OsStrExt;
+use std::os::fd::AsRawFd;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::{Component, Path, PathBuf};
 use std::sync::MutexGuard;
@@ -20,6 +18,10 @@ use redlinedb_sql::RecoveryTarget as SqlRecoveryTarget;
 use crate::Database;
 use crate::error::{Error, ErrorCode, Result};
 
+mod native_root;
+
+use native_root::NativeRoot;
+
 pub const PHASE8_DIR: &str = "phase8";
 pub const IDENTITY_FILE: &str = "identity.json";
 pub const BACKUP_DIR: &str = "backups";
@@ -35,6 +37,8 @@ const MAX_SLOT_FILE_BYTES: u64 = 64 * 1024;
 const MAX_BACKUP_FILES: usize = 1_000_000;
 const MAX_BACKUP_FILE_BYTES: u64 = 1 << 40;
 const MAX_BACKUP_TOTAL_BYTES: u64 = 16 << 40;
+const MAX_PHYSICAL_BACKUP_MANIFEST_BYTES: u64 = 16 * 1024 * 1024;
+const MAX_COMPLETE_MARKER_BYTES: u64 = 16;
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ArchiveMode {
@@ -195,12 +199,6 @@ struct RetentionFile {
     updated_unix_nanos: u128,
 }
 
-struct NativeRoot {
-    dir: File,
-    dev: u64,
-    ino: u64,
-}
-
 struct OpenedBackupFile {
     verified: VerifiedBackupFile,
     file: File,
@@ -235,10 +233,8 @@ pub fn backup_physical_to_path(
     let backup_id = next_backup_id();
     let dst = dst.as_ref();
 
-    prepare_empty_directory(dst, "physical backup destination is not empty")?;
-
     let source_root = NativeRoot::open(src)?;
-    let backup_root = NativeRoot::open(dst)?;
+    let backup_root = NativeRoot::prepare_empty(dst, "physical backup destination is not empty")?;
     let files = collect_files(src, &|path| should_copy_path(path, dst))?;
     let mut bytes_copied = 0_u64;
     for rel in &files {
@@ -287,9 +283,11 @@ pub fn backup_physical_to_path(
         total_bytes,
         tree_hash,
     };
-    let manifest_path = phase8_path(dst).join(PHYSICAL_BACKUP_MANIFEST_FILE);
-    write_json_atomic(&manifest_path, &manifest)?;
-    write_text_atomic(&phase8_path(dst).join(COMPLETE_FILE), "ok\n")?;
+    backup_root.write_json_atomic(
+        &Path::new(PHASE8_DIR).join(PHYSICAL_BACKUP_MANIFEST_FILE),
+        &manifest,
+    )?;
+    backup_root.write_text_atomic(&Path::new(PHASE8_DIR).join(COMPLETE_FILE), "ok\n")?;
     let mut final_inventory = files.clone();
     final_inventory.push(Path::new(PHASE8_DIR).join(PHYSICAL_BACKUP_MANIFEST_FILE));
     final_inventory.push(Path::new(PHASE8_DIR).join(COMPLETE_FILE));
@@ -316,8 +314,7 @@ pub fn restore_from_backup(
     let dst = dst.as_ref();
     let mut backup = open_verified_backup(src)?;
     let manifest = backup.manifest.clone();
-    prepare_empty_directory(dst, "restore destination is not empty")?;
-    let destination = NativeRoot::open(dst)?;
+    let destination = NativeRoot::prepare_empty(dst, "restore destination is not empty")?;
 
     let mut bytes_copied = 0_u64;
     let mut destination_files = Vec::with_capacity(backup.files.len());
@@ -338,7 +335,10 @@ pub fn restore_from_backup(
     // descriptor, not at a pathname which could be exchanged after
     // verification.
     let retained_dst = destination.proc_path();
-    let mut restored_identity = load_identity_or_init(&retained_dst)?;
+    let mut identity_file =
+        destination.open_regular_file(&Path::new(PHASE8_DIR).join(IDENTITY_FILE))?;
+    let mut restored_identity: IdentityFile =
+        read_bounded_json(&mut identity_file, MAX_SLOT_FILE_BYTES)?;
     restored_identity.db_id = next_db_id();
     if !options.preserve_timeline {
         restored_identity.parent_timeline = Some(manifest.timeline);
@@ -352,7 +352,10 @@ pub fn restore_from_backup(
             SqlRecoveryTarget::Csn(_) => Some(manifest.stop_lsn),
         };
     }
-    write_json_atomic(&identity_path(&retained_dst), &restored_identity)?;
+    destination.write_json_atomic(
+        &Path::new(PHASE8_DIR).join(IDENTITY_FILE),
+        &restored_identity,
+    )?;
     refresh_destination_file(
         &destination,
         &mut destination_files,
@@ -385,10 +388,7 @@ pub fn restore_from_backup(
         Err(error) => return Err(error),
     }
     verify_destination_files(&destination, &mut destination_files, &destination_inventory)?;
-    write_text_atomic(
-        &phase8_path(&retained_dst).join(RESTORE_COMPLETE_FILE),
-        "ok\n",
-    )?;
+    destination.write_text_atomic(&Path::new(PHASE8_DIR).join(RESTORE_COMPLETE_FILE), "ok\n")?;
     let restore_marker = Path::new(PHASE8_DIR).join(RESTORE_COMPLETE_FILE);
     destination_files.push(retain_destination_file(&destination, &restore_marker)?);
     destination_inventory.push(restore_marker);
@@ -420,9 +420,8 @@ pub fn physical_backup_manifest(src: impl AsRef<Path>) -> Result<PhysicalBackupM
 fn physical_backup_manifest_from_root(root: &NativeRoot) -> Result<PhysicalBackupManifest> {
     let mut file =
         root.open_regular_file(&Path::new(PHASE8_DIR).join(PHYSICAL_BACKUP_MANIFEST_FILE))?;
-    let mut bytes = Vec::new();
-    file.read_to_end(&mut bytes)?;
-    let manifest: PhysicalBackupManifest = serde_json::from_slice(&bytes)?;
+    let manifest: PhysicalBackupManifest =
+        read_bounded_json(&mut file, MAX_PHYSICAL_BACKUP_MANIFEST_BYTES)?;
     if manifest.format_version != FORMAT_VERSION {
         return Err(Error::new(
             ErrorCode::Unsupported,
@@ -934,103 +933,6 @@ fn copy_file_exclusive(source: &NativeRoot, destination: &NativeRoot, rel: &Path
 }
 
 impl NativeRoot {
-    fn open(path: &Path) -> Result<Self> {
-        let dir = OpenOptions::new()
-            .read(true)
-            .custom_flags(libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC)
-            .open(path)?;
-        let metadata = dir.metadata()?;
-        if !metadata.file_type().is_dir() {
-            return Err(Error::new(
-                ErrorCode::Corrupt,
-                "native root is not a directory",
-            ));
-        }
-        Ok(Self {
-            dir,
-            dev: metadata.dev(),
-            ino: metadata.ino(),
-        })
-    }
-
-    fn proc_path(&self) -> PathBuf {
-        PathBuf::from(format!("/proc/self/fd/{}", self.dir.as_raw_fd()))
-    }
-
-    fn revalidate_path(&self, path: &Path) -> Result<()> {
-        let metadata = fs::symlink_metadata(path)?;
-        if !metadata.file_type().is_dir()
-            || metadata.dev() != self.dev
-            || metadata.ino() != self.ino
-        {
-            return Err(Error::new(
-                ErrorCode::Corrupt,
-                "native root identity changed",
-            ));
-        }
-        Ok(())
-    }
-
-    fn open_regular_file(&self, rel: &Path) -> Result<File> {
-        let components = normal_components(rel)?;
-        let mut parent = self.dir.try_clone()?;
-        for (index, component) in components.iter().enumerate() {
-            let last = index + 1 == components.len();
-            let flags = if last {
-                libc::O_RDONLY | libc::O_NOFOLLOW | libc::O_CLOEXEC
-            } else {
-                libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC
-            };
-            let opened = openat_component(&parent, component, flags, 0)?;
-            let metadata = opened.metadata()?;
-            if (last && (!metadata.file_type().is_file() || metadata.nlink() != 1))
-                || (!last && !metadata.file_type().is_dir())
-            {
-                return Err(Error::new(
-                    ErrorCode::Corrupt,
-                    "backup path is not a native regular file",
-                ));
-            }
-            parent = opened;
-        }
-        Ok(parent)
-    }
-
-    fn create_regular_file(&self, rel: &Path) -> Result<File> {
-        let components = normal_components(rel)?;
-        let (file_name, parents) = components
-            .split_last()
-            .ok_or_else(|| Error::new(ErrorCode::Corrupt, "empty backup path"))?;
-        let mut parent = self.dir.try_clone()?;
-        for component in parents {
-            let flags = libc::O_RDONLY | libc::O_DIRECTORY | libc::O_NOFOLLOW | libc::O_CLOEXEC;
-            let opened = match openat_component(&parent, component, flags, 0) {
-                Ok(opened) => opened,
-                Err(error) if error.code() == ErrorCode::NotFound => {
-                    mkdirat_component(&parent, component)?;
-                    parent.sync_all()?;
-                    openat_component(&parent, component, flags, 0)?
-                }
-                Err(error) => return Err(error),
-            };
-            if !opened.metadata()?.file_type().is_dir() {
-                return Err(Error::new(
-                    ErrorCode::Corrupt,
-                    "restore ancestor is not a native directory",
-                ));
-            }
-            parent = opened;
-        }
-        let output = openat_component(
-            &parent,
-            file_name,
-            libc::O_RDWR | libc::O_CREAT | libc::O_EXCL | libc::O_NOFOLLOW | libc::O_CLOEXEC,
-            0o600,
-        )?;
-        parent.sync_all()?;
-        Ok(output)
-    }
-
     fn revalidate_file(&self, file: &OpenedBackupFile) -> Result<()> {
         self.revalidate_opened_file(
             Path::new(&file.verified.relative_path),
@@ -1064,67 +966,6 @@ impl NativeRoot {
         }
         Ok(())
     }
-}
-
-fn normal_components(path: &Path) -> Result<Vec<&std::ffi::OsStr>> {
-    let mut components = Vec::new();
-    for component in path.components() {
-        let Component::Normal(component) = component else {
-            return Err(Error::new(
-                ErrorCode::Corrupt,
-                "invalid backup manifest path",
-            ));
-        };
-        components.push(component);
-    }
-    if components.is_empty() {
-        return Err(Error::new(ErrorCode::Corrupt, "empty backup manifest path"));
-    }
-    Ok(components)
-}
-
-fn component_name(component: &std::ffi::OsStr) -> Result<CString> {
-    CString::new(component.as_bytes())
-        .map_err(|_| Error::new(ErrorCode::Corrupt, "backup path contains NUL"))
-}
-
-fn openat_component(
-    parent: &File,
-    component: &std::ffi::OsStr,
-    flags: libc::c_int,
-    mode: libc::mode_t,
-) -> Result<File> {
-    let component = component_name(component)?;
-    openat_name(parent, &component, flags, mode).map_err(Error::from)
-}
-
-fn openat_name(
-    parent: &File,
-    name: &CStr,
-    flags: libc::c_int,
-    mode: libc::mode_t,
-) -> std::io::Result<File> {
-    // SAFETY: `parent` is retained for the call, `name` is NUL-terminated,
-    // and a successful call returns a new owned descriptor.
-    let fd = unsafe { libc::openat(parent.as_raw_fd(), name.as_ptr(), flags, mode) };
-    if fd < 0 {
-        Err(std::io::Error::last_os_error())
-    } else {
-        // SAFETY: the successful `openat` result is uniquely owned here.
-        Ok(unsafe { File::from_raw_fd(fd) })
-    }
-}
-
-fn mkdirat_component(parent: &File, component: &std::ffi::OsStr) -> Result<()> {
-    let component = component_name(component)?;
-    // SAFETY: `parent` and `component` remain valid for the complete call.
-    if unsafe { libc::mkdirat(parent.as_raw_fd(), component.as_ptr(), 0o700) } != 0 {
-        let error = std::io::Error::last_os_error();
-        if error.kind() != std::io::ErrorKind::AlreadyExists {
-            return Err(error.into());
-        }
-    }
-    Ok(())
 }
 
 fn copy_opened_file(
@@ -1223,7 +1064,7 @@ fn verify_destination_files(
         )?;
     }
     verify_closed_inventory(destination, expected_inventory)?;
-    destination.dir.sync_all()?;
+    destination.sync_all()?;
     Ok(())
 }
 
@@ -1517,27 +1358,23 @@ fn validate_backup_relative_path(raw: &str) -> Result<PathBuf> {
 }
 
 fn verify_complete_marker_from_root(root: &NativeRoot) -> Result<()> {
-    let mut marker = root.open_regular_file(&Path::new(PHASE8_DIR).join(COMPLETE_FILE))?;
-    let mut text = String::new();
-    marker.read_to_string(&mut text)?;
-    if text != "ok\n" {
+    let marker = root.open_regular_file(&Path::new(PHASE8_DIR).join(COMPLETE_FILE))?;
+    let mut bytes = Vec::new();
+    marker
+        .take(MAX_COMPLETE_MARKER_BYTES.saturating_add(1))
+        .read_to_end(&mut bytes)?;
+    if bytes.len() as u64 > MAX_COMPLETE_MARKER_BYTES {
+        return Err(Error::new(
+            ErrorCode::TooBig,
+            "physical backup completion marker is too large",
+        ));
+    }
+    if bytes != b"ok\n" {
         return Err(Error::new(
             ErrorCode::Corrupt,
             "physical backup is incomplete",
         ));
     }
-    Ok(())
-}
-
-fn prepare_empty_directory(path: &Path, message: &'static str) -> Result<()> {
-    if path.exists() {
-        let metadata = fs::symlink_metadata(path)?;
-        if !metadata.file_type().is_dir() || fs::read_dir(path)?.next().is_some() {
-            return Err(Error::new(ErrorCode::Busy, message));
-        }
-        return Ok(());
-    }
-    fs::create_dir_all(path)?;
     Ok(())
 }
 
@@ -1681,27 +1518,6 @@ fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
             .write(true)
             .open(&tmp_path)?;
         file.write_all(&bytes)?;
-        file.sync_all()?;
-    }
-    fs::rename(&tmp_path, path)?;
-    if let Some(parent) = path.parent() {
-        sync_dir(parent)?;
-    }
-    Ok(())
-}
-
-fn write_text_atomic(path: &Path, text: &str) -> Result<()> {
-    if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let tmp_path = path.with_extension("tmp");
-    {
-        let mut file = OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(&tmp_path)?;
-        file.write_all(text.as_bytes())?;
         file.sync_all()?;
     }
     fs::rename(&tmp_path, path)?;
@@ -1859,6 +1675,61 @@ mod tests {
                 .code(),
             ErrorCode::Corrupt
         );
+    }
+
+    #[test]
+    fn retained_root_rejects_parent_ancestry_replacement() {
+        let temp = tempfile::tempdir().expect("tempdir");
+        let parent = temp.path().join("parent");
+        let dst = parent.join("dst");
+        fs::create_dir_all(&dst).expect("destination");
+        let destination = NativeRoot::open(&dst).expect("destination root");
+
+        fs::rename(&parent, temp.path().join("parent.held")).expect("hold ancestry");
+        fs::create_dir_all(&dst).expect("replacement ancestry");
+
+        assert_eq!(
+            destination
+                .revalidate_path(&dst)
+                .expect_err("ancestor replacement must fail")
+                .code(),
+            ErrorCode::Corrupt
+        );
+    }
+
+    #[test]
+    fn native_root_retains_current_and_filesystem_roots() {
+        NativeRoot::open(Path::new("."))
+            .expect("current directory")
+            .revalidate_path(Path::new("."))
+            .expect("current directory binding");
+        NativeRoot::open(Path::new("/"))
+            .expect("filesystem root")
+            .revalidate_path(Path::new("/"))
+            .expect("filesystem root binding");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn descriptor_atomic_publication_never_follows_target_symlink() {
+        use std::os::unix::fs::symlink;
+
+        let temp = tempfile::tempdir().expect("tempdir");
+        let root_path = temp.path().join("root");
+        fs::create_dir_all(root_path.join("phase8")).expect("root");
+        let external = temp.path().join("external");
+        fs::write(&external, b"keep").expect("external");
+        symlink(&external, root_path.join("phase8/backup-manifest.json")).expect("symlink");
+        let root = NativeRoot::open(&root_path).expect("native root");
+
+        assert_eq!(
+            root.write_text_atomic(Path::new("phase8/backup-manifest.json"), "replacement",)
+                .expect_err("symlink target must fail")
+                .code(),
+            ErrorCode::Corrupt
+        );
+        assert_eq!(fs::read(&external).expect("external"), b"keep");
+        assert!(!root_path.join("phase8/backup-manifest.json.tmp").exists());
     }
 
     #[test]
