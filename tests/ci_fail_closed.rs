@@ -334,6 +334,20 @@ fn one_command_verify_runs_complete_release_proof() {
 }
 
 #[test]
+fn generated_zone_authority_is_current_and_mirrored() {
+    let documented = repo_file(".jankurai/generated-zones.toml");
+    let active = repo_file("agent/generated-zones.toml");
+    let preflight = repo_file("scripts/check_audit_policy_mirror.sh");
+
+    assert_eq!(active, documented);
+    assert!(active.contains("redline-testing-1.0.1-linux-x86_64.tar.gz"));
+    assert!(!active.contains("redline-testing-0.1.2"));
+    assert!(preflight.contains("\"generated zones\""));
+    assert!(preflight.contains("\".jankurai/generated-zones.toml\""));
+    assert!(preflight.contains("\"agent/generated-zones.toml\""));
+}
+
+#[test]
 fn jankurai_lane_routes_existing_paths_from_diffs_or_clean_snapshots() {
     let lane = repo_file("ops/ci/jankurai.sh");
 
