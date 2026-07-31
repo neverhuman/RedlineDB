@@ -499,6 +499,7 @@ struct Repo {
     tag_revision: i64,
     current_tag: String,
     release_commit: String,
+    release_tree: String,
     release_checksum_sha256: String,
     prior_release: Option<PriorRelease>,
     protection_policy: String,
@@ -568,11 +569,12 @@ fn validate_release_identity(
     revision_namespace: &str,
     expected_product_version: &str,
     expected_revision: i64,
-) -> Result<(String, i64, String, String, String, String)> {
+) -> Result<(String, i64, String, String, String, String, String)> {
     let product_version = toml_string(table, "product_version", name)?;
     let tag_revision = toml_integer(table, "tag_revision", name)?;
     let current_tag = toml_string(table, "current_tag", name)?;
     let release_commit = toml_string(table, "release_commit", name)?;
+    let release_tree = toml_string(table, "release_tree", name)?;
     let release_checksum_sha256 = toml_string(table, "release_checksum_sha256", name)?;
     let protection_policy = toml_string(table, "protection_policy", name)?;
     if product_version != expected_product_version || tag_revision != expected_revision {
@@ -593,18 +595,20 @@ fn validate_release_identity(
     }
     match (
         release_commit.as_str(),
+        release_tree.as_str(),
         release_checksum_sha256.as_str(),
     ) {
-        (PENDING, PENDING) => {}
-        (commit, checksum) if is_sha1(commit) && is_sha256(checksum) => {}
-        (PENDING, _) | (_, PENDING) => {
+        (PENDING, PENDING, PENDING) => {}
+        (commit, tree, checksum)
+            if is_sha1(commit) && is_sha1(tree) && is_sha256(checksum) => {}
+        (PENDING, _, _) | (_, PENDING, _) | (_, _, PENDING) => {
             return Err(error(format!(
-                "{name}: release commit and checksum must become exact together"
+                "{name}: release commit, tree, and checksum must become exact together"
             )))
         }
         _ => {
             return Err(error(format!(
-                "{name}: release identity must contain exact SHA-1/SHA-256 values or two PENDING values"
+                "{name}: release identity must contain exact SHA-1 commit, SHA-1 tree, and SHA-256 checksum values or three PENDING values"
             )))
         }
     }
@@ -613,6 +617,7 @@ fn validate_release_identity(
         tag_revision,
         current_tag,
         release_commit,
+        release_tree,
         release_checksum_sha256,
         protection_policy,
     ))
@@ -764,6 +769,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             tag_revision,
             current_tag,
             release_commit,
+            release_tree,
             release_checksum_sha256,
             protection_policy,
         ) = validate_release_identity(
@@ -830,6 +836,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
             tag_revision,
             current_tag,
             release_commit,
+            release_tree,
             release_checksum_sha256,
             prior_release,
             protection_policy,
@@ -1238,6 +1245,22 @@ fn metadata_json(value: &TagMetadata) -> JsonValue {
     })
 }
 
+/// Bind the manifest `release_tree` to the reviewed commit's actual tree object.
+/// `release_commit` and `release_checksum_sha256` pin which commit and archive
+/// are released; without this, `release_tree` is inert metadata a caller can set
+/// to any well-formed 40-hex value. Called only when the release identity is
+/// bound (non-PENDING), after the commit and checksum are authenticated.
+fn bind_release_tree(root: &Path, commit: &str, repo: &Repo) -> Result<()> {
+    let tree = git(root, &["rev-parse", &format!("{commit}^{{tree}}")])?;
+    if repo.release_tree != tree {
+        return Err(error(format!(
+            "{}: reviewed commit tree {tree} differs from manifest release_tree {}",
+            repo.name, repo.release_tree
+        )));
+    }
+    Ok(())
+}
+
 fn current_reviewed_state(
     manifest: &Manifest,
     repo: &Repo,
@@ -1305,6 +1328,7 @@ fn current_reviewed_state(
                 repo.name
             )));
         }
+        bind_release_tree(&root, &commit, repo)?;
     }
     authenticate_prior_release(&root, repo, &commit)?;
     let metadata = if local_tag_exists(&root, &repo.current_tag)? {
@@ -1346,6 +1370,7 @@ fn current_reviewed_state(
         "tag_revision": repo.tag_revision,
         "tag": repo.current_tag,
         "release_commit": repo.release_commit,
+        "release_tree": repo.release_tree,
         "release_checksum_sha256": repo.release_checksum_sha256,
         "protection_policy": repo.protection_policy,
         "tag_state": if metadata.is_some() { "verified" } else { "absent" },
@@ -4797,6 +4822,7 @@ mod tests {
             tag_revision: 1,
             current_tag: "redline-testing-v1.0.1-jain.1".to_owned(),
             release_commit: "a".repeat(40),
+            release_tree: "c".repeat(40),
             release_checksum_sha256: "b".repeat(64),
             prior_release: None,
             protection_policy: RELEASE_PROTECTION_POLICY.to_owned(),
@@ -4882,6 +4908,7 @@ mod tests {
             tag_revision: 2,
             current_tag: "redline-web-v0.1.0-jain.2".to_owned(),
             release_commit: "a".repeat(40),
+            release_tree: "c".repeat(40),
             release_checksum_sha256: "b".repeat(64),
             prior_release: Some(PriorRelease {
                 tag: "redline-web-v0.1.0-jain.1".to_owned(),
@@ -4950,6 +4977,7 @@ mod tests {
             tag_revision: 2,
             current_tag: "redline-web-v0.1.0-jain.2".to_owned(),
             release_commit: current_commit.clone(),
+            release_tree: "c".repeat(40),
             release_checksum_sha256: "b".repeat(64),
             prior_release: Some(PriorRelease {
                 tag: prior_tag.to_owned(),
@@ -5673,6 +5701,83 @@ mod tests {
     }
 
     #[test]
+    fn release_tree_binding_requires_the_reviewed_commit_tree() {
+        let fixture = TestDir::new("release-tree-binding");
+        let source = fixture.path().join("source");
+        fs::create_dir_all(&source).unwrap();
+        git(&source, &["init", "--initial-branch=main"]).unwrap();
+        git(&source, &["config", "user.name", "Redline Test"]).unwrap();
+        git(&source, &["config", "user.email", "redline-test@localhost"]).unwrap();
+        fs::write(source.join("state"), b"payload\n").unwrap();
+        git(&source, &["add", "state"]).unwrap();
+        git(&source, &["commit", "-m", "state"]).unwrap();
+        let commit = git(&source, &["rev-parse", "HEAD"]).unwrap();
+        let tree = git(&source, &["rev-parse", "HEAD^{tree}"]).unwrap();
+        // A wrong but well-formed 40-hex release_tree -- the exact gap that
+        // passed before enforcement -- is rejected for every bound child, and
+        // the true reviewed commit tree is accepted.
+        for name in ["redline", "redline-core", "redline-testing", "redline-web"] {
+            let mut repo = testing_repo();
+            repo.name = name.to_owned();
+            repo.release_commit = commit.clone();
+            repo.release_tree = "d".repeat(40);
+            let rejected = bind_release_tree(&source, &commit, &repo)
+                .unwrap_err()
+                .to_string();
+            assert!(
+                rejected.contains("differs from manifest release_tree"),
+                "{name} wrong tree not rejected: {rejected}"
+            );
+            repo.release_tree = tree.clone();
+            bind_release_tree(&source, &commit, &repo)
+                .unwrap_or_else(|e| panic!("{name} exact tree rejected: {e}"));
+        }
+    }
+
+    #[test]
+    fn manifest_rejects_malformed_or_missing_release_tree_for_every_bound_row() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("repos.manifest.toml");
+        let base = fs::read_to_string(source).unwrap();
+        let trees = [
+            ("redline", "0299b7163c427ea0a2de8853d65e75723e425a3e"),
+            ("redline-core", "333cd8aeffd0755547c0ecaa65e1d750ddd6d260"),
+            (
+                "redline-testing",
+                "7668053a7f8d22656697a30d670d6f9e5151a209",
+            ),
+            ("redline-web", "310d2e82939705804325bb751458717f67bcd129"),
+        ];
+        for (name, tree) in trees {
+            let line = format!("release_tree = \"{tree}\"");
+            // Malformed (not a 40-hex object) breaks the exact-together coupling.
+            let malformed = base.replacen(&line, "release_tree = \"not-a-tree\"", 1);
+            assert_ne!(malformed, base, "{name}: release_tree line not found");
+            let fixture = TestDir::new("malformed-tree");
+            let path = fixture.path().join("repos.manifest.toml");
+            fs::write(&path, &malformed).unwrap();
+            let rejected = load_manifest(&path).unwrap_err().to_string();
+            assert!(
+                rejected.contains("SHA-1 tree"),
+                "{name} malformed tree not rejected: {rejected}"
+            );
+            // Dropping the field entirely is rejected at parse.
+            let missing = base.replacen(&format!("{line}\n"), "", 1);
+            assert_ne!(
+                missing, base,
+                "{name}: release_tree line with newline not found"
+            );
+            let fixture = TestDir::new("missing-tree");
+            let path = fixture.path().join("repos.manifest.toml");
+            fs::write(&path, &missing).unwrap();
+            let rejected = load_manifest(&path).unwrap_err().to_string();
+            assert!(
+                rejected.contains("release_tree"),
+                "{name} missing tree not rejected: {rejected}"
+            );
+        }
+    }
+
+    #[test]
     fn release_tree_checksum_is_stable_for_a_commit() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
         let head = git(root, &["rev-parse", "HEAD"]).unwrap();
@@ -5880,6 +5985,7 @@ mod tests {
                     },
                     current_tag: tag.to_owned(),
                     release_commit: commit.clone(),
+                    release_tree: "c".repeat(40),
                     release_checksum_sha256: "f".repeat(64),
                     prior_release: None,
                     protection_policy: RELEASE_PROTECTION_POLICY.to_owned(),

@@ -38,6 +38,7 @@ tag_revision = 3
 current_tag = "redline-split-ops-v8.0.0-split.3"
 release_commit = "PENDING"
 release_checksum_sha256 = "PENDING"
+release_tree = "PENDING"
 protection_policy = "immutable-main-v1"
 
 [[consumer]]
