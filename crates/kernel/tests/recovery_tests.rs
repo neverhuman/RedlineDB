@@ -488,6 +488,51 @@ fn checkpoint_prunes_stale_wal_segments() {
 }
 
 #[test]
+fn default_checkpoint_prunes_stale_wal_segments() {
+    let mut config = config();
+    config.wal.segment_bytes = 65_536;
+    let temp = TempDir::new().unwrap();
+    let engine = Engine::create(temp.path(), config.clone()).unwrap();
+
+    let mut rows = Vec::new();
+    while wal_segment_count(temp.path().join("wal").as_path()).len() < 3 {
+        let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+        rows.push(engine.insert(&mut tx, b"warm".to_vec()).unwrap());
+        engine.commit(tx).unwrap();
+    }
+
+    let baseline_count = rows.len();
+    let checkpoint = engine.checkpoint().unwrap();
+    assert!(checkpoint.checkpoint_lsn.0 > 0);
+
+    let mut tx = engine.begin(Isolation::Snapshot).unwrap();
+    let fresh_row = engine
+        .insert(&mut tx, b"after-checkpoint".to_vec())
+        .unwrap();
+    engine.commit(tx).unwrap();
+    drop(engine);
+
+    let segments_after = wal_segment_count(temp.path().join("wal").as_path());
+    let keep_segment = checkpoint.checkpoint_lsn.0 / config.wal.segment_bytes + 1;
+    assert!(!segments_after.is_empty());
+    assert!(
+        segments_after
+            .iter()
+            .all(|segment| *segment >= keep_segment)
+    );
+
+    let reopened = Engine::open(temp.path(), config).unwrap();
+    let mut tx = reopened.begin(Isolation::Snapshot).unwrap();
+    for row in rows.into_iter().take(baseline_count) {
+        assert_eq!(reopened.get(&mut tx, row).unwrap(), Some(b"warm".to_vec()));
+    }
+    assert_eq!(
+        reopened.get(&mut tx, fresh_row).unwrap(),
+        Some(b"after-checkpoint".to_vec())
+    );
+}
+
+#[test]
 fn checkpoint_pruning_obeys_slot_and_archive_horizons() {
     let mut config = config();
     config.wal.segment_bytes = 65_536;

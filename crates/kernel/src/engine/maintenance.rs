@@ -256,6 +256,12 @@ impl Engine {
             // owned slot and archive horizons.
             horizons.checkpoint_lsn = next.checkpoint_lsn;
             self.wal.prune_segments_below_horizons(horizons)?;
+        } else {
+            // Without caller-supplied retention horizons the checkpoint alone
+            // bounds WAL retention; prune unconditionally so the default
+            // checkpoint path never grows the WAL without bound.
+            self.wal
+                .prune_segments_below_checkpoint_lsn(next.checkpoint_lsn)?;
         }
         *checkpoint = Some(next);
         Ok(CheckpointStats {
