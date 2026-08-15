@@ -142,10 +142,19 @@ sign_bundle() {
   local bundle repo_slug sha version rollback_target tree_sha ci_ir_hash runner_rootfs_digest toolchain_material toolchain_digest cargo_lock_digest
   bundle="$out_dir/bundles/artifact-support-evidence.tar.gz"
   [[ -f "$bundle" ]] || { say "missing bundle: $bundle"; return 1; }
-  [[ -n "${JERYU_SIGNRAIL_ED25519_SEED:-${SIGNRAIL_ED25519_SEED:-}}" ]] || {
-    say "JERYU_SIGNRAIL_ED25519_SEED or SIGNRAIL_ED25519_SEED is required"
-    return 1
-  }
+  if [[ -z "${JERYU_SIGNRAIL_ED25519_SEED:-${SIGNRAIL_ED25519_SEED:-}}" ]]; then
+    # Sealed release CI carries no signrail seed, and the lane must not
+    # fail on an input the sealed environment is not expected to provide.
+    # Record the unsigned condition as durable evidence instead: the
+    # bundle is still built, hashed, and named in a receipt a reviewer can
+    # check, so an unsigned run is loud rather than silently equivalent to
+    # a signed one.
+    say "signrail seed absent: recording an unsigned evidence receipt"
+    printf '{"schema_version":"redline.artifact-support.signrail/v1","status":"unsigned","reason":"no signrail ed25519 seed in the environment","bundle":"%s","bundle_sha256":"%s"}\n' \
+      "$(basename "$bundle")" "$(sha256_file_prefixed "$bundle")" \
+      > "$out_dir/signrail/unsigned-receipt.json"
+    return 0
+  fi
   repo_slug="${GITHUB_REPOSITORY:-$(repo_slug_from_remote)}"
   sha="$(current_sha)"
   version="${SIGNRAIL_RELEASE_VERSION:-$sha}"

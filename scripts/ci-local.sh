@@ -20,17 +20,13 @@ case "$lane" in
     exec bash "$repo_root/tools/security-lane.sh"
     ;;
   score)
-    exec just score
+    exec bash "$repo_root/ops/ci/score.sh"
     ;;
   contract-drift)
-    printf 'contract-drift: redline hub has no Jain contracts consumer surface\n'
-    exit 0
+    exec bash "$repo_root/ops/ci/contract-drift.sh"
     ;;
   artifact-support)
-    mkdir -p target/artifact-support
-    cat > target/artifact-support/redline.json <<'JSON'
-{"schema_version":"jeryu.split.artifact-support/v1","repo":"redline","status":"bootstrap"}
-JSON
+    exec bash "$repo_root/ops/ci/artifact_support.sh"
     ;;
   doctor)
     exec bash "$repo_root/scripts/ci-doctor.sh"
