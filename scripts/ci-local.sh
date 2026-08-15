@@ -14,11 +14,14 @@ fi
 
 usage() {
     cat >&2 <<'USAGE'
-usage: scripts/ci-local.sh {required|pr-ci|security|jankurai|audit|release|doctor}
+usage: scripts/ci-local.sh {required|pr-ci|security|score|contract-drift|artifact-support|jankurai|audit|release|doctor}
 
   required alias for the pr-ci validation surface
   pr-ci    run the exact local mirror of the CI validation surface
   security run the repository security lane
+  score    run the ratcheted jankurai score gate
+  contract-drift    run the contract surface checks
+  artifact-support  run the artifact support evidence lane
   jankurai run the jankurai tool-suite evidence lane
   audit    run the repository audit lane
   release  run the release packaging lane
@@ -37,6 +40,15 @@ case "$1" in
         ;;
     security)
         bash "$repo_root/ops/ci/security.sh"
+        ;;
+    score)
+        bash "$repo_root/ops/ci/score.sh"
+        ;;
+    contract-drift)
+        bash "$repo_root/ops/ci/contract-drift.sh"
+        ;;
+    artifact-support)
+        bash "$repo_root/ops/ci/artifact_support.sh"
         ;;
     jankurai)
         bash "$repo_root/ops/ci/jankurai.sh"
