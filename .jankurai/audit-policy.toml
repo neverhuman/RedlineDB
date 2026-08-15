@@ -1,19 +1,35 @@
 # jankurai audit policy for redline-testing
 #
 # redline-testing is a satellite repo that produces signed reference test
-# artifacts consumed by RedlineDB CI. It is NOT itself a product binary, so
-# this policy stays advisory: we register decisions here rather than gate CI.
+# artifacts consumed by RedlineDB CI. The audit gate is ratcheted: CI runs
+# the full audit in ratchet mode against the committed accepted baseline
+# and this policy, and fails on a score below `minimum_score`, a score
+# regression, new caps, or new hard findings.
 #
-# When tightening to a ratcheted gate later, set `mode = "ratchet"`, populate
-# `minimum_score`, and generate `.jankurai/accepted-baseline.json` via
-# `jankurai audit . --baseline`.
+# The accepted baseline lives at `.jankurai/baselines/accepted-baseline.json`
+# — the path `ops/ci/jankurai.sh` and `ops/ci/score.sh` both read, and a
+# scan-excluded comparison input rather than scored content. Regenerate it
+# from a CLEAN checkout of the commit it is committed against, so the
+# recorded git head and `dirty_worktree = false` describe a real committed
+# tree:
+#
+#   jankurai audit . --full --mode advisory --policy agent/audit-policy.toml \
+#     --json .jankurai/baselines/accepted-baseline.json --no-score-history
+#
+# Regeneration is mandatory in the same change as any edit to this policy:
+# jankurai 1.6.11 fails a ratchet run whose baseline policy fingerprint
+# differs from the active policy. The run-local fields (generated_at,
+# started_at, elapsed_ms, run_id) vary per run; every other field
+# reproduces from that commit. Note that `--baseline` in 1.6.11 names a
+# comparison input to read and is not a baseline generator.
 #
 # MIRROR: this file must stay byte-identical to `agent/audit-policy.toml`
 # (jankurai 1.5.1 reads from `agent/audit-policy.toml`; we keep the canonical
 # copy in `.jankurai/`). `scripts/check_audit_policy_mirror.sh` enforces the
 # mirror in `pr-ci`. The redlineDB sibling repo uses the same pattern.
 
-mode = "advisory"
+mode = "ratchet"
+minimum_score = 85
 
 # Rules disabled at the source. The detectors below either fire on paths /
 # components that don't exist in this Rust-only CLI repo (stack misdetection
