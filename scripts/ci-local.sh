@@ -49,7 +49,10 @@ case "$1" in
         printf 'contract-drift: redline-testing has no Jain contracts consumer surface\n'
         ;;
     artifact-support)
-        bash "$repo_root/ops/ci/artifact_support.sh"
+        mkdir -p target/artifact-support
+        cat > target/artifact-support/redline-testing.json <<'JSON'
+{"schema_version":"jeryu.split.artifact-support/v1","repo":"redline-testing","status":"bootstrap"}
+JSON
         ;;
     jankurai)
         bash "$repo_root/ops/ci/jankurai.sh"
