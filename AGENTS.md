@@ -2,7 +2,7 @@
 
 ## Workspace Boundary
 
-- Work only in the user-named active repo/worktree.
+- Mutate source only in the claimed canonical checkout.
 - Never switch to sibling clones, archives, backups, resolved symlink targets, or duplicate roots.
 - Never create repo copies or side folders outside the active repo; preserve work with git branches.
 - Before edits, report `pwd`, `git rev-parse --show-toplevel`, and `git status --short --branch`.
