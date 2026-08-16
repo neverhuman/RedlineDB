@@ -12,6 +12,7 @@ fi
 
 case "${1:-validate}" in
   validate|fast|required|pr-ci) exec bash "$repo_root/ops/ci/pr-ci.sh" ;;
+  security) exec bash "$repo_root/tools/security-lane.sh" ;;
   doctor) exec bash "$repo_root/scripts/ci-doctor.sh" ;;
-  *) printf 'usage: %s {validate|fast|required|pr-ci|doctor}\n' "$0" >&2; exit 64 ;;
+  *) printf 'usage: %s {validate|fast|required|pr-ci|security|doctor}\n' "$0" >&2; exit 64 ;;
 esac
