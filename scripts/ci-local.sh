@@ -2,6 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root"
 
 if ! command -v rtk >/dev/null 2>&1; then
   rtk() {
@@ -10,9 +11,29 @@ if ! command -v rtk >/dev/null 2>&1; then
   export -f rtk
 fi
 
-case "${1:-validate}" in
-  validate|fast|required|pr-ci) exec bash "$repo_root/ops/ci/pr-ci.sh" ;;
-  security) exec bash "$repo_root/tools/security-lane.sh" ;;
-  doctor) exec bash "$repo_root/scripts/ci-doctor.sh" ;;
-  *) printf 'usage: %s {validate|fast|required|pr-ci|security|doctor}\n' "$0" >&2; exit 64 ;;
+lane="${1:-required}"
+case "$lane" in
+  validate|fast|required|pr-ci)
+    exec bash "$repo_root/ops/ci/pr-ci.sh"
+    ;;
+  security)
+    exec bash "$repo_root/tools/security-lane.sh"
+    ;;
+  score)
+    exec just score
+    ;;
+  contract-drift)
+    printf 'contract-drift: redline hub has no Jain contracts consumer surface\n'
+    exit 0
+    ;;
+  artifact-support)
+    exec bash "$repo_root/ops/ci/artifact_support.sh"
+    ;;
+  doctor)
+    exec bash "$repo_root/scripts/ci-doctor.sh"
+    ;;
+  *)
+    printf 'usage: %s {validate|fast|required|pr-ci|security|score|contract-drift|artifact-support|doctor}\n' "$0" >&2
+    exit 64
+    ;;
 esac
