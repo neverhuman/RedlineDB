@@ -1,4 +1,6 @@
 minimum_score = 85
+required_tool = "jankurai"
+required_tool_version = "1.6.11"
 fail_on = ["critical", "high"]
 advisory_on = ["medium", "low"]
 disabled_rules = ["HLT-001-DEAD-MARKER", "HLT-018-PERF-CONCURRENCY-DRIFT"]

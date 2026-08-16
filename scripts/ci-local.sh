@@ -2,6 +2,14 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+if ! command -v rtk >/dev/null 2>&1; then
+  rtk() {
+    "$@"
+  }
+  export -f rtk
+fi
+
 case "${1:-validate}" in
   validate|fast|required|pr-ci) exec bash "$repo_root/ops/ci/pr-ci.sh" ;;
   doctor) exec bash "$repo_root/scripts/ci-doctor.sh" ;;
