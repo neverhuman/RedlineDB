@@ -23,14 +23,13 @@ case "$lane" in
     exec just score
     ;;
   contract-drift)
-    printf 'contract-drift: redline hub has no Jain contracts consumer surface\n'
-    exit 0
+    # No Jain contracts consumer surface. Fail closed until SplitOps policy
+    # declares this residual; do not mint an exit-0 hollow green.
+    printf 'contract-drift: redline hub has no Jain contracts consumer surface\n' >&2
+    exit 2
     ;;
   artifact-support)
-    mkdir -p target/artifact-support
-    cat > target/artifact-support/redline.json <<'JSON'
-{"schema_version":"jeryu.split.artifact-support/v1","repo":"redline","status":"bootstrap"}
-JSON
+    exec bash "$repo_root/ops/ci/artifact_support.sh"
     ;;
   doctor)
     exec bash "$repo_root/scripts/ci-doctor.sh"
