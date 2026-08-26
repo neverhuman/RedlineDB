@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Release identity
+
+- Advance the governed Redline Hub identity to `4.1.0-jain.4`. The immutable
+  Jain.3 tag remains historical because its tree still embeds the Jain.2
+  identity; it is never moved or reused.
+
 ## [4.1.0] - 2026-05-29
 
 W7 startup optimization — eliminate cgroup walk from the volatile (in-memory)
