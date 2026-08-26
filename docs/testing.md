@@ -36,7 +36,10 @@ the authoritative lock and checksum are valid and the proof explicitly says
 report that state as `authoritative-only-historical`. A partial mirror pair,
 mismatched bytes or checksums, malformed proof value, or eligible authoritative
 lock without its mirror fails closed. Only normal two-consumer `proof-refresh`
-writes the authoritative lock, mirror, both sidecars, and operation receipt.
+writes the authoritative lock and sidecar, compatibility mirror and sidecar,
+and proof receipt and sidecar. Each individual write is atomic; a reported
+process error rolls the six paths back, but a host crash between renames can
+leave a partial fail-closed generation.
 
 The Jain.4 successor receipts remain verifiable historical artifacts, but they
 are not requirements for the current Jain.6 candidate:
@@ -82,6 +85,8 @@ Common repair signatures:
 - `tampered evidence`: regenerate the producer receipt and checksum together.
 - `proof is not derived as eligible`: obtain fresh family and consumer
   evidence; never edit the lock boolean.
+- `proof freshness window expired`: regenerate all three fresh producer inputs
+  and run the sole writer; never refresh a timestamp or lock member by hand.
 
 ## Agent-readable repair contract
 

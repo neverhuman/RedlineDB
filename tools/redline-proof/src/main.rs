@@ -554,9 +554,9 @@ fn toml_integer(table: &toml::value::Table, key: &str, context: &str) -> Result<
 
 fn expected_repo_release(name: &str) -> Option<(&'static str, i64)> {
     match name {
-        "redline" => Some(("4.1.0", 2)),
+        "redline" => Some(("4.1.0", 4)),
         "redline-core" => Some(("4.1.0", 6)),
-        "redline-testing" => Some(("1.0.1", 1)),
+        "redline-testing" => Some(("1.0.1", 2)),
         "redline-web" => Some(("0.1.0", 2)),
         _ => None,
     }
@@ -724,7 +724,7 @@ fn load_manifest(path: &Path) -> Result<Manifest> {
     {
         return Err(error("manifest control-plane identity is invalid"));
     }
-    validate_release_identity(control, "redline-split-ops", "split", RELEASE_VERSION, 3)?;
+    validate_release_identity(control, "redline-split-ops", "split", RELEASE_VERSION, 4)?;
     let rows = value
         .get("repo")
         .and_then(toml::Value::as_array)
@@ -1308,18 +1308,14 @@ fn current_reviewed_state(
     }
     authenticate_prior_release(&root, repo, &commit)?;
     let metadata = if local_tag_exists(&root, &repo.current_tag)? {
-        let found = tag_metadata(&root, &repo.current_tag, false)?;
+        let found = tag_metadata(&root, &repo.current_tag, true)?;
         if found.commit != commit {
             return Err(error(format!(
                 "{}: existing immutable tag {} points to {}, not reviewed main {commit}",
                 repo.name, repo.current_tag, found.commit
             )));
         }
-        Some(if found.remote_object.is_some() {
-            tag_metadata(&root, &repo.current_tag, true)?
-        } else {
-            found
-        })
+        Some(found)
     } else if !allow_absent_tag {
         return Err(error(format!(
             "{}: immutable tag {} is absent",
@@ -3640,15 +3636,10 @@ fn parse_time_string(raw: Option<&str>, field: &str) -> Result<DateTime<Utc>> {
     parse_time(&raw.map_or(JsonValue::Null, |value| json!(value)), field)
 }
 
-fn cutover_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
-    let now = Utc::now();
-    let value = verify_lock(manifest_path, lock, Some(mirror))?;
-    let proof = proof_table(&value)?;
-    if proof.get("parity_status").and_then(toml::Value::as_str) != Some("accepted")
-        || proof.get("cutover_eligible").and_then(toml::Value::as_bool) != Some(true)
-    {
-        return Err(error("cutover blocked: proof is not derived as eligible"));
-    }
+fn verify_cutover_freshness(
+    proof: &toml::value::Table,
+    now: DateTime<Utc>,
+) -> Result<(DateTime<Utc>, DateTime<Utc>)> {
     let generated = parse_time_string(
         proof.get("generated_at").and_then(toml::Value::as_str),
         "proof.generated_at",
@@ -3663,6 +3654,19 @@ fn cutover_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()
             "cutover blocked: proof freshness window expired or was manually altered",
         ));
     }
+    Ok((generated, fresh_until))
+}
+
+fn cutover_verify(manifest_path: &Path, lock: &Path, mirror: &Path) -> Result<()> {
+    let now = Utc::now();
+    let value = verify_lock(manifest_path, lock, Some(mirror))?;
+    let proof = proof_table(&value)?;
+    if proof.get("parity_status").and_then(toml::Value::as_str) != Some("accepted")
+        || proof.get("cutover_eligible").and_then(toml::Value::as_bool) != Some(true)
+    {
+        return Err(error("cutover blocked: proof is not derived as eligible"));
+    }
+    let (generated, fresh_until) = verify_cutover_freshness(proof, now)?;
     let lock_base = lock.parent().unwrap_or(Path::new("."));
     let family_path = resolve_recorded_path(
         &proof
@@ -4028,8 +4032,33 @@ fn security_receipt(path: &Path, root: &Path) -> Result<()> {
     Ok(())
 }
 
-fn historical_jain4_manifest(manifest_path: &Path) -> Result<Manifest> {
+fn manifest_matching_historical_proof(manifest_path: &Path) -> Result<Manifest> {
     let mut manifest = load_manifest(manifest_path)?;
+    let hub = manifest
+        .repos
+        .iter_mut()
+        .find(|repo| repo.name == "redline")
+        .ok_or_else(|| error("redline hub is missing from historical proof manifest"))?;
+    hub.tag_revision = 2;
+    hub.current_tag = "redline-v4.1.0-jain.2".to_owned();
+    hub.release_commit = "cdb1c5a4d4629ff555cfca9d8994c818e070c571".to_owned();
+    hub.release_checksum_sha256 =
+        "13c0ed0f2bf25cd4eb99cd141155a67b0c01c10564e9557d076d071a0eb1bd82".to_owned();
+    let testing = manifest
+        .repos
+        .iter_mut()
+        .find(|repo| repo.name == "redline-testing")
+        .ok_or_else(|| error("redline-testing is missing from historical proof manifest"))?;
+    testing.tag_revision = 1;
+    testing.current_tag = "redline-testing-v1.0.1-jain.1".to_owned();
+    testing.release_commit = "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea".to_owned();
+    testing.release_checksum_sha256 =
+        "825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac".to_owned();
+    Ok(manifest)
+}
+
+fn historical_jain4_manifest(manifest_path: &Path) -> Result<Manifest> {
+    let mut manifest = manifest_matching_historical_proof(manifest_path)?;
     let core = manifest
         .repos
         .iter_mut()
@@ -5138,7 +5167,7 @@ mod tests {
             .collect();
         assert_eq!(
             identities.get("redline"),
-            Some(&("4.1.0", 2, "redline-v4.1.0-jain.2"))
+            Some(&("4.1.0", 4, "redline-v4.1.0-jain.4"))
         );
         assert_eq!(
             identities.get("redline-core"),
@@ -5146,11 +5175,37 @@ mod tests {
         );
         assert_eq!(
             identities.get("redline-testing"),
-            Some(&("1.0.1", 1, "redline-testing-v1.0.1-jain.1"))
+            Some(&("1.0.1", 2, "redline-testing-v1.0.1-jain.2"))
         );
         assert_eq!(
             identities.get("redline-web"),
             Some(&("0.1.0", 2, "redline-web-v0.1.0-jain.2"))
+        );
+        let hub = manifest
+            .repos
+            .iter()
+            .find(|repo| repo.name == "redline")
+            .unwrap();
+        assert_eq!(
+            hub.release_commit,
+            "6e3e9dc1b92c87dbdd339fa50eb4bc6564eb91a1"
+        );
+        assert_eq!(
+            hub.release_checksum_sha256,
+            "31cae08433cdc613fd2d910d908fb8559585696b995e24ceafe4c4f769b1be42"
+        );
+        let testing = manifest
+            .repos
+            .iter()
+            .find(|repo| repo.name == "redline-testing")
+            .unwrap();
+        assert_eq!(
+            testing.release_commit,
+            "f2c1c36138f9a493d5844b385d89be785673f1db"
+        );
+        assert_eq!(
+            testing.release_checksum_sha256,
+            "660a6c5e58bd124d78dbc16f82055fad71850ae0f44b629d8463b6fcf3bfb015"
         );
         let web = manifest
             .repos
@@ -5178,11 +5233,11 @@ mod tests {
             control
                 .get("tag_revision")
                 .and_then(toml::Value::as_integer),
-            Some(3)
+            Some(4)
         );
         assert_eq!(
             control.get("current_tag").and_then(toml::Value::as_str),
-            Some("redline-split-ops-v8.0.0-split.3")
+            Some("redline-split-ops-v8.0.0-split.4")
         );
         let core = raw
             .get("repo")
@@ -5200,7 +5255,8 @@ mod tests {
     #[test]
     fn current_jain6_authority_has_no_pending_successor_transition() {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-        let manifest = load_manifest(&root.join("repos.manifest.toml")).unwrap();
+        let manifest =
+            manifest_matching_historical_proof(&root.join("repos.manifest.toml")).unwrap();
         let lock = load_lock(&root.join("redline.lock.toml")).unwrap();
         assert!(successor_transition(&manifest, &lock)
             .unwrap_err()
@@ -5404,12 +5460,12 @@ mod tests {
         let path = fixture.path().join("repos.manifest.toml");
         let text = fs::read_to_string(source)
             .unwrap()
-            .replace("redline-v4.1.0-jain.2", "redline-v4.1.0-jain.1");
+            .replace("redline-v4.1.0-jain.4", "redline-v4.1.0-jain.3");
         fs::write(&path, text).unwrap();
         assert!(load_manifest(&path)
             .unwrap_err()
             .to_string()
-            .contains("current_tag must be redline-v4.1.0-jain.2"));
+            .contains("current_tag must be redline-v4.1.0-jain.4"));
     }
 
     #[test]
@@ -5446,8 +5502,8 @@ mod tests {
             (
                 "non-web-prior",
                 canonical.replacen(
-                    "current_tag = \"redline-v4.1.0-jain.2\"\n",
-                    "current_tag = \"redline-v4.1.0-jain.2\"\nprior_release_tag = \"redline-v4.1.0-jain.1\"\n",
+                    "current_tag = \"redline-v4.1.0-jain.4\"\n",
+                    "current_tag = \"redline-v4.1.0-jain.4\"\nprior_release_tag = \"redline-v4.1.0-jain.3\"\n",
                     1,
                 ),
                 "prior release authority is allowed only on redline-web",
@@ -5509,7 +5565,7 @@ mod tests {
     }
 
     #[test]
-    fn standalone_release_readiness_never_claims_cutover() {
+    fn source_checkpoint_release_readiness_stays_fail_closed_until_proof_refresh() {
         let source = Path::new(env!("CARGO_MANIFEST_DIR"));
         let fixture = TestDir::new("standalone-release-readiness");
         let control = fixture.path().join("redline-split-ops");
@@ -5527,16 +5583,12 @@ mod tests {
             mirror: fixture.path().join("redline.lock.toml"),
             root: control,
         };
-        assert_eq!(
-            release_lock_state(&paths, true).unwrap(),
-            ("standalone-authoritative", false)
-        );
-        assert!(
-            review_lock_verify(&paths.manifest, &paths.lock, &paths.mirror)
-                .unwrap_err()
-                .to_string()
-                .contains("eligible authoritative Redline lock requires")
-        );
+        let standalone = release_lock_state(&paths, true).unwrap_err().to_string();
+        assert!(standalone.contains("eligible lock release identity differs from manifest"));
+        let reviewed = review_lock_verify(&paths.manifest, &paths.lock, &paths.mirror)
+            .unwrap_err()
+            .to_string();
+        assert!(reviewed.contains("eligible authoritative Redline lock requires"));
 
         fs::copy(&paths.lock, &paths.mirror).unwrap();
         assert!(release_lock_state(&paths, true)
@@ -5707,6 +5759,161 @@ mod tests {
     }
 
     #[test]
+    fn current_tracked_lock_is_expired_at_a_fixed_clock() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+        let lock = load_lock(&root.join("redline.lock.toml")).unwrap();
+        let now = DateTime::parse_from_rfc3339("2026-08-26T00:00:00Z")
+            .unwrap()
+            .with_timezone(&Utc);
+        let failure = verify_cutover_freshness(proof_table(&lock).unwrap(), now)
+            .unwrap_err()
+            .to_string();
+        assert!(failure.contains("stale"), "unexpected failure: {failure}");
+    }
+
+    #[test]
+    fn poisoned_jain3_version_is_rejected_and_jain4_version_is_accepted() {
+        let root = TestDir::new("hub-version-forward-only");
+        let mut repo = Repo {
+            name: "redline".to_owned(),
+            path: PathBuf::from("../redline"),
+            github_slug: "neverhuman/RedlineDB".to_owned(),
+            remote: format!("{LOCAL_JERYU_BASE}jeryu/redlineDB.git"),
+            product_version: "4.1.0".to_owned(),
+            tag_revision: 3,
+            current_tag: "redline-v4.1.0-jain.3".to_owned(),
+            release_commit: "a".repeat(40),
+            release_checksum_sha256: "b".repeat(64),
+            prior_release: None,
+            protection_policy: RELEASE_PROTECTION_POLICY.to_owned(),
+            required_check: "redline/required".to_owned(),
+            default_branch: "main".to_owned(),
+        };
+        fs::write(root.path().join("VERSION"), b"4.1.0-jain.2\n").unwrap();
+        let failure = validate_product_version(root.path(), &repo)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            failure.contains("tagged product version must be 4.1.0-jain.3"),
+            "unexpected failure: {failure}"
+        );
+
+        repo.tag_revision = 4;
+        repo.current_tag = "redline-v4.1.0-jain.4".to_owned();
+        fs::write(root.path().join("VERSION"), b"4.1.0-jain.4\n").unwrap();
+        validate_product_version(root.path(), &repo).unwrap();
+    }
+
+    #[test]
+    fn reviewed_hub_identity_requires_commit_checksum_forge_main_and_remote_tag_agreement() {
+        let fixture = TestDir::new("hub-reviewed-identity");
+        let origin = fixture.path().join("origin.git");
+        let hub = fixture.path().join("redline");
+        let control = fixture.path().join("control");
+        fs::create_dir_all(&control).unwrap();
+        command_output(isolated_git().args(["init", "--bare", "--"]).arg(&origin)).unwrap();
+        command_output(
+            isolated_git()
+                .args(["init", "--initial-branch", "main", "--"])
+                .arg(&hub),
+        )
+        .unwrap();
+        git(&hub, &["config", "user.name", "Redline Test"]).unwrap();
+        git(
+            &hub,
+            &["config", "user.email", "redline-test@example.invalid"],
+        )
+        .unwrap();
+        git(
+            &hub,
+            &["remote", "add", "origin", &origin.to_string_lossy()],
+        )
+        .unwrap();
+        fs::write(hub.join("VERSION"), b"4.1.0-jain.4\n").unwrap();
+        fs::write(hub.join("README.md"), b"reviewed hub\n").unwrap();
+        git(&hub, &["add", "VERSION", "README.md"]).unwrap();
+        git(&hub, &["commit", "-m", "reviewed hub"]).unwrap();
+        let commit = git(&hub, &["rev-parse", "HEAD"]).unwrap();
+        let tag = "redline-v4.1.0-jain.4";
+        git(&hub, &["tag", tag, &commit]).unwrap();
+        git(&hub, &["push", "origin", "main"]).unwrap();
+        git(&hub, &["push", "origin", &format!("refs/tags/{tag}")]).unwrap();
+        let repo = Repo {
+            name: "redline".to_owned(),
+            path: PathBuf::from("../redline"),
+            github_slug: "neverhuman/RedlineDB".to_owned(),
+            remote: origin.to_string_lossy().into_owned(),
+            product_version: "4.1.0".to_owned(),
+            tag_revision: 4,
+            current_tag: tag.to_owned(),
+            release_commit: commit.clone(),
+            release_checksum_sha256: git_tree_checksum(&hub, &commit).unwrap(),
+            prior_release: None,
+            protection_policy: RELEASE_PROTECTION_POLICY.to_owned(),
+            required_check: "redline/required".to_owned(),
+            default_branch: "main".to_owned(),
+        };
+        let manifest = Manifest {
+            path: control.join("repos.manifest.toml"),
+            repos: vec![repo.clone()],
+            successor: SuccessorTransition {
+                predecessor_lock_sha256: "a".repeat(64),
+                predecessor_engine_tag: "unused".to_owned(),
+                predecessor_engine_commit: "b".repeat(40),
+                prepared_lock_sha256: "c".repeat(64),
+            },
+        };
+        let state = current_reviewed_state(&manifest, &repo, false).unwrap();
+        assert_eq!(
+            state.get("tag_state").and_then(JsonValue::as_str),
+            Some("verified")
+        );
+
+        let mut wrong_commit = repo.clone();
+        wrong_commit.release_commit = "0".repeat(40);
+        assert!(current_reviewed_state(&manifest, &wrong_commit, false)
+            .unwrap_err()
+            .to_string()
+            .contains("differs from manifest release commit"));
+        let mut wrong_checksum = repo.clone();
+        wrong_checksum.release_checksum_sha256 = "0".repeat(64);
+        assert!(current_reviewed_state(&manifest, &wrong_checksum, false)
+            .unwrap_err()
+            .to_string()
+            .contains("release tree checksum differs"));
+
+        git(&hub, &["push", "origin", &format!(":refs/tags/{tag}")]).unwrap();
+        assert!(current_reviewed_state(&manifest, &repo, false)
+            .unwrap_err()
+            .to_string()
+            .contains("origin tag object"));
+        git(&hub, &["push", "origin", &format!("refs/tags/{tag}")]).unwrap();
+
+        let publisher = fixture.path().join("publisher");
+        command_output(
+            isolated_git()
+                .args(["clone", "--branch", "main", "--"])
+                .arg(&origin)
+                .arg(&publisher),
+        )
+        .unwrap();
+        git(&publisher, &["config", "user.name", "Redline Publisher"]).unwrap();
+        git(
+            &publisher,
+            &["config", "user.email", "redline-publisher@example.invalid"],
+        )
+        .unwrap();
+        fs::write(publisher.join("README.md"), b"forge advanced\n").unwrap();
+        git(&publisher, &["add", "README.md"]).unwrap();
+        git(&publisher, &["commit", "-m", "advance forge main"]).unwrap();
+        git(&publisher, &["push", "origin", "main"]).unwrap();
+        assert!(current_reviewed_state(&manifest, &repo, false)
+            .unwrap_err()
+            .to_string()
+            .contains("differs from forge main"));
+    }
+
+    #[test]
     fn consumer_evidence_rejects_manual_eligibility_boolean() {
         let root = TestDir::new("manual-bool");
         let path = root.path().join("jain.json");
@@ -5800,30 +6007,36 @@ mod tests {
     }
 
     #[test]
-    fn transaction_restores_every_prior_output() {
-        let root = TestDir::new("rollback");
-        let first = root.path().join("control.lock");
-        let second = root.path().join("mirror.lock");
-        atomic_write(&first, b"old-control\n").unwrap();
-        atomic_write(&second, b"old-mirror\n").unwrap();
-        let outputs = vec![
-            (first.clone(), b"new\n".to_vec()),
-            (second.clone(), b"new\n".to_vec()),
-        ];
-        let mut calls = 0;
-        let result = transactional_write_with(&outputs, |path, data| {
-            calls += 1;
-            if calls == 2 {
-                return Err(error("injected mirror failure"));
+    fn transaction_restores_all_six_outputs_after_each_possible_write_failure() {
+        for fail_at in 1..=6 {
+            let root = TestDir::new(&format!("rollback-six-{fail_at}"));
+            let outputs = (0..6)
+                .map(|index| {
+                    let path = root.path().join(format!("output-{index}"));
+                    atomic_write(&path, format!("old-{index}\n").as_bytes()).unwrap();
+                    (path, format!("new-{index}\n").into_bytes())
+                })
+                .collect::<Vec<_>>();
+            let mut calls = 0;
+            let result = transactional_write_with(&outputs, |path, data| {
+                calls += 1;
+                if calls == fail_at {
+                    return Err(error(format!("injected write failure {fail_at}")));
+                }
+                atomic_write(path, data)
+            });
+            assert!(result
+                .unwrap_err()
+                .to_string()
+                .contains(&format!("injected write failure {fail_at}")));
+            for (index, (path, _)) in outputs.iter().enumerate() {
+                assert_eq!(
+                    fs::read(path).unwrap(),
+                    format!("old-{index}\n").as_bytes(),
+                    "write failure {fail_at} did not restore output {index}"
+                );
             }
-            atomic_write(path, data)
-        });
-        assert!(result
-            .unwrap_err()
-            .to_string()
-            .contains("injected mirror failure"));
-        assert_eq!(fs::read(first).unwrap(), b"old-control\n");
-        assert_eq!(fs::read(second).unwrap(), b"old-mirror\n");
+        }
     }
 
     #[test]
@@ -5962,7 +6175,7 @@ mod tests {
     }
 
     #[test]
-    fn control_validation_does_not_require_family_checkouts() {
+    fn source_checkpoint_control_validation_fails_before_requiring_family_checkouts() {
         let fixture = TestDir::new("standalone-control");
         let control = fixture.path().join("redline-split-ops");
         let family_root = fixture.path();
@@ -5988,14 +6201,13 @@ mod tests {
             )
             .unwrap();
         }
-        assert_eq!(
-            validate_control(
-                &control.join("repos.manifest.toml"),
-                &control.join("redline.lock.toml"),
-            )
-            .unwrap(),
-            4
-        );
+        let failure = validate_control(
+            &control.join("repos.manifest.toml"),
+            &control.join("redline.lock.toml"),
+        )
+        .unwrap_err()
+        .to_string();
+        assert!(failure.contains("eligible lock release identity differs from manifest"));
         assert!(!family_root.join("redline.lock.toml").exists());
         assert!(!family_root.join("redline").exists());
     }

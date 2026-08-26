@@ -8,8 +8,13 @@ Jain 8.0.0 but does not itself push images, change routes, or promote production
 
 ## Required sequence
 
-1. Bind the exact Jain.6 Core tag, commit, and tree checksum in the manifest.
-   `control-validate` must accept the authoritative historical lock.
+1. Bind exact Hub Jain.4, Core Jain.6, Testing Jain.2, and Web Jain.2 tags,
+   commits, and tree checksums in the manifest. Hub Jain.3 is immutable but
+   unusable because it embeds the Jain.2 version; never move or reuse it.
+   This source checkpoint intentionally makes `control-validate` reject the
+   still-eligible historical lock because its Hub and Testing identities no
+   longer match the manifest. It remains fail-closed until proof refresh writes
+   the exact reviewed replacement.
    `review-lock-verify` may report `authoritative-only-historical` only when the
    compatibility mirror and sidecar are both absent and the authoritative proof
    is valid and explicitly ineligible. The Jain.4 successor receipts remain
@@ -34,9 +39,12 @@ Jain 8.0.0 but does not itself push images, change routes, or promote production
    match, then run `just cutover-verify`. This reconstructs the lock from the
    still-fresh evidence and live tag readback.
 8. Commit the derived authoritative lock, sidecar, receipt, and evidence bundle
-   through protected review. The normal two-consumer `proof-refresh` transaction
-   is the sole writer of the compatibility mirror and its sidecar; never restore
-   either by hand. Rerun `just cutover-verify` before any Jain dependency wave.
+   through protected review. The normal two-consumer `proof-refresh` operation
+   is the sole writer of its six outputs: authoritative lock and sidecar,
+   compatibility lock and sidecar, proof receipt and sidecar. Each write is
+   atomic and reported process errors roll back to prior bytes, but the six-file
+   set is not crash-atomic. Never restore any member by hand. Rerun
+   `just cutover-verify` before any Jain dependency wave.
 
 ## Evidence and integration
 

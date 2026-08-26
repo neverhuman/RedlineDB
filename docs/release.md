@@ -13,15 +13,17 @@ Jeryu consumer evidence, `just proof-refresh ...`, then
 both SHA256 sidecars, and operation receipt as one rollback-safe transaction.
 SBOM integrity evidence is produced by `just security`.
 
-The fresh Jain.6/Web Jain.2 family and two-consumer proof transaction is carried
-by control-plane identity `redline-split-ops-v8.0.0-split.3`. Its control
+The fresh Hub Jain.4/Core Jain.6/Testing Jain.2/Web Jain.2 family and
+two-consumer proof transaction is carried by control-plane identity
+`redline-split-ops-v8.0.0-split.4`. Its control
 release commit and checksum remain paired `PENDING` until the complete derived
 evidence and lock bundle passes protected review and is immutably tagged.
 
 The authorized corrective family identities are
-`redline-core-v4.1.0-jain.6`, `redline-v4.1.0-jain.2`,
-`redline-testing-v1.0.1-jain.1`, and `redline-web-v0.1.0-jain.2`. Earlier tags
-remain immutable. Before proof refresh, every manifest commit and release-tree
+`redline-core-v4.1.0-jain.6`, `redline-v4.1.0-jain.4`,
+`redline-testing-v1.0.1-jain.2`, and `redline-web-v0.1.0-jain.2`. Immutable
+Hub Jain.3 remains historical because its tree embeds the Jain.2 version; it is
+never moved or reused. Before proof refresh, every manifest commit and release-tree
 SHA256 must be exact and must match the reviewed main commit and immutable tag.
 The reviewed Core Jain.6 identity is commit
 `d0de59930141baffcfa2b514480e75b14627f24d` with release-tree SHA-256

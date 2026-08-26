@@ -18,8 +18,11 @@
   Rust-only NUMA replacement passed default and all-feature release gates.
 - Advanced the canonical Web identity to immutable `.jain.2` after its sealed
   required, browser E2E, artifact, and governed audit lanes passed.
-- Prepared control-plane `.split.3` to carry the fresh family, two-consumer,
-  proof-refresh, and derived cutover-lock transaction through protected review.
+- Prepared control-plane `.split.4` to carry Hub Jain.4, Testing Jain.2, the
+  fresh family, two-consumer, proof-refresh, and derived cutover-lock
+  transaction through protected review.
+- Skipped immutable Hub Jain.3 because its tree embeds the Jain.2 identity;
+  Jain.4 is the first lawful forward-only successor and Jain.3 is never moved.
 - Bound Web's authenticated prior release and scrubbed inherited release/build
   overrides so family CI covers the full governed surface deterministically.
 - Made candidate readiness accept only a valid explicitly ineligible
