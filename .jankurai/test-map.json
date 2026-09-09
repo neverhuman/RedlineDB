@@ -264,13 +264,38 @@
       "proof_lane": "official-evidence-guard"
     },
     "scripts/process-redline-testing-evidence.sh": {
-      "command": "rtk bash -n scripts/process-redline-testing-evidence.sh",
-      "purpose": "verify the official evidence processor stays shell-parseable",
+      "command": "rtk bash -n scripts/process-redline-testing-evidence.sh && rtk cargo test -p redlinedb-bench --bin evidence_processor --locked",
+      "purpose": "verify the shell wrapper and Rust official-evidence validator remain parseable and fail closed",
       "proof_lane": "redline-testing-official"
     },
+    "scripts/check-score-ratchet.sh": {
+      "command": "rtk bash -n scripts/check-score-ratchet.sh && rtk bash scripts/check-score-ratchet.sh .jankurai/repo-score.json .jankurai/repo-score.json commit && rtk cargo test -p redlinedb-bench --test automation_tools --locked",
+      "purpose": "verify the thin shell dispatcher and Rust score policy accept unchanged evidence and reject regressions with stable diagnostics",
+      "proof_lane": "audit"
+    },
+    "scripts/perf/lib.sh": {
+      "command": "rtk bash -n scripts/perf/lib.sh && rtk cargo test -p redlinedb-bench --test automation_tools --locked",
+      "purpose": "verify performance JSONL statistics delegate to Rust and preserve the frozen exclusive-decile p90 contract",
+      "proof_lane": "fast"
+    },
+    "scripts/perf/w2-matrix.sh": {
+      "command": "rtk bash -n scripts/perf/w2-matrix.sh && rtk bash scripts/perf/w2-matrix.sh --dry-run --suite none --profiles release --allocators mimalloc",
+      "purpose": "verify the workload wrapper validates matrix inputs while Rust owns manifest and artifact metadata generation",
+      "proof_lane": "fast"
+    },
+    "ops/ci/jankurai-audit.sh": {
+      "command": "rtk bash -n ops/ci/jankurai-audit.sh && rtk cargo test -p redlinedb-bench --locked score_policy",
+      "purpose": "verify audit acceptance delegates to the fail-closed Rust score policy",
+      "proof_lane": "audit"
+    },
     "scripts/ci-local.sh": {
-      "command": "rtk bash -n scripts/ci-local.sh && rtk bash scripts/ci-local.sh pr-ci",
-      "purpose": "verify the local PR CI mirror uses the same redline-testing official wrapper as GitHub CI",
+      "command": "rtk bash -n scripts/ci-local.sh && rtk bash -n scripts/ci-doctor.sh && rtk bash scripts/ci-doctor.sh && rtk bash scripts/ci-local.sh pr-ci",
+      "purpose": "verify the host-required alias dispatches directly to ops/ci/pr-ci.sh and the local PR CI mirror uses the same redline-testing official wrapper as GitHub CI",
+      "proof_lane": "pr-ci"
+    },
+    "scripts/ci-doctor.sh": {
+      "command": "rtk bash -n scripts/ci-doctor.sh && rtk bash scripts/ci-doctor.sh",
+      "purpose": "verify pinned tools and the canonical required-lane dispatcher contract",
       "proof_lane": "pr-ci"
     },
     ".jankurai/zyal/": {
@@ -442,6 +467,41 @@
       "command": "rtk just redline-testing-official",
       "purpose": "prove the sqlite_parity binary entrypoint remains compatible with the external official suite gate",
       "proof_lane": "redline-testing-official"
+    },
+    "crates/bench/src/bin/evidence_processor.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --bin evidence_processor --locked",
+      "purpose": "prove official evidence schema, hash-map, runner-digest, and suite validation are implemented in Rust",
+      "proof_lane": "redline-testing-official"
+    },
+    "crates/bench/src/score_policy.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --locked score_policy",
+      "purpose": "prove score, finding, cap, and failed-audit acceptance policy in Rust with positive and negative fixtures",
+      "proof_lane": "audit"
+    },
+    "crates/bench/src/bin/score_policy.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test automation_tools --locked",
+      "purpose": "prove score-policy CLI exit codes and diagnostics remain stable",
+      "proof_lane": "audit"
+    },
+    "crates/bench/src/perf_evidence.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --locked perf_evidence",
+      "purpose": "prove JSONL statistics, artifact hashing, and W2 manifest serialization are implemented in Rust",
+      "proof_lane": "fast"
+    },
+    "crates/bench/src/bin/perf_evidence.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test automation_tools --locked",
+      "purpose": "prove performance evidence CLI output matches golden fixtures",
+      "proof_lane": "fast"
+    },
+    "crates/bench/tests/automation_tools.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test automation_tools --locked",
+      "purpose": "exercise golden and rejection behavior through the compiled Rust automation binaries",
+      "proof_lane": "fast"
+    },
+    "crates/bench/tests/no_python_files.rs": {
+      "command": "rtk cargo test -p redlinedb-bench --test no_python_files --locked",
+      "purpose": "fail closed on repository Python files or executable interpreter/package invocations",
+      "proof_lane": "fast"
     },
     "crates/ffi/tests/exec_input_boundary.rs": {
       "command": "rtk cargo test -p redlinedb-ffi --test exec_input_boundary --quiet --locked",

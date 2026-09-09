@@ -13,6 +13,10 @@ check:
   ./scripts/just/run.sh rust-witness
   ./scripts/just/run.sh rust-diagnose
 
+# Exact protected PR lane: fast tests plus hard security, dependency, and audit gates.
+required:
+  ./scripts/ci-local.sh required
+
 setup:
   ./scripts/just/run.sh cache-warm
 

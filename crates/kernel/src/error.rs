@@ -43,6 +43,9 @@ pub enum Error {
     #[error("no free slot space on page")]
     PageFull,
 
+    #[error("record needs {needed} bytes but one heap page can hold at most {maximum}")]
+    RecordTooLarge { needed: usize, maximum: usize },
+
     #[error("transaction is not visible in this snapshot")]
     NotVisible,
 
@@ -163,6 +166,16 @@ impl PartialEq for Error {
             (Self::CorruptPage(left), Self::CorruptPage(right)) => left == right,
             (Self::CorruptWal(left), Self::CorruptWal(right)) => left == right,
             (Self::PageFull, Self::PageFull) => true,
+            (
+                Self::RecordTooLarge {
+                    needed: left_needed,
+                    maximum: left_maximum,
+                },
+                Self::RecordTooLarge {
+                    needed: right_needed,
+                    maximum: right_maximum,
+                },
+            ) => left_needed == right_needed && left_maximum == right_maximum,
             (Self::NotVisible, Self::NotVisible) => true,
             (Self::WriteConflict, Self::WriteConflict) => true,
             (Self::LockTimeout, Self::LockTimeout) => true,

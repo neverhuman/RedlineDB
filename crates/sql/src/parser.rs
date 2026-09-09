@@ -113,6 +113,11 @@ pub fn parse_prepared_template(conn: &Connection, sql: &str) -> Result<PreparedT
 fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<PreparedTemplate> {
     let trimmed = sql.trim();
     let stmt = trimmed.trim_end_matches(';').trim();
+    if starts_with_create_virtual_table(stmt) {
+        return Err(Error::UnsupportedSql(
+            "CREATE VIRTUAL TABLE is not supported without module migration support".to_owned(),
+        ));
+    }
     let schema = conn.schema_snapshot();
     let schema_epoch = conn.schema_epoch();
 
@@ -260,6 +265,68 @@ fn parse_prepared_template_impl(conn: &Connection, sql: &str) -> Result<Prepared
     }
 
     templates::bind_statement(conn, schema, schema_epoch, trimmed, statements.remove(0))
+}
+
+fn starts_with_create_virtual_table(stmt: &str) -> bool {
+    let mut rest = stmt.as_bytes();
+    matches!(
+        (
+            next_sql_keyword(&mut rest),
+            next_sql_keyword(&mut rest),
+            next_sql_keyword(&mut rest),
+        ),
+        (Some(create), Some(virtual_kw), Some(table))
+            if create.eq_ignore_ascii_case(b"create")
+                && virtual_kw.eq_ignore_ascii_case(b"virtual")
+                && table.eq_ignore_ascii_case(b"table")
+    )
+}
+
+/// Return the next unquoted SQL word after whitespace and comments.
+///
+/// This is intentionally a small prefix lexer rather than a SQL rewriter:
+/// the caller only needs to classify `CREATE VIRTUAL TABLE` before the main
+/// parser can construct a compatibility template. Punctuation, literals, and
+/// quoted identifiers stop classification instead of being guessed through.
+fn next_sql_keyword<'a>(rest: &mut &'a [u8]) -> Option<&'a [u8]> {
+    loop {
+        while rest.first().is_some_and(u8::is_ascii_whitespace) {
+            *rest = &rest[1..];
+        }
+
+        if rest.starts_with(b"--") {
+            let end = rest
+                .iter()
+                .position(|byte| *byte == b'\n')
+                .unwrap_or(rest.len());
+            *rest = &rest[end..];
+            continue;
+        }
+        if rest.starts_with(b"/*") {
+            let Some(end) = rest[2..].windows(2).position(|window| window == b"*/") else {
+                *rest = &[];
+                return None;
+            };
+            *rest = &rest[end + 4..];
+            continue;
+        }
+        break;
+    }
+
+    let len = rest
+        .iter()
+        .position(|byte| !is_sql_word_byte(*byte))
+        .unwrap_or(rest.len());
+    if len == 0 {
+        return None;
+    }
+    let (word, tail) = rest.split_at(len);
+    *rest = tail;
+    Some(word)
+}
+
+fn is_sql_word_byte(byte: u8) -> bool {
+    byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'$') || !byte.is_ascii()
 }
 
 /// Allocation-free prefix check for the PRAGMA keyword. Mirrors
@@ -1453,7 +1520,10 @@ mod tests {
             find_ignore_ascii_case("SELECT WINDOW win AS (x)", b" window win as ("),
             Some(6)
         );
-        assert_eq!(find_ignore_ascii_case("SELECT 1", b" window win as ("), None);
+        assert_eq!(
+            find_ignore_ascii_case("SELECT 1", b" window win as ("),
+            None
+        );
     }
 
     #[test]
@@ -4653,7 +4723,7 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
         } else {
             break;
         };
-        let body_after_select = &trimmed[select_offset + "SELECT ".len()..];
+        let body_after_select = &trimmed[select_offset + "SELECT ".len()..]; // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=string-offset-arithmetic-into-already-parsed-text-not-sql-string-construction expires=2027-06-01
         let upper_body = body_after_select.to_ascii_uppercase();
         let from_rel =
             find_top_level_keyword(&upper_body, body_after_select.as_bytes(), 0, " FROM ");
@@ -4680,7 +4750,7 @@ fn rewrite_lateral_in_statement(stmt: &str) -> String {
         //   " FROM "
         //   <FROM up to join_pos>
         //   <FROM from after_alias onward>
-        let projection_start_abs = leading_ws_len + select_offset + "SELECT ".len();
+        let projection_start_abs = leading_ws_len + select_offset + "SELECT ".len(); // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=string-offset-arithmetic-into-already-parsed-text-not-sql-string-construction expires=2027-06-01
         let from_kw_abs = projection_start_abs + from_rel;
         // join_pos is relative to `out` (lowercase has same indexing).
         // Everything strictly before join_pos in the FROM clause is

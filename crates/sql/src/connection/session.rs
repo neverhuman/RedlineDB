@@ -217,6 +217,19 @@ impl Connection {
         Ok(last)
     }
 
+    /// Execute every statement in `sql`, returning `Ok(())` when the final
+    /// statement completes.
+    ///
+    /// Behavior mirrors rusqlite's `execute_batch`: statements are parsed and
+    /// stepped in source order, explicit transaction-control statements are
+    /// executed exactly as authored, and execution stops on the first failure.
+    ///
+    /// The return type is `()` by design. If callers need per-statement row
+    /// counts, they should call [`Self::execute`].
+    pub fn execute_batch(self: &Arc<Self>, sql: &str) -> Result<()> {
+        self.execute(sql).map(|_| ())
+    }
+
     /// Prepare one typed Redline Query Language statement.
     pub fn prepare_rql(self: &Arc<Self>, statement: &crate::RqlStatement) -> Result<Statement> {
         let template = self.prepare_rql_template(statement)?;

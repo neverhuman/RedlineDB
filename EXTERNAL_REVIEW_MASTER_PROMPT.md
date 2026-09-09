@@ -31,7 +31,7 @@ This is a briefing, not ground truth. Verify every claim against source code, te
 - Kernel engine, WAL, index, and recovery paths: `crates/kernel/src/engine/mod.rs`, `crates/kernel/src/wal/*`, `crates/kernel/src/index/*`, `crates/kernel/tests/*`.
 - SQL DML, index access, vectorized executor, JSON, collation, datetime, and regexp: `crates/sql/src/exec/*`, `crates/sql/src/json/*`, `crates/sql/src/collation.rs`, `crates/sql/src/datetime.rs`, `crates/sql/src/regexp.rs`, `crates/sql/tests/*`.
 - Public facade stats and benchmark telemetry: `crates/redlinedb/src/*`, `crates/bench/src/certify.rs`, `crates/bench/src/config.rs`, `crates/bench/src/workload.rs`, `crates/bench/src/chaos.rs`.
-- FFI ABI and compatibility surface: `crates/ffi/src/lib.rs`, `crates/ffi/include/sqlite3.h`.
+- FFI ABI and compatibility surface: `crates/ffi/src/lib.rs`, `contracts/c-abi/sqlite3.h`, `contracts/c-abi/redlinedb.h`.
 - Proof-lane metadata: `.jankurai/proof-lanes.toml`, `.jankurai/test-map.json`, `.jankurai/owner-map.json`, `.jankurai/generated-zones.toml`, `.jankurai/unsafe-ledger.toml`.
 
 ## Current Evidence To Verify

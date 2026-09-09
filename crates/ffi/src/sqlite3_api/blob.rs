@@ -14,7 +14,7 @@ use redlinedb_sql::Statement;
 use redlinedb_sql::value::SqlValue;
 
 use crate::types::*;
-use crate::util::caller_buffer;
+use crate::util::{caller_buffer, reclaim_box};
 
 #[allow(non_camel_case_types)]
 pub struct RldbBlob {
@@ -187,7 +187,7 @@ pub unsafe extern "C" fn sqlite3_blob_write(
     // SAFETY: caller obligation — buf valid for reads of nbytes; routed
     // through caller_buffer per its contract.
     let src = unsafe { caller_buffer(buf as *const u8, nbytes as usize) };
-    cache[start..end].copy_from_slice(src);
+    cache[start..end].copy_from_slice(&src);
     let bytes = cache.clone();
     drop(cache);
     if !run_update(blob.db(), &blob.table, &blob.column, blob.rowid, &bytes) {
@@ -211,7 +211,7 @@ pub unsafe extern "C" fn sqlite3_blob_close(blob: *mut RldbBlob) -> c_int {
     // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/blob.rs,
     // line=98, detector=rust.unsafe.raw-parts); proof:
     // crates/ffi/tests/blob_io.rs::open_read_write_close_round_trip.
-    let _ = unsafe { Box::from_raw(blob) };
+    let _ = unsafe { reclaim_box(blob) }; // SAFETY: reclaim and drop the leaked Box; matching destructor for Box::into_raw at sqlite3_blob_open (see invariant above).
     RLDB_OK
 }
 

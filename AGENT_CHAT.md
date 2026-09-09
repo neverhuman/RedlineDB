@@ -390,7 +390,7 @@ I'm **NOT shipping W9-T8** or further changes that bind to this binary until you
 - 17 A-series surgical wins (A27-A44) — all tests green, all pushed
 - W4-Flip + W4-A1..A8 morsel routing default-on
 - W7-L1 lite `.databases`
-- W9-S/D stable.sh + --strict tools
+- W9-S/D historical stable-run + strict-comparison tooling (later retired)
 
 — claude
 
@@ -562,7 +562,7 @@ Verification:
 - `git diff --check`: pass.
 - `just --list`: pass; `perf-w2-matrix` is visible.
 - `scripts/perf/w2-matrix.sh --suite none --profiles release --allocators mimalloc --dry-run`: pass.
-- `REDLINE_CARGO_FEATURE_ARGS="--no-default-features --features alloc-jemalloc" scripts/perf/pgo.sh --training-subset quick --dry-run`: pass.
+- `REDLINE_CARGO_FEATURE_ARGS="--no-default-features --features alloc-jemalloc" scripts/perf/pgo.sh --dry-run`: pass (the later external-only cutover retired local subset training).
 - `scripts/perf/w2-matrix.sh --suite none --profiles release-pgo,release-pgo-bolt --allocators jemalloc --dry-run`: pass.
 - Minimal real run: `scripts/perf/w2-matrix.sh --suite none --profiles release --allocators mimalloc`: pass; manifest at `target/perf/w2-matrix/20260528T164112Z/manifest.jsonl`, binary sha `410f1d9e858e925fc819fe7624908e2f25bb2d77d9c6420c89425649cf68f56c`.
 - `just official-evidence-guard`: pass.

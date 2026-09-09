@@ -9,8 +9,8 @@ use redlinedb_sql::Step;
 
 use crate::types::*;
 use crate::util::{
-    api, caller_buffer, flatten_code, map_error, record_status_with_message, refresh_text_cache,
-    sql_result,
+    api, caller_buffer, flatten_code, map_error, reclaim_box, record_status_with_message,
+    refresh_text_cache, sql_result,
 };
 
 #[unsafe(no_mangle)]
@@ -38,7 +38,7 @@ pub extern "C" fn rldb_prepare_v2(
         } else {
             // SAFETY: `sql` non-null (checked); per sqlite3_prepare_v2 contract when nbytes>=0 it is the explicit byte length of the caller-owned buffer; delegate to centralised helper crates/ffi/src/util.rs::caller_buffer (see its `# Safety` doc); slice copied into owned String below.
             let bytes = unsafe { caller_buffer(sql_cstr.as_ptr() as *const u8, nbytes as usize) };
-            std::str::from_utf8(bytes)
+            std::str::from_utf8(&bytes)
                 .map_err(|_| RLDB_MISMATCH)?
                 .to_owned()
         };
@@ -175,7 +175,7 @@ pub extern "C" fn rldb_finalize(stmt: *mut rldb_stmt) -> c_int {
         // (file=crates/ffi/src/stmt.rs, line=169, detector=rust.unsafe.raw-parts);
         // proof: crates/ffi/tests/safety_invariants.rs::oversize_sql_is_rejected_gracefully
         // and ::parameter_index_out_of_range_returns_range.
-        let boxed = unsafe { Box::from_raw(stmt) };
+        let boxed = unsafe { reclaim_box(stmt) }; // SAFETY: reclaim the leaked Box; matching destructor for the Box::into_raw at prepare (see invariant above).
         // SAFETY: boxed.db is the *mut rldb recorded at prepare time;
         // rldb_close waits for active_statements==0 so the parent db is
         // still alive when we decrement here.

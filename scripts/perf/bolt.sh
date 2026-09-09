@@ -13,7 +13,7 @@
 #   * llvm-bolt v18 or newer.
 #   * `perf` with LBR support (cycles:u -j any,u,k).
 #   * A PGO build done with --emit-relocs in the link step. Run:
-#         scripts/perf/pgo.sh --for-bolt --training-subset medium
+#         scripts/perf/pgo.sh --for-bolt
 #     first; otherwise BOLT cannot rewrite the binary.
 #
 # Usage:
@@ -75,12 +75,13 @@ fi
 # (it bails out with "BOLT-ERROR: relocations against code are missing").
 if ! readelf -S "$INPUT_BIN" 2>/dev/null | grep -q '\.rela\.text\|\.rel\.text'; then
     echo "bolt.sh: $INPUT_BIN appears to lack code relocations (.rela.text)." >&2
-    echo "         Rebuild with: scripts/perf/pgo.sh --for-bolt --training-subset medium" >&2
+    echo "         Rebuild with: scripts/perf/pgo.sh --for-bolt" >&2
     exit 2
 fi
 
-REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-/home/ubuntu/redline-testing/target/release/redline-testing}"
-SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3")}"
+REDLINE_SPLIT_ROOT="${REDLINE_SPLIT_ROOT:-$(cd ".." && pwd)}"
+REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-${REDLINE_SPLIT_ROOT}/redline-testing/target/release/redline-testing}"
+SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "${REDLINE_SPLIT_ROOT}/sqlite-reference/bin/sqlite3")}" 
 if [ ! -x "$REDLINE_TESTING_BIN" ]; then
     echo "bolt.sh: redline-testing not at $REDLINE_TESTING_BIN" >&2
     exit 2

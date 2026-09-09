@@ -13,14 +13,11 @@
 # under the optimized configuration.
 #
 # Usage:
-#   scripts/perf/pgo.sh [--training-subset {quick,medium,full}] [--for-bolt] [--dry-run]
+#   scripts/perf/pgo.sh [--for-bolt] [--dry-run]
 #
-# Training subsets (default: medium):
-#   quick   ~40 curated cases via scripts/perf/run_subset.py (fast smoke).
-#   medium  ~300 curated cases via scripts/perf/run_subset.py (default;
-#           stratified by category x priority x profile).
-#   full    1127-case official corpus via `redline-testing run`
-#           (mirrors CI; original behavior).
+# Training always uses the complete official corpus through the verified
+# external `redline-testing` runner. Redline core does not own a subset
+# replay producer.
 #
 # Flags:
 #   --for-bolt   Add `-Wl,--emit-relocs` to the final link so the binary
@@ -39,20 +36,11 @@ cd "$(git rev-parse --show-toplevel)"
 # shellcheck source=scripts/perf/lib-rustflags.sh
 . "$(git rev-parse --show-toplevel)/scripts/perf/lib-rustflags.sh"
 
-TRAINING_SUBSET="medium"
 FOR_BOLT=0
 DRY_RUN=0
 
 while [ $# -gt 0 ]; do
     case "$1" in
-        --training-subset=*)
-            TRAINING_SUBSET="${1#*=}"
-            shift
-            ;;
-        --training-subset)
-            TRAINING_SUBSET="${2:?--training-subset requires a value}"
-            shift 2
-            ;;
         --for-bolt)
             FOR_BOLT=1
             shift
@@ -72,14 +60,6 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-case "$TRAINING_SUBSET" in
-    quick|medium|full) ;;
-    *)
-        echo "pgo.sh: --training-subset must be one of {quick,medium,full}, got: $TRAINING_SUBSET" >&2
-        exit 2
-        ;;
-esac
-
 PGO_DATA_DIR="${PGO_DATA_DIR:-}"
 PGO_PROFILE_DIR="${PGO_PROFILE_DIR:-}"
 REDLINE_CARGO_FEATURE_ARGS_STR="${REDLINE_CARGO_FEATURE_ARGS:-}"
@@ -88,10 +68,9 @@ if [ -n "$REDLINE_CARGO_FEATURE_ARGS_STR" ]; then
     # shellcheck disable=SC2206
     REDLINE_CARGO_FEATURE_ARGS=($REDLINE_CARGO_FEATURE_ARGS_STR)
 fi
-REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-/home/ubuntu/redline-testing/target/release/redline-testing}"
-SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3")}"
-PERF_CASES_DIR="${PERF_CASES_DIR:-bench/perf/cases}"
-PERF_ROOT="${PERF_ROOT:-target/perf}"
+REDLINE_SPLIT_ROOT="${REDLINE_SPLIT_ROOT:-$(cd ".." && pwd)}"
+REDLINE_TESTING_BIN="${REDLINE_TESTING_BIN:-${REDLINE_SPLIT_ROOT}/redline-testing/target/release/redline-testing}"
+SQLITE_REF_BIN="${SQLITE_REF_BIN:-$(bash scripts/sqlite/build-reference.sh 2>/dev/null || echo "${REDLINE_SPLIT_ROOT}/sqlite-reference/bin/sqlite3")}" 
 
 if [ "$DRY_RUN" = "0" ]; then
     if [ -z "$PGO_DATA_DIR" ]; then
@@ -105,28 +84,9 @@ else
     PGO_PROFILE_DIR="${PGO_PROFILE_DIR:-/tmp/redlinedb-pgo-profile}"
 fi
 
-# Resolve subset-specific case list. `build_case_lists.py` is the
-# canonical generator (see scripts/perf/build-case-lists.sh); the
-# committed lists in $PERF_CASES_DIR are its checked-in output and
-# match the schema run_subset.py expects (one 5-digit id per line,
-# `#` comments allowed).
-CASE_LIST=""
-case "$TRAINING_SUBSET" in
-    quick)  CASE_LIST="$PERF_CASES_DIR/quick-set.txt" ;;
-    medium) CASE_LIST="$PERF_CASES_DIR/medium-set.txt" ;;
-    full)   CASE_LIST="" ;;
-esac
-
-if [ -n "$CASE_LIST" ] && [ ! -f "$CASE_LIST" ]; then
-    echo "pgo.sh: case-list missing at $CASE_LIST" >&2
-    echo "         run scripts/perf/build-case-lists.sh to regenerate, or" >&2
-    echo "         re-run with --training-subset=full to skip case-list filtering." >&2
-    exit 2
-fi
-
 if [ ! -x "$REDLINE_TESTING_BIN" ]; then
     echo "redline-testing binary not found at $REDLINE_TESTING_BIN" >&2
-    echo "Build it: cd /home/ubuntu/redline-testing && cargo build --release --locked --bin redline-testing" >&2
+    echo "Build it in the sibling redline-testing checkout: cargo build --release --locked --bin redline-testing" >&2
     [ "$DRY_RUN" = "1" ] || exit 1
 fi
 if [ ! -x "$SQLITE_REF_BIN" ]; then
@@ -146,7 +106,6 @@ if [ -z "$LLVM_PROFDATA" ] || [ ! -x "$LLVM_PROFDATA" ]; then
 fi
 
 INSTR_BIN="target/release-pgo/redlinedb"
-SNAPSHOT="$PERF_ROOT/corpus-snapshot.json"
 
 # Final-link RUSTFLAGS — append --emit-relocs when --for-bolt so the
 # bolt.sh post-link step has the relocations it needs to rewrite.
@@ -155,12 +114,10 @@ if [ "$FOR_BOLT" = "1" ]; then
     FINAL_LINK_EXTRA=" -C link-arg=-Wl,--emit-relocs"
 fi
 
-# Compose the workload command for the chosen subset. We print it under
-# --dry-run so users can sanity-check before committing to the full
-# multi-hour pipeline.
+# Print the full external workload under --dry-run so users can sanity-check
+# the command before committing to the multi-hour pipeline.
 print_workload_cmd() {
-    if [ "$TRAINING_SUBSET" = "full" ]; then
-        cat <<EOF
+    cat <<EOF
 "$REDLINE_TESTING_BIN" run \\
     --target-bin "$INSTR_BIN" \\
     --sqlite-bin "$SQLITE_REF_BIN" \\
@@ -170,29 +127,11 @@ print_workload_cmd() {
     --repetitions 1 --warmup 0 \\
     --output target/redline-testing-pgo/training.jsonl
 EOF
-    else
-        cat <<EOF
-python3 scripts/perf/run_subset.py \\
-    --case-list   "$CASE_LIST" \\
-    --target-bin  "$INSTR_BIN" \\
-    --sqlite-bin  "$SQLITE_REF_BIN" \\
-    --output      target/redline-testing-pgo/training.jsonl \\
-    --repetitions 1 --warmup 0 \\
-    --snapshot    "$SNAPSHOT" \\
-    --tmp-root    /dev/shm/redline-testing-pgo \\
-    --workers     "\${PERF_WORKERS:-1}"
-EOF
-    fi
 }
 
 if [ "$DRY_RUN" = "1" ]; then
     echo "==> pgo.sh DRY-RUN"
-    echo "training subset: $TRAINING_SUBSET"
-    if [ -n "$CASE_LIST" ]; then
-        echo "case list:       $CASE_LIST"
-    else
-        echo "case list:       <full corpus via redline-testing run>"
-    fi
+    echo "training corpus: full official corpus via redline-testing run"
     echo "for-bolt:        $FOR_BOLT"
     echo "final RUSTFLAGS: ${REDLINE_BASE_RUSTFLAGS}${FINAL_LINK_EXTRA} -Cprofile-use=$PGO_PROFILE_DIR/merged.profdata -Cllvm-args=-pgo-warn-missing-function"
     echo
@@ -214,46 +153,23 @@ if [ ! -x "$INSTR_BIN" ]; then
     exit 1
 fi
 
-echo ">>> [3a/3] Running training workload (subset=$TRAINING_SUBSET) to gather profile data"
+echo ">>> [3a/3] Running full official training corpus to gather profile data"
 mkdir -p target/redline-testing-pgo
-if [ "$TRAINING_SUBSET" = "full" ]; then
-    # We allow a non-zero exit here (|| true) because the instrumented binary
-    # emits extra stderr (durability notice, LLVM profile warnings) that the
-    # parity harness counts as failures.  The .profraw files are written by
-    # the LLVM runtime regardless, so the profile is still valid.
-    REDLINEDB_DEFAULT_DURABILITY=normal \
-    REDLINEDB_QUIET_DURABILITY=1 \
-    "$REDLINE_TESTING_BIN" run \
-        --target-bin "$INSTR_BIN" \
-        --sqlite-bin "$SQLITE_REF_BIN" \
-        --suite sqlite_parity \
-        --workers "${PERF_WORKERS:-10}" \
-        --tmp-root /dev/shm/redline-testing-pgo \
-        --repetitions 1 --warmup 0 \
-        --output target/redline-testing-pgo/training.jsonl \
-    || true
-else
-    # Subset path: replay only the curated case-list via run_subset.py.
-    # The instrumented binary still writes .profraw to $PGO_DATA_DIR on
-    # every invocation (LLVM runtime, not the harness), so this captures
-    # a valid profile from the targeted hot cases.
-    if [ ! -f "$SNAPSHOT" ]; then
-        echo ">>> snapshot missing at $SNAPSHOT — regenerating via redline-testing list"
-        mkdir -p "$(dirname "$SNAPSHOT")"
-        "$REDLINE_TESTING_BIN" list --suite sqlite_parity --format json > "$SNAPSHOT"
-    fi
-    mkdir -p /dev/shm/redline-testing-pgo
-    REDLINEDB_DEFAULT_DURABILITY=normal \
-    python3 scripts/perf/run_subset.py \
-        --case-list   "$CASE_LIST" \
-        --target-bin  "$INSTR_BIN" \
-        --sqlite-bin  "$SQLITE_REF_BIN" \
-        --output      target/redline-testing-pgo/training.jsonl \
-        --repetitions 1 --warmup 0 \
-        --snapshot    "$SNAPSHOT" \
-        --tmp-root    /dev/shm/redline-testing-pgo \
-        --workers     "${PERF_WORKERS:-1}"
-fi
+# We allow a non-zero exit here (|| true) because the instrumented binary
+# emits extra stderr (durability notice, LLVM profile warnings) that the
+# parity harness counts as failures. The .profraw files are written by the
+# LLVM runtime regardless, so the profile is still valid.
+REDLINEDB_DEFAULT_DURABILITY=normal \
+REDLINEDB_QUIET_DURABILITY=1 \
+"$REDLINE_TESTING_BIN" run \
+    --target-bin "$INSTR_BIN" \
+    --sqlite-bin "$SQLITE_REF_BIN" \
+    --suite sqlite_parity \
+    --workers "${PERF_WORKERS:-10}" \
+    --tmp-root /dev/shm/redline-testing-pgo \
+    --repetitions 1 --warmup 0 \
+    --output target/redline-testing-pgo/training.jsonl \
+|| true
 
 echo ">>> [3b/3] Merging .profraw files"
 "$LLVM_PROFDATA" merge -output="$PGO_PROFILE_DIR/merged.profdata" "$PGO_DATA_DIR"/*.profraw
@@ -266,7 +182,7 @@ echo ""
 echo "Done."
 echo "Final PGO-optimized binary: target/release-pgo/redlinedb"
 echo "Profile data: $PGO_PROFILE_DIR/merged.profdata"
-echo "Training subset: $TRAINING_SUBSET"
+echo "Training corpus: full official corpus"
 if [ "$FOR_BOLT" = "1" ]; then
     echo "Linked with --emit-relocs for BOLT post-processing (scripts/perf/bolt.sh)."
 fi

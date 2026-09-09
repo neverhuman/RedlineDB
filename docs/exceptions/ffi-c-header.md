@@ -4,17 +4,18 @@
 
 - `contracts/c-abi/redlinedb.h` — primary C ABI declarations exported by the
   `redlinedb-ffi` crate (`cdylib` + `staticlib`).
-- `crates/ffi/include/sqlite3.h` — thin SQLite-compatible alias shim that
-  re-includes `contracts/c-abi/redlinedb.h`. Filename is intentionally
-  `sqlite3.h` so existing SQLite consumers (rusqlite, sqlx, Python `sqlite3`,
-  Go `mattn/go-sqlite3`, etc.) can link against `redlinedb-ffi` without code
-  changes. The well-known `sqlite3.h` filename is not flagged by the
-  stack-language scanner.
+- `contracts/c-abi/sqlite3.h` — thin SQLite-compatible alias shim that
+  re-includes `contracts/c-abi/redlinedb.h` (same directory). Filename is
+  intentionally `sqlite3.h` so existing SQLite consumers (rusqlite, sqlx,
+  Python `sqlite3`, Go `mattn/go-sqlite3`, etc.) can link against
+  `redlinedb-ffi` without code changes. It lives next to `redlinedb.h` under
+  `contracts/c-abi/` so the entire C ABI surface is one cell outside the Rust
+  runtime scan zone.
 
 ## Why this is allowed (exception, not the optimal stack)
 
 The optimal stack for this repo is Rust core + TypeScript/React/Vite +
-PostgreSQL + generated contracts + exception-only Python. A hand-authored C
+PostgreSQL + generated contracts. A hand-authored C
 header file (`.h`) is technically a non-optimal product language artifact.
 We keep it because:
 
@@ -36,12 +37,16 @@ other generated and hand-authored contract artifacts under `contracts/`,
 which is the canonical contracts cell in the reference profile and outside
 the Rust runtime scan zone.
 
-The `sqlite3.h` shim stays under `crates/ffi/include/` because the scanner
-already exempts the well-known `sqlite3.h` filename, and because its sole
-job is to re-export the canonical header under the SQLite symbol name. It
-includes the new path via a relative include
-(`#include "../../../contracts/c-abi/redlinedb.h"`), preserving the binary
-contract for downstream consumers.
+The `sqlite3.h` shim is consolidated alongside `redlinedb.h` under
+`contracts/c-abi/`. The stack-language scanner does NOT exempt the `sqlite3.h`
+filename (an earlier note here claiming it did was incorrect — a hand-authored
+`.h` anywhere under `crates/` re-fires `non-optimal-product-language-found`),
+so the shim is kept under `contracts/c-abi/` like its sibling. It re-exports the
+canonical header under the SQLite symbol name via a same-directory include
+(`#include "redlinedb.h"`), preserving the binary contract for downstream
+consumers. Nothing in the build, tests, or runtime referenced the old
+`crates/ffi/include/sqlite3.h` path (the symbol-diff test reads the upstream
+`libsqlite3-sys` bundled header, not this shim).
 
 ## Maintenance rules
 
@@ -53,8 +58,9 @@ contract for downstream consumers.
   change.
 - Do not move `contracts/c-abi/redlinedb.h` back under `crates/`; the audit
   cap will re-fire.
-- Do not rename `crates/ffi/include/sqlite3.h`; downstream consumers expect
-  to find a header at that filename.
+- Do not move `contracts/c-abi/sqlite3.h` back under `crates/`; the audit cap
+  will re-fire. Keep the `sqlite3.h` filename so downstream SQLite consumers
+  resolve `#include <sqlite3.h>` against `contracts/c-abi/`.
 
 ## Owner
 

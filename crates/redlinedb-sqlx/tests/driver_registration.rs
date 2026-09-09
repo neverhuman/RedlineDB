@@ -1,6 +1,5 @@
 use redlinedb_sqlx::install_default_drivers;
 use sqlx::{any::AnyPool, row::Row};
-use std::{fs, path::PathBuf};
 
 async fn assert_select_one(url: &str) {
     let pool = AnyPool::connect(url)
@@ -48,12 +47,8 @@ async fn mixed_case_redlinedb_scheme_is_normalized() {
 async fn file_backed_jeryu_autonomy_ledger_url_connects() {
     install_default_drivers();
 
-    let db_path =
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../target/jeryu/autonomy.redlineDB");
-    if let Some(parent) = db_path.parent() {
-        fs::create_dir_all(parent).expect("create target/jeryu test dir");
-    }
-    let _ = fs::remove_file(&db_path);
+    let tempdir = tempfile::tempdir().expect("create autonomy ledger test directory");
+    let db_path = tempdir.path().join("autonomy.redlineDB");
 
     assert_file_backed_round_trip(&format!("redline://{}", db_path.display()), 1, "kill-bell")
         .await;
@@ -92,4 +87,5 @@ async fn assert_file_backed_round_trip(url: &str, id: i64, kind: &str) {
         .unwrap_or_else(|err| panic!("select ledger row via {url}: {err}"));
 
     assert_eq!(row.try_get::<String, _>(0).unwrap(), kind);
+    pool.close().await;
 }

@@ -23,6 +23,7 @@ impl WalCoordinator {
                 durable_lsn: Lsn::ZERO,
                 pending: VecDeque::new(),
                 pending_bytes: 0,
+                write_requested: false,
                 flush_requested_lsn: Lsn::ZERO,
                 shutdown: false,
                 failure: None,
@@ -96,6 +97,7 @@ impl WalCoordinator {
                 durable_lsn,
                 pending: VecDeque::new(),
                 pending_bytes: 0,
+                write_requested: false,
                 flush_requested_lsn: Lsn::ZERO,
                 shutdown: false,
                 failure: None,
@@ -156,6 +158,7 @@ impl WalCoordinator {
             payload,
             encoded_len as u64,
         )?;
+        state.write_requested = true;
         self.shared.cvar.notify_all();
         Ok((csn, append))
     }
@@ -181,6 +184,7 @@ impl WalCoordinator {
             payload,
             encoded_len as u64,
         )?;
+        state.write_requested = true;
         self.shared.cvar.notify_all();
         Ok(append)
     }
@@ -234,6 +238,7 @@ impl WalCoordinator {
             if state.written_lsn >= target_lsn {
                 return Ok(state.written_lsn);
             }
+            state.write_requested = true;
             self.shared.cvar.notify_all();
             state = self
                 .shared
@@ -313,6 +318,7 @@ impl WalCoordinator {
             encoded_len as u64,
         )?;
         if combined_semantic_delta.is_none() {
+            state.write_requested = true;
             self.shared.cvar.notify_all();
         }
         Ok(append)
@@ -344,6 +350,8 @@ impl WalCoordinator {
             if available >= encoded_len {
                 return Ok(state);
             }
+            state.write_requested = true;
+            self.shared.cvar.notify_all();
             state = self
                 .shared
                 .cvar

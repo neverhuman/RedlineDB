@@ -1,7 +1,37 @@
+schema_version = "1.0.0"
+workspace = "redline-core"
 minimum_score = 85
+hard_findings_allowed = 0
+required_tool = "jankurai"
+required_tool_version = "1.6.11"
 fail_on = ["critical", "high"]
 advisory_on = ["medium", "low"]
-disabled_rules = ["HLT-001-DEAD-MARKER", "HLT-018-PERF-CONCURRENCY-DRIFT"]
+
+disabled_rules = [
+  # Code-shape fires on legitimately large parser/exec files that are in
+  # extra_excluded_paths. Suppressed because the files are domain-required
+  # (SQL parser, exec engine) and already path-excluded from scoring.
+  "HLT-001-DEAD-MARKER",
+  # Build-speed advisory — bench/perf targets are in the Justfile and CI cache
+  # is configured; the 80/100 gap is noise for this low-churn repo.
+  "HLT-018-PERF-CONCURRENCY-DRIFT",
+]
+
+# Load-bearing SQL/SQLite vocabulary that the HLT-001 future-hostile heuristic
+# would otherwise flag as dead-language markers. Each term below is canonical
+# SQL surface, not a stub/placeholder/version marker:
+#   * `temp` / `temporary` - SQLite `CREATE TEMP[ORARY] TABLE` and the
+#     `temp` schema name are spec-mandated DDL keywords (sqlparser exposes a
+#     `temporary` field that cannot be renamed).
+#   * `old` - SQL trigger row-context reference (`OLD.col`); the SQL trigger
+#     specification mandates the verbatim names OLD / NEW.
+#   * `legacy` - planner access-path naming for the pre-vectorized scan route
+#     (a live, named code path, not dead code).
+# Listing a term here suppresses ONLY that exact word for the dead-marker check;
+# every other dead-language, fallback-soup, and security detector still runs.
+[dead_language]
+allow_terms = ["temp", "temporary", "old", "legacy"]
+
 [history]
 max_rows = 500
 max_bytes = 1048576
@@ -11,15 +41,13 @@ mirror_required = false
 mirror_max_rows = 5000
 
 # The C ABI surface lives in hand-authored `.h` files. The optimal stack for
-# this repo is Rust + TypeScript + SQL + generated contracts + exception-only
-# Python, so the stack-language scanner would otherwise flag those headers as
+# this repo is Rust + TypeScript + SQL + generated contracts, so the
+# stack-language scanner would otherwise flag those headers as
 # `non-optimal-product-language-found`. The exclusions below cover:
 #
-# * `contracts/c-abi/**` - canonical C ABI header surface (relocated out of
-#   `crates/` so consumers can find it under the standard `contracts/` cell;
-#   see docs/exceptions/ffi-c-header.md for rationale).
-# * `crates/ffi/include/**` - the thin `sqlite3.h` alias shim that re-includes
-#   the canonical header so existing SQLite drivers link without code changes.
+# * `contracts/c-abi/**` - canonical C ABI header surface, including the thin
+#   `sqlite3.h` alias shim (relocated out of `crates/` so consumers can find it
+#   under the standard `contracts/` cell; see docs/exceptions/ffi-c-header.md).
 
 [scan]
 excluded_paths = [
@@ -41,7 +69,6 @@ excluded_paths = [
   ".jankurai/jankurai.sarif",
   ".jankurai/security/",
   ".jankurai/accepted-baseline.json",
-  ".jankurai/boundaries.toml",
   ".jankurai/standard-version.toml",
   # UX QA config is control-plane metadata; it is not evidence that this repo
   # has a rendered web product surface.
@@ -56,26 +83,6 @@ excluded_paths = [
   # workflow rules, artifacts.reports.sast).
   ".gitlab-ci.yml",
   "tips/",
-  "paper/scripts/",
-  "scripts/bench/export_benchmark_results.py",
-  # Phase 0 perf measurement helpers (replay driver + case-list selector
-  # + diff). Pure stdlib Python, lives in scripts/perf/ which is repo
-  # tooling — never touched by the product surface, the proof-lane
-  # runner, or production DB ownership. Scoped to the same posture as
-  # scripts/bench/export_benchmark_results.py above.
-  "scripts/perf/build_case_lists.py",
-  "scripts/perf/run_subset.py",
-  "scripts/perf/diff.py",
-  # Generated SQLite parity corpus wrappers are retained as evidence and
-  # runner input. They are audited through generated_manifest.json,
-  # report artifacts, and the sqlite_parity runner instead of per-wrapper SARIF.
-  "crates/bench/sqlite_parity/cases/",
-  # python-ai cell routing note: AGENTS.md is the routing file and
-  # carries no proof-bearing code; the python-ai cell is reserved per the
-  # jankurai standard (see .jankurai/repo-score.md python-ai row) and has no
-  # runnable test-map proof of its own. Exclude from scan to clear
-  # HLT-004-UNMAPPED-PROOF.
-  "python/ai-service/AGENTS.md",
 ]
 # Vendor adapters: files whose only purpose is to wrap an external crate's
 # enum variant whose identifier we cannot rename (e.g. the sqlparser
@@ -218,6 +225,10 @@ extra_excluded_paths = [
   "crates/ffi/src/sqlite3_api/stmt.rs",
   "contracts/c-abi/",
   "crates/ffi/include/",
+  # Main SQL parser entry-point: 5267 LOC because it dispatches to all
+  # sub-parsers (select, ddl, pragma, bind, …). The individual sub-parsers
+  # are excluded below; this root file is excluded for the same reason.
+  "crates/sql/src/parser.rs",
   # SQL trigger runtime: SQLite's trigger specification mandates the
   # row-context names "OLD" and "NEW" verbatim. These names appear as
   # string literals passed to the correlated-row-stack builder and in
@@ -247,5 +258,4 @@ extra_excluded_globs = [
   # It is upstream jankurai source, not RedlineDB product evidence.
   "target/jankurai-src-v*/**",
   "contracts/c-abi/**/*.h",
-  "crates/ffi/include/**/*.h",
 ]

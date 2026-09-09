@@ -41,7 +41,7 @@ fn try_preopen_fast_path(
 }
 ```
 
-**Proof:** Existing CLI shell tests plus targeted cases `00146`, `00148`, `00149`, `00153`, `00202`, `00376`; then `rtk just cli-test` and `rtk just perf-quick target/release/redlinedb candidate`.
+**Proof:** Existing CLI shell tests plus targeted cases `00146`, `00148`, `00149`, `00153`, `00202`, `00376`; then `rtk just cli-test` and the verified external `rtk just redline-testing-official` gate.
 
 ### 2. Lean Ephemeral Defaults and Lazy Spill Roots
 
@@ -182,7 +182,7 @@ fn dml_target_rowids(spec: &DmlTargetSpec, tx: &mut Txn) -> Result<Vec<RowId>> {
 
 **Files:** `crates/sql/src/exec/expr/*`, `crates/sql/src/exec/expr/scalar/row/*`, `crates/sql/src/exec/select_top.rs`, `crates/sql/src/batch.rs`.
 
-**Proof:** Full `rtk just sql-test`, allocation-budget tests for top memory cases, and `rtk just perf-medium target/release/redlinedb candidate`.
+**Proof:** Full `rtk just sql-test`, allocation-budget tests for top memory cases, and the verified external `rtk just redline-testing-official` gate.
 
 ### 10. B-Link Split Path Without Global Structure Lock
 
@@ -202,13 +202,13 @@ fn dml_target_rowids(spec: &DmlTargetSpec, tx: &mut Txn) -> Result<Vec<RowId>> {
 
 **Files:** `Cargo.toml`, `.cargo/config.toml`, `scripts/perf/{pgo.sh,lib-rustflags.sh,bolt.sh}`, `docs/performance.md`, `just/lanes.just`.
 
-**Proof:** `rtk just perf-quick`, `rtk just perf-medium`, binary smoke tests, and retained stdout/stderr hash parity.
+**Proof:** Binary smoke tests, retained stdout/stderr hash parity, and the verified external `rtk just redline-testing-official` gate.
 
 ## Validation Plan
 
 - Always run targeted crate lanes first: `rtk just cli-test`, `rtk just sql-test`, or `rtk just kernel-test` depending on task ownership.
 - For performance PRs, require top-case before/after rows for: `00566`, `01058`, `00493`, `01085`, `00786`, `00834`, `00376`, `00146`, `00148`, `00149`, `00202`.
-- Use `rtk just perf-quick target/release/redlinedb candidate` for iteration, `rtk just perf-medium target/release/redlinedb candidate` for PR gate, and `rtk just redline-testing-official` or `perf-full` before claiming corpus-wide wins.
+- Use targeted Rust tests and binary smoke checks for iteration; use `rtk just redline-testing-official` for the PR gate and `perf-full` before claiming corpus-wide performance wins.
 - Add allocation/RSS budget tests for memory-profile cases; report process RSS and baseline-adjusted/query incremental RSS separately.
 
 ## Expected Outcome

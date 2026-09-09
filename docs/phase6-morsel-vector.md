@@ -147,12 +147,12 @@ The single source of truth is the `redline-testing` parity corpus (`/home/ubuntu
 
 - Loads every parity case from the external corpus.
 - For each case, builds a Connection with `PRAGMA morsel_executor = OFF` and another with the default, runs the case on both, asserts byte-identical result sets via the row equality helper from `crates/sql/tests/parity_coverage.rs`.
-- Records per-case morsel width (M6 telemetry) and dispatch decision (M7 telemetry) into a JSONL sidecar used by `scripts/perf/diff.py` to flag any case where the morsel path was expected to fire but did not.
+- Records per-case morsel width (M6 telemetry) and dispatch decision (M7 telemetry) into a JSONL sidecar for external report review, including cases where the morsel path was expected to fire but did not.
 - Runs in `just fast`, fast-fails on the first divergence with a `PRAGMA morsel_executor = OFF` reproducer printed to stderr.
 
 Per-wave: after M2/M3/M4 land, the harness is in place but covers only scan/filter/project shapes. After M5 lands, it covers GROUP BY shapes. After M7 lands, it covers the full corpus. The 1727+ existing tests stay green throughout; the harness is additive.
 
-Performance numbers come from the same `phase5-baseline.jsonl` lineage: `just perf-full BIN=target/release-pgo/redlinedb OUT=phase6-morsel-pgo` and `just perf-diff phase5-bolt phase6-morsel-pgo` as the headline delta.
+Performance numbers come from the same `phase5-baseline.jsonl` lineage: run `just perf-full BIN=target/release-pgo/redlinedb OUT=phase6-morsel-pgo`, then review the comparison through the verified external `redline-testing` report workflow.
 
 ## 10. Open questions surfaced by this design
 

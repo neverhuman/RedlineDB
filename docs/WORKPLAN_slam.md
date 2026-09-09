@@ -392,7 +392,9 @@ Components:
 - `paper/figs/{architecture,dataflow,fig1_throughput_scaling,fig2_latency_p99,fig3_ratio_bars,fig4_scaling_efficiency,fig5_recovery_failpoint}.eps` — 7 EPS figures (TikZ + matplotlib)
 - `paper/data/{headline_table,loc_comparison,cert_totals,perf_aggregates}.csv` — table data sources
 - `paper/refs/refs.bib` — 49 BibTeX entries (49 distinct `\cite` keys, every entry used)
-- `paper/scripts/{build_figs.py,check_refs.py,_bibcheck.tex}` — reproducibility scripts
+- `paper/scripts/_bibcheck.tex` — frozen bibliography check fixture; the
+  historical Python figure/reference generators were retired after their
+  generated artifacts were committed
 
 ## Phase 10 Long-Range Closure (in progress)
 
@@ -702,7 +704,8 @@ passthrough + collation in spill` adds:
   — `#[ignore]` removed.
 - `paper/sections/evaluation.tex` — new ``Phase 10 Feature Lanes''
   subsection wiring fig6/7/8.
-- `paper/scripts/build_figs.py` — fig6/7/8 generators.
+- `paper/figs/{fig6_json_throughput,fig7_vector_recall_qps,fig8_group_commit_batching}.eps`
+  — committed historical figure artifacts; regeneration is not a release lane.
 
 Cert local smoke (`phase10-cert-smoke`):
 - `cargo run -p redlinedb-bench --release -- certify --config
@@ -845,7 +848,7 @@ Verified locally:
 4. `rtk cargo test -p redlinedb-kernel --test group_commit_tests --locked --quiet` — `16 passed`
 5. `rtk cargo test -p redlinedb-sql --test phase10_sqld_collation --locked --quiet` — `4 passed`
 6. `rtk cargo run -p redlinedb-bench --release -- certify --config crates/bench/bench/certification-phase10-smoke.toml --out-dir target/bench/phase10-cert-smoke --seed 7 --repetitions 1 --warmup 0`
-7. `rtk python3 paper/scripts/build_figs.py`
+7. Verify the committed paper data and figure checksums.
 8. `rtk pdflatex ...`, `rtk bibtex ...`, `rtk pdflatex ...`, `rtk pdflatex ...`
 
 Artifacts:

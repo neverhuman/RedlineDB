@@ -33,7 +33,7 @@ pub use pool::{Pool, PoolBuilder, PooledConnection};
 pub use connection::{Connection, InterruptHandle, Transaction};
 pub use error::{Error, ErrorCode, Result};
 pub use handle::Database;
-pub use iter::{FromRow, FromValue, OwnedStep, Row, Step};
+pub use iter::{FromRow, FromValue, OwnedStep, QueryMap, Row, Step};
 pub use machine::{
     BinaryOp, ColumnRef, DeleteSpec, ExprSpec, InsertSpec, OrderSpec, QuerySpec, SchemaHandle,
     SelectSpec, TableRef, UnaryOp, UpdateSpec,
@@ -205,6 +205,243 @@ mod tests {
             }
             Step::Done => panic!("expected row"),
         }
+    }
+
+    #[test]
+    fn execute_batch_runs_script_in_order_without_row_counts() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("batch.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        conn.execute_batch(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, v INTEGER);\
+             INSERT INTO t(v) VALUES (10), (20);\
+             INSERT INTO t(v) VALUES (30)",
+        )
+        .expect("batch");
+
+        let mut stmt = conn
+            .prepare("SELECT COUNT(*) FROM t")
+            .expect("count prepared");
+        let count = match stmt.step().expect("count step") {
+            Step::Row(row) => row.get::<i64>(0).expect("row value"),
+            Step::Done => panic!("expected row"),
+        };
+        assert_eq!(count, 3);
+    }
+
+    #[test]
+    fn execute_batch_enforces_read_only_for_each_statement() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = dir.path().join("batch-read-only.redline");
+        {
+            let db = Database::create(&path).expect("db");
+            let mut conn = db.connect().expect("conn");
+            conn.execute("CREATE TABLE t(v INTEGER)", ())
+                .expect("create");
+        }
+
+        let db = Database::open_with_options(
+            &path,
+            OpenOptions::default()
+                .with_create(false)
+                .with_read_only(true),
+        )
+        .expect("read-only db");
+        let mut conn = db.connect().expect("read-only conn");
+        let err = conn
+            .execute_batch("SELECT COUNT(*) FROM t; INSERT INTO t VALUES (1)")
+            .expect_err("mutation in a read-only batch must fail");
+        assert_eq!(err.code(), ErrorCode::ReadOnly);
+        assert_eq!(
+            conn.query_row::<_, i64>("SELECT COUNT(*) FROM t", ())
+                .expect("readback"),
+            0
+        );
+    }
+
+    #[test]
+    fn execute_batch_honors_prearmed_interrupt_before_execution() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("batch-interrupt.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+        let interrupt = conn.interrupt_handle();
+        interrupt.interrupt();
+
+        let err = conn
+            .execute_batch("CREATE TABLE must_not_exist(v INTEGER)")
+            .expect_err("pre-armed interrupt must stop the batch");
+        assert_eq!(err.code(), ErrorCode::Interrupt);
+    }
+
+    #[test]
+    fn execute_batch_stops_on_error_and_preserves_prior_statements() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("batch-error.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        let err = conn
+            .execute_batch(
+                "CREATE TABLE t(id INTEGER PRIMARY KEY);\
+                 INSERT INTO t VALUES (1);\
+                 INSERT INTO t VALUES (1);\
+                 INSERT INTO t VALUES (2)",
+            )
+            .expect_err("duplicate key must stop the batch");
+        assert_eq!(err.code(), ErrorCode::Constraint);
+        assert_eq!(
+            conn.query_row::<_, i64>("SELECT COUNT(*) FROM t", ())
+                .expect("readback"),
+            1
+        );
+    }
+
+    #[test]
+    fn execute_batch_preserves_savepoints_and_comment_only_noops() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("batch-savepoint.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        conn.execute_batch("  -- no statement\n /* still no statement */ ;")
+            .expect("comment-only batch");
+        conn.execute_batch(
+            "CREATE TABLE t(v INTEGER);\
+             BEGIN IMMEDIATE;\
+             INSERT INTO t VALUES (1);\
+             SAVEPOINT discard_second;\
+             INSERT INTO t VALUES (2);\
+             ROLLBACK TO discard_second;\
+             RELEASE discard_second;\
+             COMMIT",
+        )
+        .expect("savepoint batch");
+
+        assert_eq!(
+            conn.query_row::<_, i64>("SELECT SUM(v) FROM t", ())
+                .expect("readback"),
+            1
+        );
+    }
+
+    #[test]
+    fn create_virtual_table_fails_closed_with_unsupported_code() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("virtual.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        let err = conn
+            .execute(
+                "create\nvirtual\ttable boxes USING rtree (id, x1, x2, y1, y2)",
+                (),
+            )
+            .expect_err("virtual table without a module must fail");
+        assert_eq!(
+            err.code(),
+            ErrorCode::Unsupported,
+            "unexpected virtual-table error: {err}"
+        );
+        assert!(err.message().contains("CREATE VIRTUAL TABLE"));
+
+        let count = conn
+            .query_row::<_, i64>(
+                "SELECT COUNT(*) FROM sqlite_master WHERE name = 'boxes'",
+                (),
+            )
+            .expect("probe catalog");
+        assert_eq!(count, 0);
+    }
+
+    #[test]
+    fn commented_virtual_table_prefix_is_typed_unsupported_on_every_facade_path() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("virtual-comments.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+        let variants = [
+            "/* lead */ CREATE VIRTUAL TABLE boxes USING rtree (id, x1, x2)",
+            "CREATE /* between */ VIRTUAL -- line\n TABLE boxes USING rtree (id, x1, x2)",
+            "cReAtE\n/* one */ vIrTuAl\t/* two */ TaBlE IF NOT EXISTS boxes USING rtree (id, x1, x2)",
+        ];
+
+        for sql in variants {
+            let prepare_err = match conn.prepare(sql) {
+                Ok(_) => panic!("prepare accepted virtual table: {sql}"),
+                Err(err) => err,
+            };
+            assert_eq!(prepare_err.code(), ErrorCode::Unsupported, "{sql}");
+
+            let execute_err = conn
+                .execute(sql, ())
+                .expect_err("execute accepted virtual table");
+            assert_eq!(execute_err.code(), ErrorCode::Unsupported, "{sql}");
+
+            let batch_err = conn
+                .execute_batch(sql)
+                .expect_err("batch accepted virtual table");
+            assert_eq!(batch_err.code(), ErrorCode::Unsupported, "{sql}");
+        }
+    }
+
+    #[test]
+    fn borrowed_statement_query_map_maps_rows_with_order() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("query_map.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+
+        conn.execute(
+            "CREATE TABLE t(id INTEGER PRIMARY KEY, name TEXT NOT NULL)",
+            (),
+        )
+        .expect("create");
+        conn.execute("INSERT INTO t(name) VALUES (?)", params!["Ada"])
+            .expect("insert");
+        conn.execute("INSERT INTO t(name) VALUES (?)", params!["Lin"])
+            .expect("insert");
+
+        let mut stmt = conn
+            .prepare("SELECT name FROM t WHERE id > ? ORDER BY id")
+            .expect("prepare query");
+        let rows = stmt
+            .query_map(params![0_i64], |row| row.get::<String>(0))
+            .expect("bind query parameters")
+            .collect::<Result<Vec<_>>>()
+            .expect("map rows");
+        assert_eq!(rows, vec!["Ada".to_string(), "Lin".to_string()]);
+    }
+
+    #[test]
+    fn query_map_callback_error_and_early_drop_leave_statement_ordered() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let db = Database::create(dir.path().join("query-map-drop.redline")).expect("db");
+        let mut conn = db.connect().expect("conn");
+        conn.execute_batch("CREATE TABLE t(v INTEGER); INSERT INTO t VALUES (1), (2), (3)")
+            .expect("setup");
+
+        let mut stmt = conn.prepare("SELECT v FROM t ORDER BY v").expect("prepare");
+        let mut rows = stmt
+            .query_map((), |row| {
+                let value = row.get::<i64>(0)?;
+                if value == 2 {
+                    Err(Error::unsupported("mapped stop"))
+                } else {
+                    Ok(value)
+                }
+            })
+            .expect("query map");
+        assert_eq!(rows.next().expect("first").expect("first value"), 1);
+        assert_eq!(
+            rows.next()
+                .expect("second")
+                .expect_err("mapped error")
+                .code(),
+            ErrorCode::Unsupported
+        );
+        drop(rows);
+
+        match stmt.step().expect("resume after iterator drop") {
+            Step::Row(row) => assert_eq!(row.get::<i64>(0).expect("third value"), 3),
+            Step::Done => panic!("iterator drop consumed the remaining row"),
+        }
+        assert!(matches!(stmt.step().expect("done"), Step::Done));
     }
 
     #[test]

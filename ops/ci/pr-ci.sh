@@ -1,40 +1,19 @@
 #!/usr/bin/env bash
+# redline-core PR-CI gate — the authoritative local Jeryu check.
+# Runs the canonical fast lane, fail-closed supply-chain checks, dependency
+# review, and the complete Jankurai ratchet. Independent of the other Redline
+# repositories: green here means every Core-owned required gate is green.
 set -euo pipefail
-
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
-run() {
-  printf '[pr-ci] %s\n' "$*" >&2
-  "$@"
-}
+# Canonical pre-merge gate (preflight checks + full test shards).
+bash ops/ci/fast.sh
 
-just_has() {
-  command -v just >/dev/null 2>&1 || return 1
-  [[ -f justfile || -f Justfile || -f .justfile ]] || return 1
-  just --summary 2>/dev/null | tr ' ' '\n' | grep -qx "$1"
-}
+# All security and policy tools are required. Missing tools or upstream proof
+# sources fail this protected check instead of being treated as advisory.
+bash ops/ci/security.sh
+bash ops/ci/dependency-review.sh
+bash ops/ci/jankurai-audit.sh
 
-if just_has fast-test; then
-  run just fast-test
-elif just_has fast; then
-  run just fast
-elif just_has check; then
-  run just check
-elif just_has test; then
-  run just test
-elif [[ -f Cargo.toml ]]; then
-  if cargo nextest --version >/dev/null 2>&1; then
-    run cargo nextest run --workspace --no-fail-fast
-  else
-    run cargo test --workspace --no-fail-fast
-  fi
-elif [[ -f package.json ]]; then
-  if [[ -f package-lock.json ]]; then
-    run npm ci --no-audit --no-fund
-  fi
-  run npm test
-else
-  printf '[pr-ci] no supported CI entrypoint found\n' >&2
-  exit 91
-fi
+echo "==> redline-core PR-CI: OK"

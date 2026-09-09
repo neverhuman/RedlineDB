@@ -18,9 +18,9 @@ crossbeam-channel = { version = "0.5", optional = true }
 crossbeam-queue = "0.3"
 crossbeam-utils = "0.8"
 fail = { version = "0.5", features = ["failpoints"], optional = true }
-hwlocality = { version = "=1.0.0-alpha.12", optional = true }
 parking_lot = "0.12"
 redlinedb-domain = { path = "../domain" }
+rustix = { version = "=1.1.4", features = ["thread"], optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1.0"
 smallvec = "1.13"
@@ -35,7 +35,7 @@ default = ["vector_v1_unmerged"]
 failpoints = ["dep:fail"]
 # Phase 5 WS-B6: opt-in NUMA-aware buffer-pool shard pinning. Off by
 # default — the no-feature build is byte-identical to the pre-B6 binary.
-numa = ["dep:hwlocality"]
+numa = ["dep:rustix"]
 # Lane V2 ships a minimal scalar distance shim while Lane V1's
 # real `vector::distance` module is in flight. Fusion deletes this
 # feature flag and the gated items in `crates/kernel/src/vector/distance.rs`

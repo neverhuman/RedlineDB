@@ -4,7 +4,7 @@
 # Coverage:
 #   - .github/workflows/ci.yml              → preflight, tests:* (5 shards),
 #                                              parity, official-evidence-guard,
-#                                              metrics-readme, relay jobs
+#                                              relay jobs
 #   - .github/workflows/jankurai.yml        → branch-freshness, audit, security,
 #                                              dependency-review
 #   - .github/workflows/jankurai-tools.yml  → tools:audit-ci, proof-routing,
@@ -170,14 +170,11 @@ stages:
   # `parity` stage waits on the test shards via `needs:` so a regression
   # short-circuits before the 90-min parity run. `benchmark` is the
   # heavy native-compile + full-corpus perf measurement (main-only /
-  # manual). `metrics` waits on parity and (optionally) benchmark so
-  # README perf numbers prefer the ultra-fast native-compile evidence
-  # when available.
+  # manual).
   - smoke
   - test
   - parity
   - benchmark
-  - metrics
   - jankurai
   - tools
 
@@ -393,46 +390,6 @@ official-evidence-guard:
     - apk add --no-cache bash git
     - bash scripts/guard-official-evidence.sh
 
-metrics-readme:
-  stage: metrics
-  needs:
-    - job: parity
-      artifacts: true
-    # benchmark stage is main-only/manual; when present, its target/perf/*.jsonl
-    # is the preferred input for the README perf numbers (native-compile,
-    # target-cpu=znver2). When absent (MR pipelines), the script falls
-    # back to the parity job's sqlite_parity.raw.jsonl.
-    - job: benchmark
-      artifacts: true
-      optional: true
-  # README regenerator — non-blocking. The .github workflow's
-  # metrics-readme is in the same posture: it only auto-commits back on
-  # main (`if: github.ref == 'refs/heads/main'`) and is excluded from
-  # the required-check set. Mirror that policy here so MR merging isn't
-  # blocked by a README drift detector that needs main-only ops.
-  allow_failure: true
-  timeout: 30 minutes
-  script:
-    - cargo install tokei --locked --version 14.0.0
-    - bash scripts/sqlite/build-reference.sh
-    # audit-ci writes target/jankurai/repo-score.json regardless of
-    # ratchet decision; tolerate non-zero exit so the README generator
-    # downstream still gets the score artifact. (The audit gate itself
-    # runs as a separate `jankurai-audit` job in the jankurai stage.)
-    - bash ops/ci/jankurai-tools.sh audit-ci || true
-    - bash scripts/generate-metrics-readme.sh
-    - |
-      if git diff --quiet README.md; then
-        echo "README.md is already current."
-      else
-        echo "README drift detected:"
-        git diff --numstat README.md
-      fi
-  artifacts:
-    name: "refreshed-readme"
-    paths: [README.md]
-    expire_in: 7 days
-
 # ── merge-gate evidence job ─────────────────────────────────────────────────
 # Runs only when an api-source pipeline is triggered directly on a branch
 # (e.g. by `jeryu agent merge` pre-check). The MR event pipeline carries the
@@ -485,10 +442,8 @@ jankurai-audit:
   needs: []
   timeout: 60 minutes
   before_script:
-    # Install clang + mold — needed by the jankurai language-test suite which
-    # sets clang as the cargo linker and -fuse-ld=mold as a rustflag in its
-    # own .cargo/config.toml.  Split into two batches so each fits in the
-    # 64 MB default Docker /dev/shm (mold ~4 MB, clang ~60 MB).
+    # Install clang + mold for the Rust workspace. Split into two batches so
+    # each fits in the 64 MB default Docker /dev/shm (mold ~4 MB, clang ~60 MB).
     # Redirect APT's download cache to /dev/shm (a per-container tmpfs) to
     # avoid the containerd overlayfs snapshotter statfs() false-positive.
     - |
@@ -565,7 +520,7 @@ jankurai-audit:
         echo "missing accepted baseline .jankurai/baselines/main.repo-score.json" >&2; exit 1
       fi
       cp .jankurai/accepted-baseline.json target/jankurai/accepted-baseline.json
-    - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; mkdir -p .jankurai && ci_install_jankurai_logged .jankurai/jankurai-install.log'
+    - '[ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh; mkdir -p target/jankurai && ci_install_jankurai_logged target/jankurai/governed-jankurai.log'
     - bash scripts/check_audit_policy_mirror.sh
     - jankurai --version
     - |
@@ -584,22 +539,7 @@ jankurai-audit:
     - jankurai rust witness build .
     - jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
     - jankurai copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
-    - |
-      set -euo pipefail
-      [ -z "${CI_RUST_TOOLCHAIN:-}" ] && source ops/ci/lib.sh || true
-      rm -rf .jankurai/jankurai-src
-      if ci_verify_jankurai_source && git clone --depth 1 --branch "$CI_JANKURAI_TAG" "$CI_JANKURAI_GIT" .jankurai/jankurai-src 2>/dev/null; then
-        resolved_rev="$(git -C .jankurai/jankurai-src rev-parse HEAD)"
-        if [ "$resolved_rev" != "$CI_JANKURAI_REV" ]; then
-          echo "jankurai language test clone resolved to $resolved_rev, expected $CI_JANKURAI_REV" >&2
-          exit 1
-        fi
-        ( cd .jankurai/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
-          > >(tee target/jankurai/language-bad-behavior.log) 2>&1
-      else
-        printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
-          | tee target/jankurai/language-bad-behavior.log
-      fi
+    - bash ops/ci/governed-jankurai-test.sh | tee target/jankurai/governed-jankurai-test.log
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
         BASE_REF="origin/$CI_MERGE_REQUEST_TARGET_BRANCH_NAME" bash ops/ci/jankurai-staged-gate.sh
@@ -610,6 +550,7 @@ jankurai-audit:
       --md target/jankurai/repo-score.md
       --sarif target/jankurai/jankurai.sarif
       --repair-queue-jsonl target/jankurai/repair-queue.jsonl
+      --no-score-history
       --policy agent/audit-policy.toml
     - |
       if [ -f target/jankurai/jankurai.sarif ]; then
@@ -878,7 +819,7 @@ benchmark:
     PERF_ROOT: "target/perf"
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3
+    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
     - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
   script:
@@ -950,7 +891,7 @@ benchmark-rql:
     PERF_ROOT: "target/perf"
   before_script:
     - apt-get update -qq
-    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq python3
+    - apt-get install -y -qq build-essential clang mold openssl sqlite3 zlib1g-dev curl ca-certificates git jq
     - 'mkdir -p "${CARGO_HOME:-/usr/local/cargo}/bin"'
     - 'if [ -n "${CARGO_TARGET_DIR:-}" ] && [ ! -e target ]; then ln -sfn "$CARGO_TARGET_DIR" target; fi'
   script:

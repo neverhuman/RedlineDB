@@ -1,15 +1,6 @@
 fast:
   ./scripts/just/fast.sh
 
-# Regenerate the auto-metrics section of README.md from the latest
-# parity sweep + jankurai score + tokei LOC numbers. Run --check to
-# verify the README matches without writing.
-metrics-readme:
-  ./scripts/generate-metrics-readme.sh
-
-metrics-readme-check:
-  ./scripts/generate-metrics-readme.sh --check
-
 pr-ci:
   ./scripts/ci-local.sh pr-ci
 
@@ -145,46 +136,26 @@ cli-check:
 cli-test:
   ./scripts/just/run.sh cli-test
 
-# Phase 0 perf lanes — A/B measurement via the redline-testing harness.
-# quick:   ~40 curated cases × 5 reps × 1 worker (~2-4 min iteration)
-# medium:  ~300 cases × 3 reps × 2 workers (~20-30 min PR-gate)
-# full:    1127-case corpus × 3 reps × auto workers (~3h; mirrors CI)
-perf-quick BIN="target/release/redlinedb" OUT="candidate":
-  ./scripts/perf/quick.sh {{BIN}} {{OUT}}
-
-perf-medium BIN="target/release/redlinedb" OUT="candidate":
-  ./scripts/perf/medium.sh {{BIN}} {{OUT}}
-
+# Full-corpus performance measurement through the verified external runner.
+# 1127-case corpus × 3 reps × auto workers (~3h; mirrors CI).
 perf-full BIN="target/release/redlinedb" OUT="candidate":
   ./scripts/perf/full.sh {{BIN}} {{OUT}}
 
-perf-diff BEFORE AFTER:
-  python3 ./scripts/perf/diff.py {{BEFORE}} {{AFTER}}
-
-perf-profile-one CASE:
-  ./scripts/perf/profile-one.sh {{CASE}}
-
-perf-case-lists:
-  ./scripts/perf/build-case-lists.sh
-
-# W2 build/profile matrix. Default keeps the lane bounded; pass
-# PROFILES=release,release-native,release-pgo and/or SUITE=medium for
-# heavier evidence runs.
-perf-w2-matrix SUITE="quick" PROFILES="release,release-native" ALLOCATORS="mimalloc,jemalloc":
+# W2 build/profile matrix. The default builds only; SUITE=full opts into
+# complete external-corpus measurements.
+perf-w2-matrix SUITE="none" PROFILES="release,release-native" ALLOCATORS="mimalloc,jemalloc":
   bash scripts/perf/w2-matrix.sh --suite {{SUITE}} --profiles {{PROFILES}} --allocators {{ALLOCATORS}}
 
 # Phase 5 WS-B perf lanes — PGO + BOLT post-link.
-# perf-pgo:  ~20-30 min on the medium subset (~300 cases). Produces
-#            target/release-pgo/redlinedb. Override the subset by
-#            invoking the script directly:
-#              bash scripts/perf/pgo.sh --training-subset {quick,medium,full}
-#            Pass --for-bolt to emit relocations needed by perf-bolt.
+# perf-pgo: trains on the complete external corpus and produces
+#           target/release-pgo/redlinedb. Pass --for-bolt directly to
+#           scripts/perf/pgo.sh to emit relocations needed by perf-bolt.
 # perf-bolt: requires perf-pgo to have run first WITH --for-bolt so
 #            the input binary has --emit-relocs sections; samples the
 #            PGO'd binary under the parity workload via `perf record`
 #            and rewrites it with llvm-bolt. x86_64 only.
 perf-pgo:
-  bash scripts/perf/pgo.sh --training-subset medium
+  bash scripts/perf/pgo.sh
 
 perf-bolt:
   bash scripts/perf/bolt.sh
