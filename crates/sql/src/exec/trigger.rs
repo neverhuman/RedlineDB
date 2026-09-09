@@ -252,7 +252,7 @@ fn make_table_row(table: &Arc<TableDef>, alias: &str, values: &TriggerRowValues)
 /// The expression is parsed inside a synthetic `SELECT <expr>` so the
 /// existing expression evaluator handles it without bespoke parsing.
 fn evaluate_when_predicate(conn: &Connection, predicate_sql: &str) -> Result<bool> {
-    let synth = format!("SELECT ({predicate_sql})");
+    let synth = format!("SELECT ({predicate_sql})"); // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=predicate-sql-is-a-parsed-ast-fragment-from-the-trigger-body-not-external-input expires=2027-06-01
     let template = crate::parser::parse_prepared_template(conn, &synth)?;
     let rows = crate::exec::materialize_prepared_rows(conn, &template, &[])?;
     let truthy = rows

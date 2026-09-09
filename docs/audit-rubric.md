@@ -38,10 +38,9 @@ repair. Pair this with `.jankurai/owner-map.json` (who owns the file) and
 - Proof lane: `just fast`.
 
 ### 6. Python containment
-- Evidence: Python is bench-and-ops-only; product truth in Rust. Any
-  remaining Python lives under `scripts/` or `python/` and is declared
-  in `.jankurai/owner-map.json` with an explicit non-product owner.
-- Proof lane: `just score`.
+- Evidence: Python files and executable interpreter/package invocations are
+  forbidden repository-wide and enforced by the Rust no-Python test.
+- Proof lane: `cargo test -p redlinedb-bench --test no_python_files --locked`.
 
 ### 7. Observability and structured errors
 - Evidence: typed exception surface at
@@ -88,7 +87,7 @@ hop.
 | workers       | `crates/bench/`                                       | `phase9-smoke`, `just fast`   | `bench-harness`               |
 | contracts     | `crates/ffi/include/redlinedb.h`, `crates/bench/compat/` | `phase9-compat-full`       | `c-abi`                       |
 | db            | `crates/kernel/src/{storage,wal,heap,index}/`         | `phase9-recovery-matrix`      | `storage-and-catalog`         |
-| python-ai     | `scripts/`, `python/` (when present)                  | `just score`                  | `agent`                       |
+| language boundary | repository-wide                                | Rust no-Python test           | `agent`                       |
 | ops           | `.github/workflows/`, `justfile`, `.jankurai/`            | `just check`, `just security` | `ops` / `agent`               |
 
 ## Future-Hostile Language Rule

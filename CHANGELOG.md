@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Changed
+
+- Replaced the opt-in NUMA feature's C-backed `hwlocality` dependency with
+  Linux sysfs topology discovery and Rustix current-thread affinity. The
+  public helpers and default-feature one-node/no-op behavior are unchanged;
+  NUMA remains off by default pending genuine multi-node qualification.
+- Made the mandated CLI `--all-features` qualification build deterministic:
+  the exact all-three allocator combination uses the default mimalloc while
+  compiling every optional allocator dependency. Normal single-allocator
+  builds are unchanged, and zero or exactly two allocators remain rejected.
+- Switched the existing snmalloc option from its default CMake backend to its
+  supported direct C++17 build, preserving wait-on-address behavior without
+  requiring CMake in the sealed release environment.
+
 ## [4.1.0] - 2026-05-29
 
 W7 startup optimization — eliminate cgroup walk from the volatile (in-memory)
@@ -280,7 +294,7 @@ regressions; `cargo test --workspace` green at every step.
 - `.gitlab-ci.yml` mirrors the GitHub Actions suite end-to-end for the
   local GitLab/JeRyu CI (`http://127.0.0.1:8929`): 22 jobs covering
   `ci.yml` (preflight + 5 test shards + parity + evidence guard +
-  metrics-readme), `jankurai.yml` (branch-freshness, audit, security,
+  the then-current README metrics mirror), `jankurai.yml` (branch-freshness, audit, security,
   dependency-review), and `jankurai-tools.yml` (audit-ci, proof-routing,
   security, contract-drift, authz-matrix, input-boundary,
   agent-tool-supply, release-readiness, cost-budget). `gh`-CLI–bound
@@ -380,8 +394,9 @@ literature but is not yet measured in this release.
 
 - WS-B1 PGO pipeline hardened — `scripts/perf/pgo.sh` now sources
   `scripts/perf/lib-rustflags.sh` (consolidated mold + `target-cpu=native`)
-  and accepts `--training-subset {quick,medium,full}`, `--for-bolt`, and
-  `--dry-run` flags.
+  and accepts `--for-bolt` and `--dry-run` flags. Training now always uses
+  the complete corpus through the verified external runner; the former local
+  subset modes were retired.
 - WS-B2 BOLT post-link script (`scripts/perf/bolt.sh`) — x86_64-only,
   `ext-tsp` block reorder + `hfsort+` function reorder + `split-functions`
   / `split-all-cold` / `split-eh`; consumes `release-pgo` artifacts built
@@ -452,8 +467,8 @@ literature but is not yet measured in this release.
   suite (30 workers × 3 reps + 1 warmup). Full Phase 5 re-measurement is
   pending; the headline median ratio will replace the `TBD` above once
   `just perf-full BIN=target/release-pgo/redlinedb.bolt OUT=phase5-bolt`
-  completes and `just perf-diff v4.0.0-baseline phase5-bolt` produces the
-  release artifact.
+  completes and the verified external report workflow produces the release
+  comparison artifact.
 - `cargo test --workspace` green at every Wave 1–5 boundary; final
   workspace test count `1729+` (up from `1622` after Wave 1).
 - Per-WS gating tests added under `crates/sql/tests/` and
@@ -504,9 +519,9 @@ for the full ledger, named-optimization table, and benchmark provenance.
 
 - Phase 0 measurement scaffolding for redline-testing A/B (commits `bf7733e`,
   `f09b62f`, `75bad9a`).
-- Custom subset replay driver `scripts/perf/run_subset.py` for case-list-driven
-  profiling, plus `scripts/perf/{full,medium,quick,profile-one,build-case-lists,
-  pgo,gap-closure-verify}.sh` wrappers.
+- Historical local subset replay and case-list profiling scaffolding (retired
+  after the external runner became the sole evidence producer), plus the
+  surviving full-corpus, profile, PGO, and gap-closure wrappers.
 - Committed v4.0.0 baseline JSONL at
   `benchmark-results/sqlite-parity/perf-baselines/v4.0.0-baseline.jsonl`, the
   matching v3.0.0 baseline, and the structured A/B summary

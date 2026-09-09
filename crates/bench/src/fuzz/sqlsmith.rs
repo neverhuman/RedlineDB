@@ -199,7 +199,7 @@ fn gen_select_simple(rng: &mut ChaCha8Rng) -> String {
     } else {
         String::new()
     };
-    format!("SELECT {proj} FROM {table}{where_clause}{order}{limit}")
+    format!("SELECT {proj} FROM {table}{where_clause}{order}{limit}") // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=sql-fuzzer-deliberately-generates-randomized-test-sql-from-bounded-grammar expires=2027-06-01
 }
 
 fn gen_select_join(rng: &mut ChaCha8Rng) -> String {
@@ -220,7 +220,7 @@ fn gen_select_join(rng: &mut ChaCha8Rng) -> String {
     };
     let group = " GROUP BY t1.id, t1.name";
     let order = " ORDER BY t1.id";
-    format!("SELECT {proj} FROM t1 {kind} t2 ON t1.id = t2.t1_id{where_clause}{group}{order}")
+    format!("SELECT {proj} FROM t1 {kind} t2 ON t1.id = t2.t1_id{where_clause}{group}{order}") // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=sql-fuzzer-deliberately-generates-randomized-test-sql-from-bounded-grammar expires=2027-06-01
 }
 
 fn gen_select_scalar_sub(rng: &mut ChaCha8Rng) -> String {

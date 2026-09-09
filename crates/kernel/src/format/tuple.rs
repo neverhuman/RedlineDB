@@ -61,12 +61,17 @@ impl TupleVersion {
         }
     }
 
-    pub fn encode(&self) -> Result<Vec<u8>> {
+    pub(crate) fn encoded_size(&self) -> Result<usize> {
         if self.payload.len() > u32::MAX as usize {
             return Err(Error::CorruptPage("tuple payload too large"));
         }
+        TUPLE_HEADER_LEN
+            .checked_add(self.payload.len())
+            .ok_or(Error::CorruptPage("tuple length overflow"))
+    }
 
-        let mut out = vec![0; TUPLE_HEADER_LEN + self.payload.len()];
+    pub fn encode(&self) -> Result<Vec<u8>> {
+        let mut out = vec![0; self.encoded_size()?];
         write_u32(&mut out, 0, TUPLE_MAGIC)?;
         write_u16(&mut out, 4, TUPLE_FORMAT_VERSION)?;
         write_u16(&mut out, 6, self.flags)?;

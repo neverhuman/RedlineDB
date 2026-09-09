@@ -74,7 +74,7 @@ redlinedb-bench ──► all of the above (dev/test only)
 | `redlinedb-server` | — | TCP server with custom binary protocol (JSON serialization over framed stream). |
 | `redlinedb-bench` | 5,144 | Certification harness, failpoint matrix, recovery matrix, cross-engine compat, chaos workloads. |
 
-### Boundary Rules (`.jankurai/boundaries.toml`)
+### Boundary Rules (`agent/boundaries.toml`)
 
 - **No back-edges.** `kernel` must not import `sql`; `sql` must not import `redlinedb`.
 - **Forbidden stdlib in kernel/sql.** `std::fs`, `std::net`, `std::time::SystemTime`, `std::process` are blocked to keep the kernel portable and mockable.

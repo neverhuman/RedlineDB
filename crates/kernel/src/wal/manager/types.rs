@@ -68,6 +68,10 @@ pub(crate) struct WalCoordinatorState {
     pub(crate) durable_lsn: Lsn,
     pub(crate) pending: VecDeque<QueuedWalRecord>,
     pub(crate) pending_bytes: usize,
+    /// Durable wake predicate for the writer. Semantic-combiner candidates
+    /// deliberately remain false until a flush, buffer-pressure write, or a
+    /// non-combinable record releases the pending batch.
+    pub(crate) write_requested: bool,
     pub(crate) flush_requested_lsn: Lsn,
     pub(crate) shutdown: bool,
     pub(crate) failure: Option<&'static str>,

@@ -13,16 +13,18 @@ cd "$SOURCE_DIR"
 cargo build --release --locked --target "${TARGET}" -p redlinedb-cli --bin redlinedb-cli
 cargo build --release --locked --target "${TARGET}" -p redlinedb-ffi
 
+TARGET_DIR="${CARGO_TARGET_DIR:-target}"
+RELEASE_DIR="${TARGET_DIR}/${TARGET}/release"
 PKG="redlinedb-${TAG}-${ARTIFACT}"
 PKG_DIR="${OUTPUT_DIR}/${PKG}"
 mkdir -p "${PKG_DIR}/bin" "${PKG_DIR}/lib" "${PKG_DIR}/include"
 
-cp "target/${TARGET}/release/redlinedb-cli" "${PKG_DIR}/bin/redlinedb"
-if [ -f "target/${TARGET}/release/${LIB_NAME}" ]; then
-  cp "target/${TARGET}/release/${LIB_NAME}" "${PKG_DIR}/lib/"
+cp "${RELEASE_DIR}/redlinedb-cli" "${PKG_DIR}/bin/redlinedb"
+if [ -f "${RELEASE_DIR}/${LIB_NAME}" ]; then
+  cp "${RELEASE_DIR}/${LIB_NAME}" "${PKG_DIR}/lib/"
 fi
-cp "target/${TARGET}/release/libredlinedb.a" "${PKG_DIR}/lib/"
-cp "crates/ffi/include/sqlite3.h" "${PKG_DIR}/include/"
+cp "${RELEASE_DIR}/libredlinedb.a" "${PKG_DIR}/lib/"
+cp "contracts/c-abi/sqlite3.h" "${PKG_DIR}/include/"
 cp "contracts/c-abi/redlinedb.h" "${PKG_DIR}/include/"
 printf '%s\n' "${TAG}" > "${PKG_DIR}/VERSION"
 

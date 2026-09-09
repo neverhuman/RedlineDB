@@ -204,6 +204,10 @@ impl BufferPool {
         self.inner.allocate(kind, rel_id)
     }
 
+    pub(crate) fn page_size(&self) -> usize {
+        self.inner.page_file.page_size()
+    }
+
     pub fn pin(&self, page_id: PageId) -> Result<PageGuard> {
         self.inner.pin(page_id)
     }

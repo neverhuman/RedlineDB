@@ -233,49 +233,58 @@ fn semantic_combiner_off_keeps_adjacent_audit_records_separate() {
 
 #[test]
 fn semantic_combiner_on_folds_adjacent_audit_records() {
-    let temp = TempDir::new().expect("tempdir");
-    let config = WalConfig {
-        semantic_combiner: true,
-        ..WalConfig::default()
-    };
-    let wal = WalCoordinator::create(temp.path(), config.clone()).expect("wal");
+    // Repeated construction exercises the writer-startup schedule that used
+    // to drain the first unnotified candidate before the second append could
+    // fold it. The write-request predicate makes every iteration deterministic.
+    for iteration in 0..32 {
+        let temp = TempDir::new().expect("tempdir");
+        let config = WalConfig {
+            semantic_combiner: true,
+            ..WalConfig::default()
+        };
+        let wal = WalCoordinator::create(temp.path(), config.clone()).expect("wal");
 
-    let first_end = append_combined_semantic_delta(
-        &wal,
-        TxId(7),
-        RelId(3),
-        RowId(9),
-        vec![(1, 2)],
-        vec![(2, CombinedReplacementValue::Integer(3))],
-        1,
-    );
-    let second_end = append_combined_semantic_delta(
-        &wal,
-        TxId(7),
-        RelId(3),
-        RowId(9),
-        vec![(4, 5)],
-        vec![(2, CombinedReplacementValue::Integer(11))],
-        2,
-    );
-    wal.flush_until(second_end).expect("flush");
+        let first_end = append_combined_semantic_delta(
+            &wal,
+            TxId(7),
+            RelId(3),
+            RowId(9),
+            vec![(1, 2)],
+            vec![(2, CombinedReplacementValue::Integer(3))],
+            1,
+        );
+        let second_end = append_combined_semantic_delta(
+            &wal,
+            TxId(7),
+            RelId(3),
+            RowId(9),
+            vec![(4, 5)],
+            vec![(2, CombinedReplacementValue::Integer(11))],
+            2,
+        );
+        wal.flush_until(second_end).expect("flush");
 
-    let report = WalReader::new(temp.path(), config)
-        .scan_report()
-        .expect("scan");
-    assert_eq!(report.records.len(), 1);
-    assert!(first_end < second_end);
+        let report = WalReader::new(temp.path(), config)
+            .scan_report()
+            .expect("scan");
+        assert_eq!(
+            report.records.len(),
+            1,
+            "iteration {iteration} did not fold the pending pair"
+        );
+        assert!(first_end < second_end);
 
-    let decoded = WalPayload::decode(&report.records[0].payload).expect("decode merged");
-    assert_eq!(
-        decoded,
-        WalPayload::CombinedSemanticDelta {
-            tx_id: TxId(7),
-            rel_id: RelId(3),
-            row_id: RowId(9),
-            deltas: vec![(1, 2), (4, 5)],
-            replacements: vec![(2, CombinedReplacementValue::Integer(11))],
-            batched_count: 3,
-        }
-    );
+        let decoded = WalPayload::decode(&report.records[0].payload).expect("decode merged");
+        assert_eq!(
+            decoded,
+            WalPayload::CombinedSemanticDelta {
+                tx_id: TxId(7),
+                rel_id: RelId(3),
+                row_id: RowId(9),
+                deltas: vec![(1, 2), (4, 5)],
+                replacements: vec![(2, CombinedReplacementValue::Integer(11))],
+                batched_count: 3,
+            }
+        );
+    }
 }

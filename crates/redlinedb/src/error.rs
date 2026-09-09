@@ -118,6 +118,9 @@ impl From<redlinedb_sql::Error> for Error {
             | SqlError::ConstraintViolation(_) => {
                 Self::new(ErrorCode::Constraint, value.to_string())
             }
+            SqlError::Kernel(kernel_error::Error::RecordTooLarge { .. }) => {
+                Self::new(ErrorCode::TooBig, value.to_string())
+            }
             SqlError::CommitMaybeCommitted => Self::new(ErrorCode::IoErr, value.to_string()),
             SqlError::TransactionState(_) | SqlError::ParameterOutOfRange(_) => {
                 Self::new(ErrorCode::Misuse, value.to_string())
