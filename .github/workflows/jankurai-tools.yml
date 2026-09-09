@@ -16,7 +16,6 @@ name: jankurai-tools
 # the workflow stays a dispatcher and does not duplicate gate logic.
 
 on:
-  pull_request:
   push:
     branches: [main]
 

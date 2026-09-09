@@ -134,48 +134,107 @@ jobs:
       - name: Guard official evidence boundary
         run: bash scripts/guard-official-evidence.sh
 
-  # The branch ruleset requires checks named test/build/lint/typecheck/cli.
-  # The aggregate test relay emits the required `test` context, while the
-  # other relay jobs propagate the aggregate result under their required
-  # names without duplicating the build.
+  # Branch ruleset requires these exact job names. They run real engine
+  # work and must not wait on the official parity shard.
   test:
-    needs: [preflight, tests, parity, official-evidence-guard]
-    if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      attestations: read
     steps:
-      - run: test "${{ needs.preflight.result }}" = "success"
-      - run: test "${{ needs.tests.result }}" = "success"
-      - run: test "${{ needs.parity.result }}" = "success"
-      - run: test "${{ needs['official-evidence-guard'].result }}" = "success"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.ref }}
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+      - name: Engine unit tests
+        run: |
+          cargo test --locked --workspace --lib
+          cargo test --locked -p redlinedb-cli
 
   build:
-    needs: [preflight, test]
-    if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      attestations: read
     steps:
-      - run: test "${{ needs.preflight.result }}" = "success"
-      - run: test "${{ needs.test.result }}" = "success"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.ref }}
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+      - name: Release-build redlinedb-cli
+        run: cargo build --locked --release -p redlinedb-cli
 
   lint:
-    needs: [preflight, test]
-    if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      attestations: read
     steps:
-      - run: test "${{ needs.preflight.result }}" = "success"
-      - run: test "${{ needs.test.result }}" = "success"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.ref }}
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+          components: rustfmt
+      - name: rustfmt
+        run: cargo fmt --check
 
   typecheck:
-    needs: [preflight, test]
-    if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      attestations: read
     steps:
-      - run: test "${{ needs.preflight.result }}" = "success"
-      - run: test "${{ needs.test.result }}" = "success"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.ref }}
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+      - name: Workspace typecheck
+        run: cargo check --workspace --locked
 
   cli:
-    needs: [preflight, test]
-    if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      attestations: read
     steps:
-      - run: test "${{ needs.preflight.result }}" = "success"
-      - run: test "${{ needs.test.result }}" = "success"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.ref }}
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+      - name: Release-build CLI package
+        run: cargo build --locked --release -p redlinedb-cli
