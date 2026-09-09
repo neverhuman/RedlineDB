@@ -52,8 +52,9 @@ v4.0.9 and v4.1.0 additionally PGO-optimized (quick training set, `clang-18`).
 
 _Cumulative v4.0.8 → v4.1.0: median **−5.3%**, p95 **−22.3%**._
 
-> Measurements use `scripts/perf/medium.sh` (PERF\_WORKERS=2 default).
-> Full raw JSONL committed under `target/perf/` on the benchmark branch.
+> These are retained historical subset measurements from before the
+> external-only evidence cutover. Current release evidence uses the complete
+> corpus through the verified `redline-testing` workflow.
 
 ## What's new in v4.0.1 → v4.0.8 (Phase 5 / Phase 6 release train)
 
@@ -222,6 +223,7 @@ metadata that point a fix at the narrowest lawful surface.
 | SQL engine | Parser, planner, executor, pragmas, and compatibility shims |
 | Storage | Kernel-owned MVCC, WAL, catalog, and recovery layers |
 | Default proof lane | `just fast` |
+| Protected required lane | `just required` |
 | SQLite parity gate | `just redline-testing-official` |
 
 ## Install
@@ -496,12 +498,19 @@ agent routing model used by this repository.
 ## Development Notes
 
 - `just fast` is the default local proof lane for ordinary edits.
+- `just required` runs the exact protected lane: fast tests followed by the
+  hard security, full-graph dependency-review, and Jankurai ratchet gates.
 - `just redline-testing-official` runs the verified external official suite wrapper.
 - `just official-evidence-guard` fails if official metrics can be regenerated without the verified external runner.
 - `just sqlite-parity-report-update` refreshes the generated parity report from the latest processed official evidence bundle.
 - `just sqlite-parity-report-check` verifies the README report block matches the committed processed official evidence bundle.
 - `just sqlite-parity-report-publish-pr` is the CI entrypoint that regenerates the report and opens or updates the draft report PR after main CI succeeds.
 - `scripts/ci-local.sh all` mirrors the broader local CI surface when you need it.
+
+The agent-readable proof map lives in [`AGENTS.md`](AGENTS.md). Use
+[`docs/architecture.md`](docs/architecture.md) for component boundaries,
+[`docs/testing.md`](docs/testing.md) for test routing, and
+[`docs/release.md`](docs/release.md) for the gated release and rollback runbook.
 
 The repository does not expose local SQLite parity coverage, benchmark, report,
 or sentinel producers. The sole source for SQLite, memory, beyond-SQLite,

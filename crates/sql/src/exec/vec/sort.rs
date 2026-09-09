@@ -25,6 +25,10 @@ use crate::value::SqlValue;
 /// no UDF callbacks — so parallel execution is sound.
 const PARALLEL_SORT_THRESHOLD: usize = 64 * 1024;
 
+/// Maximum number of spill runs opened by one merge pass. Keep enough
+/// descriptor headroom for the database, test harness, and output run.
+const MAX_MERGE_FAN_IN: usize = 32;
+
 /// One item in the merge-priority-queue: the head row of a run plus enough
 /// metadata to refill from the right source.
 struct MergeItem {
@@ -151,34 +155,32 @@ where
         }
         writer.flush()?;
         let bytes = writer.bytes_written();
-        self.total_spilled_bytes = self.total_spilled_bytes.saturating_add(bytes);
-        if self.total_spilled_bytes > self.max_spill_bytes as u64 {
-            return Err(crate::error::Error::ConstraintViolation(
-                "query spill limit exceeded during sort".to_owned(),
-            ));
-        }
+        self.record_spilled_bytes(bytes)?;
         self.runs.push(file);
         self.buffer.clear();
         self.buffer_bytes = 0;
         Ok(())
     }
 
-    /// Consume the sorter, returning sorted rows.
-    pub fn finish(mut self) -> Result<Vec<Vec<SqlValue>>> {
-        // Fast path: nothing was spilled, we can sort in memory.
-        if self.runs.is_empty() {
-            self.sort_buffer();
-            return Ok(self.buffer.drain(..).map(|(_, row)| row).collect());
+    fn record_spilled_bytes(&mut self, bytes: u64) -> Result<()> {
+        self.total_spilled_bytes = self.total_spilled_bytes.saturating_add(bytes);
+        if self.total_spilled_bytes > self.max_spill_bytes as u64 {
+            return Err(crate::error::Error::ConstraintViolation(
+                "query spill limit exceeded during sort".to_owned(),
+            ));
         }
+        Ok(())
+    }
 
-        // Final flush of leftover memory buffer.
-        self.flush_run()?;
-
-        // K-way merge runs.
-        let mut readers: Vec<SpillReader> = self
-            .runs
+    fn merge_runs(
+        &mut self,
+        runs: &[SpillFile],
+        mut emit: impl FnMut(Vec<SqlValue>) -> Result<()>,
+    ) -> Result<()> {
+        debug_assert!(runs.len() <= MAX_MERGE_FAN_IN);
+        let mut readers: Vec<SpillReader> = runs
             .iter()
-            .map(|f| f.reader())
+            .map(SpillFile::reader)
             .collect::<Result<Vec<_>>>()?;
         let mut heap: BinaryHeap<MergeItem> = BinaryHeap::with_capacity(readers.len());
         for (idx, reader) in readers.iter_mut().enumerate() {
@@ -196,10 +198,10 @@ where
                 });
             }
         }
-        let mut out = Vec::new();
         while let Some(item) = heap.pop() {
-            out.push(item.row);
-            if let Some(idx) = item.spill_index
+            let spill_index = item.spill_index;
+            emit(item.row)?;
+            if let Some(idx) = spill_index
                 && let Some(row) = readers[idx].read_row()?
             {
                 let keys = (self.key_fn)(&row)?;
@@ -215,6 +217,51 @@ where
                 });
             }
         }
+        Ok(())
+    }
+
+    fn merge_runs_to_file(&mut self, runs: &[SpillFile]) -> Result<SpillFile> {
+        let file = SpillFile::create_in(&self.spill_root, "sort-merge")?;
+        let mut writer = file.writer()?;
+        self.merge_runs(runs, |row| writer.write_row(&row))?;
+        writer.flush()?;
+        self.record_spilled_bytes(writer.bytes_written())?;
+        Ok(file)
+    }
+
+    /// Consume the sorter, returning sorted rows.
+    pub fn finish(mut self) -> Result<Vec<Vec<SqlValue>>> {
+        // Fast path: nothing was spilled, we can sort in memory.
+        if self.runs.is_empty() {
+            self.sort_buffer();
+            return Ok(self.buffer.drain(..).map(|(_, row)| row).collect());
+        }
+
+        // Final flush of leftover memory buffer.
+        self.flush_run()?;
+
+        // Bound descriptor usage by consolidating runs in deterministic
+        // batches before the final merge.
+        while self.runs.len() > MAX_MERGE_FAN_IN {
+            let runs = std::mem::take(&mut self.runs);
+            let mut runs = runs.into_iter();
+            let mut merged = Vec::new();
+            loop {
+                let batch: Vec<SpillFile> = runs.by_ref().take(MAX_MERGE_FAN_IN).collect();
+                if batch.is_empty() {
+                    break;
+                }
+                merged.push(self.merge_runs_to_file(&batch)?);
+            }
+            self.runs = merged;
+        }
+
+        let runs = std::mem::take(&mut self.runs);
+        let mut out = Vec::new();
+        self.merge_runs(&runs, |row| {
+            out.push(row);
+            Ok(())
+        })?;
         Ok(out)
     }
 }
@@ -308,6 +355,35 @@ mod tests {
             })
             .collect();
         let expected: Vec<i64> = (0..200).collect();
+        assert_eq!(values, expected);
+    }
+
+    #[test]
+    fn merge_more_runs_than_fan_in_descending() {
+        let root = tempdir().expect("tempdir");
+        let mut sorter = SpillSort::new(
+            vec![SortDirection::Desc],
+            1,
+            16 * 1024 * 1024,
+            root.path().to_path_buf(),
+            key_first,
+        );
+        let input: Vec<i64> = (0..(MAX_MERGE_FAN_IN as i64 * 3 + 7)).rev().collect();
+        for value in &input {
+            sorter.push(vec![SqlValue::Integer(*value)]).expect("push");
+        }
+        assert!(sorter.run_count() > MAX_MERGE_FAN_IN);
+
+        let rows = sorter.finish().expect("finish");
+        let values: Vec<i64> = rows
+            .iter()
+            .map(|row| match row[0] {
+                SqlValue::Integer(value) => value,
+                _ => unreachable!(),
+            })
+            .collect();
+        let mut expected = input;
+        expected.sort_by(|left, right| right.cmp(left));
         assert_eq!(values, expected);
     }
 

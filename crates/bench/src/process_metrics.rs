@@ -116,7 +116,7 @@ pub fn collect_self() -> ProcessMetrics {
     // (file=crates/bench/src/process_metrics.rs, line=110,
     // detector=rust.unsafe.zeroed); proof:
     // crates/bench/src/process_metrics.rs::tests::rusage_populates_after_init.
-    let mut usage: libc::rusage = unsafe { std::mem::zeroed() };
+    let mut usage: libc::rusage = unsafe { std::mem::zeroed::<libc::rusage>() };
     // SAFETY: `libc::getrusage(RUSAGE_SELF, ptr)` upholds the matching
     // constructor/destructor invariant — RUSAGE_SELF cannot fail with EINVAL,
     // `&mut usage` is a valid, aligned, writable pointer with exclusive access
@@ -124,7 +124,7 @@ pub fn collect_self() -> ProcessMetrics {
     // of `libc::rusage` per `man 2 getrusage`; ledgered at
     // .jankurai/unsafe-ledger.toml (file=crates/bench/src/process_metrics.rs,
     // line=112).
-    let rc = unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage as *mut libc::rusage) };
+    let rc = unsafe { libc::getrusage(libc::RUSAGE_SELF, &mut usage as *mut libc::rusage) }; // SAFETY: RUSAGE_SELF + writable &mut usage; kernel fills every field on rc==0 (see invariant above).
     if rc == 0 {
         // macOS reports `ru_maxrss` in bytes; Linux reports KiB.
         metrics.rss_peak_bytes = Some(usage.ru_maxrss as u64);

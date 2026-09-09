@@ -489,13 +489,10 @@ pub fn execute_prepared(
                 affected_rows: 1,
             })
         }
-        PreparedKind::CreateVirtualTable(plan) => {
-            execute_create_virtual_table(conn, plan)?;
-            Ok(ExecutionResult {
-                runtime: RuntimeState::Done,
-                affected_rows: 1,
-            })
-        }
+        PreparedKind::CreateVirtualTable(plan) => Err(Error::UnsupportedSql(format!(
+            "CREATE VIRTUAL TABLE is not supported without module migration support (module=\"{}\", table=\"{}\")",
+            plan.module, plan.name
+        ))),
         PreparedKind::DropTable(spec) => {
             with_write_tx(conn, |session, tx| {
                 session
@@ -1003,35 +1000,6 @@ fn template_writes(kind: &PreparedKind) -> bool {
     }
 }
 
-fn execute_create_virtual_table(
-    conn: &Connection,
-    plan: &crate::statement::CreateVirtualTablePlan,
-) -> Result<()> {
-    let cols = plan
-        .columns
-        .iter()
-        .enumerate()
-        .map(|(idx, col)| {
-            let decl_type = if plan.module.eq_ignore_ascii_case("rtree") {
-                if idx == 0 { "INTEGER" } else { "REAL" }
-            } else {
-                "TEXT"
-            };
-            format!("\"{col}\" {decl_type}")
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    let sql = format!("CREATE TABLE \"{}\" ({cols})", plan.name);
-    let template = crate::parser::parse_prepared_template(conn, &sql)?;
-    let _ = materialize_prepared_rows(conn, &template, &[])?;
-    if plan.module.eq_ignore_ascii_case("dbstat") {
-        let sql = format!("INSERT INTO \"{}\" DEFAULT VALUES", plan.name);
-        let template = crate::parser::parse_prepared_template(conn, &sql)?;
-        let _ = materialize_prepared_rows(conn, &template, &[])?;
-    }
-    Ok(())
-}
-
 fn cross_db_insert_values_sql(table: &str, columns: &[String], arity: usize) -> String {
     let mut sql = String::from("INSERT INTO ");
     push_quoted_ident(&mut sql, table);
@@ -1415,8 +1383,8 @@ fn with_write_tx<T>(
         // `with_write_tx` call below and live for the closure's
         // lifetime. The trigger fire-hook is strictly synchronous with
         // the parent — no other writer can observe these references.
-        let session_ref: &mut SessionState = unsafe { &mut *session_ptr };
-        let tx_ref: &mut Txn = unsafe { &mut *tx_ptr };
+        let session_ref: &mut SessionState = unsafe { &mut *session_ptr }; // SAFETY: installed by the parent with_write_tx, synchronous trigger hook, no aliasing (see above).
+        let tx_ref: &mut Txn = unsafe { &mut *tx_ptr }; // SAFETY: installed by the parent with_write_tx, synchronous trigger hook, no aliasing (see above).
         return f(session_ref, tx_ref);
     }
     conn.with_session(|session| {
@@ -1471,7 +1439,7 @@ fn with_write_tx<T>(
                         // entry violates referential integrity we roll
                         // the tx back and surface the violation.
                         let drain_result = with_current_tx(tx_ptr, || {
-                            let tx_ref = unsafe { &mut *tx_ptr };
+                            let tx_ref = unsafe { &mut *tx_ptr }; // SAFETY: tx_ptr installed by with_current_tx for this synchronous slice, no aliasing.
                             crate::exec::fk::drain_deferred_fk_checks(conn, session, tx_ref)
                         });
                         if let Err(err) = drain_result {

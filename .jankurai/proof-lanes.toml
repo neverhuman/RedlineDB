@@ -139,21 +139,6 @@ name = "audit"
 purpose = "write jankurai score artifacts"
 
 [[lane]]
-command = "just perf-case-lists"
-name = "perf-case-lists"
-purpose = "regenerate quick-set/medium-set from the pinned redline-testing corpus"
-
-[[lane]]
-command = "just perf-quick target/release/redlinedb candidate"
-name = "perf-quick"
-purpose = "sub-5-minute A/B perf proof against the ~40-case curated quick-set"
-
-[[lane]]
-command = "just perf-medium target/release/redlinedb candidate"
-name = "perf-medium"
-purpose = "PR-gate perf proof against ~300 cases (~20-30 min)"
-
-[[lane]]
 command = "just perf-full target/release/redlinedb candidate"
 name = "perf-full"
 purpose = "full 1127-case parity corpus, mirrors CI official gate"

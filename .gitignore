@@ -17,7 +17,6 @@
 !.jankurai/audit-policy.toml
 !.jankurai/baselines/
 !.jankurai/baselines/main.repo-score.json
-!.jankurai/boundaries.toml
 !.jankurai/ci-soft-gate-ledger.toml
 !.jankurai/cost-budget.toml
 !.jankurai/debt-map.json
@@ -40,11 +39,27 @@
 !.jankurai/ux-qa.toml
 agent/*
 !agent/audit-policy.toml
+!agent/boundaries.toml
+!agent/generated-zones.toml
+!agent/owner-map.json
+!agent/proof-lanes.toml
+!agent/test-map.json
 :memory:/
 FUCKIT.md
 
-# Local jeryu daemon artifacts (not part of repo)
-.jeryu/
+# Local jeryu daemon runtime artifacts stay out of the repo, but the direct-mode
+# onboarding + shadow-main (mirror-on-merge) config travels with it, exactly like
+# redline-testing tracks its .jeryu/ config.
+.jeryu/*
+!.jeryu/repo.toml
+!.jeryu/ci.toml
+!.jeryu/policy.toml
+!.jeryu/backup.toml
+!.jeryu/local/
+.jeryu/local/*
+!.jeryu/local/repos/
+.jeryu/local/repos/*
+!.jeryu/local/repos/*.toml
 
 # claude-code agent runtime: scheduled-tasks state + isolated worktrees
 .claude/

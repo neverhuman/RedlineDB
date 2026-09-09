@@ -110,6 +110,7 @@ fn invoke_needed(db: *mut rldb, name: &str) {
             // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/sqlite3_api/collation.rs,
             // line=184, detector=rust.unsafe.extern-fn).
             unsafe {
+                // SAFETY: see the documented FFI-ABI callback invariant above.
                 (entry.cb)(user_data, db, 1 /* SQLITE_UTF8 */, cstr.as_ptr());
             }
         }

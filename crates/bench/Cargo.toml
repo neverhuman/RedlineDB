@@ -6,7 +6,7 @@ license.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-anyhow = "1"
+anyhow = "1.0.103"
 clap = { version = "4", features = ["derive"] }
 crossbeam-utils = "0.8"
 hdrhistogram = "7"
@@ -40,6 +40,18 @@ path = "src/bin/chaos_report/main.rs"
 [[bin]]
 name = "sqlite_parity"
 path = "src/bin/sqlite_parity.rs"
+
+[[bin]]
+name = "evidence_processor"
+path = "src/bin/evidence_processor.rs"
+
+[[bin]]
+name = "score_policy"
+path = "src/bin/score_policy.rs"
+
+[[bin]]
+name = "perf_evidence"
+path = "src/bin/perf_evidence.rs"
 
 [dev-dependencies]
 # Lane F6: integration tests in `tests/failpoint_matrix.rs` drive

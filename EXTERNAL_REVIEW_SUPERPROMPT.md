@@ -180,7 +180,7 @@ Public Rust facade:
 
 C ABI / SQLite compatibility layer:
 
-- `crates/ffi/include/sqlite3.h`
+- `contracts/c-abi/sqlite3.h`
 - `contracts/c-abi/redlinedb.h`
 - `crates/ffi/src/lib.rs`
 
@@ -335,7 +335,7 @@ Look for:
 
 Study:
 
-- `crates/ffi/include/sqlite3.h`
+- `contracts/c-abi/sqlite3.h`
 - `contracts/c-abi/redlinedb.h`
 - `crates/ffi/src/lib.rs`
 

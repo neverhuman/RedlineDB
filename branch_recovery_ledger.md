@@ -134,7 +134,7 @@ measurement axes that should be carried into the build/perf matrix:
 
 | Candidate | Minimum correctness tests | Minimum perf proof |
 |---|---|---|
-| Simple aggregate runtime | `redlinedb-sql` aggregate tests plus SQLite oracle cases for NULL, DISTINCT, HAVING, ORDER BY, overflow, empty input, and mixed affinities | W0-ranked aggregate cases before/after, plus `scripts/perf/quick.sh` |
+| Simple aggregate runtime | `redlinedb-sql` aggregate tests plus SQLite oracle cases for NULL, DISTINCT, HAVING, ORDER BY, overflow, empty input, and mixed affinities | W0-ranked aggregate cases before/after through the verified external runner |
 | Top-K tiny buffer | Unit tests against `TopKHeap`, SQL tests for ASC/DESC, NULLS FIRST/LAST, ties, aliases, LIMIT 0/1/64/65, OFFSET | W0-ranked ORDER BY LIMIT cases before/after |
 | Predicate/subquery caches | SQL tests for correlated vs uncorrelated IN, EXISTS, NOT EXISTS, scalar subquery first-row semantics, schema/stat invalidation | W0-ranked subquery and predicate cases before/after |
 

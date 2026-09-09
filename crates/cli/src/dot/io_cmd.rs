@@ -543,7 +543,7 @@ fn dump_table_rows(
     conn: &mut redlinedb::Connection,
     table: &str,
 ) -> Result<(), String> {
-    let select_sql = format!("SELECT * FROM {}", quote_ident(table));
+    let select_sql = format!("SELECT * FROM {}", quote_ident(table)); // jankurai:allow HLT-023-INPUT-BOUNDARY-GAP reason=table-identifier-escaped-via-quote-ident-not-a-bindable-data-value expires=2027-06-01
     let mut stmt = conn.prepare(&select_sql).map_err(|err| err.to_string())?;
     let column_count = stmt.column_count();
     while let Step::Row(row) = stmt.step().map_err(|err| err.to_string())? {

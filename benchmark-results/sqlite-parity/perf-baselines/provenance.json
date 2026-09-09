@@ -14,20 +14,16 @@
       "samples_per_case": "2 warmup + 5 measured",
       "median_ratio": 1.893,
       "p90_ratio": 2.125,
-      "purpose": "diff-against target for scripts/perf/quick.sh post-Phase-1+ iteration"
+      "purpose": "retained historical quick-subset baseline; not current release evidence"
     },
     "medium-baseline.jsonl": {
       "case_count": 294,
       "samples_per_case": "1 warmup + 3 measured",
       "median_ratio": 1.663,
       "p90_ratio": 2.259,
-      "purpose": "PR-gate baseline for scripts/perf/medium.sh"
+      "purpose": "retained historical medium-subset baseline; not a current PR gate"
     }
   },
-  "regenerate_with": [
-    "scripts/perf/quick.sh target/release/redlinedb phase0-baseline",
-    "scripts/perf/medium.sh target/release/redlinedb phase0-medium-baseline",
-    "cp target/perf/phase0-baseline.jsonl benchmark-results/sqlite-parity/perf-baselines/quick-baseline.jsonl",
-    "cp target/perf/phase0-medium-baseline.jsonl benchmark-results/sqlite-parity/perf-baselines/medium-baseline.jsonl"
-  ]
+  "regeneration_status": "retired after the external-only evidence cutover",
+  "current_evidence_lane": "just redline-testing-official"
 }

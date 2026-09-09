@@ -10,7 +10,7 @@ use std::time::Duration;
 use redlinedb_sql::BeginMode;
 
 use crate::error::{Error, ErrorCode, Result};
-use crate::iter::{FromRow, Step};
+use crate::iter::{FromRow, OwnedStep, Step};
 use crate::options::{CommitStats, ConnectionStats, ExecuteSummary, FunctionArity, FunctionFlags};
 use crate::params::Params;
 use crate::statement::{OwnedStatement, Rows, Statement};
@@ -131,6 +131,24 @@ impl Connection {
             rows_affected: stmt.affected_rows() as u64,
             rows_returned: rows,
         })
+    }
+
+    /// Execute one or more SQL statements, discarding per-statement row counts.
+    ///
+    /// The order and transaction semantics follow the `Connection::execute`
+    /// behavior in this crate, and execution stops on first error.
+    pub fn execute_batch(&mut self, sql: &str) -> Result<()> {
+        let mut rest = sql;
+        loop {
+            let (statement, tail) = self.prepare_v2(rest)?;
+            if let Some(mut statement) = statement {
+                while let OwnedStep::Row = statement.step()? {}
+            }
+            if tail.is_empty() {
+                return Ok(());
+            }
+            rest = tail;
+        }
     }
 
     pub fn execute_rql(&mut self, program: &redlinedb_sql::RqlProgram) -> Result<ExecuteSummary> {

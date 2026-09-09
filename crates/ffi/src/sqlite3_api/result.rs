@@ -156,7 +156,7 @@ pub unsafe extern "C" fn sqlite3_result_error(
     } else {
         // SAFETY: caller obligation — msg valid for reads of `nbytes` bytes.
         let bytes = unsafe { caller_buffer(msg as *const u8, nbytes as usize) };
-        String::from_utf8_lossy(bytes).into_owned()
+        String::from_utf8_lossy(&bytes).into_owned()
     };
     // SAFETY: caller obligation; non-null ctx checked above.
     let ctx = unsafe { &*ctx };

@@ -123,7 +123,6 @@
     "packages/": "tools",
     "paper/": "standard",
     "paper/data/loc_comparison.csv": "redline-testing",
-    "python/ai-service/": "ai",
     "rust-toolchain.toml": "workspace",
     "rustfmt.toml": "workspace",
     "schemas/coverage-*.schema.json": "agent",

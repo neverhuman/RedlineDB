@@ -472,7 +472,18 @@ fn volatile_root_from_candidate(candidate: &Path) -> PathBuf {
 }
 
 fn ensure_writable_volatile_root(root: &Path) -> bool {
-    fs::create_dir_all(root).is_ok()
+    if fs::create_dir_all(root).is_err() {
+        return false;
+    }
+    let probe_id = EPHEMERAL_COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
+    let probe = root.join(format!(
+        ".redlinedb-volatile-probe-{}-{probe_id}",
+        std::process::id()
+    ));
+    if fs::create_dir(&probe).is_err() {
+        return false;
+    }
+    fs::remove_dir(&probe).is_ok()
 }
 
 #[derive(Debug)]
@@ -630,6 +641,43 @@ mod volatile_root_tests {
         assert_eq!(
             volatile_root_from_candidate(&file_path),
             std::env::temp_dir()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn existing_unwritable_candidate_uses_process_scratch_without_residue() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().expect("scratch dir");
+        let candidate = root.path().join("existing-shared-root");
+        fs::create_dir(&candidate).expect("candidate dir");
+        fs::set_permissions(&candidate, fs::Permissions::from_mode(0o555))
+            .expect("candidate permissions");
+
+        let selected = volatile_root_from_candidate(&candidate);
+        let residue = fs::read_dir(&candidate)
+            .expect("candidate remains readable")
+            .count();
+        fs::set_permissions(&candidate, fs::Permissions::from_mode(0o700))
+            .expect("restore candidate permissions");
+
+        assert_eq!(selected, std::env::temp_dir());
+        assert_eq!(residue, 0, "failed probes must leave no child custody");
+    }
+
+    #[test]
+    fn writable_candidate_is_selected_and_probe_is_removed() {
+        let root = tempfile::tempdir().expect("scratch dir");
+        let candidate = root.path().join("writable-shared-root");
+
+        assert_eq!(volatile_root_from_candidate(&candidate), candidate);
+        assert_eq!(
+            fs::read_dir(&candidate)
+                .expect("selected candidate remains readable")
+                .count(),
+            0,
+            "successful probe must remove its child custody"
         );
     }
 }

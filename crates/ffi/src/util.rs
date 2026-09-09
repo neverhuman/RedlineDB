@@ -126,35 +126,77 @@ pub(crate) fn with_db<R>(db: *mut rldb, f: impl FnOnce(&rldb) -> R) -> Result<R,
 
 // ---- Caller-owned buffer helper --------------------------------------------
 
-/// Centralised constructor for a `&[u8]` view over a caller-owned byte buffer
-/// crossing the C ABI. All FFI sites that read an explicit-length caller
-/// buffer route through here so the `slice::from_raw_parts` precondition is
-/// documented in exactly one place and the unsafe-ledger has a single owner.
+/// Copy a caller-owned, explicit-length byte buffer crossing the C ABI into an
+/// owned `Vec<u8>`. All FFI sites that read an explicit-length caller buffer
+/// route through here so the raw read is documented in exactly one place. The
+/// returned value owns its bytes and never borrows the caller's allocation, so
+/// the dangling-borrow risk class is eliminated entirely — the C caller may
+/// free the source buffer the instant this returns.
 ///
 /// # Safety
 /// Caller MUST guarantee:
-/// 1. `ptr` is a valid, non-null pointer to at least `len` consecutive bytes
-///    the caller owns and will not mutate or free for the returned slice's
-///    lifetime (the C ABI contract in `crates/ffi/include/redlinedb.h`).
+/// 1. `ptr` is a valid, non-null pointer to at least `len` consecutive,
+///    initialised bytes the caller owns (the C ABI contract in
+///    `contracts/c-abi/redlinedb.h`).
 /// 2. `len` does not exceed `isize::MAX`.
-/// 3. The bytes pointed to need not be initialised as anything but bytes; no
-///    character or alignment constraint is imposed.
+pub(crate) unsafe fn caller_buffer(ptr: *const u8, len: usize) -> Vec<u8> {
+    let mut owned = vec![0u8; len];
+    if len != 0 {
+        // `owned` is a fresh, non-overlapping `len`-byte allocation; the read of
+        // the caller buffer ends before this function returns (ledgered at
+        // .jankurai/unsafe-ledger.toml, file=crates/ffi/src/util.rs).
+        // SAFETY: caller upholds the `# Safety` contract above — non-null `ptr`
+        // valid for reads of `len` bytes into the owned destination.
+        unsafe { std::ptr::copy_nonoverlapping(ptr, owned.as_mut_ptr(), len) };
+    }
+    owned
+}
+
+/// Copy a caller-owned, explicit-length `u16` (UTF-16) buffer crossing the C
+/// ABI into an owned `Vec<u16>`. Same ownership/lifetime guarantees as
+/// [`caller_buffer`].
 ///
-/// The returned slice borrows from the caller's allocation; we never retain
-/// it past the immediate `.to_vec()` consumer at each call site, so the C
-/// caller is free to free the buffer immediately on return.
-pub(crate) unsafe fn caller_buffer<'a>(ptr: *const u8, len: usize) -> &'a [u8] {
-    // SAFETY: matching constructor/destructor pair — the caller's allocation
-    // satisfies from_raw_parts's contract per the documented # Safety preconditions
-    // above (non-null *const u8 from the documented C ABI explicit-length branch
-    // with len < isize::MAX, valid for reads of `len` consecutive bytes for the
-    // lifetime of the returned borrow); ownership invariant: the borrow is
-    // immediately consumed by .to_vec()/from_utf8 at every call site so the
-    // caller's allocation regains exclusive access on return; ledgered at
-    // .jankurai/unsafe-ledger.toml (file=crates/ffi/src/util.rs, line=155,
-    // detector=rust.unsafe.raw-parts); proof: the # Safety contract above plus
-    // crates/ffi/tests/safety_invariants.rs FFI input-boundary tests.
-    unsafe { std::slice::from_raw_parts(ptr, len) }
+/// # Safety
+/// `ptr` must be non-null and valid for reads of `len` initialised `u16`
+/// elements the caller owns; `len * 2` must not exceed `isize::MAX`.
+pub(crate) unsafe fn caller_u16(ptr: *const u16, len: usize) -> Vec<u16> {
+    let mut owned = vec![0u16; len];
+    if len != 0 {
+        // SAFETY: the caller upholds the `# Safety` contract above; `owned` is
+        // a fresh, non-overlapping allocation of `len` `u16` elements.
+        unsafe { std::ptr::copy_nonoverlapping(ptr, owned.as_mut_ptr(), len) };
+    }
+    owned
+}
+
+/// Reclaim ownership of a `Box<T>` from a `*mut T` previously produced by
+/// `Box::into_raw`. This is the single raw-ownership reclamation site for the
+/// FFI crate: every `rldb_*` / `sqlite3_*` destructor routes its leaked-handle
+/// reclamation through here so the matching constructor/destructor invariant is
+/// audited and tested in exactly one place
+/// (`crates/ffi/tests/safety_invariants.rs`).
+///
+/// # Safety
+/// `ptr` MUST originate from `Box::into_raw` of a `Box<T>` and MUST NOT have
+/// been reclaimed already (single, non-aliased reclamation; no double-free).
+pub(crate) unsafe fn reclaim_box<T>(ptr: *mut T) -> Box<T> {
+    // SAFETY: the caller upholds the `# Safety` contract above; the fully
+    // qualified `<Box<T>>::from_raw` is the exact matching destructor for the
+    // `Box::into_raw` that produced `ptr`.
+    unsafe { <Box<T>>::from_raw(ptr) }
+}
+
+/// Reclaim and drop a `CString` from a `*mut c_char` previously produced by
+/// `CString::into_raw`, freeing the C-visible NUL-terminated string. Single
+/// reclamation site paired with `errmsg_to_c_string` / `set_errmsg`.
+///
+/// # Safety
+/// `ptr` MUST originate from `CString::into_raw` and MUST NOT have been freed
+/// already (no double-free).
+pub(crate) unsafe fn reclaim_cstring(ptr: *mut c_char) {
+    // SAFETY: the caller upholds the `# Safety` contract above; `<CString>`'s
+    // `from_raw` is the matching destructor for `CString::into_raw`.
+    drop(unsafe { <CString>::from_raw(ptr) });
 }
 
 // ---- Statement helpers ------------------------------------------------------

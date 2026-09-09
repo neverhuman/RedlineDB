@@ -8,9 +8,11 @@ pub mod failpoint_matrix;
 pub mod fuzz;
 mod gates;
 mod metrics;
+pub mod perf_evidence;
 pub mod process_metrics;
 mod recover;
 pub mod report;
+pub mod score_policy;
 pub mod strace_capture;
 pub mod workload;
 

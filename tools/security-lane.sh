@@ -24,12 +24,11 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
-# cargo audit + cargo deny check + gitleaks detect (hard-gated end-to-end
-# except for cargo deny, which is soft-gated inside ops/ci/security.sh
-# per .jankurai/ci-soft-gate-ledger.toml#cargo-deny-check).
+# cargo audit + cargo deny check + gitleaks detect. Every command in the
+# canonical security script is a hard gate; any non-zero exit fails this lane.
 bash "$ROOT/ops/ci/security.sh"
 
-# dependency-review-action mirror (soft-gated inside the script per
-# .jankurai/ci-soft-gate-ledger.toml#dependency-review-action until
-# GitHub Advanced Security Dependency graph is enabled at the repo level).
+# dependency-review-action mirror. The reproducible local implementation checks
+# advisories, bans, licenses, and sources across the full locked dependency graph
+# and is also a hard gate.
 bash "$ROOT/ops/ci/dependency-review.sh"

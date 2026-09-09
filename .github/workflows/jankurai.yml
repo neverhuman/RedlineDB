@@ -34,9 +34,9 @@ jobs:
   audit:
     # Inline jankurai tool-adoption CI evidence steps. Each `run: jankurai
     # ...` step is the canonical CI evidence entry for its tool-adoption
-    # manifest row (see .jankurai/tool-adoption.toml). jankurai is installed
-    # from the pinned v1.5.1 release binary in ops/ci/lib.sh and is a hard
-    # dependency for this job.
+    # manifest row (see .jankurai/tool-adoption.toml). The local Jeryu fleet
+    # injects the governed binary pinned in ops/ci/lib.sh; this mirror never
+    # installs or fetches Jankurai source.
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     permissions:
@@ -56,7 +56,7 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked --version 0.18.0
+        run: cargo install cargo-deny --locked --version 0.19.8
       - name: Install gitleaks
         run: |
           set -euo pipefail
@@ -92,23 +92,23 @@ jobs:
             exit 1
           fi
           cp .jankurai/accepted-baseline.json target/jankurai/accepted-baseline.json
-      - name: Install jankurai
+      - name: Verify governed jankurai
         run: |
           set -euo pipefail
           source ops/ci/lib.sh
-          mkdir -p .jankurai
-          ci_install_jankurai_logged .jankurai/jankurai-install.log
+          mkdir -p target/jankurai
+          ci_install_jankurai_logged target/jankurai/governed-jankurai.log
       - name: Check audit policy mirror
         run: bash scripts/check_audit_policy_mirror.sh
       - name: Tool-adoption command index
         run: |
           printf '%s\n' \
-            'jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml' \
+            'jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --no-score-history --policy agent/audit-policy.toml' \
             'jankurai proofbind verify . --changed-from origin/main' \
             'jankurai proofmark rust . --obligations target/jankurai/proofbind/obligations.json' \
-            'cargo run -p jankurai -- copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md' \
+            'jankurai copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md' \
             'jankurai security run . --out target/jankurai/security/evidence.json' \
-            'cargo test -p jankurai --test language_bad_behavior' \
+            'bash ops/ci/governed-jankurai-test.sh' \
             'jankurai rust witness build .'
       - run: jankurai --version
       - name: Proofbind verify
@@ -127,23 +127,8 @@ jobs:
         run: jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json
       - name: Copy-code audit
         run: jankurai copy-code . --json target/jankurai/copy-code.json --md target/jankurai/copy-code.md
-      - name: Language bad-behavior tests
-        run: |
-          set -euo pipefail
-          source ops/ci/lib.sh
-          rm -rf .jankurai/jankurai-src
-          if ci_verify_jankurai_source && git clone --depth 1 --branch "$CI_JANKURAI_TAG" "$CI_JANKURAI_GIT" .jankurai/jankurai-src 2>/dev/null; then
-            resolved_rev="$(git -C .jankurai/jankurai-src rev-parse HEAD)"
-            if [ "$resolved_rev" != "$CI_JANKURAI_REV" ]; then
-              echo "jankurai language test clone resolved to $resolved_rev, expected $CI_JANKURAI_REV" >&2
-              exit 1
-            fi
-            ( cd .jankurai/jankurai-src && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
-              > >(tee target/jankurai/language-bad-behavior.log) 2>&1
-          else
-            printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
-              | tee target/jankurai/language-bad-behavior.log
-          fi
+      - name: Governed Jankurai hostile probes
+        run: bash ops/ci/governed-jankurai-test.sh
       - name: jankurai staged-gate (PR changed files)
         # Mirrors tools/jankurai-hooks/pre-commit but compares against the
         # PR merge base. Blocks the lane on any new hard finding so PRs
@@ -154,7 +139,7 @@ jobs:
           BASE_REF: origin/main
         run: bash ops/ci/jankurai-staged-gate.sh
       - name: jankurai audit
-        run: jankurai audit . --mode advisory --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --sarif target/jankurai/jankurai.sarif --github-step-summary target/jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl --policy agent/audit-policy.toml
+        run: jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --sarif target/jankurai/jankurai.sarif --github-step-summary target/jankurai/summary.md --repair-queue-jsonl target/jankurai/repair-queue.jsonl --no-score-history --policy agent/audit-policy.toml
       - name: Filter generated-zone SARIF findings
         if: hashFiles('target/jankurai/jankurai.sarif') != ''
         run: bash ops/ci/filter-generated-sarif.sh target/jankurai/jankurai.sarif
@@ -200,9 +185,8 @@ jobs:
             .jankurai/security/evidence.json
             target/jankurai/security/evidence.json
             .jankurai/migration-report.json
-            .jankurai/language-bad-behavior.log
-            target/jankurai/language-bad-behavior.log
-            .jankurai/jankurai-install.log
+            target/jankurai/governed-jankurai.log
+            target/jankurai/governed-jankurai-test.log
 
   security:
     # Hard gate end-to-end. Mirrors the local `just security` recipe so
@@ -225,7 +209,7 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked --version 0.18.0
+        run: cargo install cargo-deny --locked --version 0.19.8
       - name: Install gitleaks
         run: |
           set -euo pipefail
@@ -241,24 +225,15 @@ jobs:
             | tar -xz -C /usr/local/bin syft
       # Thin dispatcher: all supply-chain logic lives in ops/ci/security.sh
       # so CI and local (`scripts/ci-local.sh security`, `just security`)
-      # run identical commands. Cargo-deny is soft-gated INSIDE the script
-      # (see .jankurai/ci-soft-gate-ledger.toml#cargo-deny-check); cargo-audit
-      # and gitleaks remain hard gates. actionlint and syft are soft-gated
-      # (see ledger entries actionlint-workflow-lint, syft-sbom).
+      # run identical hard-gated commands and preserve their evidence logs.
       - name: security lane (ops/ci/security.sh)
         run: bash ops/ci/security.sh
 
   dependency-review:
-    # SBOM-like dependency review on PRs. Compares base vs head
-    # manifests for newly-introduced vulnerable or non-allowlisted
-    # licenses. PR-only; non-PR runs short-circuit cleanly.
+    # Reproducible full-graph dependency review on PRs. Rejects vulnerable,
+    # banned, non-allowlisted, or untrusted dependencies under deny.toml.
     #
-    # Hard gate end-to-end. The dependency-review action itself stays in
-    # the workflow YAML (it can only execute inside Actions), but its
-    # exit is intercepted by ops/ci/dependency-review.sh which decides
-    # whether to fail the lane. The workflow step always runs the
-    # script, and the soft-gate semantics live there (see
-    # .jankurai/ci-soft-gate-ledger.toml#dependency-review-action).
+    # Hard gate end-to-end through the reproducible cargo-deny equivalent.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -271,6 +246,6 @@ jobs:
         with:
           toolchain: 1.95.0
       - name: Install cargo-deny
-        run: cargo install cargo-deny --locked --version 0.18.0
+        run: cargo install cargo-deny --locked --version 0.19.8
       - name: dependency-review lane (ops/ci/dependency-review.sh)
         run: bash ops/ci/dependency-review.sh

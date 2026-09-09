@@ -1,0 +1,8 @@
+schema = "redlinedb.public-monorepo/v1"
+source_engine_commit = "d0de59930141baffcfa2b514480e75b14627f24d"
+source_engine_tag = "redline-core-v4.1.0-jain.6"
+source_engine_tree = "333cd8aeffd0755547c0ecaa65e1d750ddd6d260"
+public_repository = "https://github.com/neverhuman/RedlineDB.git"
+split_mirror = "https://github.com/neverhuman/redline-core.git"
+status = "candidate"
+note = "Public clone/build root. Engine bytes match the immutable split tag. Canonical producer remains jain-redline/redline-core until protected handover."

@@ -1,7 +1,6 @@
 //! Error reporting and ancillary FFI surface (`errcode`, `errmsg`,
 //! `interrupt`, `free`).
 
-use std::ffi::CString;
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
 use std::sync::atomic::Ordering;
@@ -40,7 +39,9 @@ pub extern "C" fn rldb_free(ptr: *mut c_void) {
         // crates/ffi/tests/safety_invariants.rs::rldb_free_null_is_noop and
         // ::exec_callback_failure_round_trips_errmsg_ownership.
         unsafe {
-            drop(CString::from_raw(ptr as *mut c_char));
+            // SAFETY: reclaim and free the leaked CString; matching destructor
+            // for the documented CString::into_raw above.
+            crate::util::reclaim_cstring(ptr as *mut c_char);
         }
     }
 }

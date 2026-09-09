@@ -134,15 +134,15 @@ The silent-wiring bug. `PRAGMA synchronous=NORMAL;` is accepted but does nothing
 ### A6. Build profile audit + `release-pgo` baseline (Claude, day 3, concurrent with A1-A5)
 
 - Verify CI runner produces `target-cpu=znver2` (per `39fffed`). The repo `.cargo/config.toml` default is `x86-64-v3`. Document the official benchmark profile in `crates/bench/README.md`.
-- Build `release-pgo` over the W0 baseline workload (the corpus is the training set — use `scripts/perf/medium.sh` casts as training input).
+- Build `release-pgo` over the W0 baseline workload using the complete corpus through the verified external runner.
 - Compare `release` vs `release-pgo` on full SQL median, p95, max, faster-count, RSS — choose the official profile based on the full table, not median alone.
 - Hand W2 (BOLT, allocator A/B, full CPU strategy) to Codex; A6 is a quick PGO sanity gate.
 
 ### Phase 1 verification
 
-- Per commit: `cargo test --locked` in workspace + `scripts/perf/quick.sh` (36 cases).
-- Pre-merge: `scripts/perf/medium.sh` (296 cases including the regression rank top 15) + RQL phase 1 subset.
-- Phase boundary: full `scripts/perf/full.sh` against W0 baseline. Diff via `scripts/perf/diff.py --regression-threshold 5`.
+- Per commit: `cargo test --locked` in the workspace plus targeted Rust tests.
+- Pre-merge: the verified external `redline-testing-official` gate plus RQL phase 1 coverage.
+- Phase boundary: full `scripts/perf/full.sh` against the W0 baseline, reviewed through the external report workflow.
 - Gate: median ≤ 1.50×, faster-count ≥ 50, RSS not worse than baseline, 0 conformance failures.
 
 ## 5. Phase 2 — Structural Wins (weeks 2-4)
@@ -240,9 +240,8 @@ Proof gates table:
 | `just fast` | Default repo health | Every commit |
 | Targeted crate tests | Package-local correctness | Every commit touching that crate |
 | `cargo test --locked` workspace | Full correctness | Every commit |
-| SQL parity quick (36 cases) | Obvious conformance + perf signal | Every commit pre-push |
-| `scripts/perf/quick.sh` | Fast perf signal | Every commit pre-push |
-| `scripts/perf/medium.sh` | Medium perf + regression-15 set | Pre-merge |
+| Targeted Rust and CLI tests | Obvious correctness signal | Every commit pre-push |
+| Official `redline-testing` evidence | Complete external parity gate | Pre-merge |
 | `scripts/perf/full.sh` | Full SQL parity + perf | Phase boundary |
 | RQL phase 1 full | RQL correctness + perf | Every RQL change + phase boundary |
 | Memory suite | RSS regression protection | Every CLI/allocator/vector/cache change |
@@ -261,7 +260,7 @@ Regression policy:
 | RSS isolated regression | Maybe | Must be bounded + explained |
 | Unsafe / SIMD without runtime detect | NO | Add detection or remove |
 
-Per-campaign regression threshold lowered to 5% in `scripts/perf/diff.py` (default is 15%).
+Per-campaign regression review uses a 5% threshold in the externally produced report evidence.
 
 ## 6. Critical Files
 
@@ -298,7 +297,7 @@ Per-campaign regression threshold lowered to 5% in `scripts/perf/diff.py` (defau
 | 7 | W4 morsel routes a shape it can't handle | Medium-High | Differential harness mandatory; default-OFF until full proof; explicit fallback recorded |
 | 8 | W5 AccessPath default-on causes plan flips on user workloads | Medium | Per-feature flip; planner-trace evidence; emergency PRAGMA/env rollback; both planners compiled in |
 | 9 | W8 group-commit window changes recovery | Medium-High | Gated; mandatory recovery test crashing inside the window; WAL format unchanged |
-| 10 | Median improves but a case regresses > 15% | Medium | `scripts/perf/diff.py --regression-threshold 5`; per-case sign-off |
+| 10 | Median improves but a case regresses > 15% | Medium | External report review at a 5% threshold; per-case sign-off |
 | 11 | Concurrent claims collide between Claude and Codex | Low | AGENT_CHAT.md before starting cross-file work; this doc's claim table is authoritative |
 | 12 | RSS bloats from morsel batches | Medium | Memory suite gate; arena reuse mandatory; `bytes_copied` telemetry |
 
@@ -741,7 +740,7 @@ See §14 C.5.
 
 ### G.3 RedlineDB vs SQLite (existing parity)
 
-This is the existing `redline-testing` corpus. No new harness; per-campaign threshold tightened to 5% regression in `scripts/perf/diff.py`.
+This is the existing `redline-testing` corpus. No new harness; the external report review applies the 5% per-campaign regression threshold.
 
 ### G.4 Random generator parameters (shared)
 
@@ -783,8 +782,8 @@ Types: `perf`, `fix`, `chore`, `test`, `docs`, `revert`.
 
 - [ ] `cargo test --locked` workspace green
 - [ ] Crate-local tests touching changed files green
-- [ ] `scripts/perf/quick.sh` shows no regression > 5%
-- [ ] For default-on changes: `scripts/perf/medium.sh` shows no regression > 5%
+- [ ] Verified external `redline-testing-official` evidence is green
+- [ ] For default-on changes: external report review shows no regression > 5%
 - [ ] For Phase boundary merges: `scripts/perf/full.sh` shows median target met
 - [ ] AGENT_CHAT.md entry posted with PR link
 - [ ] Risk register row added if introducing a new risk
