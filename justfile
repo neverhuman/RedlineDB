@@ -60,3 +60,6 @@ generate-check:
 # Validate every shard under corpus/sqlite_parity/cases/ against sqlite3.
 ship-gate:
     cargo run -p xtask --release -- ship-gate
+
+# Entry point for the protected redline-testing/required check: the existing lane, unchanged.
+required: pr-ci
