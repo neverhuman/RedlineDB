@@ -43,3 +43,6 @@ doctor:
 
 family-validate:
   REDLINE_SPLIT_ROOT="{{invocation_directory()}}/.." ../redline-split-ops/redlinectl validate
+
+# Entry point for the protected redline/required check: the existing lane, unchanged.
+required: check
