@@ -1,0 +1,34 @@
+[workspace]
+members = [".", "xtask"]
+default-members = ["."]
+resolver = "3"
+
+[package]
+name = "redline-testing"
+version = "1.0.1"
+edition = "2024"
+license = "Apache-2.0"
+rust-version = "1.95"
+
+[features]
+default = []
+# When enabled, the beyond-SQLite oracle can auto-bootstrap an embedded
+# Postgres via the `postgresql_embedded` crate. Off by default to keep the
+# zero-extra-deps invariant for SQLite-parity-only builds. The dep is intentionally
+# NOT yet listed in [dependencies]; this declaration is a future-compatible stub
+# that consumers can opt into when the embedded-pg surface is ready.
+pg-embedded = []
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+sqlparser = "0.61"
+
+[dev-dependencies]
+# Property/invariant testing for pure transforms (identifier sanitization and
+# other in-crate helpers). See the in-module `prop_tests` under
+# src/sqlite_parity/.
+proptest = "1"

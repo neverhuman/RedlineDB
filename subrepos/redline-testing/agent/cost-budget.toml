@@ -1,0 +1,19 @@
+schema_version = "1.0.0"
+
+# redline-testing is a zero-spend, offline conformance harness: it drives local
+# `sqlite3` / `psql` subprocesses and writes JSONL/artifacts. There is no paid
+# API, network egress, or metered service in the runtime path.
+default_external_spend_usd = 0
+default_network_spend_usd = 0
+kill_switch_env = "REDLINE_TESTING_KILL_SWITCH"
+
+[quota_caps]
+external_api_usd = 0
+telegram_paid_usd = 0
+model_api_usd = 0
+
+[stop_conditions]
+on_missing_receipt = true
+on_unknown_paid_tool = true
+on_quota_exceeded = true
+on_kill_switch = true

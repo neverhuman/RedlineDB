@@ -1,0 +1,32 @@
+{
+  "workspace": "redline-testing",
+  "owners": {
+    "src/": "runner",
+    "tests/": "runner",
+    "xtask/": "runner",
+    "corpus/": "runner",
+    "metadata/": "runner",
+    "schemas/": "runner",
+    "templates/": "runner",
+    "build.rs": "runner",
+    "Cargo.toml": "runner",
+    "Cargo.lock": "runner",
+    "rust-toolchain.toml": "runner",
+    "justfile": "runner",
+    "ops/": "ops",
+    "scripts/": "ops",
+    ".github/": "ops",
+    ".gitlab-ci.yml": "ops",
+    ".gitignore": "ops",
+    "deny.toml": "ops",
+    "gitleaks.toml": "ops",
+    "docs/": "docs",
+    "README.md": "docs",
+    "CHANGELOG.md": "docs",
+    "AGENTS.md": "control-plane",
+    "agent/": "control-plane",
+    ".jankurai/": "control-plane",
+    ".jeryu/": "control-plane",
+    ".cargo/": "control-plane"
+  }
+}

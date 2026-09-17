@@ -1,0 +1,49 @@
+[[zone]]
+path = "corpus/sqlite_parity/generated_manifest.json"
+read_only = true
+source = "Migrated from /home/ubuntu/redlineDB/crates/bench/sqlite_parity/generated_manifest.json"
+command = "copy from pinned RedlineDB parity corpus during split"
+
+# Hand-authored shard directory: each file is curated, not generated, but the
+# directory is enumerated by `build.rs` at compile time so the runner can
+# include_str! every shard. Files inside this directory may be edited by hand
+# unless prefixed with `gen_` (those are produced by the xtask generator).
+[[zone]]
+path = "corpus/sqlite_parity/cases/"
+read_only = false
+source = "Hand-curated + xtask-generated SQLite parity case shards"
+command = "cargo run -p xtask -- generate (for gen_*.json shards only)"
+
+# Beyond-SQLite case manifest is hand-curated against psql↔psql self-compare.
+[[zone]]
+path = "corpus/beyond_sqlite/generated_manifest.json"
+read_only = false
+source = "Hand-curated beyond-SQLite oracle cases (validated via psql↔psql self-compare)"
+command = "manual authoring; ship-gate enforces self-compare green"
+
+# YAML rule files are the inputs to the xtask generator for matrix-product
+# shards (math×inputs, datetime×modifiers, affinity matrix, CAST matrix,
+# window-frame matrix, PRAGMA sweep, JSON path matrix).
+[[zone]]
+path = "corpus/sqlite_parity/rules/"
+read_only = false
+source = "YAML rule files driving xtask matrix-product shard generation"
+command = "manual authoring; xtask `generate --check` enforces drift-free output"
+
+[[zone]]
+path = "dist/redline-testing-0.1.2-linux-x86_64.tar.gz"
+read_only = false
+source = "local release package"
+command = "just release-local"
+
+[[zone]]
+path = "dist/redline-testing-0.1.2-linux-x86_64.tar.gz.sha256"
+read_only = false
+source = "local release checksum"
+command = "just release-local"
+
+[[zone]]
+path = "dist/release-manifest.json"
+read_only = false
+source = "local release manifest"
+command = "just release-local"

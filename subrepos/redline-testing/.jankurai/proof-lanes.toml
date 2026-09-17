@@ -1,0 +1,73 @@
+[lane.fast]
+commands = [
+  "rtk cargo fmt --check",
+  "rtk cargo check --locked",
+  "rtk cargo test --locked",
+]
+
+[lane.release-local]
+commands = [
+  "rtk just release-local",
+]
+
+[lane.pr-ci]
+commands = [
+  "rtk scripts/ci-local.sh pr-ci",
+]
+
+[lane.strict-pr-ci]
+commands = [
+  "rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/pr-ci.sh",
+]
+
+[lane.strict-security]
+commands = [
+  "rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/security.sh",
+]
+
+[lane.workflow-security]
+commands = [
+  "rtk scripts/ci-local.sh doctor && rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/security.sh",
+]
+
+[lane.ci-doctor]
+commands = [
+  "rtk scripts/ci-local.sh doctor",
+]
+
+[lane.ci-contract]
+commands = [
+  "rtk cargo test --locked --test ci_fail_closed",
+]
+
+[lane.release-readiness]
+commands = [
+  "rtk bash ops/ci/release-readiness.sh",
+]
+
+[lane.release-manifest-integrity]
+commands = [
+  "rtk cargo test --locked --test release_manifest_integrity",
+]
+
+# Postgres-backed beyond-SQLite oracle. The lane connects to the configured
+# PostgreSQL instance and self-compares each published case via psql↔psql;
+# cases that do not pass are rejected from the corpus.
+[lane.beyond-postgres-reference]
+commands = [
+  "rtk cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact",
+]
+
+# Generator drift detector for matrix-product shards. `xtask generate --check`
+# re-expands the YAML rule files and fails if the on-disk shard JSON drifts.
+[lane.corpus-generator]
+commands = [
+  "rtk cargo run --locked -p xtask -- generate --check",
+]
+
+# Ship-gate: drives the reference self-compare end-to-end across every
+# shipping shard. New cases must clear this lane before they land on `main`.
+[lane.ship-gate]
+commands = [
+  "rtk cargo run --locked -p xtask -- ship-gate",
+]

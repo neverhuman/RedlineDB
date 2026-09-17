@@ -1,0 +1,26 @@
+{
+  "owners": {
+    "runner": [
+      "Cargo.toml",
+      "Cargo.lock",
+      "build.rs",
+      ".github/workflows/ci.yml",
+      ".github/workflows/release.yml",
+      "src/**",
+      "tests/**",
+      "xtask/**",
+      "corpus/**",
+      "metadata/**",
+      "schemas/**",
+      "scripts/**",
+      "templates/**",
+      "README.md",
+      "justfile"
+    ],
+    "control-plane": [
+      "AGENTS.md",
+      ".jankurai/**",
+      ".cargo/**"
+    ]
+  }
+}
