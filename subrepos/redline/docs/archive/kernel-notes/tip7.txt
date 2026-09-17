@@ -1,0 +1,1836 @@
+## The design I would build: an MVCC ordered-key storage kernel, not a mini-Postgres heap
+
+For a Rust-native SQLite replacement that can become **brutally fast, low-memory, durable, and multi-writer**, I would not start with a PostgreSQL-style heap table plus separate indexes. I would start with a **transactional ordered key-value kernel** and let SQL tables, primary keys, secondary indexes, uniqueness constraints, and catalog rows all compile down into ordered keyspaces.
+
+The core design:
+
+> **A cache-conscious MVCC B-link-tree engine where every committed version is stored as `(logical_key, commit_timestamp DESC) -> value`, transactions stage writes privately, commit through a group-committed WAL, and readers use snapshot timestamps without blocking writers.**
+
+This directly attacks SQLite’s biggest concurrency ceiling: SQLite WAL allows readers and one writer to coexist, but the official docs are explicit that “there can only be one writer at a time” because there is only one WAL file. SQLite WAL also depends on checkpoint behavior, and long/overlapping readers can prevent checkpoint completion and let the WAL grow. ([SQLite][1])
+
+PostgreSQL’s MVCC target is the right philosophical goal: readers should not block writers, and writers should not block readers. PostgreSQL documents exactly that MVCC property, including that even strict serializable isolation is implemented without normal read/write blocking. ([PostgreSQL][2])
+
+For durability, steal the best ideas from WAL/ARIES: log before data, page LSNs, fuzzy checkpoints, idempotent redo, and crash recovery from the log. PostgreSQL’s WAL docs summarize the essential rule: data-file changes must only reach durable storage after WAL records describing those changes have been flushed; that avoids flushing every data page on commit and enables sequential WAL/group commit. ([PostgreSQL][3]) ARIES is the classic industrial design for WAL recovery, page LSNs, fine-grained locking, and restart recovery. ([Computer Science][4])
+
+For multicore scaling, borrow from Silo: avoid centralized contention, use epochs, keep read paths mostly free of shared writes, and make transaction coordination scale with cores. Silo’s paper is especially relevant because it was designed around cache efficiency, decentralized transaction IDs, epoch-based recovery/snapshots, and near-linear multicore scaling. ([Wenting Zheng][5])
+
+---
+
+# 1. The kernel shape
+
+Build this as an **ordered MVCC KV store** first.
+
+SQL layer later maps things like this:
+
+```text
+table row:
+  key   = [space=table][table_id][primary_key]
+  value = encoded row payload
+
+secondary index:
+  key   = [space=index][index_id][indexed_columns][primary_key]
+  value = empty or covering-index payload
+
+unique index:
+  key   = [space=unique][index_id][indexed_columns]
+  value = primary_key
+
+catalog:
+  key   = [space=catalog][object_type][object_id]
+  value = catalog record
+```
+
+The transactional kernel only needs to understand:
+
+```text
+get(key, snapshot)
+scan(range, snapshot)
+put(key, value)
+delete(key)
+commit()
+rollback()
+```
+
+Everything SQL-specific sits above that.
+
+This is the right foundation because it makes tables, indexes, uniqueness, constraints, catalog metadata, and future replication all use one transactional primitive. It also avoids coupling the kernel to row layouts too early.
+
+---
+
+# 2. Internal MVCC key format
+
+Every logical key can have multiple committed versions.
+
+On disk/in tree, a leaf entry is:
+
+```text
+InternalKey = {
+    user_key: bytes,
+    commit_ts: u64,       // sorted descending for same user_key
+}
+
+Value = {
+    flags: u16,           // normal, tombstone, overflow, compressed
+    codec: u8,
+    payload_len: varint,
+    payload: bytes,
+}
+```
+
+The comparator orders by:
+
+```text
+(user_key ASC, commit_ts DESC)
+```
+
+So the newest version of a key is physically first.
+
+Example:
+
+```text
+user_key = table/users/pk=42
+
+(table/users/42, ts=105) -> tombstone
+(table/users/42, ts=99)  -> { name: "Ada" }
+(table/users/42, ts=91)  -> { name: "Ada Lovelace" }
+```
+
+A transaction with `read_ts = 100` sees timestamp `99`. A transaction with `read_ts = 110` sees the tombstone at `105`.
+
+This avoids PostgreSQL-style row headers on every tuple version and avoids SQLite-style single-writer page replacement. Updates become **append new version**, not destructive overwrite.
+
+---
+
+# 3. Page layout
+
+Use fixed-size pages. Default: **16 KiB**.
+
+Why 16 KiB?
+
+It gives better B-tree fanout and compression than 4 KiB, while still being small enough for cache-conscious mutation and bounded write amplification. Make this configurable at database creation: 4 KiB, 8 KiB, 16 KiB, 32 KiB.
+
+## Page header
+
+```rust
+#[repr(C)]
+pub struct PageHeader {
+    pub magic: u32,
+    pub format_version: u16,
+    pub page_kind: u16,          // meta, internal, leaf, overflow, freelist
+    pub page_id: u64,
+    pub page_lsn: u64,
+    pub checksum: u32,
+    pub flags: u32,
+
+    pub lower: u16,              // start of free space
+    pub upper: u16,              // end of free space
+    pub slot_count: u16,
+    pub level: u16,              // 0 = leaf
+
+    pub right_sibling: u64,      // B-link right link
+    pub high_fence_len: u16,
+    pub reserved: [u8; 30],
+}
+```
+
+Keep it 64-byte aligned if possible.
+
+## Leaf page body
+
+A leaf page is a slotted page:
+
+```text
++----------------------+
+| PageHeader           |
++----------------------+
+| Slot array grows ->  |
+|   Slot { off, len }  |
++----------------------+
+| free space           |
++----------------------+
+| <- Cell bytes grow   |
++----------------------+
+```
+
+Cell format:
+
+```rust
+pub struct LeafCell {
+    // encoded as varints on disk, not fixed Rust struct
+    pub shared_prefix_len: u16,
+    pub key_suffix_len: u16,
+    pub commit_ts_delta: u64,
+    pub value_len: u32,
+    pub flags: u16,
+    pub key_suffix: [u8],
+    pub value: [u8],
+}
+```
+
+Use prefix compression per page:
+
+```text
+page_prefix = longest useful shared prefix for keys on page
+cell_key = page_prefix + key_suffix
+```
+
+For version chains, many adjacent entries share the same `user_key`, so store the `commit_ts` delta compactly.
+
+## Internal page body
+
+Internal pages store separator keys and child page IDs:
+
+```text
+separator_key -> child_page_id
+```
+
+Internal pages also use prefix compression and fence keys.
+
+---
+
+# 4. Tree: concurrent B-link tree
+
+Use a **B-link tree**: every page has a high fence key and a right sibling pointer. If a concurrent split happens while a reader is descending, the reader can move right until the target key is within the page’s fence.
+
+This avoids heavy tree-wide locks. ARIES/KVL is useful inspiration here because it was explicitly about high-concurrency B-tree operations, including traversals, inserts, deletes, fetches, and range scans. ([VLDB][6])
+
+## Latching strategy
+
+There are two kinds of synchronization:
+
+```text
+Transaction locks:
+  logical key/range locks for conflict control
+
+Page latches:
+  short critical sections for physical page mutation
+```
+
+Never confuse them.
+
+Page latches should be tiny and never held across disk I/O, WAL fsync, network I/O, or transaction wait.
+
+Use optimistic read latches:
+
+```rust
+pub struct PageFrame {
+    pub page_id: PageId,
+    pub state: AtomicU64,      // version counter + write bit
+    pub page_lsn: AtomicU64,
+    pub bytes: UnsafeCell<Box<[u8; PAGE_SIZE]>>,
+}
+```
+
+Read path:
+
+```rust
+loop {
+    let v1 = frame.state.load(Ordering::Acquire);
+
+    if is_write_locked(v1) {
+        cpu_relax();
+        continue;
+    }
+
+    // Read page bytes optimistically.
+    let result = read_from_page(frame);
+
+    let v2 = frame.state.load(Ordering::Acquire);
+    if v1 == v2 && !is_write_locked(v2) {
+        return result;
+    }
+}
+```
+
+Write path:
+
+```rust
+lock_write_bit();
+mutate_page();
+frame.page_lsn.store(lsn, Ordering::Release);
+increment_version_and_unlock();
+```
+
+For page splits:
+
+```text
+1. Latch target leaf.
+2. Allocate new right sibling.
+3. Move upper half of cells to new page.
+4. Set new.right_sibling = old.right_sibling.
+5. Set old.right_sibling = new.
+6. Update old.high_fence.
+7. Release leaf latches.
+8. Insert separator into parent.
+9. If parent update races, B-link right links still preserve correctness.
+```
+
+Readers can survive parent lag because right links and high fences route them correctly.
+
+---
+
+# 5. Transaction model
+
+Support these isolation levels in the kernel:
+
+```rust
+pub enum Isolation {
+    ReadCommitted,
+    SnapshotIsolation,
+    Serializable,
+}
+```
+
+Use PostgreSQL semantics as the eventual SQL target:
+
+```text
+ReadCommitted:
+  new snapshot per statement
+
+SnapshotIsolation / RepeatableRead:
+  one snapshot per transaction
+
+Serializable:
+  SnapshotIsolation + SSI conflict tracking
+```
+
+PostgreSQL documents the distinction: Read Committed gets a snapshot per command, Repeatable Read sees data committed before transaction start, and Serializable additionally monitors conditions that could make concurrent execution inconsistent with any serial order. ([PostgreSQL][7])
+
+## Transaction state
+
+```rust
+pub struct Txn {
+    id: TxnId,
+    isolation: Isolation,
+    read_ts: CommitTs,
+
+    // Own writes, not yet installed into the tree.
+    write_batch: WriteBatch,
+
+    // For SSI / validation.
+    read_keys: ReadSet,
+    read_ranges: RangeReadSet,
+
+    // Savepoints.
+    savepoints: Vec<Savepoint>,
+
+    // Memory arena for staged values.
+    arena: TxnArena,
+}
+```
+
+## Write batch
+
+Keep writes private until commit.
+
+```rust
+pub enum Mutation {
+    Put {
+        key: Bytes,
+        value: Bytes,
+    },
+    Delete {
+        key: Bytes,
+    },
+    PutUnique {
+        key: Bytes,
+        value: Bytes,
+    },
+}
+```
+
+Before commit:
+
+```text
+1. Sort by key.
+2. Deduplicate last-write-wins.
+3. Merge own writes for read-your-writes.
+```
+
+This is a massive simplification: aborted transactions do not leave garbage in the tree.
+
+---
+
+# 6. Read path
+
+## Point get
+
+```rust
+fn get(txn: &Txn, key: &[u8]) -> Result<Option<Bytes>> {
+    // 1. Check own write batch first.
+    if let Some(v) = txn.write_batch.get_overlay(key) {
+        return Ok(v);
+    }
+
+    // 2. Use snapshot timestamp.
+    let read_ts = txn.current_read_ts();
+
+    // 3. Seek to newest version for key.
+    let mut cursor = tree.seek_user_key(key)?;
+
+    // 4. Walk versions descending.
+    while let Some(cell) = cursor.current() {
+        if cell.user_key != key {
+            return Ok(None);
+        }
+
+        if cell.commit_ts <= read_ts {
+            if cell.is_tombstone() {
+                return Ok(None);
+            }
+            return Ok(Some(cell.value));
+        }
+
+        cursor.next_version_same_key()?;
+    }
+
+    Ok(None)
+}
+```
+
+## Range scan
+
+For each logical key in range:
+
+```text
+1. Seek to lower bound.
+2. For each user_key:
+   a. inspect newest version
+   b. skip versions newer than snapshot
+   c. return first visible version
+   d. skip remaining versions for same user_key
+3. Continue until upper bound
+```
+
+Serializable transactions also register the scanned key range.
+
+---
+
+# 7. Write path
+
+Writes are staged:
+
+```rust
+txn.put(key, value)
+txn.delete(key)
+```
+
+They do not touch the B-tree yet.
+
+This gives:
+
+```text
+rollback = drop write batch
+savepoint rollback = truncate write batch to savepoint marker
+read-your-writes = overlay check before tree read
+```
+
+For huge transactions, spill the write batch to a temp segment:
+
+```text
+txn.tmp/txn_id.batch
+```
+
+The commit path streams it back sorted.
+
+---
+
+# 8. Commit algorithm
+
+This is the central performance path.
+
+## MVP single-transaction commit
+
+```rust
+pub fn commit(mut txn: Txn) -> Result<CommitTs> {
+    txn.write_batch.sort_and_dedup();
+
+    // 1. Lock all written logical keys in deterministic order.
+    let guards = lock_table.lock_all(txn.write_batch.keys())?;
+
+    // 2. Validate first-committer-wins.
+    validate_no_newer_versions(&txn)?;
+
+    // 3. Validate unique inserts.
+    validate_unique_constraints(&txn)?;
+
+    // 4. Serializable conflict checks.
+    if txn.is_serializable() {
+        ssi::validate_and_register_commit(&txn)?;
+    }
+
+    // 5. Allocate commit timestamp.
+    let commit_ts = txn_mgr.allocate_commit_ts();
+
+    // 6. Encode one atomic WAL transaction batch.
+    let wal_record = WalRecord::TxnBatch {
+        txn_id: txn.id,
+        commit_ts,
+        mutations: txn.write_batch.as_slice(),
+    };
+
+    // 7. Append WAL, get LSN.
+    let end_lsn = wal.append(&wal_record)?;
+
+    // 8. Install versions into tree in memory.
+    tree.install_batch(commit_ts, end_lsn, &txn.write_batch)?;
+
+    // 9. Force WAL for synchronous durability.
+    wal.flush(end_lsn)?;
+
+    // 10. Publish timestamp.
+    txn_mgr.publish(commit_ts);
+
+    drop(guards);
+    Ok(commit_ts)
+}
+```
+
+Critical invariant:
+
+```text
+Readers only choose read_ts <= published_commit_ts.
+```
+
+So versions installed into the tree before publish are invisible.
+
+Also critical:
+
+```text
+Dirty pages with page_lsn > durable_lsn cannot be written back.
+```
+
+So if the process or machine dies before the WAL is durable, those in-memory versions never become persistent.
+
+## Production group commit
+
+Autocommit workloads live or die by group commit.
+
+Use a commit queue:
+
+```text
+worker threads
+   |
+   v
+commit_queue
+   |
+   v
+group_commit_leader
+   |
+   +--> assign commit_ts range
+   +--> append WAL records
+   +--> parallel install into tree
+   +--> fdatasync WAL
+   +--> publish all commit_ts in order
+   +--> wake waiters
+```
+
+Group commit structure:
+
+```rust
+pub struct CommitGroup {
+    pub first_csn: CommitTs,
+    pub last_csn: CommitTs,
+    pub txns: Vec<PreparedTxn>,
+    pub end_lsn: Lsn,
+}
+```
+
+The trick: overlap B-tree installation with WAL fsync.
+
+```text
+append WAL to OS buffer
+start WAL flush
+install tree versions in parallel
+wait for both install barrier and WAL durability
+publish commit group
+```
+
+That gives high throughput because fsync latency is amortized and partially hidden.
+
+PostgreSQL’s WAL docs explicitly note that one WAL fsync may commit many small concurrent transactions. ([PostgreSQL][3])
+
+---
+
+# 9. Conflict control
+
+Use **first-committer-wins** for Snapshot Isolation.
+
+At commit, for every written key:
+
+```text
+latest_commit_ts(key) <= txn.read_ts
+```
+
+If not, conflict.
+
+For Read Committed:
+
+```text
+restart statement or re-read latest and retry
+```
+
+For Snapshot Isolation / Repeatable Read:
+
+```text
+return serialization/concurrent update error
+```
+
+For Serializable:
+
+```text
+SSI check
+```
+
+## Key lock table
+
+Use logical key locks to avoid two writers committing the same key at once.
+
+Do not allocate a lock object per key. Use sharded lock buckets:
+
+```rust
+pub struct LockTable {
+    shards: Box<[LockShard]>,
+}
+
+pub struct LockShard {
+    mutex: parking_lot::Mutex<ShardState>,
+}
+
+pub struct ShardState {
+    locks: hashbrown::HashMap<KeyHash, LockEntry>,
+}
+```
+
+Lock acquisition:
+
+```text
+1. Hash all write keys.
+2. Sort by (hash, full key bytes).
+3. Acquire in that order.
+4. If conflict, wait or wound-wait.
+```
+
+Deterministic ordering prevents deadlocks for ordinary key locks.
+
+For range locks, use separate interval structures.
+
+---
+
+# 10. Serializable isolation
+
+Implement Serializable as **SSI: Serializable Snapshot Isolation**.
+
+Do not start with table locks. That will kill concurrency.
+
+Kernel-level SSI needs three hooks:
+
+```rust
+txn.record_read_key(index_id, key)
+txn.record_read_range(index_id, lower, upper)
+txn.record_write_key(index_id, key)
+```
+
+For every serializable read:
+
+```text
+register nonblocking SIREAD lock
+```
+
+For every write:
+
+```text
+check whether this key intersects another active serializable txn’s read key/range
+record rw-antidependency
+```
+
+Dangerous structure detection:
+
+```text
+T1 --rw--> T2 --rw--> T3
+```
+
+If a transaction becomes a pivot with both incoming and outgoing rw-dependencies among overlapping transactions, abort one transaction before commit.
+
+PostgreSQL’s docs describe this idea at a high level: Serializable works like Repeatable Read plus monitoring for conditions that could cause serialization anomalies; predicate locks do not cause blocking and are used to identify dependencies. ([PostgreSQL][7])
+
+For an MVP, implement this fallback first:
+
+```text
+SerializableStrict:
+  take blocking range locks
+```
+
+But keep the API shaped for SSI from day one. Then replace strict range locking with nonblocking SSI.
+
+---
+
+# 11. WAL design
+
+Use one WAL truth: **transaction batch records**.
+
+Normal transaction WAL record:
+
+```rust
+pub struct TxnBatchRecord {
+    pub header: WalHeader,
+    pub txn_id: u64,
+    pub commit_ts: u64,
+    pub mutation_count: u32,
+    pub mutations_crc: u32,
+    pub mutations: [EncodedMutation],
+}
+```
+
+WAL header:
+
+```rust
+pub struct WalHeader {
+    pub magic: u32,
+    pub version: u16,
+    pub record_type: u16,
+    pub len: u32,
+    pub header_crc: u32,
+    pub body_crc: u32,
+    pub prev_record_crc: u32,
+    pub lsn: u64,
+}
+```
+
+Mutation encoding:
+
+```rust
+pub enum EncodedMutation {
+    Put {
+        key_len: varint,
+        value_len: varint,
+        key: bytes,
+        value: bytes,
+    },
+    Delete {
+        key_len: varint,
+        key: bytes,
+    },
+}
+```
+
+## WAL append
+
+```text
+1. Reserve byte range in WAL segment.
+2. Copy encoded record.
+3. Publish record end offset.
+4. Group flusher fdatasyncs up to max requested LSN.
+```
+
+Use segment files:
+
+```text
+db.wal/
+  0000000000000000.wal
+  0000000000000001.wal
+  ...
+```
+
+Default segment size: **64 MiB**.
+
+## WAL durability modes
+
+```rust
+pub enum Durability {
+    Full,            // fdatasync every commit group
+    Normal,          // fdatasync every N ms; crash-safe for process crash, not power loss
+    Relaxed,         // benchmarking/dev only
+}
+```
+
+## WAL rule
+
+Never write a dirty page unless:
+
+```text
+page.page_lsn <= wal.durable_lsn
+```
+
+This is non-negotiable.
+
+---
+
+# 12. Checkpointing
+
+Use two metadata superblocks:
+
+```text
+main.dat:
+  superblock A
+  superblock B
+  page area
+```
+
+Superblock:
+
+```rust
+pub struct Superblock {
+    pub magic: u64,
+    pub format_version: u32,
+    pub generation: u64,
+    pub page_size: u32,
+    pub checkpoint_lsn: u64,
+    pub root_page_id: u64,
+    pub catalog_root: u64,
+    pub last_commit_ts: u64,
+    pub crc: u32,
+}
+```
+
+Checkpoint algorithm:
+
+```text
+1. stable_lsn = wal.durable_lsn()
+2. Freeze checkpoint target.
+3. Flush dirty pages with page_lsn <= stable_lsn.
+4. fsync data file.
+5. Write inactive superblock with generation+1 and checkpoint_lsn=stable_lsn.
+6. fsync metadata.
+7. Recycle WAL segments <= checkpoint_lsn.
+```
+
+This can run while new transactions continue. New dirty pages get higher LSNs and are ignored by this checkpoint.
+
+## Torn page protection
+
+Use both:
+
+```text
+page checksum
+doublewrite buffer or full-page images
+```
+
+I would start with a **doublewrite buffer** because it keeps the WAL logical and compact.
+
+Writeback path:
+
+```text
+1. Copy dirty page images into db.dblwr.
+2. fsync db.dblwr.
+3. Write pages to main.dat.
+4. fsync main.dat eventually.
+5. Mark doublewrite entries reusable.
+```
+
+Recovery:
+
+```text
+if page checksum fails:
+    try restore from doublewrite buffer
+    else replay WAL from checkpoint
+```
+
+---
+
+# 13. Recovery
+
+Startup recovery:
+
+```text
+1. Read both superblocks.
+2. Pick highest generation with valid checksum.
+3. Open WAL at checkpoint_lsn.
+4. Scan records sequentially.
+5. Stop at first bad CRC, partial record, or invalid segment chain.
+6. For every complete TxnBatch after checkpoint:
+      replay mutations idempotently into B-tree using commit_ts.
+7. Rebuild allocator/free-space metadata if needed.
+8. Set published_commit_ts = last recovered commit_ts.
+9. Start checkpointer/vacuum.
+```
+
+Replay is idempotent:
+
+```text
+insert_version(key, commit_ts, value):
+    if (key, commit_ts) already exists:
+        skip
+    else:
+        insert
+```
+
+This makes crash points easier to test.
+
+---
+
+# 14. Garbage collection / vacuum
+
+Because versions are stored as `(key, ts DESC)`, GC is straightforward.
+
+Track active snapshots:
+
+```rust
+pub struct EpochManager {
+    global_epoch: AtomicU64,
+    lanes: Box<[AtomicU64]>, // one per worker/thread
+}
+```
+
+Each reader publishes:
+
+```text
+my_lane.active_read_ts = read_ts
+```
+
+GC computes:
+
+```text
+oldest_read_ts = min(active_read_ts across lanes)
+```
+
+For each logical key:
+
+```text
+Keep:
+  - all versions newer than oldest_read_ts
+  - the newest version <= oldest_read_ts
+
+Delete:
+  - versions older than that
+```
+
+Example:
+
+```text
+versions: ts=200, 180, 150, 120, 90
+oldest_read_ts = 160
+
+keep: 200, 180, 150
+drop: 120, 90
+```
+
+Tombstone removal:
+
+```text
+If newest visible version <= oldest_read_ts is tombstone,
+and all older versions are unreachable,
+delete tombstone and older versions.
+```
+
+Silo’s epoch idea is directly relevant: epochs help with snapshots and garbage collection while avoiding unnecessary centralized contention. ([Wenting Zheng][5])
+
+---
+
+# 15. Buffer pool
+
+Do not use a global `Mutex<HashMap<PageId, PageFrame>>`.
+
+Use sharded page cache:
+
+```rust
+pub struct BufferPool {
+    shards: Box<[BufferShard]>,
+    io: Arc<dyn Io>,
+    replacer: Replacer,
+    dirty_queue: DirtyQueue,
+}
+
+pub struct BufferShard {
+    table: parking_lot::RwLock<HashMap<PageId, Arc<PageFrame>>>,
+}
+```
+
+Replacement policy:
+
+```text
+segmented clock / 2Q
+```
+
+Why not naive LRU?
+
+Range scans will murder it. You need scan resistance.
+
+Frame metadata:
+
+```rust
+pub struct FrameMeta {
+    pub page_id: PageId,
+    pub page_lsn: AtomicU64,
+    pub pin_count: AtomicU32,
+    pub flags: AtomicU32,       // dirty, io_in_progress, evicting
+    pub last_access_epoch: AtomicU64,
+}
+```
+
+Rules:
+
+```text
+- get/scan must allocate zero heap objects on hot path
+- page lookup must touch one shard
+- dirty pages are ordered by page_lsn for checkpointing
+- never evict pinned pages
+- never write page_lsn > durable_lsn
+```
+
+---
+
+# 16. Space management
+
+Use extents.
+
+```text
+segment = 1 GiB file region
+extent  = 1 MiB
+page    = 4/8/16/32 KiB
+```
+
+Page ID:
+
+```rust
+pub struct PageId(u64);
+
+// Suggested bit layout:
+bits 63..48 = segment id
+bits 47..0  = page number within logical address space
+```
+
+Free-space structures:
+
+```text
+free page map:
+  page_id -> free/used
+
+free space map for leaves:
+  free_bytes class -> page list
+
+overflow allocator:
+  large values stored in overflow chains or blob extents
+```
+
+For values larger than ~2 KiB, use overflow pages:
+
+```rust
+pub struct OverflowRef {
+    pub first_page: PageId,
+    pub total_len: u64,
+    pub checksum: u32,
+}
+```
+
+Keep small values inline. Inline payloads are much faster for OLTP.
+
+---
+
+# 17. Rust crate layout
+
+```text
+crates/
+  kernel/
+    Cargo.toml
+    src/
+      lib.rs
+      config.rs
+      error.rs
+      types.rs
+
+      txn/
+        mod.rs
+        manager.rs
+        snapshot.rs
+        write_batch.rs
+        lock_table.rs
+        ssi.rs
+        savepoint.rs
+
+      tree/
+        mod.rs
+        blink.rs
+        page.rs
+        cell.rs
+        cursor.rs
+        split.rs
+        comparator.rs
+        prefix.rs
+
+      wal/
+        mod.rs
+        record.rs
+        writer.rs
+        reader.rs
+        segment.rs
+        checksum.rs
+        recovery.rs
+
+      buf/
+        mod.rs
+        frame.rs
+        pool.rs
+        replacer.rs
+        dirty.rs
+
+      io/
+        mod.rs
+        file.rs
+        fault.rs
+        sync.rs
+        uring.rs
+
+      gc/
+        mod.rs
+        epoch.rs
+        vacuum.rs
+        checkpoint.rs
+
+      codec/
+        mod.rs
+        varint.rs
+        key.rs
+        value.rs
+
+      testutil/
+        mod.rs
+        model.rs
+        crash.rs
+        failpoints.rs
+
+  benches/
+    ycsb.rs
+    commit_latency.rs
+    scan.rs
+
+  fuzz/
+    wal_reader.rs
+    page_parser.rs
+    recovery.rs
+```
+
+## Cargo dependencies
+
+Keep it 100% Rust.
+
+```toml
+[dependencies]
+bytes = "1"
+parking_lot = "0.12"
+crossbeam-utils = "0.8"
+crossbeam-queue = "0.3"
+smallvec = "1"
+arrayvec = "0.7"
+hashbrown = "0.15"
+crc32fast = "1"
+thiserror = "2"
+tracing = "0.1"
+
+[dev-dependencies]
+proptest = "1"
+loom = "0.7"
+criterion = "0.5"
+tempfile = "3"
+rand = "0.8"
+```
+
+Optional Linux feature:
+
+```toml
+[features]
+default = []
+io-uring = ["dep:io-uring"]
+
+[dependencies.io-uring]
+version = "0.7"
+optional = true
+```
+
+Avoid async inside the kernel. Make the kernel synchronous and deterministic. A server layer can put async around it.
+
+---
+
+# 18. Core Rust types
+
+```rust
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Lsn(pub u64);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct CommitTs(pub u64);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct TxnId(pub u64);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PageId(pub u64);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Isolation {
+    ReadCommitted,
+    SnapshotIsolation,
+    Serializable,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Durability {
+    Full,
+    Normal,
+    Relaxed,
+}
+```
+
+Storage API:
+
+```rust
+pub trait StorageKernel: Send + Sync + 'static {
+    fn begin(&self, opts: TxnOptions) -> Result<Txn>;
+
+    fn get(&self, txn: &mut Txn, key: &[u8]) -> Result<Option<bytes::Bytes>>;
+
+    fn scan<'a>(
+        &'a self,
+        txn: &'a mut Txn,
+        range: KeyRange,
+    ) -> Result<Box<dyn Iterator<Item = Result<KvPair>> + 'a>>;
+
+    fn put(&self, txn: &mut Txn, key: bytes::Bytes, value: bytes::Bytes) -> Result<()>;
+
+    fn delete(&self, txn: &mut Txn, key: bytes::Bytes) -> Result<()>;
+
+    fn commit(&self, txn: Txn) -> Result<CommitTs>;
+
+    fn rollback(&self, txn: Txn) -> Result<()>;
+}
+```
+
+Transaction options:
+
+```rust
+pub struct TxnOptions {
+    pub isolation: Isolation,
+    pub read_only: bool,
+    pub durability: Durability,
+}
+```
+
+---
+
+# 19. Kernel invariants
+
+These are sacred. Put them in `docs/invariants.md` and test them constantly.
+
+```text
+I1. A published commit timestamp implies all its mutations are either installed
+    in the tree or recoverable from durable WAL.
+
+I2. A reader snapshot only sees commit timestamps <= its read_ts.
+
+I3. read_ts is never greater than the globally published commit timestamp.
+
+I4. A dirty page may not be written if page_lsn > durable_lsn.
+
+I5. WAL scan must stop safely at the first partial/corrupt record.
+
+I6. Recovery replay is idempotent.
+
+I7. For a given user_key, versions are sorted by commit_ts descending.
+
+I8. GC never deletes the newest version <= oldest_active_read_ts.
+
+I9. Page latches are never held across fsync, blocking lock wait, or user code.
+
+I10. Transaction locks are logical; page latches are physical; they must not be
+     used interchangeably.
+
+I11. Tree splits preserve right-link reachability before parent updates become visible.
+
+I12. Serializable reads register key/range dependencies before returning results.
+
+I13. Commit validation happens while write keys are locked.
+
+I14. No unsafe code outside page/frame/io internals.
+
+I15. Any unsafe block must have a written safety comment and a loom/proptest/fuzz test
+     covering its invariants.
+```
+
+---
+
+# 20. Performance-critical choices
+
+## Reads
+
+Hot point read should be:
+
+```text
+1 snapshot timestamp load
+1 B-tree descent
+0 heap allocations
+0 transaction lock acquisitions
+0 WAL interaction
+0 shared writes, unless SSI read tracking is enabled
+```
+
+## Writes
+
+Hot autocommit write should be:
+
+```text
+private write batch
+sort one/few keys
+logical key lock
+validate latest version
+append WAL
+install one/few leaf entries
+group fsync
+publish
+```
+
+## Memory
+
+Keep memory low by:
+
+```text
+- prefix-compressed pages
+- no per-key lock objects
+- no per-read heap allocation
+- staged writes in arenas
+- overflow only for large values
+- scan-resistant page cache
+- compact varint cell encoding
+- GC old versions aggressively once snapshots release
+```
+
+## NUMA / multicore
+
+Later server mode should have:
+
+```text
+- worker-local transaction arenas
+- worker-local WAL staging buffers
+- sharded lock table
+- sharded buffer pool
+- sharded commit queues
+- optional CPU pinning
+```
+
+Do not start with one global transaction mutex. That design dies early.
+
+---
+
+# 21. Why not LSM first?
+
+An LSM tree is tempting: high write throughput, append-friendly, good compression.
+
+But for a SQLite replacement with SQL range scans, uniqueness checks, predictable point reads, small transactions, and low memory, I would start with a B-link tree.
+
+LSM tradeoffs:
+
+```text
+Pros:
+  great sequential writes
+  high ingest
+
+Cons:
+  compaction complexity
+  read amplification
+  harder predictable latency
+  more complex snapshot/version GC
+  secondary-index maintenance gets uglier
+```
+
+A B-link MVCC tree gives more predictable OLTP behavior and a cleaner SQL mapping.
+
+---
+
+# 22. Why not LMDB-style copy-on-write?
+
+LMDB-style COW trees are elegant and excellent for readers. But they are fundamentally constrained by writer serialization. That is too close to SQLite’s biggest concurrency weakness.
+
+For this project, the goal is multi-writer. Use MVCC versions plus key-level commit locks instead.
+
+---
+
+# 23. Why not PostgreSQL heap first?
+
+A PostgreSQL-like heap is proven, but it brings more complexity:
+
+```text
+- tuple IDs
+- HOT chains
+- heap bloat
+- index-to-heap visibility checks
+- vacuum complexity
+- more relational coupling inside the storage engine
+```
+
+The ordered-KV approach keeps the transactional kernel generic. SQL tables and indexes become encodings over one primitive.
+
+---
+
+# 24. Implementation sequence for an agent
+
+## Milestone 1: page codec
+
+Build:
+
+```text
+tree/page.rs
+tree/cell.rs
+codec/varint.rs
+```
+
+Must support:
+
+```text
+- create leaf page
+- insert cell
+- binary search by InternalKey
+- delete cell
+- compact page
+- checksum page
+- prefix-compressed keys
+```
+
+Tests:
+
+```text
+- proptest random keys/values
+- insert sorted and unsorted
+- decode equals encode
+- checksum catches mutation
+```
+
+## Milestone 2: single-threaded MVCC B-tree
+
+Build:
+
+```text
+tree/blink.rs
+tree/cursor.rs
+```
+
+Ignore concurrency first.
+
+Support:
+
+```text
+put_version(user_key, commit_ts, value)
+delete_version(user_key, commit_ts)
+get(user_key, read_ts)
+scan(range, read_ts)
+```
+
+Tests compare against:
+
+```rust
+BTreeMap<Vec<u8>, Vec<(CommitTs, Option<Vec<u8>>)>>
+```
+
+## Milestone 3: WAL writer/reader
+
+Build:
+
+```text
+wal/record.rs
+wal/writer.rs
+wal/reader.rs
+```
+
+Support:
+
+```text
+- append TxnBatch
+- segment rollover
+- CRC validation
+- partial final record handling
+- replay records
+```
+
+Crash tests:
+
+```text
+- truncate WAL at every byte offset
+- corrupt random byte
+- recover to last valid record
+```
+
+## Milestone 4: transaction manager
+
+Build:
+
+```text
+txn/manager.rs
+txn/write_batch.rs
+txn/snapshot.rs
+```
+
+Support:
+
+```text
+- begin
+- read-your-writes
+- commit
+- rollback
+- first-committer-wins validation
+```
+
+Single-thread tests:
+
+```text
+T1 read_ts=10
+T2 writes key at 11
+T1 still sees old value
+T3 read_ts=11 sees new value
+```
+
+## Milestone 5: key lock table
+
+Build:
+
+```text
+txn/lock_table.rs
+```
+
+Support:
+
+```text
+- lock all keys sorted
+- wait queues
+- timeout
+- cancellation
+```
+
+Loom tests:
+
+```text
+- two txns same key
+- two txns overlapping keys
+- deterministic lock ordering prevents deadlock
+```
+
+## Milestone 6: concurrent tree latching
+
+Add:
+
+```text
+- optimistic read latch
+- exclusive write latch
+- concurrent insert
+- concurrent split
+- right-link traversal
+```
+
+Tests:
+
+```text
+- many threads insert disjoint keys
+- many threads insert same page range
+- scan while split
+- get while split
+```
+
+## Milestone 7: buffer pool and file I/O
+
+Build:
+
+```text
+buf/
+io/
+```
+
+Support:
+
+```text
+- page cache
+- dirty page tracking
+- page read/write
+- page checksum
+- no writeback beyond durable_lsn
+```
+
+Add fault-injection I/O:
+
+```rust
+pub trait Io {
+    fn read_at(&self, offset: u64, buf: &mut [u8]) -> Result<()>;
+    fn write_at(&self, offset: u64, buf: &[u8]) -> Result<()>;
+    fn sync_data(&self) -> Result<()>;
+}
+```
+
+## Milestone 8: checkpoint/recovery
+
+Build:
+
+```text
+gc/checkpoint.rs
+wal/recovery.rs
+```
+
+Crash matrix:
+
+```text
+before WAL append
+after WAL append before tree install
+after tree install before WAL fsync
+after WAL fsync before publish
+after publish before page write
+during page write
+during superblock flip
+```
+
+Every state must recover to either:
+
+```text
+old committed state
+or new committed state
+```
+
+Never garbage.
+
+## Milestone 9: GC/vacuum
+
+Build:
+
+```text
+gc/epoch.rs
+gc/vacuum.rs
+```
+
+Support:
+
+```text
+- active snapshot tracking
+- oldest_read_ts
+- remove obsolete versions
+- compact pages
+- reclaim empty pages
+```
+
+## Milestone 10: Serializable SSI
+
+Build:
+
+```text
+txn/ssi.rs
+```
+
+Initial strict version:
+
+```text
+blocking range locks
+```
+
+Then upgrade to:
+
+```text
+nonblocking SIREAD locks + rw-dependency graph
+```
+
+---
+
+# 25. Benchmarks to run from day one
+
+Kernel benchmarks:
+
+```text
+1. point get, hot cache
+2. point get, cold cache
+3. autocommit insert
+4. autocommit update same key
+5. autocommit update disjoint keys
+6. 80/20 read/write YCSB-style
+7. range scan 100 rows
+8. range scan 10k rows
+9. write conflict storm
+10. long reader + heavy writer + GC pressure
+```
+
+Compare against:
+
+```text
+- SQLite WAL mode
+- SQLite rollback journal
+- sled, if useful
+- RocksDB, if allowing non-Rust comparison in benchmark only
+```
+
+Record:
+
+```text
+throughput
+p50/p95/p99 latency
+fsync count
+bytes written per transaction
+page cache hit rate
+WAL bytes per mutation
+allocated bytes/op
+abort rate
+GC lag
+oldest snapshot age
+```
+
+Do not trust average latency. Watch p99.
+
+---
+
+# 26. The sharp edges
+
+These are the places that will decide whether the engine becomes world-class or fragile.
+
+## 1. Publishing commits
+
+Never publish a commit timestamp before both are true:
+
+```text
+WAL durable
+tree install complete
+```
+
+Otherwise readers can observe a commit that disappears after crash or partially exists.
+
+## 2. Dirty page flushing
+
+Never flush:
+
+```text
+page_lsn > durable_lsn
+```
+
+This is the most important WAL invariant.
+
+## 3. Tree splits
+
+A split must become reachable through the right link before the parent separator is required for correctness.
+
+## 4. GC
+
+Do not delete an old version just because there is a newer version. Delete only when no active snapshot can see it.
+
+## 5. Large transactions
+
+Do not let one massive transaction hold all memory hostage.
+
+Use spill files:
+
+```text
+txn write batch > 16 MiB => external sort/spill
+```
+
+## 6. Savepoints
+
+Because writes are staged, savepoints are cheap:
+
+```text
+savepoint = write_batch length marker
+rollback_to_savepoint = truncate write_batch
+```
+
+## 7. Multi-process access
+
+For the first serious version, allow:
+
+```text
+many connections in one process
+one process opens DB read/write
+other processes blocked by lock file
+```
+
+Postgres-wire server mode can provide external concurrency. True SQLite-style multiprocess concurrent writes require shared-memory coordination and file locks; that is a separate monster.
+
+---
+
+# 27. Default configuration
+
+```rust
+pub struct KernelConfig {
+    pub page_size: usize,             // default 16 KiB
+    pub wal_segment_size: u64,        // default 64 MiB
+    pub cache_size: u64,              // default min(25% RAM, configured cap)
+    pub lock_shards: usize,           // default 4096
+    pub commit_group_max_delay_us: u64, // default 200
+    pub commit_group_max_bytes: usize,  // default 4 MiB
+    pub checkpoint_target_bytes: u64, // default 1 GiB WAL
+    pub vacuum_target_lag: u64,       // commit_ts distance
+    pub inline_value_max: usize,      // default 2048 bytes
+    pub durability: Durability,       // default Full
+}
+```
+
+---
+
+# 28. The north-star architecture diagram
+
+```text
+                 SQL layer later
+        +--------------------------------+
+        | parser / planner / executor    |
+        | table codec / index codec      |
+        +---------------+----------------+
+                        |
+                        v
+        +--------------------------------+
+        | Transactional KV API           |
+        | get / scan / put / delete      |
+        +---------------+----------------+
+                        |
+        +---------------+-------------------------------+
+        | Transaction Manager                            |
+        | snapshots | write batches | key locks | SSI    |
+        +---------------+-------------------------------+
+                        |
+        +---------------+-------------------------------+
+        | MVCC B-link Tree                              |
+        | internal pages | leaf pages | versioned keys   |
+        +---------------+-------------------------------+
+                        |
+        +---------------+-------------------------------+
+        | Buffer Pool                                    |
+        | page cache | dirty queue | replacement         |
+        +---------------+-------------------------------+
+                        |
+        +---------------+-------------------------------+
+        | WAL + Checkpoint + Recovery                    |
+        | group commit | CRC | replay | superblocks      |
+        +---------------+-------------------------------+
+                        |
+        +---------------+-------------------------------+
+        | File I/O                                       |
+        | pread/pwrite | fsync | fault injection         |
+        +------------------------------------------------+
+```
+
+---
+
+# 29. Final recommendation
+
+Build the transactional storage kernel as:
+
+```text
+MVCC ordered key-value engine
++ B-link tree
++ private write batches
++ commit-time key locking
++ first-committer-wins validation
++ group-committed WAL
++ page-LSN writeback discipline
++ epoch-based GC
++ SSI-ready read tracking
+```
+
+That gives you the right base for:
+
+```text
+- SQLite replacement ergonomics
+- PostgreSQL-like MVCC behavior
+- real multi-writer concurrency
+- efficient range scans
+- unique constraints
+- secondary indexes
+- future logical replication
+- future PostgreSQL wire compatibility
+```
+
+The most important early decision is this: **make the kernel ordered-KV and MVCC from day one**. Everything else can layer cleanly on top.
+
+[1]: https://www.sqlite.org/wal.html "Write-Ahead Logging"
+[2]: https://www.postgresql.org/docs/current/mvcc-intro.html "PostgreSQL: Documentation: 18: 13.1. Introduction"
+[3]: https://www.postgresql.org/docs/current/wal-intro.html "PostgreSQL: Documentation: 18: 28.3. Write-Ahead Logging (WAL)"
+[4]: https://cs.stanford.edu/people/chrismre/cs345/rl/aries.pdf "ARIES"
+[5]: https://wzheng.github.io/silo.pdf "Speedy Transactions in Multicore In-Memory Databases"
+[6]: https://www.vldb.org/conf/1990/P392.PDF "ARIES/KVL: A Key-Value Locking Method for Concurrency Control of Multiaction Transactions Operating on B-Tree Indexes"
+[7]: https://www.postgresql.org/docs/current/transaction-iso.html "PostgreSQL: Documentation: 18: 13.2. Transaction Isolation"
+
