@@ -1,0 +1,9 @@
+schema_version = "1.0.0"
+# redline-web's security lane (tools/security-lane.sh -> ops/ci/security.sh)
+# runs these operational scanners; they are blocking in CI.
+enabled_tools = ["gitleaks", "cargo audit", "cargo deny", "zizmor", "syft", "grype"]
+required_tools = ["gitleaks", "cargo audit", "cargo deny", "zizmor", "syft", "grype"]
+advisory_tools = ["cargo audit", "cargo deny", "grype"]
+
+[severity_thresholds]
+fail_lane_on = "high"

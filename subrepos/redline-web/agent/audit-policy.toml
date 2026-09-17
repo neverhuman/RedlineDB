@@ -1,0 +1,33 @@
+# Jankurai audit policy for redline-web.
+minimum_score = 85
+# Governed tool identity. splitctl (main.rs:4336-4339) requires both fields and
+# main.rs:4468 matches them exactly against the auditor executable release.
+required_tool = "jankurai"
+required_tool_version = "1.6.11"
+fail_on = ["critical", "high"]
+advisory_on = ["medium", "low"]
+
+[scan]
+# redline-web is a database GUI. The schema browser renders DB *metadata*
+# received over HTTP — SQLite object kinds (table/view/index/trigger) and a
+# relation's CREATE text shown as a tooltip. The HLT-006
+# "direct-db-access-from-wrong-layer" detector reads that display vocabulary as
+# direct DB access in a non-adapter layer, but the web layer performs NO database
+# access: it is enforced *structurally* by [typescript].forbidden_web_imports in
+# boundaries.toml — no DB client can be imported into apps/web. Excluded as a
+# documented false positive. Real DB access lives only in apps/api/src/connector
+# (the adapter). Path-level exclusion is the family's documented FP mechanism
+# (see redline-core/.jankurai/audit-policy.toml; the schema has no per-rule waiver).
+extra_excluded_paths = [
+  "apps/web/src/components/SchemaTree.tsx",
+  "apps/web/src/components/TableBrowser.tsx",
+]
+# Web test files, e2e specs, build output, and vendored deps are not
+# product-runtime code: their SQL strings are user-input fixtures, not DB access.
+extra_excluded_globs = [
+  "apps/web/**/*.test.ts",
+  "apps/web/**/*.test.tsx",
+  "apps/web/e2e/**",
+  "apps/web/dist/**",
+  "apps/web/node_modules/**",
+]

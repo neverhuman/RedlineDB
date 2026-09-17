@@ -1,0 +1,36 @@
+/* Design tokens — the single source of truth for redline-web's visual system.
+   Semantic tokens (color/space/radius/typography) are defined here as CSS
+   custom properties and consumed by styles.css and the components, so theming
+   stays consistent and auditable. */
+:root {
+  /* color — base palette */
+  --rw-color-bg: #0d1117;
+  --rw-color-surface: #161b22;
+  --rw-color-border: #30363d;
+  --rw-color-text: #e6edf3;
+  --rw-color-text-muted: #8b949e;
+
+  /* color — semantic */
+  --rw-color-accent: #2f81f7;
+  --rw-color-success: #3fb950;
+  --rw-color-warning: #d29922;
+  --rw-color-danger: #f85149;
+  --rw-color-null: #6e7681;
+
+  /* spacing scale */
+  --rw-space-1: 0.25rem;
+  --rw-space-2: 0.5rem;
+  --rw-space-3: 0.75rem;
+  --rw-space-4: 1rem;
+  --rw-space-6: 1.5rem;
+
+  /* radius */
+  --rw-radius-sm: 4px;
+  --rw-radius-md: 8px;
+
+  /* typography */
+  --rw-font-mono: ui-monospace, "SFMono-Regular", "Menlo", monospace;
+  --rw-font-sans: system-ui, -apple-system, "Segoe UI", sans-serif;
+  --rw-font-size-sm: 0.8125rem;
+  --rw-font-size-md: 0.9375rem;
+}
