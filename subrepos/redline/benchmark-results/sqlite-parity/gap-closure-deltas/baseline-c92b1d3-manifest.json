@@ -1,0 +1,31 @@
+{
+  "raw": "target/redline-testing/all.jsonl",
+  "schema_version": "redline-testing-all-manifest-v1",
+  "suite": "all",
+  "suites": [
+    {
+      "failed": 0,
+      "passed": 1127,
+      "raw": "target/redline-testing/sqlite_parity.raw.jsonl",
+      "skipped": 0,
+      "suite": "sqlite_parity",
+      "total": 1127
+    },
+    {
+      "failed": 0,
+      "passed": 1127,
+      "raw": "target/redline-testing/memory.raw.jsonl",
+      "skipped": 0,
+      "suite": "memory",
+      "total": 1127
+    },
+    {
+      "failed": 0,
+      "passed": 4,
+      "raw": "target/redline-testing/beyond_sqlite.raw.jsonl",
+      "skipped": 8,
+      "suite": "beyond_sqlite",
+      "total": 12
+    }
+  ]
+}

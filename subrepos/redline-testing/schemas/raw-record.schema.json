@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/neverhuman/redline-testing/schemas/raw-record.schema.json",
+  "title": "redline-testing raw JSONL record",
+  "type": "object",
+  "required": [
+    "case_id",
+    "name",
+    "priority",
+    "profile",
+    "category",
+    "sample_role",
+    "status",
+    "reference_elapsed_ns",
+    "target_elapsed_ns"
+  ],
+  "properties": {
+    "suite": { "type": "string" },
+    "case_id": { "type": "string" },
+    "name": { "type": "string" },
+    "case_file": { "type": "string" },
+    "priority": { "type": "string" },
+    "profile": { "type": "string" },
+    "category": { "type": "string" },
+    "sample_role": { "type": "string" },
+    "repetition_index": { "type": ["integer", "null"], "minimum": 1 },
+    "status": { "enum": ["passed", "failed", "skipped"] },
+    "memory_status": { "enum": ["sampled", "unavailable", "disabled", "not_run"] },
+    "reference_elapsed_ns": { "type": "integer", "minimum": 0 },
+    "target_elapsed_ns": { "type": "integer", "minimum": 0 }
+  },
+  "additionalProperties": true
+}

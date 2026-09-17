@@ -8,6 +8,10 @@ fn workspace_root() -> &'static Path {
 }
 
 fn is_executable_surface(path: &str) -> bool {
+    // The former public hub is retained as historical documentation.
+    if path.starts_with("subrepos/redline/") {
+        return false;
+    }
     path.ends_with(".sh")
         || path == ".gitlab-ci.yml"
         || path.starts_with(".github/workflows/")

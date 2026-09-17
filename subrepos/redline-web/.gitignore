@@ -1,0 +1,26 @@
+# Rust
+/target
+**/target
+
+# Node
+node_modules
+web/node_modules
+web/dist/assets
+web/dist/*.js
+web/dist/*.css
+apps/web/playwright-report/
+apps/web/test-results/
+*.tsbuildinfo
+
+# Generated CI evidence
+.artifacts/
+/agent/repo-score.json
+/.jankurai/score-history.jsonl
+
+# Local
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+*.db
+.env
+.DS_Store

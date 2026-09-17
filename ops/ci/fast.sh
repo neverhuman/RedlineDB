@@ -32,7 +32,12 @@ run_preflight() {
     cargo fmt --check
     bash scripts/check_file_sizes.sh
     bash scripts/parity/lint-sqlite-parity-ledger.sh
-    ci_verify_redlinedb_release_smoke
+    cargo build --locked -p redlinedb-cli --bin redlinedb
+    local smoke_directory smoke_binary
+    smoke_directory=$(mktemp -d)
+    smoke_binary="$PWD/target/debug/redlinedb"
+    (cd "$smoke_directory"; test "$("$smoke_binary" -batch :memory: 'SELECT 1;')" = 1)
+    rm -rf "$smoke_directory"
     cargo check --workspace --locked
 }
 

@@ -230,63 +230,75 @@ metadata that point a fix at the narrowest lawful surface.
 
 ### Rust library
 
-Pin the release in `Cargo.toml`:
+Use the engine library from the same source release:
 
 ```toml
 [dependencies]
-  redlinedb = "=4.0.0"
+redlinedb = { git = "https://github.com/neverhuman/RedlineDB", tag = "v4.1.0" }
 ```
 
-For libraries, `redlinedb = "1"` is usually fine. For binaries, keep the exact
-pin and commit `Cargo.lock`.
+Commit `Cargo.lock` for reproducible application builds. Existing crates.io
+versions remain available; GitHub package publication does not publish new
+crates.io versions.
 
-### CLI binary
+### Install binaries
 
-Install the published shell on Linux or macOS:
+Linux x86_64/ARM64 and macOS Intel/Apple Silicon packages include the CLI,
+server, native libraries and C headers. Rust and Node are not needed to run them.
+Linux packages require glibc 2.35 or newer; macOS packages require macOS 15 or newer.
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/neverhuman/RedlineDB/main/install.sh | bash
 ```
 
-Pin a specific release when you need reproducible installs:
+The installer verifies the release checksum and defaults to `~/.local`. To select
+a release and an installation directory:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v4.0.8 bash
+curl -fsSL https://raw.githubusercontent.com/neverhuman/RedlineDB/main/install.sh | \
+  VERSION=v4.1.0 PREFIX="$HOME/redline install" bash
 ```
 
-Lock the exact tarball digest in CI or release automation:
-
-```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | \
-  VERSION=v4.1.0 REDLINEDB_SHA256=<sha256> bash
-```
+It installs `redlinedb` and `redlinedb-server`; it never replaces `sqlite3`.
+Set `REDLINEDB_SHA256` to additionally require a particular archive digest.
 
 ### Build from source
 
-```bash
-cargo install redlinedb-cli --version 4.1.0 --locked
-```
-
-Or install from the tagged repository release:
+Install Rust 1.95, a C/C++ compiler and pkg-config, then run:
 
 ```bash
-cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v4.1.0 --package redlinedb-cli --locked
+git clone https://github.com/neverhuman/redlineDB
+cd redlineDB
+./scripts/build-from-source.sh
+./scripts/install-from-source.sh
 ```
 
-### Direct download
+The source archive from GitHub works with the same scripts. An ordinary clone
+contains the engine and all supporting components; no private forge or sibling
+checkout is needed. Add `--all` to both scripts to include the testing runner,
+release tools and web console (building the console also requires Node 22/npm).
+Use `PREFIX` for the installation root and `CARGO_BUILD_JOBS` to limit build jobs.
 
-Release tarballs are published on the [releases page](https://github.com/neverhuman/RedlineDB/releases):
+### Components and downloads
 
-| Platform | File |
-|---|---|
-| Linux x86_64 | `redlinedb-v4.1.0-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `redlinedb-v4.1.0-macos-arm64.tar.gz` |
-| macOS Intel | `redlinedb-v4.1.0-macos-x86_64.tar.gz` |
+| Component | Source | Release package |
+|---|---|---|
+| Engine, CLI, server, adapters, FFI | `crates/` | `redlinedb-v4.1.0-<platform>.tar.gz` |
+| Conformance runner | `subrepos/redline-testing` | `redline-testing-v4.1.0-<platform>.tar.gz` |
+| Embedded web console | `subrepos/redline-web` | `redline-web-v4.1.0-<platform>.tar.gz` |
+| Rust client and database shim | `subrepos/redline-central` | source |
+| Release tooling | `subrepos/redline-split-ops` | source |
+| Historical public hub | `subrepos/redline` | source |
 
-Each tarball ships with a matching `.sha256` checksum and contains the CLI,
-shared libraries, and public headers.
+Download packages and checksums from [GitHub Releases](https://github.com/neverhuman/RedlineDB/releases).
+Platform names are `linux-x86_64`, `linux-arm64`, `macos-x86_64`, and `macos-arm64`.
+Optional packages extract alongside the core package. Start the console with
+`redline-web --target-bin /path/to/redlinedb`.
 
-## Quick Start
+Each package includes dependency notices, an SBOM and parent-commit build metadata.
+GitHub Releases also attach build provenance attestations. [subrepos.toml](subrepos.toml)
+records the initial component identities; [migration records](docs/migration/README.md)
+explain preserved histories and the unfinished work kept outside the release.
 
 ### Embedded use
 
@@ -325,15 +337,12 @@ rtk just sqlite-parity-report-check
 
 ## SQLite Parity Status
 
-The official parity lane is sourced only from the verified external
-`neverhuman/redline-testing` release artifact, which is the sole official
-evidence source. Missing, skipped, failed, or unmeasured cases are hard
-report-check failures rather than excluded from the denominator. The live report
-below is generated only from `benchmark-results/sqlite-parity/latest/` after
-`official-evidence.processed.json` validates `raw.jsonl` against the
-hash-bound upstream official evidence chain, including the verified release
-tarball SHA-256, the `redline-testing` binary SHA-256, the release manifest, and
-the GitHub artifact attestation.
+The official parity lane builds `subrepos/redline-testing` and the engine from
+this same checkout. Its processed evidence binds raw results to the runner's
+SHA-256 and enforces the declared suites and compatibility baselines. The report
+below is a dated historical measurement from
+`benchmark-results/sqlite-parity/latest/`; its original provenance is preserved.
+Current acceptance evidence is attached to the GitHub CI run.
 
 <!-- sqlite-parity-report:begin -->
 **SQLite parity coverage:** **1123 / 1127** cases passed in CI. Failed: **0**. Skipped: **4**. Updated 2026-05-26.
@@ -474,7 +483,7 @@ RedlineDB is a layered Rust workspace:
 - `crates/ffi` exports the SQLite-shaped C ABI for compatibility testing.
 - `crates/cli` provides the shell and administrative commands.
 - `crates/bench` keeps engine-local tests and non-official harness code only.
-- The official conformance corpus, memory suite, beyond-SQLite coverage, benchmark gate, and report authority live in `neverhuman/redline-testing`.
+- The official conformance corpus, memory suite, beyond-SQLite coverage, benchmark gate, and report authority live in `subrepos/redline-testing`.
 
 The dependency graph stays one-way: lower layers do not depend on higher layers.
 That keeps the engine testable, replaceable, and easy to reason about in the
@@ -491,7 +500,7 @@ agent routing model used by this repository.
 | `crates/cli/` | Command-line shell |
 | `crates/server/` | Optional framed server |
 | `crates/bench/` | Engine-local tests and non-official harness code; not a parity evidence producer |
-| `benchmark-results/sqlite-parity/latest/` | Current external-suite report artifacts and processed official evidence |
+| `benchmark-results/sqlite-parity/latest/` | Dated official report artifacts and processed evidence |
 | `docs/` | Architecture, testing, and audit guidance |
 | `paper/` | Evaluation writeup and reproducibility assets |
 
@@ -500,8 +509,8 @@ agent routing model used by this repository.
 - `just fast` is the default local proof lane for ordinary edits.
 - `just required` runs the exact protected lane: fast tests followed by the
   hard security, full-graph dependency-review, and Jankurai ratchet gates.
-- `just redline-testing-official` runs the verified external official suite wrapper.
-- `just official-evidence-guard` fails if official metrics can be regenerated without the verified external runner.
+- `just redline-testing-official` runs the included official suite wrapper.
+- `just official-evidence-guard` fails if official metrics can be regenerated without the included official runner.
 - `just sqlite-parity-report-update` refreshes the generated parity report from the latest processed official evidence bundle.
 - `just sqlite-parity-report-check` verifies the README report block matches the committed processed official evidence bundle.
 - `just sqlite-parity-report-publish-pr` is the CI entrypoint that regenerates the report and opens or updates the draft report PR after main CI succeeds.
@@ -512,11 +521,9 @@ The agent-readable proof map lives in [`AGENTS.md`](AGENTS.md). Use
 [`docs/testing.md`](docs/testing.md) for test routing, and
 [`docs/release.md`](docs/release.md) for the gated release and rollback runbook.
 
-The repository does not expose local SQLite parity coverage, benchmark, report,
-or sentinel producers. The sole source for SQLite, memory, beyond-SQLite,
-latency, chart, README, Jankurai, and score evidence is the verified
-`neverhuman/redline-testing` release artifact and its processed evidence
-bundle.
+Official SQLite, memory, RQL and beyond-SQLite evidence is produced only by
+`subrepos/redline-testing` and its processed evidence bundle. Engine-local tests
+remain regression checks, while the runner owns the conformance corpus and reports.
 
 ## Contributing
 

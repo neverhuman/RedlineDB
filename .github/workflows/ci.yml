@@ -1,6 +1,11 @@
 name: ci
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        default: v4.1.0-rc.1
   push:
     branches: [main]
   pull_request:
@@ -30,7 +35,7 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Install cargo-nextest
         run: |
           curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
@@ -68,7 +73,7 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Install cargo-nextest
         run: |
           curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
@@ -100,19 +105,11 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Run parity shard
         env:
           REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
           GH_TOKEN: ${{ github.token }}
-          # Pin to the redline-testing release that ships target capability
-          # gating (skips SQL_VIRTUAL_TABLE_OPTIONAL cases 93–96 against
-          # engines without fts5/rtree/dbstat) and the PINNED_ONLY env so
-          # the run sticks to the 1127-case pinned upstream manifest.
-          # v1.0.0 is the GA release; the parity engine + corpus are
-          # unchanged from v0.1.3 (which introduced the gating).
-          CI_REDLINE_TESTING_REQUESTED_VERSION: "1.0.0"
-          REDLINE_TESTING_PINNED_ONLY: "1"
         run: CI_PARITY_STAGE=${{ matrix.stage }} bash ops/ci/parity.sh
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         if: always()
@@ -153,7 +150,7 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Engine unit tests
         run: |
           cargo test --locked --workspace --lib
@@ -176,7 +173,7 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Release-build redlinedb-cli
         run: cargo build --locked --release -p redlinedb-cli
 
@@ -214,7 +211,7 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Workspace typecheck
         run: cargo check --workspace --locked
 
@@ -235,6 +232,88 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Release-build CLI package
         run: cargo build --locked --release -p redlinedb-cli
+
+  components:
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [testing, central, web, release-tools, integration]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with: {toolchain: 1.95.0, components: rustfmt}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22'}
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        with: {key: '${{ matrix.lane }}'}
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config sqlite3
+      - run: bash scripts/ci-family.sh "${{ matrix.lane }}"
+
+  audit:
+    needs: security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {fetch-depth: 0}
+      - run: bash ops/ci/install-github-tools.sh
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: {name: security-evidence, path: target/jankurai/security}
+      - name: Audit engine against the accepted baseline
+        run: jankurai audit . --full --mode ratchet --baseline .jankurai/baselines/github-monorepo.repo-score.json --json target/audit-family/engine/repo-score.json --md target/audit-family/engine/repo-score.md --no-score-history --policy agent/audit-policy.toml
+      - run: bash ops/ci/audit-family.sh components
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with: {name: audit-family, path: target/audit-family, if-no-files-found: error}
+
+  security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with: {toolchain: 1.95.0}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22'}
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - run: cargo install cargo-audit --locked --version 0.22.1
+      - run: cargo install cargo-deny --locked --version 0.19.8
+      - run: bash ops/ci/install-github-tools.sh
+      - run: |
+          jankurai security run . --strict --profile ci --script ops/ci/security-family.sh --out target/jankurai/security/evidence.json || {
+            cat target/jankurai/security/security-lane-*.log
+            exit 1
+          }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with: {name: security-evidence, path: target/jankurai/security, if-no-files-found: error}
+
+  packaging:
+    uses: ./.github/workflows/packages.yml
+    with:
+      tag: ${{ inputs.tag || 'v4.1.0-rc.1' }}
+    permissions:
+      contents: read
+
+  required:
+    name: RedlineDB/required
+    if: always()
+    needs: [preflight, tests, parity, official-evidence-guard, test, build, lint, typecheck, cli, components, audit, security, packaging]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {contents: read}
+    steps:
+      - name: Require every gate to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -e 'to_entries | length > 0 and all(.value.result == "success")'

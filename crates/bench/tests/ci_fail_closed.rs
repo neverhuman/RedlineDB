@@ -15,10 +15,9 @@ fn protected_required_lane_runs_every_hard_gate_in_order() {
     let mut remainder = required.as_str();
 
     for command in [
-        "bash ops/ci/fast.sh",
-        "bash ops/ci/security.sh",
-        "bash ops/ci/dependency-review.sh",
-        "bash ops/ci/jankurai-audit.sh",
+        "bash scripts/ci-family.sh all",
+        "jankurai security run . --strict --profile ci --script ops/ci/security-family.sh",
+        "bash ops/ci/audit-family.sh",
     ] {
         let offset = remainder
             .find(command)
@@ -57,15 +56,18 @@ fn release_security_surfaces_have_no_active_soft_gate() {
         "release security policy must not retain an active soft-gate row"
     );
 
-    let workflow = read(".github/workflows/jankurai.yml");
+    let workflow = read(".github/workflows/ci.yml");
     assert!(workflow.contains("cargo install cargo-deny --locked --version 0.19.8"));
-    assert!(workflow.contains(
-        "jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json"
-    ));
+    let audit = read("ops/ci/audit-family.sh");
+    assert!(audit.contains("--mode ratchet --baseline"));
+    assert!(audit.contains(".jankurai/baselines/main.repo-score.json"));
+    assert!(!audit.contains("--mode advisory"));
+    assert!(workflow.contains("RedlineDB/required"));
+    assert!(workflow.contains("all(.value.result == \"success\")"));
     assert!(!workflow.contains("cargo-deny --locked --version 0.18.0"));
 
     let security_marker = read("tools/security-lane.sh");
-    assert!(security_marker.contains("bash \"$ROOT/ops/ci/security.sh\""));
+    assert!(security_marker.contains("bash \"$ROOT/ops/ci/security-family.sh\""));
     assert!(security_marker.contains("bash \"$ROOT/ops/ci/dependency-review.sh\""));
     assert!(!security_marker.contains("soft-gated"));
     assert!(!security_marker.contains("ci-soft-gate-ledger"));

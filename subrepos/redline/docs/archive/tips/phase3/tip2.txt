@@ -1,0 +1,3052 @@
+Understood: **Phase 3 only**. Treat Phase 1 and Phase 2 primitives as available: durable WAL, page checksums, recovery, buffer pool, MVCC heap, row locks, CSN frontier, allocator/free-space metadata, and vacuum horizon tracking.
+
+The right Phase 3 design is **not** “build an in-memory Rust BTreeMap.” It is a **page-resident, WAL-redoable, concurrent B-link/B+tree access method** that behaves like a database index: short physical latches, logical transaction locks outside latches, MVCC heap recheck, stale-entry tolerance, background cleanup, and idempotent recovery.
+
+SQLite WAL mode allows readers and a writer to coexist, but SQLite still has only one writer at a time because there is one WAL append writer lock. RedlineDB’s advantage should be: **many writer transactions can concurrently prepare, latch, modify different index/heap pages, and only serialize at the WAL byte-order / group-commit boundary**, not at a global “write transaction” boundary. SQLite’s own WAL documentation says WAL readers and writers can run concurrently, but “there can only be one writer at a time.” ([SQLite][1])
+
+---
+
+# Phase 3 target architecture
+
+Build this crate/module:
+
+```text
+redlinedb_index/
+  mod.rs
+  btree.rs
+  page.rs
+  key.rs
+  scan.rs
+  unique.rs
+  wal.rs
+  recovery.rs
+  merge.rs
+  verify.rs
+  stats.rs
+  tests/
+```
+
+The index layer should expose this shape:
+
+```rust
+pub trait IndexAccessMethod {
+    fn insert(
+        &self,
+        tx: &mut Tx,
+        logical_key: &[u8],
+        row: RowRef,
+        uniqueness: Uniqueness,
+    ) -> Result<()>;
+
+    fn delete_mark(
+        &self,
+        tx: &mut Tx,
+        logical_key: &[u8],
+        row: RowRef,
+    ) -> Result<()>;
+
+    fn point_lookup(
+        &self,
+        tx: &Tx,
+        logical_key: &[u8],
+        out: &mut dyn FnMut(VisibleRow) -> Result<()>,
+    ) -> Result<()>;
+
+    fn range_scan(
+        &self,
+        tx: &Tx,
+        range: KeyRange<'_>,
+        out: &mut dyn FnMut(VisibleRow) -> Result<()>,
+    ) -> Result<()>;
+
+    fn verify(&self, mode: VerifyMode) -> Result<VerifyReport>;
+}
+```
+
+The core Phase 3 primitive should be a **B-link tree**:
+
+```text
+Normal B+tree:
+  parent decides which child to visit.
+
+B-link/B+tree:
+  parent gives you a probable child.
+  every page also has:
+    high_key: exclusive upper bound for this page
+    right_sibling: page id of next page on same level
+
+If parent routing is stale because a split happened:
+  visit child
+  if search_key >= child.high_key:
+      move right
+```
+
+This is the crucial concurrency trick. A split can be made visible at the child level before the parent is updated. Readers and writers that land on the old child can still walk right and find the correct page. Lehman/Yao-style B-link trees are specifically about high-concurrency B+tree operations; a common summary is that readers need no locks in the idealized algorithm and writers hold only a small number of locks, usually no more than three. ([UW Computer Sciences][2])
+
+For RedlineDB, I would use **short read/write page latches** instead of fully latch-free page reads at first. It is still fast, much simpler to make safe in Rust, and leaves room for optimistic latch coupling later.
+
+---
+
+# Non-negotiable design rules
+
+These are the rules that keep the index fast and correct.
+
+## Rule 1: page latches are physical, not transactional
+
+A page latch protects the bytes of one page.
+
+It is **not** a row lock.
+
+It is **not** a predicate lock.
+
+It is **not** held until commit.
+
+It is held only while inspecting or changing the physical page image.
+
+```text
+Good:
+  latch leaf
+  insert entry into page bytes
+  copy WAL record into reserved WAL memory
+  mark page dirty
+  unlatch leaf
+  later wait for commit durability
+
+Bad:
+  latch leaf
+  wait for another transaction
+  fsync WAL
+  call user callback
+  read heap row
+  perform constraint wait
+```
+
+Never hold a page latch while doing any of these:
+
+```text
+WAL fsync
+group commit wait
+row-lock wait
+unique-key-lock wait
+heap visibility recheck
+user callback
+buffer-pool eviction wait
+disk read of another page
+network/server wait
+```
+
+## Rule 2: logical locks may outlive page latches
+
+Unique-index key locks are logical transaction locks. They may be held until commit or rollback.
+
+That is okay.
+
+But no code may try to acquire a logical lock while holding a page latch.
+
+```text
+Allowed:
+  acquire unique key lock
+  latch page briefly
+  modify page
+  unlatch page
+  wait for commit
+
+Forbidden:
+  latch page
+  then wait for unique key lock
+```
+
+## Rule 3: every index entry is a hint until heap recheck
+
+The index should never be trusted alone for SQL visibility.
+
+Every candidate index entry points to the heap:
+
+```rust
+pub struct IndexEntry {
+    physical_key: EncodedKey,
+    logical_key_len: u16,
+    row: RowRef,
+}
+```
+
+Lookup flow:
+
+```text
+index says: "row X may match key K"
+heap says:  "under snapshot S, row X is visible or not"
+executor says: "after recomputing indexed expression, row still matches K or not"
+```
+
+That lets the index contain stale physical entries after UPDATE, DELETE, rollback, aborted insert, crash recovery, or vacuum delay.
+
+This is how Phase 3 satisfies:
+
+```text
+Index entries may be stale physically but never return incorrect visible SQL rows.
+```
+
+## Rule 4: row references must include generation
+
+A stale index pointer must not accidentally point to a reused heap slot.
+
+Do not use only:
+
+```rust
+(page_id, slot_id)
+```
+
+Use:
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct RowRef {
+    pub rel_id: RelationId,
+    pub page_id: PageId,
+    pub slot_id: u16,
+    pub slot_gen: u16,
+    pub tuple_id: u64,
+}
+```
+
+The heap recheck validates `slot_gen` or `tuple_id`.
+
+If the slot was reused, the stale index entry becomes harmless.
+
+## Rule 5: foreground path is split-oriented, not merge-oriented
+
+Foreground INSERT must be fast.
+
+Foreground DELETE should usually only mark or tolerate dead entries.
+
+Actual physical cleanup should be background:
+
+```text
+foreground DELETE:
+  update heap MVCC state
+  optionally append index delete marker
+  do not rebalance tree synchronously
+
+background vacuum/consolidation:
+  purge dead entries
+  compact pages
+  merge underfull siblings
+  unlink forwarding pages when safe
+```
+
+Classic B+tree delete/merge is where many index implementations become slow and fragile. The fast database approach is:
+
+```text
+hot path:
+  split when needed
+  append / mark / compact cheaply
+
+cold path:
+  consolidate with horizons
+```
+
+---
+
+# Core data model
+
+## IDs and scalar types
+
+```rust
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct PageId(pub u64);
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct RelationId(pub u64);
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
+pub struct IndexId(pub u64);
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct Lsn(pub u64);
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Ord, PartialOrd)]
+pub struct Csn(pub u64);
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct RowRef {
+    pub rel_id: RelationId,
+    pub page_id: PageId,
+    pub slot_id: u16,
+    pub slot_gen: u16,
+    pub tuple_id: u64,
+}
+```
+
+## Logical key vs physical key
+
+The **logical key** is the SQL/index key:
+
+```text
+email = "a@x.com"
+customer_id = 123
+created_at = 2026-04-27
+```
+
+The **physical key** must be unique inside the B+tree so deletion, scan resume, and duplicate handling are easy.
+
+For non-unique indexes:
+
+```text
+physical_key = logical_key || row_ref_suffix
+```
+
+For unique indexes, still store `row_ref_suffix` physically, because historical versions and stale entries may coexist:
+
+```text
+unique physical_key = logical_key || row_ref_suffix
+unique enforcement key = logical_key only
+```
+
+That gives you:
+
+```text
+exact lookup:
+  scan logical prefix
+
+stable page order:
+  logical key first
+  row ref tie-breaker second
+
+duplicate-safe range scans:
+  resume after last physical key
+```
+
+---
+
+# Key encoding
+
+Phase 3 should accept already-encoded mem-comparable keys from the future SQL/catalog/type layer.
+
+The B-tree should not know SQL types deeply. It only needs:
+
+```rust
+pub trait KeyComparator: Send + Sync + 'static {
+    fn cmp(&self, a: &[u8], b: &[u8]) -> std::cmp::Ordering;
+    fn starts_with_logical(&self, physical: &[u8], logical: &[u8], logical_len: usize) -> bool;
+}
+```
+
+But design the encoding now so Phase 4 does not break Phase 3.
+
+A SQLite-like dynamic value key encoding can later look like this:
+
+```text
+NULL:
+  tag 0x00
+
+INTEGER:
+  tag 0x10
+  i64 with sign bit flipped, big-endian
+
+REAL:
+  tag 0x20
+  canonical IEEE-754 sortable transform
+  normalize NaN if supported
+
+TEXT:
+  tag 0x30
+  collation sort key bytes
+  escaped terminator
+
+BLOB:
+  tag 0x40
+  escaped bytes or length-delimited bytes
+
+DESC column:
+  invert payload bytes after encoding
+
+row_ref suffix:
+  tag 0xF0
+  rel_id/page_id/slot/tuple_id big-endian
+```
+
+Important: use **big-endian** for numeric key bytes if they participate in lexicographic ordering.
+
+Example:
+
+```rust
+pub struct KeyBuf {
+    buf: Vec<u8>,
+    logical_len: usize,
+}
+
+impl KeyBuf {
+    pub fn new() -> Self {
+        Self {
+            buf: Vec::with_capacity(128),
+            logical_len: 0,
+        }
+    }
+
+    pub fn clear(&mut self) {
+        self.buf.clear();
+        self.logical_len = 0;
+    }
+
+    pub fn as_physical(&self) -> &[u8] {
+        &self.buf
+    }
+
+    pub fn logical_len(&self) -> usize {
+        self.logical_len
+    }
+
+    pub fn append_row_ref_suffix(&mut self, row: RowRef) {
+        self.buf.push(0xF0);
+        self.buf.extend_from_slice(&row.rel_id.0.to_be_bytes());
+        self.buf.extend_from_slice(&row.page_id.0.to_be_bytes());
+        self.buf.extend_from_slice(&row.slot_id.to_be_bytes());
+        self.buf.extend_from_slice(&row.slot_gen.to_be_bytes());
+        self.buf.extend_from_slice(&row.tuple_id.to_be_bytes());
+    }
+}
+```
+
+For hot paths, use a session-owned scratch key buffer. Do **not** allocate per comparison.
+
+```rust
+pub struct IndexOpCtx {
+    pub key: KeyBuf,
+    pub split_scratch: Box<[u8; PAGE_SIZE]>,
+    pub scan_batch: Vec<RawIndexEntry>,
+}
+```
+
+Each session/connection gets an `IndexOpCtx`.
+
+---
+
+# Page format
+
+Use a slotted page.
+
+```text
++----------------------------+
+| IndexPageHeader            |
++----------------------------+
+| Slot[0]                    |
+| Slot[1]                    |
+| ...                        |
+| Slot[n-1]                  |
++----------------------------+
+| free space                 |
++----------------------------+
+| item bytes                 |
+| item bytes                 |
+| high key bytes             |
++----------------------------+
+```
+
+## Header
+
+```rust
+pub const INDEX_PAGE_MAGIC: u32 = 0x5244_4958; // "RDIX"
+pub const PAGE_SIZE: usize = 16 * 1024;
+
+pub const FLAG_LEAF: u16              = 0x0001;
+pub const FLAG_ROOT: u16              = 0x0002;
+pub const FLAG_RIGHTMOST: u16         = 0x0004;
+pub const FLAG_INCOMPLETE_SPLIT: u16  = 0x0008;
+pub const FLAG_DELETED: u16           = 0x0010;
+pub const FLAG_REDIRECT_RIGHT: u16    = 0x0020;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IndexPageHeader {
+    pub magic: u32,
+    pub format_version: u16,
+    pub flags: u16,
+
+    pub index_id: u64,
+    pub page_id: u64,
+
+    /// 0 = leaf. 1 = parent of leaves. Higher = internal.
+    pub level: u16,
+
+    pub item_count: u16,
+
+    /// Offset to first free byte after slot directory.
+    pub lower: u16,
+
+    /// Offset to first used byte from the end.
+    pub upper: u16,
+
+    /// Serialized high key location.
+    /// If FLAG_RIGHTMOST is set, high key is +infinity.
+    pub high_key_off: u16,
+    pub high_key_len: u16,
+
+    /// B-link pointer on the same level.
+    pub right_sibling: u64,
+
+    /// Last LSN whose effects are reflected on this page.
+    pub page_lsn: u64,
+
+    /// Used for parent-completion repair.
+    pub split_right: u64,
+
+    /// Optional checksum or page image salt if not already in common page header.
+    pub reserved: [u8; 24],
+}
+```
+
+## Slot
+
+```rust
+pub const ITEM_DEAD: u16       = 0x0001;
+pub const ITEM_DELETE_MARK: u16 = 0x0002;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IndexSlot {
+    pub off: u16,
+    pub len: u16,
+    pub flags: u16,
+
+    /// Length of SQL/logical key inside physical key.
+    /// The remaining bytes are tie-breaker suffix.
+    pub logical_key_len: u16,
+}
+```
+
+## Leaf item bytes
+
+```text
+u16 key_len
+u16 value_len
+u8[key_len] physical_key
+u8[value_len] row_ref
+```
+
+For leaves:
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LeafValue {
+    pub rel_id: u64,
+    pub page_id: u64,
+    pub slot_id: u16,
+    pub slot_gen: u16,
+    pub tuple_id: u64,
+}
+```
+
+## Internal item bytes
+
+Internal pages should use **child high-bound entries**, not “separator then right child” in the classic form.
+
+Each internal item says:
+
+```text
+child subtree contains keys < child_high_key
+child page = child_pid
+```
+
+```rust
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct InternalValue {
+    pub child_pid: u64,
+    pub child_level: u16,
+    pub reserved: u16,
+}
+```
+
+Internal search:
+
+```text
+choose first child_high_key where search_key < child_high_key
+if none:
+    follow right_sibling
+```
+
+This is perfect for B-link stale-parent routing.
+
+Before split:
+
+```text
+parent has:
+  child_high = old_high -> left_pid
+```
+
+After child split:
+
+```text
+left.high = split_key
+right.high = old_high
+
+parent eventually becomes:
+  child_high = split_key -> left_pid
+  child_high = old_high  -> right_pid
+```
+
+If parent is not yet updated, it still routes both ranges to `left_pid`. The page-level high key pushes searches right.
+
+---
+
+# Page invariants
+
+Every page must satisfy:
+
+```text
+1. item keys are strictly sorted by physical key.
+
+2. for every item on page P:
+     item.key < P.high_key
+   unless P is rightmost.
+
+3. if P.right_sibling = R:
+     P.high_key <= every key reachable from R
+
+4. internal item child_pid C with child_high K:
+     child C is responsible for keys < K,
+     although C may have split and require right-walk.
+
+5. parent routing may be stale.
+   page high keys and right links must not be stale.
+
+6. page_lsn is monotonic.
+
+7. if FLAG_INCOMPLETE_SPLIT:
+     P.split_right points to the new sibling whose parent entry may be absent.
+
+8. if FLAG_REDIRECT_RIGHT:
+     page contains no live entries;
+     searches must move to right_sibling.
+```
+
+---
+
+# Buffer frame and latch design
+
+For production speed, I would use a tiny audited unsafe island around page bytes.
+
+`pure Rust` can still include `unsafe` Rust. If you require zero unsafe, put the page bytes inside `RwLock<[u8; PAGE_SIZE]>`, but the hot path will be slower and less flexible.
+
+Use `parking_lot` for latches. Its docs describe smaller, faster, more flexible synchronization primitives than the standard library, and its `RwLock` has eventual fairness behavior. ([Docs.rs][3])
+
+```rust
+use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::cell::UnsafeCell;
+use std::sync::atomic::{AtomicU64, Ordering};
+
+pub struct Frame {
+    latch: RwLock<()>,
+    bytes: UnsafeCell<[u8; PAGE_SIZE]>,
+
+    page_id: PageId,
+    page_lsn: AtomicU64,
+    dirty_lsn: AtomicU64,
+    pin_count: AtomicU64,
+}
+
+unsafe impl Sync for Frame {}
+
+impl Frame {
+    pub fn read(&self) -> ReadPage<'_> {
+        let guard = self.latch.read();
+        let ptr = self.bytes.get() as *const [u8; PAGE_SIZE];
+
+        ReadPage {
+            _guard: guard,
+            bytes: unsafe { &*ptr },
+            frame: self,
+        }
+    }
+
+    pub fn write(&self) -> WritePage<'_> {
+        let guard = self.latch.write();
+        let ptr = self.bytes.get();
+
+        WritePage {
+            _guard: guard,
+            bytes: unsafe { &mut *ptr },
+            frame: self,
+        }
+    }
+}
+
+pub struct ReadPage<'a> {
+    _guard: RwLockReadGuard<'a, ()>,
+    bytes: &'a [u8; PAGE_SIZE],
+    frame: &'a Frame,
+}
+
+pub struct WritePage<'a> {
+    _guard: RwLockWriteGuard<'a, ()>,
+    bytes: &'a mut [u8; PAGE_SIZE],
+    frame: &'a Frame,
+}
+```
+
+Safety invariant:
+
+```text
+The only way to access Frame.bytes is through ReadPage or WritePage.
+ReadPage requires shared latch.
+WritePage requires exclusive latch.
+No references escape guard lifetime.
+```
+
+Use `CachePadded` around heavily updated atomics and stats to avoid false sharing. Crossbeam’s docs explicitly describe this use case: preventing unrelated data from sharing cache lines that get invalidated across cores. ([Docs.rs][4])
+
+```rust
+use crossbeam_utils::CachePadded;
+
+pub struct IndexStats {
+    pub inserts: CachePadded<AtomicU64>,
+    pub splits: CachePadded<AtomicU64>,
+    pub right_moves: CachePadded<AtomicU64>,
+    pub insert_retries: CachePadded<AtomicU64>,
+    pub unique_waits: CachePadded<AtomicU64>,
+    pub page_compactions: CachePadded<AtomicU64>,
+}
+```
+
+Use relaxed ordering for counters:
+
+```rust
+self.stats.inserts.fetch_add(1, Ordering::Relaxed);
+```
+
+---
+
+# Btree handle
+
+```rust
+pub struct BtreeIndex {
+    index_id: IndexId,
+
+    /// Current root. Readers may see an older root; B-link side links keep it safe.
+    root_pid: AtomicU64,
+    root_level: AtomicU64,
+    root_epoch: AtomicU64,
+
+    buf: Arc<dyn BufferPool>,
+    wal: Arc<dyn Wal>,
+    heap: Arc<dyn HeapAccess>,
+    key_locks: Arc<KeyLockTable>,
+
+    cmp: Arc<dyn KeyComparator>,
+    stats: Arc<IndexStats>,
+}
+```
+
+`root_pid` is atomic so normal readers do not touch a root mutex. Root split is rare and can use a small meta latch.
+
+---
+
+# Search algorithm
+
+## Point/range descent
+
+```rust
+impl BtreeIndex {
+    fn find_leaf(&self, physical_key: &[u8]) -> Result<PageId> {
+        let mut pid = PageId(self.root_pid.load(Ordering::Acquire));
+
+        loop {
+            let frame = self.buf.pin(pid)?;
+            let page = frame.read();
+            let view = IndexPageView::new(page.bytes)?;
+
+            if view.is_redirect_right() {
+                pid = view.right_sibling();
+                continue;
+            }
+
+            // Move right at this level until key belongs here.
+            if !view.is_rightmost() && view.key_ge_high(physical_key, self.cmp.as_ref()) {
+                let next = view.right_sibling();
+                drop(page);
+                self.stats.right_moves.fetch_add(1, Ordering::Relaxed);
+                pid = next;
+                continue;
+            }
+
+            if view.is_leaf() {
+                return Ok(pid);
+            }
+
+            let child = view.find_child(physical_key, self.cmp.as_ref())?;
+            drop(page);
+            pid = child;
+        }
+    }
+}
+```
+
+Important details:
+
+```text
+1. A reader does not keep parent latched while reading child.
+2. If the child split after parent was read, child.high_key redirects right.
+3. If root changed, old root remains valid until safe reclamation.
+4. No heap access while page latch is held.
+```
+
+---
+
+# Leaf lookup
+
+Point lookup is a range scan over the logical prefix.
+
+```rust
+impl BtreeIndex {
+    pub fn point_lookup(
+        &self,
+        tx: &Tx,
+        logical_key: &[u8],
+        out: &mut dyn FnMut(VisibleRow) -> Result<()>,
+    ) -> Result<()> {
+        let lower = tx.scratch.physical_lower_bound(logical_key);
+        let range = KeyRange {
+            start: &lower,
+            logical_prefix: Some(logical_key),
+            end: None,
+        };
+
+        self.range_scan(tx, range, out)
+    }
+}
+```
+
+The scan copies raw entries out of the page, releases the latch, then does heap work.
+
+```rust
+#[derive(Clone)]
+pub struct RawIndexEntry {
+    pub physical_key: Vec<u8>,
+    pub logical_key_len: u16,
+    pub row: RowRef,
+}
+
+impl BtreeIndex {
+    pub fn range_scan(
+        &self,
+        tx: &Tx,
+        range: KeyRange<'_>,
+        out: &mut dyn FnMut(VisibleRow) -> Result<()>,
+    ) -> Result<()> {
+        let mut pid = self.find_leaf(range.start)?;
+        let mut resume_key = range.start.to_vec();
+        let mut last_physical_key: Option<Vec<u8>> = None;
+
+        loop {
+            let frame = self.buf.pin(pid)?;
+            let page = frame.read();
+            let view = IndexPageView::new(page.bytes)?;
+
+            if view.is_redirect_right() {
+                pid = view.right_sibling();
+                continue;
+            }
+
+            let next = view.right_sibling_opt();
+            let page_high = view.high_key_owned();
+
+            let mut batch = Vec::with_capacity(64);
+
+            view.copy_scan_batch(
+                &resume_key,
+                range,
+                self.cmp.as_ref(),
+                64,
+                &mut batch,
+            )?;
+
+            drop(page);
+
+            for e in batch {
+                if let Some(last) = &last_physical_key {
+                    if self.cmp.cmp(&e.physical_key, last) != std::cmp::Ordering::Greater {
+                        continue;
+                    }
+                }
+
+                last_physical_key = Some(e.physical_key.clone());
+
+                let Some(row) = self.heap.visible_row(tx.snapshot(), e.row)? else {
+                    continue;
+                };
+
+                // Critical: executor/key layer rechecks.
+                if !tx.recheck_index_predicate(&row, range)? {
+                    continue;
+                }
+
+                out(row)?;
+            }
+
+            if range.stops_before_page_high(&page_high, self.cmp.as_ref()) {
+                return Ok(());
+            }
+
+            let Some(next_pid) = next else {
+                return Ok(());
+            };
+
+            pid = next_pid;
+
+            if let Some(last) = &last_physical_key {
+                resume_key.clear();
+                resume_key.extend_from_slice(last);
+                resume_key.push(0); // conceptual; use real successor/resume logic.
+            }
+        }
+    }
+}
+```
+
+For real code, avoid `Vec` allocation in each scan batch. Use a session scratch vector and inline key storage for small keys.
+
+---
+
+# Insert fast path
+
+The fast path should be:
+
+```text
+1. encode physical key in session scratch
+2. if unique, acquire logical unique-key lock
+3. if unique, check current committed/active conflicts
+4. find leaf using read latches
+5. reserve WAL bytes before taking write latch
+6. write-latch leaf
+7. validate key still belongs to leaf
+8. if enough space:
+      insert entry
+      copy WAL record into reserved WAL memory
+      set page_lsn
+      mark dirty
+      unlatch
+      return
+9. else:
+      unlatch
+      split
+      retry/complete parent
+```
+
+The WAL reservation is important: reservation can block under backpressure or segment rotation. Page latches must not be held during that.
+
+```rust
+impl BtreeIndex {
+    pub fn insert(
+        &self,
+        tx: &mut Tx,
+        logical_key: &[u8],
+        row: RowRef,
+        uniqueness: Uniqueness,
+    ) -> Result<()> {
+        tx.scratch.key.clear();
+        tx.scratch.key.extend_logical(logical_key);
+        tx.scratch.key.append_row_ref_suffix(row);
+
+        let physical_key = tx.scratch.key.as_physical().to_vec();
+        let logical_len = tx.scratch.key.logical_len() as u16;
+
+        let _unique_guard = match uniqueness {
+            Uniqueness::Unique => {
+                let guard = self.lock_unique_key(tx, logical_key)?;
+                self.check_unique_current(tx, logical_key, row)?;
+                Some(guard)
+            }
+            Uniqueness::NonUnique => None,
+        };
+
+        loop {
+            match self.try_insert_fast(tx, &physical_key, logical_len, row)? {
+                InsertAttempt::Inserted => {
+                    self.stats.inserts.fetch_add(1, Ordering::Relaxed);
+                    return Ok(());
+                }
+                InsertAttempt::Retry => {
+                    self.stats.insert_retries.fetch_add(1, Ordering::Relaxed);
+                    continue;
+                }
+                InsertAttempt::NeedSplit { leaf_pid } => {
+                    self.split_leaf_and_insert(tx, leaf_pid, &physical_key, logical_len, row)?;
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    fn try_insert_fast(
+        &self,
+        tx: &mut Tx,
+        physical_key: &[u8],
+        logical_len: u16,
+        row: RowRef,
+    ) -> Result<InsertAttempt> {
+        let leaf_pid = self.find_leaf(physical_key)?;
+
+        // Must happen before page latch.
+        let mut reservation = self.wal.reserve(WalClass::IndexInsert, INDEX_INSERT_MAX_BYTES)?;
+
+        let frame = self.buf.pin(leaf_pid)?;
+        let mut page = frame.write();
+        let mut view = IndexPageMut::new(page.bytes)?;
+
+        if view.is_redirect_right() {
+            reservation.cancel();
+            return Ok(InsertAttempt::Retry);
+        }
+
+        if !view.belongs_to_page(physical_key, self.cmp.as_ref()) {
+            reservation.cancel();
+            return Ok(InsertAttempt::Retry);
+        }
+
+        let needed = view.leaf_insert_size(physical_key, row);
+
+        if !view.has_space(needed) {
+            reservation.cancel();
+            return Ok(InsertAttempt::NeedSplit { leaf_pid });
+        }
+
+        let lsn = reservation.lsn();
+
+        view.insert_leaf_item(
+            physical_key,
+            logical_len,
+            row,
+            self.cmp.as_ref(),
+        )?;
+
+        view.set_page_lsn(lsn);
+
+        let rec = IndexWalRecord::Insert {
+            index_id: self.index_id,
+            page_id: leaf_pid,
+            physical_key,
+            logical_key_len: logical_len,
+            row,
+        };
+
+        reservation.encode_and_publish(&rec)?;
+        self.buf.mark_dirty(leaf_pid, lsn)?;
+
+        drop(page);
+
+        tx.record_index_mutation(self.index_id, lsn);
+
+        Ok(InsertAttempt::Inserted)
+    }
+}
+
+pub enum InsertAttempt {
+    Inserted,
+    Retry,
+    NeedSplit { leaf_pid: PageId },
+}
+```
+
+---
+
+# Split algorithm
+
+Leaf split must be B-link-safe and recovery-safe.
+
+## Split state transition
+
+Before:
+
+```text
+L:
+  high_key = old_high
+  right    = old_right
+  entries  = [ ... full ... ]
+```
+
+After split:
+
+```text
+L:
+  high_key = split_key
+  right    = N
+  flags   |= INCOMPLETE_SPLIT
+  split_right = N
+
+N:
+  high_key = old_high
+  right    = old_right
+  entries  = upper half
+```
+
+Then parent completion eventually changes parent from:
+
+```text
+old_high -> L
+```
+
+to:
+
+```text
+split_key -> L
+old_high  -> N
+```
+
+If crash happens before parent completion, search still works:
+
+```text
+parent routes key to L
+if key >= L.high_key:
+    follow L.right to N
+```
+
+## Split code skeleton
+
+```rust
+impl BtreeIndex {
+    fn split_leaf_and_insert(
+        &self,
+        tx: &mut Tx,
+        leaf_pid: PageId,
+        physical_key: &[u8],
+        logical_len: u16,
+        row: RowRef,
+    ) -> Result<()> {
+        // Allocate and reserve before latches.
+        let new_pid = self.buf.alloc_index_page(self.index_id, 0)?;
+        let mut reservation = self.wal.reserve(WalClass::IndexSplit, INDEX_SPLIT_MAX_BYTES)?;
+
+        let left_frame = self.buf.pin(leaf_pid)?;
+        let right_frame = self.buf.pin(new_pid)?;
+
+        let mut left_page = left_frame.write();
+        let mut right_page = right_frame.write();
+
+        let mut left = IndexPageMut::new(left_page.bytes)?;
+        let mut right = IndexPageMut::new(right_page.bytes)?;
+
+        if !left.belongs_to_page(physical_key, self.cmp.as_ref()) {
+            reservation.cancel();
+            self.buf.free_fresh_page(new_pid)?;
+            return Ok(());
+        }
+
+        // Another writer may have compacted and freed enough space.
+        if left.has_space(left.leaf_insert_size(physical_key, row)) {
+            reservation.cancel();
+            drop(right_page);
+            self.buf.free_fresh_page(new_pid)?;
+
+            return match self.try_insert_fast(tx, physical_key, logical_len, row)? {
+                InsertAttempt::Inserted => Ok(()),
+                _ => Err(Error::RetryRequired),
+            };
+        }
+
+        let old_high = left.high_key_owned();
+        let old_right = left.right_sibling_opt();
+
+        let split = left.split_leaf_into(
+            &mut right,
+            new_pid,
+            physical_key,
+            logical_len,
+            row,
+            self.cmp.as_ref(),
+        )?;
+
+        // left.high_key = split.left_high
+        // left.right = new_pid
+        // right.high_key = old_high
+        // right.right = old_right
+
+        left.set_incomplete_split(new_pid);
+        right.clear_incomplete_split();
+
+        let lsn = reservation.lsn();
+
+        left.set_page_lsn(lsn);
+        right.set_page_lsn(lsn);
+
+        let left_image = left.copy_page_image();
+        let right_image = right.copy_page_image();
+
+        let rec = IndexWalRecord::Split {
+            index_id: self.index_id,
+            level: 0,
+            left_pid: leaf_pid,
+            right_pid: new_pid,
+            left_high: split.left_high.clone(),
+            right_high: old_high.clone(),
+            old_right,
+            left_page_image: left_image,
+            right_page_image: right_image,
+        };
+
+        reservation.encode_and_publish(&rec)?;
+
+        self.buf.mark_dirty(leaf_pid, lsn)?;
+        self.buf.mark_dirty(new_pid, lsn)?;
+
+        drop(right_page);
+        drop(left_page);
+
+        self.stats.splits.fetch_add(1, Ordering::Relaxed);
+
+        // Parent work is deliberately outside child latches.
+        self.complete_parent_split(
+            tx,
+            leaf_pid,
+            new_pid,
+            split.left_high,
+            old_high,
+            0,
+        )
+    }
+}
+```
+
+Structural WAL records should use page images at first. Splits are uncommon relative to inserts, and page images make crash recovery dramatically simpler.
+
+For normal inserts/deletes, use compact delta WAL.
+
+For splits/root changes/merges, use after-images of affected pages.
+
+---
+
+# Parent completion
+
+The parent completion operation is logically:
+
+```text
+Given:
+  left_pid
+  right_pid
+  left_high
+  right_high
+  child_level
+
+Find parent at level child_level + 1.
+
+In parent:
+  locate item with child_pid = left_pid
+  update its child_high to left_high
+  insert new item:
+      child_high = right_high
+      child_pid  = right_pid
+```
+
+If parent has space, this is a one-page update.
+
+If parent is full, split the parent using the same B-link split algorithm.
+
+If parent is missing or already updated, verify and return.
+
+```rust
+impl BtreeIndex {
+    fn complete_parent_split(
+        &self,
+        tx: &mut Tx,
+        left_pid: PageId,
+        right_pid: PageId,
+        left_high: Vec<u8>,
+        right_high: FenceKeyOwned,
+        child_level: u16,
+    ) -> Result<()> {
+        // Root case.
+        if self.is_current_root(left_pid, child_level)? {
+            return self.complete_root_split(
+                tx,
+                left_pid,
+                right_pid,
+                left_high,
+                right_high,
+                child_level,
+            );
+        }
+
+        loop {
+            let parent_pid = self.find_parent_for_child(
+                left_pid,
+                child_level,
+                &left_high,
+            )?;
+
+            let mut reservation = self.wal.reserve(
+                WalClass::IndexParentInsert,
+                INDEX_PARENT_INSERT_MAX_BYTES,
+            )?;
+
+            let parent_frame = self.buf.pin(parent_pid)?;
+            let mut parent_page = parent_frame.write();
+            let mut parent = IndexPageMut::new(parent_page.bytes)?;
+
+            if parent.is_redirect_right() {
+                reservation.cancel();
+                continue;
+            }
+
+            if !parent.belongs_to_page(&left_high, self.cmp.as_ref()) {
+                reservation.cancel();
+                continue;
+            }
+
+            if parent.has_child(right_pid) {
+                reservation.cancel();
+                drop(parent_page);
+                self.clear_incomplete_split_hint(left_pid, right_pid)?;
+                return Ok(());
+            }
+
+            let Some(left_slot) = parent.find_child_slot_by_pid(left_pid) else {
+                reservation.cancel();
+                drop(parent_page);
+
+                // Could be completed by another thread, or parent split moved us.
+                if self.parent_link_exists(left_pid, right_pid, child_level)? {
+                    self.clear_incomplete_split_hint(left_pid, right_pid)?;
+                    return Ok(());
+                }
+
+                continue;
+            };
+
+            let needed = parent.internal_insert_size(&right_high, right_pid);
+
+            if !parent.has_space(needed) {
+                reservation.cancel();
+                drop(parent_page);
+
+                self.split_internal_and_insert_parent_entry(
+                    tx,
+                    parent_pid,
+                    left_pid,
+                    right_pid,
+                    left_high.clone(),
+                    right_high.clone(),
+                    child_level + 1,
+                )?;
+
+                self.clear_incomplete_split_hint(left_pid, right_pid)?;
+                return Ok(());
+            }
+
+            let lsn = reservation.lsn();
+
+            parent.update_child_high(left_slot, &left_high)?;
+            parent.insert_internal_item(
+                &right_high,
+                right_pid,
+                child_level,
+                self.cmp.as_ref(),
+            )?;
+
+            parent.set_page_lsn(lsn);
+
+            let rec = IndexWalRecord::ParentInsert {
+                index_id: self.index_id,
+                parent_pid,
+                left_pid,
+                right_pid,
+                left_high: left_high.clone(),
+                right_high: right_high.clone(),
+                parent_page_image: parent.copy_page_image(),
+            };
+
+            reservation.encode_and_publish(&rec)?;
+            self.buf.mark_dirty(parent_pid, lsn)?;
+
+            drop(parent_page);
+
+            self.clear_incomplete_split_hint(left_pid, right_pid)?;
+
+            return Ok(());
+        }
+    }
+}
+```
+
+Parent completion can be done by:
+
+```text
+the splitting thread
+a later writer that notices INCOMPLETE_SPLIT
+a background maintenance worker
+recovery repair
+```
+
+Make it idempotent.
+
+---
+
+# Root split
+
+Root split is rare. Use a small meta latch.
+
+Readers can load the old root concurrently; that is safe because old root’s B-link side links still route correctly.
+
+```rust
+impl BtreeIndex {
+    fn complete_root_split(
+        &self,
+        tx: &mut Tx,
+        left_pid: PageId,
+        right_pid: PageId,
+        left_high: Vec<u8>,
+        right_high: FenceKeyOwned,
+        child_level: u16,
+    ) -> Result<()> {
+        let _meta = self.buf.index_meta_latch(self.index_id).lock();
+
+        if !self.is_current_root(left_pid, child_level)? {
+            drop(_meta);
+            return self.complete_parent_split(
+                tx,
+                left_pid,
+                right_pid,
+                left_high,
+                right_high,
+                child_level,
+            );
+        }
+
+        let new_root_pid = self.buf.alloc_index_page(self.index_id, child_level + 1)?;
+
+        let mut reservation = self.wal.reserve(
+            WalClass::IndexRootSplit,
+            INDEX_ROOT_SPLIT_MAX_BYTES,
+        )?;
+
+        let root_frame = self.buf.pin(new_root_pid)?;
+        let mut root_page = root_frame.write();
+        let mut root = IndexPageMut::new(root_page.bytes)?;
+
+        root.init_internal_root(
+            self.index_id,
+            new_root_pid,
+            child_level + 1,
+        )?;
+
+        root.insert_internal_item(
+            &FenceKeyOwned::Key(left_high.clone()),
+            left_pid,
+            child_level,
+            self.cmp.as_ref(),
+        )?;
+
+        root.insert_internal_item(
+            &right_high,
+            right_pid,
+            child_level,
+            self.cmp.as_ref(),
+        )?;
+
+        root.set_rightmost();
+        root.set_high_key_infinity();
+
+        let lsn = reservation.lsn();
+        root.set_page_lsn(lsn);
+
+        let rec = IndexWalRecord::RootSplit {
+            index_id: self.index_id,
+            old_root_pid: left_pid,
+            new_root_pid,
+            new_root_level: child_level + 1,
+            left_pid,
+            right_pid,
+            left_high,
+            right_high,
+            root_page_image: root.copy_page_image(),
+        };
+
+        reservation.encode_and_publish(&rec)?;
+        self.buf.mark_dirty(new_root_pid, lsn)?;
+
+        self.install_root(new_root_pid, child_level + 1, lsn)?;
+
+        drop(root_page);
+
+        self.clear_incomplete_split_hint(left_pid, right_pid)?;
+
+        Ok(())
+    }
+}
+```
+
+`install_root` updates the persistent index metadata page through WAL as well.
+
+Atomic in-memory install:
+
+```rust
+self.root_pid.store(new_root_pid.0, Ordering::Release);
+self.root_level.store((child_level + 1) as u64, Ordering::Release);
+self.root_epoch.fetch_add(1, Ordering::AcqRel);
+```
+
+---
+
+# Unique indexes
+
+Unique index enforcement is not just “check if key exists.”
+
+With MVCC, stale entries, active transactions, and deletes, you need current-state conflict detection.
+
+## Unique insert protocol
+
+```text
+1. Build logical unique key.
+2. Acquire logical unique-key lock.
+3. Probe index for matching logical key.
+4. For every candidate row_ref:
+      heap recheck using current-for-write visibility
+      if live committed row exists:
+          unique violation
+      if row created/deleted by active transaction:
+          wait or fail according to tx policy
+      if dead/aborted:
+          ignore
+5. Insert index entry.
+6. Hold unique key lock until commit/rollback.
+```
+
+No page latch is held while waiting.
+
+```rust
+impl BtreeIndex {
+    fn lock_unique_key<'a>(
+        &'a self,
+        tx: &mut Tx,
+        logical_key: &[u8],
+    ) -> Result<UniqueKeyGuard<'a>> {
+        let guard = self.key_locks.lock(self.index_id, logical_key, tx.id())?;
+        tx.register_unique_key_guard(guard.clone_token());
+        Ok(guard)
+    }
+
+    fn check_unique_current(
+        &self,
+        tx: &mut Tx,
+        logical_key: &[u8],
+        inserting_row: RowRef,
+    ) -> Result<()> {
+        loop {
+            let mut wait_for = None;
+
+            self.scan_raw_logical_prefix(logical_key, |entry| {
+                if entry.row == inserting_row {
+                    return Ok(());
+                }
+
+                match self.heap.unique_check_visibility(tx.id(), entry.row)? {
+                    UniqueVisibility::NoSuchRow => Ok(()),
+                    UniqueVisibility::Aborted => Ok(()),
+                    UniqueVisibility::DeletedCommitted => Ok(()),
+
+                    UniqueVisibility::LiveCommitted => {
+                        Err(Error::UniqueViolation)
+                    }
+
+                    UniqueVisibility::CreatedByActive(other_tx)
+                    | UniqueVisibility::DeletePending(other_tx) => {
+                        wait_for = Some(other_tx);
+                        Ok(())
+                    }
+                }
+            })?;
+
+            if let Some(other) = wait_for {
+                self.stats.unique_waits.fetch_add(1, Ordering::Relaxed);
+
+                // Absolutely no page latch is held here.
+                tx.wait_for_transaction(other)?;
+                continue;
+            }
+
+            return Ok(());
+        }
+    }
+}
+```
+
+## Unique lock table
+
+Use sharded mutexes. Do not reach for a big global map.
+
+```rust
+use parking_lot::{Condvar, Mutex};
+use std::collections::{HashMap, VecDeque};
+
+const UNIQUE_LOCK_SHARDS: usize = 4096;
+
+pub struct KeyLockTable {
+    shards: Vec<CachePadded<Mutex<KeyLockShard>>>,
+}
+
+pub struct KeyLockShard {
+    locks: HashMap<KeyLockId, LockState>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+pub struct KeyLockId {
+    index_id: IndexId,
+    hash: u64,
+}
+
+pub struct LockState {
+    owner: Option<TxId>,
+    waiters: VecDeque<TxId>,
+    cvar: Arc<Condvar>,
+}
+```
+
+Use the hash for sharding and the actual B-tree/heap probe for correctness. Hash collision only causes extra waiting, not wrong uniqueness.
+
+For multi-row insert/update, acquire unique key locks in canonical order to avoid deadlocks:
+
+```text
+sort by (index_id, key_bytes)
+deduplicate
+lock in order
+```
+
+If that is too restrictive, add wound-wait or a transaction deadlock detector later.
+
+---
+
+# Delete marker
+
+Do not physically remove index entries in the foreground unless the page has lots of garbage and compaction is cheap.
+
+For DELETE or UPDATE changing indexed columns:
+
+```text
+DELETE:
+  heap marks version deleted
+  index delete_mark optional
+
+UPDATE indexed key:
+  insert new key -> new row version
+  delete_mark old key -> old row ref
+```
+
+Because heap recheck is authoritative, delete mark is an optimization, not the correctness foundation.
+
+```rust
+impl BtreeIndex {
+    pub fn delete_mark(
+        &self,
+        tx: &mut Tx,
+        logical_key: &[u8],
+        row: RowRef,
+    ) -> Result<()> {
+        tx.scratch.key.clear();
+        tx.scratch.key.extend_logical(logical_key);
+        tx.scratch.key.append_row_ref_suffix(row);
+
+        let physical_key = tx.scratch.key.as_physical().to_vec();
+
+        loop {
+            let leaf_pid = self.find_leaf(&physical_key)?;
+
+            let mut reservation = self.wal.reserve(
+                WalClass::IndexDeleteMark,
+                INDEX_DELETE_MARK_MAX_BYTES,
+            )?;
+
+            let frame = self.buf.pin(leaf_pid)?;
+            let mut page = frame.write();
+            let mut view = IndexPageMut::new(page.bytes)?;
+
+            if !view.belongs_to_page(&physical_key, self.cmp.as_ref()) {
+                reservation.cancel();
+                continue;
+            }
+
+            let Some(slot) = view.find_leaf_item(&physical_key, row, self.cmp.as_ref())? else {
+                reservation.cancel();
+
+                // Missing index entry is tolerable if heap is authoritative,
+                // but in debug/strict mode record this.
+                return Ok(());
+            };
+
+            let lsn = reservation.lsn();
+
+            view.mark_slot_delete(slot)?;
+            view.set_page_lsn(lsn);
+
+            let rec = IndexWalRecord::DeleteMark {
+                index_id: self.index_id,
+                page_id: leaf_pid,
+                physical_key: &physical_key,
+                row,
+            };
+
+            reservation.encode_and_publish(&rec)?;
+            self.buf.mark_dirty(leaf_pid, lsn)?;
+
+            drop(page);
+
+            tx.record_index_mutation(self.index_id, lsn);
+
+            return Ok(());
+        }
+    }
+}
+```
+
+---
+
+# Background compaction and merge
+
+## Page-local compaction
+
+Page compaction is simple and safe:
+
+```text
+1. write-latch page
+2. remove entries whose heap versions are dead before oldest_required_csn
+3. rewrite page densely into scratch page
+4. WAL-log compacted page image
+5. install compacted page
+6. unlatch
+```
+
+```rust
+pub struct IndexVacuumCtx {
+    pub oldest_required_csn: Csn,
+    pub max_pages_per_batch: usize,
+    pub max_bytes_per_batch: usize,
+}
+```
+
+## Merge-forward, not merge-backward
+
+Use forward redirects to avoid backward scans.
+
+Choose adjacent leaves:
+
+```text
+L.right = R
+live_bytes(L) + live_bytes(R) <= merge_fill_target
+```
+
+Then:
+
+```text
+move live entries from L into R
+mark L as REDIRECT_RIGHT
+L.right = R
+R keeps high_key/right_sibling
+```
+
+Why move left into right instead of right into left?
+
+Because B-link trees naturally move right. If a stale parent sends a search to `L`, `L` redirects right. Forward range scans also move right.
+
+```text
+Before:
+  parent may point to L and R
+  L -> R -> S
+
+After:
+  L is redirect-right to R
+  R contains L+R entries
+  L -> R -> S
+```
+
+Later cleanup can remove parent downlink to `L` and unlink `L` from the sibling chain. Do not reuse `L` until:
+
+```text
+parent deletion is durable
+left sibling bypass is durable
+no active snapshot/scan can still hold old navigation state
+checkpoint/recovery horizon allows reuse
+```
+
+Code shape:
+
+```rust
+impl BtreeIndex {
+    fn try_merge_forward(
+        &self,
+        left_pid: PageId,
+        vacuum: &IndexVacuumCtx,
+    ) -> Result<MergeOutcome> {
+        let left_frame = self.buf.pin(left_pid)?;
+        let left_read = left_frame.read();
+        let left_view = IndexPageView::new(left_read.bytes)?;
+
+        if !left_view.is_leaf() || left_view.is_redirect_right() {
+            return Ok(MergeOutcome::Skipped);
+        }
+
+        let Some(right_pid) = left_view.right_sibling_opt() else {
+            return Ok(MergeOutcome::Skipped);
+        };
+
+        drop(left_read);
+
+        // Allocate WAL reservation before write latches.
+        let mut reservation = self.wal.reserve(
+            WalClass::IndexMergeForward,
+            INDEX_MERGE_MAX_BYTES,
+        )?;
+
+        let right_frame = self.buf.pin(right_pid)?;
+
+        // Avoid deadlocks: use try_write or strict left->right protocol.
+        let Some(mut left_page) = left_frame.try_write() else {
+            reservation.cancel();
+            return Ok(MergeOutcome::Busy);
+        };
+
+        let Some(mut right_page) = right_frame.try_write() else {
+            reservation.cancel();
+            return Ok(MergeOutcome::Busy);
+        };
+
+        let mut left = IndexPageMut::new(left_page.bytes)?;
+        let mut right = IndexPageMut::new(right_page.bytes)?;
+
+        if left.right_sibling() != right_pid {
+            reservation.cancel();
+            return Ok(MergeOutcome::Retry);
+        }
+
+        if !left.can_merge_forward_into(&right, vacuum.oldest_required_csn)? {
+            reservation.cancel();
+            return Ok(MergeOutcome::Skipped);
+        }
+
+        let lsn = reservation.lsn();
+
+        right.absorb_left_live_items(&left, self.cmp.as_ref())?;
+        left.clear_items();
+        left.set_redirect_right(right_pid);
+
+        left.set_page_lsn(lsn);
+        right.set_page_lsn(lsn);
+
+        let rec = IndexWalRecord::MergeForward {
+            index_id: self.index_id,
+            left_pid,
+            right_pid,
+            left_page_image: left.copy_page_image(),
+            right_page_image: right.copy_page_image(),
+        };
+
+        reservation.encode_and_publish(&rec)?;
+
+        self.buf.mark_dirty(left_pid, lsn)?;
+        self.buf.mark_dirty(right_pid, lsn)?;
+
+        Ok(MergeOutcome::Merged)
+    }
+}
+```
+
+This satisfies the requirement for merge/consolidation without polluting the foreground path.
+
+---
+
+# WAL records
+
+Use logical/physiological deltas for small updates and page images for structural changes.
+
+```rust
+pub enum IndexWalRecord<'a> {
+    Insert {
+        index_id: IndexId,
+        page_id: PageId,
+        physical_key: &'a [u8],
+        logical_key_len: u16,
+        row: RowRef,
+    },
+
+    DeleteMark {
+        index_id: IndexId,
+        page_id: PageId,
+        physical_key: &'a [u8],
+        row: RowRef,
+    },
+
+    CompactPage {
+        index_id: IndexId,
+        page_id: PageId,
+        page_image: Box<[u8; PAGE_SIZE]>,
+    },
+
+    Split {
+        index_id: IndexId,
+        level: u16,
+        left_pid: PageId,
+        right_pid: PageId,
+        left_high: Vec<u8>,
+        right_high: FenceKeyOwned,
+        old_right: Option<PageId>,
+        left_page_image: Box<[u8; PAGE_SIZE]>,
+        right_page_image: Box<[u8; PAGE_SIZE]>,
+    },
+
+    ParentInsert {
+        index_id: IndexId,
+        parent_pid: PageId,
+        left_pid: PageId,
+        right_pid: PageId,
+        left_high: Vec<u8>,
+        right_high: FenceKeyOwned,
+        parent_page_image: Box<[u8; PAGE_SIZE]>,
+    },
+
+    RootSplit {
+        index_id: IndexId,
+        old_root_pid: PageId,
+        new_root_pid: PageId,
+        new_root_level: u16,
+        left_pid: PageId,
+        right_pid: PageId,
+        left_high: Vec<u8>,
+        right_high: FenceKeyOwned,
+        root_page_image: Box<[u8; PAGE_SIZE]>,
+    },
+
+    MergeForward {
+        index_id: IndexId,
+        left_pid: PageId,
+        right_pid: PageId,
+        left_page_image: Box<[u8; PAGE_SIZE]>,
+        right_page_image: Box<[u8; PAGE_SIZE]>,
+    },
+}
+```
+
+## WAL reservation API
+
+```rust
+pub trait Wal: Send + Sync {
+    fn reserve(&self, class: WalClass, max_bytes: usize) -> Result<WalReservation>;
+    fn durable_lsn(&self) -> Lsn;
+}
+
+pub struct WalReservation {
+    lsn: Lsn,
+    // internal pointer into reserved WAL buffer
+}
+
+impl WalReservation {
+    pub fn lsn(&self) -> Lsn {
+        self.lsn
+    }
+
+    pub fn encode_and_publish(&mut self, rec: &IndexWalRecord<'_>) -> Result<()> {
+        // encode into already-reserved WAL memory
+        // publish must not fsync
+        Ok(())
+    }
+
+    pub fn cancel(self) {
+        // publish padding/abort reservation, or return unused reservation
+    }
+}
+```
+
+Important:
+
+```text
+reserve may block
+encode_and_publish must not block on fsync
+commit wait happens after page latches are gone
+```
+
+---
+
+# Recovery
+
+Recovery must be idempotent.
+
+Every index page has `page_lsn`.
+
+Redo rule:
+
+```text
+if page.page_lsn >= record.lsn:
+    skip
+else:
+    apply record
+    page.page_lsn = record.lsn
+```
+
+For structural records with page images:
+
+```rust
+pub fn redo_index_record(
+    rec: DecodedIndexWalRecord,
+    buf: &dyn RecoveryBuffer,
+) -> Result<()> {
+    match rec {
+        DecodedIndexWalRecord::Insert(r) => {
+            let mut page = buf.get_or_create(r.page_id)?;
+            if page.page_lsn() >= r.lsn {
+                return Ok(());
+            }
+
+            page.insert_leaf_item_idempotent(
+                &r.physical_key,
+                r.logical_key_len,
+                r.row,
+            )?;
+
+            page.set_page_lsn(r.lsn);
+            Ok(())
+        }
+
+        DecodedIndexWalRecord::DeleteMark(r) => {
+            let mut page = buf.get_or_create(r.page_id)?;
+            if page.page_lsn() >= r.lsn {
+                return Ok(());
+            }
+
+            page.mark_delete_if_present(&r.physical_key, r.row)?;
+            page.set_page_lsn(r.lsn);
+            Ok(())
+        }
+
+        DecodedIndexWalRecord::Split(r) => {
+            redo_page_image(buf, r.left_pid, r.lsn, &r.left_page_image)?;
+            redo_page_image(buf, r.right_pid, r.lsn, &r.right_page_image)?;
+            Ok(())
+        }
+
+        DecodedIndexWalRecord::ParentInsert(r) => {
+            redo_page_image(buf, r.parent_pid, r.lsn, &r.parent_page_image)?;
+            Ok(())
+        }
+
+        DecodedIndexWalRecord::RootSplit(r) => {
+            redo_page_image(buf, r.new_root_pid, r.lsn, &r.root_page_image)?;
+            redo_index_root_meta(buf, r.index_id, r.new_root_pid, r.new_root_level, r.lsn)?;
+            Ok(())
+        }
+
+        DecodedIndexWalRecord::CompactPage(r) => {
+            redo_page_image(buf, r.page_id, r.lsn, &r.page_image)
+        }
+
+        DecodedIndexWalRecord::MergeForward(r) => {
+            redo_page_image(buf, r.left_pid, r.lsn, &r.left_page_image)?;
+            redo_page_image(buf, r.right_pid, r.lsn, &r.right_page_image)?;
+            Ok(())
+        }
+    }
+}
+
+fn redo_page_image(
+    buf: &dyn RecoveryBuffer,
+    pid: PageId,
+    lsn: Lsn,
+    image: &[u8; PAGE_SIZE],
+) -> Result<()> {
+    let mut page = buf.get_or_create(pid)?;
+
+    if page.page_lsn() >= lsn {
+        return Ok(());
+    }
+
+    page.copy_from_slice(image);
+    page.set_page_lsn(lsn);
+
+    Ok(())
+}
+```
+
+## Incomplete split repair
+
+After redo:
+
+```text
+scan index pages
+find FLAG_INCOMPLETE_SPLIT
+for each:
+  if parent contains right_pid:
+      clear hint
+  else:
+      complete parent insertion
+```
+
+This can happen:
+
+```text
+during recovery
+during background maintenance
+when a foreground search sees incomplete split
+```
+
+Recovery repair uses normal WAL records, so it is itself crash-safe.
+
+---
+
+# MVCC integration
+
+Index scan visibility should be:
+
+```rust
+pub trait HeapAccess: Send + Sync {
+    fn visible_row(&self, snapshot: Snapshot, row: RowRef) -> Result<Option<VisibleRow>>;
+
+    fn unique_check_visibility(
+        &self,
+        self_tx: TxId,
+        row: RowRef,
+    ) -> Result<UniqueVisibility>;
+}
+```
+
+```rust
+pub enum UniqueVisibility {
+    NoSuchRow,
+    Aborted,
+    DeletedCommitted,
+    LiveCommitted,
+    CreatedByActive(TxId),
+    DeletePending(TxId),
+}
+```
+
+For normal SELECT:
+
+```text
+snapshot visibility
+```
+
+For unique enforcement:
+
+```text
+current-for-write visibility
+```
+
+That distinction matters. A transaction running under snapshot isolation should still reject inserting a unique key that was committed after its read snapshot if the database-current state contains that key.
+
+---
+
+# Threading model
+
+Use caller threads for foreground work.
+
+Do not create per-index worker threads for normal insert/lookup.
+
+Background workers:
+
+```text
+index split repair worker
+index vacuum/compact worker
+index merge/unlink worker
+```
+
+Each background worker must be bounded:
+
+```rust
+pub struct IndexMaintenanceBudget {
+    pub max_pages: usize,
+    pub max_wal_bytes: usize,
+    pub max_millis: u64,
+}
+```
+
+Foreground operations should help a little when necessary:
+
+```text
+if search sees incomplete split:
+  maybe enqueue repair
+  maybe help if cheap
+  never block long
+```
+
+---
+
+# Latch ordering
+
+Use this rule set:
+
+```text
+1. Descent is top-down but parent is released before child is latched.
+
+2. Right movement is allowed:
+     latch current
+     read right pid
+     unlatch current
+     latch right
+
+3. Split:
+     latch child only
+     create right sibling
+     release child/right
+     then complete parent
+
+4. Parent completion:
+     latch parent only
+     never hold child latch while waiting for parent
+
+5. Merge-forward:
+     try-latch left
+     try-latch right
+     if either fails, abort and retry later
+
+6. Never acquire row/key locks while holding page latch.
+
+7. Never fsync while holding page latch.
+```
+
+This avoids deadlocks and keeps critical sections small.
+
+---
+
+# Page mutation helpers
+
+The page code should avoid heap allocation and parse carefully.
+
+```rust
+pub struct IndexPageView<'a> {
+    bytes: &'a [u8; PAGE_SIZE],
+}
+
+pub struct IndexPageMut<'a> {
+    bytes: &'a mut [u8; PAGE_SIZE],
+}
+
+impl<'a> IndexPageView<'a> {
+    pub fn new(bytes: &'a [u8; PAGE_SIZE]) -> Result<Self> {
+        let page = Self { bytes };
+        page.validate_basic()?;
+        Ok(page)
+    }
+
+    pub fn header(&self) -> IndexPageHeader {
+        read_header(self.bytes)
+    }
+
+    pub fn is_leaf(&self) -> bool {
+        self.header().level == 0
+    }
+
+    pub fn is_rightmost(&self) -> bool {
+        self.header().flags & FLAG_RIGHTMOST != 0
+    }
+
+    pub fn is_redirect_right(&self) -> bool {
+        self.header().flags & FLAG_REDIRECT_RIGHT != 0
+    }
+
+    pub fn right_sibling(&self) -> PageId {
+        PageId(self.header().right_sibling)
+    }
+
+    pub fn right_sibling_opt(&self) -> Option<PageId> {
+        let h = self.header();
+        if h.right_sibling == 0 {
+            None
+        } else {
+            Some(PageId(h.right_sibling))
+        }
+    }
+
+    pub fn key_ge_high(&self, key: &[u8], cmp: &dyn KeyComparator) -> bool {
+        if self.is_rightmost() {
+            return false;
+        }
+
+        let high = self.high_key();
+        cmp.cmp(key, high) != std::cmp::Ordering::Less
+    }
+
+    pub fn find_child(&self, key: &[u8], cmp: &dyn KeyComparator) -> Result<PageId> {
+        debug_assert!(!self.is_leaf());
+
+        let mut lo = 0usize;
+        let mut hi = self.item_count();
+
+        while lo < hi {
+            let mid = (lo + hi) / 2;
+            let child_high = self.item_key(mid)?;
+
+            if cmp.cmp(key, child_high) == std::cmp::Ordering::Less {
+                hi = mid;
+            } else {
+                lo = mid + 1;
+            }
+        }
+
+        if lo == self.item_count() {
+            return Err(Error::NeedRightMove);
+        }
+
+        self.internal_child_pid(lo)
+    }
+}
+```
+
+Mutable insert:
+
+```rust
+impl<'a> IndexPageMut<'a> {
+    pub fn insert_leaf_item(
+        &mut self,
+        physical_key: &[u8],
+        logical_key_len: u16,
+        row: RowRef,
+        cmp: &dyn KeyComparator,
+    ) -> Result<()> {
+        let slot_idx = self.lower_bound(physical_key, cmp)?;
+
+        if self.leaf_item_exists_at(slot_idx, physical_key, row, cmp)? {
+            return Ok(());
+        }
+
+        let encoded_len = leaf_item_encoded_len(physical_key.len());
+        self.ensure_space(encoded_len + std::mem::size_of::<IndexSlot>())?;
+
+        let item_off = self.alloc_item_space(encoded_len)?;
+        encode_leaf_item(&mut self.bytes[item_off..], physical_key, row)?;
+
+        self.insert_slot(
+            slot_idx,
+            IndexSlot {
+                off: item_off as u16,
+                len: encoded_len as u16,
+                flags: 0,
+                logical_key_len,
+            },
+        )?;
+
+        Ok(())
+    }
+
+    pub fn lower_bound(
+        &self,
+        physical_key: &[u8],
+        cmp: &dyn KeyComparator,
+    ) -> Result<usize> {
+        let mut lo = 0usize;
+        let mut hi = self.item_count();
+
+        while lo < hi {
+            let mid = (lo + hi) / 2;
+            let mid_key = self.item_key(mid)?;
+
+            if cmp.cmp(mid_key, physical_key) == std::cmp::Ordering::Less {
+                lo = mid + 1;
+            } else {
+                hi = mid;
+            }
+        }
+
+        Ok(lo)
+    }
+}
+```
+
+---
+
+# Split policy
+
+Do not split exactly by count. Split by bytes, with a fill factor.
+
+```rust
+pub struct SplitPolicy {
+    pub target_left_fraction: f32,
+    pub min_left_bytes: usize,
+    pub min_right_bytes: usize,
+}
+
+impl Default for SplitPolicy {
+    fn default() -> Self {
+        Self {
+            target_left_fraction: 0.50,
+            min_left_bytes: PAGE_SIZE / 4,
+            min_right_bytes: PAGE_SIZE / 4,
+        }
+    }
+}
+```
+
+For append-heavy workloads, rightmost leaf splits should be biased:
+
+```text
+normal random insert:
+  50/50 split
+
+rightmost append insert:
+  90/10 split, leaving room on right page
+```
+
+Actually for monotonically increasing keys:
+
+```text
+left gets old entries nearly full
+right gets new entry and lots of free space
+```
+
+That avoids splitting the new rightmost page immediately.
+
+```rust
+pub enum SplitKind {
+    Random,
+    RightmostAppend,
+}
+
+fn choose_split_point(
+    items: &[ItemRef],
+    inserting_key: &[u8],
+    page_is_rightmost: bool,
+    cmp: &dyn KeyComparator,
+) -> usize {
+    if page_is_rightmost && inserting_key_is_after_all(items, inserting_key, cmp) {
+        // Keep left dense; make right roomy.
+        return items.len().saturating_sub(1);
+    }
+
+    // Otherwise split by byte balance.
+    choose_byte_balanced_split(items)
+}
+```
+
+This is a major performance detail for auto-increment primary keys.
+
+---
+
+# Internal-page design detail
+
+Internal entries use `child_high`.
+
+Example:
+
+```text
+Root:
+  key 100 -> child A
+  key 200 -> child B
+  +inf    -> child C
+```
+
+Search key 150:
+
+```text
+first child_high > 150 is 200 -> child B
+```
+
+When child B splits:
+
+```text
+B.high becomes 160
+D.high becomes 200
+B.right = D
+```
+
+Parent update:
+
+```text
+100 -> A
+160 -> B
+200 -> D
++inf -> C
+```
+
+Before parent update, parent still has:
+
+```text
+200 -> B
+```
+
+Search key 180 goes to B, sees `180 >= B.high`, follows `B.right` to D.
+
+This is the cleanest B-link form for database pages.
+
+---
+
+# Range scan correctness under split and merge
+
+Range scans must track the last returned physical key.
+
+Why?
+
+Split case:
+
+```text
+scan reads L before split
+writer splits L into L + N
+scan follows old L.right, skipping N
+```
+
+This is okay because the scan copied L entries before they moved.
+
+Merge case:
+
+```text
+scan reads L
+background moves L entries into R
+scan reaches R
+duplicates possible
+```
+
+Therefore:
+
+```text
+every scan maintains last_physical_key
+on every page:
+  start at lower_bound(max(request_start, last_physical_key_successor))
+skip key <= last_physical_key
+```
+
+MVCC heap recheck also protects correctness, but physical-key resume protects duplicate output.
+
+---
+
+# Memory strategy
+
+## Page size
+
+Use configurable page size, but start with:
+
+```text
+16 KiB index pages
+```
+
+Why:
+
+```text
+higher fanout
+shallower tree
+better range scan bandwidth
+fewer parent splits
+```
+
+Keep 4 KiB support if your storage kernel already assumes it, but design index page code with `const PAGE_SIZE`.
+
+## Avoid allocations in hot path
+
+Per session:
+
+```rust
+pub struct SessionIndexScratch {
+    pub key: KeyBuf,
+    pub split_page: Box<[u8; PAGE_SIZE]>,
+    pub scan_batch: Vec<RawIndexEntry>,
+    pub parent_stack: Vec<PageId>,
+}
+```
+
+Avoid:
+
+```text
+allocating Vec for every key compare
+allocating during page latch
+allocating during WAL encode under latch
+```
+
+## Compress only where it pays
+
+Initial production design:
+
+```text
+leaf keys: full physical key
+internal keys: full child high key
+```
+
+Then add:
+
+```text
+internal separator truncation
+leaf prefix compression
+posting-list compression for duplicate logical keys
+```
+
+Do not add compression before crash tests pass. Compression bugs in indexes are brutal.
+
+## Duplicate-heavy indexes
+
+For non-unique indexes with many duplicate logical keys, eventually use posting lists:
+
+```text
+logical_key -> row_ref list
+```
+
+But Phase 3 should first use:
+
+```text
+logical_key || row_ref
+```
+
+It is simpler, correct, and range-scan-friendly.
+
+Add posting lists later when benchmarks show duplicate-key bloat.
+
+---
+
+# WAL + dirty page ordering
+
+For every page mutation:
+
+```text
+1. reserve WAL outside latch
+2. latch page
+3. mutate page
+4. set page_lsn = reserved_lsn
+5. encode/copy WAL record into reserved slot
+6. mark dirty(page_id, page_lsn)
+7. unlatch
+8. commit may wait for durable_lsn >= commit_lsn
+```
+
+The buffer pool must enforce:
+
+```text
+dirty page with page_lsn L cannot flush unless WAL durable_lsn >= L
+```
+
+Phase 1 already handles this globally; Phase 3 must use it correctly.
+
+---
+
+# API-level interaction with transactions
+
+A transaction should collect index mutation LSNs:
+
+```rust
+impl Tx {
+    pub fn record_index_mutation(&mut self, index_id: IndexId, lsn: Lsn) {
+        self.max_index_lsn = self.max_index_lsn.max(lsn);
+        self.touched_indexes.push(index_id);
+    }
+}
+```
+
+Commit:
+
+```text
+commit_lsn >= max(heap_lsn, index_lsn, catalog_lsn)
+group commit waits for commit_lsn durable
+```
+
+Rollback:
+
+```text
+heap marks tx aborted
+index entries can remain as stale hints
+optional rollback cleanup can delete_mark entries
+vacuum eventually removes
+```
+
+This is fast. Do not synchronously walk every index on rollback unless needed.
+
+---
+
+# Testing plan
+
+Use three layers.
+
+## 1. Deterministic single-thread model tests
+
+Reference model:
+
+```rust
+BTreeMap<Vec<u8>, BTreeSet<RowRef>>
+```
+
+Random operation stream:
+
+```text
+insert
+delete_mark
+point_lookup
+range_scan
+split-triggering inserts
+page compaction
+merge-forward
+```
+
+After every operation:
+
+```text
+verify tree invariants
+compare scan results to model after heap visibility simulation
+```
+
+## 2. Crash/recovery tests
+
+Inject crash after each WAL boundary:
+
+```text
+after insert WAL publish before dirty page flush
+after split left image only impossible if record atomic; test torn WAL tail
+after split before parent insert
+after parent insert before clearing incomplete hint
+after root split before root meta install
+after merge-forward before parent cleanup
+after compact page
+```
+
+Recovery assertions:
+
+```text
+no missing committed rows
+stale entries tolerated
+all pages page_lsn sane
+incomplete splits either searchable or repaired
+verify() passes after repair
+```
+
+## 3. Concurrency schedule tests
+
+Use Shuttle or Loom-style testing for small in-memory fake buffer/WAL. Shuttle is a Rust concurrency testing library inspired by Loom; its docs describe randomized schedule testing as a scalable trade-off versus exhaustive testing. ([Docs.rs][5])
+
+Test scenarios:
+
+```text
+two writers insert into same leaf and split
+writer splits while reader scans
+writer splits child while another completes parent
+root split while readers hold old root id
+unique insert conflict
+unique insert while delete pending
+merge-forward while range scan runs
+compact while lookup runs
+```
+
+Example Shuttle-style test shape:
+
+```rust
+#[test]
+fn concurrent_split_and_lookup() {
+    shuttle::check_random(
+        || {
+            let db = Arc::new(TestIndex::new_small_pages());
+
+            let a = db.clone();
+            let t1 = shuttle::thread::spawn(move || {
+                for i in 0..100 {
+                    a.insert_key(format!("k{i:03}").as_bytes());
+                }
+            });
+
+            let b = db.clone();
+            let t2 = shuttle::thread::spawn(move || {
+                for i in 0..100 {
+                    let _ = b.lookup_key(format!("k{i:03}").as_bytes());
+                }
+            });
+
+            t1.join().unwrap();
+            t2.join().unwrap();
+
+            db.verify().unwrap();
+        },
+        10_000,
+    );
+}
+```
+
+---
+
+# Verifier
+
+Build `verify()` early. It will save the project.
+
+```rust
+pub struct VerifyReport {
+    pub pages_seen: usize,
+    pub leaf_pages: usize,
+    pub internal_pages: usize,
+    pub incomplete_splits: usize,
+    pub redirects: usize,
+    pub max_level: u16,
+    pub errors: Vec<VerifyError>,
+}
+```
+
+Checks:
+
+```text
+page header valid
+page checksum valid
+item offsets valid
+items sorted
+no item >= page.high_key
+right-link chain has increasing high keys
+no right-link cycles
+internal child levels are exactly parent.level - 1
+root level matches metadata
+all reachable pages have correct index_id
+redirect pages have no live entries
+incomplete split right page exists
+parent entries are either correct or child has incomplete split
+leaf scan order globally sorted
+```
+
+Pseudo:
+
+```rust
+impl BtreeIndex {
+    pub fn verify(&self, mode: VerifyMode) -> Result<VerifyReport> {
+        let root = PageId(self.root_pid.load(Ordering::Acquire));
+        let mut report = VerifyReport::default();
+
+        self.verify_subtree(root, None, FenceKeyOwned::PosInf, &mut report)?;
+
+        if mode == VerifyMode::Full {
+            self.verify_leaf_chain(&mut report)?;
+            self.verify_incomplete_splits(&mut report)?;
+        }
+
+        Ok(report)
+    }
+}
+```
+
+---
+
+# Performance targets for Phase 3
+
+## Fast path insert, no split
+
+Expected operations:
+
+```text
+encode key in session scratch
+read-latch root/internal pages briefly
+write-latch one leaf
+copy one WAL delta into reserved buffer
+mark one dirty page
+release latch
+```
+
+No:
+
+```text
+global writer lock
+root latch
+parent latch
+heap read
+fsync
+allocation
+user callback
+```
+
+## Point lookup
+
+Expected operations:
+
+```text
+read-latch one page per tree level
+read-latch leaf
+copy row refs
+unlatch
+heap recheck candidates
+```
+
+For unique primary key:
+
+```text
+usually one candidate row_ref
+```
+
+## Range scan
+
+Expected operations:
+
+```text
+walk leaf right links
+copy batches
+heap recheck outside latches
+prefetch next page if buffer supports it
+```
+
+## Split
+
+Expected operations:
+
+```text
+allocate one page
+write-latch one leaf and new page
+write page-image WAL record
+release
+complete parent outside child latch
+```
+
+Split is more expensive, but rare.
+
+## Merge/cleanup
+
+Background only.
+
+---
+
+# Minimal `Cargo.toml`
+
+```toml
+[dependencies]
+parking_lot = "0.12"
+crossbeam-utils = "0.8"
+smallvec = "1"
+
+[dev-dependencies]
+shuttle = "0.8"
+proptest = "1"
+```
+
+Keep dependencies pure Rust.
+
+Do not use C/C++ index code.
+
+---
+
+# Implementation order
+
+This is the order I would build Phase 3.
+
+## Step 1: page format and verifier
+
+Build:
+
+```text
+IndexPageHeader
+IndexSlot
+leaf item encode/decode
+internal item encode/decode
+lower_bound
+insert slot
+delete mark
+compact page
+verify page
+```
+
+No concurrency yet.
+
+## Step 2: single-thread B-link tree
+
+Build:
+
+```text
+create index
+find_leaf
+insert
+split leaf
+split internal
+root split
+point lookup
+range scan
+```
+
+Use fake WAL first, but include page_lsn.
+
+## Step 3: real WAL records
+
+Add:
+
+```text
+IndexInsert
+IndexDeleteMark
+IndexSplit page images
+IndexParentInsert page image
+IndexRootSplit page image
+IndexCompactPage
+IndexMergeForward
+```
+
+Then implement recovery replay.
+
+## Step 4: concurrent latches
+
+Add:
+
+```text
+page read/write latches
+short critical sections
+right-walk validation
+retry paths
+try-latch merge
+```
+
+## Step 5: MVCC heap recheck
+
+Add:
+
+```text
+VisibleRow scan output
+heap.visible_row()
+executor predicate recheck
+stale entry tolerance
+```
+
+## Step 6: unique indexes
+
+Add:
+
+```text
+KeyLockTable
+current-for-write unique check
+wait/retry active tx
+hold guard until tx finish
+```
+
+## Step 7: background cleanup
+
+Add:
+
+```text
+page-local compaction
+dead entry purge
+merge-forward
+parent cleanup
+redirect page unlink
+```
+
+## Step 8: torture tests and benchmark harness
+
+Add:
+
+```text
+model tests
+crash injection
+shuttle tests
+multi-thread random insert/read
+duplicate-key workload
+append-key workload
+unique conflict workload
+```
+
+---
+
+# The “brilliant simplicity” version
+
+The simplest design that is still fast and extensible is:
+
+```text
+1. B-link high keys and right links on every level.
+2. Physical key = logical key + row_ref.
+3. Index entries are hints; heap recheck is authoritative.
+4. Normal insert modifies only one leaf.
+5. Splits are child-first; parent completion is asynchronous/idempotent.
+6. Structural WAL uses page images.
+7. Deletes are logical/tombstone first.
+8. Physical cleanup is background.
+9. Unique constraints use logical key locks, not page locks.
+10. No page latch survives a wait, fsync, heap read, or callback.
+```
+
+That gives you the thing SQLite cannot give you in embedded mode: **many concurrent writers doing real work at the same time**, contending mostly on hot pages and WAL bandwidth rather than a single global writer gate.
+
+[1]: https://www.sqlite.org/wal.html?utm_source=chatgpt.com "Write-Ahead Logging"
+[2]: https://pages.cs.wisc.edu/~zuyu/summaries/cs764/bLinkTree "
+Efficient Locking for Concurrent Operations on B-Trees
+"
+[3]: https://docs.rs/parking_lot?utm_source=chatgpt.com "parking_lot - Rust"
+[4]: https://docs.rs/crossbeam/latest/crossbeam/utils/struct.CachePadded.html?utm_source=chatgpt.com "CachePadded in crossbeam::utils - Rust"
+[5]: https://docs.rs/shuttle/latest/shuttle/?utm_source=chatgpt.com "shuttle - Rust"
+

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ops_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+workspace_root="${REDLINE_SPLIT_ROOT:-$(cd "$ops_root/.." && pwd)}"
+if [[ -f "$ops_root/../../subrepos.toml" ]]; then
+  export REDLINE_REPO_ROOT="$(cd "$ops_root/../.." && pwd)"
+  exec cargo run --quiet --locked --manifest-path "$ops_root/Cargo.toml" -- "${@:-doctor}"
+fi
+
+export REDLINE_SPLIT_MANIFEST="${REDLINE_SPLIT_MANIFEST:-$ops_root/repos.manifest.toml}"
+export REDLINE_SPLIT_LOCK="${REDLINE_SPLIT_LOCK:-$ops_root/redline.lock.toml}"
+export REDLINE_SPLIT_MIRROR_LOCK="${REDLINE_SPLIT_MIRROR_LOCK:-$ops_root/../redline.lock.toml}"
+
+case "${1:-doctor}" in
+  clone|update|family-ci|ci|proof-refresh)
+    exec 9>"$workspace_root/.redline-family.lock"
+    flock -x 9
+    ;;
+esac
+
+if [[ $# -eq 0 ]]; then
+  set -- doctor
+fi
+exec cargo run --quiet --locked --manifest-path "$ops_root/Cargo.toml" -- "$@"

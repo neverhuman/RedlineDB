@@ -1,5 +1,12 @@
 # RedlineDB Agent Router
 
+This is the primary GitHub checkout for all Redline development. Component paths
+and original identities are recorded in `subrepos.toml`. Use root GitHub workflows
+and `scripts/ci-family.sh`; old per-component forge/publication instructions are
+historical. Preserve the independent nested Cargo workspaces. Consumer deployment
+locks and databases are outside this source/release migration.
+
+
 ## Workspace Boundary
 
 - Mutate source only in the claimed canonical checkout.

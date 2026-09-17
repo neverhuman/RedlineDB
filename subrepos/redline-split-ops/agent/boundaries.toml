@@ -1,0 +1,21 @@
+schema_version = "1.0.0"
+workspace = "redline-split-ops"
+profile = "control-plane"
+required_check = "redline-split-ops/required"
+
+[split]
+cross_repo_dependency_policy = "pinned-local-jeryu-git-tags"
+local_path_patches = false
+
+cargo_members = []
+
+[contracts]
+role = "control-plane-proof-lock"
+canonical_repo = "redline-split-ops"
+mirror_check = "./redlinectl lock-verify"
+
+[db]
+root_paths = []
+migration_paths = []
+constraint_paths = []
+owner = "not-applicable"

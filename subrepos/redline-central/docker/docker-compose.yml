@@ -1,0 +1,17 @@
+# The ONE central RedlineDB for the whole system. Every project points its db-shim at
+# redline://<host>:6033 (DB_DSN). Run:  docker compose up -d   (from this directory)
+services:
+  central-db:
+    build:
+      context: ../../..                           # primary RedlineDB checkout
+      dockerfile: subrepos/redline-central/docker/Dockerfile
+    image: redline-central-db:4.1.0
+    container_name: redline-central-db
+    ports:
+      - "6033:6033"
+    volumes:
+      - central-data:/data                        # the one shared database, persisted
+    restart: unless-stopped
+
+volumes:
+  central-data:

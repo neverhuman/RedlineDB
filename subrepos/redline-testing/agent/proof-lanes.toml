@@ -1,0 +1,74 @@
+[[lane]]
+name = "fast"
+command = "rtk cargo fmt --check"
+purpose = "verify Rust formatting"
+
+[[lane]]
+name = "check"
+command = "rtk cargo check --locked"
+purpose = "verify the locked Rust dependency graph compiles"
+
+[[lane]]
+name = "test"
+command = "rtk cargo test --locked"
+purpose = "run the locked Rust test suite"
+
+[[lane]]
+name = "release-local"
+command = "rtk just release-local"
+purpose = "build and verify the local release archive"
+
+[[lane]]
+name = "pr-ci"
+command = "rtk scripts/ci-local.sh pr-ci"
+purpose = "run the standard pull-request lane"
+
+[[lane]]
+name = "strict-pr-ci"
+command = "rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/pr-ci.sh"
+purpose = "run the required pull-request lane with all tools mandatory"
+
+[[lane]]
+name = "strict-security"
+command = "rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/security.sh"
+purpose = "run secret, dependency, workflow, and SBOM checks with all tools mandatory"
+
+[[lane]]
+name = "workflow-security"
+command = "rtk scripts/ci-local.sh doctor && rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/security.sh"
+purpose = "verify workflow delegation and strict workflow security"
+
+[[lane]]
+name = "ci-doctor"
+command = "rtk scripts/ci-local.sh doctor"
+purpose = "verify local CI entrypoints and workflow structure"
+
+[[lane]]
+name = "ci-contract"
+command = "rtk cargo test --locked --test ci_fail_closed"
+purpose = "verify fail-closed CI and proof-catalog contracts"
+
+[[lane]]
+name = "release-readiness"
+command = "rtk bash ops/ci/release-readiness.sh"
+purpose = "verify release documentation and package readiness"
+
+[[lane]]
+name = "release-manifest-integrity"
+command = "rtk cargo test --locked --test release_manifest_integrity"
+purpose = "verify packaged contracts and release hashes"
+
+[[lane]]
+name = "beyond-postgres-reference"
+command = "rtk cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact"
+purpose = "self-compare every beyond-SQLite case through PostgreSQL"
+
+[[lane]]
+name = "corpus-generator"
+command = "rtk cargo run --locked -p xtask -- generate --check"
+purpose = "verify generated corpus shards match their rule files"
+
+[[lane]]
+name = "ship-gate"
+command = "rtk cargo run --locked -p xtask -- ship-gate"
+purpose = "self-compare every shipping SQLite-parity case through sqlite3"

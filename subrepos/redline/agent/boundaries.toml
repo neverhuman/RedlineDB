@@ -1,0 +1,9 @@
+[stack]
+id = "shell-docs-family-hub"
+version = "1.0.0"
+
+[queues]
+adapter_paths = []
+event_contract_paths = []
+generated_type_paths = []
+client_markers = []

@@ -1,0 +1,132 @@
+name: redline-split-ops
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: redline-split-ops-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  required:
+    name: redline-split-ops/required
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          persist-credentials: false
+      - name: Required Rust lane
+        run: bash ops/ci/required.sh
+
+  security:
+    name: Security and supply-chain evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c
+        with:
+          go-version: 1.25.5
+          cache: false
+      - name: Install pinned security tools
+        run: bash ops/ci/install-tools.sh
+      - name: Secret, dependency, workflow, and SBOM scans
+        env:
+          REQUIRED_SECURITY_COMMANDS: "cargo audit; cargo deny; gitleaks; actionlint; zizmor; syft SBOM"
+        run: bash ops/ci/security.sh
+      - name: Upload security and SBOM evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: redline-split-ops-security
+          path: target/security/
+          if-no-files-found: error
+
+  audit:
+    name: Jankurai audit evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c
+        with:
+          go-version: 1.25.5
+          cache: false
+      - name: Install exact audit toolchain
+        run: bash ops/ci/install-tools.sh
+      - name: Prepare exact Jankurai source and reviewed baseline
+        run: |
+          bash ops/ci/prepare-jankurai-source.sh
+          install -d target/jankurai .jankurai
+          install -m 0644 agent/jankurai-baseline.json target/jankurai/accepted-baseline.json
+      - name: Bind strict security evidence
+        run: |
+          jankurai security run . --strict --profile ci --out target/jankurai/security/evidence.json --script ops/ci/security.sh
+          jankurai security run . --out target/jankurai/security/evidence.json --strict --profile ci --script ops/ci/security.sh
+      - name: Bind changed surfaces to proof obligations
+        run: |
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          jankurai proofbind verify . --changed-from origin/main --out target/jankurai/proofbind/surface-witness.json --obligations-out target/jankurai/proofbind/obligations.json
+      - name: Run exact language bad-behavior suite
+        run: |
+          set -o pipefail
+          (cd target/jankurai-source-1.6.10 && cargo test -p jankurai --test language_bad_behavior) 2>&1 | tee target/jankurai/language-bad-behavior.log
+      - name: Verify coverage and evidence sources
+        run: jankurai coverage audit . --config agent/coverage-sources.toml --json target/jankurai/coverage/coverage-audit.json --md target/jankurai/coverage/coverage-audit.md
+      - name: Jankurai score and hard-finding gate
+        run: |
+          jankurai audit . --mode ratchet --baseline target/jankurai/accepted-baseline.json --json target/jankurai/repo-score.json --md target/jankurai/repo-score.md --policy agent/audit-policy.toml --repair-queue-jsonl target/jankurai/repair-queue.jsonl
+          install -m 0644 target/jankurai/repo-score.json .jankurai/repo-score.json
+          install -m 0644 target/jankurai/repo-score.md .jankurai/repo-score.md
+          ./redlinectl audit-verify target/jankurai/repo-score.json
+      - name: Upload JSON and Markdown audit evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: redline-split-ops-audit
+          path: |
+            .jankurai/repo-score.json
+            .jankurai/repo-score.md
+            target/jankurai/repo-score.json
+            target/jankurai/repo-score.md
+            target/jankurai/repair-queue.jsonl
+            target/jankurai/proofbind/surface-witness.json
+            target/jankurai/proofbind/obligations.json
+            target/jankurai/security/evidence.json
+            target/jankurai/language-bad-behavior.log
+            target/jankurai/coverage/coverage-audit.json
+            target/jankurai/coverage/coverage-audit.md
+          if-no-files-found: error
+
+  release-readiness:
+    name: Candidate release readiness
+    needs: [required, security, audit]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@4dc6199c7b1a012772edbd06daecab0f50c9053c
+        with:
+          go-version: 1.25.5
+          cache: false
+      - name: Install exact release evidence tools
+        run: bash ops/ci/install-tools.sh
+      - name: Reproduce security evidence in the release snapshot
+        env:
+          REQUIRED_SECURITY_COMMANDS: "cargo audit; cargo deny; gitleaks; actionlint; zizmor; syft SBOM"
+        run: bash ops/ci/security.sh
+      - name: Release readiness
+        run: bash ops/ci/release-readiness.sh

@@ -50,49 +50,22 @@ if [ "$#" -ne 1 ]; then
     exit 64
 fi
 
-run_ci_yml_pr_mirror() {
-    local stage
-
-    printf 'ci-local pr-ci: preflight\n' >&2
-    CI_FAST_STAGE=preflight bash "$ROOT/ops/ci/fast.sh"
-
-    for stage in \
-        core \
-        kernel \
-        sql-unit \
-        sql-contracts \
-        bench
-    do
-        printf 'ci-local pr-ci: tests/%s\n' "$stage" >&2
-        CI_FAST_STAGE="$stage" bash "$ROOT/ops/ci/fast.sh"
-    done
-
-    for stage in \
-        redline-testing-official
-    do
-        printf 'ci-local pr-ci: parity/%s\n' "$stage" >&2
-        CI_PARITY_STAGE="$stage" bash "$ROOT/ops/ci/parity.sh"
-    done
-
-    printf 'ci-local pr-ci: official-evidence-guard\n' >&2
-    bash "$ROOT/scripts/guard-official-evidence.sh"
-}
 
 case "$1" in
     required)
         bash "$ROOT/ops/ci/pr-ci.sh"
         ;;
     pr-ci)
-        run_ci_yml_pr_mirror
+        bash "$ROOT/ops/ci/pr-ci.sh"
         ;;
     fast)
         bash "$ROOT/scripts/just/fast.sh"
         ;;
     security)
-        bash "$ROOT/ops/ci/security.sh"
+        bash "$ROOT/ops/ci/security-family.sh"
         ;;
     audit)
-        bash "$ROOT/ops/ci/jankurai-audit.sh"
+        bash "$ROOT/ops/ci/audit-family.sh"
         ;;
     score)
         bash "$ROOT/scripts/just/run.sh" score
@@ -138,12 +111,7 @@ case "$1" in
             bash "$ROOT/ops/ci/jankurai-staged-gate.sh"
         ;;
     all)
-        bash "$ROOT/scripts/ci-local.sh" pr-ci
-        bash "$ROOT/ops/ci/security.sh"
-        bash "$ROOT/ops/ci/dependency-review.sh"
-        bash "$ROOT/ops/ci/jankurai-audit.sh"
-        bash "$ROOT/scripts/ci-local.sh" jankurai-tools
-        bash "$ROOT/scripts/ci-local.sh" pr-gate
+        bash "$ROOT/ops/ci/pr-ci.sh"
         ;;
     -h|--help|help)
         usage

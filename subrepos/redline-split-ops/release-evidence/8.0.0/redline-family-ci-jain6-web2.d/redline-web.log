@@ -1,0 +1,1142 @@
+$ bash scripts/ci-local.sh pr-ci
+[redline-ci] pr-ci: fast lane
+[redline-ci] fast: checking shell syntax
+[redline-ci] fast: governed Jankurai hostile identity tests
+governed-Jankurai must be an executable regular non-symlink: /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-governed-jankurai.QJ4Mck/missing
+governed-Jankurai must be an executable regular non-symlink: /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-governed-jankurai.QJ4Mck/linked-jankurai
+governed-Jankurai digest mismatch: /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-governed-jankurai.QJ4Mck/jankurai
+governed Jankurai version mismatch: jankurai fixture-1
+governed Jankurai hostile identity tests passed
+[redline-ci] proofbind: exact-head non-deleted surface evidence passed
+[redline-ci] proofbind: exact-head non-deleted surface evidence passed
+[redline-ci] proof-base-contract: governed no-remote base routing passed
+[redline-ci] contract-drift: checking OpenAPI <-> Rust DTOs <-> TS DTOs
+[redline-ci] contract-drift: ok: 16 schemas, 10 paths in sync
+[redline-ci] contract-drift: complete
+[redline-ci] release-dispatch-contract: complete
+[redline-ci] fast: cargo-deny locked archive cache hostile tests
+refusing scratch cleanup: directory custody changed
+refusing scratch cleanup: directory custody changed
+refusing scratch retention: directory custody changed
+refusing scratch cleanup: directory custody changed
+refusing scratch retention: directory custody changed
+[redline-ci] security: seeded locked Cargo archive valuable-0.1.1.crate sha256=a6e3d83185113052ba3e705746c8ef1a5a69955063e16049e6d549bfed59749e
+[redline-ci] security: seeded locked Cargo archive anstyle-wincon-3.0.11.crate sha256=fb9cb9435c8721b80b1164e8eae3fbf3a992cdaed9aced6a1d447615f18b9d16
+[redline-ci] security: seeded locked Cargo archive anstyle-wincon-3.0.11.crate sha256=fb9cb9435c8721b80b1164e8eae3fbf3a992cdaed9aced6a1d447615f18b9d16
+[redline-ci] security: seeded locked Cargo archive valuable-0.1.1.crate sha256=a6e3d83185113052ba3e705746c8ef1a5a69955063e16049e6d549bfed59749e
+[redline-ci] security: verified exact Cargo.lock registry closure packages=2 manifest=7c8f4ccbf8713d8420b42ebfb2adddc888ad64bce9b078e696207e7d70478209
+[redline-ci] security: seeded locked Cargo archive valuable-0.1.1.crate sha256=a6e3d83185113052ba3e705746c8ef1a5a69955063e16049e6d549bfed59749e
+[redline-ci] security: seeded locked Cargo archive anstyle-wincon-3.0.11.crate sha256=fb9cb9435c8721b80b1164e8eae3fbf3a992cdaed9aced6a1d447615f18b9d16
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/home-success/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at c5af3bf second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=c5af3bfdf5b4dd9f701d3731d7da75ec28629819 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/home-inherited-hooks-disabled/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at c5af3bf second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=c5af3bfdf5b4dd9f701d3731d7da75ec28629819 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/home-advanced-source/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at c79f7ab first fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=c79f7abcc4144d7b1f99d75145f7815744a9c01c tree=32e3cd1f78df1991c164b7e794dc1392bbfb7928
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/home-fetch-head/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at c5af3bf second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=c5af3bfdf5b4dd9f701d3731d7da75ec28629819 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/home-destination-link/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at c5af3bf second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=c5af3bfdf5b4dd9f701d3731d7da75ec28629819 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/home-alternates/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at c5af3bf second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=c5af3bfdf5b4dd9f701d3731d7da75ec28629819 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/home-local-hooks/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at c5af3bf second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=c5af3bfdf5b4dd9f701d3731d7da75ec28629819 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/home-unexpected-ref/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at c5af3bf second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=c5af3bfdf5b4dd9f701d3731d7da75ec28629819 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/home-nonclean/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.HWk599/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at c5af3bf second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=c5af3bfdf5b4dd9f701d3731d7da75ec28629819 tree=f0aff5b92e52942ee52138348a60211f145da103
+cargo-deny locked archive and advisory DB hostile tests passed
+[redline-ci] security: seeded lock-closure crates.io index entries=185 manifest=aac1119a086ca336165f570d5794853f0dfedb444ed4300cf13a77bac170ffad
+[redline-ci] security: seeded locked Cargo archive adler2-2.0.1.crate sha256=320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa
+[redline-ci] security: seeded locked Cargo archive ahash-0.8.12.crate sha256=5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75
+[redline-ci] security: seeded locked Cargo archive aho-corasick-1.1.4.crate sha256=ddd31a130427c27518df266943a5308ed92d4b226cc639f5a8f1002816174301
+[redline-ci] security: seeded locked Cargo archive anstream-1.0.0.crate sha256=824a212faf96e9acacdbd09febd34438f8f711fb84e09a8916013cd7815ca28d
+[redline-ci] security: seeded locked Cargo archive anstyle-1.0.14.crate sha256=940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000
+[redline-ci] security: seeded locked Cargo archive anstyle-parse-1.0.0.crate sha256=52ce7f38b242319f7cabaa6813055467063ecdc9d355bbb4ce0c68908cd8130e
+[redline-ci] security: seeded locked Cargo archive anstyle-query-1.1.5.crate sha256=40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc
+[redline-ci] security: seeded locked Cargo archive anstyle-wincon-3.0.11.crate sha256=291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d
+[redline-ci] security: seeded locked Cargo archive anyhow-1.0.103.crate sha256=2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3
+[redline-ci] security: seeded locked Cargo archive async-compression-0.4.42.crate sha256=e79b3f8a79cccc2898f31920fc69f304859b3bd567490f75ebf51ae1c792a9ac
+[redline-ci] security: seeded locked Cargo archive atomic-waker-1.1.2.crate sha256=1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0
+[redline-ci] security: seeded locked Cargo archive autocfg-1.5.1.crate sha256=f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53
+[redline-ci] security: seeded locked Cargo archive axum-0.8.9.crate sha256=31b698c5f9a010f6573133b09e0de5408834d0c82f8d7475a89fc1867a71cd90
+[redline-ci] security: seeded locked Cargo archive axum-core-0.5.6.crate sha256=08c78f31d7b1291f7ee735c1c6780ccde7785daae9a9206026862dab7d8792d1
+[redline-ci] security: seeded locked Cargo archive axum-macros-0.5.1.crate sha256=7aa268c23bfbbd2c4363b9cd302a4f504fb2a9dfe7e3451d66f35dd392e20aca
+[redline-ci] security: seeded locked Cargo archive bit-set-0.8.0.crate sha256=08807e080ed7f9d5433fa9b275196cfc35414f66a0c79d864dc51a0d825231a3
+[redline-ci] security: seeded locked Cargo archive bit-vec-0.8.0.crate sha256=5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7
+[redline-ci] security: seeded locked Cargo archive bitflags-2.13.0.crate sha256=b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8
+[redline-ci] security: seeded locked Cargo archive block-buffer-0.10.4.crate sha256=3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71
+[redline-ci] security: seeded locked Cargo archive bytes-1.11.1.crate sha256=1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33
+[redline-ci] security: seeded locked Cargo archive cc-1.2.63.crate sha256=556e016178bb5662a08681bbe0f00f8e17631781a4dfc8c45e466e4b185ec27f
+[redline-ci] security: seeded locked Cargo archive cfg-if-1.0.4.crate sha256=9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801
+[redline-ci] security: seeded locked Cargo archive clap-4.6.1.crate sha256=1ddb117e43bbf7dacf0a4190fef4d345b9bad68dfc649cb349e7d17d28428e51
+[redline-ci] security: seeded locked Cargo archive clap_builder-4.6.0.crate sha256=714a53001bf66416adb0e2ef5ac857140e7dc3a0c48fb28b2f10762fc4b5069f
+[redline-ci] security: seeded locked Cargo archive clap_derive-4.6.1.crate sha256=f2ce8604710f6733aa641a2b3731eaa1e8b3d9973d5e3565da11800813f997a9
+[redline-ci] security: seeded locked Cargo archive clap_lex-1.1.0.crate sha256=c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9
+[redline-ci] security: seeded locked Cargo archive colorchoice-1.0.5.crate sha256=1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570
+[redline-ci] security: seeded locked Cargo archive compression-codecs-0.4.38.crate sha256=ce2548391e9c1929c21bf6aa2680af86fe4c1b33e6cea9ac1cfeec0bd11218cf
+[redline-ci] security: seeded locked Cargo archive compression-core-0.4.32.crate sha256=cc14f565cf027a105f7a44ccf9e5b424348421a1d8952a8fc9d499d313107789
+[redline-ci] security: seeded locked Cargo archive cpufeatures-0.2.17.crate sha256=59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280
+[redline-ci] security: seeded locked Cargo archive crc32fast-1.5.0.crate sha256=9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511
+[redline-ci] security: seeded locked Cargo archive crypto-common-0.1.7.crate sha256=78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a
+[redline-ci] security: seeded locked Cargo archive digest-0.10.7.crate sha256=9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292
+[redline-ci] security: seeded locked Cargo archive dirs-6.0.0.crate sha256=c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e
+[redline-ci] security: seeded locked Cargo archive dirs-sys-0.5.0.crate sha256=e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab
+[redline-ci] security: seeded locked Cargo archive equivalent-1.0.2.crate sha256=877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f
+[redline-ci] security: seeded locked Cargo archive errno-0.3.14.crate sha256=39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb
+[redline-ci] security: seeded locked Cargo archive fallible-iterator-0.3.0.crate sha256=2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649
+[redline-ci] security: seeded locked Cargo archive fallible-streaming-iterator-0.1.9.crate sha256=7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a
+[redline-ci] security: seeded locked Cargo archive fastrand-2.4.1.crate sha256=9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6
+[redline-ci] security: seeded locked Cargo archive find-msvc-tools-0.1.9.crate sha256=5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582
+[redline-ci] security: seeded locked Cargo archive flate2-1.1.9.crate sha256=843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c
+[redline-ci] security: seeded locked Cargo archive fnv-1.0.7.crate sha256=3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1
+[redline-ci] security: seeded locked Cargo archive foldhash-0.1.5.crate sha256=d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2
+[redline-ci] security: seeded locked Cargo archive form_urlencoded-1.2.2.crate sha256=cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf
+[redline-ci] security: seeded locked Cargo archive futures-0.3.32.crate sha256=8b147ee9d1f6d097cef9ce628cd2ee62288d963e16fb287bd9286455b241382d
+[redline-ci] security: seeded locked Cargo archive futures-channel-0.3.32.crate sha256=07bbe89c50d7a535e539b8c17bc0b49bdb77747034daa8087407d655f3f7cc1d
+[redline-ci] security: seeded locked Cargo archive futures-core-0.3.32.crate sha256=7e3450815272ef58cec6d564423f6e755e25379b217b0bc688e295ba24df6b1d
+[redline-ci] security: seeded locked Cargo archive futures-executor-0.3.32.crate sha256=baf29c38818342a3b26b5b923639e7b1f4a61fc5e76102d4b1981c6dc7a7579d
+[redline-ci] security: seeded locked Cargo archive futures-io-0.3.32.crate sha256=cecba35d7ad927e23624b22ad55235f2239cfa44fd10428eecbeba6d6a717718
+[redline-ci] security: seeded locked Cargo archive futures-macro-0.3.32.crate sha256=e835b70203e41293343137df5c0664546da5745f82ec9b84d40be8336958447b
+[redline-ci] security: seeded locked Cargo archive futures-sink-0.3.32.crate sha256=c39754e157331b013978ec91992bde1ac089843443c49cbc7f46150b0fad0893
+[redline-ci] security: seeded locked Cargo archive futures-task-0.3.32.crate sha256=037711b3d59c33004d3856fbdc83b99d4ff37a24768fa1be9ce3538a1cde4393
+[redline-ci] security: seeded locked Cargo archive futures-util-0.3.32.crate sha256=389ca41296e6190b48053de0321d02a77f32f8a5d2461dd38762c0593805c6d6
+[redline-ci] security: seeded locked Cargo archive generic-array-0.14.7.crate sha256=85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a
+[redline-ci] security: seeded locked Cargo archive getrandom-0.2.17.crate sha256=ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0
+[redline-ci] security: seeded locked Cargo archive getrandom-0.3.4.crate sha256=899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd
+[redline-ci] security: seeded locked Cargo archive getrandom-0.4.2.crate sha256=0de51e6874e94e7bf76d726fc5d13ba782deca734ff60d5bb2fb2607c7406555
+[redline-ci] security: seeded locked Cargo archive hashbrown-0.14.5.crate sha256=e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1
+[redline-ci] security: seeded locked Cargo archive hashbrown-0.15.5.crate sha256=9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1
+[redline-ci] security: seeded locked Cargo archive hashbrown-0.17.1.crate sha256=ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a
+[redline-ci] security: seeded locked Cargo archive hashlink-0.9.1.crate sha256=6ba4ff7128dee98c7dc9794b6a411377e1404dba1c97deb8d1a55297bd25d8af
+[redline-ci] security: seeded locked Cargo archive heck-0.5.0.crate sha256=2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea
+[redline-ci] security: seeded locked Cargo archive http-1.4.2.crate sha256=6970f50e31d6fc17d3fa27329444bfa74e196cf62e95052a3f6fee181dba6425
+[redline-ci] security: seeded locked Cargo archive http-body-1.0.1.crate sha256=1efedce1fb8e6913f23e0c92de8e62cd5b772a67e7b3946df930a62566c93184
+[redline-ci] security: seeded locked Cargo archive http-body-util-0.1.3.crate sha256=b021d93e26becf5dc7e1b75b1bed1fd93124b374ceb73f43d4d4eafec896a64a
+[redline-ci] security: seeded locked Cargo archive http-range-header-0.4.2.crate sha256=9171a2ea8a68358193d15dd5d70c1c10a2afc3e7e4c5bc92bc9f025cebd7359c
+[redline-ci] security: seeded locked Cargo archive httparse-1.10.1.crate sha256=6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87
+[redline-ci] security: seeded locked Cargo archive httpdate-1.0.3.crate sha256=df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9
+[redline-ci] security: seeded locked Cargo archive hyper-1.10.1.crate sha256=55281c53a1894c864990125767da440a4e630446785086f52523b20033b74498
+[redline-ci] security: seeded locked Cargo archive hyper-util-0.1.20.crate sha256=96547c2556ec9d12fb1578c4eaf448b04993e7fb79cbaad930a656880a6bdfa0
+[redline-ci] security: seeded locked Cargo archive id-arena-2.3.0.crate sha256=3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954
+[redline-ci] security: seeded locked Cargo archive indexmap-2.14.0.crate sha256=d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9
+[redline-ci] security: seeded locked Cargo archive is_terminal_polyfill-1.70.2.crate sha256=a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695
+[redline-ci] security: seeded locked Cargo archive itoa-1.0.18.crate sha256=8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682
+[redline-ci] security: seeded locked Cargo archive lazy_static-1.5.0.crate sha256=bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe
+[redline-ci] security: seeded locked Cargo archive leb128fmt-0.1.0.crate sha256=09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2
+[redline-ci] security: seeded locked Cargo archive libc-0.2.186.crate sha256=68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66
+[redline-ci] security: seeded locked Cargo archive libredox-0.1.17.crate sha256=f02ab6bace2054fb888a3c16f990117b579d14a3088e472d63c6011fa185c9d3
+[redline-ci] security: seeded locked Cargo archive libsqlite3-sys-0.30.1.crate sha256=2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149
+[redline-ci] security: seeded locked Cargo archive linux-raw-sys-0.12.1.crate sha256=32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53
+[redline-ci] security: seeded locked Cargo archive lock_api-0.4.14.crate sha256=224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965
+[redline-ci] security: seeded locked Cargo archive log-0.4.32.crate sha256=953f07c43838f8e6f9758cab68bf5bed85465e7587ebe0b823f1bcd81978ad3a
+[redline-ci] security: seeded locked Cargo archive matchers-0.2.0.crate sha256=d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9
+[redline-ci] security: seeded locked Cargo archive matchit-0.8.4.crate sha256=47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3
+[redline-ci] security: seeded locked Cargo archive memchr-2.8.1.crate sha256=6b947ae49db0d222b1dbc6b113ce7248a3fc3a6ca21b696717bfc000ba4484d8
+[redline-ci] security: seeded locked Cargo archive mime-0.3.17.crate sha256=6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a
+[redline-ci] security: seeded locked Cargo archive mime_guess-2.0.5.crate sha256=f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e
+[redline-ci] security: seeded locked Cargo archive miniz_oxide-0.8.9.crate sha256=1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316
+[redline-ci] security: seeded locked Cargo archive mio-1.2.1.crate sha256=02bd0af71c67b473010cbbc60715ee815645a4dc942899111f494b4b737d6fda
+[redline-ci] security: seeded locked Cargo archive nu-ansi-term-0.50.3.crate sha256=7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5
+[redline-ci] security: seeded locked Cargo archive num-traits-0.2.19.crate sha256=071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841
+[redline-ci] security: seeded locked Cargo archive once_cell-1.21.4.crate sha256=9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50
+[redline-ci] security: seeded locked Cargo archive once_cell_polyfill-1.70.2.crate sha256=384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe
+[redline-ci] security: seeded locked Cargo archive option-ext-0.2.0.crate sha256=04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d
+[redline-ci] security: seeded locked Cargo archive parking_lot-0.12.5.crate sha256=93857453250e3077bd71ff98b6a65ea6621a19bb0f559a85248955ac12c45a1a
+[redline-ci] security: seeded locked Cargo archive parking_lot_core-0.9.12.crate sha256=2621685985a2ebf1c516881c026032ac7deafcda1a2c9b7850dc81e3dfcb64c1
+[redline-ci] security: seeded locked Cargo archive percent-encoding-2.3.2.crate sha256=9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220
+[redline-ci] security: seeded locked Cargo archive pin-project-lite-0.2.17.crate sha256=a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd
+[redline-ci] security: seeded locked Cargo archive pkg-config-0.3.33.crate sha256=19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e
+[redline-ci] security: seeded locked Cargo archive ppv-lite86-0.2.21.crate sha256=85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9
+[redline-ci] security: seeded locked Cargo archive prettyplease-0.2.37.crate sha256=479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b
+[redline-ci] security: seeded locked Cargo archive proc-macro2-1.0.106.crate sha256=8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934
+[redline-ci] security: seeded locked Cargo archive proptest-1.11.0.crate sha256=4b45fcc2344c680f5025fe57779faef368840d0bd1f42f216291f0dc4ace4744
+[redline-ci] security: seeded locked Cargo archive quick-error-1.2.3.crate sha256=a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0
+[redline-ci] security: seeded locked Cargo archive quote-1.0.45.crate sha256=41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924
+[redline-ci] security: seeded locked Cargo archive r-efi-5.3.0.crate sha256=69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f
+[redline-ci] security: seeded locked Cargo archive r-efi-6.0.0.crate sha256=f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf
+[redline-ci] security: seeded locked Cargo archive rand-0.9.4.crate sha256=44c5af06bb1b7d3216d91932aed5265164bf384dc89cd6ba05cf59a35f5f76ea
+[redline-ci] security: seeded locked Cargo archive rand_chacha-0.9.0.crate sha256=d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb
+[redline-ci] security: seeded locked Cargo archive rand_core-0.9.5.crate sha256=76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c
+[redline-ci] security: seeded locked Cargo archive rand_xorshift-0.4.0.crate sha256=513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a
+[redline-ci] security: seeded locked Cargo archive redox_syscall-0.5.18.crate sha256=ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d
+[redline-ci] security: seeded locked Cargo archive redox_users-0.5.2.crate sha256=a4e608c6638b9c18977b00b475ac1f28d14e84b27d8d42f70e0bf1e3dec127ac
+[redline-ci] security: seeded locked Cargo archive regex-automata-0.4.14.crate sha256=6e1dd4122fc1595e8162618945476892eefca7b88c52820e74af6262213cae8f
+[redline-ci] security: seeded locked Cargo archive regex-syntax-0.8.11.crate sha256=d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4
+[redline-ci] security: seeded locked Cargo archive rusqlite-0.32.1.crate sha256=7753b721174eb8ff87a9a0e799e2d7bc3749323e773db92e0984debb00019d6e
+[redline-ci] security: seeded locked Cargo archive rust-embed-8.11.0.crate sha256=04113cb9355a377d83f06ef1f0a45b8ab8cd7d8b1288160717d66df5c7988d27
+[redline-ci] security: seeded locked Cargo archive rust-embed-impl-8.11.0.crate sha256=da0902e4c7c8e997159ab384e6d0fc91c221375f6894346ae107f47dd0f3ccaa
+[redline-ci] security: seeded locked Cargo archive rust-embed-utils-8.11.0.crate sha256=5bcdef0be6fe7f6fa333b1073c949729274b05f123a0ad7efcb8efd878e5c3b1
+[redline-ci] security: seeded locked Cargo archive rustix-1.1.4.crate sha256=b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190
+[redline-ci] security: seeded locked Cargo archive rusty-fork-0.3.1.crate sha256=cc6bf79ff24e648f6da1f8d1f011e9cac26491b619e6b9280f2b47f1774e6ee2
+[redline-ci] security: seeded locked Cargo archive ryu-1.0.23.crate sha256=9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f
+[redline-ci] security: seeded locked Cargo archive same-file-1.0.6.crate sha256=93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502
+[redline-ci] security: seeded locked Cargo archive scopeguard-1.2.0.crate sha256=94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49
+[redline-ci] security: seeded locked Cargo archive semver-1.0.28.crate sha256=8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd
+[redline-ci] security: seeded locked Cargo archive serde-1.0.228.crate sha256=9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e
+[redline-ci] security: seeded locked Cargo archive serde_core-1.0.228.crate sha256=41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad
+[redline-ci] security: seeded locked Cargo archive serde_derive-1.0.228.crate sha256=d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79
+[redline-ci] security: seeded locked Cargo archive serde_json-1.0.150.crate sha256=e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9
+[redline-ci] security: seeded locked Cargo archive serde_path_to_error-0.1.20.crate sha256=10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457
+[redline-ci] security: seeded locked Cargo archive serde_urlencoded-0.7.1.crate sha256=d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd
+[redline-ci] security: seeded locked Cargo archive sha2-0.10.9.crate sha256=a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283
+[redline-ci] security: seeded locked Cargo archive sharded-slab-0.1.7.crate sha256=f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6
+[redline-ci] security: seeded locked Cargo archive shellexpand-3.1.2.crate sha256=32824fab5e16e6c4d86dc1ba84489390419a39f97699852b66480bb87d297ed8
+[redline-ci] security: seeded locked Cargo archive shlex-2.0.1.crate sha256=f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba
+[redline-ci] security: seeded locked Cargo archive signal-hook-registry-1.4.8.crate sha256=c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b
+[redline-ci] security: seeded locked Cargo archive simd-adler32-0.3.9.crate sha256=703d5c7ef118737c72f1af64ad2f6f8c5e1921f818cdcb97b8fe6fc69bf66214
+[redline-ci] security: seeded locked Cargo archive slab-0.4.12.crate sha256=0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5
+[redline-ci] security: seeded locked Cargo archive smallvec-1.15.1.crate sha256=67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03
+[redline-ci] security: seeded locked Cargo archive socket2-0.6.4.crate sha256=52d1cfed4120b4d927bf7c0f86d2087a4a7d6027c906d9f9d525a80573b9be51
+[redline-ci] security: seeded locked Cargo archive strsim-0.11.1.crate sha256=7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f
+[redline-ci] security: seeded locked Cargo archive syn-2.0.117.crate sha256=e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99
+[redline-ci] security: seeded locked Cargo archive sync_wrapper-1.0.2.crate sha256=0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263
+[redline-ci] security: seeded locked Cargo archive tempfile-3.27.0.crate sha256=32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd
+[redline-ci] security: seeded locked Cargo archive thiserror-2.0.18.crate sha256=4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4
+[redline-ci] security: seeded locked Cargo archive thiserror-impl-2.0.18.crate sha256=ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5
+[redline-ci] security: seeded locked Cargo archive thread_local-1.1.9.crate sha256=f60246a4944f24f6e018aa17cdeffb7818b76356965d03b07d6a9886e8962185
+[redline-ci] security: seeded locked Cargo archive tokio-1.52.3.crate sha256=8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe
+[redline-ci] security: seeded locked Cargo archive tokio-macros-2.7.0.crate sha256=385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496
+[redline-ci] security: seeded locked Cargo archive tokio-stream-0.1.18.crate sha256=32da49809aab5c3bc678af03902d4ccddea2a87d028d86392a4b1560c6906c70
+[redline-ci] security: seeded locked Cargo archive tokio-util-0.7.18.crate sha256=9ae9cec805b01e8fc3fd2fe289f89149a9b66dd16786abd8b19cfa7b48cb0098
+[redline-ci] security: seeded locked Cargo archive tower-0.5.3.crate sha256=ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4
+[redline-ci] security: seeded locked Cargo archive tower-http-0.6.11.crate sha256=4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840
+[redline-ci] security: seeded locked Cargo archive tower-layer-0.3.3.crate sha256=121c2a6cda46980bb0fcd1647ffaf6cd3fc79a013de288782836f6df9c48780e
+[redline-ci] security: seeded locked Cargo archive tower-service-0.3.3.crate sha256=8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3
+[redline-ci] security: seeded locked Cargo archive tracing-0.1.44.crate sha256=63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100
+[redline-ci] security: seeded locked Cargo archive tracing-attributes-0.1.31.crate sha256=7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da
+[redline-ci] security: seeded locked Cargo archive tracing-core-0.1.36.crate sha256=db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a
+[redline-ci] security: seeded locked Cargo archive tracing-log-0.2.0.crate sha256=ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3
+[redline-ci] security: seeded locked Cargo archive tracing-subscriber-0.3.23.crate sha256=cb7f578e5945fb242538965c2d0b04418d38ec25c79d160cd279bf0731c8d319
+[redline-ci] security: seeded locked Cargo archive typenum-1.20.1.crate sha256=b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20
+[redline-ci] security: seeded locked Cargo archive unarray-0.1.4.crate sha256=eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94
+[redline-ci] security: seeded locked Cargo archive unicase-2.9.0.crate sha256=dbc4bc3a9f746d862c45cb89d705aa10f187bb96c76001afab07a0d35ce60142
+[redline-ci] security: seeded locked Cargo archive unicode-ident-1.0.24.crate sha256=e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75
+[redline-ci] security: seeded locked Cargo archive unicode-xid-0.2.6.crate sha256=ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853
+[redline-ci] security: seeded locked Cargo archive utf8parse-0.2.2.crate sha256=06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821
+[redline-ci] security: seeded locked Cargo archive valuable-0.1.1.crate sha256=ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65
+[redline-ci] security: seeded locked Cargo archive vcpkg-0.2.15.crate sha256=accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426
+[redline-ci] security: seeded locked Cargo archive version_check-0.9.5.crate sha256=0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a
+[redline-ci] security: seeded locked Cargo archive wait-timeout-0.2.1.crate sha256=09ac3b126d3914f9849036f826e054cbabdc8519970b8998ddaf3b5bd3c65f11
+[redline-ci] security: seeded locked Cargo archive walkdir-2.5.0.crate sha256=29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b
+[redline-ci] security: seeded locked Cargo archive wasi-0.11.1+wasi-snapshot-preview1.crate sha256=ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b
+[redline-ci] security: seeded locked Cargo archive wasip2-1.0.3+wasi-0.2.9.crate sha256=20064672db26d7cdc89c7798c48a0fdfac8213434a1186e5ef29fd560ae223d6
+[redline-ci] security: seeded locked Cargo archive wasip3-0.4.0+wasi-0.3.0-rc-2026-01-06.crate sha256=5428f8bf88ea5ddc08faddef2ac4a67e390b88186c703ce6dbd955e1c145aca5
+[redline-ci] security: seeded locked Cargo archive wasm-encoder-0.244.0.crate sha256=990065f2fe63003fe337b932cfb5e3b80e0b4d0f5ff650e6985b1048f62c8319
+[redline-ci] security: seeded locked Cargo archive wasm-metadata-0.244.0.crate sha256=bb0e353e6a2fbdc176932bbaab493762eb1255a7900fe0fea1a2f96c296cc909
+[redline-ci] security: seeded locked Cargo archive wasmparser-0.244.0.crate sha256=47b807c72e1bac69382b3a6fb3dbe8ea4c0ed87ff5629b8685ae6b9a611028fe
+[redline-ci] security: seeded locked Cargo archive winapi-util-0.1.11.crate sha256=c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22
+[redline-ci] security: seeded locked Cargo archive windows-link-0.2.1.crate sha256=f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5
+[redline-ci] security: seeded locked Cargo archive windows-sys-0.61.2.crate sha256=ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc
+[redline-ci] security: seeded locked Cargo archive wit-bindgen-0.51.0.crate sha256=d7249219f66ced02969388cf2bb044a09756a083d0fab1e566056b04d9fbcaa5
+[redline-ci] security: seeded locked Cargo archive wit-bindgen-0.57.1.crate sha256=1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e
+[redline-ci] security: seeded locked Cargo archive wit-bindgen-core-0.51.0.crate sha256=ea61de684c3ea68cb082b7a88508a8b27fcc8b797d738bfc99a82facf1d752dc
+[redline-ci] security: seeded locked Cargo archive wit-bindgen-rust-0.51.0.crate sha256=b7c566e0f4b284dd6561c786d9cb0142da491f46a9fbed79ea69cdad5db17f21
+[redline-ci] security: seeded locked Cargo archive wit-bindgen-rust-macro-0.51.0.crate sha256=0c0f9bfd77e6a48eccf51359e3ae77140a7f50b1e2ebfe62422d8afdaffab17a
+[redline-ci] security: seeded locked Cargo archive wit-component-0.244.0.crate sha256=9d66ea20e9553b30172b5e831994e35fbde2d165325bec84fc43dbf6f4eb9cb2
+[redline-ci] security: seeded locked Cargo archive wit-parser-0.244.0.crate sha256=ecc8ac4bc1dc3381b7f59c34f00b67e18f910c2c0f50015669dde7def656a736
+[redline-ci] security: seeded locked Cargo archive zerocopy-0.8.52.crate sha256=ce1022995ff5ff5d841ad7d994facc23098cd40152f2c1d11cd607c6f530653f
+[redline-ci] security: seeded locked Cargo archive zerocopy-derive-0.8.52.crate sha256=1ae7f38b72ec2a254e2b87ef277cf2cd4fb97cbebf944faa6f33354da0867930
+[redline-ci] security: seeded locked Cargo archive zmij-1.0.21.crate sha256=b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa
+[redline-ci] security: verified exact Cargo.lock registry closure packages=191 manifest=fcbbe7bd4730723c82706762902c583ff39cdc0ade551d2b0e8e47fe54136957
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-security-no-index.rsNJmK/cargo-deny-home/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/.cargo/advisory-dbs/advisory-db-3157b0e258782691
+ * branch              main       -> FETCH_HEAD
+HEAD is now at 6e3286f4 Assigned RUSTSEC-2026-0206 to rustybuzz
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=6e3286f4efa8c142fb33e5ea4342c8db6693cf34 tree=d12220aff0053a035739bec6e64aefbaafbf01a3
+[redline-ci] security-no-index: cargo-deny from the bound lock closure, no index, dead network
+[redline-ci] security-no-index: proof ok — cargo-deny completes offline from the lock closure with yanked checking live (index entries=185 of 883)
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-security-authority.E6aqsK/rustsec/local-seed-home/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/ci-tmp/redline-web-security-authority.E6aqsK/rustsec/local-deny
+ * branch            main       -> FETCH_HEAD
+HEAD is now at e2bc89e first RustSec fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=e2bc89eeba94da4122b2e54ad6de0b71fbb217ac tree=6aa3f2640694f7843358a942f64c6d8fb394c6bb
+[redline-ci] security-authority: complete npm closure and hostile Grype fixtures passed
+[redline-ci] fast: checking CI language boundary
+    Checking redline-web-release-control v0.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/tools/release-control)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.54s
+   Compiling redline-web-release-control v0.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/tools/release-control)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 1.53s
+     Running unittests src/main.rs (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/family-target/debug/deps/redline_web_release_control-70a6615ff3357b33)
+
+running 4 tests
+test tests::detects_direct_and_split_interpreter_commands ... ok
+test tests::detects_source_extensions_case_insensitively ... ok
+test tests::ignores_documentation_comments_and_unrelated_words ... ok
+test tests::repository_satisfies_language_boundary ... ok
+
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+language boundary: no forbidden interpreter files or invocations
+[redline-ci] fast: rust fmt + check
+   Compiling libc v0.2.186
+   Compiling proc-macro2 v1.0.106
+    Checking cfg-if v1.0.4
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling version_check v0.9.5
+    Checking pin-project-lite v0.2.17
+    Checking once_cell v1.21.4
+    Checking smallvec v1.15.1
+    Checking futures-core v0.3.32
+    Checking bytes v1.11.1
+   Compiling parking_lot_core v0.9.12
+    Checking scopeguard v1.2.0
+    Checking itoa v1.0.18
+    Checking futures-sink v0.3.32
+    Checking memchr v2.8.1
+   Compiling zerocopy v0.8.52
+   Compiling unicase v2.9.0
+   Compiling typenum v1.20.1
+    Checking log v0.4.32
+   Compiling serde_core v1.0.228
+   Compiling crc32fast v1.5.0
+    Checking futures-io v0.3.32
+    Checking futures-task v0.3.32
+    Checking slab v0.4.12
+    Checking mime v0.3.17
+    Checking bitflags v2.13.0
+    Checking lock_api v0.4.14
+    Checking tracing-core v0.1.36
+    Checking simd-adler32 v0.3.9
+    Checking adler2 v2.0.1
+   Compiling option-ext v0.2.0
+   Compiling mime_guess v2.0.5
+    Checking futures-channel v0.3.32
+   Compiling find-msvc-tools v0.1.9
+   Compiling getrandom v0.3.4
+   Compiling shlex v2.0.1
+   Compiling httparse v1.10.1
+    Checking tower-service v0.3.3
+   Compiling pkg-config v0.3.33
+    Checking tower-layer v0.3.3
+   Compiling generic-array v0.14.7
+   Compiling ahash v0.8.12
+    Checking miniz_oxide v0.8.9
+   Compiling same-file v1.0.6
+   Compiling vcpkg v0.2.15
+    Checking regex-syntax v0.8.11
+   Compiling serde v1.0.228
+    Checking http v1.4.2
+   Compiling cc v1.2.63
+   Compiling cpufeatures v0.2.17
+    Checking percent-encoding v2.3.2
+   Compiling zmij v1.0.21
+    Checking httpdate v1.0.3
+    Checking utf8parse v0.2.2
+   Compiling walkdir v2.5.0
+   Compiling serde_json v1.0.150
+    Checking anstyle-parse v1.0.0
+    Checking compression-core v0.4.32
+   Compiling getrandom v0.4.2
+    Checking is_terminal_polyfill v1.70.2
+    Checking colorchoice v1.0.5
+    Checking flate2 v1.1.9
+    Checking anstyle-query v1.1.5
+    Checking anstyle v1.0.14
+   Compiling rustix v1.1.4
+    Checking atomic-waker v1.1.2
+    Checking sync_wrapper v1.0.2
+    Checking form_urlencoded v1.2.2
+    Checking strsim v0.11.1
+    Checking anstream v1.0.0
+   Compiling anyhow v1.0.103
+   Compiling autocfg v1.5.1
+   Compiling thiserror v2.0.18
+    Checking ryu v1.0.23
+   Compiling heck v0.5.0
+   Compiling syn v2.0.117
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+    Checking compression-codecs v0.4.38
+    Checking linux-raw-sys v0.12.1
+    Checking lazy_static v1.5.0
+   Compiling digest v0.10.7
+    Checking clap_lex v1.1.0
+    Checking tracing-log v0.2.0
+    Checking http-body v1.0.1
+    Checking sharded-slab v0.1.7
+    Checking thread_local v1.1.9
+    Checking fallible-streaming-iterator v0.1.9
+    Checking fastrand v2.4.1
+    Checking nu-ansi-term v0.50.3
+    Checking errno v0.3.14
+    Checking mio v1.2.1
+    Checking socket2 v0.6.4
+    Checking http-body-util v0.1.3
+    Checking clap_builder v4.6.0
+   Compiling num-traits v0.2.19
+    Checking signal-hook-registry v1.4.8
+   Compiling sha2 v0.10.9
+    Checking matchit v0.8.4
+    Checking http-range-header v0.4.2
+    Checking parking_lot v0.12.5
+    Checking fallible-iterator v0.3.0
+    Checking rand_core v0.9.5
+    Checking wait-timeout v0.2.1
+    Checking bit-vec v0.8.0
+    Checking quick-error v1.2.3
+    Checking fnv v1.0.7
+   Compiling dirs-sys v0.5.0
+    Checking unarray v0.1.4
+    Checking rand_xorshift v0.4.0
+    Checking rand v0.9.4
+   Compiling dirs v6.0.0
+    Checking bit-set v0.8.0
+   Compiling libsqlite3-sys v0.30.1
+   Compiling rust-embed-utils v8.11.0
+   Compiling shellexpand v3.1.2
+    Checking regex-automata v0.4.14
+    Checking serde_path_to_error v0.1.20
+    Checking matchers v0.2.0
+    Checking tempfile v3.27.0
+    Checking rusty-fork v0.3.1
+   Compiling tokio-macros v2.7.0
+   Compiling futures-macro v0.3.32
+   Compiling tracing-attributes v0.1.31
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling axum-macros v0.5.1
+   Compiling clap_derive v4.6.1
+   Compiling rust-embed-impl v8.11.0
+    Checking tokio v1.52.3
+    Checking rust-embed v8.11.0
+    Checking futures-util v0.3.32
+    Checking ppv-lite86 v0.2.21
+    Checking hashbrown v0.14.5
+    Checking tracing v0.1.44
+    Checking rand_chacha v0.9.0
+    Checking axum-core v0.5.6
+    Checking tracing-subscriber v0.3.23
+    Checking proptest v1.11.0
+    Checking hashlink v0.9.1
+    Checking clap v4.6.1
+    Checking serde_urlencoded v0.7.1
+    Checking futures-executor v0.3.32
+    Checking futures v0.3.32
+    Checking hyper v1.10.1
+    Checking tokio-util v0.7.18
+    Checking tower v0.5.3
+    Checking async-compression v0.4.42
+    Checking tokio-stream v0.1.18
+    Checking tower-http v0.6.11
+    Checking hyper-util v0.1.20
+    Checking axum v0.8.9
+    Checking rusqlite v0.32.1
+    Checking redline-web-server v0.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/apps/api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 28.95s
+[redline-ci] fast: verifying npm lockfile
+npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+npm warn deprecated recharts@2.15.4: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
+
+added 325 packages in 6s
+[redline-ci] fast: linting GitHub Actions
+[redline-ci] fast: complete
+[redline-ci] pr-ci: frontend lane
+[redline-ci] web: npm ci
+npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+npm warn deprecated recharts@2.15.4: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
+
+added 325 packages in 6s
+[redline-ci] web: typecheck
+
+> @neverhuman/redline-web@0.1.0 typecheck
+> tsc --noEmit
+
+[redline-ci] web: lint
+
+> @neverhuman/redline-web@0.1.0 lint
+> eslint . --max-warnings=0
+
+[redline-ci] web: unit tests
+
+> @neverhuman/redline-web@0.1.0 test
+> vitest run
+
+
+ RUN  v3.2.7 /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/apps/web
+
+ ✓ src/lib/playwright-config.test.ts (2 tests) 4ms
+ ✓ src/api/client.test.ts (5 tests) 6ms
+ ✓ src/components/ResultsGrid.test.tsx (2 tests) 86ms
+ ✓ src/lib/format.test.ts (13 tests) 229ms
+ ✓ src/components/QueryConsole.test.tsx (3 tests) 300ms
+
+ Test Files  5 passed (5)
+      Tests  25 passed (25)
+   Start at  08:36:54
+   Duration  4.05s (transform 393ms, setup 442ms, collect 829ms, tests 625ms, environment 3.12s, prepare 912ms)
+
+[redline-ci] web: build
+
+> @neverhuman/redline-web@0.1.0 build
+> tsc -b && vite build
+
+vite v6.4.3 building for production...
+transforming...
+✓ 706 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                   0.49 kB │ gzip:   0.32 kB
+dist/assets/index-BYKRgdJ7.css   12.42 kB │ gzip:   2.99 kB
+dist/assets/index-CwNOHE9X.js   651.81 kB │ gzip: 188.44 kB │ map: 2,838.69 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 7.70s
+[redline-ci] web: complete
+[redline-ci] pr-ci: backend lane
+[redline-ci] backend: fmt
+[redline-ci] backend: clippy
+    Checking redline-web-server v0.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/apps/api)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 3.50s
+[redline-ci] backend: tests
+   Compiling cfg-if v1.0.4
+   Compiling pin-project-lite v0.2.17
+   Compiling once_cell v1.21.4
+   Compiling bytes v1.11.1
+   Compiling smallvec v1.15.1
+   Compiling futures-core v0.3.32
+   Compiling scopeguard v1.2.0
+   Compiling itoa v1.0.18
+   Compiling futures-sink v0.3.32
+   Compiling memchr v2.8.1
+   Compiling typenum v1.20.1
+   Compiling mime v0.3.17
+   Compiling log v0.4.32
+   Compiling unicase v2.9.0
+   Compiling futures-task v0.3.32
+   Compiling slab v0.4.12
+   Compiling futures-io v0.3.32
+   Compiling libc v0.2.186
+   Compiling zerocopy v0.8.52
+   Compiling bitflags v2.13.0
+   Compiling serde_core v1.0.228
+   Compiling lock_api v0.4.14
+   Compiling simd-adler32 v0.3.9
+   Compiling adler2 v2.0.1
+   Compiling futures-channel v0.3.32
+   Compiling tower-service v0.3.3
+   Compiling crc32fast v1.5.0
+   Compiling regex-syntax v0.8.11
+   Compiling cpufeatures v0.2.17
+   Compiling tracing-core v0.1.36
+   Compiling utf8parse v0.2.2
+   Compiling tower-layer v0.3.3
+   Compiling httpdate v1.0.3
+   Compiling miniz_oxide v0.8.9
+   Compiling same-file v1.0.6
+   Compiling mime_guess v2.0.5
+   Compiling percent-encoding v2.3.2
+   Compiling httparse v1.10.1
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling anstyle-query v1.1.5
+   Compiling sync_wrapper v1.0.2
+   Compiling colorchoice v1.0.5
+   Compiling atomic-waker v1.1.2
+   Compiling walkdir v2.5.0
+   Compiling anstyle-parse v1.0.0
+   Compiling anstyle v1.0.14
+   Compiling compression-core v0.4.32
+   Compiling zmij v1.0.21
+   Compiling lazy_static v1.5.0
+   Compiling ryu v1.0.23
+   Compiling clap_lex v1.1.0
+   Compiling linux-raw-sys v0.12.1
+   Compiling form_urlencoded v1.2.2
+   Compiling strsim v0.11.1
+   Compiling futures-util v0.3.32
+   Compiling sharded-slab v0.1.7
+   Compiling anstream v1.0.0
+   Compiling libsqlite3-sys v0.30.1
+   Compiling thread_local v1.1.9
+   Compiling fastrand v2.4.1
+   Compiling nu-ansi-term v0.50.3
+   Compiling fallible-iterator v0.3.0
+   Compiling http-range-header v0.4.2
+   Compiling http v1.4.2
+   Compiling tracing v0.1.44
+   Compiling clap_builder v4.6.0
+   Compiling tracing-log v0.2.0
+   Compiling matchit v0.8.4
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling thiserror v2.0.18
+   Compiling anyhow v1.0.103
+   Compiling quick-error v1.2.3
+   Compiling rustix v1.1.4
+   Compiling bit-vec v0.8.0
+   Compiling fnv v1.0.7
+   Compiling num-traits v0.2.19
+   Compiling flate2 v1.1.9
+   Compiling unarray v0.1.4
+   Compiling bit-set v0.8.0
+   Compiling compression-codecs v0.4.38
+   Compiling http-body v1.0.1
+   Compiling http-body-util v0.1.3
+   Compiling generic-array v0.14.7
+   Compiling parking_lot_core v0.9.12
+   Compiling errno v0.3.14
+   Compiling socket2 v0.6.4
+   Compiling mio v1.2.1
+   Compiling dirs-sys v0.5.0
+   Compiling getrandom v0.3.4
+   Compiling getrandom v0.4.2
+   Compiling wait-timeout v0.2.1
+   Compiling signal-hook-registry v1.4.8
+   Compiling dirs v6.0.0
+   Compiling axum-core v0.5.6
+   Compiling parking_lot v0.12.5
+   Compiling shellexpand v3.1.2
+   Compiling rand_core v0.9.5
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling rand v0.9.4
+   Compiling rand_xorshift v0.4.0
+   Compiling digest v0.10.7
+   Compiling tokio v1.52.3
+   Compiling sha2 v0.10.9
+   Compiling tempfile v3.27.0
+   Compiling rust-embed-utils v8.11.0
+   Compiling regex-automata v0.4.14
+   Compiling rusty-fork v0.3.1
+   Compiling rust-embed-impl v8.11.0
+   Compiling serde v1.0.228
+   Compiling serde_path_to_error v0.1.20
+   Compiling serde_json v1.0.150
+   Compiling clap v4.6.1
+   Compiling rust-embed v8.11.0
+   Compiling serde_urlencoded v0.7.1
+   Compiling futures-executor v0.3.32
+   Compiling ahash v0.8.12
+   Compiling ppv-lite86 v0.2.21
+   Compiling futures v0.3.32
+   Compiling hashbrown v0.14.5
+   Compiling matchers v0.2.0
+   Compiling rand_chacha v0.9.0
+   Compiling hashlink v0.9.1
+   Compiling tracing-subscriber v0.3.23
+   Compiling proptest v1.11.0
+   Compiling rusqlite v0.32.1
+   Compiling hyper v1.10.1
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling async-compression v0.4.42
+   Compiling tower-http v0.6.11
+   Compiling tokio-stream v0.1.18
+   Compiling hyper-util v0.1.20
+   Compiling axum v0.8.9
+   Compiling redline-web-server v0.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/apps/api)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 32.54s
+     Running unittests src/lib.rs (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/family-target/debug/deps/redline_web_server-a799085e23abb463)
+
+running 8 tests
+test connector::target_bin::tests::empty_cell_is_null ... ok
+test connector::tests::ident_quoting ... ok
+test connector::tests::read_only_detection ... ok
+test connector::target_bin::tests::unsupported_ops_error_cleanly ... ok
+test connector::target_bin::tests::parses_tab_output ... ok
+test metrics::tests::percentiles_are_nearest_rank ... ok
+test metrics::tests::records_and_counts ... ok
+test repair::tests::read_only_hint_points_at_the_authz_proof ... ok
+
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running unittests src/main.rs (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/family-target/debug/deps/redline_web-e19ef8feb3043cb9)
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+     Running tests/api.rs (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/family-target/debug/deps/api-5aa102b7cfa1e285)
+
+running 5 tests
+test write_rejected_when_read_only ... ok
+test query_select_returns_one ... ok
+test health_is_ok ... ok
+test metrics_counters_increment ... ok
+test schema_lists_seeded_tables ... ok
+
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+     Running tests/connector.rs (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/family-target/debug/deps/connector-81d84b1936fdb3e4)
+
+running 6 tests
+test read_only_rejects_writes ... ok
+test query_truncates_when_over_cap ... ok
+test rejects_unknown_order_by ... ok
+test select_returns_rows ... ok
+test truncates_at_max_rows ... ok
+test seeds_demo_schema ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+     Running tests/property.rs (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/family-target/debug/deps/property-8d636936f5c304d2)
+
+running 6 tests
+test commented_write_is_rejected ... ok
+test quote_ident_neutralises_breakout ... ok
+test read_statements_are_always_read_only ... ok
+test write_statements_are_never_read_only ... ok
+test quote_ident_round_trips ... ok
+test quote_ident_is_always_well_formed ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+[redline-ci] backend: release build
+   Compiling proc-macro2 v1.0.106
+   Compiling unicode-ident v1.0.24
+   Compiling quote v1.0.45
+   Compiling libc v0.2.186
+   Compiling version_check v0.9.5
+   Compiling pin-project-lite v0.2.17
+   Compiling cfg-if v1.0.4
+   Compiling bytes v1.11.1
+   Compiling futures-core v0.3.32
+   Compiling once_cell v1.21.4
+   Compiling itoa v1.0.18
+   Compiling futures-sink v0.3.32
+   Compiling unicase v2.9.0
+   Compiling memchr v2.8.1
+   Compiling typenum v1.20.1
+   Compiling log v0.4.32
+   Compiling serde_core v1.0.228
+   Compiling smallvec v1.15.1
+   Compiling futures-io v0.3.32
+   Compiling crc32fast v1.5.0
+   Compiling futures-task v0.3.32
+   Compiling mime v0.3.17
+   Compiling zerocopy v0.8.52
+   Compiling slab v0.4.12
+   Compiling httparse v1.10.1
+   Compiling futures-channel v0.3.32
+   Compiling tower-service v0.3.3
+   Compiling tracing-core v0.1.36
+   Compiling shlex v2.0.1
+   Compiling find-msvc-tools v0.1.9
+   Compiling option-ext v0.2.0
+   Compiling simd-adler32 v0.3.9
+   Compiling adler2 v2.0.1
+   Compiling utf8parse v0.2.2
+   Compiling pkg-config v0.3.33
+   Compiling vcpkg v0.2.15
+   Compiling same-file v1.0.6
+   Compiling generic-array v0.14.7
+   Compiling ahash v0.8.12
+   Compiling miniz_oxide v0.8.9
+   Compiling cc v1.2.63
+   Compiling mime_guess v2.0.5
+   Compiling serde v1.0.228
+   Compiling percent-encoding v2.3.2
+   Compiling tower-layer v0.3.3
+   Compiling cpufeatures v0.2.17
+   Compiling zmij v1.0.21
+   Compiling http v1.4.2
+   Compiling httpdate v1.0.3
+   Compiling walkdir v2.5.0
+   Compiling anstyle-parse v1.0.0
+   Compiling anstyle v1.0.14
+   Compiling anstyle-query v1.1.5
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling compression-core v0.4.32
+   Compiling colorchoice v1.0.5
+   Compiling atomic-waker v1.1.2
+   Compiling regex-syntax v0.8.11
+   Compiling sync_wrapper v1.0.2
+   Compiling parking_lot_core v0.9.12
+   Compiling serde_json v1.0.150
+   Compiling form_urlencoded v1.2.2
+   Compiling anstream v1.0.0
+   Compiling anyhow v1.0.103
+   Compiling flate2 v1.1.9
+   Compiling scopeguard v1.2.0
+   Compiling ryu v1.0.23
+   Compiling clap_lex v1.1.0
+   Compiling heck v0.5.0
+   Compiling lazy_static v1.5.0
+   Compiling thiserror v2.0.18
+   Compiling strsim v0.11.1
+   Compiling bitflags v2.13.0
+   Compiling sharded-slab v0.1.7
+   Compiling lock_api v0.4.14
+   Compiling tracing-log v0.2.0
+   Compiling thread_local v1.1.9
+   Compiling syn v2.0.117
+   Compiling dirs-sys v0.5.0
+   Compiling clap_builder v4.6.0
+   Compiling matchit v0.8.4
+   Compiling http-range-header v0.4.2
+   Compiling nu-ansi-term v0.50.3
+   Compiling fallible-streaming-iterator v0.1.9
+   Compiling compression-codecs v0.4.38
+   Compiling dirs v6.0.0
+   Compiling fallible-iterator v0.3.0
+   Compiling block-buffer v0.10.4
+   Compiling crypto-common v0.1.7
+   Compiling http-body v1.0.1
+   Compiling errno v0.3.14
+   Compiling socket2 v0.6.4
+   Compiling mio v1.2.1
+   Compiling digest v0.10.7
+   Compiling signal-hook-registry v1.4.8
+   Compiling http-body-util v0.1.3
+   Compiling shellexpand v3.1.2
+   Compiling sha2 v0.10.9
+   Compiling parking_lot v0.12.5
+   Compiling libsqlite3-sys v0.30.1
+   Compiling rust-embed-utils v8.11.0
+   Compiling regex-automata v0.4.14
+   Compiling serde_path_to_error v0.1.20
+   Compiling hashbrown v0.14.5
+   Compiling tokio-macros v2.7.0
+   Compiling tracing-attributes v0.1.31
+   Compiling futures-macro v0.3.32
+   Compiling serde_derive v1.0.228
+   Compiling clap_derive v4.6.1
+   Compiling rust-embed-impl v8.11.0
+   Compiling thiserror-impl v2.0.18
+   Compiling axum-macros v0.5.1
+   Compiling tokio v1.52.3
+   Compiling hashlink v0.9.1
+   Compiling rust-embed v8.11.0
+   Compiling futures-util v0.3.32
+   Compiling matchers v0.2.0
+   Compiling tracing v0.1.44
+   Compiling axum-core v0.5.6
+   Compiling tracing-subscriber v0.3.23
+   Compiling clap v4.6.1
+   Compiling serde_urlencoded v0.7.1
+   Compiling futures-executor v0.3.32
+   Compiling futures v0.3.32
+   Compiling hyper v1.10.1
+   Compiling tokio-util v0.7.18
+   Compiling tower v0.5.3
+   Compiling async-compression v0.4.42
+   Compiling tokio-stream v0.1.18
+   Compiling tower-http v0.6.11
+   Compiling hyper-util v0.1.20
+   Compiling axum v0.8.9
+   Compiling rusqlite v0.32.1
+   Compiling redline-web-server v0.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/apps/api)
+    Finished `release` profile [optimized] target(s) in 2m 35s
+[redline-ci] backend: complete
+[redline-ci] pr-ci: contract-drift lane
+[redline-ci] contract-drift: checking OpenAPI <-> Rust DTOs <-> TS DTOs
+[redline-ci] contract-drift: ok: 16 schemas, 10 paths in sync
+[redline-ci] contract-drift: complete
+[redline-ci] pr-ci: security lane
+[redline-ci] security: pinned local gitleaks
+[90m8:40AM[0m [32mINF[0m 42 commits scanned.
+[90m8:40AM[0m [32mINF[0m scan completed in 7.48s
+[90m8:40AM[0m [32mINF[0m no leaks found
+[redline-ci] security: pinned local RustSec database
+[redline-ci] security: pinned offline cargo-deny trust-domain=local-governed
+[redline-ci] security: verified locked Cargo archive valuable-0.1.1.crate sha256=ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65
+[redline-ci] security: verified locked Cargo archive anstyle-wincon-3.0.11.crate sha256=291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d
+[redline-ci] security: seeded lock-closure crates.io index entries=185 manifest=45169acea56070f13e18ce19f2f4d3ec86abaec0cf47365b9f27b31505b2abb3
+[redline-ci] security: seeded locked Cargo archive adler2-2.0.1.crate sha256=320119579fcad9c21884f5c4861d16174d0e06250625266f50fe6898340abefa
+[redline-ci] security: seeded locked Cargo archive ahash-0.8.12.crate sha256=5a15f179cd60c4584b8a8c596927aadc462e27f2ca70c04e0071964a73ba7a75
+[redline-ci] security: seeded locked Cargo archive aho-corasick-1.1.4.crate sha256=ddd31a130427c27518df266943a5308ed92d4b226cc639f5a8f1002816174301
+[redline-ci] security: seeded locked Cargo archive anstream-1.0.0.crate sha256=824a212faf96e9acacdbd09febd34438f8f711fb84e09a8916013cd7815ca28d
+[redline-ci] security: seeded locked Cargo archive anstyle-1.0.14.crate sha256=940b3a0ca603d1eade50a4846a2afffd5ef57a9feac2c0e2ec2e14f9ead76000
+[redline-ci] security: seeded locked Cargo archive anstyle-parse-1.0.0.crate sha256=52ce7f38b242319f7cabaa6813055467063ecdc9d355bbb4ce0c68908cd8130e
+[redline-ci] security: seeded locked Cargo archive anstyle-query-1.1.5.crate sha256=40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc
+[redline-ci] security: seeded locked Cargo archive anstyle-wincon-3.0.11.crate sha256=291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d
+[redline-ci] security: seeded locked Cargo archive anyhow-1.0.103.crate sha256=2a4385e2e34eb35d6b3efe798b9eb88096925d87726c0798709bf56d9ed84af3
+[redline-ci] security: seeded locked Cargo archive async-compression-0.4.42.crate sha256=e79b3f8a79cccc2898f31920fc69f304859b3bd567490f75ebf51ae1c792a9ac
+[redline-ci] security: seeded locked Cargo archive atomic-waker-1.1.2.crate sha256=1505bd5d3d116872e7271a6d4e16d81d0c8570876c8de68093a09ac269d8aac0
+[redline-ci] security: seeded locked Cargo archive autocfg-1.5.1.crate sha256=f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53
+[redline-ci] security: seeded locked Cargo archive axum-0.8.9.crate sha256=31b698c5f9a010f6573133b09e0de5408834d0c82f8d7475a89fc1867a71cd90
+[redline-ci] security: seeded locked Cargo archive axum-core-0.5.6.crate sha256=08c78f31d7b1291f7ee735c1c6780ccde7785daae9a9206026862dab7d8792d1
+[redline-ci] security: seeded locked Cargo archive axum-macros-0.5.1.crate sha256=7aa268c23bfbbd2c4363b9cd302a4f504fb2a9dfe7e3451d66f35dd392e20aca
+[redline-ci] security: seeded locked Cargo archive bit-set-0.8.0.crate sha256=08807e080ed7f9d5433fa9b275196cfc35414f66a0c79d864dc51a0d825231a3
+[redline-ci] security: seeded locked Cargo archive bit-vec-0.8.0.crate sha256=5e764a1d40d510daf35e07be9eb06e75770908c27d411ee6c92109c9840eaaf7
+[redline-ci] security: seeded locked Cargo archive bitflags-2.13.0.crate sha256=b4388bee8683e3d04af747c73422af53102d2bd24d9eadb6cbc100baef4b43f8
+[redline-ci] security: seeded locked Cargo archive block-buffer-0.10.4.crate sha256=3078c7629b62d3f0439517fa394996acacc5cbc91c5a20d8c658e77abd503a71
+[redline-ci] security: seeded locked Cargo archive bytes-1.11.1.crate sha256=1e748733b7cbc798e1434b6ac524f0c1ff2ab456fe201501e6497c8417a4fc33
+[redline-ci] security: seeded locked Cargo archive cc-1.2.63.crate sha256=556e016178bb5662a08681bbe0f00f8e17631781a4dfc8c45e466e4b185ec27f
+[redline-ci] security: seeded locked Cargo archive cfg-if-1.0.4.crate sha256=9330f8b2ff13f34540b44e946ef35111825727b38d33286ef986142615121801
+[redline-ci] security: seeded locked Cargo archive clap-4.6.1.crate sha256=1ddb117e43bbf7dacf0a4190fef4d345b9bad68dfc649cb349e7d17d28428e51
+[redline-ci] security: seeded locked Cargo archive clap_builder-4.6.0.crate sha256=714a53001bf66416adb0e2ef5ac857140e7dc3a0c48fb28b2f10762fc4b5069f
+[redline-ci] security: seeded locked Cargo archive clap_derive-4.6.1.crate sha256=f2ce8604710f6733aa641a2b3731eaa1e8b3d9973d5e3565da11800813f997a9
+[redline-ci] security: seeded locked Cargo archive clap_lex-1.1.0.crate sha256=c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9
+[redline-ci] security: seeded locked Cargo archive colorchoice-1.0.5.crate sha256=1d07550c9036bf2ae0c684c4297d503f838287c83c53686d05370d0e139ae570
+[redline-ci] security: seeded locked Cargo archive compression-codecs-0.4.38.crate sha256=ce2548391e9c1929c21bf6aa2680af86fe4c1b33e6cea9ac1cfeec0bd11218cf
+[redline-ci] security: seeded locked Cargo archive compression-core-0.4.32.crate sha256=cc14f565cf027a105f7a44ccf9e5b424348421a1d8952a8fc9d499d313107789
+[redline-ci] security: seeded locked Cargo archive cpufeatures-0.2.17.crate sha256=59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280
+[redline-ci] security: seeded locked Cargo archive crc32fast-1.5.0.crate sha256=9481c1c90cbf2ac953f07c8d4a58aa3945c425b7185c9154d67a65e4230da511
+[redline-ci] security: seeded locked Cargo archive crypto-common-0.1.7.crate sha256=78c8292055d1c1df0cce5d180393dc8cce0abec0a7102adb6c7b1eef6016d60a
+[redline-ci] security: seeded locked Cargo archive digest-0.10.7.crate sha256=9ed9a281f7bc9b7576e61468ba615a66a5c8cfdff42420a70aa82701a3b1e292
+[redline-ci] security: seeded locked Cargo archive dirs-6.0.0.crate sha256=c3e8aa94d75141228480295a7d0e7feb620b1a5ad9f12bc40be62411e38cce4e
+[redline-ci] security: seeded locked Cargo archive dirs-sys-0.5.0.crate sha256=e01a3366d27ee9890022452ee61b2b63a67e6f13f58900b651ff5665f0bb1fab
+[redline-ci] security: seeded locked Cargo archive equivalent-1.0.2.crate sha256=877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f
+[redline-ci] security: seeded locked Cargo archive errno-0.3.14.crate sha256=39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb
+[redline-ci] security: seeded locked Cargo archive fallible-iterator-0.3.0.crate sha256=2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649
+[redline-ci] security: seeded locked Cargo archive fallible-streaming-iterator-0.1.9.crate sha256=7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a
+[redline-ci] security: seeded locked Cargo archive fastrand-2.4.1.crate sha256=9f1f227452a390804cdb637b74a86990f2a7d7ba4b7d5693aac9b4dd6defd8d6
+[redline-ci] security: seeded locked Cargo archive find-msvc-tools-0.1.9.crate sha256=5baebc0774151f905a1a2cc41989300b1e6fbb29aff0ceffa1064fdd3088d582
+[redline-ci] security: seeded locked Cargo archive flate2-1.1.9.crate sha256=843fba2746e448b37e26a819579957415c8cef339bf08564fe8b7ddbd959573c
+[redline-ci] security: seeded locked Cargo archive fnv-1.0.7.crate sha256=3f9eec918d3f24069decb9af1554cad7c880e2da24a9afd88aca000531ab82c1
+[redline-ci] security: seeded locked Cargo archive foldhash-0.1.5.crate sha256=d9c4f5dac5e15c24eb999c26181a6ca40b39fe946cbe4c263c7209467bc83af2
+[redline-ci] security: seeded locked Cargo archive form_urlencoded-1.2.2.crate sha256=cb4cb245038516f5f85277875cdaa4f7d2c9a0fa0468de06ed190163b1581fcf
+[redline-ci] security: seeded locked Cargo archive futures-0.3.32.crate sha256=8b147ee9d1f6d097cef9ce628cd2ee62288d963e16fb287bd9286455b241382d
+[redline-ci] security: seeded locked Cargo archive futures-channel-0.3.32.crate sha256=07bbe89c50d7a535e539b8c17bc0b49bdb77747034daa8087407d655f3f7cc1d
+[redline-ci] security: seeded locked Cargo archive futures-core-0.3.32.crate sha256=7e3450815272ef58cec6d564423f6e755e25379b217b0bc688e295ba24df6b1d
+[redline-ci] security: seeded locked Cargo archive futures-executor-0.3.32.crate sha256=baf29c38818342a3b26b5b923639e7b1f4a61fc5e76102d4b1981c6dc7a7579d
+[redline-ci] security: seeded locked Cargo archive futures-io-0.3.32.crate sha256=cecba35d7ad927e23624b22ad55235f2239cfa44fd10428eecbeba6d6a717718
+[redline-ci] security: seeded locked Cargo archive futures-macro-0.3.32.crate sha256=e835b70203e41293343137df5c0664546da5745f82ec9b84d40be8336958447b
+[redline-ci] security: seeded locked Cargo archive futures-sink-0.3.32.crate sha256=c39754e157331b013978ec91992bde1ac089843443c49cbc7f46150b0fad0893
+[redline-ci] security: seeded locked Cargo archive futures-task-0.3.32.crate sha256=037711b3d59c33004d3856fbdc83b99d4ff37a24768fa1be9ce3538a1cde4393
+[redline-ci] security: seeded locked Cargo archive futures-util-0.3.32.crate sha256=389ca41296e6190b48053de0321d02a77f32f8a5d2461dd38762c0593805c6d6
+[redline-ci] security: seeded locked Cargo archive generic-array-0.14.7.crate sha256=85649ca51fd72272d7821adaf274ad91c288277713d9c18820d8499a7ff69e9a
+[redline-ci] security: seeded locked Cargo archive getrandom-0.2.17.crate sha256=ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0
+[redline-ci] security: seeded locked Cargo archive getrandom-0.3.4.crate sha256=899def5c37c4fd7b2664648c28120ecec138e4d395b459e5ca34f9cce2dd77fd
+[redline-ci] security: seeded locked Cargo archive getrandom-0.4.2.crate sha256=0de51e6874e94e7bf76d726fc5d13ba782deca734ff60d5bb2fb2607c7406555
+[redline-ci] security: seeded locked Cargo archive hashbrown-0.14.5.crate sha256=e5274423e17b7c9fc20b6e7e208532f9b19825d82dfd615708b70edd83df41f1
+[redline-ci] security: seeded locked Cargo archive hashbrown-0.15.5.crate sha256=9229cfe53dfd69f0609a49f65461bd93001ea1ef889cd5529dd176593f5338a1
+[redline-ci] security: seeded locked Cargo archive hashbrown-0.17.1.crate sha256=ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a
+[redline-ci] security: seeded locked Cargo archive hashlink-0.9.1.crate sha256=6ba4ff7128dee98c7dc9794b6a411377e1404dba1c97deb8d1a55297bd25d8af
+[redline-ci] security: seeded locked Cargo archive heck-0.5.0.crate sha256=2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea
+[redline-ci] security: seeded locked Cargo archive http-1.4.2.crate sha256=6970f50e31d6fc17d3fa27329444bfa74e196cf62e95052a3f6fee181dba6425
+[redline-ci] security: seeded locked Cargo archive http-body-1.0.1.crate sha256=1efedce1fb8e6913f23e0c92de8e62cd5b772a67e7b3946df930a62566c93184
+[redline-ci] security: seeded locked Cargo archive http-body-util-0.1.3.crate sha256=b021d93e26becf5dc7e1b75b1bed1fd93124b374ceb73f43d4d4eafec896a64a
+[redline-ci] security: seeded locked Cargo archive http-range-header-0.4.2.crate sha256=9171a2ea8a68358193d15dd5d70c1c10a2afc3e7e4c5bc92bc9f025cebd7359c
+[redline-ci] security: seeded locked Cargo archive httparse-1.10.1.crate sha256=6dbf3de79e51f3d586ab4cb9d5c3e2c14aa28ed23d180cf89b4df0454a69cc87
+[redline-ci] security: seeded locked Cargo archive httpdate-1.0.3.crate sha256=df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9
+[redline-ci] security: seeded locked Cargo archive hyper-1.10.1.crate sha256=55281c53a1894c864990125767da440a4e630446785086f52523b20033b74498
+[redline-ci] security: seeded locked Cargo archive hyper-util-0.1.20.crate sha256=96547c2556ec9d12fb1578c4eaf448b04993e7fb79cbaad930a656880a6bdfa0
+[redline-ci] security: seeded locked Cargo archive id-arena-2.3.0.crate sha256=3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954
+[redline-ci] security: seeded locked Cargo archive indexmap-2.14.0.crate sha256=d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9
+[redline-ci] security: seeded locked Cargo archive is_terminal_polyfill-1.70.2.crate sha256=a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695
+[redline-ci] security: seeded locked Cargo archive itoa-1.0.18.crate sha256=8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682
+[redline-ci] security: seeded locked Cargo archive lazy_static-1.5.0.crate sha256=bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe
+[redline-ci] security: seeded locked Cargo archive leb128fmt-0.1.0.crate sha256=09edd9e8b54e49e587e4f6295a7d29c3ea94d469cb40ab8ca70b288248a81db2
+[redline-ci] security: seeded locked Cargo archive libc-0.2.186.crate sha256=68ab91017fe16c622486840e4c83c9a37afeff978bd239b5293d61ece587de66
+[redline-ci] security: seeded locked Cargo archive libredox-0.1.17.crate sha256=f02ab6bace2054fb888a3c16f990117b579d14a3088e472d63c6011fa185c9d3
+[redline-ci] security: seeded locked Cargo archive libsqlite3-sys-0.30.1.crate sha256=2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149
+[redline-ci] security: seeded locked Cargo archive linux-raw-sys-0.12.1.crate sha256=32a66949e030da00e8c7d4434b251670a91556f4144941d37452769c25d58a53
+[redline-ci] security: seeded locked Cargo archive lock_api-0.4.14.crate sha256=224399e74b87b5f3557511d98dff8b14089b3dadafcab6bb93eab67d3aace965
+[redline-ci] security: seeded locked Cargo archive log-0.4.32.crate sha256=953f07c43838f8e6f9758cab68bf5bed85465e7587ebe0b823f1bcd81978ad3a
+[redline-ci] security: seeded locked Cargo archive matchers-0.2.0.crate sha256=d1525a2a28c7f4fa0fc98bb91ae755d1e2d1505079e05539e35bc876b5d65ae9
+[redline-ci] security: seeded locked Cargo archive matchit-0.8.4.crate sha256=47e1ffaa40ddd1f3ed91f717a33c8c0ee23fff369e3aa8772b9605cc1d22f4c3
+[redline-ci] security: seeded locked Cargo archive memchr-2.8.1.crate sha256=6b947ae49db0d222b1dbc6b113ce7248a3fc3a6ca21b696717bfc000ba4484d8
+[redline-ci] security: seeded locked Cargo archive mime-0.3.17.crate sha256=6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a
+[redline-ci] security: seeded locked Cargo archive mime_guess-2.0.5.crate sha256=f7c44f8e672c00fe5308fa235f821cb4198414e1c77935c1ab6948d3fd78550e
+[redline-ci] security: seeded locked Cargo archive miniz_oxide-0.8.9.crate sha256=1fa76a2c86f704bdb222d66965fb3d63269ce38518b83cb0575fca855ebb6316
+[redline-ci] security: seeded locked Cargo archive mio-1.2.1.crate sha256=02bd0af71c67b473010cbbc60715ee815645a4dc942899111f494b4b737d6fda
+[redline-ci] security: seeded locked Cargo archive nu-ansi-term-0.50.3.crate sha256=7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5
+[redline-ci] security: seeded locked Cargo archive num-traits-0.2.19.crate sha256=071dfc062690e90b734c0b2273ce72ad0ffa95f0c74596bc250dcfd960262841
+[redline-ci] security: seeded locked Cargo archive once_cell-1.21.4.crate sha256=9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50
+[redline-ci] security: seeded locked Cargo archive once_cell_polyfill-1.70.2.crate sha256=384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe
+[redline-ci] security: seeded locked Cargo archive option-ext-0.2.0.crate sha256=04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d
+[redline-ci] security: seeded locked Cargo archive parking_lot-0.12.5.crate sha256=93857453250e3077bd71ff98b6a65ea6621a19bb0f559a85248955ac12c45a1a
+[redline-ci] security: seeded locked Cargo archive parking_lot_core-0.9.12.crate sha256=2621685985a2ebf1c516881c026032ac7deafcda1a2c9b7850dc81e3dfcb64c1
+[redline-ci] security: seeded locked Cargo archive percent-encoding-2.3.2.crate sha256=9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220
+[redline-ci] security: seeded locked Cargo archive pin-project-lite-0.2.17.crate sha256=a89322df9ebe1c1578d689c92318e070967d1042b512afbe49518723f4e6d5cd
+[redline-ci] security: seeded locked Cargo archive pkg-config-0.3.33.crate sha256=19f132c84eca552bf34cab8ec81f1c1dcc229b811638f9d283dceabe58c5569e
+[redline-ci] security: seeded locked Cargo archive ppv-lite86-0.2.21.crate sha256=85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9
+[redline-ci] security: seeded locked Cargo archive prettyplease-0.2.37.crate sha256=479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b
+[redline-ci] security: seeded locked Cargo archive proc-macro2-1.0.106.crate sha256=8fd00f0bb2e90d81d1044c2b32617f68fcb9fa3bb7640c23e9c748e53fb30934
+[redline-ci] security: seeded locked Cargo archive proptest-1.11.0.crate sha256=4b45fcc2344c680f5025fe57779faef368840d0bd1f42f216291f0dc4ace4744
+[redline-ci] security: seeded locked Cargo archive quick-error-1.2.3.crate sha256=a1d01941d82fa2ab50be1e79e6714289dd7cde78eba4c074bc5a4374f650dfe0
+[redline-ci] security: seeded locked Cargo archive quote-1.0.45.crate sha256=41f2619966050689382d2b44f664f4bc593e129785a36d6ee376ddf37259b924
+[redline-ci] security: seeded locked Cargo archive r-efi-5.3.0.crate sha256=69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f
+[redline-ci] security: seeded locked Cargo archive r-efi-6.0.0.crate sha256=f8dcc9c7d52a811697d2151c701e0d08956f92b0e24136cf4cf27b57a6a0d9bf
+[redline-ci] security: seeded locked Cargo archive rand-0.9.4.crate sha256=44c5af06bb1b7d3216d91932aed5265164bf384dc89cd6ba05cf59a35f5f76ea
+[redline-ci] security: seeded locked Cargo archive rand_chacha-0.9.0.crate sha256=d3022b5f1df60f26e1ffddd6c66e8aa15de382ae63b3a0c1bfc0e4d3e3f325cb
+[redline-ci] security: seeded locked Cargo archive rand_core-0.9.5.crate sha256=76afc826de14238e6e8c374ddcc1fa19e374fd8dd986b0d2af0d02377261d83c
+[redline-ci] security: seeded locked Cargo archive rand_xorshift-0.4.0.crate sha256=513962919efc330f829edb2535844d1b912b0fbe2ca165d613e4e8788bb05a5a
+[redline-ci] security: seeded locked Cargo archive redox_syscall-0.5.18.crate sha256=ed2bf2547551a7053d6fdfafda3f938979645c44812fbfcda098faae3f1a362d
+[redline-ci] security: seeded locked Cargo archive redox_users-0.5.2.crate sha256=a4e608c6638b9c18977b00b475ac1f28d14e84b27d8d42f70e0bf1e3dec127ac
+[redline-ci] security: seeded locked Cargo archive regex-automata-0.4.14.crate sha256=6e1dd4122fc1595e8162618945476892eefca7b88c52820e74af6262213cae8f
+[redline-ci] security: seeded locked Cargo archive regex-syntax-0.8.11.crate sha256=d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4
+[redline-ci] security: seeded locked Cargo archive rusqlite-0.32.1.crate sha256=7753b721174eb8ff87a9a0e799e2d7bc3749323e773db92e0984debb00019d6e
+[redline-ci] security: seeded locked Cargo archive rust-embed-8.11.0.crate sha256=04113cb9355a377d83f06ef1f0a45b8ab8cd7d8b1288160717d66df5c7988d27
+[redline-ci] security: seeded locked Cargo archive rust-embed-impl-8.11.0.crate sha256=da0902e4c7c8e997159ab384e6d0fc91c221375f6894346ae107f47dd0f3ccaa
+[redline-ci] security: seeded locked Cargo archive rust-embed-utils-8.11.0.crate sha256=5bcdef0be6fe7f6fa333b1073c949729274b05f123a0ad7efcb8efd878e5c3b1
+[redline-ci] security: seeded locked Cargo archive rustix-1.1.4.crate sha256=b6fe4565b9518b83ef4f91bb47ce29620ca828bd32cb7e408f0062e9930ba190
+[redline-ci] security: seeded locked Cargo archive rusty-fork-0.3.1.crate sha256=cc6bf79ff24e648f6da1f8d1f011e9cac26491b619e6b9280f2b47f1774e6ee2
+[redline-ci] security: seeded locked Cargo archive ryu-1.0.23.crate sha256=9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f
+[redline-ci] security: seeded locked Cargo archive same-file-1.0.6.crate sha256=93fc1dc3aaa9bfed95e02e6eadabb4baf7e3078b0bd1b4d7b6b0b68378900502
+[redline-ci] security: seeded locked Cargo archive scopeguard-1.2.0.crate sha256=94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49
+[redline-ci] security: seeded locked Cargo archive semver-1.0.28.crate sha256=8a7852d02fc848982e0c167ef163aaff9cd91dc640ba85e263cb1ce46fae51cd
+[redline-ci] security: seeded locked Cargo archive serde-1.0.228.crate sha256=9a8e94ea7f378bd32cbbd37198a4a91436180c5bb472411e48b5ec2e2124ae9e
+[redline-ci] security: seeded locked Cargo archive serde_core-1.0.228.crate sha256=41d385c7d4ca58e59fc732af25c3983b67ac852c1a25000afe1175de458b67ad
+[redline-ci] security: seeded locked Cargo archive serde_derive-1.0.228.crate sha256=d540f220d3187173da220f885ab66608367b6574e925011a9353e4badda91d79
+[redline-ci] security: seeded locked Cargo archive serde_json-1.0.150.crate sha256=e8014e44b4736ed0538adeecded0fce2a272f22dc9578a7eb6b2d9993c74cfb9
+[redline-ci] security: seeded locked Cargo archive serde_path_to_error-0.1.20.crate sha256=10a9ff822e371bb5403e391ecd83e182e0e77ba7f6fe0160b795797109d1b457
+[redline-ci] security: seeded locked Cargo archive serde_urlencoded-0.7.1.crate sha256=d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd
+[redline-ci] security: seeded locked Cargo archive sha2-0.10.9.crate sha256=a7507d819769d01a365ab707794a4084392c824f54a7a6a7862f8c3d0892b283
+[redline-ci] security: seeded locked Cargo archive sharded-slab-0.1.7.crate sha256=f40ca3c46823713e0d4209592e8d6e826aa57e928f09752619fc696c499637f6
+[redline-ci] security: seeded locked Cargo archive shellexpand-3.1.2.crate sha256=32824fab5e16e6c4d86dc1ba84489390419a39f97699852b66480bb87d297ed8
+[redline-ci] security: seeded locked Cargo archive shlex-2.0.1.crate sha256=f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba
+[redline-ci] security: seeded locked Cargo archive signal-hook-registry-1.4.8.crate sha256=c4db69cba1110affc0e9f7bcd48bbf87b3f4fc7c61fc9155afd4c469eb3d6c1b
+[redline-ci] security: seeded locked Cargo archive simd-adler32-0.3.9.crate sha256=703d5c7ef118737c72f1af64ad2f6f8c5e1921f818cdcb97b8fe6fc69bf66214
+[redline-ci] security: seeded locked Cargo archive slab-0.4.12.crate sha256=0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5
+[redline-ci] security: seeded locked Cargo archive smallvec-1.15.1.crate sha256=67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03
+[redline-ci] security: seeded locked Cargo archive socket2-0.6.4.crate sha256=52d1cfed4120b4d927bf7c0f86d2087a4a7d6027c906d9f9d525a80573b9be51
+[redline-ci] security: seeded locked Cargo archive strsim-0.11.1.crate sha256=7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f
+[redline-ci] security: seeded locked Cargo archive syn-2.0.117.crate sha256=e665b8803e7b1d2a727f4023456bbbbe74da67099c585258af0ad9c5013b9b99
+[redline-ci] security: seeded locked Cargo archive sync_wrapper-1.0.2.crate sha256=0bf256ce5efdfa370213c1dabab5935a12e49f2c58d15e9eac2870d3b4f27263
+[redline-ci] security: seeded locked Cargo archive tempfile-3.27.0.crate sha256=32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd
+[redline-ci] security: seeded locked Cargo archive thiserror-2.0.18.crate sha256=4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4
+[redline-ci] security: seeded locked Cargo archive thiserror-impl-2.0.18.crate sha256=ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5
+[redline-ci] security: seeded locked Cargo archive thread_local-1.1.9.crate sha256=f60246a4944f24f6e018aa17cdeffb7818b76356965d03b07d6a9886e8962185
+[redline-ci] security: seeded locked Cargo archive tokio-1.52.3.crate sha256=8fc7f01b389ac15039e4dc9531aa973a135d7a4135281b12d7c1bc79fd57fffe
+[redline-ci] security: seeded locked Cargo archive tokio-macros-2.7.0.crate sha256=385a6cb71ab9ab790c5fe8d67f1645e6c450a7ce006a33de03daa956cf70a496
+[redline-ci] security: seeded locked Cargo archive tokio-stream-0.1.18.crate sha256=32da49809aab5c3bc678af03902d4ccddea2a87d028d86392a4b1560c6906c70
+[redline-ci] security: seeded locked Cargo archive tokio-util-0.7.18.crate sha256=9ae9cec805b01e8fc3fd2fe289f89149a9b66dd16786abd8b19cfa7b48cb0098
+[redline-ci] security: seeded locked Cargo archive tower-0.5.3.crate sha256=ebe5ef63511595f1344e2d5cfa636d973292adc0eec1f0ad45fae9f0851ab1d4
+[redline-ci] security: seeded locked Cargo archive tower-http-0.6.11.crate sha256=4cfcf7e2740e6fc6d4d688b4ef00650406bb94adf4731e43c096c3a19fe40840
+[redline-ci] security: seeded locked Cargo archive tower-layer-0.3.3.crate sha256=121c2a6cda46980bb0fcd1647ffaf6cd3fc79a013de288782836f6df9c48780e
+[redline-ci] security: seeded locked Cargo archive tower-service-0.3.3.crate sha256=8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3
+[redline-ci] security: seeded locked Cargo archive tracing-0.1.44.crate sha256=63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100
+[redline-ci] security: seeded locked Cargo archive tracing-attributes-0.1.31.crate sha256=7490cfa5ec963746568740651ac6781f701c9c5ea257c58e057f3ba8cf69e8da
+[redline-ci] security: seeded locked Cargo archive tracing-core-0.1.36.crate sha256=db97caf9d906fbde555dd62fa95ddba9eecfd14cb388e4f491a66d74cd5fb79a
+[redline-ci] security: seeded locked Cargo archive tracing-log-0.2.0.crate sha256=ee855f1f400bd0e5c02d150ae5de3840039a3f54b025156404e34c23c03f47c3
+[redline-ci] security: seeded locked Cargo archive tracing-subscriber-0.3.23.crate sha256=cb7f578e5945fb242538965c2d0b04418d38ec25c79d160cd279bf0731c8d319
+[redline-ci] security: seeded locked Cargo archive typenum-1.20.1.crate sha256=b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20
+[redline-ci] security: seeded locked Cargo archive unarray-0.1.4.crate sha256=eaea85b334db583fe3274d12b4cd1880032beab409c0d774be044d4480ab9a94
+[redline-ci] security: seeded locked Cargo archive unicase-2.9.0.crate sha256=dbc4bc3a9f746d862c45cb89d705aa10f187bb96c76001afab07a0d35ce60142
+[redline-ci] security: seeded locked Cargo archive unicode-ident-1.0.24.crate sha256=e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75
+[redline-ci] security: seeded locked Cargo archive unicode-xid-0.2.6.crate sha256=ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853
+[redline-ci] security: seeded locked Cargo archive utf8parse-0.2.2.crate sha256=06abde3611657adf66d383f00b093d7faecc7fa57071cce2578660c9f1010821
+[redline-ci] security: seeded locked Cargo archive valuable-0.1.1.crate sha256=ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65
+[redline-ci] security: seeded locked Cargo archive vcpkg-0.2.15.crate sha256=accd4ea62f7bb7a82fe23066fb0957d48ef677f6eeb8215f372f52e48bb32426
+[redline-ci] security: seeded locked Cargo archive version_check-0.9.5.crate sha256=0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a
+[redline-ci] security: seeded locked Cargo archive wait-timeout-0.2.1.crate sha256=09ac3b126d3914f9849036f826e054cbabdc8519970b8998ddaf3b5bd3c65f11
+[redline-ci] security: seeded locked Cargo archive walkdir-2.5.0.crate sha256=29790946404f91d9c5d06f9874efddea1dc06c5efe94541a7d6863108e3a5e4b
+[redline-ci] security: seeded locked Cargo archive wasi-0.11.1+wasi-snapshot-preview1.crate sha256=ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b
+[redline-ci] security: seeded locked Cargo archive wasip2-1.0.3+wasi-0.2.9.crate sha256=20064672db26d7cdc89c7798c48a0fdfac8213434a1186e5ef29fd560ae223d6
+[redline-ci] security: seeded locked Cargo archive wasip3-0.4.0+wasi-0.3.0-rc-2026-01-06.crate sha256=5428f8bf88ea5ddc08faddef2ac4a67e390b88186c703ce6dbd955e1c145aca5
+[redline-ci] security: seeded locked Cargo archive wasm-encoder-0.244.0.crate sha256=990065f2fe63003fe337b932cfb5e3b80e0b4d0f5ff650e6985b1048f62c8319
+[redline-ci] security: seeded locked Cargo archive wasm-metadata-0.244.0.crate sha256=bb0e353e6a2fbdc176932bbaab493762eb1255a7900fe0fea1a2f96c296cc909
+[redline-ci] security: seeded locked Cargo archive wasmparser-0.244.0.crate sha256=47b807c72e1bac69382b3a6fb3dbe8ea4c0ed87ff5629b8685ae6b9a611028fe
+[redline-ci] security: seeded locked Cargo archive winapi-util-0.1.11.crate sha256=c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22
+[redline-ci] security: seeded locked Cargo archive windows-link-0.2.1.crate sha256=f0805222e57f7521d6a62e36fa9163bc891acd422f971defe97d64e70d0a4fe5
+[redline-ci] security: seeded locked Cargo archive windows-sys-0.61.2.crate sha256=ae137229bcbd6cdf0f7b80a31df61766145077ddf49416a728b02cb3921ff3fc
+[redline-ci] security: seeded locked Cargo archive wit-bindgen-0.51.0.crate sha256=d7249219f66ced02969388cf2bb044a09756a083d0fab1e566056b04d9fbcaa5
+[redline-ci] security: seeded locked Cargo archive wit-bindgen-0.57.1.crate sha256=1ebf944e87a7c253233ad6766e082e3cd714b5d03812acc24c318f549614536e
+[redline-ci] security: seeded locked Cargo archive wit-bindgen-core-0.51.0.crate sha256=ea61de684c3ea68cb082b7a88508a8b27fcc8b797d738bfc99a82facf1d752dc
+[redline-ci] security: seeded locked Cargo archive wit-bindgen-rust-0.51.0.crate sha256=b7c566e0f4b284dd6561c786d9cb0142da491f46a9fbed79ea69cdad5db17f21
+[redline-ci] security: seeded locked Cargo archive wit-bindgen-rust-macro-0.51.0.crate sha256=0c0f9bfd77e6a48eccf51359e3ae77140a7f50b1e2ebfe62422d8afdaffab17a
+[redline-ci] security: seeded locked Cargo archive wit-component-0.244.0.crate sha256=9d66ea20e9553b30172b5e831994e35fbde2d165325bec84fc43dbf6f4eb9cb2
+[redline-ci] security: seeded locked Cargo archive wit-parser-0.244.0.crate sha256=ecc8ac4bc1dc3381b7f59c34f00b67e18f910c2c0f50015669dde7def656a736
+[redline-ci] security: seeded locked Cargo archive zerocopy-0.8.52.crate sha256=ce1022995ff5ff5d841ad7d994facc23098cd40152f2c1d11cd607c6f530653f
+[redline-ci] security: seeded locked Cargo archive zerocopy-derive-0.8.52.crate sha256=1ae7f38b72ec2a254e2b87ef277cf2cd4fb97cbebf944faa6f33354da0867930
+[redline-ci] security: seeded locked Cargo archive zmij-1.0.21.crate sha256=b8848ee67ecc8aedbaf3e4122217aff892639231befc6a1b58d29fff4c2cabaa
+[redline-ci] security: verified exact Cargo.lock registry closure packages=191 manifest=fcbbe7bd4730723c82706762902c583ff39cdc0ade551d2b0e8e47fe54136957
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/jankurai/security/cargo-deny-home.dxD4WF/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/.cargo/advisory-dbs/advisory-db-3157b0e258782691
+ * branch              main       -> FETCH_HEAD
+HEAD is now at 6e3286f4 Assigned RUSTSEC-2026-0206 to rustybuzz
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=6e3286f4efa8c142fb33e5ea4342c8db6693cf34 tree=d12220aff0053a035739bec6e64aefbaafbf01a3
+[redline-ci] security: verified exact Cargo.lock registry closure packages=191 manifest=fcbbe7bd4730723c82706762902c583ff39cdc0ade551d2b0e8e47fe54136957
+[redline-ci] security: pinned offline blocking zizmor
+ INFO zizmor: 🌈 zizmor v1.25.2
+ INFO audit: zizmor: 🌈 completed .github/workflows/ci.yml
+[redline-ci] security: pinned update-disabled whole-repository Syft SBOM
+[redline-ci] security: complete dev-enabled npm lock SBOM
+[redline-ci] security: authenticated offline Grype over the npm lock SBOM
+[redline-ci] security: complete
+[redline-ci] pr-ci: web e2e lane (browser required by the canonical required dispatcher)
+[redline-ci] e2e: running Playwright smoke
+(node:1938966) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+Running 4 tests using 4 workers
+
+(node:1939849) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1939849) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:1939849) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1939841) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1939841) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:1939848) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1939841) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › e2e/smoke.spec.ts:16:1 › POST /api/query round-trips through the connector (94ms)
+(node:1939848) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:1939848) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1939842) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:1939842) [DEP0205] DeprecationWarning: `module.register()` is deprecated. Use `module.registerHooks()` instead.
+(node:1939842) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  2 [chromium] › e2e/smoke.spec.ts:9:1 › SPA renders the workbench shell (2.8s)
+  ✓  3 [chromium] › e2e/smoke.spec.ts:28:1 › running a query from the UI shows results (3.0s)
+  ✓  4 [chromium] › e2e/smoke.spec.ts:37:1 › the workbench has no critical accessibility violations (3.4s)
+
+  4 passed (7.4s)
+[redline-ci] e2e: complete
+[redline-ci] pr-ci: cost-budget + release-readiness lanes
+[redline-ci] cost-budget: validating zero-spend manifest
+[redline-ci] cost-budget: complete
+[redline-ci] release-readiness: validating release evidence surface
+[redline-ci] release-readiness: complete
+[redline-ci] pr-ci: jankurai tool-suite evidence
+[redline-ci] jankurai: audit-ci (clean exact-head score)
+[smart] full scan — --full requested
+score=90 raw=90 caps=0 findings=2
+[redline-ci] score: clean exact-head governed evidence passed
+[redline-ci] jankurai: proof-routing
+Error: provide at least one --changed path or --changed-from ref
+[redline-ci][warn] jankurai: proof-routing failed
+[redline-ci] jankurai: proofbind
+[redline-ci][error] proofbind requires at least one non-deleted changed path
+[redline-ci][warn] jankurai: proofbind failed
+[redline-ci] jankurai: proofmark-rust
+[redline-ci] jankurai: copy-code
+copy-code status=pass hard=0 warning=0 classes=0 json=/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/jankurai/copy-code.json md=/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-web/target/jankurai/copy-code.md
+[redline-ci] jankurai: security evidence
+[redline-ci] jankurai: language bad-behavior
+[redline-ci] language-bad-behavior: complete
+[redline-ci] jankurai: rust-witness
+witness graph written: 1 crates, 78 pub items indexed
+[redline-ci] jankurai: authz-matrix + input-boundary + agent-tool-supply (audit detectors)
+[smart] full scan — --full requested
+score=90 raw=90 caps=0 findings=2
+[redline-ci] jankurai: contract-drift
+[redline-ci] contract-drift: checking OpenAPI <-> Rust DTOs <-> TS DTOs
+[redline-ci] contract-drift: ok: 16 schemas, 10 paths in sync
+[redline-ci] contract-drift: complete
+[redline-ci] jankurai: release-readiness (script)
+[redline-ci] release-readiness: validating release evidence surface
+[redline-ci] release-readiness: complete
+[redline-ci] jankurai: cost-budget
+[redline-ci] cost-budget: validating zero-spend manifest
+[redline-ci] cost-budget: complete
+[redline-ci] jankurai: ux-qa
+[redline-ci] ux-qa: complete

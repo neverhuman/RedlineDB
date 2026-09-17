@@ -1,0 +1,904 @@
+Here’s the **Rust HPC acceleration playbook I’d use in 2026**. I’m treating “native Rust” as: Rust-first code where possible, with a separate lane for Rust bindings to unavoidable HPC substrates like CUDA, MPI, BLAS/LAPACK, RDMA, ROCm, and vendor runtimes. No list can be literally permanent because Rust HPC crates are moving fast, but this is a broad current sweep across docs, GitHub, crates, and recent community/X signals.
+
+## The biggest breakthrough levers, ranked
+
+**1. Change the algorithm or representation before touching micro-optimizations.** A better algorithm beats hand-tuned loops almost every time: FFT instead of direct convolution, Fast Multipole Method instead of all-pairs interactions, sparse matrices instead of dense, columnar Arrow/Polars instead of row-wise records, batched GEMM instead of scalar loops. Rust has credible building blocks here: `RustFFT` is pure Rust and SIMD-accelerated; `kifmm` is a Rust kernel-independent Fast Multipole Method framework with optional MPI support; `faer` is a high-performance dense linear algebra library; `sprs` provides compressed sparse matrix/vector storage; and Polars/DataFusion/Arrow give you columnar query execution. ([GitHub][1])
+
+**2. Compile for the actual machine.** For intense HPC binaries, start with `opt-level = 3`, `codegen-units = 1`, LTO, `panic = "abort"`, and `-C target-cpu=native` when you do not need portable binaries. Cargo profiles expose optimization controls, Rust’s performance book explicitly recommends `codegen-units = 1`, `lto = "fat"`, alternative allocators, `panic = "abort"`, and `-C target-cpu=native` for maximum runtime speed, and `rustc` supports PGO. ([Rust Documentation][2])
+
+```toml
+# Cargo.toml
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "thin"          # use "fat" for final squeeze if build time is acceptable
+panic = "abort"
+debug = "line-tables-only"  # keep profiler-friendly symbols without full debuginfo
+
+[profile.bench]
+inherits = "release"
+debug = true
+```
+
+```toml
+# .cargo/config.toml
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "target-cpu=native"]
+```
+
+**3. Build a real profiling stack first.** Use `criterion` for statistical microbenchmarks, `iai-callgrind` for stable instruction/cache-style benchmarking, `cargo-flamegraph`/`perf` for hotspots, heaptrack/DHAT/bytehound for allocation pressure, and `cargo-show-asm` to check whether the generated assembly actually vectorized. Criterion is statistics-driven, Iai-Callgrind uses Valgrind tools such as Callgrind/Cachegrind/DHAT, and Rust’s performance book lists flamegraph, heaptrack, bytehound, samply, and causal profiling tools. ([Docs.rs][3])
+
+**4. Push memory bandwidth and cache locality before adding threads.** Use structure-of-arrays, cache blocking/tiling, preallocated workspaces, `Vec::with_capacity`, aligned chunks, chunked reductions, bitsets, compressed sparse structures, and zero-copy parsing. False sharing can destroy scaling; `CachePadded` exists specifically to prevent unrelated hot fields from living in the same cache line. ([Docs.rs][4])
+
+**5. Use SIMD intentionally.** Stable Rust gives you `std::arch` for architecture-specific intrinsics; nightly `std::simd` is still experimental but provides portable SIMD; crates like `wide`, `pulp`, `safe_arch`, `rten-simd`, `simd-json`, `sonic-rs`, and libraries such as `RustFFT` expose SIMD in more ergonomic forms. ([Rust Documentation][5])
+
+**6. Offload only when arithmetic intensity justifies it.** For GPUs, the exciting Rust-native frontier is moving quickly: `cuda-oxide` is an NVIDIA Labs experimental Rust-to-CUDA compiler that compiles Rust to PTX; Rust-CUDA rebooted in 2025; CubeCL lets you write GPU kernels using Rust abstractions across platforms; `cudarc` is a safe Rust wrapper around CUDA; `wgpu` gives portable compute/graphics across Vulkan/Metal/D3D12/OpenGL/WebGPU; and `rust-gpu` targets SPIR-V shaders. These are powerful, but maturity varies dramatically. ([GitHub][6])
+
+**7. For cluster work, combine MPI/RDMA/Slurm-style scheduling with Rust ownership.** Use MPI between nodes, Rayon within a process/socket, NUMA-aware placement inside nodes, and RDMA only when message overhead dominates. `rsmpi` provides MPI bindings, `FerroMPI` is a newer MPI 4.0+ wrapper, `rust-ibverbs` exposes RDMA verbs, and HyperQueue handles large HPC workflows on Slurm/PBS-style clusters. ([Docs.rs][7])
+
+---
+
+# Rust HPC techniques that move the needle
+
+## Compiler, linker, and build tricks
+
+Use this as the baseline for performance builds:
+
+```bash
+RUSTFLAGS="-C target-cpu=native" cargo build --release
+```
+
+For reproducible cluster builds, build multiple CPU-specific artifacts instead of shipping one generic binary: for example, one binary for AVX2-era nodes, another for AVX-512 nodes, and another for ARM Neoverse. `target-cpu=native` is excellent for a fixed machine, but dangerous for broad distribution because the binary may use instructions unavailable on older nodes. The Rust performance book specifically recommends `-C target-cpu=native` when broad architecture support is not needed. ([Nicholas Nethercote][8])
+
+Use **PGO** for real workloads: run an instrumented binary on representative datasets, merge the profile, then rebuild with `-C profile-use`. Rustc’s PGO support is documented in the rustc book, and it is one of the rare compiler optimizations that can improve branch-heavy, parser-heavy, query-engine, and control-flow-heavy HPC applications without changing source code. ([Rust Documentation][9])
+
+Use **ThinLTO first, Fat LTO last**. ThinLTO often gives a strong speed/build-time tradeoff; Fat LTO may squeeze a little more in final binaries but can increase build time substantially. Cargo exposes LTO and codegen-unit profile controls. ([Rust Documentation][2])
+
+Consider this final-release variant:
+
+```toml
+[profile.release]
+opt-level = 3
+codegen-units = 1
+lto = "fat"
+panic = "abort"
+strip = "symbols"
+```
+
+Add `debug = "line-tables-only"` while optimizing so profilers can still resolve line numbers.
+
+## Measurement and inspection
+
+Use a full stack, not one tool:
+
+| Need                         | Tools                                                         |
+| ---------------------------- | ------------------------------------------------------------- |
+| Microbenchmarks              | `criterion`, `divan`                                          |
+| CI-stable performance deltas | `iai-callgrind`, `cachegrind`                                 |
+| CPU flamegraphs              | `cargo-flamegraph`, Linux `perf`, `samply`                    |
+| Allocation profiling         | `heaptrack`, `bytehound`, `dhat-rs`, `rust-jemalloc-pprof`    |
+| Assembly/codegen inspection  | `cargo-show-asm`, Compiler Explorer, `objdump`, `llvm-mca`    |
+| System counters              | `perf stat`, `perf record`, Intel VTune, AMD uProf, LIKWID    |
+| GPU profiling                | Nsight Systems/Compute for CUDA, ROCm profiling tools for AMD |
+
+Criterion aims to detect and estimate performance improvements/regressions statistically, Iai-Callgrind gives accurate Valgrind-backed measurements, and `cargo-flamegraph` generates flamegraphs for Rust/Cargo workloads. ([Docs.rs][3])
+
+The optimization loop should be:
+
+```text
+benchmark representative workload
+→ flamegraph / perf counters / allocation profile
+→ inspect generated assembly if the hotspot is a tight loop
+→ change one thing
+→ benchmark again
+→ keep only measured wins
+```
+
+## Rust-specific codegen tricks
+
+These are the little Rust moves that often create surprisingly large wins:
+
+| Trick                                                                                      | Why it helps                                                                                                                             |
+| ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| Prefer `&[T]` / `&mut [T]` over owned `Vec<T>` in hot kernels                              | Better API, easier slicing, fewer ownership moves, often cleaner aliasing for LLVM                                                       |
+| Use `split_at_mut`, `chunks_exact`, `chunks_exact_mut`, `array_chunks`, `zip`, `enumerate` | Helps remove bounds checks and expresses non-overlap                                                                                     |
+| Hoist shape/length checks outside loops                                                    | Lets the inner loop avoid repeated branches                                                                                              |
+| Use `debug_assert!` for invariants, not runtime checks in release                          |                                                                                                                                          |
+| Prefer `fold`/`reduce` over shared mutable state                                           | Avoids locks and atomics                                                                                                                 |
+| Avoid `collect()` in the middle of a pipeline                                              | Prevents temporary allocations                                                                                                           |
+| Avoid `clone()` of `Vec`, `String`, `HashMap`, tensor buffers                              | Cloning heap-allocated structures usually allocates; Rust’s performance book calls this out explicitly. ([Nicholas Nethercote][10])      |
+| Use `#[inline]` for tiny hot wrappers; avoid blanket `#[inline(always)]` everywhere        | Good for kernels, bad for code bloat                                                                                                     |
+| Use `#[cold]` on rare error/slow paths                                                     | Keeps hot instruction cache cleaner                                                                                                      |
+| Use `#[target_feature(enable = "avx2")]` / runtime dispatch for CPU-specific kernels       |                                                                                                                                          |
+| Use `std::hint::black_box` in benchmarks                                                   | Prevents optimizer from deleting benchmarked work                                                                                        |
+| Use `MaybeUninit` for output buffers only in carefully-audited low-level kernels           |                                                                                                                                          |
+| Use `get_unchecked` only after measuring and proving bounds checks remain                  | Safe indexing can often be optimized; the Rust Performance Book discusses bounds-check elimination patterns. ([Nicholas Nethercote][11]) |
+
+---
+
+# Memory and data layout acceleration
+
+## Highest-impact memory tactics
+
+Use **SoA instead of AoS** when you process one field across many elements.
+
+```rust
+// Usually worse for SIMD/cache if you only touch x/y/z separately
+struct Particle {
+    x: f32,
+    y: f32,
+    z: f32,
+    mass: f32,
+}
+
+// Often better for vectorized kernels
+struct Particles {
+    x: Vec<f32>,
+    y: Vec<f32>,
+    z: Vec<f32>,
+    mass: Vec<f32>,
+}
+```
+
+Use **AoSoA** for vector-friendly chunking:
+
+```rust
+const LANES: usize = 8;
+
+#[repr(C, align(64))]
+struct ParticleBlock {
+    x: [f32; LANES],
+    y: [f32; LANES],
+    z: [f32; LANES],
+    mass: [f32; LANES],
+}
+```
+
+Use **cache blocking/tiling** for matrices, stencils, pairwise kernels, convolutions, and graph traversal. The goal is to reuse data while it is still in L1/L2/L3 rather than streaming everything repeatedly from DRAM.
+
+Use **thread-local workspaces** instead of per-iteration allocation:
+
+```rust
+use rayon::prelude::*;
+
+items.par_chunks(chunk_size)
+    .map_init(
+        || Vec::<f64>::with_capacity(4096),
+        |scratch, chunk| {
+            scratch.clear();
+            // reuse scratch for this Rayon worker
+            compute_chunk(chunk, scratch)
+        },
+    )
+    .sum::<f64>();
+```
+
+## Memory libraries and crates
+
+| Area                    | Crates / libraries                                                            | Use when                                                                                                                                                                                                                                   |
+| ----------------------- | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Global allocators       | `mimalloc`, `tikv-jemallocator`, `snmalloc-rs`, `rpmalloc-rs`                 | Your profiler shows allocator contention, fragmentation, or allocation-heavy hot paths. `mimalloc` is a drop-in allocator wrapper; `snmalloc-rs` and `rpmalloc-rs` can also be used as global allocators. ([Docs.rs][12])                  |
+| Arena allocation        | `bumpalo`, `typed-arena`, `id-arena`, `generational-arena`, `slotmap`, `slab` | Many same-lifetime objects; ASTs; graph construction; temporary per-step data. `bumpalo` allocates chunks and then bump-allocates within them. ([Docs.rs][13])                                                                             |
+| Small inline buffers    | `smallvec`, `arrayvec`, `tinyvec`, `heapless`                                 | Avoid heap allocation for short vectors or fixed-capacity buffers.                                                                                                                                                                         |
+| Cache padding           | `crossbeam_utils::CachePadded`, `cache-padded`                                | Per-thread counters, atomics, queues, hot shared metadata; avoids false sharing. ([Docs.rs][4])                                                                                                                                            |
+| Byte casting            | `bytemuck`, `zerocopy`                                                        | Convert plain-old-data slices to bytes or parse binary layouts without copying. `bytemuck` provides safe bit-cast utilities; `zerocopy` focuses on zero-cost memory manipulation. ([Docs.rs][14])                                          |
+| Zero-copy serialization | `rkyv`, `musli-zerocopy`, `postcard` for compact embedded data                | Read structured data without full deserialize/copy passes. `rkyv` is a zero-copy deserialization framework. ([Docs.rs][15])                                                                                                                |
+| Memory-mapped I/O       | `memmap2`                                                                     | Huge files, read-mostly datasets, checkpoint loading, tensor/model loading; `memmap2` maps files to slices. ([Docs.rs][16])                                                                                                                |
+| Fast maps               | `hashbrown`, `ahash`, `rustc-hash`, `foldhash`, `gxhash`, `rapidhash`         | Internal trusted hash maps where default hashing is too slow. `hashbrown` is a SwissTable implementation; `rustc-hash` is fast but non-cryptographic; `ahash` is intended for in-memory hash maps and is not cryptographic. ([GitHub][17]) |
+| Bitsets/compressed sets | `bitvec`, `fixedbitset`, `roaring`, `croaring-rs`, `vers`                     | Dense boolean features, graph visited sets, analytics, bitmap indexes. Roaring bitmaps are compressed bitmaps and the Rust `roaring` crate ports that structure. ([Docs.rs][18])                                                           |
+
+**Underused trick:** replace `HashSet<u32>` with `RoaringBitmap` or `FixedBitSet` when keys are integer IDs. This can transform memory use and set-intersection throughput.
+
+**Underused trick:** use `Arc<[T]>` or `Box<[T]>` for immutable large arrays instead of `Arc<Vec<T>>`. It removes spare capacity and communicates immutability.
+
+**Underused trick:** use `Cow<'a, str>`, borrowed slices, or arena-backed strings in parsers to avoid building owned `String`s.
+
+---
+
+# CPU parallelism and NUMA
+
+## Best CPU threading crates
+
+| Area                   | Crates                                                                 | Notes                                                                                                                                                  |
+| ---------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Data parallelism       | `rayon`                                                                | First choice for CPU-bound loops. Rayon makes sequential-to-parallel conversion simple and guarantees data-race freedom. ([GitHub][19])                |
+| Work stealing / queues | `crossbeam`, `crossbeam-deque`, `crossbeam-channel`, `crossbeam-queue` | Crossbeam provides atomics, channels, work-stealing deques, queues, epoch reclamation, and scoped threads. ([Docs.rs][20])                             |
+| Locks                  | `parking_lot`                                                          | Smaller/faster/more flexible Mutex/RwLock/Condvar implementations than std, according to the crate docs. ([Docs.rs][21])                               |
+| Channels               | `flume`, `crossbeam-channel`, `kanal`                                  | MPMC channels; good for pipelines, but avoid in tight numerical kernels.                                                                               |
+| Read-mostly sharing    | `arc-swap`, `evmap`, `left-right`                                      | `ArcSwap` provides atomic `Arc` replacement and is optimized for read-mostly scenarios. ([Docs.rs][22])                                                |
+| Thread pinning         | `core_affinity`, `core_affinity2`, `hwlocality`, `affinitypool`        | Important for NUMA and latency-sensitive HPC. `hwlocality` binds to hwloc and exposes NUMA/socket/cache/core topology. ([Crates][23])                  |
+| NUMA                   | `hwlocality`, `libnuma`, `numa-sys`, `rustix`/`libc` calls             | Use first-touch placement and pin workers to local memory. libnuma exposes NUMA policy; NUMA memory can have different latency/bandwidth. ([Man7][24]) |
+| Thread priority        | `thread-priority`, OS-specific APIs                                    | Useful for real-time-ish pipelines and latency-critical simulations.                                                                                   |
+
+## Rayon patterns that scale
+
+Good:
+
+```rust
+use rayon::prelude::*;
+
+let sum = data
+    .par_chunks(4096)
+    .map(|chunk| chunk.iter().map(|x| expensive(*x)).sum::<f64>())
+    .sum::<f64>();
+```
+
+Better when you need scratch buffers:
+
+```rust
+let result = data
+    .par_chunks(4096)
+    .map_init(
+        || Scratch::new(),
+        |scratch, chunk| compute_with_reused_workspace(chunk, scratch),
+    )
+    .reduce(Output::zero, Output::combine);
+```
+
+Avoid:
+
+```rust
+// Usually terrible: shared lock in hot loop
+data.par_iter().for_each(|x| {
+    *global.lock().unwrap() += expensive(*x);
+});
+```
+
+Use per-thread local accumulation and reduce at the end. Locks and atomics can be fine for coarse-grained coordination, but they are poison inside numerical inner loops.
+
+## NUMA strategy for big machines
+
+On dual-socket or multi-NUMA-node servers:
+
+1. Start one process per NUMA node or one process per socket.
+2. Pin worker threads to cores in that NUMA region.
+3. First-touch initialize arrays on the same threads that will later use them.
+4. Avoid one giant global allocator bottleneck.
+5. Avoid cross-socket reductions until the end.
+6. For MPI+threads, prefer MPI between sockets/nodes and Rayon/OpenMP-style parallelism inside a socket.
+
+`hwlocality` is especially valuable because it exposes NUMA nodes, sockets, shared caches, cores, SMT topology, and can pin threads/memory. ([Docs.rs][25])
+
+---
+
+# SIMD and vectorization
+
+## SIMD options in Rust
+
+| Approach                   | Status                                  | Use when                                                                                                                                                                   |
+| -------------------------- | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Auto-vectorization         | Stable                                  | Start here. Write simple, branch-light loops over slices. Inspect assembly.                                                                                                |
+| `std::arch` / `core::arch` | Stable architecture-specific intrinsics | You need AVX2/AVX-512/SSE/NEON and can write target-specific kernels. `std::arch` is the gateway to architecture intrinsics and is not portable. ([Rust Documentation][5]) |
+| Runtime dispatch           | Stable                                  | Write scalar fallback plus AVX2/AVX-512/NEON paths selected at runtime.                                                                                                    |
+| `std::simd`                | Nightly experimental                    | Portable SIMD abstraction; docs still mark it nightly-only experimental. ([Rust Documentation][26])                                                                        |
+| `wide`                     | Stable crate                            | Portable wide vector types that try to be SIMD where possible. ([GitHub][27])                                                                                              |
+| `pulp`                     | Stable crate                            | Safe abstraction over SIMD with dispatch to vectorized versions. ([Crates][28])                                                                                            |
+| `safe_arch`                | Stable crate                            | Safe wrappers for compile-time CPU-feature intrinsics; not runtime dispatch. ([Docs.rs][29])                                                                               |
+| `rten-simd`                | Stable crate                            | Portable SIMD operations with runtime ISA dispatch. ([Docs.rs][30])                                                                                                        |
+
+## SIMD hot-loop rules
+
+Use these aggressively:
+
+```rust
+for (a, b) in xs.chunks_exact(8).zip(ys.chunks_exact(8)) {
+    // vectorizable chunk
+}
+```
+
+Prefer:
+
+* contiguous slices;
+* no virtual calls in the inner loop;
+* no allocation in the inner loop;
+* one or two predictable branches, not many data-dependent branches;
+* precomputed constants;
+* `mul_add` where numerical semantics allow FMA;
+* SoA layout for gather-heavy kernels;
+* chunked tail handling.
+
+Avoid:
+
+* `Vec<Vec<T>>` for matrices;
+* maps/hash lookups inside inner numerical loops;
+* iterator chains that allocate;
+* branchy per-element state machines when a vectorized block parser is possible;
+* tiny tasks that are parallelized before they are vectorized.
+
+## SIMD-enabled libraries worth knowing
+
+| Workload           | Crates                                                                                                     |
+| ------------------ | ---------------------------------------------------------------------------------------------------------- |
+| FFT                | `rustfft`, `realfft`, `microfft`; RustFFT supports AVX acceleration on x86_64. ([Docs.rs][31])             |
+| JSON               | `simd-json`, `sonic-rs`; both are SIMD-oriented JSON libraries. ([Docs.rs][32])                            |
+| Search/bytes       | `memchr`, `aho-corasick`, `regex-automata`, `bstr`                                                         |
+| Hashing            | `ahash`, `foldhash`, `gxhash`, `rapidhash`, `rustc-hash`                                                   |
+| Columnar analytics | `arrow-rs`, `polars`, `datafusion`                                                                         |
+| Compression        | `lz4_flex`, `zstd`, `snap`, `lz4`, `brotli`; `lz4_flex` is pure Rust high-performance LZ4. ([Docs.rs][33]) |
+
+---
+
+# Numerical and scientific Rust libraries
+
+## Dense linear algebra
+
+| Library                                    | Best for                                                                                                                                                 |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `faer`                                     | High-performance dense matrices, decompositions, solving systems; pure Rust and designed for medium/large matrix operations. ([Docs.rs][34])             |
+| `nalgebra`                                 | Low-dimensional linear algebra, statically-sized matrices/vectors, graphics/physics, geometry. ([Docs.rs][35])                                           |
+| `ndarray`                                  | N-dimensional arrays, NumPy-like work, views/slicing, numerical containers. ([Docs.rs][36])                                                              |
+| `ndarray-linalg`                           | `ndarray` plus LAPACK backends such as OpenBLAS, Netlib, Intel MKL. ([GitHub][37])                                                                       |
+| `blas`, `blas-src`, `lapack`, `lapack-src` | Calling BLAS/LAPACK implementations; `blas-src` supports implementations including Accelerate, BLIS, Intel MKL, Netlib, OpenBLAS, and R. ([Docs.rs][38]) |
+| `glam`, `ultraviolet`, `vek`               | Small vector math, graphics, SIMD-ish vector types                                                                                                       |
+| `matrixmultiply`                           | Low-level GEMM-style kernels used by higher-level crates                                                                                                 |
+
+## Sparse linear algebra and graph kernels
+
+| Library                  | Best for                                                            |
+| ------------------------ | ------------------------------------------------------------------- |
+| `sprs`                   | Sparse matrices/vectors using compressed storage. ([Docs.rs][39])   |
+| `nalgebra-sparse`        | CSC/CSR sparse matrices in the nalgebra ecosystem. ([Nalgebra][40]) |
+| `faer-sparse`            | Emerging sparse work in the faer ecosystem                          |
+| `russell_sparse`         | COO/CSC/CSR-style sparse utilities                                  |
+| `petgraph`               | Graph data structures and algorithms                                |
+| `fixedbitset`, `roaring` | Graph traversal visited sets, compressed frontier sets              |
+
+## FFT, FMM, signal, scientific kernels
+
+| Domain                  | Crates                                                                 |
+| ----------------------- | ---------------------------------------------------------------------- |
+| FFT/signal              | `rustfft`, `realfft`, `microfft`, `rubato`, `biquad`                   |
+| Fast multipole / N-body | `kifmm`                                                                |
+| Optimization            | `argmin`, `optimization-engine`, `good_lp`, `clarabel`, `osqp`         |
+| ODE/PDE/science         | `ode_solvers`, `differential-equations`, `peroxide`, `ndarray`, `faer` |
+| Statistics/random       | `rand`, `rand_distr`, `statrs`, `rv`, `noisy_float`                    |
+| Bioinformatics          | `rust-bio`, `needletail`, `seq_io`                                     |
+| Geometry/spatial        | `kiddo`, `rstar`, `geo`, `parry`, `rapier`                             |
+
+The “hidden” HPC win here is not that every crate is faster than C/Fortran. It is that you can compose safe ownership, parallelism, memory mapping, zero-copy parsing, and specialized algorithms without building a giant unsafe C++ codebase.
+
+---
+
+# GPU and accelerator stack
+
+## Rust CUDA and GPU options
+
+| Layer                                    | Libraries                                                  | Use when                                                                                                                                                                                |
+| ---------------------------------------- | ---------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CUDA host API from Rust                  | `cudarc`, `cust`, `rustacuda`                              | You want to launch CUDA kernels, call CUDA libraries, manage streams/memory from Rust. `cudarc` is a safe wrapper around the CUDA toolkit. ([GitHub][41])                               |
+| Write CUDA kernels in Rust               | `cuda-oxide`, Rust-CUDA, `rustc_codegen_nvvm`, `cutile-rs` | Experimental but very exciting. `cuda-oxide` compiles standard Rust to PTX and is alpha; Rust-CUDA rebooted after dormancy and targets NVVM IR. ([GitHub][6])                           |
+| Multi-backend Rust GPU kernels           | CubeCL                                                     | Rust-based compute kernels across platforms; CubeCL describes Rust GPU programming with zero-cost abstractions and optimized runtimes. ([GitHub][42])                                   |
+| Portable WebGPU/Vulkan/Metal/D3D compute | `wgpu`, `naga`, `vulkano`, `ash`                           | Cross-platform compute/graphics. `wgpu` runs on Vulkan, Metal, D3D12, OpenGL, WebGL2, and WebGPU. ([GitHub][43])                                                                        |
+| Rust-to-SPIR-V shaders                   | `rust-gpu`                                                 | Rust as a language for GPU graphics and compute shaders. ([GitHub][44])                                                                                                                 |
+| OpenCL                                   | `ocl`, `opencl3`                                           | Cross-vendor kernels with OpenCL; `ocl` exposes Rust’s OpenCL API and aims to preserve C API performance. ([Crates][45])                                                                |
+| AMD ROCm/HIP                             | `rocm-rs`, `hip-sys`, CubeCL ROCm/HIP support              | AMD GPUs. ROCm is AMD’s open GPU software stack for HPC/AI workloads. ([AMD][46])                                                                                                       |
+| ML/tensors                               | `candle`, `burn`, `ort`, `tract`, `safetensors`            | Inference/training/tensor workloads. Candle focuses on Rust ML performance with GPU support; Burn is a tensor/deep-learning framework optimized for numerical computing. ([GitHub][47]) |
+
+## GPU rules that matter more than language
+
+1. Keep data resident on the device.
+2. Fuse kernels to reduce global memory traffic.
+3. Batch small operations.
+4. Use streams to overlap copy and compute.
+5. Prefer library kernels for GEMM/FFT/convolution unless your kernel is specialized.
+6. Use pinned/page-locked host memory for heavy transfers.
+7. Use mixed precision when numerically acceptable.
+8. Minimize host-device synchronization.
+9. Avoid GPU offload for low arithmetic-intensity work.
+10. Profile with Nsight/ROCm tools, not just CPU timers.
+
+## Current “watchlist” GPU projects
+
+`cuda-oxide` is the most interesting new item: NVIDIA Labs describes it as an experimental alpha compiler for writing CUDA SIMT kernels in pure Rust and compiling to PTX. Treat it as frontier technology, not production-stable infrastructure yet. ([GitHub][6])
+
+Rust-CUDA is alive again after being dormant for years, but its own repo still warns to expect bugs, safety issues, and things that do not work. It is exciting, but not “just drop it into production” tooling. ([GitHub][48])
+
+OxiCUDA showed up in recent X/GitHub searches and claims to replace the CUDA Toolkit stack in Rust, but it is extremely new. I would put it on a watchlist and validate hard before betting production workloads on it. ([X (formerly Twitter)][49])
+
+---
+
+# Data processing, I/O, and serialization
+
+## Columnar data stack
+
+| Library                   | Use                                                                                                                                                                                          |
+| ------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `arrow-rs`                | Native Rust implementation of Apache Arrow and Parquet. ([GitHub][50])                                                                                                                       |
+| `polars`                  | Extremely fast Rust DataFrame/query engine with lazy/eager execution, streaming larger-than-RAM datasets, query optimization, multithreading, SIMD, and Arrow format support. ([GitHub][51]) |
+| `datafusion`              | Extensible Rust query engine using Arrow as its in-memory format. ([Apache DataFusion][52])                                                                                                  |
+| `ballista`                | Distributed execution for DataFusion workloads across multiple nodes. ([GitHub][53])                                                                                                         |
+| `parquet`, `object_store` | Cloud/object-store data lakes, parquet scanning, pushdown, partitioned datasets                                                                                                              |
+
+For HPC analytics, prefer Arrow/Parquet/Polars/DataFusion over ad hoc `Vec<MyStruct>` pipelines when the workload is columnar, filter-heavy, aggregation-heavy, or larger than RAM.
+
+## I/O and parsing
+
+| Workload                     | Libraries                                                                                                                               |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Memory-mapped files          | `memmap2`                                                                                                                               |
+| Async Linux file/network I/O | `tokio-uring`, `monoio`, `glommio`; `tokio-uring` provides a Tokio-compatible io_uring runtime and requires Linux 5.10+. ([GitHub][54]) |
+| Fast JSON                    | `simd-json`, `sonic-rs`, `serde_json_borrow`                                                                                            |
+| Binary parsing               | `nom`, `winnow`, `zerocopy`, `bytemuck`, `scroll`                                                                                       |
+| Compression                  | `lz4_flex`, `zstd`, `snap`, `flate2`, `brotli`                                                                                          |
+| Tensor files                 | `safetensors`; Hugging Face describes SafeTensors as safe and fast/zero-copy for tensor storage. ([Hugging Face][55])                   |
+| Serialization                | `rkyv`, `bincode`, `postcard`, `ciborium`, `capnp`, `flatbuffers`                                                                       |
+
+Underused trick: for huge static datasets, combine `memmap2` + `rkyv`/`zerocopy`/`bytemuck` and read directly from mapped bytes. That can remove an entire “load/parse/allocate” phase.
+
+---
+
+# Distributed and cluster HPC
+
+## Rust distributed stack
+
+| Area                   | Libraries/tools                                                                    |
+| ---------------------- | ---------------------------------------------------------------------------------- |
+| MPI                    | `mpi` / `rsmpi`, `FerroMPI`                                                        |
+| RDMA / InfiniBand      | `rust-ibverbs`, `ibverbs`, `ibverbs-sys`, `rdma-cm`, `async-rdma`, `infinity-rust` |
+| Distributed query      | `Ballista`, `DataFusion`, Arrow Flight                                             |
+| Workflow / Slurm / PBS | `HyperQueue`, `slurm-rs`, `slurry`, `fi-slurm-utils`                               |
+| Distributed KV/storage | `tikv`, `redb`, `sled`, `rocksdb`, `object_store`                                  |
+| RPC                    | `tonic`, `tarpc`, `quinn`, `zenoh`                                                 |
+| Observability          | `tracing`, `tracing-tracy`, `pprof`, `metrics`, `opentelemetry`                    |
+
+For serious multi-node HPC, the practical architecture is usually:
+
+```text
+MPI or RDMA between nodes
++ Rayon/thread pinning within each node/socket
++ NUMA first-touch memory placement
++ Arrow/Parquet/checkpoint formats for data
++ Slurm/HyperQueue for scheduling
+```
+
+`rsmpi` bridges MPI into Rust for HPC systems, `FerroMPI` adds safe/generic MPI bindings with MPI 4.0+ features, `rust-ibverbs` exposes high-throughput/low-latency RDMA verbs, and HyperQueue simplifies large task graphs on clusters without manually submitting every Slurm/PBS task. ([Docs.rs][7])
+
+---
+
+# “People miss these” Rust HPC tricks
+
+## 1. Use `par_chunks_mut`, not shared mutation
+
+```rust
+use rayon::prelude::*;
+
+output
+    .par_chunks_mut(block)
+    .zip(input.par_chunks(block))
+    .for_each(|(out, inp)| {
+        kernel(inp, out);
+    });
+```
+
+This gives each worker exclusive mutable slices and avoids locks entirely.
+
+## 2. Use one allocation per phase, not one allocation per item
+
+Bad:
+
+```rust
+let ys: Vec<Vec<f64>> = xs.iter().map(|x| compute_vec(x)).collect();
+```
+
+Better:
+
+```rust
+let mut workspace = vec![0.0; n_items * item_width];
+// fill by chunk/slice
+```
+
+## 3. Replace nested `Vec<Vec<T>>` matrices
+
+Prefer flat storage:
+
+```rust
+struct Matrix {
+    data: Vec<f64>,
+    rows: usize,
+    cols: usize,
+}
+
+impl Matrix {
+    #[inline]
+    fn get(&self, r: usize, c: usize) -> f64 {
+        self.data[r * self.cols + c]
+    }
+}
+```
+
+Better still: use `faer`, `ndarray`, or BLAS-backed crates when the matrix operations are standard.
+
+## 4. Use bitsets for graph/frontier workloads
+
+`HashSet<usize>` is often a disaster for graph traversals. Try `FixedBitSet`, `bitvec`, `RoaringBitmap`, or sorted `Vec<u32>` with galloping intersection.
+
+## 5. Specialize by type and dimension
+
+Const generics can make small kernels much faster:
+
+```rust
+fn dot<const N: usize>(a: &[f64; N], b: &[f64; N]) -> f64 {
+    let mut acc = 0.0;
+    for i in 0..N {
+        acc += a[i] * b[i];
+    }
+    acc
+}
+```
+
+For tiny fixed matrices/vectors, `nalgebra` with static dimensions can beat dynamic array abstractions.
+
+## 6. Runtime-dispatch SIMD
+
+Have scalar fallback plus CPU-specific kernels:
+
+```rust
+pub fn saxpy(a: f32, x: &[f32], y: &mut [f32]) {
+    assert_eq!(x.len(), y.len());
+
+    #[cfg(target_arch = "x86_64")]
+    {
+        if std::is_x86_feature_detected!("avx2") && std::is_x86_feature_detected!("fma") {
+            unsafe { return saxpy_avx2_fma(a, x, y); }
+        }
+    }
+
+    saxpy_scalar(a, x, y)
+}
+
+fn saxpy_scalar(a: f32, x: &[f32], y: &mut [f32]) {
+    for (xi, yi) in x.iter().zip(y.iter_mut()) {
+        *yi = a.mul_add(*xi, *yi);
+    }
+}
+```
+
+## 7. Use `ArcSwap` for read-mostly global state
+
+For lookup tables, configurations, model snapshots, or immutable simulation parameters updated occasionally, `ArcSwap` can replace `RwLock<Arc<T>>` patterns and avoid read locks. ([Docs.rs][22])
+
+## 8. Use mmap + zero-copy for massive static files
+
+```rust
+use memmap2::Mmap;
+use std::fs::File;
+
+let file = File::open("huge-table.bin")?;
+let mmap = unsafe { Mmap::map(&file)? };
+// parse/view mmap bytes without copying
+```
+
+`memmap2` maps files to byte slices, which pairs naturally with `bytemuck`, `zerocopy`, `rkyv`, Arrow, or SafeTensors. ([Docs.rs][16])
+
+## 9. Use alternative allocators only after profiling
+
+```rust
+use mimalloc::MiMalloc;
+
+#[global_allocator]
+static GLOBAL: MiMalloc = MiMalloc;
+```
+
+Allocator swaps can help allocation-heavy services, parsers, graph builders, and schedulers, but they will not fix a bad algorithm or poor memory layout. Rust exposes `#[global_allocator]`, and `mimalloc` is a drop-in Rust global allocator wrapper. ([Rust Documentation][56])
+
+## 10. Don’t use async for CPU compute kernels
+
+Async helps with I/O concurrency. It usually hurts tight compute kernels. Use Rayon or dedicated pinned worker threads for CPU-bound numerical work; use async for feeding data, networking, and storage.
+
+---
+
+# Open-source Rust HPC library map
+
+## Core performance toolkit
+
+```text
+criterion
+divan
+iai-callgrind
+cargo-flamegraph
+pprof
+dhat-rs
+tracing
+tracing-tracy
+cargo-show-asm
+cargo-bloat
+cargo-pgo
+```
+
+## Parallelism and synchronization
+
+```text
+rayon
+crossbeam
+crossbeam-channel
+crossbeam-deque
+crossbeam-queue
+parking_lot
+flume
+kanal
+arc-swap
+evmap
+left-right
+dashmap
+scc
+lockfree-object-pool
+thread-priority
+core_affinity
+core_affinity2
+hwlocality
+affinitypool
+```
+
+## SIMD and CPU intrinsics
+
+```text
+std::arch
+core::arch
+std::simd       # nightly experimental
+wide
+pulp
+safe_arch
+rten-simd
+bytemuck
+zerocopy
+memchr
+aho-corasick
+simd-json
+sonic-rs
+```
+
+## Memory and allocation
+
+```text
+mimalloc
+tikv-jemallocator
+snmalloc-rs
+rpmalloc-rs
+ferroc
+bumpalo
+typed-arena
+id-arena
+generational-arena
+slotmap
+slab
+smallvec
+arrayvec
+tinyvec
+heapless
+cache-padded
+crossbeam-utils::CachePadded
+bytes
+bytestring
+compact_str
+smol_str
+```
+
+## Hashing, sets, compressed structures
+
+```text
+hashbrown
+ahash
+rustc-hash
+foldhash
+gxhash
+rapidhash
+xxhash-rust
+twox-hash
+seahash
+bitvec
+fixedbitset
+roaring
+croaring-rs
+vers
+fst
+```
+
+## Numerics and scientific compute
+
+```text
+faer
+faer-sparse
+nalgebra
+nalgebra-sparse
+ndarray
+ndarray-linalg
+blas
+blas-src
+lapack
+lapack-src
+matrixmultiply
+sprs
+russell_sparse
+rustfft
+realfft
+microfft
+kifmm
+argmin
+optimization-engine
+clarabel
+osqp
+ode_solvers
+peroxide
+statrs
+rand
+rand_distr
+rust-bio
+```
+
+## GPU and tensor
+
+```text
+cudarc
+cust
+rustacuda
+cuda-oxide
+Rust-CUDA
+rustc_codegen_nvvm
+cutile-rs
+CubeCL
+wgpu
+rust-gpu
+vulkano
+ash
+ocl
+opencl3
+rocm-rs
+hip-sys
+candle
+burn
+ort
+tract
+safetensors
+```
+
+## Data, query engines, I/O
+
+```text
+arrow
+parquet
+polars
+datafusion
+ballista
+object_store
+memmap2
+rkyv
+musli-zerocopy
+postcard
+bincode
+capnp
+flatbuffers
+tokio-uring
+monoio
+glommio
+lz4_flex
+zstd
+snap
+flate2
+```
+
+## Distributed / cluster
+
+```text
+mpi
+rsmpi
+ferrompi
+rust-ibverbs
+ibverbs
+ibverbs-sys
+rdma-cm
+async-rdma
+infinity-rust
+hyperqueue
+slurm-rs
+slurry
+tonic
+tarpc
+quinn
+zenoh
+```
+
+---
+
+# A practical “max performance Rust” checklist
+
+Use this order:
+
+1. **Benchmark the real workload.** Add Criterion/Divan microbenchmarks only after you know the macro hotspot.
+2. **Build release correctly.** `cargo build --release`, `target-cpu=native`, `codegen-units=1`, LTO, PGO.
+3. **Inspect flamegraphs.** Do not optimize cold code.
+4. **Kill allocations.** Preallocate, reuse scratch buffers, avoid `clone`, use arenas where lifetimes match.
+5. **Fix data layout.** SoA/AoSoA, flat matrices, compressed sparse/bitset structures.
+6. **Remove lock contention.** Chunk ownership, local reductions, `CachePadded`, `ArcSwap`, per-thread buffers.
+7. **Vectorize.** First auto-vectorization, then `std::arch`/`wide`/`pulp`, then hand SIMD.
+8. **Thread carefully.** Rayon for CPU kernels; tune chunk sizes; avoid nested oversubscription.
+9. **Make it NUMA-aware.** Pin workers, first-touch memory, reduce cross-socket traffic.
+10. **Use specialized libraries.** `faer`, BLAS/MKL/OpenBLAS, `RustFFT`, `sprs`, `Polars`, `DataFusion`, `kifmm`.
+11. **Offload to GPU only when data movement is amortized.** Keep buffers resident and fuse kernels.
+12. **Scale out.** MPI/RDMA/HyperQueue/Ballista only after single-node efficiency is strong.
+13. **Lock in regressions.** Add benchmark thresholds in CI.
+
+For the absolute highest-end Rust HPC apps, the stack I’d try first is:
+
+```text
+CPU numerical core:
+  faer / ndarray / RustFFT / sprs
+  + rayon
+  + explicit SIMD where needed
+  + target-cpu=native + PGO
+
+Memory/data:
+  SoA/AoSoA
+  + memmap2
+  + bytemuck/zerocopy/rkyv
+  + mimalloc or jemalloc only if profiling says so
+
+GPU:
+  cudarc for production NVIDIA host-side control
+  CubeCL for Rust-first multi-backend kernels
+  cuda-oxide/Rust-CUDA as frontier experiments
+
+Cluster:
+  mpi or ferrompi between nodes
+  + rayon inside each node/socket
+  + hwlocality/libnuma for placement
+  + HyperQueue for task-graph scheduling
+```
+
+The most “breakthrough” path is not a single crate. It is **algorithmic reduction + cache-friendly layout + measured compiler settings + SIMD + Rayon/NUMA + GPU only where arithmetic intensity is high**. Rust gives you a fantastic advantage here because you can encode ownership, aliasing, and thread-safety directly into the program while still reaching down to intrinsics, CUDA, MPI, RDMA, mmap, and custom allocators when the workload demands it.
+
+[1]: https://github.com/ejmahler/RustFFT "https://github.com/ejmahler/RustFFT"
+[2]: https://doc.rust-lang.org/cargo/reference/profiles.html "https://doc.rust-lang.org/cargo/reference/profiles.html"
+[3]: https://docs.rs/criterion/latest/criterion/ "https://docs.rs/criterion/latest/criterion/"
+[4]: https://docs.rs/cache-padded "https://docs.rs/cache-padded"
+[5]: https://doc.rust-lang.org/std/arch/index.html "https://doc.rust-lang.org/std/arch/index.html"
+[6]: https://github.com/NVlabs/cuda-oxide "https://github.com/NVlabs/cuda-oxide"
+[7]: https://docs.rs/mpi "https://docs.rs/mpi"
+[8]: https://nnethercote.github.io/perf-book/build-configuration.html "https://nnethercote.github.io/perf-book/build-configuration.html"
+[9]: https://doc.rust-lang.org/beta/rustc/profile-guided-optimization.html "https://doc.rust-lang.org/beta/rustc/profile-guided-optimization.html"
+[10]: https://nnethercote.github.io/perf-book/heap-allocations.html "https://nnethercote.github.io/perf-book/heap-allocations.html"
+[11]: https://nnethercote.github.io/perf-book/bounds-checks.html "https://nnethercote.github.io/perf-book/bounds-checks.html"
+[12]: https://docs.rs/mimalloc "https://docs.rs/mimalloc"
+[13]: https://docs.rs/bumpalo "https://docs.rs/bumpalo"
+[14]: https://docs.rs/bytemuck "https://docs.rs/bytemuck"
+[15]: https://docs.rs/rkyv "https://docs.rs/rkyv"
+[16]: https://docs.rs/memmap2 "https://docs.rs/memmap2"
+[17]: https://github.com/rust-lang/hashbrown "https://github.com/rust-lang/hashbrown"
+[18]: https://docs.rs/roaring "https://docs.rs/roaring"
+[19]: https://github.com/rayon-rs/rayon "https://github.com/rayon-rs/rayon"
+[20]: https://docs.rs/crossbeam/ "https://docs.rs/crossbeam/"
+[21]: https://docs.rs/parking_lot "https://docs.rs/parking_lot"
+[22]: https://docs.rs/arc-swap "https://docs.rs/arc-swap"
+[23]: https://crates.io/crates/core_affinity "https://crates.io/crates/core_affinity"
+[24]: https://man7.org/linux/man-pages/man3/numa.3.html "https://man7.org/linux/man-pages/man3/numa.3.html"
+[25]: https://docs.rs/hwlocality "https://docs.rs/hwlocality"
+[26]: https://doc.rust-lang.org/std/simd/index.html "https://doc.rust-lang.org/std/simd/index.html"
+[27]: https://github.com/lokathor/wide "https://github.com/lokathor/wide"
+[28]: https://crates.io/crates/pulp "https://crates.io/crates/pulp"
+[29]: https://docs.rs/safe_arch/latest/safe_arch/ "https://docs.rs/safe_arch/latest/safe_arch/"
+[30]: https://docs.rs/rten-simd "https://docs.rs/rten-simd"
+[31]: https://docs.rs/rustfft/ "https://docs.rs/rustfft/"
+[32]: https://docs.rs/simd-json "https://docs.rs/simd-json"
+[33]: https://docs.rs/lz4_flex "https://docs.rs/lz4_flex"
+[34]: https://docs.rs/faer/latest/faer/ "https://docs.rs/faer/latest/faer/"
+[35]: https://docs.rs/nalgebra/latest/nalgebra/ "https://docs.rs/nalgebra/latest/nalgebra/"
+[36]: https://docs.rs/ndarray/latest/ndarray/ "https://docs.rs/ndarray/latest/ndarray/"
+[37]: https://github.com/rust-ndarray/ndarray-linalg "https://github.com/rust-ndarray/ndarray-linalg"
+[38]: https://docs.rs/blas-src "https://docs.rs/blas-src"
+[39]: https://docs.rs/sprs "https://docs.rs/sprs"
+[40]: https://nalgebra.rs/ "https://nalgebra.rs/"
+[41]: https://github.com/chelsea0x3b/cudarc "https://github.com/chelsea0x3b/cudarc"
+[42]: https://github.com/tracel-ai/cubecl "https://github.com/tracel-ai/cubecl"
+[43]: https://github.com/gfx-rs/wgpu "https://github.com/gfx-rs/wgpu"
+[44]: https://github.com/rust-gpu/rust-gpu "https://github.com/rust-gpu/rust-gpu"
+[45]: https://crates.io/crates/ocl "https://crates.io/crates/ocl"
+[46]: https://www.amd.com/en/products/software/rocm.html "https://www.amd.com/en/products/software/rocm.html"
+[47]: https://github.com/huggingface/candle "https://github.com/huggingface/candle"
+[48]: https://github.com/Rust-GPU/Rust-CUDA "https://github.com/Rust-GPU/Rust-CUDA"
+[49]: https://x.com/search?f=live&q=%22CUFFT%22 "https://x.com/search?f=live&q=%22CUFFT%22"
+[50]: https://github.com/apache/arrow-rs "https://github.com/apache/arrow-rs"
+[51]: https://github.com/pola-rs/polars?rev=61d951c "https://github.com/pola-rs/polars?rev=61d951c"
+[52]: https://datafusion.apache.org/ "https://datafusion.apache.org/"
+[53]: https://github.com/apache/datafusion-ballista "https://github.com/apache/datafusion-ballista"
+[54]: https://github.com/tokio-rs/tokio-uring "https://github.com/tokio-rs/tokio-uring"
+[55]: https://huggingface.co/docs/safetensors/index "https://huggingface.co/docs/safetensors/index"
+[56]: https://doc.rust-lang.org/std/alloc/index.html "https://doc.rust-lang.org/std/alloc/index.html"

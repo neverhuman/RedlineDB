@@ -4,6 +4,11 @@
 
 ### Changed
 
+- Consolidated the supporting runner, web console, client and release tooling into
+  the complete GitHub checkout, with portable source builds, four-platform binary
+  packages, pinned audit tooling, and a required aggregate CI gate. Original source
+  histories and unfinished work are preserved through recovery refs.
+
 - Replaced the opt-in NUMA feature's C-backed `hwlocality` dependency with
   Linux sysfs topology discovery and Rustix current-thread affinity. The
   public helpers and default-feature one-node/no-op behavior are unchanged;

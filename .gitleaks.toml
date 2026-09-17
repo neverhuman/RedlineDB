@@ -1,0 +1,11 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Historical proof metadata: Cargo checksums, Git SHAs and request idempotency IDs are not credentials"
+regexTarget = "line"
+regexes = [
+  '''lock_api-0\.4\.14\.crate sha256=[a-f0-9]{64}''',
+  '''"(?:pr_api_base_snapshot|api_base_sha_at_open)":\s*"[a-f0-9]{40}"''',
+  '''"key_sha256":\s*"[a-f0-9]{64}"''',
+]

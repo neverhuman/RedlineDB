@@ -1,0 +1,23 @@
+{
+  "schema_version": "v0/summary/1",
+  "total_cases": 1127,
+  "harness_version": "1.0.1",
+  "env": "REDLINEDB_DEFAULT_DURABILITY=normal",
+  "binary": "A1-A26 + A19 + A20 + W4-T + W4-A2a + Codex W5/W6 + PGO",
+  "aggregation": "3-run median across reps \u00d7 cases",
+  "median_latency_ratio": 1.7984,
+  "p75": 1.8536,
+  "p90": 1.9191,
+  "p95": 1.9543,
+  "max": 2.4101,
+  "min": 0.0,
+  "faster_than_sqlite": 12,
+  "latency_buckets": {
+    "<1.0x": 12,
+    "1.0-1.2x": 7,
+    "1.2-1.5x": 37,
+    "1.5-2.0x": 1053,
+    "2.0-3.0x": 18,
+    ">=3.0x": 0
+  }
+}

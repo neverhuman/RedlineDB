@@ -1,0 +1,20 @@
+{
+  "schema_version": "redline.consumer-evidence/v1",
+  "consumer": "jain-split",
+  "family": "redline-split",
+  "generated_at": "2026-07-13T13:04:10Z",
+  "status": "pass",
+  "source_commit": "1c80c91cb62176a6ffab62d7a62a57b8fcb712b0",
+  "required_check": "jain-split/redline-consumer",
+  "engine_tag": "redline-core-v4.1.0-jain.3",
+  "engine_commit": "7137a1ee2d04be4eb6931d99ff78b8a52c827900",
+  "proof_lock_id": "redline-proof/v2/4.1.0/7137a1ee2d04be4eb6931d99ff78b8a52c827900",
+  "family_ci_receipt_sha256": "d8fdc0cba2d7d02f8be272435304b7a94f6a7ddb36e59e414dda776aa182b41d",
+  "manifest_sha256": "dd15cdab7d28fcd41a82d8658092156f4407ec0dd9cbf5fedcef8b5edac84f61",
+  "policy_sha256": "e29ddbb7ec7bed306210ac0ba290b3886d210b93e45de6b8e0f873e01945315c",
+  "consumer_manifest_sha256": "95749e60f67d330dce235467e081b2473b3068874a6e08f2b194e67beca51117",
+  "consumer_policy_sha256": "ced77178a24f3bacef30f63203aceacf9de8cf32d034576828f18e8b500d6ffb",
+  "test_log": "jain-consumer.test.log",
+  "test_log_sha256": "584404ab24a4d557535e87800309764876b4bbea9734e4ee49db4a5b27a914a2",
+  "tool_version": "jain-redline-consumer/v1"
+}
