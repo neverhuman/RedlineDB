@@ -1,0 +1,63 @@
+{
+  "schema_version": "v4-release-summary/1",
+  "release": "v4.0.0",
+  "compared_against": "v3.0.0 (main HEAD at release prep)",
+  "harness": {
+    "binary": "/home/ubuntu/redline-testing/target/release/redline-testing",
+    "version": "redline-testing 1.0.0",
+    "suite": "sqlite_parity",
+    "workers": 30,
+    "repetitions": 3,
+    "warmup": 1,
+    "host": "128-core Linux x86_64"
+  },
+  "sqlite_reference": {
+    "binary": "/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3",
+    "version": "3.53.1",
+    "sha256": "fd3bdd25217a849f8f4fa295fb78199cfd69b0c4d47ba8d8c32a1aa328bd147e"
+  },
+  "v3.0.0": {
+    "binary_sha256": "da770dfd25beeb36aa22f8ce7a09d935b4e9fd7c8b2a77c36e621c46cec69ef2",
+    "total_cases": 2445,
+    "passed": 2374,
+    "failed": 67,
+    "skipped": 4,
+    "pass_rate_pct": 97.1,
+    "median_latency_ratio": 1.837,
+    "latency_buckets": {
+      "<1.0\u00d7": 7,
+      "1.0-1.2\u00d7": 16,
+      "1.2-1.5\u00d7": 173,
+      "1.5-2.0\u00d7": 1622,
+      "2.0-3.0\u00d7": 555,
+      "\u22653.0\u00d7": 1
+    }
+  },
+  "v4.0.0": {
+    "binary_sha256": "7ae60cb513e866b4a94996968b0c6b9f01b0071776bc842f526702be33f05e56",
+    "total_cases": 2445,
+    "passed": 2374,
+    "failed": 67,
+    "skipped": 4,
+    "pass_rate_pct": 97.1,
+    "median_latency_ratio": 1.7378,
+    "latency_buckets": {
+      "<1.0\u00d7": 8,
+      "1.0-1.2\u00d7": 28,
+      "1.2-1.5\u00d7": 292,
+      "1.5-2.0\u00d7": 1748,
+      "2.0-3.0\u00d7": 297,
+      "\u22653.0\u00d7": 1
+    }
+  },
+  "delta": {
+    "new_regressions": 0,
+    "fixed_failures": 0,
+    "pre_existing_failures": 67,
+    "cases_5pct_faster": 1410,
+    "cases_5pct_slower": 386,
+    "cases_within_5pct": 578,
+    "mean_target_latency_change_pct": -6.85,
+    "median_target_latency_change_pct": -7.67
+  }
+}

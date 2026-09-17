@@ -1,3 +1,6 @@
+use super::select_parallel::{
+    ParallelCoveringDecision, decide_parallel_covering_scan, record_parallel_covering_decision,
+};
 use super::*;
 
 pub(super) fn begin_select_tx(conn: &Connection) -> Result<(SelectRuntimeTx, bool)> {
@@ -33,6 +36,30 @@ pub(super) fn execute_select(
             }
         }
     }
+
+    // Phase 1.5: fromless SELECT fast path. For `SELECT <pure-expr>, ...;`
+    // with no FROM, no WHERE/GROUP/HAVING/ORDER/DISTINCT and a projection
+    // containing only pure scalar expressions (no subqueries / aggregates /
+    // window functions), evaluate the projection once against an empty row
+    // and return a StaticRows runtime. Skips begin_select_tx,
+    // QueryMemoryBroker::new, and the full build_select_runtime path.
+    //
+    // Hits the dominant SCALAR_STRING / SCALAR_ARITH / scalar-only cases,
+    // which are 100% fromless.
+    if let Some(runtime) = try_fromless_select_fast_path(plan, bindings)? {
+        return Ok(runtime);
+    }
+
+    // W4-T/W4-A1: morsel observation/routing hooks. Default-OFF runs must not
+    // pay classifier or route-tap overhead; enable this block with
+    // REDLINE_MORSEL_TELEMETRY or REDLINE_MORSEL_ROUTE.
+    if super::morsel::morsel_observation_or_route_enabled() {
+        super::morsel::record_morsel_eligibility(super::morsel::classify_select_plan_eligibility(
+            plan,
+        ));
+        let _ = super::morsel::route::route_primitive_scan(plan);
+    }
+
     let (mut tx, restore_tx) = begin_select_tx(conn)?;
     let temp_dir = conn.temp_dir().map(|path| path.to_path_buf());
     let memory = QueryMemoryBroker::new(
@@ -97,13 +124,25 @@ fn build_select_runtime(
     if let SelectSource::Table(table) = &plan.source
         && plan.group_by.is_empty()
         && !plan.distinct
+        && plan.distinct_on.is_empty()
         && plan.order_by.is_empty()
         && plan.having.is_none()
         && is_count_star_only_projection(&plan.projection)
-        && let Some(matched) =
-            index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
+        && let Some(matched) = index_access::try_match_index_access_hinted(
+            conn.engine(),
+            table,
+            &plan.selection,
+            bindings,
+            plan.table_hint.as_ref(),
+        )
         && let index_access::IndexProbe::Range { start, end } = &matched.probe
         && index_access::open_handle(conn.engine(), &matched.index).is_some()
+        // Phase 5 WS-A1: the count fast path skips per-row predicate
+        // recheck, so any residual conjunct would be silently dropped
+        // (e.g. WHERE k BETWEEN ? AND ? AND status='active' would
+        // return the BETWEEN-range count instead of the AND-filtered
+        // count). Bail to the heap-scan path when residuals exist.
+        && matched.consumed_full_predicate()
     {
         let tx_ref = tx.as_mut().expect("tx present");
         let count = index_access::execute_index_count_range(
@@ -123,16 +162,62 @@ fn build_select_runtime(
         && let SelectSource::Table(table) = &plan.source
         && plan.group_by.is_empty()
         && !plan.distinct
+        && plan.distinct_on.is_empty()
         && !select_requires_aggregation(plan)
         && plan.having.is_none()
-        && let Some(matched) =
-            index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
+        && let Some(matched) = index_access::try_match_index_access_hinted(
+            conn.engine(),
+            table,
+            &plan.selection,
+            bindings,
+            plan.table_hint.as_ref(),
+        )
         && let index_access::IndexProbe::Range { start, end } = &matched.probe
         && index_access::open_handle(conn.engine(), &matched.index).is_some()
         && let Some(out_columns) =
             covering_projection_for_index(table, &matched.index, &plan.projection)
-        && covering_order_satisfies(&matched.index, table, &plan.order_by)
+        && order_satisfied_by_index_with_prefix(&matched, table, &plan.order_by)
+        // Phase 5 WS-A1: covering scan returns the index leaf bytes
+        // directly without re-loading the heap or re-checking the
+        // predicate. Residual conjuncts would be silently dropped,
+        // producing wrong rows.
+        && matched.consumed_full_predicate()
     {
+        // WS-C3 R2/R3: consult the parallel covering-scan gate.
+        //
+        // R2 (kernel + gate predicate) shipped the gate that
+        // evaluates per-condition fallbacks. R3-C (this commit)
+        // wires the actual dispatch: when the gate returns
+        // `Dispatch` AND the downstream operator is HashAggregator
+        // or SpillSort, we route the read through
+        // `Engine::parallel_scan_page_range` (the public R2 kernel
+        // API) inside `pool.install(|| ...)` so workers run in the
+        // database's dedicated Rayon pool. Without a pool installed,
+        // the gate returns `FallbackNoPool` and we keep the
+        // index-leaf serial covering path. Result-set parity vs
+        // the serial path is enforced by
+        // `tests/ws_c3_parallel_scan_dispatch.rs`.
+        // A5: skip the gate when no Rayon pool is installed. By default
+        // `OpenOptions::rayon_threads = None`, so `current_rayon_pool()`
+        // returns `None` and the gate would walk the eligibility checks
+        // only to return `FallbackNoPool`. Hoist that decision up so every
+        // covering-eligible SELECT in default (no-pool) mode pays only an
+        // atomic-load + branch, not the full per-condition evaluation +
+        // `record_parallel_covering_decision` thread-local update.
+        // Pool-installed tests (`ws_c3_parallel_scan_dispatch.rs`) still
+        // exercise the gate because they install a pool first.
+        let parallel_decision = if super::current_rayon_pool().is_none() {
+            ParallelCoveringDecision::FallbackNoPool
+        } else {
+            let decision = decide_parallel_covering_scan(plan, limit);
+            debug_assert!(
+                !decision.would_dispatch() || super::outer_row_stack_is_empty(),
+                "WS-C3 R2: parallel covering-scan gate fired with non-empty OUTER_ROW_STACK"
+            );
+            record_parallel_covering_decision(decision);
+            decision
+        };
+
         let tx_ref = tx.as_mut().expect("tx present");
         let cover_limit = if plan.order_by.is_empty() {
             None
@@ -141,16 +226,72 @@ fn build_select_runtime(
         } else {
             None
         };
-        let rows = index_access::execute_index_covering_range(
-            conn.engine(),
-            tx_ref,
-            &matched.index,
-            start,
-            end,
-            &out_columns,
-            cover_limit,
-        )?;
+        let rows = match parallel_decision {
+            ParallelCoveringDecision::Dispatch { worker_count } => {
+                // R3-C: heap parallel-scan dispatch. The pool was
+                // installed by the embedder (or the test surface);
+                // `current_rayon_pool` returns it and we use
+                // `pool.install` to confine worker affinity to the
+                // dedicated pool. Falls through to the serial
+                // covering path when the pool slot is empty between
+                // the gate decision and dispatch — this is the
+                // safety net that keeps the executor honest in the
+                // face of races on the per-thread slot.
+                match super::current_rayon_pool() {
+                    Some(pool) => dispatch_parallel_covering_scan(
+                        conn.engine(),
+                        tx_ref,
+                        table,
+                        &plan.selection,
+                        &plan.projection,
+                        bindings,
+                        worker_count,
+                        &pool,
+                    )?,
+                    None => index_access::execute_index_covering_range(
+                        conn.engine(),
+                        tx_ref,
+                        &matched.index,
+                        start,
+                        end,
+                        &out_columns,
+                        cover_limit,
+                    )?,
+                }
+            }
+            _ => index_access::execute_index_covering_range(
+                conn.engine(),
+                tx_ref,
+                &matched.index,
+                start,
+                end,
+                &out_columns,
+                cover_limit,
+            )?,
+        };
         fast_path_rows = Some(rows);
+    }
+
+    // W4-A2b: morsel-routed primitive scan. Off by default — gated by
+    // `REDLINE_MORSEL_ROUTE=primitive_scan` (or `all`/`1`/`on`). When the
+    // env var is unset, the check is one OnceLock load + branch so default
+    // builds pay nothing here. When enabled, we route bare-column
+    // projections of Integer/Real affinity columns through the direct
+    // rowid scan + indexed projection path, skipping `eval_projection_item`
+    // for the supported shape. Falls through to the tuple path when the
+    // plan doesn't match (telemetry counters surface why) or when a runtime
+    // value's kind doesn't match the affinity-derived kind (SQLite loose
+    // typing safety net).
+    if fast_path_rows.is_none()
+        && super::morsel::morsel_route_mode().is_some()
+        && let SelectSource::Table(table) = &plan.source
+    {
+        let tx_ref = tx.as_mut().expect("tx present");
+        if let Some(rows) =
+            super::morsel::route::execute_routed_scan(conn.engine(), tx_ref, table, plan)?
+        {
+            fast_path_rows = Some(rows);
+        }
     }
 
     if let Some(rows) = fast_path_rows {
@@ -244,15 +385,25 @@ fn build_select_runtime(
                     //      `selection_rowid_eq` / RowIdGet).
                     //   2. physical-index probe (point or range).
                     //   3. default path: full heap scan.
-                    let rowids = if let Some(rowid) =
+                    // Phase 5 WS-A2e: `NOT INDEXED` disables the rowid-PK
+                    // alias short-circuit too (SQLite parity: rowid is
+                    // index-driven).
+                    let rowid_candidate = if matches!(
+                        plan.table_hint,
+                        Some(crate::statement::TableAccessHint::NotIndexed)
+                    ) {
+                        None
+                    } else {
                         selection_rowid_eq(table, &plan.selection, bindings)?
-                    {
+                    };
+                    let rowids = if let Some(rowid) = rowid_candidate {
                         vec![rowid]
-                    } else if let Some(matched) = index_access::try_match_index_access(
+                    } else if let Some(matched) = index_access::try_match_index_access_hinted(
                         conn.engine(),
                         table,
                         &plan.selection,
                         bindings,
+                        plan.table_hint.as_ref(),
                     ) {
                         let tx = tx.as_mut().expect("tx present");
                         // Conservatism: if the kernel can't honor
@@ -310,10 +461,11 @@ fn build_select_runtime(
                         .map(SqlRow::Table)
                         .collect::<Vec<_>>();
                     SelectRuntimeSource::Batched {
-                        node: MaterializeNode::new(order_and_project_rows(
+                        node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                             rows,
                             &plan.selection,
                             &plan.order_by,
+                            &plan.distinct_on,
                             bindings,
                             &plan.projection,
                             limit,
@@ -336,10 +488,11 @@ fn build_select_runtime(
                 let rows =
                     collect_join_rows(conn.engine(), tx.as_mut().expect("tx present"), tables)?;
                 SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
+                    node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                         rows,
                         &plan.selection,
                         &plan.order_by,
+                        &plan.distinct_on,
                         bindings,
                         &plan.projection,
                         limit,
@@ -365,10 +518,11 @@ fn build_select_runtime(
                     bindings,
                 )?;
                 SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
+                    node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                         rows,
                         &plan.selection,
                         &plan.order_by,
+                        &plan.distinct_on,
                         bindings,
                         &plan.projection,
                         limit,
@@ -398,10 +552,11 @@ fn build_select_runtime(
                         .map(SqlRow::SqliteSchema)
                         .collect::<Vec<_>>();
                     SelectRuntimeSource::Batched {
-                        node: MaterializeNode::new(order_and_project_rows(
+                        node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                             sqlite_rows,
                             &plan.selection,
                             &plan.order_by,
+                            &plan.distinct_on,
                             bindings,
                             &plan.projection,
                             limit,
@@ -422,6 +577,16 @@ fn build_select_runtime(
                     SelectRuntimeSource::SqliteSchema { rows, cursor: 0 }
                 }
             }
+            SelectSource::SqliteSequence { alias } => super::sqlite_sequence::build_runtime(
+                conn,
+                alias.as_ref(),
+                plan,
+                bindings,
+                limit,
+                offset,
+                temp_dir.clone(),
+                &mut memory,
+            )?,
             SelectSource::StaticRows { rows } => SelectRuntimeSource::StaticRows {
                 rows: Arc::clone(rows),
                 cursor: 0,
@@ -448,10 +613,11 @@ fn build_select_runtime(
                     })
                     .collect();
                 SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
+                    node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                         sql_rows,
                         &plan.selection,
                         &plan.order_by,
+                        &plan.distinct_on,
                         bindings,
                         &plan.projection,
                         limit,
@@ -476,10 +642,11 @@ fn build_select_runtime(
                     .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
                     .collect::<Vec<_>>();
                 SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
+                    node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                         rows,
                         &plan.selection,
                         &plan.order_by,
+                        &plan.distinct_on,
                         bindings,
                         &plan.projection,
                         limit,
@@ -505,10 +672,11 @@ fn build_select_runtime(
                         .map(|values| wrap_compound_row(values, Arc::clone(&column_names)))
                         .collect::<Vec<_>>();
                 SelectRuntimeSource::Batched {
-                    node: MaterializeNode::new(order_and_project_rows(
+                    node: MaterializeNode::new(order_and_project_rows_with_distinct_on(
                         rows,
                         &plan.selection,
                         &plan.order_by,
+                        &plan.distinct_on,
                         bindings,
                         &plan.projection,
                         limit,
@@ -552,13 +720,31 @@ fn build_select_runtime(
         }
     };
 
+    // A28: only the live-iteration source variants (Table, SqliteSchema,
+    // Empty) consult `runtime.selection` / `runtime.projection` per
+    // `selection_passes` + `project_row` in exec/mod.rs. Batched sources
+    // pre-project via `order_and_project_rows_with_distinct_on`; StaticRows
+    // sources are pre-projected by their fast paths (covering scan, index
+    // count, morsel route). Cloning the plan's selection/projection for
+    // those variants is dead work — and selection trees can be deep
+    // sqlparser AST nodes, so the saving compounds on complex queries.
+    let (selection, projection) = match &source {
+        SelectRuntimeSource::Table { .. }
+        | SelectRuntimeSource::SqliteSchema { .. }
+        | SelectRuntimeSource::SqliteSequence { .. }
+        | SelectRuntimeSource::Empty => (plan.selection.clone(), plan.projection.clone()),
+        SelectRuntimeSource::Batched { .. } | SelectRuntimeSource::StaticRows { .. } => {
+            (None, Vec::new())
+        }
+    };
+
     let runtime_tx = std::mem::replace(tx, SelectRuntimeTx::Empty);
     Ok(SelectRuntime {
         tx: runtime_tx,
         restore_tx,
         source,
-        selection: plan.selection.clone(),
-        projection: plan.projection.clone(),
+        selection,
+        projection,
         limit,
         offset,
         seen: 0,
@@ -569,6 +755,24 @@ fn build_select_runtime(
 
 fn sqlite_schema_rows(conn: &Connection) -> Vec<SqliteSchemaRow> {
     let mut rows = conn.engine().sqlite_schema();
+    if conn
+        .engine()
+        .schema_snapshot()
+        .tables
+        .iter()
+        .any(|table| table.is_autoincrement())
+        && !rows
+            .iter()
+            .any(|row| row.name.as_ref() == "sqlite_sequence")
+    {
+        rows.push(SqliteSchemaRow {
+            type_name: "table".into(),
+            name: "sqlite_sequence".into(),
+            tbl_name: "sqlite_sequence".into(),
+            rootpage: 0,
+            sql: "CREATE TABLE sqlite_sequence(name,seq)".into(),
+        });
+    }
     if !conn.stats_snapshot().tables.is_empty()
         && !rows.iter().any(|row| row.name.as_ref() == "sqlite_stat1")
     {
@@ -636,11 +840,17 @@ fn table_rows_for_select(
     collect_table_rows(conn.engine(), tx, table)
 }
 
+/// Track K — DISTINCT ON wrapper around the ordering/projection pipeline.
+/// When `distinct_on` is non-empty, the rows are sorted by ORDER BY first,
+/// then we walk in order and keep only the first row per distinct
+/// combination of the ON expressions. LIMIT/OFFSET are applied after the
+/// dedup pass.
 #[allow(clippy::too_many_arguments)]
-pub(super) fn order_and_project_rows(
+pub(super) fn order_and_project_rows_with_distinct_on(
     rows: Vec<SqlRow>,
     selection: &Option<Expr>,
     order_by: &[OrderByExpr],
+    distinct_on: &[Expr],
     bindings: &[Option<SqlValue>],
     projection: &[SelectItem],
     limit: usize,
@@ -652,6 +862,64 @@ pub(super) fn order_and_project_rows(
         if selection_passes(selection, &row, bindings)? {
             filtered.push(row);
         }
+    }
+
+    // DISTINCT ON: sort by ORDER BY (which decides the "first" winner per
+    // ON-group), walk in order, and keep one row per distinct ON-key. We
+    // must compute ON keys against the raw `SqlRow` context (not the
+    // projected output), so the dedup needs to happen here before we drop
+    // the row context.
+    if !distinct_on.is_empty() {
+        // Sort first so the per-group winner is deterministic. We use the
+        // existing sort plumbing by transferring through a key+row vector.
+        let directions = directions_from_order_by(order_by);
+        let mut keyed: Vec<(Vec<SqlValue>, SqlRow)> = Vec::with_capacity(filtered.len());
+        for row in filtered {
+            let mut keys = Vec::with_capacity(order_by.len());
+            for order in order_by {
+                keys.push(eval_order_key(order, &row.context(), bindings)?);
+            }
+            keyed.push((keys, row));
+        }
+        keyed.sort_by(|a, b| {
+            for (idx, dir) in directions.iter().enumerate() {
+                let cmp = dir.compare_values(&a.0[idx], &b.0[idx]);
+                if cmp != std::cmp::Ordering::Equal {
+                    return cmp;
+                }
+            }
+            std::cmp::Ordering::Equal
+        });
+        let mut seen: Vec<Vec<SqlValue>> = Vec::with_capacity(keyed.len());
+        let mut deduped: Vec<SqlRow> = Vec::with_capacity(keyed.len());
+        for (_keys, row) in keyed {
+            let mut on_key = Vec::with_capacity(distinct_on.len());
+            for expr in distinct_on {
+                on_key.push(eval_scalar(expr, &row.context(), bindings)?);
+            }
+            let mut already = false;
+            for prev in &seen {
+                if prev.len() == on_key.len()
+                    && prev.iter().zip(on_key.iter()).all(|(a, b)| {
+                        crate::value::compare_values(a, b) == std::cmp::Ordering::Equal
+                    })
+                {
+                    already = true;
+                    break;
+                }
+            }
+            if !already {
+                seen.push(on_key);
+                deduped.push(row);
+            }
+        }
+        // Now project + apply LIMIT/OFFSET. The rows are already in the
+        // requested order so no further sort is needed.
+        let mut out = Vec::with_capacity(limit.min(deduped.len()));
+        for row in deduped.into_iter().skip(offset).take(limit) {
+            out.push(project_row(projection, &row, bindings)?);
+        }
+        return Ok(out);
     }
 
     // Comparator-only collation fallback: custom collations and SQLite's UINT
@@ -846,6 +1114,9 @@ pub(super) fn collect_select_rows(
             .into_iter()
             .map(SqlRow::SqliteSchema)
             .collect()),
+        SelectSource::SqliteSequence { alias } => {
+            super::sqlite_sequence::collect_rows(conn, alias.as_ref())
+        }
         SelectSource::SqliteTempSchema => Ok(temp_schema_rows(conn)
             .into_iter()
             .map(SqlRow::SqliteSchema)
@@ -1025,40 +1296,94 @@ fn covering_projection_for_index(
     Some(out)
 }
 
-/// Phase 11 W1-E: for the covering path, the cursor already emits in
-/// the index leading-column order. `ORDER BY k` (or no ORDER BY)
-/// matches; anything else needs a downstream sort and falls through.
-fn covering_order_satisfies(
-    index: &redlinedb_kernel::catalog::IndexDef,
+/// Phase 5 WS-A2: prefix-aware ORDER BY satisfaction check.
+///
+/// The cursor walks the index in key order. When the leading key
+/// positions are pinned to constants by equality (e.g. `WHERE tenant=?`
+/// on `INDEX(tenant, k)`), the cursor effectively walks in `k`-order
+/// over the slice where `tenant` is constant. So `ORDER BY k` IS
+/// satisfied by the index walk even though `k` is not the leading
+/// column of the index itself.
+///
+/// Strip `equality_prefix_len` leading key positions; then ORDER BY
+/// columns must align one-for-one with the next unpinned key positions.
+/// Empty ORDER BY is always satisfied. DESC ORDER BY currently disqual-
+/// ifies (caller routes DESC through `order_reverse_satisfied_by_index`).
+fn order_satisfied_by_index_with_prefix(
+    matched: &index_access::IndexAccessMatch,
     table: &Arc<redlinedb_kernel::catalog::TableDef>,
     order_by: &[OrderByExpr],
 ) -> bool {
     if order_by.is_empty() {
         return true;
     }
-    if order_by.len() != 1 {
+    let remaining = matched
+        .index
+        .keys
+        .get(matched.equality_prefix_len..)
+        .unwrap_or(&[]);
+    if order_by.len() > remaining.len() {
         return false;
     }
-    let item = &order_by[0];
-    if matches!(item.options.asc, Some(false)) {
-        // Desc ORDER BY does not match an Asc index; the cursor walks
-        // left-to-right and does not currently support reverse
-        // iteration. Use the sort path instead.
+    for (item, key) in order_by.iter().zip(remaining.iter()) {
+        if matches!(item.options.asc, Some(false)) {
+            return false;
+        }
+        let Expr::Identifier(ident) = &item.expr else {
+            return false;
+        };
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = key.source else {
+            return false;
+        };
+        let Some(col) = table.columns.get(attnum as usize) else {
+            return false;
+        };
+        if !col.folded.as_ref().eq_ignore_ascii_case(&ident.value) {
+            return false;
+        }
+    }
+    true
+}
+
+/// Phase 5 WS-A2c: reverse-walk variant of
+/// `order_satisfied_by_index_with_prefix`. Returns true iff every ORDER
+/// BY item is `DESC` and otherwise aligns with the equality-prefix-shifted
+/// key positions. ASC items disqualify (the caller routes those through
+/// the forward-walk check instead).
+fn order_reverse_satisfied_by_index(
+    matched: &index_access::IndexAccessMatch,
+    table: &Arc<redlinedb_kernel::catalog::TableDef>,
+    order_by: &[OrderByExpr],
+) -> bool {
+    if order_by.is_empty() {
         return false;
     }
-    let Expr::Identifier(ident) = &item.expr else {
+    let remaining = matched
+        .index
+        .keys
+        .get(matched.equality_prefix_len..)
+        .unwrap_or(&[]);
+    if order_by.len() > remaining.len() {
         return false;
-    };
-    let Some(first_key) = index.keys.first() else {
-        return false;
-    };
-    let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = first_key.source else {
-        return false;
-    };
-    table
-        .columns
-        .get(attnum as usize)
-        .is_some_and(|col| col.folded.as_ref().eq_ignore_ascii_case(&ident.value))
+    }
+    for (item, key) in order_by.iter().zip(remaining.iter()) {
+        if !matches!(item.options.asc, Some(false)) {
+            return false;
+        }
+        let Expr::Identifier(ident) = &item.expr else {
+            return false;
+        };
+        let redlinedb_kernel::catalog::IndexKeySource::Column { attnum } = key.source else {
+            return false;
+        };
+        let Some(col) = table.columns.get(attnum as usize) else {
+            return false;
+        };
+        if !col.folded.as_ref().eq_ignore_ascii_case(&ident.value) {
+            return false;
+        }
+    }
+    true
 }
 
 fn order_by_rowid_alias(
@@ -1101,11 +1426,18 @@ fn try_ordered_index_limit_path(
     if plan.order_by.is_empty() || limit == usize::MAX {
         return Ok(None);
     }
-    let Some(matched) =
-        index_access::try_match_index_access(conn.engine(), table, &plan.selection, bindings)
-    else {
+    let Some(matched) = index_access::try_match_index_access_hinted(
+        conn.engine(),
+        table,
+        &plan.selection,
+        bindings,
+        plan.table_hint.as_ref(),
+    ) else {
         return Ok(None);
     };
+    if !matched.consumed_full_predicate() {
+        return Ok(None);
+    }
     if matched.index.keys.len() == 1
         && order_by_rowid_alias(table, &plan.order_by)
         && matches!(matched.probe, index_access::IndexProbe::Point { .. })
@@ -1127,21 +1459,35 @@ fn try_ordered_index_limit_path(
     if !matches!(matched.probe, index_access::IndexProbe::Range { .. }) {
         return Ok(None);
     }
-    if !covering_order_satisfies(&matched.index, table, &plan.order_by) {
+    let order_asc = order_satisfied_by_index_with_prefix(&matched, table, &plan.order_by);
+    let order_desc =
+        !order_asc && order_reverse_satisfied_by_index(&matched, table, &plan.order_by);
+    if !order_asc && !order_desc {
         return Ok(None);
     }
     if index_access::open_handle(conn.engine(), &matched.index).is_none() {
         return Ok(None);
     }
     let take = limit.saturating_add(offset);
-    let rowids = index_access::execute_index_probe_with_limit(
-        conn.engine(),
-        tx,
-        table,
-        &matched.index,
-        &matched.probe,
-        Some(take),
-    )?;
+    let rowids = if order_desc {
+        index_access::execute_index_probe_with_limit_desc(
+            conn.engine(),
+            tx,
+            table,
+            &matched.index,
+            &matched.probe,
+            Some(take),
+        )?
+    } else {
+        index_access::execute_index_probe_with_limit(
+            conn.engine(),
+            tx,
+            table,
+            &matched.index,
+            &matched.probe,
+            Some(take),
+        )?
+    };
     Ok(Some(rowids))
 }
 
@@ -1196,12 +1542,376 @@ fn authorize_select_source(source: &SelectSource) -> Option<crate::udf::Authoriz
         }
         SelectSource::SqliteSchema
         | SelectSource::SqliteTempSchema
+        | SelectSource::SqliteSequence { .. }
         | SelectSource::StaticRows { .. }
         | SelectSource::Empty
         | SelectSource::CompoundSet { .. }
         | SelectSource::Cte { .. } => {}
     }
     if found { Some(worst) } else { None }
+}
+
+/// Phase 1.5 fast path. Returns `Some(runtime)` for a FROM-less SELECT
+/// whose projection contains only pure scalar expressions and that has
+/// no row-shaping clauses (WHERE/GROUP/HAVING/ORDER/DISTINCT/LIMIT/OFFSET).
+///
+/// Subqueries, aggregates, window functions, and modifiers all fall
+/// through to the regular `execute_select` path. Returning `None` means
+/// "use the slow path"; returning `Err` means evaluation failed and
+/// must be surfaced to the caller.
+fn try_fromless_select_fast_path(
+    plan: &crate::statement::SelectPlan,
+    bindings: &[Option<SqlValue>],
+) -> Result<Option<SelectRuntime>> {
+    if !matches!(plan.source, SelectSource::Empty) {
+        return Ok(None);
+    }
+    if plan.distinct
+        || !plan.distinct_on.is_empty()
+        || plan.selection.is_some()
+        || !plan.group_by.is_empty()
+        || plan.having.is_some()
+        || !plan.order_by.is_empty()
+        || plan.limit.is_some()
+        || plan.offset.is_some()
+    {
+        return Ok(None);
+    }
+    // Reject wildcards (`SELECT *` on no FROM is an error anyway, but be
+    // explicit) and any projection item containing a subquery or
+    // aggregate. Window functions are caught by `expr_has_aggregate`
+    // since `window::projection_has_window` would have routed them
+    // through the window pipeline; the conservative shape-check here
+    // re-uses the well-tested AST walker.
+    if plan.projection.is_empty() {
+        return Ok(None);
+    }
+    for item in &plan.projection {
+        let expr = match item {
+            SelectItem::UnnamedExpr(expr) => expr,
+            SelectItem::ExprWithAlias { expr, .. } => expr,
+            SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => {
+                return Ok(None);
+            }
+        };
+        if !is_pure_scalar_expr(expr) {
+            return Ok(None);
+        }
+    }
+
+    let mut row = Vec::with_capacity(plan.projection.len());
+    for item in &plan.projection {
+        let expr = match item {
+            SelectItem::UnnamedExpr(expr) => expr,
+            SelectItem::ExprWithAlias { expr, .. } => expr,
+            _ => unreachable!("wildcard filtered above"),
+        };
+        row.push(eval_scalar(expr, &RowContext::Empty, bindings)?);
+    }
+
+    Ok(Some(SelectRuntime {
+        tx: SelectRuntimeTx::Empty,
+        restore_tx: false,
+        source: SelectRuntimeSource::StaticRows {
+            rows: Arc::from(vec![row]),
+            cursor: 0,
+        },
+        selection: None,
+        projection: Vec::new(),
+        limit: usize::MAX,
+        offset: 0,
+        seen: 0,
+        yielded: 0,
+        memory: QueryMemoryBroker::new(0, 0, None),
+    }))
+}
+
+/// Conservative scalar-purity check. Returns `true` only when the
+/// expression tree is safely evaluable against `RowContext::Empty`
+/// without engine state — no Subquery, no Exists, no aggregate/window
+/// function, no identifier reference.
+fn is_pure_scalar_expr(expr: &Expr) -> bool {
+    use sqlparser::ast::Expr::*;
+    match expr {
+        Value(_) => true,
+        Identifier(_) | CompoundIdentifier(_) => false,
+        Subquery(_) | Exists { .. } | InSubquery { .. } | AnyOp { .. } | AllOp { .. } => false,
+        TypedString(_) => true,
+        Function(func) => {
+            // Window functions carry an OVER (...) clause.
+            if func.over.is_some() {
+                return false;
+            }
+            if is_aggregate_function_name(func) {
+                return false;
+            }
+            // Function with simple positional args of pure scalars is OK.
+            match &func.args {
+                FunctionArguments::None => true,
+                FunctionArguments::List(list) => list.args.iter().all(|arg| match arg {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(inner)) => {
+                        is_pure_scalar_expr(inner)
+                    }
+                    _ => false,
+                }),
+                FunctionArguments::Subquery(_) => false,
+            }
+        }
+        BinaryOp { left, right, .. } => is_pure_scalar_expr(left) && is_pure_scalar_expr(right),
+        UnaryOp { expr, .. } => is_pure_scalar_expr(expr),
+        Nested(inner)
+        | IsFalse(inner)
+        | IsTrue(inner)
+        | IsNull(inner)
+        | IsNotNull(inner)
+        | IsUnknown(inner)
+        | IsNotUnknown(inner)
+        | IsNotFalse(inner)
+        | IsNotTrue(inner)
+        | Collate { expr: inner, .. }
+        | Cast { expr: inner, .. } => is_pure_scalar_expr(inner),
+        Case {
+            operand,
+            conditions,
+            else_result,
+            ..
+        } => {
+            operand
+                .as_ref()
+                .map(|e| is_pure_scalar_expr(e))
+                .unwrap_or(true)
+                && conditions
+                    .iter()
+                    .all(|w| is_pure_scalar_expr(&w.condition) && is_pure_scalar_expr(&w.result))
+                && else_result
+                    .as_ref()
+                    .map(|e| is_pure_scalar_expr(e))
+                    .unwrap_or(true)
+        }
+        InList { expr, list, .. } => {
+            is_pure_scalar_expr(expr) && list.iter().all(is_pure_scalar_expr)
+        }
+        Between {
+            expr, low, high, ..
+        } => is_pure_scalar_expr(expr) && is_pure_scalar_expr(low) && is_pure_scalar_expr(high),
+        Tuple(items) => items.iter().all(is_pure_scalar_expr),
+        // Phase 4.1: sqlparser parses several standard scalar functions
+        // into dedicated `Expr` variants instead of `Expr::Function`.
+        // The Phase 1.5 walker silently rejected all of these, forcing
+        // the slow path for any SELECT using substr/trim/position/etc.
+        Substring {
+            expr,
+            substring_from,
+            substring_for,
+            ..
+        } => {
+            is_pure_scalar_expr(expr)
+                && substring_from
+                    .as_ref()
+                    .is_none_or(|e| is_pure_scalar_expr(e))
+                && substring_for
+                    .as_ref()
+                    .is_none_or(|e| is_pure_scalar_expr(e))
+        }
+        Trim {
+            expr,
+            trim_what,
+            trim_characters,
+            ..
+        } => {
+            is_pure_scalar_expr(expr)
+                && trim_what.as_ref().is_none_or(|e| is_pure_scalar_expr(e))
+                && trim_characters
+                    .as_ref()
+                    .is_none_or(|chars| chars.iter().all(is_pure_scalar_expr))
+        }
+        Position { expr, r#in } => is_pure_scalar_expr(expr) && is_pure_scalar_expr(r#in),
+        Extract { expr, .. } => is_pure_scalar_expr(expr),
+        Convert { expr, .. } => is_pure_scalar_expr(expr),
+        Overlay {
+            expr,
+            overlay_what,
+            overlay_from,
+            overlay_for,
+        } => {
+            is_pure_scalar_expr(expr)
+                && is_pure_scalar_expr(overlay_what)
+                && is_pure_scalar_expr(overlay_from)
+                && overlay_for.as_ref().is_none_or(|e| is_pure_scalar_expr(e))
+        }
+        Like { expr, pattern, .. } | ILike { expr, pattern, .. } => {
+            is_pure_scalar_expr(expr) && is_pure_scalar_expr(pattern)
+        }
+        IsDistinctFrom(a, b) | IsNotDistinctFrom(a, b) => {
+            is_pure_scalar_expr(a) && is_pure_scalar_expr(b)
+        }
+        // Anything we don't explicitly recognize — fall through to the
+        // slow path. Strictly conservative: we'd rather miss a fast-path
+        // opportunity than evaluate an expression in the wrong context.
+        _ => false,
+    }
+}
+
+/// Name-based aggregate detection. Mirrors the small allow-list used by
+/// the GROUP BY classifier; deliberately conservative — anything
+/// borderline must go through the regular path that consults the
+/// aggregate registry.
+fn is_aggregate_function_name(func: &sqlparser::ast::Function) -> bool {
+    let parts = &func.name.0;
+    if parts.len() != 1 {
+        return false;
+    }
+    let ident = match &parts[0] {
+        sqlparser::ast::ObjectNamePart::Identifier(ident) => ident,
+        _ => return false,
+    };
+    let name = ident.value.as_str();
+    matches!(
+        name.to_ascii_lowercase().as_str(),
+        "count"
+            | "sum"
+            | "avg"
+            | "min"
+            | "max"
+            | "total"
+            | "group_concat"
+            | "string_agg"
+            | "array_agg"
+            | "json_group_array"
+            | "json_group_object"
+            | "jsonb_group_array"
+            | "jsonb_group_object"
+            | "every"
+            | "some"
+            | "any_value"
+            | "bool_and"
+            | "bool_or"
+            | "bit_and"
+            | "bit_or"
+            | "stddev"
+            | "stddev_pop"
+            | "stddev_samp"
+            | "variance"
+            | "var_pop"
+            | "var_samp"
+    )
+}
+
+/// WS-C3 R3-C: dispatch the heap-side parallel scan and reshape its
+/// output into the same `Vec<Vec<SqlValue>>` projection that the
+/// serial covering path produces. The serial path walks the index
+/// leaf chain; the parallel path walks every heap page belonging to
+/// `table.relation_id` in parallel, applies the WHERE predicate
+/// post-scan, then evaluates `projection` per surviving row.
+///
+/// Result ordering is intentionally NOT preserved: the kernel
+/// `parallel_scan_page_range` documents that rows arrive in an
+/// order determined by which worker drains its slice of pages
+/// first, and the WS-C3 R2 gate refuses to dispatch when an
+/// `ORDER BY` consumer downstream would observe a different shape.
+/// The two downstream operators that tolerate this — HashAggregator
+/// and SpillSort — re-establish order from the data itself.
+///
+/// The `pool.install(|| ...)` wrap is what keeps the worker
+/// threads bound to the database's dedicated pool; without it, the
+/// kernel would still parallelise but the `std::thread::scope`
+/// workers would not see the pool's affinity / NUMA hints.
+#[allow(clippy::too_many_arguments)]
+fn dispatch_parallel_covering_scan(
+    engine: &Engine,
+    tx: &mut Txn,
+    table: &Arc<TableDef>,
+    selection: &Option<Expr>,
+    projection: &[SelectItem],
+    bindings: &[Option<SqlValue>],
+    worker_count: usize,
+    pool: &Arc<rayon::ThreadPool>,
+) -> Result<Vec<Vec<SqlValue>>> {
+    use redlinedb_kernel::format::PageId;
+
+    // R3-C: the scan needs a page-range bound that covers every page
+    // currently holding a live tuple for this relation. The
+    // engine-level `heap_page_count` (derived from the heap file's
+    // on-disk size) is too low when writes are still buffered in
+    // the WAL + buffer pool and the heap file has not yet
+    // extended. `relation_entries` walks the in-memory row
+    // directory: every row's `TuplePtr` carries the `PageId`, so
+    // `max + 1` of those page ids is a safe upper bound that
+    // covers both flushed and buffered pages. We take the max of
+    // the two bounds so the scan also visits any pages already on
+    // disk that don't yet have a directory entry for this
+    // relation (the per-page `rel_filter` discards rows belonging
+    // to other relations).
+    let entries = engine.relation_entries(table.relation_id)?;
+    let max_page = entries
+        .iter()
+        .map(|(_, ptr)| ptr.page_id.0)
+        .max()
+        .unwrap_or(0);
+    let mut total_pages = engine.heap_page_count()?;
+    // Take whichever bound is larger — `page_count` covers any pages
+    // already extended on disk (including pages from other relations
+    // that the per-page rel_filter will skip), and `max_page+1`
+    // covers any in-memory pages not yet flushed.
+    total_pages = total_pages.max(max_page.saturating_add(1));
+    if total_pages == 0 || entries.is_empty() {
+        return Ok(Vec::new());
+    }
+    let rel_filter = Some(table.relation_id);
+    let snapshot = tx.snapshot().clone();
+    let owner = Some(tx.id());
+
+    // The pool is dedicated to this database; `install` confines the
+    // `thread::scope` workers spawned inside
+    // `parallel_scan_page_range` to that pool's affinity. We still
+    // pass `worker_count` so the dispatcher knows how many slices to
+    // make.
+    //
+    // `PageId(0)` is reserved for the control file / catalog header
+    // and pinning it returns `CorruptPage("page id zero is invalid")`,
+    // so the page range starts at `PageId(1)`. Higher non-heap pages
+    // (catalog / undo / index) are skipped per-page inside
+    // `collect_heap_page` via the page-kind check.
+    let scan_start = PageId(1);
+    let heap_rows = pool.install(|| {
+        engine.parallel_scan_page_range(
+            &snapshot,
+            owner,
+            scan_start..PageId(total_pages),
+            rel_filter,
+            worker_count,
+            None,
+        )
+    })?;
+
+    // Decode payloads -> SqlRow, apply WHERE, project. The decoding
+    // and predicate evaluation stay serial (downstream operator) —
+    // the parallel speedup lives in the I/O + page-pin phase.
+    let mut out: Vec<Vec<SqlValue>> = Vec::with_capacity(heap_rows.len());
+    for heap_row in heap_rows {
+        let Some((table_id, mut values)) = decode_sql_row(&heap_row.payload)? else {
+            continue;
+        };
+        if table_id != table.table_id.0 {
+            continue;
+        }
+        if values.len() < table.columns.len() {
+            values.resize(table.columns.len(), SqlValue::Null);
+            values = build_default_values(table, values)?;
+        }
+        let table_row = TableRow {
+            rowid: heap_row.row_id,
+            values,
+            table: Arc::clone(table),
+            alias: None,
+        };
+        let row = SqlRow::Table(table_row);
+        if !selection_passes(selection, &row, bindings)? {
+            continue;
+        }
+        out.push(project_row(projection, &row, bindings)?);
+    }
+    Ok(out)
 }
 
 /// Build a SELECT runtime that yields zero rows. Used when the

@@ -1,0 +1,70 @@
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling version_check v0.9.5
+   Compiling find-msvc-tools v0.1.9
+   Compiling shlex v2.0.1
+   Compiling object v0.37.3
+   Compiling crossbeam-utils v0.8.22
+   Compiling memchr v2.8.1
+   Compiling crossbeam-epoch v0.9.20
+   Compiling zerocopy v0.8.50
+   Compiling getrandom v0.3.4
+   Compiling crossbeam-deque v0.8.7
+   Compiling rustversion v1.0.22
+   Compiling parking_lot_core v0.9.12
+   Compiling typenum v1.20.1
+   Compiling once_cell v1.21.4
+   Compiling serde_json v1.0.150
+   Compiling rayon-core v1.13.0
+   Compiling getrandom v0.4.2
+   Compiling scopeguard v1.2.0
+   Compiling smallvec v1.15.2
+   Compiling crc32fast v1.5.0
+   Compiling thiserror v2.0.18
+   Compiling rustix v1.1.4
+   Compiling bitflags v2.13.0
+   Compiling libm v0.2.16
+   Compiling linux-raw-sys v0.12.1
+   Compiling regex-syntax v0.8.11
+   Compiling fastrand v2.4.1
+   Compiling bumpalo v3.20.3
+   Compiling redlinedb-domain v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.6#d0de5993)
+   Compiling either v1.16.0
+   Compiling log v0.4.32
+   Compiling cpufeatures v0.2.17
+   Compiling jeryu-obs v5.0.0 (/home/ubuntu/jain-split/target/redline-r3-claim533.WoXiFR/jeryu-release-ops/crates/jeryu-obs)
+   Compiling thiserror-impl v2.0.18
+   Compiling recursive-proc-macro-impl v0.1.1
+   Compiling lock_api v0.4.14
+   Compiling cc v1.2.63
+   Compiling generic-array v0.14.7
+   Compiling ahash v0.8.12
+   Compiling aho-corasick v1.1.4
+   Compiling crossbeam-queue v0.3.13
+   Compiling arc-swap v1.9.2
+   Compiling stacker v0.1.24
+   Compiling num_cpus v1.17.0
+   Compiling rayon v1.12.0
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling parking_lot v0.12.5
+   Compiling regex-automata v0.4.15
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling tempfile v3.27.0
+   Compiling regex v1.13.0
+   Compiling ar_archive_writer v0.5.2
+   Compiling psm v0.1.31
+   Compiling redlinedb-kernel v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.6#d0de5993)
+   Compiling recursive v0.1.1
+   Compiling sqlparser v0.61.0
+   Compiling redlinedb-sql v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.6#d0de5993)
+   Compiling redlinedb v4.1.0 (http://127.0.0.1:8787/git/jeryu/redline-core.git?tag=redline-core-v4.1.0-jain.6#d0de5993)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 18.09s
+     Running tests/redline_consumer_contract.rs (/home/ubuntu/jain-split/target/redline-r3-claim533.WoXiFR/cargo/jeryu/debug/deps/redline_consumer_contract-a875b83d0dfa4529)
+
+running 1 test
+test jeryu_work_and_audit_state_survives_transactions_and_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.38s
+

@@ -46,14 +46,51 @@ pub struct OpenOptions {
     pub busy_timeout: Duration,
     pub process_owner_lock: bool,
     pub temp_dir: Option<std::path::PathBuf>,
+    /// Size of the per-`Database` Rayon thread pool used by future
+    /// intra-query parallel operators. `None` (default) picks
+    /// `min(num_cpus, 8)`. `Some(0)` or `Some(1)` opts out of the pool —
+    /// operators fall back to their serial path. `Some(n)` builds an
+    /// `n`-thread non-global pool dedicated to this database.
+    pub rayon_threads: Option<usize>,
+    /// WS-C9 / Wave-6b: lean defaults for short-lived ephemeral
+    /// databases (`:memory:`, CLI one-shots, smoke tests). When the
+    /// effective value resolves to `true`:
+    ///   * buffer pool capacity is forced to `LEAN_BUFFER_POOL_PAGES`
+    ///     (256 pages = 1 MB at 4 KB) instead of the larger calculation
+    ///     from `memory.cache_bytes`.
+    ///   * statement cache capacity is forced to
+    ///     `LEAN_STATEMENT_CACHE_CAPACITY` (8) instead of the user's
+    ///     setting.
+    ///
+    /// `None` (default) lets the open path pick the right value:
+    /// `Database::create_in_memory` / `Database::create_ephemeral`
+    /// auto-enable, on-disk opens stay off. `Some(true)` / `Some(false)`
+    /// pin the value regardless of the open flavour, preserving the
+    /// historical opt-in surface.
+    pub lean_ephemeral: Option<bool>,
 }
+
+/// Buffer pool capacity, in pages, when `lean_ephemeral = true`.
+/// 256 pages × 4 KB = 1 MB.
+pub const LEAN_BUFFER_POOL_PAGES: usize = 256;
+/// Statement cache capacity when `lean_ephemeral = true`.
+pub const LEAN_STATEMENT_CACHE_CAPACITY: usize = 8;
+
+/// A2: env-var name for overriding the default durability without recompiling
+/// or changing user code. Values: `strict`, `normal`, `unsafe_dev`. Any other
+/// value panics at the first `OpenOptions::default()` call so misconfiguration
+/// surfaces loudly.
+pub const REDLINEDB_DEFAULT_DURABILITY_ENV: &str = "REDLINEDB_DEFAULT_DURABILITY";
+/// Suppress the one-line stderr notice emitted on first non-default
+/// durability via [`REDLINEDB_DEFAULT_DURABILITY_ENV`].
+pub const REDLINEDB_QUIET_DURABILITY_ENV: &str = "REDLINEDB_QUIET_DURABILITY";
 
 impl Default for OpenOptions {
     fn default() -> Self {
         Self {
             create: true,
             read_only: false,
-            durability: Durability::Strict,
+            durability: default_durability_from_env(),
             memory: MemoryOptions::default(),
             optimizer: OptimizerOptions::default(),
             query_memory: QueryMemoryOptions::default(),
@@ -62,7 +99,61 @@ impl Default for OpenOptions {
             busy_timeout: Duration::from_secs(5),
             process_owner_lock: true,
             temp_dir: None,
+            rayon_threads: None,
+            lean_ephemeral: None,
         }
+    }
+}
+
+/// Parse `REDLINEDB_DEFAULT_DURABILITY` and emit a one-line stderr notice on
+/// first non-default selection. The intent is to keep the open() default at
+/// `Strict` (matches the durable behaviour users implicitly depend on) while
+/// letting the parity harness / CI export `REDLINEDB_DEFAULT_DURABILITY=normal`
+/// to recover the per-statement fsync tax. Unknown values panic on purpose.
+fn default_durability_from_env() -> Durability {
+    let Ok(raw) = std::env::var(REDLINEDB_DEFAULT_DURABILITY_ENV) else {
+        return Durability::Strict;
+    };
+    let value = raw.trim().to_ascii_lowercase();
+    let parsed = match value.as_str() {
+        "strict" | "full" => Durability::Strict,
+        "normal" => Durability::Normal,
+        "unsafe_dev" | "unsafe-dev" | "off" => Durability::UnsafeDev,
+        other => panic!(
+            "{REDLINEDB_DEFAULT_DURABILITY_ENV}={other:?} is not a valid durability — \
+             expected one of: strict, normal, unsafe_dev"
+        ),
+    };
+    if parsed != Durability::Strict
+        && std::env::var_os(REDLINEDB_QUIET_DURABILITY_ENV).is_none()
+        && DURABILITY_NOTICE_EMITTED
+            .compare_exchange(
+                false,
+                true,
+                std::sync::atomic::Ordering::Relaxed,
+                std::sync::atomic::Ordering::Relaxed,
+            )
+            .is_ok()
+    {
+        eprintln!(
+            "redlinedb: {REDLINEDB_DEFAULT_DURABILITY_ENV}={raw} active \
+             (commit durability defaults to {parsed:?} instead of Strict). \
+             Set {REDLINEDB_QUIET_DURABILITY_ENV}=1 to suppress this notice."
+        );
+    }
+    parsed
+}
+
+static DURABILITY_NOTICE_EMITTED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+impl OpenOptions {
+    /// Resolve [`OpenOptions::lean_ephemeral`] for a concrete open. When the
+    /// caller never touched the field (`None`), `volatile` decides:
+    /// `:memory:` / `create_ephemeral` opens enable lean mode by default,
+    /// on-disk opens stay off. An explicit `Some(_)` from the caller wins.
+    pub(crate) fn effective_lean_ephemeral(&self, volatile: bool) -> bool {
+        self.lean_ephemeral.unwrap_or(volatile)
     }
 }
 
@@ -109,6 +200,49 @@ impl OpenOptions {
     #[must_use]
     pub fn with_temp_dir(mut self, temp_dir: impl Into<std::path::PathBuf>) -> Self {
         self.temp_dir = Some(temp_dir.into());
+        self
+    }
+
+    #[must_use]
+    pub fn with_rayon_threads(mut self, threads: Option<usize>) -> Self {
+        self.rayon_threads = threads;
+        self
+    }
+
+    /// WS-C3 R3 (Phase 6): build a per-`Database` Rayon thread pool
+    /// dedicated to intra-query parallel operators (parallel
+    /// covering-scan, parallel sort, parallel hash aggregation).
+    ///
+    /// This is the user-facing entry point that lights up the WS-C3
+    /// R2 parallel covering-scan gate: with no pool installed the
+    /// gate always falls back to the serial path
+    /// ([`ParallelCoveringDecision::FallbackNoPool`]); with a pool
+    /// installed the gate dispatches when downstream is
+    /// HashAggregator or SpillSort.
+    ///
+    /// Behaviour mirrors [`OpenOptions::with_rayon_threads`] — the
+    /// fluent name is what the WS-C3 R3 brief calls out so the public
+    /// API matches the wiring document. Passing `0` or `1` keeps the
+    /// serial path (no pool is constructed); passing `n >= 2` builds
+    /// an `n`-thread non-global pool. Embedders that already host a
+    /// Rayon pool (axum, sqlx, host analytics stacks) are NOT
+    /// affected — the build never calls `build_global`.
+    ///
+    /// [`ParallelCoveringDecision::FallbackNoPool`]:
+    ///     https://docs.rs/redlinedb-sql/latest/redlinedb_sql/ws_c3_testing/enum.ParallelCoveringDecision.html
+    #[must_use]
+    pub fn parallel_executor(mut self, num_threads: usize) -> Self {
+        self.rayon_threads = Some(num_threads);
+        self
+    }
+
+    /// WS-C9: pin the lean ephemeral defaults explicitly. See
+    /// [`OpenOptions::lean_ephemeral`]. Callers that want to override the
+    /// Wave-6b auto-default for in-memory / ephemeral opens should pass
+    /// `false` here.
+    #[must_use]
+    pub fn with_lean_ephemeral(mut self, lean: bool) -> Self {
+        self.lean_ephemeral = Some(lean);
         self
     }
 }

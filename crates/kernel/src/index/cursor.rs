@@ -512,17 +512,34 @@ impl<'idx> IndexCursor<'idx> {
     /// `true` if `logical_key` lies within `[start, end)` (or whatever
     /// the user-supplied bounds declare).
     fn in_range(&self, logical_key: &[u8]) -> bool {
+        use std::cmp::Ordering;
         let lower_ok = match &self.start {
-            Bound::Included(b) => logical_key >= b.as_slice(),
-            Bound::Excluded(b) => logical_key > b.as_slice(),
+            Bound::Included(b) => !matches!(
+                crate::index::keycmp::cmp_keys(logical_key, b),
+                Ordering::Less
+            ),
+            Bound::Excluded(b) => {
+                matches!(
+                    crate::index::keycmp::cmp_keys(logical_key, b),
+                    Ordering::Greater
+                )
+            }
             Bound::Unbounded => true,
         };
         if !lower_ok {
             return false;
         }
         match &self.end {
-            Bound::Included(b) => logical_key <= b.as_slice(),
-            Bound::Excluded(b) => logical_key < b.as_slice(),
+            Bound::Included(b) => !matches!(
+                crate::index::keycmp::cmp_keys(logical_key, b),
+                Ordering::Greater
+            ),
+            Bound::Excluded(b) => {
+                matches!(
+                    crate::index::keycmp::cmp_keys(logical_key, b),
+                    Ordering::Less
+                )
+            }
             Bound::Unbounded => true,
         }
     }
@@ -560,7 +577,7 @@ impl<'idx> IndexCursor<'idx> {
 #[path = "cursor/raw/mod.rs"]
 mod raw;
 
-pub use raw::{RawIndexCursor, RawPointCursor};
+pub use raw::{Direction, IndexScanScratch, RawIndexCursor, RawPointCursor};
 
 fn cached_tx_visible(
     tx_status: &ConcurrentTxStatus,

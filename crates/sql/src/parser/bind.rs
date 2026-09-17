@@ -37,6 +37,27 @@ pub(crate) fn into_bind_value(name: String) -> Value {
     Value::Placeholder(name)
 }
 
+/// Parse a normalized positional bind marker (`?N`) without the generic
+/// integer parser. This is intentionally tiny and branch-light because it
+/// sits under every scalar bind read in prepared SQLite/RQL execution.
+fn parse_positional_slot(name: &str) -> Option<usize> {
+    let digits = name.strip_prefix('?')?;
+    if digits.is_empty() {
+        return None;
+    }
+
+    let mut slot = 0usize;
+    for byte in digits.bytes() {
+        if !byte.is_ascii_digit() {
+            return None;
+        }
+        slot = slot
+            .checked_mul(10)?
+            .checked_add(usize::from(byte - b'0'))?;
+    }
+    Some(slot)
+}
+
 /// Resolve a bind-parameter marker against a positional bindings vector.
 ///
 /// `name` must already be in the normalized `?N` form produced by
@@ -44,14 +65,9 @@ pub(crate) fn into_bind_value(name: String) -> Value {
 /// marker is malformed (non-numeric slot); returns `Some(SqlValue::Null)`
 /// when the slot is unbound or set to `None`.
 pub(crate) fn resolve_positional(name: &str, bindings: &[Option<SqlValue>]) -> Option<SqlValue> {
-    let slot = name
-        .strip_prefix('?')
-        .and_then(|slot| slot.parse::<usize>().ok())?;
-    Some(
-        bindings
-            .get(slot)
-            .cloned()
-            .flatten()
-            .unwrap_or(SqlValue::Null),
-    )
+    let slot = parse_positional_slot(name)?;
+    match bindings.get(slot) {
+        Some(Some(value)) => Some(value.clone()),
+        _ => Some(SqlValue::Null),
+    }
 }

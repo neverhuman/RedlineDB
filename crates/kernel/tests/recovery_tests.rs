@@ -633,6 +633,7 @@ fn create_index_atomicity_under_simulated_crash_mid_backfill() {
                         }],
                         collation: None,
                         default_value: None,
+                        autoincrement: false,
                         generated: None,
                     },
                     ColumnSpec {
@@ -641,6 +642,7 @@ fn create_index_atomicity_under_simulated_crash_mid_backfill() {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+                        autoincrement: false,
                         generated: None,
                     },
                 ],
@@ -740,6 +742,7 @@ fn create_index_with_backfill_recovers_meta_page_id_after_commit() {
                         }],
                         collation: None,
                         default_value: None,
+                        autoincrement: false,
                         generated: None,
                     },
                     ColumnSpec {
@@ -748,6 +751,7 @@ fn create_index_with_backfill_recovers_meta_page_id_after_commit() {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+                        autoincrement: false,
                         generated: None,
                     },
                 ],
@@ -846,6 +850,7 @@ fn committed_heap_and_index_deltas_replay_after_reopen() {
                         }],
                         collation: None,
                         default_value: None,
+                        autoincrement: false,
                         generated: None,
                     },
                     ColumnSpec {
@@ -854,6 +859,7 @@ fn committed_heap_and_index_deltas_replay_after_reopen() {
                         constraints: vec![],
                         collation: None,
                         default_value: None,
+                        autoincrement: false,
                         generated: None,
                     },
                 ],

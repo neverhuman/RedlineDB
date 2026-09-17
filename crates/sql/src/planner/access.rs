@@ -11,14 +11,41 @@ pub(crate) use projection::*;
 pub(crate) fn choose_access_path(
     conn: &Connection,
     table: &Arc<TableDef>,
-    _projection: &[SelectItem],
+    projection: &[SelectItem],
     selection: &Option<Expr>,
-    _order_by: &[OrderByExpr],
+    order_by: &[OrderByExpr],
     rowid: Option<RowId>,
     bindings: &[Option<SqlValue>],
     _table_stats: Option<&TableStats>,
     _optimizer: &OptimizerConfig,
+    table_hint: Option<&crate::statement::TableAccessHint>,
 ) -> AccessPath {
+    // Phase 6 R2-C: when `PRAGMA redline_planner_use_access_path = ON`
+    // is set, route every decision through the formal `AccessPath` IR
+    // defined in `planner::access_path`. The IR carries pre-computed
+    // `order_satisfies` / `hard_limit` facts the caller can read
+    // without re-pattern-matching the raw `IndexAccessMatch`. We then
+    // lower back to the legacy `super::AccessPath` enum so `build.rs`
+    // can build the `PhysicalPlan` leaf unchanged.
+    //
+    // The legacy default-OFF path below is byte-for-byte identical to
+    // v4.0.3: when the PRAGMA is OFF, NOTHING in this function's
+    // output changes, so parity remains intact for every consumer
+    // that did not opt in. Tests in `tests/access_path_ir.rs` assert
+    // this invariant explicitly.
+    if planner_use_access_path() {
+        let ir = choose_access_path_ir(
+            conn.engine(),
+            table,
+            projection,
+            selection,
+            bindings,
+            table_hint,
+            order_by,
+            None,
+        );
+        return lower_access_path_to_legacy(&ir);
+    }
     // Order matters and mirrors the executor in `exec.rs`:
     //   1. The integer-PK rowid alias (if the predicate is `id = ?` on
     //      a rowid table) is the cheapest path; it lands in
@@ -28,12 +55,21 @@ pub(crate) fn choose_access_path(
     //      ONLY advertises an index path when the executor will
     //      actually consume one, so EXPLAIN never lies about the
     //      physical plan.
-    if let Some(rowid) = rowid {
+    if let Some(rowid) = rowid
+        && !matches!(
+            table_hint,
+            Some(crate::statement::TableAccessHint::NotIndexed)
+        )
+    {
         return AccessPath::RowIdGet { rowid };
     }
-    if let Some(matched) =
-        crate::exec::index_access::try_match_index_access(conn.engine(), table, selection, bindings)
-    {
+    if let Some(matched) = crate::exec::index_access::try_match_index_access_hinted(
+        conn.engine(),
+        table,
+        selection,
+        bindings,
+        table_hint,
+    ) {
         return match matched.kind {
             crate::exec::index_access::IndexProbeKind::PointLookup => {
                 AccessPath::IndexPointLookup {
@@ -71,7 +107,7 @@ pub(crate) fn choose_access_path(
 /// can consume it today. If yes, extend `execute_select` and add a
 /// match arm here (returning `true`). If no, leave the planner unable
 /// to emit it.
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, test))]
 pub(crate) fn access_path_is_consumable_by_executor(access: &AccessPath) -> bool {
     match access {
         AccessPath::TableScan

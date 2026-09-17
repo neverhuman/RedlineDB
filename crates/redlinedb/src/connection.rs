@@ -10,7 +10,7 @@ use std::time::Duration;
 use redlinedb_sql::BeginMode;
 
 use crate::error::{Error, ErrorCode, Result};
-use crate::iter::{FromRow, Step};
+use crate::iter::{FromRow, OwnedStep, Step};
 use crate::options::{CommitStats, ConnectionStats, ExecuteSummary, FunctionArity, FunctionFlags};
 use crate::params::Params;
 use crate::statement::{OwnedStatement, Rows, Statement};
@@ -52,6 +52,32 @@ impl Connection {
     pub fn prepare_owned(&mut self, sql: &str) -> Result<OwnedStatement> {
         self.check_interrupt()?;
         let stmt = self.inner.prepare(sql)?;
+        if self.read_only && !stmt.is_readonly() {
+            return Err(Error::new(ErrorCode::ReadOnly, "connection is read-only"));
+        }
+        Ok(OwnedStatement {
+            inner: stmt,
+            interrupted: Arc::clone(&self.interrupted),
+            _marker: Rc::new(()),
+        })
+    }
+
+    pub fn prepare_rql<'c>(
+        &'c mut self,
+        statement: &redlinedb_sql::RqlStatement,
+    ) -> Result<Statement<'c>> {
+        Ok(Statement {
+            inner: self.prepare_rql_owned(statement)?,
+            _conn: std::marker::PhantomData,
+        })
+    }
+
+    pub fn prepare_rql_owned(
+        &mut self,
+        statement: &redlinedb_sql::RqlStatement,
+    ) -> Result<OwnedStatement> {
+        self.check_interrupt()?;
+        let stmt = self.inner.prepare_rql(statement)?;
         if self.read_only && !stmt.is_readonly() {
             return Err(Error::new(ErrorCode::ReadOnly, "connection is read-only"));
         }
@@ -104,6 +130,40 @@ impl Connection {
         Ok(ExecuteSummary {
             rows_affected: stmt.affected_rows() as u64,
             rows_returned: rows,
+        })
+    }
+
+    /// Execute one or more SQL statements, discarding per-statement row counts.
+    ///
+    /// The order and transaction semantics follow the `Connection::execute`
+    /// behavior in this crate, and execution stops on first error.
+    pub fn execute_batch(&mut self, sql: &str) -> Result<()> {
+        let mut rest = sql;
+        loop {
+            let (statement, tail) = self.prepare_v2(rest)?;
+            if let Some(mut statement) = statement {
+                while let OwnedStep::Row = statement.step()? {}
+            }
+            if tail.is_empty() {
+                return Ok(());
+            }
+            rest = tail;
+        }
+    }
+
+    pub fn execute_rql(&mut self, program: &redlinedb_sql::RqlProgram) -> Result<ExecuteSummary> {
+        let mut rows_affected = 0_u64;
+        let mut rows_returned = 0_u64;
+        for statement in &program.statements {
+            let mut stmt = self.prepare_rql(statement)?;
+            while let Step::Row(_) = stmt.step()? {
+                rows_returned += 1;
+            }
+            rows_affected += stmt.affected_rows() as u64;
+        }
+        Ok(ExecuteSummary {
+            rows_affected,
+            rows_returned,
         })
     }
 
@@ -243,8 +303,19 @@ impl<'conn> Transaction<'conn> {
         self.conn.execute(sql, params)
     }
 
+    pub fn execute_rql(&mut self, program: &redlinedb_sql::RqlProgram) -> Result<ExecuteSummary> {
+        self.conn.execute_rql(program)
+    }
+
     pub fn prepare<'a>(&'a mut self, sql: &str) -> Result<Statement<'a>> {
         self.conn.prepare(sql)
+    }
+
+    pub fn prepare_rql<'a>(
+        &'a mut self,
+        statement: &redlinedb_sql::RqlStatement,
+    ) -> Result<Statement<'a>> {
+        self.conn.prepare_rql(statement)
     }
 
     pub fn commit(&mut self) -> Result<()> {

@@ -10,6 +10,7 @@ mod runtime;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -118,6 +119,30 @@ pub enum CommitDurability {
     UnsafeDev,
 }
 
+impl CommitDurability {
+    const STRICT_U8: u8 = 0;
+    const NORMAL_U8: u8 = 1;
+    const UNSAFE_DEV_U8: u8 = 2;
+
+    #[inline]
+    fn to_u8(self) -> u8 {
+        match self {
+            Self::Strict => Self::STRICT_U8,
+            Self::Normal => Self::NORMAL_U8,
+            Self::UnsafeDev => Self::UNSAFE_DEV_U8,
+        }
+    }
+
+    #[inline]
+    fn from_u8(value: u8) -> Self {
+        match value {
+            Self::NORMAL_U8 => Self::Normal,
+            Self::UNSAFE_DEV_U8 => Self::UnsafeDev,
+            _ => Self::Strict, // safest default for unknown
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CommitOutcome {
     Committed(Csn),
@@ -127,16 +152,21 @@ pub enum CommitOutcome {
 
 impl Default for EngineConfig {
     fn default() -> Self {
-        let parallelism = std::thread::available_parallelism()
-            .map(|value| value.get())
-            .unwrap_or(4);
+        // W7-perf: avoid the cgroup walk in `cached_available_parallelism()`
+        // when constructing the default config for volatile (in-memory) databases.
+        // Persistent databases call `with_detected_parallelism()` in
+        // `Engine::create_inner`, which scales up to match CPU count at that
+        // point (still using the process-wide OnceLock cache).  Using a fixed
+        // baseline here means constructing DbOptions::default() or
+        // EngineConfig::default() for an in-memory database no longer triggers
+        // the 4–6 syscall cgroup walk on every fresh process.
         Self {
             rel_id: RelId(1),
             wal: WalConfig::default(),
             commit_durability: CommitDurability::Strict,
-            lock_shards: (parallelism * 4).max(16),
+            lock_shards: 16,
             busy_timeout: Duration::from_millis(250),
-            heap_lanes: parallelism.max(4),
+            heap_lanes: 4,
             page_size: DEFAULT_PAGE_SIZE,
             buffer_pool_pages: 1024,
             data_file_name: "data.redline".to_owned(),
@@ -147,6 +177,11 @@ impl Default for EngineConfig {
 #[derive(Debug)]
 pub struct Engine {
     config: EngineConfig,
+    /// Runtime-mutable commit durability. Init from `config.commit_durability`
+    /// at open; updatable via `set_commit_durability` so `PRAGMA synchronous`
+    /// propagates from SQL into the commit hot path. Read at every commit via
+    /// `Engine::commit_durability()` (atomic load, ~free).
+    commit_durability_live: AtomicU8,
     volatile: bool,
     data_path: PathBuf,
     wal_dir: PathBuf,
@@ -182,5 +217,22 @@ impl Engine {
         } else {
             Some(Arc::clone(&self.wal))
         }
+    }
+
+    /// Current commit durability. Read on the commit hot path; reflects any
+    /// runtime change made via `set_commit_durability`.
+    #[inline]
+    pub fn commit_durability(&self) -> CommitDurability {
+        CommitDurability::from_u8(self.commit_durability_live.load(Ordering::Relaxed))
+    }
+
+    /// Update commit durability live. In-flight commits observe the new value
+    /// at their next durability decision. Used by SQL `PRAGMA synchronous`
+    /// propagation; never changes the open-time `EngineConfig.commit_durability`
+    /// snapshot (that stays the open-time intent).
+    #[inline]
+    pub fn set_commit_durability(&self, durability: CommitDurability) {
+        self.commit_durability_live
+            .store(durability.to_u8(), Ordering::Relaxed);
     }
 }

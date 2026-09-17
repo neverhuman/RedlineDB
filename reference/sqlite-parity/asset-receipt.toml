@@ -1,0 +1,20 @@
+schema_version = "1.0.0"
+classification = "historical-reference-evidence"
+digest_algorithm = "sha256(sorted UTF-8 filename + NUL + file bytes + NUL)"
+
+[manifest]
+path = "crates/bench/sqlite_parity/generated_manifest.json"
+case_count = 1127
+sha256 = "ba9dcfb87e63436456498ab956c646c77759307ef354ea464dcbda33dd2456d3"
+
+[snapshots.redline_core_owned]
+path = "reference/sqlite-parity/redline-core-owned-cases"
+source_commit = "7ba2f349489448885be593261553c0bdd55821bd"
+case_count = 1127
+tree_sha256 = "cbfb74f34fbc12b6751b9dfe928cbd3506097df65db9263cdadb743b3a31df77"
+
+[snapshots.legacy_diagnostic]
+path = "reference/sqlite-parity/legacy-diagnostic-cases"
+source_commit = "53db3c5e08eb033b5a7d66720cd12cdfceb41eef"
+case_count = 1127
+tree_sha256 = "34797838ff13b6894cbce8ba08d3ac1ea462836ddf3f01d0374d513ee0c50c25"

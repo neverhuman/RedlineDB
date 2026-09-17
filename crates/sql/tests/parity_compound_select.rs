@@ -143,6 +143,46 @@ fn except_returns_left_only_rows() {
 }
 
 #[test]
+fn mixed_set_operations_follow_sqlite_left_to_right() {
+    harness::assert_parity("SELECT 1 UNION SELECT 2 INTERSECT SELECT 2");
+}
+
+#[test]
+fn mixed_union_all_intersect_follows_sqlite_left_to_right() {
+    harness::assert_parity("SELECT 1 UNION ALL SELECT 2 INTERSECT SELECT 2");
+}
+
+#[test]
+fn mixed_set_operations_keep_final_order_by_and_limit() {
+    harness::assert_parity("SELECT 1 UNION SELECT 2 INTERSECT SELECT 2 ORDER BY 1 LIMIT 1");
+}
+
+#[test]
+fn mixed_set_operations_keep_leftmost_column_name() {
+    let pair = ParamPair::new();
+    let mut redline = pair
+        .redline
+        .prepare("SELECT 1 AS alpha UNION SELECT 2 INTERSECT SELECT 2")
+        .expect("redline prepare");
+    let sqlite = pair
+        .sqlite
+        .prepare("SELECT 1 AS alpha UNION SELECT 2 INTERSECT SELECT 2")
+        .expect("sqlite prepare");
+    assert_eq!(
+        redline.column_name(0),
+        sqlite.column_name(0).expect("sqlite column name")
+    );
+    assert_eq!(
+        collect_redline_rows(&mut redline),
+        collect_sqlite_rows(
+            &pair.sqlite,
+            "SELECT 1 AS alpha UNION SELECT 2 INTERSECT SELECT 2",
+            rusqlite::params![]
+        ),
+    );
+}
+
+#[test]
 fn union_all_order_by_position_matches_fuzz_iter_110() {
     // Regression from the local differential fuzz parity lane.
     // seed=7 iter=110: ORDER BY 1 after UNION ALL was a no-op because the

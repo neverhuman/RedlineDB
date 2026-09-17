@@ -1,6 +1,11 @@
 name: ci
 
 on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        default: v4.1.0-rc.2
   push:
     branches: [main]
   pull_request:
@@ -30,10 +35,10 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Install cargo-nextest
         run: |
-          curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+          curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
       # Thin dispatcher: all fast-lane logic lives in ops/ci/fast.sh so
       # CI and local (`scripts/ci-local.sh fast`, `just fast`, the
       # pre-push gate) run the same command set. The preflight stage is
@@ -68,10 +73,10 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Install cargo-nextest
         run: |
-          curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C ${CARGO_HOME:-~/.cargo}/bin
+          curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
       - name: Run fast test shard
         env:
           REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
@@ -100,7 +105,7 @@ jobs:
       - name: Install system packages
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Run parity shard
         env:
           REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
@@ -126,48 +131,189 @@ jobs:
       - name: Guard official evidence boundary
         run: bash scripts/guard-official-evidence.sh
 
-  # The branch ruleset requires checks named test/build/lint/typecheck/cli.
-  # The aggregate test relay emits the required `test` context, while the
-  # other relay jobs propagate the aggregate result under their required
-  # names without duplicating the build.
+  # Branch ruleset requires these exact job names. They run real engine
+  # work and must not wait on the official parity shard.
   test:
-    needs: [preflight, tests, parity, official-evidence-guard]
-    if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      attestations: read
     steps:
-      - run: test "${{ needs.preflight.result }}" = "success"
-      - run: test "${{ needs.tests.result }}" = "success"
-      - run: test "${{ needs.parity.result }}" = "success"
-      - run: test "${{ needs['official-evidence-guard'].result }}" = "success"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.ref }}
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
+      - name: Engine unit tests
+        run: |
+          cargo test --locked --workspace --lib
+          cargo test --locked -p redlinedb-cli
 
   build:
-    needs: [preflight, test]
-    if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      attestations: read
     steps:
-      - run: test "${{ needs.preflight.result }}" = "success"
-      - run: test "${{ needs.test.result }}" = "success"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.ref }}
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
+      - name: Release-build redlinedb-cli
+        run: cargo build --locked --release -p redlinedb-cli
 
   lint:
-    needs: [preflight, test]
-    if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      attestations: read
     steps:
-      - run: test "${{ needs.preflight.result }}" = "success"
-      - run: test "${{ needs.test.result }}" = "success"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.ref }}
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+          components: rustfmt
+      - name: rustfmt
+        run: cargo fmt --check
 
   typecheck:
-    needs: [preflight, test]
-    if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      attestations: read
     steps:
-      - run: test "${{ needs.preflight.result }}" = "success"
-      - run: test "${{ needs.test.result }}" = "success"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.ref }}
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
+      - name: Workspace typecheck
+        run: cargo check --workspace --locked
 
   cli:
-    needs: [preflight, test]
-    if: always()
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      attestations: read
     steps:
-      - run: test "${{ needs.preflight.result }}" = "success"
-      - run: test "${{ needs.test.result }}" = "success"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.ref }}
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with:
+          toolchain: 1.95.0
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
+      - name: Release-build CLI package
+        run: cargo build --locked --release -p redlinedb-cli
+
+  components:
+    strategy:
+      fail-fast: false
+      matrix:
+        lane: [testing, central, web, release-tools, integration]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with: {toolchain: 1.95.0, components: rustfmt}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22'}
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+        with: {key: '${{ matrix.lane }}'}
+      - run: sudo apt-get update && sudo apt-get install -y pkg-config sqlite3
+      - run: bash scripts/ci-family.sh "${{ matrix.lane }}"
+
+  audit:
+    needs: security
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with: {fetch-depth: 0}
+      - run: bash ops/ci/install-github-tools.sh
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with: {name: security-evidence, path: target/jankurai/security}
+      - name: Audit engine against the accepted baseline
+        run: jankurai audit . --full --mode ratchet --baseline .jankurai/baselines/github-monorepo.repo-score.json --json target/audit-family/engine/repo-score.json --md target/audit-family/engine/repo-score.md --no-score-history --policy agent/audit-policy.toml
+      - run: bash ops/ci/audit-family.sh components
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with: {name: audit-family, path: target/audit-family, if-no-files-found: error}
+
+  security:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions: {contents: read}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
+        with: {toolchain: 1.95.0}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22'}
+      - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
+      - run: cargo install cargo-audit --locked --version 0.22.1
+      - run: cargo install cargo-deny --locked --version 0.19.8
+      - run: bash ops/ci/install-github-tools.sh
+      - run: |
+          jankurai security run . --strict --profile ci --script ops/ci/security-family.sh --out target/jankurai/security/evidence.json || {
+            cat target/jankurai/security/security-lane-*.log
+            exit 1
+          }
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with: {name: security-evidence, path: target/jankurai/security, if-no-files-found: error}
+
+  packaging:
+    uses: ./.github/workflows/packages.yml
+    with:
+      tag: ${{ inputs.tag || 'v4.1.0-rc.2' }}
+    permissions:
+      contents: read
+
+  required:
+    name: RedlineDB/required
+    if: always()
+    needs: [preflight, tests, parity, official-evidence-guard, test, build, lint, typecheck, cli, components, audit, security, packaging]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions: {contents: read}
+    steps:
+      - name: Require every gate to succeed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -e 'to_entries | length > 0 and all(.value.result == "success")'

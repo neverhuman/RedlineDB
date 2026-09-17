@@ -104,6 +104,7 @@ pub(crate) fn try_resolve_view_bound_table(
     Ok(Some(BoundTable {
         table: table_def,
         alias: alias.cloned(),
+        index_hint: None,
     }))
 }
 

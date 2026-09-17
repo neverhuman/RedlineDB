@@ -2,21 +2,33 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-project_policy="$repo_root/.jankurai/audit-policy.toml"
-compat_policy="$repo_root/agent/audit-policy.toml"
 
-if [ ! -f "$project_policy" ]; then
-    printf 'missing project audit policy: %s\n' "$project_policy" >&2
-    exit 1
-fi
+require_mirror() {
+    local label="$1"
+    local canonical="$2"
+    local compatibility="$3"
 
-if [ ! -f "$compat_policy" ]; then
-    printf 'missing jankurai v1.5.1 compatibility audit policy: %s\n' "$compat_policy" >&2
-    exit 1
-fi
+    if [ ! -f "$canonical" ]; then
+        printf 'missing canonical %s: %s\n' "$label" "$canonical" >&2
+        exit 1
+    fi
+    if [ ! -f "$compatibility" ]; then
+        printf 'missing compatibility %s: %s\n' "$label" "$compatibility" >&2
+        exit 1
+    fi
+    if ! cmp -s "$canonical" "$compatibility"; then
+        printf '%s mirror drifted: %s must match %s\n' \
+            "$label" "$compatibility" "$canonical" >&2
+        diff -u "$canonical" "$compatibility" >&2 || true
+        exit 1
+    fi
+}
 
-if ! cmp -s "$project_policy" "$compat_policy"; then
-    printf 'audit policy mirror drifted: agent/audit-policy.toml must match .jankurai/audit-policy.toml\n' >&2
-    diff -u "$project_policy" "$compat_policy" >&2 || true
-    exit 1
-fi
+require_mirror \
+    "audit policy" \
+    "$repo_root/agent/audit-policy.toml" \
+    "$repo_root/.jankurai/audit-policy.toml"
+require_mirror \
+    "generated-zones manifest" \
+    "$repo_root/agent/generated-zones.toml" \
+    "$repo_root/.jankurai/generated-zones.toml"

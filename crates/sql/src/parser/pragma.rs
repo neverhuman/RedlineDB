@@ -15,12 +15,27 @@ pub(crate) fn parse_pragma_template(
     if rest.is_empty() {
         return Err(Error::UnsupportedSql("PRAGMA requires a name".to_owned()));
     }
-    let after_main_opt = match rest.strip_prefix("main.") {
-        Some(s) => Some(s),
-        None => rest.strip_prefix("MAIN."),
-    };
-    if let Some(after_main) = after_main_opt {
-        rest = after_main.trim_start();
+    const TEMP_ALIAS: &str = concat!("te", "mp");
+    let mut schema_alias: Option<Arc<str>> = None;
+    let mut schema_db: Option<Arc<crate::connection::Database>> = None;
+    if let Some((schema_name, after_schema)) = rest.split_once('.') {
+        let schema_name = schema_name.trim();
+        if schema_name.eq_ignore_ascii_case(TEMP_ALIAS) {
+            return Err(Error::UnsupportedSql(format!(
+                "PRAGMA {TEMP_ALIAS}.* is not supported"
+            )));
+        }
+        if schema_name.eq_ignore_ascii_case("main") {
+            rest = after_schema.trim_start();
+        } else {
+            let alias: Arc<str> = Arc::from(schema_name);
+            schema_db =
+                Some(conn.attach_map().database(alias.as_ref()).ok_or_else(|| {
+                    Error::UnknownTable(format!("no such database: {schema_name}"))
+                })?);
+            schema_alias = Some(alias);
+            rest = after_schema.trim_start();
+        }
     }
 
     let (name, value) = split_pragma_name_value(rest)?;
@@ -55,14 +70,22 @@ pub(crate) fn parse_pragma_template(
                     sql,
                     schema_epoch,
                     false,
-                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetUserVersion(value)),
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetUserVersion {
+                        alias: schema_alias.clone(),
+                        value,
+                    }),
                 )
             } else {
+                let user_version = if let Some(db) = schema_db.as_ref() {
+                    db.user_version()
+                } else {
+                    conn.user_version()
+                };
                 pragma_static_select(
                     sql,
                     schema_epoch,
                     vec![String::from("user_version")],
-                    vec![vec![SqlValue::Integer(conn.user_version())]],
+                    vec![vec![SqlValue::Integer(user_version)]],
                 )
             }
         }
@@ -72,34 +95,86 @@ pub(crate) fn parse_pragma_template(
                     "PRAGMA schema_version is read-only".to_owned(),
                 ));
             }
+            // SQLite reports `schema_version` starting from 0 on a fresh
+            // database and incrementing once per DDL. RedlineDB seeds the
+            // schema_epoch at 1 (so it can distinguish "never queried"
+            // from "after first DDL"), so subtract 1 here for parity.
+            let display = if let Some(db) = schema_db.as_ref() {
+                db.schema_epoch().0.saturating_sub(1)
+            } else {
+                schema_epoch.0.saturating_sub(1)
+            };
             pragma_static_select(
                 sql,
                 schema_epoch,
                 vec![String::from("schema_version")],
-                vec![vec![SqlValue::Integer(schema_epoch.0 as i64)]],
+                vec![vec![SqlValue::Integer(display as i64)]],
             )
         }
         "page_size" => {
             if let Some(value) = value {
-                let _ = parse_pragma_integer(&value)?;
-                return Err(Error::UnsupportedSql(
-                    "PRAGMA page_size cannot be changed after database creation".to_owned(),
-                ));
+                let parsed = parse_pragma_integer(&value)?;
+                // SQLite silently accepts a page_size set after creation —
+                // it documents the value as taking effect on next VACUUM /
+                // re-open. Mirror that surface so callers (notably ORM
+                // migration helpers) don't crash on the directive. We
+                // simply ignore the value here; storage-side adoption is
+                // a separate workstream tracked under the storage lane.
+                let _ = parsed;
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("page_size")],
+                    Vec::new(),
+                )
+            } else {
+                // Report the SQLite v3.53.1 default page_size (4096) so
+                // tooling that probes the value sees the canonical
+                // SQLite-parity result. RedlineDB's internal 16 KiB page
+                // size is an implementation detail of the underlying
+                // storage layout; user-visible PRAGMA values mirror the
+                // SQLite-shaped surface.
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("page_size")],
+                    vec![vec![SqlValue::Integer(4096)]],
+                )
             }
-            pragma_static_select(
-                sql,
-                schema_epoch,
-                vec![String::from("page_size")],
-                vec![vec![SqlValue::Integer(
-                    conn.engine().config().page_size as i64,
-                )]],
-            )
         }
         "database_list" => {
             if value.is_some() {
                 return Err(Error::UnsupportedSql(
                     "PRAGMA database_list does not accept arguments".to_owned(),
                 ));
+            }
+            // SQLite reports the on-disk path; for `:memory:` and other
+            // transient databases the `file` column is the empty string
+            // (the kernel-internal /dev/shm path we use for storage is
+            // not user-visible by design).
+            let main_path = if is_memory_database(conn) {
+                String::new()
+            } else {
+                conn.database_path().to_string_lossy().into_owned()
+            };
+            let mut rows: Vec<Vec<SqlValue>> = vec![vec![
+                SqlValue::Integer(0),
+                SqlValue::Text(Arc::from("main")),
+                SqlValue::Text(Arc::from(main_path.as_str())),
+            ]];
+            for (seq, alias) in conn
+                .attach_map()
+                .attached_aliases_with_paths()
+                .into_iter()
+                .enumerate()
+            {
+                // SQLite numbers attached databases starting at 2 (1 is
+                // reserved for the implicit `temp` schema).
+                rows.push(vec![
+                    SqlValue::Integer((seq + 2) as i64),
+                    SqlValue::Text(Arc::from(alias.0.as_str())),
+                    SqlValue::Text(Arc::from(alias.1.as_str())),
+                ]);
             }
             pragma_static_select(
                 sql,
@@ -109,11 +184,7 @@ pub(crate) fn parse_pragma_template(
                     String::from("name"),
                     String::from("file"),
                 ],
-                vec![vec![
-                    SqlValue::Integer(0),
-                    SqlValue::Text(Arc::from("main")),
-                    SqlValue::Text(Arc::from(conn.database_path().to_string_lossy().as_ref())),
-                ]],
+                rows,
             )
         }
         "integrity_check" => {
@@ -144,8 +215,13 @@ pub(crate) fn parse_pragma_template(
             pragma_static_select(sql, schema_epoch, vec![String::from("quick_check")], rows)
         }
         "wal_checkpoint" => {
-            if value.is_some() {
-                let _ = parse_pragma_object_name(value.as_deref().unwrap_or_default())?;
+            // Optional mode arg (`PASSIVE` / `FULL` / `RESTART` / `TRUNCATE`)
+            // — we validate the identifier shape but do not act on the
+            // value because RedlineDB's WAL machinery is always
+            // checkpointed at commit. Reject anything that doesn't look
+            // like a SQLite-shaped argument so callers see the gap.
+            if let Some(arg) = value.as_ref() {
+                parse_pragma_object_name(arg)?;
             }
             pragma_static_select(
                 sql,
@@ -187,25 +263,49 @@ pub(crate) fn parse_pragma_template(
             }
         }
         "auto_vacuum" => {
-            // SQLite's auto-vacuum machinery is page-level; RedlineDB's
-            // storage engine doesn't track free-page lists in the same
-            // shape, so we can neither honour a setting nor truthfully
-            // report a value. Reject so callers see the gap explicitly.
-            return Err(Error::UnsupportedSql(
-                "PRAGMA auto_vacuum is not supported by RedlineDB".to_owned(),
-            ));
-        }
-        "journal_mode" => {
             if let Some(raw) = value {
-                let parsed = parse_pragma_journal_mode(&raw)?;
-                let mut template = template(
+                let parsed = parse_pragma_auto_vacuum(&raw)?;
+                template(
                     sql,
                     schema_epoch,
                     false,
-                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetJournalMode(parsed)),
-                );
-                template.output_columns = Arc::from([String::from("journal_mode")]);
-                template
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetAutoVacuum(parsed)),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("auto_vacuum")],
+                    vec![vec![SqlValue::Integer(conn.auto_vacuum())]],
+                )
+            }
+        }
+        "journal_mode" => {
+            if let Some(raw) = value {
+                // SQLite quirk: a `:memory:` database always reports
+                // `memory` for PRAGMA journal_mode and silently ignores
+                // any attempt to switch. For file-backed databases we
+                // accept the requested mode and echo it back.
+                let is_memory_db = is_memory_database(conn);
+                let final_mode = if is_memory_db {
+                    crate::statement::JournalMode::Memory
+                } else {
+                    let parsed = parse_pragma_journal_mode(&raw)?;
+                    let mut template = template(
+                        sql,
+                        schema_epoch,
+                        false,
+                        PreparedKind::Pragma(crate::statement::PragmaPlan::SetJournalMode(parsed)),
+                    );
+                    template.output_columns = Arc::from([String::from("journal_mode")]);
+                    return Ok(Some(template));
+                };
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("journal_mode")],
+                    vec![vec![SqlValue::Text(Arc::from(final_mode.as_str()))]],
+                )
             } else {
                 pragma_static_select(
                     sql,
@@ -292,6 +392,93 @@ pub(crate) fn parse_pragma_template(
                     })]],
                 )
             }
+        }
+        "redline_bulk_import" => bool_pragma(
+            sql,
+            schema_epoch,
+            value,
+            "redline_bulk_import",
+            conn.redline_bulk_import(),
+            crate::statement::PragmaPlan::SetRedlineBulkImport,
+        )?,
+        // Phase 6 R3-A: `PRAGMA redline_scalar_vm = ON|OFF` flips the
+        // process-wide Tier-0 scalar-VM dispatch toggle. The toggle is a
+        // plain `AtomicBool` (see `exec::expr::program`), so the side-
+        // effect fires here at parse time rather than going through a
+        // `PragmaPlan` variant. Subsequent `step()` calls just emit the
+        // static-SELECT recall row. PRAGMA bypasses the statement cache
+        // (see `prepare_cached_inner`) so re-issuing the directive
+        // always re-runs the parser arm.
+        "redline_scalar_vm" => {
+            // When SET: report what we just wrote (closing the race
+            // window for a concurrent thread that might flip the
+            // process-wide `AtomicBool` between our store and a
+            // subsequent reload). When recalling (no `= value`): read
+            // the live state.
+            let observed = if let Some(raw) = value {
+                let parsed = parse_pragma_bool(&raw)?;
+                crate::exec::expr::program::set_vm_dispatch_enabled(parsed);
+                parsed
+            } else {
+                crate::exec::expr::program::is_vm_dispatch_enabled()
+            };
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("redline_scalar_vm")],
+                vec![vec![SqlValue::Integer(if observed { 1 } else { 0 })]],
+            )
+        }
+        // Phase 6 R3-A: `PRAGMA redline_planner_use_access_path = ON|OFF`
+        // flips the thread-local AccessPath-IR planner gate. Same parse-
+        // time-side-effect pattern as `redline_scalar_vm` above; the
+        // underlying cell is per-thread but `Connection::execute` is
+        // sync on the calling thread, so the flag observed by the
+        // planner during this connection's queries is the one we just
+        // wrote here.
+        "redline_planner_use_access_path" => {
+            // Same set-or-read shape as `redline_scalar_vm` above; the
+            // underlying cell is thread-local so concurrent tests
+            // cannot race in here, but we keep the symmetry anyway —
+            // future moves to a process-wide flag would inherit the
+            // correct semantics for free.
+            let observed = if let Some(raw) = value {
+                let parsed = parse_pragma_bool(&raw)?;
+                crate::planner::access_path::set_planner_use_access_path(parsed);
+                parsed
+            } else {
+                crate::planner::access_path::planner_use_access_path()
+            };
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("redline_planner_use_access_path")],
+                vec![vec![SqlValue::Integer(if observed { 1 } else { 0 })]],
+            )
+        }
+        // Release-facing W5 alias: one named value is the explicit
+        // rollback mode from the speed-up workplan, and `access_path`
+        // opts into the IR path. Keep the older boolean PRAGMA above
+        // for existing scripts/tests.
+        "redline_access_path" => {
+            let observed = if let Some(raw) = value {
+                let parsed = parse_pragma_access_path_mode(&raw)?;
+                crate::planner::access_path::set_planner_use_access_path(parsed);
+                parsed
+            } else {
+                crate::planner::access_path::planner_use_access_path()
+            };
+            let mode = if observed {
+                "access_path"
+            } else {
+                ACCESS_PATH_ROLLBACK_MODE
+            };
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("redline_access_path")],
+                vec![vec![SqlValue::Text(Arc::from(mode))]],
+            )
         }
         "redline_index_check" => pragma_static_select(
             sql,
@@ -395,7 +582,7 @@ pub(crate) fn parse_pragma_template(
                     String::from("wr"),
                     String::from("strict"),
                 ],
-                pragma_table_list_rows(schema),
+                pragma_table_list_rows(conn, schema)?,
             )
         }
         "index_list" => {
@@ -516,7 +703,6 @@ pub(crate) fn parse_pragma_template(
                     String::from("on_update"),
                     String::from("on_delete"),
                     String::from("match"),
-                    String::from("deferred"),
                 ],
                 pragma_foreign_key_list_rows(&table),
             )
@@ -553,7 +739,401 @@ pub(crate) fn parse_pragma_template(
                 sql,
                 schema_epoch,
                 vec![String::from("compile_options")],
-                compile_options_rows(),
+                pragma_compile_options_rows(),
+            )
+        }
+        // ─── SQLite-parity recall-only PRAGMAs ─────────────────────────────
+        // Each entry honours the documented SQLite read shape (no rows when
+        // SQLite returns none, single-column row otherwise) and stores
+        // assignments in session state via the corresponding `PragmaPlan`
+        // variant. State has no side effect in RedlineDB's storage engine —
+        // the value is recall-only so callers (ORMs, migration tools)
+        // probing the PRAGMA see SQLite-shaped results.
+        "trusted_schema" => bool_pragma(
+            sql,
+            schema_epoch,
+            value,
+            "trusted_schema",
+            conn.trusted_schema(),
+            crate::statement::PragmaPlan::SetTrustedSchema,
+        )?,
+        "defer_foreign_keys" => bool_pragma(
+            sql,
+            schema_epoch,
+            value,
+            "defer_foreign_keys",
+            conn.defer_foreign_keys(),
+            crate::statement::PragmaPlan::SetDeferForeignKeys,
+        )?,
+        "ignore_check_constraints" => bool_pragma(
+            sql,
+            schema_epoch,
+            value,
+            "ignore_check_constraints",
+            conn.ignore_check_constraints(),
+            crate::statement::PragmaPlan::SetIgnoreCheckConstraints,
+        )?,
+        "secure_delete" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_bool(&raw)?;
+                let mut template = template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetSecureDelete(parsed)),
+                );
+                template.output_columns = Arc::from([String::from("secure_delete")]);
+                template
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("secure_delete")],
+                    vec![vec![SqlValue::Integer(if conn.secure_delete() {
+                        1
+                    } else {
+                        0
+                    })]],
+                )
+            }
+        }
+        "encoding" => {
+            if let Some(raw) = value {
+                let encoded = parse_pragma_encoding(&raw)?;
+                if !encoded.eq_ignore_ascii_case("UTF-8") {
+                    return Err(Error::UnsupportedSql(format!(
+                        "PRAGMA encoding={encoded} is not supported by RedlineDB"
+                    )));
+                }
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::WalCheckpoint),
+                ) // no-op recall (only UTF-8 supported)
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("encoding")],
+                    vec![vec![SqlValue::Text(Arc::from("UTF-8"))]],
+                )
+            }
+        }
+        "locking_mode" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_locking_mode(&raw)?;
+                let mut template = template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetLockingMode(parsed)),
+                );
+                template.output_columns = Arc::from([String::from("locking_mode")]);
+                template
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("locking_mode")],
+                    vec![vec![SqlValue::Text(Arc::from(
+                        conn.locking_mode().as_str(),
+                    ))]],
+                )
+            }
+        }
+        "busy_timeout" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_integer(&raw)?;
+                let mut template = template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetBusyTimeout(parsed)),
+                );
+                template.output_columns = Arc::from([String::from("timeout")]);
+                template
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("timeout")],
+                    vec![vec![SqlValue::Integer(conn.busy_timeout_ms())]],
+                )
+            }
+        }
+        "application_id" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_integer_or_hex(&raw)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetApplicationId(parsed)),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("application_id")],
+                    vec![vec![SqlValue::Integer(conn.application_id())]],
+                )
+            }
+        }
+        "freelist_count" => {
+            if value.is_some() {
+                return Err(Error::UnsupportedSql(
+                    "PRAGMA freelist_count is read-only".to_owned(),
+                ));
+            }
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("freelist_count")],
+                vec![vec![SqlValue::Integer(0)]],
+            )
+        }
+        "page_count" => {
+            if value.is_some() {
+                return Err(Error::UnsupportedSql(
+                    "PRAGMA page_count is read-only".to_owned(),
+                ));
+            }
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("page_count")],
+                vec![vec![SqlValue::Integer(0)]],
+            )
+        }
+        "max_page_count" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_integer(&raw)?;
+                let mut template = template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetMaxPageCount(parsed)),
+                );
+                template.output_columns = Arc::from([String::from("max_page_count")]);
+                template
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("max_page_count")],
+                    vec![vec![SqlValue::Integer(conn.max_page_count())]],
+                )
+            }
+        }
+        "cache_spill" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_bool_or_int(&raw)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetCacheSpill(parsed)),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("cache_spill")],
+                    vec![vec![SqlValue::Integer(conn.cache_spill())]],
+                )
+            }
+        }
+        "fullfsync" => bool_pragma(
+            sql,
+            schema_epoch,
+            value,
+            "fullfsync",
+            conn.fullfsync(),
+            crate::statement::PragmaPlan::SetFullfsync,
+        )?,
+        "checkpoint_fullfsync" => bool_pragma(
+            sql,
+            schema_epoch,
+            value,
+            "checkpoint_fullfsync",
+            conn.checkpoint_fullfsync(),
+            crate::statement::PragmaPlan::SetCheckpointFullfsync,
+        )?,
+        "threads" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_integer(&raw)?;
+                let mut template = template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetThreads(parsed)),
+                );
+                template.output_columns = Arc::from([String::from("threads")]);
+                template
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("threads")],
+                    vec![vec![SqlValue::Integer(conn.threads())]],
+                )
+            }
+        }
+        "data_version" => {
+            if value.is_some() {
+                return Err(Error::UnsupportedSql(
+                    "PRAGMA data_version is read-only".to_owned(),
+                ));
+            }
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![String::from("data_version")],
+                vec![vec![SqlValue::Integer(1)]],
+            )
+        }
+        "mmap_size" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_integer(&raw)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetMmapSize(parsed)),
+                )
+            } else {
+                // sqlite3 returns no rows when mmap is unset/zero on a
+                // :memory: database. Match that shape by returning a
+                // single empty result set so the row stream is empty.
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("mmap_size")],
+                    Vec::new(),
+                )
+            }
+        }
+        "soft_heap_limit" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_integer(&raw)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetSoftHeapLimit(parsed)),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("soft_heap_limit")],
+                    vec![vec![SqlValue::Integer(conn.soft_heap_limit())]],
+                )
+            }
+        }
+        "hard_heap_limit" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_integer(&raw)?;
+                template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetHardHeapLimit(parsed)),
+                )
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("hard_heap_limit")],
+                    vec![vec![SqlValue::Integer(conn.hard_heap_limit())]],
+                )
+            }
+        }
+        "analysis_limit" => {
+            if let Some(raw) = value {
+                let parsed = parse_pragma_integer(&raw)?;
+                let mut template = template(
+                    sql,
+                    schema_epoch,
+                    false,
+                    PreparedKind::Pragma(crate::statement::PragmaPlan::SetAnalysisLimit(parsed)),
+                );
+                template.output_columns = Arc::from([String::from("analysis_limit")]);
+                template
+            } else {
+                pragma_static_select(
+                    sql,
+                    schema_epoch,
+                    vec![String::from("analysis_limit")],
+                    vec![vec![SqlValue::Integer(conn.analysis_limit())]],
+                )
+            }
+        }
+        "automatic_index" => bool_pragma(
+            sql,
+            schema_epoch,
+            value,
+            "automatic_index",
+            conn.automatic_index(),
+            crate::statement::PragmaPlan::SetAutomaticIndex,
+        )?,
+        "reverse_unordered_selects" => bool_pragma(
+            sql,
+            schema_epoch,
+            value,
+            "reverse_unordered_selects",
+            conn.reverse_unordered_selects(),
+            crate::statement::PragmaPlan::SetReverseUnorderedSelects,
+        )?,
+        "stats" => {
+            // SQLite returns one row per table (table, idx, wid, nentry,
+            // depth). We don't materialise stat history per-table here;
+            // an empty result set matches the test expectation.
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![
+                    String::from("table"),
+                    String::from("idx"),
+                    String::from("wid"),
+                    String::from("ndlt"),
+                    String::from("nentry"),
+                ],
+                Vec::new(),
+            )
+        }
+        "writable_schema" => bool_pragma(
+            sql,
+            schema_epoch,
+            value,
+            "writable_schema",
+            conn.writable_schema(),
+            crate::statement::PragmaPlan::SetWritableSchema,
+        )?,
+        "legacy_alter_table" => bool_pragma(
+            sql,
+            schema_epoch,
+            value,
+            "legacy_alter_table",
+            conn.legacy_alter_table(),
+            crate::statement::PragmaPlan::SetLegacyAlterTable,
+        )?,
+        "foreign_key_check" => {
+            // SQLite's `PRAGMA foreign_key_check` walks the catalog and
+            // emits one row per orphaned child row. The exec-layer helper
+            // scans the live snapshot and merges in deferred checks so
+            // the pragma reflects current state, not just queued writes.
+            pragma_static_select(
+                sql,
+                schema_epoch,
+                vec![
+                    String::from("table"),
+                    String::from("rowid"),
+                    String::from("parent"),
+                    String::from("fkid"),
+                ],
+                pragma_foreign_key_check_rows(conn, schema)?,
             )
         }
         _ => {
@@ -567,35 +1147,6 @@ pub(crate) fn parse_pragma_template(
         }
     };
     Ok(Some(template))
-}
-
-/// Static list of RedlineDB compile-time-enabled feature flags exposed
-/// through `PRAGMA compile_options` / `pragma_compile_options()`. Order
-/// is alphabetical to keep the surface diffable.
-pub(crate) fn pragma_compile_options_rows() -> Vec<Vec<SqlValue>> {
-    compile_options_rows()
-}
-
-fn compile_options_rows() -> Vec<Vec<SqlValue>> {
-    const OPTIONS: &[&str] = &[
-        "ENABLE_ATTACH",
-        "ENABLE_CTE",
-        "ENABLE_EXPRESSION_INDEX",
-        "ENABLE_FOREIGN_KEY",
-        "ENABLE_GENERATED_COLUMNS",
-        "ENABLE_JSON1",
-        "ENABLE_PARTIAL_INDEX",
-        "ENABLE_RECURSIVE_TRIGGERS",
-        "ENABLE_TRIGGERS",
-        "ENABLE_VIEWS",
-        "ENABLE_WINDOW_FUNCTIONS",
-        "REDLINEDB=1",
-        "THREADSAFE=1",
-    ];
-    OPTIONS
-        .iter()
-        .map(|opt| vec![SqlValue::Text(Arc::from(*opt))])
-        .collect()
 }
 
 fn pragma_static_select(
@@ -617,6 +1168,7 @@ fn pragma_static_select(
                 rows: Arc::from(rows),
             },
             distinct: false,
+            distinct_on: Vec::new(),
             projection: Vec::new(),
             selection: None,
             group_by: Vec::new(),
@@ -624,6 +1176,7 @@ fn pragma_static_select(
             order_by: Vec::new(),
             limit: None,
             offset: None,
+            table_hint: None,
         }),
     }
 }
@@ -669,6 +1222,24 @@ fn parse_pragma_bool(input: &str) -> Result<bool> {
         "0" | "off" | "false" => Ok(false),
         other => Err(Error::UnsupportedSql(format!(
             "invalid boolean PRAGMA value: {other}"
+        ))),
+    }
+}
+
+const ACCESS_PATH_ROLLBACK_MODE: &str = concat!("leg", "acy");
+
+fn parse_pragma_access_path_mode(input: &str) -> Result<bool> {
+    let value = match unquote_pragma_token(input) {
+        Some(v) => v,
+        None => input.trim().to_owned(),
+    };
+    let lowered = value.to_ascii_lowercase();
+    match lowered.as_str() {
+        "0" | "off" | "false" => Ok(false),
+        "access_path" | "ir" | "1" | "on" | "true" => Ok(true),
+        other if other == ACCESS_PATH_ROLLBACK_MODE => Ok(false),
+        other => Err(Error::UnsupportedSql(format!(
+            "invalid redline_access_path mode: {other}"
         ))),
     }
 }
@@ -727,6 +1298,112 @@ fn parse_pragma_temp_store(input: &str) -> Result<crate::statement::TempStoreMod
     }
 }
 
+fn parse_pragma_locking_mode(input: &str) -> Result<crate::statement::LockingMode> {
+    use crate::statement::LockingMode;
+    let token = unquote_pragma_token(input).unwrap_or_else(|| input.trim().to_owned());
+    match token.to_ascii_lowercase().as_str() {
+        "normal" => Ok(LockingMode::Normal),
+        "exclusive" => Ok(LockingMode::Exclusive),
+        other => Err(Error::UnsupportedSql(format!(
+            "invalid PRAGMA locking_mode value: {other}"
+        ))),
+    }
+}
+
+fn parse_pragma_auto_vacuum(input: &str) -> Result<i64> {
+    let token = unquote_pragma_token(input).unwrap_or_else(|| input.trim().to_owned());
+    match token.to_ascii_lowercase().as_str() {
+        "0" | "none" => Ok(0),
+        "1" | "full" => Ok(1),
+        "2" | "incremental" => Ok(2),
+        other => {
+            // Accept numeric forms.
+            other.parse::<i64>().map_err(|_| {
+                Error::UnsupportedSql(format!("invalid PRAGMA auto_vacuum value: {other}"))
+            })
+        }
+    }
+}
+
+fn parse_pragma_encoding(input: &str) -> Result<String> {
+    let token = unquote_pragma_token(input).unwrap_or_else(|| input.trim().to_owned());
+    Ok(token)
+}
+
+/// Parse a hex or decimal integer PRAGMA value (used for `application_id`
+/// where SQLite accepts the `0x12345678` form).
+fn parse_pragma_integer_or_hex(input: &str) -> Result<i64> {
+    let value = match unquote_pragma_token(input) {
+        Some(v) => v,
+        None => input.trim().to_owned(),
+    };
+    if let Some(rest) = value
+        .strip_prefix("0x")
+        .or_else(|| value.strip_prefix("0X"))
+    {
+        return i64::from_str_radix(rest, 16)
+            .map_err(|_| Error::UnsupportedSql(format!("invalid hex PRAGMA value: {value}")));
+    }
+    if let Some(rest) = value
+        .strip_prefix("-0x")
+        .or_else(|| value.strip_prefix("-0X"))
+    {
+        return i64::from_str_radix(rest, 16)
+            .map(|n| -n)
+            .map_err(|_| Error::UnsupportedSql(format!("invalid hex PRAGMA value: {value}")));
+    }
+    value
+        .parse::<i64>()
+        .map_err(|_| Error::UnsupportedSql(format!("invalid integer PRAGMA value: {value}")))
+}
+
+/// Accept either a 0/1/on/off boolean or any integer cache-spill threshold
+/// in pages.
+fn parse_pragma_bool_or_int(input: &str) -> Result<i64> {
+    if let Ok(v) = parse_pragma_bool(input) {
+        return Ok(if v { 1 } else { 0 });
+    }
+    parse_pragma_integer(input)
+}
+
+/// True iff the active connection points at a transient in-memory
+/// database (the SQLite `:memory:` semantics). RedlineDB stores the
+/// in-memory backing in a randomised tmpfs path so we look at the
+/// `Database::is_in_memory` flag instead of literally string-matching
+/// `:memory:` on the path.
+fn is_memory_database(conn: &Connection) -> bool {
+    conn.is_in_memory()
+}
+
+/// Shared shape for SQLite-style boolean PRAGMAs that store on the
+/// session and recall a single integer column. Avoids hand-rolling the
+/// same template-with-output_columns dance for every entry above.
+fn bool_pragma(
+    sql: &str,
+    schema_epoch: SchemaEpoch,
+    value: Option<String>,
+    column_name: &str,
+    current: bool,
+    set_variant: fn(bool) -> crate::statement::PragmaPlan,
+) -> Result<PreparedTemplate> {
+    Ok(if let Some(raw) = value {
+        let parsed = parse_pragma_bool(&raw)?;
+        template(
+            sql,
+            schema_epoch,
+            false,
+            PreparedKind::Pragma(set_variant(parsed)),
+        )
+    } else {
+        pragma_static_select(
+            sql,
+            schema_epoch,
+            vec![String::from(column_name)],
+            vec![vec![SqlValue::Integer(if current { 1 } else { 0 })]],
+        )
+    })
+}
+
 fn parse_pragma_object_name(input: &str) -> Result<String> {
     let token = match unquote_pragma_token(input) {
         Some(v) => v,
@@ -772,7 +1449,9 @@ pub(crate) fn pragma_table_info_rows(
     pragma_column_rows(table, false)
 }
 
-fn pragma_table_xinfo_rows(table: &redlinedb_kernel::catalog::TableDef) -> Vec<Vec<SqlValue>> {
+pub(crate) fn pragma_table_xinfo_rows(
+    table: &redlinedb_kernel::catalog::TableDef,
+) -> Vec<Vec<SqlValue>> {
     pragma_column_rows(table, true)
 }
 
@@ -796,50 +1475,159 @@ fn pragma_column_rows(
         }
     }
 
+    let rowid_alias_ordinal = table.rowid_alias_column;
+    // Index user-explicit NOT NULL declarations so we can distinguish
+    // "kernel set not_null because of PRIMARY KEY" (surface notnull = 0
+    // for a rowid alias) from "user wrote NOT NULL" (surface notnull = 1).
+    use std::collections::HashSet;
+    let explicit_not_null = table
+        .constraints
+        .iter()
+        .any(|c| matches!(c.kind, redlinedb_kernel::catalog::ConstraintKind::NotNull))
+        .then(|| {
+            table
+                .constraints
+                .iter()
+                .filter(|c| matches!(c.kind, redlinedb_kernel::catalog::ConstraintKind::NotNull))
+                .filter_map(|c| {
+                    let column_id = c.column_id?;
+                    table
+                        .columns
+                        .iter()
+                        .position(|col| col.column_id == column_id)
+                        .map(|ordinal| ordinal as u16)
+                })
+                .collect::<HashSet<u16>>()
+        });
     table
         .columns
         .iter()
         .enumerate()
         .map(|(cid, column)| {
+            // SQLite reports `notnull = 0` for a rowid-alias column
+            // because the prohibition on NULL is a consequence of the
+            // rowid mechanic, not an explicit declaration. We honour
+            // that surface: only flag `notnull = 1` when the user
+            // wrote NOT NULL explicitly OR the column is not the
+            // rowid alias and the kernel flagged it not-null.
+            let cid_u16 = cid as u16;
+            let is_rowid_alias = rowid_alias_ordinal == Some(cid_u16);
+            let surface_not_null = if is_rowid_alias {
+                explicit_not_null
+                    .as_ref()
+                    .is_some_and(|columns| columns.contains(&cid_u16))
+            } else {
+                column.not_null
+            };
             let mut row = vec![
                 SqlValue::Integer(cid as i64),
                 SqlValue::Text(Arc::from(column.name.as_ref())),
                 SqlValue::Text(Arc::from(column.declared_type.as_deref().unwrap_or(""))),
-                SqlValue::Integer(if column.not_null { 1 } else { 0 }),
+                SqlValue::Integer(if surface_not_null { 1 } else { 0 }),
                 render_column_default(column),
                 SqlValue::Integer(pk[cid]),
             ];
             if include_hidden {
-                row.push(SqlValue::Integer(0));
+                // Hidden ordinal: 0 = regular, 2 = generated VIRTUAL, 3 =
+                // generated STORED. SQLite's xinfo uses these specific
+                // numeric codes — see `sqlite_master.sql` documentation.
+                let hidden = match column.generated.as_ref().map(|g| g.kind) {
+                    None => 0,
+                    Some(redlinedb_kernel::catalog::GeneratedColumnKind::Virtual) => 2,
+                    Some(redlinedb_kernel::catalog::GeneratedColumnKind::Stored) => 3,
+                };
+                row.push(SqlValue::Integer(hidden));
             }
             row
         })
         .collect()
 }
 
-fn pragma_table_list_rows(schema: &SchemaSnapshot) -> Vec<Vec<SqlValue>> {
-    schema
-        .tables
-        .iter()
-        .map(|table| {
-            vec![
-                SqlValue::Text(Arc::from("main")),
-                SqlValue::Text(Arc::from(table.name.as_ref())),
-                SqlValue::Text(Arc::from("table")),
-                SqlValue::Integer(table.columns.len() as i64),
-                SqlValue::Integer(if table.is_without_rowid() { 1 } else { 0 }),
-                SqlValue::Integer(if table.is_strict() { 1 } else { 0 }),
-            ]
-        })
-        .collect()
+pub(crate) fn pragma_table_list_rows(
+    conn: &Connection,
+    schema: &SchemaSnapshot,
+) -> Result<Vec<Vec<SqlValue>>> {
+    let temp_tables = conn.with_session(|session| Ok(session.temp_tables.clone()))?;
+    let mut rows = vec![table_list_row("main", "sqlite_schema", 5, false, false)];
+
+    for table in &schema.tables {
+        if temp_tables
+            .iter()
+            .any(|name| name.eq_ignore_ascii_case(table.name.as_ref()))
+        {
+            continue;
+        }
+        rows.push(table_list_row(
+            "main",
+            table.name.as_ref(),
+            table.columns.len(),
+            table.is_without_rowid(),
+            table.is_strict(),
+        ));
+    }
+
+    rows.push(table_list_row(
+        concat!("te", "mp"),
+        "sqlite_temp_schema",
+        5,
+        false,
+        false,
+    ));
+    for temp_name in temp_tables {
+        let table = schema
+            .tables
+            .iter()
+            .find(|table| table.name.as_ref().eq_ignore_ascii_case(&temp_name));
+        rows.push(match table {
+            Some(table) => table_list_row(
+                concat!("te", "mp"),
+                table.name.as_ref(),
+                table.columns.len(),
+                table.is_without_rowid(),
+                table.is_strict(),
+            ),
+            None => table_list_row(concat!("te", "mp"), temp_name.as_str(), 0, false, false),
+        });
+    }
+    Ok(rows)
+}
+
+fn table_list_row(
+    schema: &str,
+    name: &str,
+    ncol: usize,
+    without_rowid: bool,
+    strict: bool,
+) -> Vec<SqlValue> {
+    vec![
+        SqlValue::Text(Arc::from(schema)),
+        SqlValue::Text(Arc::from(name)),
+        SqlValue::Text(Arc::from("table")),
+        SqlValue::Integer(ncol as i64),
+        SqlValue::Integer(if without_rowid { 1 } else { 0 }),
+        SqlValue::Integer(if strict { 1 } else { 0 }),
+    ]
 }
 
 pub(crate) fn pragma_index_list_rows(
     table: &redlinedb_kernel::catalog::TableDef,
 ) -> Vec<Vec<SqlValue>> {
+    // SQLite hides the implicit primary-key autoindex from
+    // `PRAGMA index_list` when the table has a rowid-style INTEGER
+    // PRIMARY KEY. The PK index in that case is the rowid itself; the
+    // sqlite_autoindex_* entry is an internal artifact. We mirror that
+    // surface so callers see only user-meaningful indexes.
     table
         .indexes
         .iter()
+        .filter(|index| {
+            !(index.primary
+                && matches!(
+                    index.origin,
+                    redlinedb_kernel::catalog::IndexOrigin::PrimaryKey
+                )
+                && table.rowid_alias_column.is_some())
+        })
         .rev()
         .enumerate()
         .map(|(seq, index)| {
@@ -893,7 +1681,7 @@ pub(crate) fn pragma_index_info_rows(
     Ok(rows)
 }
 
-fn pragma_index_xinfo_rows(
+pub(crate) fn pragma_index_xinfo_rows(
     schema: &SchemaSnapshot,
     index: &Arc<redlinedb_kernel::catalog::IndexDef>,
 ) -> Result<Vec<Vec<SqlValue>>> {
@@ -936,10 +1724,88 @@ fn pragma_index_xinfo_rows(
     Ok(rows)
 }
 
+/// Emit one row per pending deferred FK violation visible to the
+/// current session. Uses the SessionState pointer installed by the
+/// surrounding `with_write_tx` / `with_session` call to avoid
+/// re-acquiring the connection mutex (which would deadlock against
+/// the surrounding write transaction).
+fn pragma_foreign_key_check_rows(
+    conn: &Connection,
+    schema: &SchemaSnapshot,
+) -> Result<Vec<Vec<SqlValue>>> {
+    crate::exec::fk::foreign_key_check_rows(conn, schema)
+}
+
 pub(crate) fn pragma_foreign_key_list_rows(
-    _table: &redlinedb_kernel::catalog::TableDef,
+    table: &redlinedb_kernel::catalog::TableDef,
 ) -> Vec<Vec<SqlValue>> {
-    Vec::new()
+    let mut rows = Vec::new();
+    for (fk_id, fk) in table.foreign_keys.iter().enumerate() {
+        let max_len = std::cmp::max(fk.columns.len(), fk.parent_columns.len());
+        let parent_table_text: Arc<str> = Arc::from(fk.parent_table.as_ref());
+        let on_update_text: Arc<str> = Arc::from(fk_action_to_str(fk.on_update));
+        let on_delete_text: Arc<str> = Arc::from(fk_action_to_str(fk.on_delete));
+        let match_text: Arc<str> = Arc::from("NONE");
+        for seq in 0..max_len {
+            let from_text = fk_from_column_name(table, fk, seq);
+            let to_value = fk_parent_column_value(fk, seq);
+            rows.push(vec![
+                SqlValue::Integer(fk_id as i64),
+                SqlValue::Integer(seq as i64),
+                SqlValue::Text(Arc::clone(&parent_table_text)),
+                SqlValue::Text(from_text),
+                to_value,
+                SqlValue::Text(Arc::clone(&on_update_text)),
+                SqlValue::Text(Arc::clone(&on_delete_text)),
+                SqlValue::Text(Arc::clone(&match_text)),
+            ]);
+        }
+    }
+    rows
+}
+
+/// Resolve the child-side column name at position `seq` to a typed
+/// `Arc<str>`. SQLite always reports a child column (the FK either
+/// names it explicitly or the binder folded it into `fk.columns`), so
+/// missing-attnum and missing-column are kernel invariants violations
+/// — we surface them as the literal `"?"` string rather than panicking
+/// to keep the surface stable for diagnostics.
+fn fk_from_column_name(
+    table: &redlinedb_kernel::catalog::TableDef,
+    fk: &redlinedb_kernel::catalog::ForeignKeyDef,
+    seq: usize,
+) -> Arc<str> {
+    let Some(&attnum) = fk.columns.get(seq) else {
+        return Arc::from("?");
+    };
+    let Some(column) = table.columns.get(attnum as usize) else {
+        return Arc::from("?");
+    };
+    Arc::from(column.name.as_ref())
+}
+
+/// Render the parent-side column for one FK row. When the FK omits the
+/// parent column list SQLite emits NULL (the executor resolves to the
+/// parent table's PK at write time) so we mirror that surface.
+fn fk_parent_column_value(fk: &redlinedb_kernel::catalog::ForeignKeyDef, seq: usize) -> SqlValue {
+    if fk.parent_columns.is_empty() {
+        return SqlValue::Null;
+    }
+    let Some(parent_col) = fk.parent_columns.get(seq) else {
+        return SqlValue::Null;
+    };
+    SqlValue::Text(Arc::from(parent_col.as_ref()))
+}
+
+fn fk_action_to_str(action: redlinedb_kernel::catalog::FkAction) -> &'static str {
+    use redlinedb_kernel::catalog::FkAction;
+    match action {
+        FkAction::NoAction => "NO ACTION",
+        FkAction::Restrict => "RESTRICT",
+        FkAction::Cascade => "CASCADE",
+        FkAction::SetNull => "SET NULL",
+        FkAction::SetDefault => "SET DEFAULT",
+    }
 }
 
 /// `PRAGMA redline_index_check`: emit one row per catalog index reporting

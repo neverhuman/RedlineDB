@@ -6,9 +6,6 @@ RUN apt-get update \
     procps \
     sqlite3 \
     strace \
-    python3 \
-    python3-pip \
-  && python3 -m pip install --no-cache-dir --break-system-packages matplotlib numpy pandas \
   && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /work

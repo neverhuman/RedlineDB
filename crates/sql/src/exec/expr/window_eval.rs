@@ -16,6 +16,8 @@
 //! `SqlRow` values; partitions / ordering / frame bounds are computed
 //! purely in-memory.
 
+use std::collections::HashMap;
+
 #[path = "window_eval/accumulator.rs"]
 mod accumulator;
 #[path = "window_eval/frame.rs"]
@@ -24,7 +26,8 @@ mod frame;
 mod partition;
 
 use sqlparser::ast::{
-    Expr, FunctionArg, FunctionArgExpr, FunctionArguments, SelectItem, WindowSpec, WindowType,
+    Expr, FunctionArg, FunctionArgExpr, FunctionArguments, SelectItem, WindowFrameUnits,
+    WindowSpec, WindowType,
 };
 
 use crate::error::{Error, Result};
@@ -34,7 +37,10 @@ use super::SqlRow;
 use super::{cast_value, eval_scalar};
 
 use accumulator::Accumulator;
-use frame::{ResolvedFrame, frame_bounds, literal_i64, resolve_frame};
+use frame::{
+    ExcludeMode, ResolvedBound, ResolvedFrame, frame_bounds, is_exclude_marker, literal_i64,
+    resolve_frame,
+};
 use partition::{assign_peer_ids, order_partition, partition_rows, peer_ranges};
 
 /// Returns `true` if any projection item contains a function call carrying
@@ -84,11 +90,12 @@ pub(crate) fn evaluate_window_functions(
         return Ok(Vec::new());
     }
     let mut window_values: Vec<Vec<Vec<SqlValue>>> = Vec::with_capacity(projection.len());
+    let mut window_cache = WindowLayoutCache::new(rows, bindings);
     for item in projection {
         let calls = collect_window_calls(item);
         let mut per_call: Vec<Vec<SqlValue>> = Vec::with_capacity(calls.len());
         for call in &calls {
-            per_call.push(eval_window_call(call, rows, bindings)?);
+            per_call.push(eval_window_call(call, rows, bindings, &mut window_cache)?);
         }
         window_values.push(per_call);
     }
@@ -193,11 +200,14 @@ fn eval_with_window_values(
             eval_with_window_values(inner, row, bindings, window_values, row_idx, counter)
         }
         Expr::Cast {
-            expr, data_type, ..
+            kind,
+            expr,
+            data_type,
+            ..
         } => {
             let value =
                 eval_with_window_values(expr, row, bindings, window_values, row_idx, counter)?;
-            cast_value(value, data_type)
+            cast_value(value, data_type, kind.clone())
         }
         _ => eval_scalar(expr, &row.context(), bindings),
     }
@@ -239,7 +249,15 @@ fn to_real(value: &SqlValue) -> f64 {
         SqlValue::Integer(n) => *n as f64,
         SqlValue::Real(n) => *n,
         SqlValue::Text(s) => s.parse().unwrap_or(0.0),
-        SqlValue::Blob(b) => String::from_utf8_lossy(b).parse().unwrap_or(0.0),
+        // A41: avoid the `String::from_utf8_lossy` allocation. Non-UTF8
+        // blob bytes can't parse as f64 (replacement chars don't fit
+        // the numeric grammar), so the lossy path always returned 0.0
+        // for them anyway. Short-circuit directly. Same shape as A33
+        // (is_truthy for Blob) and A39 (numeric_value for Blob).
+        SqlValue::Blob(b) => match std::str::from_utf8(b) {
+            Ok(s) => s.parse().unwrap_or(0.0),
+            Err(_) => 0.0,
+        },
         SqlValue::Null => 0.0,
     }
 }
@@ -249,6 +267,7 @@ fn eval_window_call(
     expr: &Expr,
     rows: &[SqlRow],
     bindings: &[Option<SqlValue>],
+    window_cache: &mut WindowLayoutCache<'_>,
 ) -> Result<Vec<SqlValue>> {
     let Expr::Function(func) = expr else {
         return Err(Error::UnsupportedSql(
@@ -261,31 +280,63 @@ fn eval_window_call(
         ));
     };
 
-    let partitions = partition_rows(rows, &window.partition_by, bindings)?;
     let frame = resolve_frame(window);
 
-    let func_name = func.name.to_string().to_ascii_lowercase();
+    // A46: stack-buffer function-name lowering (reuse the
+    // `simple_function_name_lower` helper from json_dispatch.rs). The
+    // previous `func.name.to_string().to_ascii_lowercase()` allocated
+    // a fresh String per window function call; the helper lowercases
+    // into a 48-byte stack scratch and only falls through to the
+    // owned-String path for qualified / quoted / >48-byte names
+    // (< 1% of real-world calls). Fires per window function per query.
+    let mut scratch = [0u8; crate::exec::expr::json_dispatch::FN_NAME_STACK];
+    let borrowed = crate::exec::expr::json_dispatch::simple_function_name_lower(func, &mut scratch);
+    let owned_name;
+    let func_name: &str = match borrowed {
+        Some(s) => s,
+        None => {
+            owned_name = func.name.to_string().to_ascii_lowercase();
+            owned_name.as_str()
+        }
+    };
     let args = function_args(func);
 
     let mut results = vec![SqlValue::Null; rows.len()];
-    for partition in &partitions {
-        let sorted = order_partition(partition, rows, &window.order_by, bindings)?;
-        let order_index_map: Vec<usize> = sorted.iter().map(|(idx, _)| *idx).collect();
-        let peer_ids: Vec<usize> = if window.order_by.is_empty() {
-            vec![0; sorted.len()]
-        } else {
-            assign_peer_ids(&sorted, &window.order_by)
-        };
-        let peer_ranges = peer_ranges(&peer_ids);
-
-        for (sorted_pos, (row_idx, _row_ref)) in sorted.iter().enumerate() {
+    let layouts = window_cache.layouts_for(window)?;
+    if whole_partition_aggregate_window(
+        &func_name,
+        &args,
+        rows,
+        layouts,
+        &frame,
+        bindings,
+        &mut results,
+    )? {
+        return Ok(results);
+    }
+    if prefix_aggregate_window(
+        &func_name,
+        &args,
+        rows,
+        layouts,
+        &frame,
+        bindings,
+        &mut results,
+    )? {
+        return Ok(results);
+    }
+    if ranking_window(&func_name, &args, layouts, &mut results)? {
+        return Ok(results);
+    }
+    for layout in layouts {
+        for (sorted_pos, row_idx) in layout.order_index_map.iter().enumerate() {
             let value = compute_function_for_row(
                 &func_name,
                 &args,
                 rows,
-                &order_index_map,
-                &peer_ids,
-                &peer_ranges,
+                &layout.order_index_map,
+                &layout.peer_ids,
+                &layout.peer_ranges,
                 sorted_pos,
                 &frame,
                 window,
@@ -295,6 +346,267 @@ fn eval_window_call(
         }
     }
     Ok(results)
+}
+
+fn whole_partition_aggregate_window(
+    func_name: &str,
+    args: &[Expr],
+    rows: &[SqlRow],
+    layouts: &[CachedWindowPartition],
+    frame: &ResolvedFrame,
+    bindings: &[Option<SqlValue>],
+    results: &mut [SqlValue],
+) -> Result<bool> {
+    if !is_window_aggregate(func_name)
+        || !matches!(&frame.start, ResolvedBound::UnboundedPreceding)
+        || !matches!(&frame.end, ResolvedBound::UnboundedFollowing)
+        || frame.exclude != ExcludeMode::NoOthers
+    {
+        return Ok(false);
+    }
+    for layout in layouts {
+        let mut accumulator = Accumulator::new(func_name);
+        for row_idx in &layout.order_index_map {
+            let value = match args.first() {
+                Some(expr) => eval_scalar(expr, &rows[*row_idx].context(), bindings)?,
+                None => SqlValue::Integer(1),
+            };
+            accumulator.push(value);
+        }
+        let value = accumulator.finalize();
+        for row_idx in &layout.order_index_map {
+            results[*row_idx] = value.clone();
+        }
+    }
+    Ok(true)
+}
+
+fn prefix_aggregate_window(
+    func_name: &str,
+    args: &[Expr],
+    rows: &[SqlRow],
+    layouts: &[CachedWindowPartition],
+    frame: &ResolvedFrame,
+    bindings: &[Option<SqlValue>],
+    results: &mut [SqlValue],
+) -> Result<bool> {
+    if !is_window_aggregate(func_name)
+        || !matches!(frame.units, WindowFrameUnits::Rows)
+        || !matches!(&frame.start, ResolvedBound::UnboundedPreceding)
+        || !matches!(&frame.end, ResolvedBound::CurrentRow)
+        || frame.exclude != ExcludeMode::NoOthers
+    {
+        return Ok(false);
+    }
+    for layout in layouts {
+        let mut accumulator = Accumulator::new(func_name);
+        for row_idx in &layout.order_index_map {
+            let value = match args.first() {
+                Some(expr) => eval_scalar(expr, &rows[*row_idx].context(), bindings)?,
+                None => SqlValue::Integer(1),
+            };
+            accumulator.push(value);
+            results[*row_idx] = accumulator.value();
+        }
+    }
+    Ok(true)
+}
+
+fn is_window_aggregate(func_name: &str) -> bool {
+    matches!(func_name, "sum" | "count" | "avg" | "min" | "max" | "total")
+}
+
+fn ranking_window(
+    func_name: &str,
+    args: &[Expr],
+    layouts: &[CachedWindowPartition],
+    results: &mut [SqlValue],
+) -> Result<bool> {
+    if !matches!(
+        func_name,
+        "row_number" | "rank" | "dense_rank" | "percent_rank" | "cume_dist" | "ntile"
+    ) {
+        return Ok(false);
+    }
+    for layout in layouts {
+        let total = layout.order_index_map.len();
+        for (sorted_pos, row_idx) in layout.order_index_map.iter().enumerate() {
+            let value = match func_name {
+                "row_number" => SqlValue::Integer((sorted_pos + 1) as i64),
+                "rank" => {
+                    let target = layout.peer_ids[sorted_pos];
+                    let first_peer_pos = layout
+                        .peer_ranges
+                        .get(target)
+                        .map(|range| range.0)
+                        .unwrap_or(sorted_pos);
+                    SqlValue::Integer((first_peer_pos + 1) as i64)
+                }
+                "dense_rank" => SqlValue::Integer((layout.peer_ids[sorted_pos] + 1) as i64),
+                "percent_rank" => {
+                    let target = layout.peer_ids[sorted_pos];
+                    let pre = layout
+                        .peer_ranges
+                        .get(target)
+                        .map(|range| range.0)
+                        .unwrap_or(sorted_pos) as f64;
+                    let total = total as f64;
+                    if total <= 1.0 {
+                        SqlValue::Real(0.0)
+                    } else {
+                        SqlValue::Real(pre / (total - 1.0))
+                    }
+                }
+                "cume_dist" => {
+                    let target = layout.peer_ids[sorted_pos];
+                    let n = layout
+                        .peer_ranges
+                        .get(target)
+                        .map(|range| range.1 + 1)
+                        .unwrap_or(sorted_pos + 1) as f64;
+                    SqlValue::Real(n / total as f64)
+                }
+                "ntile" => ntile_value(args, total, sorted_pos)?,
+                _ => unreachable!("ranking function checked above"),
+            };
+            results[*row_idx] = value;
+        }
+    }
+    Ok(true)
+}
+
+/// Returns `true` if the row at `pos` (a position in
+/// `order_index_map`) should be excluded from the current row's frame
+/// per `frame.exclude`.
+fn position_excluded(
+    frame: &ResolvedFrame,
+    pos: usize,
+    sorted_pos: usize,
+    peer_ids: &[usize],
+) -> bool {
+    match frame.exclude {
+        ExcludeMode::NoOthers => false,
+        ExcludeMode::CurrentRow => pos == sorted_pos,
+        ExcludeMode::Group => {
+            // Exclude the current row and all rows in the same peer
+            // group (rows with equal ORDER BY keys).
+            peer_ids
+                .get(pos)
+                .zip(peer_ids.get(sorted_pos))
+                .is_some_and(|(a, b)| a == b)
+        }
+        ExcludeMode::Ties => {
+            // Exclude peers but keep the current row.
+            if pos == sorted_pos {
+                false
+            } else {
+                peer_ids
+                    .get(pos)
+                    .zip(peer_ids.get(sorted_pos))
+                    .is_some_and(|(a, b)| a == b)
+            }
+        }
+    }
+}
+
+/// Enumerate the indices in `order_index_map` that fall within
+/// `[bounds.0, bounds.1]` AND survive `frame.exclude`. The result
+/// preserves natural order.
+fn enumerate_frame_positions(
+    frame: &ResolvedFrame,
+    bounds: (usize, usize),
+    sorted_pos: usize,
+    peer_ids: &[usize],
+    total: usize,
+) -> Vec<usize> {
+    if bounds.0 > bounds.1 {
+        return Vec::new();
+    }
+    let mut out = Vec::with_capacity(bounds.1 - bounds.0 + 1);
+    let end = bounds.1.min(total.saturating_sub(1));
+    for pos in bounds.0..=end {
+        if position_excluded(frame, pos, sorted_pos, peer_ids) {
+            continue;
+        }
+        out.push(pos);
+    }
+    out
+}
+
+fn frame_positions_without_exclude(bounds: (usize, usize), total: usize) -> Option<(usize, usize)> {
+    if total == 0 || bounds.0 > bounds.1 {
+        return None;
+    }
+    let end = bounds.1.min(total.saturating_sub(1));
+    if bounds.0 > end {
+        return None;
+    }
+    Some((bounds.0, end))
+}
+
+struct WindowLayoutCache<'a> {
+    rows: &'a [SqlRow],
+    bindings: &'a [Option<SqlValue>],
+    layouts: HashMap<String, Vec<CachedWindowPartition>>,
+}
+
+struct CachedWindowPartition {
+    order_index_map: Vec<usize>,
+    peer_ids: Vec<usize>,
+    peer_ranges: Vec<(usize, usize)>,
+}
+
+impl<'a> WindowLayoutCache<'a> {
+    fn new(rows: &'a [SqlRow], bindings: &'a [Option<SqlValue>]) -> Self {
+        Self {
+            rows,
+            bindings,
+            layouts: HashMap::new(),
+        }
+    }
+
+    fn layouts_for(&mut self, window: &WindowSpec) -> Result<&[CachedWindowPartition]> {
+        let key = window_layout_key(window);
+        if !self.layouts.contains_key(&key) {
+            let layouts = self.build_layouts(window)?;
+            self.layouts.insert(key.clone(), layouts);
+        }
+        Ok(self.layouts.get(&key).expect("inserted layout").as_slice())
+    }
+
+    fn build_layouts(&self, window: &WindowSpec) -> Result<Vec<CachedWindowPartition>> {
+        // The EXCLUDE-mode marker (a constant string literal injected by
+        // `parser::rewrite_window_exclude`) lives in PARTITION BY but
+        // must not affect partitioning: filter it out before hashing.
+        let real_partition_by: Vec<Expr> = window
+            .partition_by
+            .iter()
+            .filter(|e| !is_exclude_marker(e))
+            .cloned()
+            .collect();
+        let partitions = partition_rows(self.rows, &real_partition_by, self.bindings)?;
+        let mut layouts = Vec::with_capacity(partitions.len());
+        for partition in &partitions {
+            let sorted = order_partition(partition, self.rows, &window.order_by, self.bindings)?;
+            let order_index_map: Vec<usize> = sorted.iter().map(|(idx, _)| *idx).collect();
+            let peer_ids: Vec<usize> = if window.order_by.is_empty() {
+                vec![0; sorted.len()]
+            } else {
+                assign_peer_ids(&sorted, &window.order_by)
+            };
+            let peer_ranges = peer_ranges(&peer_ids);
+            layouts.push(CachedWindowPartition {
+                order_index_map,
+                peer_ids,
+                peer_ranges,
+            });
+        }
+        Ok(layouts)
+    }
+}
+
+fn window_layout_key(window: &WindowSpec) -> String {
+    format!("{:?}|{:?}", window.partition_by, window.order_by)
 }
 
 fn function_args(func: &sqlparser::ast::Function) -> Vec<Expr> {
@@ -363,34 +675,46 @@ fn compute_function_for_row(
             lag_lead_value(func_name, args, rows, order_index_map, sorted_pos, bindings)
         }
         "first_value" => {
-            let bounds = frame_bounds(
-                frame,
-                sorted_pos,
-                peer_ids,
-                peer_ranges,
-                order_index_map.len(),
-            );
-            if bounds.0 > bounds.1 {
-                return Ok(SqlValue::Null);
+            let total = order_index_map.len();
+            let bounds = frame_bounds(frame, sorted_pos, peer_ids, peer_ranges, total);
+            if frame.exclude == ExcludeMode::NoOthers {
+                let Some((first, _)) = frame_positions_without_exclude(bounds, total) else {
+                    return Ok(SqlValue::Null);
+                };
+                let row_idx = order_index_map[first];
+                return match args.first() {
+                    Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
+                    None => Ok(SqlValue::Null),
+                };
             }
-            let row_idx = order_index_map[bounds.0];
+            let positions = enumerate_frame_positions(frame, bounds, sorted_pos, peer_ids, total);
+            let Some(first) = positions.first() else {
+                return Ok(SqlValue::Null);
+            };
+            let row_idx = order_index_map[*first];
             match args.first() {
                 Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
                 None => Ok(SqlValue::Null),
             }
         }
         "last_value" => {
-            let bounds = frame_bounds(
-                frame,
-                sorted_pos,
-                peer_ids,
-                peer_ranges,
-                order_index_map.len(),
-            );
-            if bounds.0 > bounds.1 {
-                return Ok(SqlValue::Null);
+            let total = order_index_map.len();
+            let bounds = frame_bounds(frame, sorted_pos, peer_ids, peer_ranges, total);
+            if frame.exclude == ExcludeMode::NoOthers {
+                let Some((_, last)) = frame_positions_without_exclude(bounds, total) else {
+                    return Ok(SqlValue::Null);
+                };
+                let row_idx = order_index_map[last];
+                return match args.first() {
+                    Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
+                    None => Ok(SqlValue::Null),
+                };
             }
-            let row_idx = order_index_map[bounds.1];
+            let positions = enumerate_frame_positions(frame, bounds, sorted_pos, peer_ids, total);
+            let Some(last) = positions.last() else {
+                return Ok(SqlValue::Null);
+            };
+            let row_idx = order_index_map[*last];
             match args.first() {
                 Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
                 None => Ok(SqlValue::Null),
@@ -401,18 +725,27 @@ fn compute_function_for_row(
                 Some(v) if v > 0 => v as usize,
                 _ => return Ok(SqlValue::Null),
             };
-            let bounds = frame_bounds(
-                frame,
-                sorted_pos,
-                peer_ids,
-                peer_ranges,
-                order_index_map.len(),
-            );
-            let target = bounds.0 + n - 1;
-            if target > bounds.1 {
-                return Ok(SqlValue::Null);
+            let total = order_index_map.len();
+            let bounds = frame_bounds(frame, sorted_pos, peer_ids, peer_ranges, total);
+            if frame.exclude == ExcludeMode::NoOthers {
+                let Some((first, last)) = frame_positions_without_exclude(bounds, total) else {
+                    return Ok(SqlValue::Null);
+                };
+                let target = first.saturating_add(n - 1);
+                if target > last {
+                    return Ok(SqlValue::Null);
+                }
+                let row_idx = order_index_map[target];
+                return match args.first() {
+                    Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
+                    None => Ok(SqlValue::Null),
+                };
             }
-            let row_idx = order_index_map[target];
+            let positions = enumerate_frame_positions(frame, bounds, sorted_pos, peer_ids, total);
+            let Some(target) = positions.get(n - 1) else {
+                return Ok(SqlValue::Null);
+            };
+            let row_idx = order_index_map[*target];
             match args.first() {
                 Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
                 None => Ok(SqlValue::Null),
@@ -430,6 +763,9 @@ fn compute_function_for_row(
             for i in bounds.0..=bounds.1 {
                 if i >= order_index_map.len() {
                     break;
+                }
+                if position_excluded(frame, i, sorted_pos, peer_ids) {
+                    continue;
                 }
                 let row_idx = order_index_map[i];
                 let value = match args.first() {

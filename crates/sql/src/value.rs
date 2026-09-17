@@ -35,7 +35,18 @@ pub fn is_truthy(value: &SqlValue) -> bool {
         OwnedValue::Integer(v) => *v != 0,
         OwnedValue::Real(v) => *v != 0.0,
         OwnedValue::Text(v) => sqlite_truthy_str(v.as_ref()),
-        OwnedValue::Blob(v) => sqlite_truthy_str(&String::from_utf8_lossy(v)),
+        // A33: avoid the `String::from_utf8_lossy` allocation. The
+        // previous code allocated a fresh String for every Blob truthy
+        // check that contained non-UTF8 bytes. `sqlite_truthy_str` only
+        // checks for parseable i64 / f64 patterns, neither of which can
+        // include replacement chars (U+FFFD) — so any non-UTF8 byte
+        // sequence in the blob must yield `false` anyway. Short-circuit
+        // it directly; for valid-UTF8 blobs we borrow the slice without
+        // allocating.
+        OwnedValue::Blob(v) => match std::str::from_utf8(v) {
+            Ok(s) => sqlite_truthy_str(s),
+            Err(_) => false,
+        },
     }
 }
 

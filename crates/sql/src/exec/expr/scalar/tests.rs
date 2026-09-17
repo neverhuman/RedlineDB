@@ -33,7 +33,10 @@ fn format_real_sqlite_keeps_trailing_zero_for_whole_values() {
     use super::value::format_real_sqlite;
     assert_eq!(format_real_sqlite(1.0), "1.0");
     assert_eq!(format_real_sqlite(0.0), "0.0");
-    assert_eq!(format_real_sqlite(-0.0), "-0.0");
+    // SQLite's `printf("%g", -0.0)` renders negative zero as `"0.0"` (the
+    // sign is dropped by `sqlite3FpDecode` when the magnitude is exactly
+    // zero — see `util.c::sqlite3FpDecode`). Our formatter matches.
+    assert_eq!(format_real_sqlite(-0.0), "0.0");
     assert_eq!(format_real_sqlite(22.0), "22.0");
     assert_eq!(format_real_sqlite(-3.0), "-3.0");
 }

@@ -1,0 +1,99 @@
+{
+  "openapi": "3.1.0",
+  "x-generated-marker": "Contract zone: verified by bash ops/ci/contract-drift.sh. Source: CONTRACT.md + apps/api/src/model.rs + apps/web/src/api/types.ts. DO NOT EDIT WITHOUT UPDATING THE DTOs.",
+  "info": {
+    "title": "redline-web HTTP API",
+    "version": "0.1.0",
+    "description": "Machine-readable mirror of CONTRACT.md. The Rust DTOs (apps/api/src/model.rs, serde camelCase) and the TypeScript DTOs (apps/web/src/api/types.ts) are kept in lock-step with this document; ops/ci/contract-drift.sh checks for drift."
+  },
+  "servers": [{ "url": "/" }],
+  "paths": {
+    "/api/health": {
+      "get": {
+        "operationId": "getHealth",
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Health" } } } } }
+      }
+    },
+    "/api/connection": {
+      "get": {
+        "operationId": "getConnection",
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ConnectionInfo" } } } } }
+      }
+    },
+    "/api/schema": {
+      "get": {
+        "operationId": "getSchema",
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SchemaResponse" } } } } }
+      }
+    },
+    "/api/tables/{name}/schema": {
+      "get": {
+        "operationId": "getTableSchema",
+        "parameters": [{ "name": "name", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TableSchema" } } } } }
+      }
+    },
+    "/api/tables/{name}": {
+      "get": {
+        "operationId": "getTablePage",
+        "parameters": [
+          { "name": "name", "in": "path", "required": true, "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer" } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer" } },
+          { "name": "orderBy", "in": "query", "schema": { "type": "string" } },
+          { "name": "dir", "in": "query", "schema": { "type": "string", "enum": ["asc", "desc"] } }
+        ],
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/TablePage" } } } } }
+      }
+    },
+    "/api/query": {
+      "post": {
+        "operationId": "runQuery",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QueryRequest" } } } },
+        "responses": {
+          "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/QueryResult" } } } },
+          "400": { "description": "sql error", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/ApiError" } } } }
+        }
+      }
+    },
+    "/api/metrics": {
+      "get": {
+        "operationId": "getMetrics",
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/MetricsSnapshot" } } } } }
+      }
+    },
+    "/api/metrics/stream": {
+      "get": { "operationId": "streamMetrics", "responses": { "200": { "description": "SSE stream of MetricsSnapshot" } } }
+    },
+    "/api/slow-queries": {
+      "get": {
+        "operationId": "getSlowQueries",
+        "parameters": [{ "name": "limit", "in": "query", "schema": { "type": "integer" } }],
+        "responses": { "200": { "description": "ok", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/SlowQueriesResponse" } } } } }
+      }
+    },
+    "/metrics": {
+      "get": { "operationId": "prometheus", "responses": { "200": { "description": "Prometheus text exposition" } } }
+    }
+  },
+  "components": {
+    "schemas": {
+      "ConnectionInfo": { "type": "object", "required": ["mode", "engine", "path", "readOnly", "sqliteVersion", "engineVersion", "sizeBytes"], "properties": { "mode": { "type": "string", "enum": ["sqlite-file", "target-bin"] }, "engine": { "type": "string", "enum": ["sqlite", "redline"] }, "path": { "type": "string" }, "readOnly": { "type": "boolean" }, "sqliteVersion": { "type": "string" }, "engineVersion": { "type": ["string", "null"] }, "sizeBytes": { "type": "integer" } } },
+      "SchemaObject": { "type": "object", "required": ["name", "kind", "sql", "rowCount"], "properties": { "name": { "type": "string" }, "kind": { "type": "string", "enum": ["table", "view", "index", "trigger"] }, "sql": { "type": ["string", "null"] }, "rowCount": { "type": ["integer", "null"] } } },
+      "SchemaResponse": { "type": "object", "required": ["objects"], "properties": { "objects": { "type": "array", "items": { "$ref": "#/components/schemas/SchemaObject" } } } },
+      "ColumnInfo": { "type": "object", "required": ["name", "type", "notNull", "pk", "defaultValue"], "properties": { "name": { "type": "string" }, "type": { "type": "string" }, "notNull": { "type": "boolean" }, "pk": { "type": "boolean" }, "defaultValue": { "type": ["string", "null"] } } },
+      "TableSchema": { "type": "object", "required": ["name", "kind", "columns", "rowCount", "indexes"], "properties": { "name": { "type": "string" }, "kind": { "type": "string" }, "columns": { "type": "array", "items": { "$ref": "#/components/schemas/ColumnInfo" } }, "rowCount": { "type": ["integer", "null"] }, "indexes": { "type": "array", "items": { "type": "string" } } } },
+      "TablePage": { "type": "object", "required": ["name", "columns", "rows", "total", "limit", "offset"], "properties": { "name": { "type": "string" }, "columns": { "type": "array", "items": { "type": "string" } }, "rows": { "type": "array", "items": { "type": "array" } }, "total": { "type": ["integer", "null"] }, "limit": { "type": "integer" }, "offset": { "type": "integer" } } },
+      "QueryRequest": { "type": "object", "required": ["sql", "maxRows"], "properties": { "sql": { "type": "string" }, "maxRows": { "type": ["integer", "null"] } } },
+      "QueryResult": { "type": "object", "required": ["columns", "rows", "rowCount", "rowsAffected", "elapsedMs", "truncated"], "properties": { "columns": { "type": "array", "items": { "type": "string" } }, "rows": { "type": "array", "items": { "type": "array" } }, "rowCount": { "type": "integer" }, "rowsAffected": { "type": ["integer", "null"] }, "elapsedMs": { "type": "number" }, "truncated": { "type": "boolean" } } },
+      "ApiError": { "type": "object", "required": ["error"], "properties": { "error": { "type": "string" } } },
+      "LatencyMs": { "type": "object", "required": ["p50", "p95", "p99", "max"], "properties": { "p50": { "type": "number" }, "p95": { "type": "number" }, "p99": { "type": "number" }, "max": { "type": "number" } } },
+      "DbStats": { "type": "object", "required": ["sizeBytes", "pageCount", "pageSize", "freelistCount", "walBytes"], "properties": { "sizeBytes": { "type": "integer" }, "pageCount": { "type": "integer" }, "pageSize": { "type": "integer" }, "freelistCount": { "type": "integer" }, "walBytes": { "type": "integer" } } },
+      "TableSize": { "type": "object", "required": ["name", "rowCount", "bytes"], "properties": { "name": { "type": "string" }, "rowCount": { "type": ["integer", "null"] }, "bytes": { "type": ["integer", "null"] } } },
+      "MetricsSnapshot": { "type": "object", "required": ["uptimeSecs", "totalQueries", "failedQueries", "qps", "latencyMs", "db", "tables", "atUnixMs"], "properties": { "uptimeSecs": { "type": "integer" }, "totalQueries": { "type": "integer" }, "failedQueries": { "type": "integer" }, "qps": { "type": "number" }, "latencyMs": { "$ref": "#/components/schemas/LatencyMs" }, "db": { "$ref": "#/components/schemas/DbStats" }, "tables": { "type": "array", "items": { "$ref": "#/components/schemas/TableSize" } }, "atUnixMs": { "type": "integer" } } },
+      "SlowQuery": { "type": "object", "required": ["sql", "elapsedMs", "atUnixMs", "rowCount", "ok"], "properties": { "sql": { "type": "string" }, "elapsedMs": { "type": "number" }, "atUnixMs": { "type": "integer" }, "rowCount": { "type": ["integer", "null"] }, "ok": { "type": "boolean" } } },
+      "SlowQueriesResponse": { "type": "object", "required": ["queries"], "properties": { "queries": { "type": "array", "items": { "$ref": "#/components/schemas/SlowQuery" } } } },
+      "Health": { "type": "object", "required": ["status", "version", "engine"], "properties": { "status": { "type": "string", "enum": ["ok"] }, "version": { "type": "string" }, "engine": { "type": "string", "enum": ["sqlite", "redline"] } } }
+    }
+  }
+}

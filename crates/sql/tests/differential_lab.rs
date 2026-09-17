@@ -190,6 +190,23 @@ fn diff_outer_and_cross_join_matrix() {
 }
 
 #[test]
+fn diff_natural_using_join_output_shape() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE p(id INTEGER, x INTEGER)");
+    lab.execute("CREATE TABLE q(id INTEGER, y INTEGER)");
+    lab.execute("INSERT INTO p VALUES (1,10),(2,20),(3,30)");
+    lab.execute("INSERT INTO q VALUES (1,100),(3,300)");
+
+    lab.assert_queries(&[
+        "SELECT * FROM p JOIN q USING(id) ORDER BY id",
+        "SELECT * FROM p NATURAL JOIN q ORDER BY id",
+        "SELECT * FROM p NATURAL LEFT JOIN q ORDER BY id",
+        "SELECT id FROM p NATURAL LEFT JOIN q ORDER BY id",
+        "SELECT p.id, q.id, id FROM p NATURAL LEFT JOIN q ORDER BY p.id",
+    ]);
+}
+
+#[test]
 fn diff_group_by_having_matrix() {
     let lab = Lab::new();
     lab.execute("CREATE TABLE t(grp TEXT, v INTEGER)");
@@ -276,4 +293,18 @@ fn diff_subquery_matrix() {
         "SELECT a.id, (SELECT COUNT(*) FROM b WHERE b.aid = a.id) AS bcnt FROM a ORDER BY a.id",
         "SELECT id, (SELECT v FROM b WHERE b.aid = a.id ORDER BY v LIMIT 1) FROM a ORDER BY id",
     ]);
+}
+
+#[test]
+fn diff_correlated_subquery_outer_pk_is_not_inner_rowid_alias() {
+    let lab = Lab::new();
+    lab.execute("CREATE TABLE a(id INTEGER PRIMARY KEY, name TEXT)");
+    lab.execute("CREATE TABLE b(id INTEGER PRIMARY KEY, a_id INTEGER, val INTEGER)");
+    lab.execute("INSERT INTO a VALUES (1, 'one'), (2, 'two'), (3, 'three')");
+    lab.execute("INSERT INTO b VALUES (10, 1, 100), (11, 1, 101), (12, 2, 200)");
+
+    lab.assert_query(
+        "SELECT a.id, a.name, (SELECT max(b.val) FROM b WHERE b.a_id = a.id) AS top \
+         FROM a ORDER BY a.id",
+    );
 }

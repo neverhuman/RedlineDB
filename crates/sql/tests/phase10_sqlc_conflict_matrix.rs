@@ -3,8 +3,8 @@
 //!
 //! Each row in the SQLite resolution-action table at
 //! <https://sqlite.org/lang_conflict.html> gets dedicated tests for both
-//! the "constraint fails" and the "no conflict" paths, plus AUTOINCREMENT
-//! high-water-mark and UPSERT (`ON CONFLICT(col) DO ...`) variants.
+//! the "constraint fails" and the "no conflict" paths, plus rowid reuse,
+//! AUTOINCREMENT, and UPSERT (`ON CONFLICT(col) DO ...`) variants.
 //!
 //! Documented deviations from SQLite (kept out of `crates/sql/src/exec.rs`
 //! per Lane SQL-C's allowed file list):
@@ -15,12 +15,9 @@
 //!   and `tail.rs::conflict_action_for` records the intended action, so
 //!   a future lane that touches `with_write_tx` can lift the collapse
 //!   without reparsing.
-//! - The literal `AUTOINCREMENT` keyword is not yet recognised because
-//!   that requires extending `crates/sql/src/parser/helpers.rs`. The
-//!   engine's `reserve_row_id()` is process-wide monotonic, so an
-//!   `INTEGER PRIMARY KEY` (the rowid alias) already exhibits SQLite's
-//!   AUTOINCREMENT-style high-water-mark behaviour and the tests assert
-//!   that.
+//! - The literal `AUTOINCREMENT` keyword is recognised; the dedicated
+//!   `jeryu_schema_compat` tests cover the sqlite_sequence contract and
+//!   monotonic rowid allocation behavior.
 
 #[allow(non_snake_case)]
 mod phase10_sqlc_conflict_matrix {
@@ -166,6 +163,23 @@ mod phase10_sqlc_conflict_matrix {
     }
 
     #[test]
+    fn check_constraint_like_allows_matching_rows() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(x TEXT CHECK(x LIKE 'a%'))")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES ('apple')")
+            .expect("first");
+        conn.execute("INSERT INTO t VALUES ('avocado')")
+            .expect("second");
+        let mut stmt = conn.prepare("SELECT x FROM t ORDER BY x").expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_text(0).expect("x"), "apple");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_text(0).expect("x"), "avocado");
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
     fn ignore_unique_violation_skips_silently() {
         let (_dir, conn) = open_database();
         conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY)")
@@ -237,10 +251,7 @@ mod phase10_sqlc_conflict_matrix {
 
     /// Verify that OR REPLACE on a non-PK UNIQUE keeps the row count at 1
     /// (the conflicting row is deleted before the new one inserts) and
-    /// that the rowid moves: when the conflicting row's rowid is
-    /// engine-allocated (no explicit alias), the replacement gets a new
-    /// monotonic rowid because `engine.reserve_row_id()` is a high-water
-    /// mark.
+    /// that the hidden rowid allocator still advances for the replacement.
     #[test]
     fn replace_unique_non_pk_changes_rowid_but_not_count() {
         let (_dir, conn) = open_database();
@@ -264,11 +275,11 @@ mod phase10_sqlc_conflict_matrix {
         assert_eq!(stmt.step().expect("step"), Step::Row);
         let new_rowid = stmt.column_i64(0).expect("rowid");
         assert_eq!(stmt.column_text(1).expect("b"), "second");
-        // Engine reserve_row_id is monotonic, so the replacement row gets
-        // a strictly larger rowid than the deleted one.
+        // Hidden rowid tables keep advancing their allocator even when the
+        // conflicting row is deleted and immediately replaced.
         assert!(
             new_rowid > original_rowid,
-            "expected new rowid ({new_rowid}) > original ({original_rowid}) — engine high-water mark"
+            "expected new rowid ({new_rowid}) > original ({original_rowid})"
         );
     }
 
@@ -356,20 +367,14 @@ mod phase10_sqlc_conflict_matrix {
     }
 
     // ----------------------------------------------------------------
-    // AUTOINCREMENT / high-water-mark semantics
+    // INTEGER PRIMARY KEY rowid reuse semantics (without AUTOINCREMENT)
     //
-    // We do not yet recognise the literal `AUTOINCREMENT` keyword (that
-    // requires a parser change in `crates/sql/src/parser/helpers.rs`,
-    // outside Lane SQL-C's allowed file list). However the engine's
-    // `reserve_row_id()` is a process-wide monotonic counter that never
-    // rolls backwards even after deletes, so an `INTEGER PRIMARY KEY`
-    // (the rowid alias) already exhibits SQLite's AUTOINCREMENT-style
-    // high-water-mark behaviour. These tests pin that behaviour so the
-    // future keyword wiring inherits it.
+    // AUTOINCREMENT coverage lives in `jeryu_schema_compat`; this lane
+    // keeps the ordinary `INTEGER PRIMARY KEY` allocator fallback pinned.
     // ----------------------------------------------------------------
 
     #[test]
-    fn integer_pk_high_water_mark_survives_deletes() {
+    fn integer_pk_reuses_deleted_max_rowid() {
         let (_dir, conn) = open_database();
         conn.execute("CREATE TABLE t(id INTEGER PRIMARY KEY, label TEXT)")
             .expect("create");
@@ -386,10 +391,10 @@ mod phase10_sqlc_conflict_matrix {
         assert_eq!(stmt.step().expect("step"), Step::Row);
         let third_id = stmt.column_i64(0).expect("id");
         drop(stmt);
-        // Delete every row.
-        conn.execute("DELETE FROM t").expect("delete");
-        // Re-insert. The new id must be strictly greater than the
-        // pre-delete max — a high-water-mark engine never reuses ids.
+        // Delete the max rowid and re-insert. SQLite reuses the deleted
+        // max when AUTOINCREMENT is absent.
+        conn.execute("DELETE FROM t WHERE id = 3").expect("delete");
+        // Re-insert. The new id should reuse the deleted max rowid.
         conn.execute("INSERT INTO t(label) VALUES ('d')")
             .expect("d");
         let mut stmt = conn
@@ -397,14 +402,11 @@ mod phase10_sqlc_conflict_matrix {
             .expect("prepare");
         assert_eq!(stmt.step().expect("step"), Step::Row);
         let new_id = stmt.column_i64(0).expect("id");
-        assert!(
-            new_id > third_id,
-            "AUTOINCREMENT semantics broken: new {new_id} <= prior max {third_id}"
-        );
+        assert_eq!(new_id, third_id, "expected deleted max rowid to be reused");
     }
 
     #[test]
-    fn integer_pk_high_water_mark_survives_recovery() {
+    fn integer_pk_reuses_deleted_rowid_after_recovery() {
         let dir = tempdir().expect("temp dir");
         let path = dir.path().join("redlinedb-sql-phase10-sqlc-autoinc.db");
         // Phase 1: insert, capture rowid, drop the database handle so the
@@ -419,9 +421,9 @@ mod phase10_sqlc_conflict_matrix {
                 .expect("first");
             db.checkpoint().expect("checkpoint");
         }
-        // Phase 2: re-open (recovery replays WAL into a fresh engine) and
-        // insert again. The rowid counter must advance past the durable
-        // max even though the engine restarted.
+        // Phase 2: re-open (recovery replays WAL into a fresh engine),
+        // delete the row, and insert again. SQLite reuses the deleted
+        // rowid after restart too.
         let db = Database::open(&path, DbOptions::default()).expect("open database");
         let conn = db.connect();
         let mut stmt = conn
@@ -430,6 +432,7 @@ mod phase10_sqlc_conflict_matrix {
         assert_eq!(stmt.step().expect("step"), Step::Row);
         let first_id = stmt.column_i64(0).expect("id");
         drop(stmt);
+        conn.execute("DELETE FROM t WHERE id = 1").expect("delete");
         conn.execute("INSERT INTO t(payload) VALUES ('second')")
             .expect("second");
         let mut stmt = conn
@@ -437,10 +440,7 @@ mod phase10_sqlc_conflict_matrix {
             .expect("prepare");
         assert_eq!(stmt.step().expect("step"), Step::Row);
         let second_id = stmt.column_i64(0).expect("id");
-        assert!(
-            second_id > first_id,
-            "post-recovery rowid {second_id} did not exceed pre-recovery rowid {first_id}"
-        );
+        assert_eq!(second_id, first_id, "expected deleted rowid to be reused");
     }
 
     // ----------------------------------------------------------------
@@ -532,5 +532,228 @@ mod phase10_sqlc_conflict_matrix {
             .expect("prepare");
         assert_eq!(stmt.step().expect("step"), Step::Row);
         assert_eq!(stmt.column_text(0).expect("b"), "untouched");
+    }
+
+    #[test]
+    fn on_conflict_text_literal_is_not_rewritten_as_upsert() {
+        let (_dir, conn) = open_database();
+        let mut stmt = conn
+            .prepare("SELECT 'literal on conflict text', 'escaped ''on conflict'' text'")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(
+            stmt.column_text(0).expect("literal"),
+            "literal on conflict text"
+        );
+        assert_eq!(
+            stmt.column_text(1).expect("escaped"),
+            "escaped 'on conflict' text"
+        );
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_update_matching_unique_branch() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100)")
+            .expect("first");
+
+        conn.execute(
+            "INSERT INTO t VALUES (2, 100) \
+             ON CONFLICT(a) DO NOTHING \
+             ON CONFLICT(b) DO UPDATE SET b = b + 1",
+        )
+        .expect("upsert");
+
+        let mut stmt = conn
+            .prepare("SELECT a, b FROM t ORDER BY a")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 101);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_do_nothing_matching_pk_branch() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100)")
+            .expect("first");
+
+        conn.execute(
+            "INSERT INTO t VALUES (1, 200) \
+             ON CONFLICT(a) DO NOTHING \
+             ON CONFLICT(b) DO UPDATE SET b = b + 1",
+        )
+        .expect("upsert");
+
+        let mut stmt = conn
+            .prepare("SELECT a, b FROM t ORDER BY a")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 100);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_keep_sql_parameter_order() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE, c INTEGER)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100, 0)")
+            .expect("first");
+
+        let mut stmt = conn
+            .prepare(
+                "INSERT INTO t VALUES (?, ?, ?) \
+                 ON CONFLICT(a) DO NOTHING \
+                 ON CONFLICT(b) DO UPDATE SET c = ? + excluded.a WHERE ? = ?",
+            )
+            .expect("prepare");
+        assert_eq!(stmt.parameter_count(), 6);
+        stmt.bind_i64(1, 2).expect("bind a");
+        stmt.bind_i64(2, 100).expect("bind b");
+        stmt.bind_i64(3, 7).expect("bind c");
+        stmt.bind_i64(4, 30).expect("bind update");
+        stmt.bind_i64(5, 9).expect("bind where left");
+        stmt.bind_i64(6, 9).expect("bind where right");
+        assert_eq!(stmt.step().expect("step"), Step::Done);
+
+        let mut stmt = conn
+            .prepare("SELECT a, b, c FROM t ORDER BY a")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 100);
+        assert_eq!(stmt.column_i64(2).expect("c"), 32);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_reserve_params_in_skipped_update_arm() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE, c INTEGER)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100, 0)")
+            .expect("first");
+
+        let mut stmt = conn
+            .prepare(
+                "INSERT INTO t VALUES (?, ?, ?) \
+                 ON CONFLICT(a) DO UPDATE SET c = ? \
+                 ON CONFLICT(b) DO UPDATE SET c = ? + excluded.a WHERE ? = ?",
+            )
+            .expect("prepare");
+        assert_eq!(stmt.parameter_count(), 7);
+        stmt.bind_i64(1, 2).expect("bind a");
+        stmt.bind_i64(2, 100).expect("bind b");
+        stmt.bind_i64(3, 7).expect("bind c");
+        stmt.bind_i64(4, 111).expect("bind skipped update");
+        stmt.bind_i64(5, 30).expect("bind matching update");
+        stmt.bind_i64(6, 9).expect("bind where left");
+        stmt.bind_i64(7, 9).expect("bind where right");
+        assert_eq!(stmt.step().expect("step"), Step::Done);
+
+        let mut stmt = conn
+            .prepare("SELECT c FROM t WHERE a = 1")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("c"), 32);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_accept_trivia_between_arms() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100)")
+            .expect("first");
+
+        conn.execute(
+            "INSERT INTO t VALUES (2, 100)
+ON CONFLICT(a) DO NOTHING
+	/* second arm */ ON CONFLICT(b) DO UPDATE SET b = b + 1",
+        )
+        .expect("upsert");
+
+        let mut stmt = conn
+            .prepare("SELECT a, b FROM t ORDER BY a")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 101);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_allow_targetless_final_arm() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE, c INTEGER)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100, 0)")
+            .expect("first");
+
+        conn.execute(
+            "INSERT INTO t VALUES (2, 100, 0) \
+             ON CONFLICT(a) DO NOTHING \
+             ON CONFLICT DO UPDATE SET c = 33",
+        )
+        .expect("upsert");
+
+        let mut stmt = conn
+            .prepare("SELECT a, b, c FROM t ORDER BY a")
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 100);
+        assert_eq!(stmt.column_i64(2).expect("c"), 33);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_reject_targetless_nonfinal_arm() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE)")
+            .expect("create");
+
+        let err = conn
+            .prepare(
+                "INSERT INTO t VALUES (1, 100) \
+                 ON CONFLICT DO NOTHING \
+                 ON CONFLICT(b) DO UPDATE SET b = b + 1",
+            )
+            .expect_err("targetless ON CONFLICT arm must be final");
+        assert!(
+            err_msg(&err).contains("without target must be last"),
+            "unexpected error: {err:?}"
+        );
+    }
+
+    #[test]
+    fn multiple_on_conflict_clauses_preserve_returning_after_newline() {
+        let (_dir, conn) = open_database();
+        conn.execute("CREATE TABLE t(a INTEGER PRIMARY KEY, b INTEGER UNIQUE, c INTEGER)")
+            .expect("create");
+        conn.execute("INSERT INTO t VALUES (1, 100, 0)")
+            .expect("first");
+
+        let mut stmt = conn
+            .prepare(
+                "INSERT INTO t VALUES (2, 100, 0) \
+                 ON CONFLICT(b) DO UPDATE SET c = 10 \
+                 ON CONFLICT(a) DO UPDATE SET c = 20\nRETURNING a, b, c",
+            )
+            .expect("prepare");
+        assert_eq!(stmt.step().expect("step"), Step::Row);
+        assert_eq!(stmt.column_i64(0).expect("a"), 1);
+        assert_eq!(stmt.column_i64(1).expect("b"), 100);
+        assert_eq!(stmt.column_i64(2).expect("c"), 10);
+        assert_eq!(stmt.step().expect("done"), Step::Done);
     }
 }

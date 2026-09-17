@@ -10,10 +10,53 @@ members = [
     "crates/ffi",
     "crates/cli",
     "crates/server",
+    "crates/redlinedb-lite",
 ]
 resolver = "3"
+exclude = ["subrepos/redline-testing", "subrepos/redline-web", "subrepos/redline-central", "subrepos/redline-split-ops", "subrepos/redline"]
 
 [workspace.package]
 edition = "2024"
 license = "Apache-2.0"
 rust-version = "1.95"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = "symbols"
+debug = false
+debug-assertions = false
+overflow-checks = false
+incremental = false
+
+# Local CPU specialization requires an explicit RUSTFLAGS override.
+[profile.release-native]
+inherits = "release"
+
+# release-pgo trains via scripts/perf/pgo.sh + rebuilds with
+# -Cprofile-use. Consumed by the redline-testing parity gate in CI.
+[profile.release-pgo]
+inherits = "release-native"
+
+# Keep cargo bench aligned with the production optimization lane so parser,
+# SQL, RQL, and storage benchmarks do not accidentally measure debug info,
+# incremental state, or multi-codegen-unit artifacts.
+[profile.bench]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+debug = false
+debug-assertions = false
+overflow-checks = false
+incremental = false
+
+# release-fast is the contributor escape hatch: thin LTO + multiple
+# codegen units so dev iteration on `--release` builds doesn't pay the
+# ~2-3x link cost of fat LTO + codegen-units=1. Not used by CI or by
+# any official release artifact.
+[profile.release-fast]
+inherits = "release"
+lto = "thin"
+codegen-units = 16

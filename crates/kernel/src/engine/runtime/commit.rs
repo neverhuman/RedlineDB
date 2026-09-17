@@ -71,7 +71,10 @@ impl Engine {
             }
         };
 
-        if self.config.commit_durability == CommitDurability::Strict
+        // A1: read live commit durability (atomic, mutable via PRAGMA synchronous)
+        // rather than the open-time `EngineConfig.commit_durability` snapshot.
+        let live_durability = self.commit_durability();
+        if live_durability == CommitDurability::Strict
             && pending_schema.is_none()
             && tx.pending_index_handles().is_empty()
         {
@@ -95,7 +98,7 @@ impl Engine {
             return Ok(CommitOutcome::Committed(csn));
         }
 
-        let commit_barrier = match self.config.commit_durability {
+        let commit_barrier = match live_durability {
             CommitDurability::Strict => self.wal.flush_until(append.end_lsn),
             CommitDurability::Normal => self.wal.write_until(append.end_lsn),
             CommitDurability::UnsafeDev => Ok(append.end_lsn),

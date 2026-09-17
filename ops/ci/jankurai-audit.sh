@@ -9,9 +9,9 @@
 # HLT-042 ci-local-parity.lib-missing,
 # HLT-034 ci-bad-behavior.
 #
-# jankurai is a hard dependency for this lane. The install path is the
-# pinned, checksum-verified release binary in ops/ci/lib.sh so CI and local
-# proof runs consume the same artifact.
+# Jankurai is a hard dependency for this lane. `ops/ci/lib.sh` freezes the
+# release sandbox's PATH selection, then binds it by physical path, exact
+# version, and exact digest. This lane never installs or fetches tool source.
 #
 # Usage:
 #   bash ops/ci/jankurai-audit.sh
@@ -21,10 +21,10 @@ set -euo pipefail
 # shellcheck source=ops/ci/lib.sh
 . "$(dirname "$0")/lib.sh"
 
-LOG_DIR=".jankurai"
+LOG_DIR="target/jankurai"
 AUDIT_POLICY="agent/audit-policy.toml"
 mkdir -p "$LOG_DIR" "$LOG_DIR/security" "$LOG_DIR/proofbind" "$LOG_DIR/proofmark" "$LOG_DIR/rust"
-JANKURAI_INSTALL_LOG="$LOG_DIR/jankurai-install.log"
+JANKURAI_VERIFY_LOG="$LOG_DIR/governed-jankurai.log"
 
 force_full_smart_scan() {
     # CI jobs start with an empty target directory, but local mirrors often
@@ -32,16 +32,6 @@ force_full_smart_scan() {
     # canonical command string while forcing a full evidence scan.
     rm -f target/jankurai/audit-state.json
 }
-
-cleanup_jankurai_upstream_scratch() {
-    rm -rf .jankurai/jankurai-src target/jankurai-src-v*
-    if [ -f .jankurai/security/sbom-syft.json ] \
-        && grep -Eq '/(\.jankurai/jankurai-src|target/jankurai-src-v)' .jankurai/security/sbom-syft.json
-    then
-        rm -f .jankurai/security/sbom-syft.json
-    fi
-}
-trap cleanup_jankurai_upstream_scratch EXIT
 
 # ---- 1) jankurai --version --------------------------------------------------
 step_version() {
@@ -56,16 +46,16 @@ step_version() {
 # .jankurai/cost-budget.toml.
 step_audit_advisory() {
     bash scripts/check_audit_policy_mirror.sh
-    cleanup_jankurai_upstream_scratch
     force_full_smart_scan
     jankurai audit . \
         --mode advisory \
-        --baseline .jankurai/repo-score.json \
-        --json .jankurai/repo-score.json \
-        --md .jankurai/repo-score.md \
+        --baseline .jankurai/baselines/main.repo-score.json \
+        --json "$LOG_DIR/repo-score.advisory.json" \
+        --md "$LOG_DIR/repo-score.advisory.md" \
         --sarif "$LOG_DIR/jankurai.sarif" \
         --github-step-summary "$LOG_DIR/summary.md" \
         --repair-queue-jsonl "$LOG_DIR/repair-queue.jsonl" \
+        --no-score-history \
         --policy "$AUDIT_POLICY"
 }
 
@@ -76,13 +66,12 @@ step_audit_advisory() {
 # candidate audit run; that would hide score regressions
 # (HLT-034 ci.ratchet.self-generated-baseline).
 step_fetch_baseline() {
-    if [ -f .jankurai/baselines/accepted-baseline.json ]; then
-        install -m 0644 .jankurai/baselines/accepted-baseline.json "$LOG_DIR/accepted-baseline.json"
-        echo "baseline sourced from .jankurai/baselines/accepted-baseline.json"
-    else
-        git show origin/main:.jankurai/repo-score.json > "$LOG_DIR/accepted-baseline.json"
-        echo "baseline sourced from origin/main"
-    fi
+    [ -f .jankurai/baselines/main.repo-score.json ] || {
+        printf 'missing reviewed Jankurai baseline: .jankurai/baselines/main.repo-score.json\n' >&2
+        return 1
+    }
+    install -m 0644 .jankurai/baselines/main.repo-score.json "$LOG_DIR/accepted-baseline.json"
+    echo "baseline sourced from .jankurai/baselines/main.repo-score.json"
 }
 
 # ---- 4) jankurai security run (strict, pre-audit) --------------------------
@@ -90,7 +79,6 @@ step_fetch_baseline() {
 # with --strict in the ci profile BEFORE the final ratchet audit so
 # security evidence is binding (HLT-034 ci-bad-behavior).
 step_security_run() {
-    cleanup_jankurai_upstream_scratch
     jankurai security run . \
         --strict \
         --profile ci \
@@ -101,39 +89,22 @@ step_security_run() {
 step_audit_ratchet() {
     local rc=0
     bash scripts/check_audit_policy_mirror.sh
-    cleanup_jankurai_upstream_scratch
     force_full_smart_scan
     jankurai audit . \
         --mode ratchet \
         --baseline "$LOG_DIR/accepted-baseline.json" \
         --json "$LOG_DIR/repo-score.json" \
         --md "$LOG_DIR/repo-score.md" \
+        --repair-queue-jsonl "$LOG_DIR/repair-queue.jsonl" \
+        --no-score-history \
         --policy "$AUDIT_POLICY" || rc=$?
 
     if [ "$rc" -eq 0 ]; then
         return 0
     fi
 
-    if python3 - "$LOG_DIR/repo-score.json" <<'PY'
-import json
-import sys
-
-with open(sys.argv[1], "r", encoding="utf-8") as fh:
-    report = json.load(fh)
-
-ratchet = report.get("decision", {}).get("ratchet", {})
-if (
-    report.get("score", 0) >= report.get("decision", {}).get("minimum_score", 85)
-    and report.get("decision", {}).get("hard_findings", 1) == 0
-    and not report.get("caps_applied")
-    and not ratchet.get("new_caps")
-    and not ratchet.get("new_hard_findings")
-    and ratchet.get("score_delta", -1) >= 0
-):
-    sys.exit(0)
-
-sys.exit(1)
-PY
+    if cargo run --quiet --locked -p redlinedb-bench --bin score_policy -- \
+        audit-acceptance "$LOG_DIR/repo-score.json"
     then
         printf 'jankurai ratchet accepted: no score drop, new caps, or new hard findings vs baseline\n'
         return 0
@@ -185,58 +156,15 @@ step_ux_qa() {
     jankurai ux audit --config .jankurai/ux-qa.toml --out "$LOG_DIR/ux-qa.json"
 }
 
-# ---- 12) Language bad-behavior tests ---------------------------------------
-# Canonical CI invocation for the ci-bad-behavior, git-bad-behavior, and
-# release-bad-behavior tool-adoption entries:
-#   cargo test -p jankurai --test language_bad_behavior
-# Run against the upstream jankurai source (jankurai is not a workspace
-# member here) and capture the output as the canonical evidence artifact
-# .jankurai/language-bad-behavior.log.
-#
-# Hard gate: the workflow YAML carries NO `continue-on-error: true` for
-# this step. Soft-gate semantics (upstream-clone-failed -> exit 0) live
-# here, and we ALWAYS write a machine-grep-able
-# `status: upstream-{clone-failed|tests-passed|tests-failed}` line.
-step_language_bad_behavior() {
-    local upstream_dir=".jankurai/jankurai-src"
-
-    cleanup_jankurai_upstream_scratch
-
-    local cloned=0
-    if ci_verify_jankurai_source \
-        && git clone --depth 1 --branch "$CI_JANKURAI_TAG" "$CI_JANKURAI_GIT" "$upstream_dir"
-    then
-        local resolved_rev
-        resolved_rev="$(git -C "$upstream_dir" rev-parse HEAD)"
-        if [ "$resolved_rev" != "$CI_JANKURAI_REV" ]; then
-            printf 'jankurai language test clone resolved to %s, expected %s\n' \
-                "$resolved_rev" "$CI_JANKURAI_REV" >&2
-            cleanup_jankurai_upstream_scratch
-            return 1
-        fi
-        cloned=1
-    fi
-
-    if [ "${cloned}" -eq 1 ] && [ -d "$upstream_dir" ]; then
-        local rc=0
-        ( cd "$upstream_dir" && cargo test -p jankurai --test language_bad_behavior --no-fail-fast ) \
-            > >(tee "$LOG_DIR/language-bad-behavior.log") 2>&1 || rc=$?
-        printf 'status: %s\n' "$( [ "$rc" -eq 0 ] && echo upstream-tests-passed || echo upstream-tests-failed )" \
-            >> "$LOG_DIR/language-bad-behavior.log"
-        cleanup_jankurai_upstream_scratch
-        # Hard gate when the clone succeeds: test failure is a real failure.
-        return "$rc"
-    fi
-
-    printf 'attempted: cargo test -p jankurai --test language_bad_behavior\nstatus: upstream-clone-failed\nsoft-gate=jankurai-language-bad-behavior-local ledger=.jankurai/ci-soft-gate-ledger.toml\n' \
-        | tee "$LOG_DIR/language-bad-behavior.log"
-    cleanup_jankurai_upstream_scratch
-    return 0
+# ---- 12) Governed binary hostile probes ------------------------------------
+step_governed_jankurai_probes() {
+    bash ops/ci/governed-jankurai-test.sh \
+        | tee "$LOG_DIR/governed-jankurai-test.log"
 }
 
 main() {
-    ci_install_jankurai_logged "$JANKURAI_INSTALL_LOG"
-    cleanup_jankurai_upstream_scratch
+    ci_install_jankurai_logged "$JANKURAI_VERIFY_LOG"
+    step_governed_jankurai_probes
 
     step_version
     step_audit_advisory
@@ -249,7 +177,6 @@ main() {
     step_rust_witness
     step_copy_code
     step_ux_qa
-    step_language_bad_behavior
 }
 
 main "$@"

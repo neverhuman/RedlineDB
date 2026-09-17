@@ -47,6 +47,12 @@ impl SpillFile {
 
     pub fn create_in(root: impl AsRef<Path>, label: &str) -> Result<Self> {
         let root = root.as_ref();
+        // WS-C9: this is the lazy mkdir for spill files. We only enter
+        // `create_in` when an operator (sort/hash-agg) has actually
+        // decided to spill, so the directory is created on first real
+        // need. `create_dir_all` is idempotent (zero net syscalls when
+        // the dir already exists), so lean ephemeral runs that never
+        // spill never pay for the mkdir.
         fs::create_dir_all(root)
             .map_err(|err| Error::ConstraintViolation(format!("spill root create: {err}")))?;
         let path = spill_path(root, label);

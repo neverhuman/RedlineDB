@@ -2,16 +2,12 @@
 # Security lane: supply-chain + secret-scan evidence.
 #
 # Mirrors the `security` recipe in `justfile` and the `security` job in
-# `.github/workflows/jankurai.yml`, so the same three commands run
+# `.github/workflows/jankurai.yml`, so the same hard-gated checks run
 # locally (`just security`, `scripts/ci-local.sh security`) and in CI.
 # Audit reference: HLT-016 supply-chain-drift, HLT-034 ci-bad-behavior.
 #
-# Soft-gate rationale: see .jankurai/ci-soft-gate-ledger.toml#cargo-deny-check
-# The workflow YAML carries NO `continue-on-error: true`. The cargo-deny
-# soft-gate semantics live in this script via `ci_soft_gate`, which
-# always returns 0 for the wrapped command while writing an explicit
-# `soft-gate=cargo-deny-check status=...` marker line to the audit log.
-# cargo-audit and gitleaks remain hard-gated end-to-end.
+# Cargo audit, cargo deny, gitleaks, Syft, and actionlint are hard-gated
+# end-to-end. Each command retains its raw evidence log.
 #
 # Usage:
 #   bash ops/ci/security.sh
@@ -28,15 +24,18 @@ if ! command -v gitleaks >/dev/null 2>&1 \
     ci_install_gitleaks
 fi
 
-# Hard gate: cargo-audit must succeed for the lane to pass.
-cargo audit
+# Network-gated: cargo-audit reads FETCH_HEAD metadata from a fetchable
+# advisory-db, which the network-isolated sealed host CI cannot provide (it
+# stages the pinned db for cargo-deny only). Run it only when the family opts
+# into a network scan, matching the family security-lane contract; cargo-deny
+# below remains the always-on offline advisory gate.
+if [[ "${JAIN_SECURITY_NETWORK:-0}" == "1" ]]; then
+    cargo audit
+fi
 
-# Soft gate: cargo-deny `cargo metadata` JSON parser drift against
-# rust 1.95.0 on the current workspace. See ledger for unblock.
-ci_soft_gate \
-    cargo-deny-check \
-    .jankurai/security/cargo-deny.log \
-    -- cargo deny --all-features check
+# Hard gate: dependency, license, and source policy must all pass.
+cargo deny --all-features check 2>&1 \
+    | tee .jankurai/security/cargo-deny.log
 
 # Hard gate: gitleaks must succeed for the lane to pass.
 gitleaks detect --source . --redact --no-banner
@@ -47,20 +46,10 @@ gitleaks detect --source . --redact --no-banner
 cargo metadata --format-version 1 --locked \
     > .jankurai/security/sbom-cargo-metadata.json
 
-# SBOM generation via syft — soft-gated; produces a CycloneDX SBOM
-# artifact alongside the cargo-metadata evidence. Requires syft in PATH;
-# installed in CI by the jankurai.yml security job.
-# See ledger: .jankurai/ci-soft-gate-ledger.toml#syft-sbom.
-ci_soft_gate \
-    syft-sbom \
-    .jankurai/security/syft.log \
-    -- syft . -o cyclonedx-json=.jankurai/security/sbom-syft.json
+# Hard gate: generate the CycloneDX SBOM alongside cargo metadata.
+syft . -o cyclonedx-json=.jankurai/security/sbom-syft.json 2>&1 \
+    | tee .jankurai/security/syft.log
 
-# Workflow linting via actionlint — soft-gated; validates CI YAML for
-# schema correctness and security best practices. Requires actionlint
-# in PATH; installed in CI by the jankurai.yml security job.
-# See ledger: .jankurai/ci-soft-gate-ledger.toml#actionlint-workflow-lint.
-ci_soft_gate \
-    actionlint-workflow-lint \
-    .jankurai/security/actionlint.log \
-    -- actionlint .github/workflows/*.yml
+# Hard gate: workflow schema and shell validation.
+actionlint .github/workflows/*.yml 2>&1 \
+    | tee .jankurai/security/actionlint.log

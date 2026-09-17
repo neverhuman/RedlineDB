@@ -139,6 +139,11 @@ name = "audit"
 purpose = "write jankurai score artifacts"
 
 [[lane]]
+command = "just perf-full target/release/redlinedb candidate"
+name = "perf-full"
+purpose = "full 1127-case parity corpus, mirrors CI official gate"
+
+[[lane]]
 command = "just security"
 name = "security"
 purpose = "secret, dependency, and workflow proof"

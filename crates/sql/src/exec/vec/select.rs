@@ -8,9 +8,17 @@
 
 use std::sync::Arc;
 
+use smallvec::SmallVec;
+
 use crate::batch::{RowBatch, RowLayout};
 use crate::error::Result;
 use crate::value::SqlValue;
+
+/// WS-B8 Part 1: inline-allocated row buffer. Most SQL rows have <= 8
+/// columns, so we stack-allocate the buffer and only spill to the heap
+/// when a wider row is encountered. Coerces to `&[SqlValue]` via Deref,
+/// so call sites that take a slice are unchanged.
+pub(crate) type RowBuffer = SmallVec<[SqlValue; 8]>;
 
 /// Default vectorized batch size (rows per `RowBatch`). Tip1/Tip2 advise
 /// 1024–4096; we anchor at 1024 for cache friendliness, but operators that
@@ -99,7 +107,7 @@ where
     F: FnMut(&[SqlValue]) -> Result<bool>,
 {
     let mut out = SelectionVector::with_capacity(batch.len);
-    let mut row_buffer: Vec<SqlValue> = Vec::with_capacity(batch.columns.len());
+    let mut row_buffer: RowBuffer = SmallVec::with_capacity(batch.columns.len());
     for index in 0..batch.len {
         row_buffer.clear();
         for column in &batch.columns {

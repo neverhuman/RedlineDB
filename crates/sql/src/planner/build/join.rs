@@ -18,8 +18,16 @@ pub(crate) fn build_join_plan(
     let scans: Vec<(BoundTable, PhysicalPlan, f64)> = tables
         .iter()
         .map(|table| {
-            let scan =
-                build_table_scan_plan(conn, &table.table, &[], &None, &[], bindings, optimizer);
+            let scan = build_table_scan_plan(
+                conn,
+                &table.table,
+                &[],
+                &None,
+                &[],
+                bindings,
+                optimizer,
+                table.index_hint.as_ref(),
+            );
             let rows = estimate_table_rows(stats.tables.get(&table.table.table_id));
             (table.clone(), scan, rows)
         })

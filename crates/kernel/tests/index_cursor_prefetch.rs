@@ -244,9 +244,23 @@ fn buffer_prefetch_on_cold_page_reports_miss_and_warms() {
     );
     assert_eq!(snap.prefetch_hits, 0);
 
-    // After the cold-load path ran, the page should now be resident
-    // — a second prefetch should report a hit. This pins down the
-    // "warm side-effect" half of the prefetch contract.
+    // WS-C4: the cold-load path is now async. Spin briefly for the
+    // background worker to finish the cold load, then a second
+    // prefetch should report a hit. This pins down the "warm side-
+    // effect" half of the prefetch contract.
+    let mut warmed = false;
+    for _ in 0..200 {
+        if buffer2.resident_pages() > 0 {
+            warmed = true;
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(
+        warmed,
+        "prefetch worker should have warmed the cold page within 1s; resident_pages={}",
+        buffer2.resident_pages(),
+    );
     buffer2.prefetch(page_id, &counters);
     let snap = counters.snapshot();
     assert_eq!(

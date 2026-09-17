@@ -68,6 +68,10 @@ pub(crate) struct WalCoordinatorState {
     pub(crate) durable_lsn: Lsn,
     pub(crate) pending: VecDeque<QueuedWalRecord>,
     pub(crate) pending_bytes: usize,
+    /// Durable wake predicate for the writer. Semantic-combiner candidates
+    /// deliberately remain false until a flush, buffer-pressure write, or a
+    /// non-combinable record releases the pending batch.
+    pub(crate) write_requested: bool,
     pub(crate) flush_requested_lsn: Lsn,
     pub(crate) shutdown: bool,
     pub(crate) failure: Option<&'static str>,
@@ -91,6 +95,25 @@ pub struct WalScanReport {
     pub records: Vec<WalRecord>,
     pub valid_end_lsn: Lsn,
     pub torn_tail: bool,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct WalOpenScanSummary {
+    pub(crate) valid_end_lsn: Lsn,
+    pub(crate) last_record_lsn: Lsn,
+}
+
+impl WalScanReport {
+    pub(crate) fn open_summary(&self) -> WalOpenScanSummary {
+        WalOpenScanSummary {
+            valid_end_lsn: self.valid_end_lsn,
+            last_record_lsn: self
+                .records
+                .last()
+                .map(|record| record.lsn)
+                .unwrap_or(Lsn::ZERO),
+        }
+    }
 }
 
 pub(super) fn validate_config(config: &WalConfig) -> Result<()> {

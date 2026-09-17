@@ -1,0 +1,26 @@
+# Boundary declaration for redline-testing.
+#
+# redline-testing is a single-crate Rust CLI conformance harness. It does NOT
+# embed a database driver: every "DB access" is a subprocess invocation of an
+# external `sqlite3` / `psql` shell, driven from the runner+engine pair. The
+# whole `src/` tree is therefore the data-access / adapter boundary for this
+# repo — there is no separate pure-domain layer to keep DB vocabulary out of.
+
+[stack]
+id = "rust-ts-postgres"
+version = "0.4.0"
+
+[rust]
+# No pure-domain layer in a single-binary harness; nothing to forbid DB
+# vocabulary from.
+domain_paths = []
+forbidden_domain_imports = []
+
+[db]
+# The subprocess-driving runner/engine pair is the real database seam; the
+# remaining src/ modules render reports over its raw JSONL output. Declare the
+# crate source as the data-access root so the auditor does not read the
+# domain-vocabulary substring `sqlite` as a misplaced DB client.
+root_paths = ["src", "corpus"]
+migration_paths = []
+constraint_paths = ["corpus"]

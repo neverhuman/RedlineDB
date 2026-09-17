@@ -19,6 +19,46 @@ pub(crate) fn set_current_match_term(term: Option<String>) {
     CURRENT_FTS_MATCH.with(|cell| *cell.borrow_mut() = term);
 }
 
+/// Stack-buffer capacity for lowercased function names. Every known
+/// scalar/aggregate/window function fits comfortably (longest is
+/// `json_group_object` at 17 bytes; we round up to 48 for safety).
+pub(crate) const FN_NAME_STACK: usize = 48;
+
+/// Borrow the function name as a single unquoted identifier, lowercased
+/// into the caller-provided stack buffer. Returns `None` for qualified
+/// names (`schema.fn`), quoted identifiers, or names longer than
+/// `FN_NAME_STACK` — those callers fall through to the
+/// `to_string().to_ascii_lowercase()` slow path, which still pays the
+/// allocation cost but is reached for <1% of function calls in
+/// practice.
+pub(crate) fn simple_function_name_lower<'b>(
+    func: &sqlparser::ast::Function,
+    scratch: &'b mut [u8; FN_NAME_STACK],
+) -> Option<&'b str> {
+    let parts = &func.name.0;
+    if parts.len() != 1 {
+        return None;
+    }
+    let ident = match &parts[0] {
+        sqlparser::ast::ObjectNamePart::Identifier(ident) if ident.quote_style.is_none() => ident,
+        _ => return None,
+    };
+    let raw = ident.value.as_bytes();
+    if raw.len() > scratch.len() {
+        return None;
+    }
+    for (i, &b) in raw.iter().enumerate() {
+        scratch[i] = b.to_ascii_lowercase();
+    }
+    let s = &scratch[..raw.len()];
+    // SAFETY: `raw` was a valid UTF-8 &str (from Ident::value), and
+    // ASCII-folding preserves UTF-8 validity for the subset of bytes
+    // <0x80. For bytes >=0x80 the value is unchanged by
+    // to_ascii_lowercase, so the resulting buffer is byte-identical
+    // valid UTF-8.
+    std::str::from_utf8(s).ok()
+}
+
 pub(super) fn eval_function(
     func: &sqlparser::ast::Function,
     row: &RowContext<'_>,
@@ -27,14 +67,30 @@ pub(super) fn eval_function(
     if let Some(result) = window::try_eval_window(func) {
         return result;
     }
-    let name = func.name.to_string().to_ascii_lowercase();
+
+    let mut scratch = [0u8; FN_NAME_STACK];
+    let borrowed = simple_function_name_lower(func, &mut scratch);
+    let owned;
+    let name: &str = match borrowed {
+        Some(s) => s,
+        None => {
+            owned = func.name.to_string().to_ascii_lowercase();
+            owned.as_str()
+        }
+    };
+
     if name == "raise" {
         return eval_raise_function(func);
     }
     if name == "highlight" {
         return eval_highlight_function(func, row, bindings);
     }
-    let mut values = Vec::new();
+    // Phase 4.3: hint capacity for the args buffer. Called per scalar
+    // function call per row in projection / aggregate filter paths.
+    let mut values = Vec::with_capacity(match &func.args {
+        FunctionArguments::List(list) => list.args.len(),
+        _ => 0,
+    });
     if let FunctionArguments::List(list) = &func.args {
         for arg in &list.args {
             match arg {
@@ -54,7 +110,7 @@ pub(super) fn eval_function(
         ));
     }
 
-    eval_scalar_function_values(&name, values)
+    eval_scalar_function_values(name, values)
 }
 
 pub(crate) fn eval_scalar_function_values(
@@ -70,22 +126,148 @@ pub(crate) fn eval_scalar_function_values(
             }
             Ok(SqlValue::Integer(last_insert_rowid_value()))
         }
+        "changes" => {
+            if !values.is_empty() {
+                return Err(Error::UnsupportedSql("changes requires 0 args".to_owned()));
+            }
+            Ok(SqlValue::Integer(changes_value()))
+        }
+        "total_changes" => {
+            if !values.is_empty() {
+                return Err(Error::UnsupportedSql(
+                    "total_changes requires 0 args".to_owned(),
+                ));
+            }
+            Ok(SqlValue::Integer(total_changes_value()))
+        }
         "length" => match values.first() {
-            // SQLite: length(NULL) is NULL, not 0.
+            // SQLite: length(NULL) is NULL, not 0. For TEXT, length returns
+            // the count of Unicode characters (not bytes); for BLOB, byte
+            // count. See https://sqlite.org/lang_corefunc.html#length.
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
             Some(SqlValue::Blob(value)) => Ok(SqlValue::Integer(value.len() as i64)),
-            Some(other) => Ok(SqlValue::Integer(value_to_string(other).len() as i64)),
+            Some(SqlValue::Text(value)) => {
+                // Phase 2.1 ASCII fast path: for pure-ASCII strings,
+                // character count equals byte length. `str::is_ascii`
+                // is SIMD-vectorized on x86_64 in Rust 1.95.
+                let len = if value.is_ascii() {
+                    value.len() as i64
+                } else {
+                    value.chars().count() as i64
+                };
+                Ok(SqlValue::Integer(len))
+            }
+            Some(other) => {
+                let s = value_to_string(other);
+                let len = if s.is_ascii() {
+                    s.len() as i64
+                } else {
+                    s.chars().count() as i64
+                };
+                Ok(SqlValue::Integer(len))
+            }
         },
+        // SQLite octet_length(X): byte length regardless of type. TEXT in its
+        // UTF-8 byte form, BLOB in its raw byte form, others coerced to TEXT
+        // then byte-counted. NULL propagates.
+        "octet_length" => match values.first() {
+            Some(SqlValue::Null) | None => Ok(SqlValue::Null),
+            Some(SqlValue::Blob(value)) => Ok(SqlValue::Integer(value.len() as i64)),
+            Some(SqlValue::Text(value)) => Ok(SqlValue::Integer(value.as_bytes().len() as i64)),
+            Some(other) => Ok(SqlValue::Integer(
+                value_to_string(other).as_bytes().len() as i64
+            )),
+        },
+        // SQLite concat(X, ...) — concatenates non-NULL operands (NULLs treated
+        // as empty strings). Always returns TEXT.
+        // Phase 2.3: value_as_str returns Cow<'_, str>; SqlValue::Text
+        // borrows from its Arc<str> without allocation.
+        "concat" => {
+            let mut out = String::new();
+            for v in &values {
+                if !matches!(v, SqlValue::Null) {
+                    out.push_str(value_as_str(v).as_ref());
+                }
+            }
+            Ok(SqlValue::Text(Arc::from(out)))
+        }
+        "concat_ws" => {
+            if values.is_empty() || matches!(values[0], SqlValue::Null) {
+                return Ok(SqlValue::Null);
+            }
+            let sep = value_as_str(&values[0]);
+            let mut first = true;
+            let mut out = String::new();
+            for v in &values[1..] {
+                if matches!(v, SqlValue::Null) {
+                    continue;
+                }
+                if !first {
+                    out.push_str(sep.as_ref());
+                }
+                first = false;
+                out.push_str(value_as_str(v).as_ref());
+            }
+            Ok(SqlValue::Text(Arc::from(out)))
+        }
+        // soundex(X) is gated behind SQLITE_SOUNDEX in the reference build
+        // and *not* compiled into sqlite3 v3.53.1 (`PRAGMA compile_options`
+        // confirms it). Surface the same "no such function" error so parity
+        // tests that expect rejection don't see a phantom success.
+        "soundex" => Err(Error::UnsupportedSql(
+            "no such function: soundex".to_owned(),
+        )),
+        // SQLite unhex(X[, ignore]) — decode a hex string into a blob. If any
+        // non-hex / non-ignore character appears, return NULL. Whitespace is
+        // not implicit; only chars in `ignore` are skipped.
+        "unhex" => {
+            if values.is_empty() || matches!(values[0], SqlValue::Null) {
+                return Ok(SqlValue::Null);
+            }
+            if values.len() > 1 && matches!(values[1], SqlValue::Null) {
+                return Ok(SqlValue::Null);
+            }
+            let s = value_to_string(&values[0]);
+            let ignore = values.get(1).map(value_to_string).unwrap_or_default();
+            match sqlite_unhex(&s, &ignore) {
+                Some(bytes) => Ok(SqlValue::Blob(Arc::from(bytes.as_slice()))),
+                None => Ok(SqlValue::Null),
+            }
+        }
+        // SQLite-style two-arg `like(PATTERN, VALUE)` / `like(PATTERN, VALUE, ESC)`
+        // — function form (note argument order vs. the LIKE operator).
+        "like" => {
+            if values.len() < 2 {
+                return Err(Error::UnsupportedSql(
+                    "like requires at least 2 args".to_owned(),
+                ));
+            }
+            // A13: pass by reference — the previous `clone()`s are pure
+            // waste now that `like_result` takes `&SqlValue`.
+            let pattern = &values[0];
+            let value = &values[1];
+            let escape_char = values.get(2).and_then(|v| match v {
+                SqlValue::Text(s) if s.chars().count() == 1 => {
+                    Some(sqlparser::ast::Value::SingleQuotedString(s.to_string()))
+                }
+                _ => None,
+            });
+            let case_insensitive =
+                crate::exec::current_connection().is_none_or(|conn| !conn.case_sensitive_like());
+            like_result(value, pattern, false, escape_char, case_insensitive)
+        }
+        // SQLite `lower`/`upper` are ASCII-only: non-ASCII code points are
+        // preserved, while ASCII letters fold in place. NULL propagates.
         "lower" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
             Some(other) => Ok(SqlValue::Text(Arc::from(
-                value_to_string(other).to_ascii_lowercase(),
+                value_as_str(other).as_ref().to_ascii_lowercase(),
             ))),
         },
         "upper" => match values.first() {
             Some(SqlValue::Null) | None => Ok(SqlValue::Null),
             Some(other) => Ok(SqlValue::Text(Arc::from(
-                value_to_string(other).to_ascii_uppercase(),
+                value_as_str(other).as_ref().to_ascii_uppercase(),
             ))),
         },
         "abs" => match values.first() {
@@ -121,22 +303,52 @@ pub(crate) fn eval_scalar_function_values(
         }
         "min" | "max" => eval_scalar_min_max(&values, name == "min"),
         "round" => round_function(&values),
-        "sin" => unary_real(&values, f64::sin),
-        "sqrt" => unary_real(&values, f64::sqrt),
-        "ceil" | "ceiling" => unary_real(&values, f64::ceil),
-        "floor" => unary_real(&values, f64::floor),
-        "pow" | "power" => {
-            if values.len() != 2 || values.iter().any(|v| matches!(v, SqlValue::Null)) {
-                Ok(SqlValue::Null)
-            } else {
-                Ok(SqlValue::Real(
-                    numeric_value(&values[0])?.powf(numeric_value(&values[1])?),
-                ))
+        // SQLite math1 unary functions. Each returns NULL for non-finite
+        // / out-of-domain inputs (sqlite's math1 semantics) via `math1_unary`.
+        "sin" => math1_unary(&values, libm::sin),
+        "cos" => math1_unary(&values, libm::cos),
+        "tan" => math1_unary(&values, libm::tan),
+        "asin" => math1_unary(&values, libm::asin),
+        "acos" => math1_unary(&values, libm::acos),
+        "atan" => math1_unary(&values, libm::atan),
+        "sinh" => math1_unary(&values, libm::sinh),
+        "cosh" => math1_unary(&values, f64::cosh),
+        "tanh" => math1_unary(&values, libm::tanh),
+        "asinh" => math1_unary(&values, libm::asinh),
+        "acosh" => math1_unary(&values, libm::acosh),
+        "atanh" => math1_unary(&values, libm::atanh),
+        "sqrt" => math1_unary(&values, libm::sqrt),
+        "exp" => math1_unary(&values, f64::exp),
+        "ln" => math1_unary(&values, libm::log),
+        "log10" => math1_unary(&values, libm::log10),
+        "log2" => math1_unary(&values, libm::log2),
+        // SQLite log(): 1-arg = natural log, 2-arg = log_b(x).
+        "log" => math_log(&values),
+        "atan2" => math1_binary(&values, libm::atan2),
+        "degrees" => math_degrees(&values),
+        "radians" => math_radians(&values),
+        "trunc" => math_trunc(&values),
+        "pi" => {
+            if !values.is_empty() {
+                return Err(Error::UnsupportedSql("pi takes 0 args".to_owned()));
             }
+            Ok(math_pi())
         }
+        "mod" => math_mod(&values),
+        "ceil" | "ceiling" => math1_unary(&values, f64::ceil),
+        "floor" => math1_unary(&values, f64::floor),
+        "pow" | "power" => math1_binary(&values, f64::powf),
         "timediff" => timediff_function(&values),
+        // SQLite hex(X) returns an *empty TEXT*, not NULL, when X is NULL —
+        // see https://sqlite.org/lang_corefunc.html#hex and `func.c`. We
+        // also default to empty TEXT when called with no args so error
+        // surfaces stay consistent with sqlite.
+        // A37: cache the empty `Arc<str>` for the None/Null branches.
+        // SQLite returns empty TEXT (not NULL) for `hex(NULL)`; the previous
+        // code allocated a fresh `Arc<str>` per call via `Arc::from("")`.
+        // Cached clone is one atomic refcount bump.
         "hex" => match values.first() {
-            Some(SqlValue::Null) | None => Ok(SqlValue::Null),
+            None | Some(SqlValue::Null) => Ok(SqlValue::Text(Arc::clone(empty_text_arc()))),
             Some(other) => Ok(SqlValue::Text(Arc::from(hex_value(other)))),
         },
         "quote" => Ok(SqlValue::Text(Arc::from(quote_value(
@@ -157,17 +369,31 @@ pub(crate) fn eval_scalar_function_values(
             if matches!(values[0], SqlValue::Null) || matches!(values[1], SqlValue::Null) {
                 return Ok(SqlValue::Null);
             }
-            let haystack = value_to_string(&values[0]);
-            let needle = value_to_string(&values[1]);
+            // Phase 2.3: borrow when possible.
+            let haystack = value_as_str(&values[0]);
+            let needle = value_as_str(&values[1]);
             if needle.is_empty() {
                 return Ok(SqlValue::Integer(1));
             }
-            let pos = haystack
-                .char_indices()
-                .enumerate()
-                .find(|(_, (byte_pos, _))| haystack[*byte_pos..].starts_with(&needle))
-                .map(|(char_pos, _)| char_pos as i64 + 1)
-                .unwrap_or(0);
+            // Phase 2.2: ASCII fast path. When both sides are ASCII,
+            // byte offset == char offset, so memmem (SIMD-accelerated
+            // for >=2-byte needles via memchr) gives us O(n) substring
+            // search without the per-char `starts_with` allocation
+            // cascade.
+            let pos = if haystack.is_ascii() && needle.is_ascii() {
+                match memchr::memmem::find(haystack.as_bytes(), needle.as_bytes()) {
+                    Some(byte_pos) => byte_pos as i64 + 1,
+                    None => 0,
+                }
+            } else {
+                let hay: &str = haystack.as_ref();
+                let need: &str = needle.as_ref();
+                hay.char_indices()
+                    .enumerate()
+                    .find(|(_, (byte_pos, _))| hay[*byte_pos..].starts_with(need))
+                    .map(|(char_pos, _)| char_pos as i64 + 1)
+                    .unwrap_or(0)
+            };
             Ok(SqlValue::Integer(pos))
         }
         // SQLite trim / ltrim / rtrim — strip specified chars (or whitespace).
@@ -175,6 +401,10 @@ pub(crate) fn eval_scalar_function_values(
         "ltrim" => sqlite_ltrim_function(values.first().unwrap_or(&SqlValue::Null), values.get(1)),
         "rtrim" => sqlite_rtrim_function(values.first().unwrap_or(&SqlValue::Null), values.get(1)),
         // SQLite replace(X, Y, Z) — replace all occurrences of Y in X with Z.
+        // Phase 2.3 + 2.5: value_as_str borrows from Arc<str> when the
+        // argument is already a Text value (the common case for
+        // REPLACE on column data); avoids three String allocations
+        // per call.
         "replace" => {
             if values.len() < 3 {
                 return Ok(SqlValue::Null);
@@ -182,11 +412,11 @@ pub(crate) fn eval_scalar_function_values(
             if values.iter().take(3).any(|v| matches!(v, SqlValue::Null)) {
                 return Ok(SqlValue::Null);
             }
-            let s = value_to_string(&values[0]);
-            let from = value_to_string(&values[1]);
-            let to = value_to_string(&values[2]);
+            let s = value_as_str(&values[0]);
+            let from = value_as_str(&values[1]);
+            let to = value_as_str(&values[2]);
             Ok(SqlValue::Text(Arc::from(
-                s.replace(from.as_str(), to.as_str()),
+                s.replace(from.as_ref(), to.as_ref()),
             )))
         }
         // SQLite printf/format — basic sprintf-style formatting.
@@ -289,15 +519,10 @@ pub(crate) fn eval_scalar_function_values(
             if values.len() < 2 {
                 return Err(Error::UnsupportedSql("glob requires 2 args".to_owned()));
             }
-            glob_result(values[1].clone(), values[0].clone(), false)
+            // A14: pass by reference — `glob_result` now takes `&SqlValue`.
+            glob_result(&values[1], &values[0], false)
         }
-        "typeof" => Ok(SqlValue::Text(Arc::from(match values.first() {
-            Some(SqlValue::Null) | None => "null",
-            Some(SqlValue::Integer(_)) => "integer",
-            Some(SqlValue::Real(_)) => "real",
-            Some(SqlValue::Text(_)) => "text",
-            Some(SqlValue::Blob(_)) => "blob",
-        }))),
+        "typeof" => Ok(SqlValue::Text(Arc::clone(typeof_name(values.first())))),
         "json" => crate::json::scalar::json_func(&values),
         "json_array" => crate::json::scalar::json_array(&values),
         "json_array_length" => crate::json::scalar::json_array_length(&values),
@@ -312,6 +537,27 @@ pub(crate) fn eval_scalar_function_values(
         "json_valid" => crate::json::scalar::json_valid(&values),
         "json_quote" => crate::json::scalar::json_quote(&values),
         "json_minify" => crate::json::scalar::json_minify(&values),
+        "jsonb" => crate::json::scalar::json_func(&values),
+        "to_jsonb" => crate::json::scalar::json_quote(&values),
+        "jsonb_pretty" => crate::json::jsonb::jsonb_pretty(&values),
+        "jsonb_strip_nulls" => crate::json::jsonb::jsonb_strip_nulls(&values),
+        "jsonb_set" => crate::json::jsonb::jsonb_set(&values),
+        "jsonb_insert" => crate::json::jsonb::jsonb_insert(&values),
+        "jsonb_path_exists" => crate::json::jsonb::jsonb_path_exists(&values),
+        "jsonb_path_match" => crate::json::jsonb::jsonb_path_match(&values),
+        "jsonb_path_query_first" => crate::json::jsonb::jsonb_path_query_first(&values),
+        "jsonb_contains" => crate::json::jsonb::jsonb_contains(&values),
+        "jsonb_contained" => crate::json::jsonb::jsonb_contained(&values),
+        "jsonb_exists" => crate::json::jsonb::jsonb_exists(&values),
+        "jsonb_exists_any" => crate::json::jsonb::jsonb_exists_any(&values),
+        "jsonb_exists_all" => crate::json::jsonb::jsonb_exists_all(&values),
+        "jsonb_concat" => crate::json::jsonb::jsonb_concat(&values),
+        "jsonb_delete" => crate::json::jsonb::jsonb_delete(&values),
+        "jsonb_delete_path" => crate::json::jsonb::jsonb_delete_path(&values),
+        "jsonb_typeof" => crate::json::jsonb::jsonb_typeof(&values),
+        "jsonb_array_length" => crate::json::jsonb::jsonb_array_length(&values),
+        "jsonb_build_object" => crate::json::jsonb::jsonb_build_object(&values),
+        "jsonb_build_array" => crate::json::jsonb::jsonb_build_array(&values),
         "vector" | "vector_blob" | "vector_from_json" => {
             let arg = values.first().unwrap_or(&SqlValue::Null);
             vector_construct_from_value(arg)
@@ -335,6 +581,21 @@ pub(crate) fn eval_scalar_function_values(
             }
             crate::exec::expr::regexp_result(values[1].clone(), values[0].clone(), false)
         }
+        // Track H — beyond-SQLite (Postgres) parity functions.
+        "date_trunc" => crate::exec::expr::scalar::value::pg_date_trunc(&values),
+        "gen_random_uuid" => crate::exec::expr::scalar::value::pg_gen_random_uuid(&values),
+        "pg_array_contains" => crate::exec::expr::scalar::value::pg_array_contains(&values),
+        "pg_array_contained" => crate::exec::expr::scalar::value::pg_array_contained(&values),
+        "pg_array_overlap" => crate::exec::expr::scalar::value::pg_array_overlap(&values),
+        // Track J — Postgres sequence helpers operate on session-level
+        // sequence state recorded by CREATE SEQUENCE.
+        "nextval" => pg_sequence_nextval(&values),
+        "currval" => pg_sequence_currval(&values),
+        "setval" => pg_sequence_setval(&values),
+        // A37: cache the "public" Arc<str>. SQLite/Postgres-compat returns
+        // this constant string for every call; one OnceLock initialization
+        // then Arc::clone for each invocation.
+        "current_schema" => Ok(SqlValue::Text(Arc::clone(current_schema_arc()))),
         _ => {
             let db = crate::udf::current_db();
             match crate::udf::call_registered_scalar(db, &name, &values) {
@@ -348,10 +609,174 @@ pub(crate) fn eval_scalar_function_values(
     }
 }
 
-fn unary_real(values: &[SqlValue], f: fn(f64) -> f64) -> Result<SqlValue> {
-    match values.first() {
-        None | Some(SqlValue::Null) => Ok(SqlValue::Null),
-        Some(value) => Ok(SqlValue::Real(f(numeric_value(value)?))),
+/// Track J — Postgres `nextval(seq)`. Reads the named sequence from
+/// A36: process-wide cached `Arc<str>` names for `typeof()`. The previous
+/// implementation called `Arc::from(&'static str)` on every `typeof()`
+/// invocation, allocating a fresh `Arc<str>` and heap buffer for one of
+/// five constant strings ("null", "integer", "real", "text", "blob").
+/// The LITERALS_AND_TYPEOF case (00002, 2.407× SQLite) calls `typeof()`
+/// many times per row — the per-call alloc dominates.
+///
+/// Cache one `Arc<str>` per kind in process-wide OnceLocks. Subsequent
+/// calls return `Arc::clone`, which is one atomic refcount bump —
+/// cheaper than allocating a fresh Arc.
+fn typeof_name(value: Option<&SqlValue>) -> &'static Arc<str> {
+    use std::sync::OnceLock;
+    static NULL_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static INTEGER_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static REAL_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static TEXT_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    static BLOB_NAME: OnceLock<Arc<str>> = OnceLock::new();
+    match value {
+        Some(SqlValue::Null) | None => NULL_NAME.get_or_init(|| Arc::from("null")),
+        Some(SqlValue::Integer(_)) => INTEGER_NAME.get_or_init(|| Arc::from("integer")),
+        Some(SqlValue::Real(_)) => REAL_NAME.get_or_init(|| Arc::from("real")),
+        Some(SqlValue::Text(_)) => TEXT_NAME.get_or_init(|| Arc::from("text")),
+        Some(SqlValue::Blob(_)) => BLOB_NAME.get_or_init(|| Arc::from("blob")),
+    }
+}
+
+/// A37: cached empty `Arc<str>`. Used by `hex(NULL)` / `hex()` — SQLite
+/// returns empty TEXT (not NULL) for the no-arg / null-arg cases. The
+/// previous code allocated `Arc::from("")` per call; cached clone is one
+/// atomic refcount bump. Could also be reused by other empty-string
+/// branches in future sweeps.
+fn empty_text_arc() -> &'static Arc<str> {
+    use std::sync::OnceLock;
+    static EMPTY: OnceLock<Arc<str>> = OnceLock::new();
+    EMPTY.get_or_init(|| Arc::from(""))
+}
+
+/// A37: cached `Arc<str>` for `current_schema()`. SQLite/Postgres-compat
+/// always returns "public" for this function. One-time alloc, then
+/// `Arc::clone` per call.
+fn current_schema_arc() -> &'static Arc<str> {
+    use std::sync::OnceLock;
+    static SCHEMA: OnceLock<Arc<str>> = OnceLock::new();
+    SCHEMA.get_or_init(|| Arc::from("public"))
+}
+
+/// session state, advances it by `increment`, and returns the new value.
+/// The first call returns the configured `start`; subsequent calls add
+/// `increment`. Unknown sequences raise an UnsupportedSql error
+/// mirroring `relation "<name>" does not exist`.
+fn pg_sequence_nextval(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() != 1 {
+        return Err(Error::UnsupportedSql(
+            "nextval expects one argument".to_owned(),
+        ));
+    }
+    let name = pg_sequence_name(&values[0])?;
+    let conn = crate::exec::current_connection().ok_or_else(|| {
+        Error::UnsupportedSql("nextval requires an active connection context".to_owned())
+    })?;
+    let result = conn.with_session(|session| {
+        let entry = session
+            .pg_sequences
+            .get_mut(&name)
+            .ok_or_else(|| Error::UnsupportedSql(format!("relation \"{name}\" does not exist")))?;
+        let next = match entry.last_value {
+            Some(v) => v + entry.increment,
+            None => entry.start,
+        };
+        entry.last_value = Some(next);
+        Ok(next)
+    })?;
+    Ok(SqlValue::Integer(result))
+}
+
+/// Track J — Postgres `currval(seq)`. Returns the most recent value
+/// produced by `nextval`. Errors if `nextval` has never been called on
+/// the sequence in this session, mirroring Postgres' standard surface.
+fn pg_sequence_currval(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() != 1 {
+        return Err(Error::UnsupportedSql(
+            "currval expects one argument".to_owned(),
+        ));
+    }
+    let name = pg_sequence_name(&values[0])?;
+    let conn = crate::exec::current_connection().ok_or_else(|| {
+        Error::UnsupportedSql("currval requires an active connection context".to_owned())
+    })?;
+    let result = conn.with_session(|session| {
+        let entry = session
+            .pg_sequences
+            .get(&name)
+            .ok_or_else(|| Error::UnsupportedSql(format!("relation \"{name}\" does not exist")))?;
+        match entry.last_value {
+            Some(v) => Ok(v),
+            None => Err(Error::UnsupportedSql(format!(
+                "currval of sequence \"{name}\" is not yet defined in this session"
+            ))),
+        }
+    })?;
+    Ok(SqlValue::Integer(result))
+}
+
+/// Track J — Postgres `setval(seq, value [, is_called])`. Sets the
+/// sequence's last_value to the given integer. If `is_called` is false,
+/// the next `nextval` returns `value` rather than `value + increment`
+/// (Postgres semantics). When omitted, `is_called` defaults to true.
+fn pg_sequence_setval(values: &[SqlValue]) -> Result<SqlValue> {
+    if values.len() < 2 || values.len() > 3 {
+        return Err(Error::UnsupportedSql(
+            "setval expects 2 or 3 arguments".to_owned(),
+        ));
+    }
+    let name = pg_sequence_name(&values[0])?;
+    let value = match &values[1] {
+        SqlValue::Integer(v) => *v,
+        SqlValue::Real(v) => *v as i64,
+        SqlValue::Text(t) => t
+            .parse::<i64>()
+            .map_err(|_| Error::UnsupportedSql(format!("setval value must be integer: {t}")))?,
+        _ => {
+            return Err(Error::UnsupportedSql(
+                "setval second argument must be integer".to_owned(),
+            ));
+        }
+    };
+    let is_called = if values.len() == 3 {
+        match &values[2] {
+            SqlValue::Integer(v) => *v != 0,
+            _ => true,
+        }
+    } else {
+        true
+    };
+    let conn = crate::exec::current_connection().ok_or_else(|| {
+        Error::UnsupportedSql("setval requires an active connection context".to_owned())
+    })?;
+    conn.with_session(|session| {
+        let entry = session
+            .pg_sequences
+            .get_mut(&name)
+            .ok_or_else(|| Error::UnsupportedSql(format!("relation \"{name}\" does not exist")))?;
+        if is_called {
+            entry.last_value = Some(value);
+        } else {
+            entry.last_value = Some(value - entry.increment);
+        }
+        Ok(())
+    })?;
+    Ok(SqlValue::Integer(value))
+}
+
+fn pg_sequence_name(value: &SqlValue) -> Result<String> {
+    match value {
+        SqlValue::Text(s) => {
+            // Track J — strip schema qualifier (`sch.s` → `s`). SQLite has
+            // no schema layer; sequences live in a flat session map.
+            let folded = s.to_ascii_lowercase();
+            let stripped = folded
+                .rsplit_once('.')
+                .map(|(_schema, name)| name.to_owned())
+                .unwrap_or(folded);
+            Ok(stripped)
+        }
+        _ => Err(Error::UnsupportedSql(
+            "sequence name must be a string".to_owned(),
+        )),
     }
 }
 
@@ -542,4 +967,37 @@ fn last_insert_rowid_value() -> i64 {
     current_connection()
         .and_then(|conn| conn.last_insert_rowid())
         .unwrap_or(0)
+}
+
+fn changes_value() -> i64 {
+    if let Some(ptr) = crate::exec::current_session_ptr() {
+        // SAFETY: installed by `with_write_tx` for the duration of the
+        // synchronous statement/trigger execution scope.
+        let session: &crate::session::SessionState = unsafe { &*ptr };
+        return usize_to_sql_i64(session.changes);
+    }
+    match current_connection() {
+        Some(conn) => usize_to_sql_i64(conn.changes()),
+        None => 0,
+    }
+}
+
+fn total_changes_value() -> i64 {
+    if let Some(ptr) = crate::exec::current_session_ptr() {
+        // SAFETY: installed by `with_write_tx` for the duration of the
+        // synchronous statement/trigger execution scope.
+        let session: &crate::session::SessionState = unsafe { &*ptr };
+        return usize_to_sql_i64(session.total_changes);
+    }
+    match current_connection() {
+        Some(conn) => usize_to_sql_i64(conn.total_changes()),
+        None => 0,
+    }
+}
+
+fn usize_to_sql_i64(value: usize) -> i64 {
+    match i64::try_from(value) {
+        Ok(value) => value,
+        Err(_) => i64::MAX,
+    }
 }

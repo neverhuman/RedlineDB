@@ -11,7 +11,9 @@ use std::sync::atomic::Ordering as AtomicOrdering;
 use redlinedb_kernel::catalog::{IndexDef, SortDir, TableDef};
 use redlinedb_kernel::engine::{Engine, Txn};
 use redlinedb_kernel::format::RowId;
-use redlinedb_kernel::index::{CursorYield, IndexRowRef, KeyRange, RawIndexCursor, SnapshotView};
+use redlinedb_kernel::index::{
+    CursorYield, IndexRowRef, IndexScanScratch, KeyRange, RawIndexCursor, SnapshotView,
+};
 
 use crate::error::Result;
 use crate::value::SqlValue;
@@ -58,10 +60,19 @@ pub(super) fn execute_index_range_scan_streaming(
         None => Vec::new(),
     };
     let mut batch: Vec<IndexRowRef> = Vec::with_capacity(MAX_BATCH);
+    // Phase 5 WS-A4: hand the cursor a reusable per-statement entry
+    // buffer / bump arena so the open-time `load_current_leaf` reuses
+    // the prior scan's capacity instead of malloc'ing a fresh `Vec`.
+    let mut scratch = IndexScanScratch::new();
     {
         let view = SnapshotView::visible(tx_status, &snapshot, owner);
-        let mut cursor =
-            RawIndexCursor::open_with_counters(&handle, range, view, Some(&*counters))?;
+        let mut cursor = RawIndexCursor::open_with_scratch_and_counters(
+            &handle,
+            range,
+            view,
+            Some(&*counters),
+            &mut scratch,
+        )?;
         loop {
             if let Some(n) = limit
                 && out.len() >= n
@@ -83,7 +94,7 @@ pub(super) fn execute_index_range_scan_streaming(
                 }
             }
         }
-        cursor.close();
+        cursor.close_into_scratch(&mut scratch);
     }
     Ok(out)
 }
@@ -117,6 +128,64 @@ pub(super) fn execute_index_range_scan_ordered(
         let view = SnapshotView::visible(tx_status, &snapshot, owner);
         let mut cursor =
             RawIndexCursor::open_with_counters(&handle, range, view, Some(&*counters))?;
+        loop {
+            let remaining = limit.saturating_sub(out.len());
+            if remaining == 0 {
+                break;
+            }
+            batch.clear();
+            let batch_cap = remaining.clamp(1, MAX_BATCH);
+            match cursor.next_rowid_batch(&mut batch, batch_cap)? {
+                CursorYield::End => break,
+                CursorYield::Batch(_) => {
+                    for entry in &batch {
+                        if out.len() >= limit {
+                            break;
+                        }
+                        out.push(entry.row_id);
+                    }
+                }
+            }
+        }
+        cursor.close();
+    }
+    counters
+        .ordered_limit_rows_returned
+        .fetch_add(out.len() as u64, AtomicOrdering::Relaxed);
+    Ok(out)
+}
+
+/// Phase 5 WS-A2c: reverse mirror of [`execute_index_range_scan_ordered`].
+/// Walks the index leaf chain right-to-left so `ORDER BY k DESC LIMIT n`
+/// can satisfy ordering directly from the cursor with the same early-stop
+/// semantics the forward path uses for ASC. Visibility / range checks are
+/// identical to the forward walk; only the iteration direction changes.
+pub(super) fn execute_index_range_scan_ordered_desc(
+    engine: &Engine,
+    tx: &mut Txn,
+    _table: &Arc<TableDef>,
+    index: &IndexDef,
+    start: &[u8],
+    end: &[u8],
+    limit: usize,
+) -> Result<Vec<RowId>> {
+    let Some(handle) = open_handle(engine, index) else {
+        return Ok(Vec::new());
+    };
+    let counters = engine.phase11_counters();
+    counters
+        .ordered_limit_path_hits
+        .fetch_add(1, AtomicOrdering::Relaxed);
+    let tx_status = engine.tx_status();
+    let owner = Some(tx.id());
+    let snapshot = tx.snapshot().clone();
+    let range = KeyRange::half_open(start, end);
+    let mut out: Vec<RowId> = Vec::with_capacity(limit.min(MAX_BATCH));
+    let mut batch: Vec<IndexRowRef> = Vec::with_capacity(MAX_BATCH);
+    {
+        let view = SnapshotView::visible(tx_status, &snapshot, owner);
+        let mut cursor =
+            RawIndexCursor::open_reverse_with_counters(&handle, range, view, Some(&*counters))?;
         loop {
             let remaining = limit.saturating_sub(out.len());
             if remaining == 0 {
@@ -228,7 +297,18 @@ pub(super) fn execute_index_covering_range(
     let snapshot = tx.snapshot().clone();
     let view = SnapshotView::visible(engine.tx_status(), &snapshot, Some(tx.id()));
     let range = KeyRange::half_open(start, end);
-    let mut cursor = RawIndexCursor::open_with_counters(&handle, range, view, Some(&*counters))?;
+    // Phase 5 WS-A4: covering-range walks every leaf in the window via
+    // `next_batch_with_keys`, which re-fills `self.entries` on every
+    // leaf hop. Hand it a reusable scratch so the per-leaf `Vec` is
+    // capacity-stable instead of malloc'd per visit.
+    let mut scratch = IndexScanScratch::new();
+    let mut cursor = RawIndexCursor::open_with_scratch_and_counters(
+        &handle,
+        range,
+        view,
+        Some(&*counters),
+        &mut scratch,
+    )?;
     let mut batch: Vec<(Vec<u8>, IndexRowRef)> = Vec::with_capacity(MAX_BATCH);
     let mut out: Vec<Vec<SqlValue>> = Vec::new();
     let dirs: Vec<SortDir> = index.keys.iter().map(|k| k.sort_dir).collect();
@@ -257,7 +337,7 @@ pub(super) fn execute_index_covering_range(
             }
         }
     }
-    cursor.close();
+    cursor.close_into_scratch(&mut scratch);
     Ok(out)
 }
 

@@ -19,11 +19,21 @@ pub(crate) mod helpers;
 use helpers::*;
 
 mod access;
+pub mod access_path;
 mod build;
 mod optimize;
 mod policy;
+mod trace;
 
 use access::*;
+#[allow(unused_imports)]
+pub(crate) use access_path::AccessPath as AccessPathIr;
+#[allow(unused_imports)]
+pub(crate) use access_path::{
+    OrderSatisfies as AccessPathOrderSatisfies, choose_access_path as choose_access_path_ir,
+    lower_to_legacy as lower_access_path_to_legacy, planner_use_access_path,
+    set_planner_use_access_path,
+};
 use build::*;
 use optimize::*;
 use policy::*;
@@ -242,6 +252,7 @@ pub(crate) fn explain_rows(
     format: ExplainFormat,
 ) -> Vec<Vec<SqlValue>> {
     let plan = build_plan(conn, kind, bindings, metrics);
+    trace::maybe_emit_planner_trace(&plan);
     match format {
         ExplainFormat::QueryPlan => flatten_query_plan(&plan)
             .into_iter()
@@ -308,7 +319,9 @@ pub(crate) fn build_plan(
             simple_node(PhysicalKind::Constant, "ALTER TABLE".to_owned())
         }
         PreparedKind::Pragma(_) => simple_node(PhysicalKind::Constant, "PRAGMA".to_owned()),
-        PreparedKind::Attach(_) | PreparedKind::CrossDbSql(_) => {
+        PreparedKind::Attach(_)
+        | PreparedKind::CrossDbSql(_)
+        | PreparedKind::CrossDbInsertSelect(_) => {
             simple_node(PhysicalKind::Constant, "ATTACH/DETACH".to_owned())
         }
         PreparedKind::Reindex => simple_node(PhysicalKind::Constant, "REINDEX".to_owned()),
@@ -326,6 +339,29 @@ pub(crate) fn build_plan(
         PreparedKind::DropTrigger(_) => {
             simple_node(PhysicalKind::Constant, "DROP TRIGGER".to_owned())
         }
+        PreparedKind::CreateSchema { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE SCHEMA".to_owned())
+        }
+        PreparedKind::DropSchema { .. } => {
+            simple_node(PhysicalKind::Constant, "DROP SCHEMA".to_owned())
+        }
+        PreparedKind::CreateSequence { .. } => {
+            simple_node(PhysicalKind::Constant, "CREATE SEQUENCE".to_owned())
+        }
+        PreparedKind::DropSequence { .. } => {
+            simple_node(PhysicalKind::Constant, "DROP SEQUENCE".to_owned())
+        }
+        PreparedKind::SetTransactionIsolation { .. } => {
+            simple_node(PhysicalKind::Constant, "SET TRANSACTION".to_owned())
+        }
+        PreparedKind::ShowVariable { .. } => simple_node(PhysicalKind::Constant, "SHOW".to_owned()),
+        PreparedKind::AlterIndex { .. } => {
+            simple_node(PhysicalKind::Constant, "ALTER INDEX".to_owned())
+        }
+        PreparedKind::Merge(plan) => simple_node(
+            PhysicalKind::Constant,
+            format!("MERGE INTO {}", plan.target.name),
+        ),
     };
 
     if let Some(metrics) = metrics {

@@ -190,18 +190,13 @@ fn redline_ilike_handles_unicode_case_folding() {
 }
 
 #[test]
-fn ilike_any_is_explicitly_rejected() {
-    // `ILIKE ANY(<array>)` is a Postgres-specific surface. RedlineDB
-    // rejects it; the upstream sqlparser also can't parse the trailing
-    // ARRAY literal in our SQLite dialect, so we accept either rejection
-    // pathway and only assert the prepare fails.
+fn ilike_any_is_accepted() {
+    // Track G/H landed ILIKE + the ARRAY[..] pre-parse rewrite.
+    // `ILIKE ANY(ARRAY[..])` now parses + prepares successfully.
     let pair = Pair::new();
-    let err = pair
-        .redline
+    pair.redline
         .prepare("SELECT 'x' ILIKE ANY (ARRAY['a','x'])")
-        .expect_err("ILIKE ANY should be rejected");
-    let _ = err; // error message origin (parser vs executor) varies; the
-    // contract is `prepare()` must not return Ok.
+        .expect("ILIKE ANY accepted");
 }
 
 // ---------------------------------------------------------------------------

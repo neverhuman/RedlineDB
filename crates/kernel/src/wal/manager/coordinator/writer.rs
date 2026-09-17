@@ -33,7 +33,7 @@ pub(super) fn wal_writer_loop(
                 Err(_) => return,
             };
 
-            while state.pending.is_empty()
+            while !state.write_requested
                 && state.flush_requested_lsn <= state.durable_lsn
                 && !state.shutdown
             {
@@ -50,6 +50,7 @@ pub(super) fn wal_writer_loop(
             let batch_limit = ActiveWalSchedulePolicy::write_batch_bytes(
                 WalScheduleContext::with_pending(&config, state.pending_bytes, state.pending.len()),
             );
+            state.write_requested = false;
             let mut batch_bytes = 0_usize;
             while let Some(record) = state.pending.pop_front() {
                 batch_bytes += record.encoded.len();
@@ -58,6 +59,9 @@ pub(super) fn wal_writer_loop(
                 if batch_bytes >= batch_limit {
                     break;
                 }
+            }
+            if !state.pending.is_empty() {
+                state.write_requested = true;
             }
 
             if state.flush_requested_lsn > state.durable_lsn {

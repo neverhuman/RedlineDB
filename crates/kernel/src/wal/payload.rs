@@ -16,6 +16,17 @@ const TAG_LOGICAL_TXN: u8 = 10;
 const TAG_CATALOG_SNAPSHOT: u8 = 11;
 const TAG_INDEX_INSERT: u8 = 12;
 const TAG_INDEX_DELETE: u8 = 13;
+// WS-A6 multi-writer hot-row coordinator output. Older binaries that
+// don't know this tag fall through to the catch-all and return
+// `Error::CorruptWal("unknown wal payload tag")`, the same error any
+// unknown tag has always produced.
+const TAG_COMBINED_SEMANTIC_DELTA: u8 = 14;
+
+const COMBINED_VAL_NULL: u8 = 0;
+const COMBINED_VAL_INTEGER: u8 = 1;
+const COMBINED_VAL_REAL: u8 = 2;
+const COMBINED_VAL_TEXT: u8 = 3;
+const COMBINED_VAL_BLOB: u8 = 4;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LogicalEvent {
@@ -42,7 +53,7 @@ pub enum LogicalEvent {
     },
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum WalPayload {
     HeapInsert {
         tx_id: TxId,
@@ -113,6 +124,24 @@ pub enum WalPayload {
         schema_epoch: u64,
         snapshot: Vec<u8>,
     },
+    /// WS-A6 multi-writer hot-row coordinator output.
+    CombinedSemanticDelta {
+        tx_id: TxId,
+        rel_id: RelId,
+        row_id: RowId,
+        deltas: Vec<(u16, i64)>,
+        replacements: Vec<(u16, CombinedReplacementValue)>,
+        batched_count: u32,
+    },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum CombinedReplacementValue {
+    Null,
+    Integer(i64),
+    Real(f64),
+    Text(Vec<u8>),
+    Blob(Vec<u8>),
 }
 
 impl WalPayload {
@@ -131,6 +160,7 @@ impl WalPayload {
             | Self::TimelineFork { .. }
             | Self::LogicalTxn { .. } => TxId::ZERO,
             Self::CatalogSnapshot { tx_id, .. } => *tx_id,
+            Self::CombinedSemanticDelta { tx_id, .. } => *tx_id,
         }
     }
 
@@ -278,6 +308,21 @@ impl WalPayload {
                 write_bytes(&mut out, 21, snapshot)?;
                 Ok(out)
             }
+            Self::CombinedSemanticDelta {
+                tx_id,
+                rel_id,
+                row_id,
+                deltas,
+                replacements,
+                batched_count,
+            } => encode_combined_semantic_delta(
+                *tx_id,
+                *rel_id,
+                *row_id,
+                deltas,
+                replacements,
+                *batched_count,
+            ),
         }
     }
 
@@ -438,6 +483,7 @@ impl WalPayload {
                     snapshot: bytes[21..expected].to_vec(),
                 })
             }
+            TAG_COMBINED_SEMANTIC_DELTA => decode_combined_semantic_delta(bytes),
             _ => Err(Error::CorruptWal("unknown wal payload tag")),
         }
     }
@@ -711,4 +757,173 @@ fn decode_logical_event(bytes: &[u8]) -> Result<(LogicalEvent, usize)> {
     };
 
     Ok((event, cursor))
+}
+
+fn encode_combined_semantic_delta(
+    tx_id: TxId,
+    rel_id: RelId,
+    row_id: RowId,
+    deltas: &[(u16, i64)],
+    replacements: &[(u16, CombinedReplacementValue)],
+    batched_count: u32,
+) -> Result<Vec<u8>> {
+    if deltas.len() > u32::MAX as usize || replacements.len() > u32::MAX as usize {
+        return Err(Error::CorruptWal("combined semantic delta too large"));
+    }
+    let mut out = Vec::with_capacity(33 + deltas.len() * 10 + 4);
+    out.push(TAG_COMBINED_SEMANTIC_DELTA);
+    out.extend_from_slice(&tx_id.0.to_le_bytes());
+    out.extend_from_slice(&rel_id.0.to_le_bytes());
+    out.extend_from_slice(&row_id.0.to_le_bytes());
+    out.extend_from_slice(&batched_count.to_le_bytes());
+    out.extend_from_slice(&(deltas.len() as u32).to_le_bytes());
+    for (col, delta) in deltas {
+        out.extend_from_slice(&col.to_le_bytes());
+        out.extend_from_slice(&delta.to_le_bytes());
+    }
+    out.extend_from_slice(&(replacements.len() as u32).to_le_bytes());
+    for (col, value) in replacements {
+        out.extend_from_slice(&col.to_le_bytes());
+        encode_combined_value(value, &mut out);
+    }
+    Ok(out)
+}
+
+fn decode_combined_semantic_delta(bytes: &[u8]) -> Result<WalPayload> {
+    if bytes.len() < 33 {
+        return Err(Error::BufferTooSmall {
+            needed: 33,
+            actual: bytes.len(),
+        });
+    }
+    let tx_id = TxId(read_u64(bytes, 1)?);
+    let rel_id = RelId(read_u64(bytes, 9)?);
+    let row_id = RowId(read_u64(bytes, 17)?);
+    let batched_count = read_u32(bytes, 25)?;
+    let delta_count = read_u32(bytes, 29)? as usize;
+    let mut cursor = 33;
+    let mut deltas = Vec::with_capacity(delta_count);
+    for _ in 0..delta_count {
+        if bytes.len() < cursor + 10 {
+            return Err(Error::BufferTooSmall {
+                needed: cursor + 10,
+                actual: bytes.len(),
+            });
+        }
+        let col = read_u16(bytes, cursor)?;
+        cursor += 2;
+        let delta = i64::from_le_bytes(bytes[cursor..cursor + 8].try_into().unwrap());
+        cursor += 8;
+        deltas.push((col, delta));
+    }
+    if bytes.len() < cursor + 4 {
+        return Err(Error::BufferTooSmall {
+            needed: cursor + 4,
+            actual: bytes.len(),
+        });
+    }
+    let repl_count = read_u32(bytes, cursor)? as usize;
+    cursor += 4;
+    let mut replacements = Vec::with_capacity(repl_count);
+    for _ in 0..repl_count {
+        if bytes.len() < cursor + 3 {
+            return Err(Error::BufferTooSmall {
+                needed: cursor + 3,
+                actual: bytes.len(),
+            });
+        }
+        let col = read_u16(bytes, cursor)?;
+        cursor += 2;
+        let (value, used) = decode_combined_value(&bytes[cursor..])?;
+        cursor += used;
+        replacements.push((col, value));
+    }
+    require_exact_len(bytes, cursor)?;
+    Ok(WalPayload::CombinedSemanticDelta {
+        tx_id,
+        rel_id,
+        row_id,
+        deltas,
+        replacements,
+        batched_count,
+    })
+}
+
+fn encode_combined_value(value: &CombinedReplacementValue, out: &mut Vec<u8>) {
+    match value {
+        CombinedReplacementValue::Null => out.push(COMBINED_VAL_NULL),
+        CombinedReplacementValue::Integer(n) => {
+            out.push(COMBINED_VAL_INTEGER);
+            out.extend_from_slice(&n.to_le_bytes());
+        }
+        CombinedReplacementValue::Real(r) => {
+            out.push(COMBINED_VAL_REAL);
+            out.extend_from_slice(&r.to_le_bytes());
+        }
+        CombinedReplacementValue::Text(bytes) => {
+            out.push(COMBINED_VAL_TEXT);
+            out.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+            out.extend_from_slice(bytes);
+        }
+        CombinedReplacementValue::Blob(bytes) => {
+            out.push(COMBINED_VAL_BLOB);
+            out.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+            out.extend_from_slice(bytes);
+        }
+    }
+}
+
+fn decode_combined_value(bytes: &[u8]) -> Result<(CombinedReplacementValue, usize)> {
+    let tag = *bytes
+        .first()
+        .ok_or(Error::CorruptWal("combined value: missing tag"))?;
+    match tag {
+        COMBINED_VAL_NULL => Ok((CombinedReplacementValue::Null, 1)),
+        COMBINED_VAL_INTEGER => {
+            if bytes.len() < 9 {
+                return Err(Error::BufferTooSmall {
+                    needed: 9,
+                    actual: bytes.len(),
+                });
+            }
+            let n = i64::from_le_bytes(bytes[1..9].try_into().unwrap());
+            Ok((CombinedReplacementValue::Integer(n), 9))
+        }
+        COMBINED_VAL_REAL => {
+            if bytes.len() < 9 {
+                return Err(Error::BufferTooSmall {
+                    needed: 9,
+                    actual: bytes.len(),
+                });
+            }
+            let r = f64::from_le_bytes(bytes[1..9].try_into().unwrap());
+            Ok((CombinedReplacementValue::Real(r), 9))
+        }
+        COMBINED_VAL_TEXT | COMBINED_VAL_BLOB => {
+            if bytes.len() < 5 {
+                return Err(Error::BufferTooSmall {
+                    needed: 5,
+                    actual: bytes.len(),
+                });
+            }
+            let len = u32::from_le_bytes(bytes[1..5].try_into().unwrap()) as usize;
+            let end = 5usize
+                .checked_add(len)
+                .ok_or(Error::CorruptWal("combined value length overflow"))?;
+            if bytes.len() < end {
+                return Err(Error::BufferTooSmall {
+                    needed: end,
+                    actual: bytes.len(),
+                });
+            }
+            let payload = bytes[5..end].to_vec();
+            let value = if tag == COMBINED_VAL_TEXT {
+                CombinedReplacementValue::Text(payload)
+            } else {
+                CombinedReplacementValue::Blob(payload)
+            };
+            Ok((value, end))
+        }
+        _ => Err(Error::CorruptWal("unknown combined value tag")),
+    }
 }

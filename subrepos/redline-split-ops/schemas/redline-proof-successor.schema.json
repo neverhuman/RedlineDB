@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/redline-proof-successor.schema.json",
+  "title": "Redline proof successor invalidation receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "family",
+    "generated_at",
+    "status",
+    "transition_state",
+    "compatibility_mirror_updated",
+    "cutover_eligible",
+    "previous_proof_lock_id",
+    "previous_engine_tag",
+    "previous_engine_commit",
+    "predecessor_lock_sha256",
+    "successor_engine_tag",
+    "successor_engine_commit",
+    "successor_manifest_sha256",
+    "authoritative_lock",
+    "compatibility_mirror",
+    "lock_sha256"
+  ],
+  "properties": {
+    "schema_version": {"const": "redline.proof-successor/v1"},
+    "family": {"const": "redline-split"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "status": {"const": "pass"},
+    "transition_state": {"enum": ["prepared", "reconciled"]},
+    "compatibility_mirror_updated": {"type": "boolean"},
+    "cutover_eligible": {"const": false},
+    "previous_proof_lock_id": {"type": "string"},
+    "previous_engine_tag": {"type": "string"},
+    "previous_engine_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "predecessor_lock_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "successor_engine_tag": {"type": "string"},
+    "successor_engine_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "successor_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "authoritative_lock": {"type": "string"},
+    "compatibility_mirror": {"type": "string"},
+    "lock_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"transition_state": {"const": "prepared"}}},
+      "then": {"properties": {"compatibility_mirror_updated": {"const": false}}}
+    },
+    {
+      "if": {"properties": {"transition_state": {"const": "reconciled"}}},
+      "then": {"properties": {"compatibility_mirror_updated": {"const": true}}}
+    }
+  ]
+}

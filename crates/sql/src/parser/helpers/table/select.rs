@@ -9,6 +9,7 @@ use sqlparser::ast::{
 
 use crate::error::{Error, Result};
 use crate::statement::{BoundTable, JoinKind, JoinSource, JoinStep, ParamLayout, SelectSource};
+use crate::value::SqlValue;
 
 use super::bind::{bind_table_name, object_name_part_to_string};
 
@@ -43,6 +44,14 @@ pub(crate) fn bind_select_from(
             crate::exec::view::try_resolve_view_source(schema, name, alias_arc.as_ref(), params)?
         {
             return Ok((source, None));
+        }
+        if is_sqlite_sequence_name(name)
+            && schema.tables.iter().any(|table| table.is_autoincrement())
+        {
+            return Ok((SelectSource::SqliteSequence { alias: alias_arc }, None));
+        }
+        if is_sqlite_stat1_name(name) && !conn.stats_snapshot().tables.is_empty() {
+            return Ok((sqlite_stat1_source(conn, schema, alias_arc), None));
         }
     }
 
@@ -118,6 +127,11 @@ fn bind_select_from_after_tvf(
 
     for table in from {
         match &table.relation {
+            TableFactor::Table { name, .. } if is_sqlite_sequence_name(name) => {
+                return Err(Error::UnsupportedSql(
+                    "sqlite_sequence cannot participate in joins".to_owned(),
+                ));
+            }
             TableFactor::Table { name, .. } if is_sqlite_temp_schema_name(name) => {
                 if !table.joins.is_empty() {
                     return Err(Error::UnsupportedSql(
@@ -153,17 +167,51 @@ fn bind_select_from_after_tvf(
         }
     }
 
+    // Phase 5 WS-A2e: when the source collapses to the single-table
+    // fast path the bound table's `index_hint` would otherwise be lost
+    // (the `Table(Arc<TableDef>)` variant deliberately does not carry
+    // the BoundTable wrapper). Stash the hint on a per-prepare
+    // thread-local that `crate::parser::select::bind_query` lifts into
+    // `SelectPlan::table_hint`. Captured BEFORE we move `tables` into
+    // `SelectSource::Tables`.
+    let collapse_to_single_table =
+        tables.len() == 1 && tables[0].alias.is_none() && selection.is_none();
+    if collapse_to_single_table
+        && let Some(first) = tables.first()
+        && first.index_hint.is_some()
+    {
+        crate::parser::prepare::stash_single_table_hint(first.index_hint.clone());
+    }
+
     let source = if saw_sqlite_temp_schema && tables.is_empty() {
         SelectSource::SqliteTempSchema
     } else if saw_sqlite_schema && tables.is_empty() {
         SelectSource::SqliteSchema
-    } else if tables.len() == 1 && tables[0].alias.is_none() && selection.is_none() {
+    } else if collapse_to_single_table {
         SelectSource::Table(Arc::clone(&tables[0].table))
     } else {
         SelectSource::Tables(tables)
     };
 
     Ok((source, selection))
+}
+
+pub(crate) fn is_sqlite_sequence_name(name: &ObjectName) -> bool {
+    match name.0.as_slice() {
+        [part] => object_name_part_to_string(part)
+            .map(|s| s.eq_ignore_ascii_case("sqlite_sequence"))
+            .unwrap_or(false),
+        [schema, table] => match (
+            object_name_part_to_string(schema).ok(),
+            object_name_part_to_string(table).ok(),
+        ) {
+            (Some(schema), Some(table)) => {
+                schema.eq_ignore_ascii_case("main") && table.eq_ignore_ascii_case("sqlite_sequence")
+            }
+            _ => false,
+        },
+        _ => false,
+    }
 }
 
 pub(crate) fn bind_select_join_source(
@@ -176,31 +224,31 @@ pub(crate) fn bind_select_join_source(
     let mut joins = Vec::new();
     for join in table.joins {
         let right = bind_select_join_relation(schema, join.relation)?;
-        let (kind, join_selection) = match join.join_operator {
-            JoinOperator::Join(constraint) | JoinOperator::Inner(constraint) => (
-                JoinKind::Inner,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
+        let (kind, join_constraint) = match join.join_operator {
+            JoinOperator::Join(constraint) | JoinOperator::Inner(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Inner, constraint)
+            }
             JoinOperator::CrossJoin(constraint) => match constraint {
-                JoinConstraint::None => (JoinKind::Inner, None),
+                JoinConstraint::None => (JoinKind::Inner, JoinConstraintBinding::default()),
                 _ => {
                     return Err(Error::UnsupportedSql(
                         "CROSS JOIN cannot have a constraint".to_owned(),
                     ));
                 }
             },
-            JoinOperator::Left(constraint) | JoinOperator::LeftOuter(constraint) => (
-                JoinKind::Left,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
-            JoinOperator::Right(constraint) | JoinOperator::RightOuter(constraint) => (
-                JoinKind::Right,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
-            JoinOperator::FullOuter(constraint) => (
-                JoinKind::Full,
-                bind_join_constraint(&left_tables, &right, constraint, params)?,
-            ),
+            JoinOperator::Left(constraint) | JoinOperator::LeftOuter(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Left, constraint)
+            }
+            JoinOperator::Right(constraint) | JoinOperator::RightOuter(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Right, constraint)
+            }
+            JoinOperator::FullOuter(constraint) => {
+                let constraint = bind_join_constraint(&left_tables, &right, constraint, params)?;
+                (JoinKind::Full, constraint)
+            }
             JoinOperator::Semi(_)
             | JoinOperator::LeftSemi(_)
             | JoinOperator::RightSemi(_)
@@ -219,7 +267,8 @@ pub(crate) fn bind_select_join_source(
         joins.push(JoinStep {
             right,
             kind,
-            selection: join_selection,
+            selection: join_constraint.selection,
+            hidden_right_columns: join_constraint.hidden_right_columns,
         });
         left_tables.push(joins.last().expect("join just pushed").right.clone());
     }
@@ -272,6 +321,14 @@ pub(crate) fn bind_select_table_factor(
             }
             let alias_arc: Option<Arc<str>> =
                 alias.as_ref().map(|a| Arc::from(a.name.value.as_str()));
+            // SQLite-parity bare-name pragma TVFs: callers query
+            // `pragma_database_list` (no parens) as if it were a plain
+            // table. We rewrite the bare reference into a synthetic
+            // TVF call against the existing TVF registry so the same
+            // row source backs both surfaces.
+            if let Some(bound) = try_resolve_zero_arg_pragma_tvf(&name, alias_arc.as_ref())? {
+                return Ok(bound);
+            }
             // CTE-name resolution: if the name matches an active CTE
             // in scope, return a synthetic BoundTable whose TableDef is
             // backed by pre-materialized rows.
@@ -298,9 +355,23 @@ pub(crate) fn bind_select_table_factor(
             )? {
                 return Ok(bound);
             }
+            // Phase 5 WS-A2e: pull any `INDEXED BY` / `NOT INDEXED` hint
+            // captured during the `prepare` strip pass. Hints are keyed
+            // by the lexically preceding identifier (alias if present,
+            // else table name) so the lookup mirrors what the user typed.
+            let alias_key = alias.as_ref().map(|a| a.name.value.clone());
+            let name_key = name
+                .0
+                .last()
+                .and_then(|p| object_name_part_to_string(p).ok());
+            let index_hint = crate::parser::prepare::take_table_index_hint(
+                alias_key.as_deref(),
+                name_key.as_deref(),
+            );
             Ok(BoundTable {
                 table: bind_table_name(schema, &name)?,
                 alias: alias.map(|alias| Arc::from(alias.name.value)),
+                index_hint,
             })
         }
         TableFactor::Derived {
@@ -330,7 +401,23 @@ fn bind_derived_table(
         &sql,
         subquery,
     )?;
-    let columns = template.output_columns.iter().cloned().collect::<Vec<_>>();
+    // Track K — `(<subquery>) AS u(c1, c2, ...)` overrides the subquery's
+    // emitted column names with the alias-supplied list. Used by
+    // `(VALUES ...) AS t(id, name)` in BEYOND-CASE-20115 and the LATERAL
+    // shapes. The override only applies when the count matches; otherwise
+    // we keep the subquery's column names so downstream qualified
+    // references (`u.name`) still resolve.
+    let mut columns = template.output_columns.iter().cloned().collect::<Vec<_>>();
+    if let Some(alias_ref) = alias.as_ref()
+        && !alias_ref.columns.is_empty()
+        && alias_ref.columns.len() == columns.len()
+    {
+        columns = alias_ref
+            .columns
+            .iter()
+            .map(|c| c.name.value.clone())
+            .collect();
+    }
     let rows = crate::exec::materialize_prepared_rows(conn, &template, &[])?;
     let name = alias
         .as_ref()
@@ -343,6 +430,7 @@ fn bind_derived_table(
     Ok(BoundTable {
         table,
         alias: alias.map(|alias| Arc::from(alias.name.value)),
+        index_hint: None,
     })
 }
 
@@ -353,15 +441,24 @@ pub(crate) fn bind_select_join_relation(
     bind_select_table_factor(schema, relation)
 }
 
+#[derive(Default)]
+pub(crate) struct JoinConstraintBinding {
+    pub(crate) selection: Option<Expr>,
+    pub(crate) hidden_right_columns: Arc<[usize]>,
+}
+
 pub(crate) fn bind_join_constraint(
     left: &[BoundTable],
     right: &BoundTable,
     constraint: JoinConstraint,
     params: &mut ParamLayout,
-) -> Result<Option<Expr>> {
+) -> Result<JoinConstraintBinding> {
     match constraint {
-        JoinConstraint::None => Ok(None),
-        JoinConstraint::On(expr) => Ok(Some(crate::parser::select::normalize_expr(expr, params)?)),
+        JoinConstraint::None => Ok(JoinConstraintBinding::default()),
+        JoinConstraint::On(expr) => Ok(JoinConstraintBinding {
+            selection: Some(crate::parser::select::normalize_expr(expr, params)?),
+            hidden_right_columns: Arc::from([]),
+        }),
         JoinConstraint::Using(columns) => {
             let right_name = match right.alias.as_ref().map(|alias| alias.to_string()) {
                 Some(n) => n,
@@ -381,6 +478,7 @@ pub(crate) fn bind_join_constraint(
                 }
             };
             let mut expr = None;
+            let mut hidden = Vec::new();
             for column in columns {
                 let column_part = match column.0.last() {
                     Some(p) => p,
@@ -389,6 +487,11 @@ pub(crate) fn bind_join_constraint(
                     }
                 };
                 let column_name = object_name_part_to_string(column_part)?;
+                if let Some(ordinal) = right_column_ordinal(right, &column_name)
+                    && !hidden.contains(&ordinal)
+                {
+                    hidden.push(ordinal);
+                }
                 let left_col = Expr::CompoundIdentifier(vec![
                     Ident::new(left_name.clone()),
                     Ident::new(column_name.clone()),
@@ -407,15 +510,21 @@ pub(crate) fn bind_join_constraint(
                     None => eq,
                 });
             }
-            Ok(expr)
+            Ok(JoinConstraintBinding {
+                selection: expr,
+                hidden_right_columns: Arc::from(hidden),
+            })
         }
         JoinConstraint::Natural => bind_natural_constraint(left, right),
     }
 }
 
-fn bind_natural_constraint(left: &[BoundTable], right: &BoundTable) -> Result<Option<Expr>> {
+fn bind_natural_constraint(
+    left: &[BoundTable],
+    right: &BoundTable,
+) -> Result<JoinConstraintBinding> {
     let Some(left_table) = left.last() else {
-        return Ok(None);
+        return Ok(JoinConstraintBinding::default());
     };
     let left_name = left_table
         .alias
@@ -428,13 +537,17 @@ fn bind_natural_constraint(left: &[BoundTable], right: &BoundTable) -> Result<Op
         .map(|alias| alias.to_string())
         .unwrap_or_else(|| right.table.name.to_string());
     let mut expr = None;
+    let mut hidden = Vec::new();
     for lcol in &left_table.table.columns {
-        if right
+        if let Some(ordinal) = right
             .table
             .columns
             .iter()
-            .any(|rcol| rcol.folded.eq_ignore_ascii_case(lcol.folded.as_ref()))
+            .position(|rcol| rcol.folded.eq_ignore_ascii_case(lcol.folded.as_ref()))
         {
+            if !hidden.contains(&ordinal) {
+                hidden.push(ordinal);
+            }
             let column_name = lcol.name.to_string();
             let eq = Expr::BinaryOp {
                 left: Box::new(Expr::CompoundIdentifier(vec![
@@ -453,7 +566,18 @@ fn bind_natural_constraint(left: &[BoundTable], right: &BoundTable) -> Result<Op
             });
         }
     }
-    Ok(expr)
+    Ok(JoinConstraintBinding {
+        selection: expr,
+        hidden_right_columns: Arc::from(hidden),
+    })
+}
+
+fn right_column_ordinal(right: &BoundTable, column_name: &str) -> Option<usize> {
+    right
+        .table
+        .columns
+        .iter()
+        .position(|col| col.folded.as_ref().eq_ignore_ascii_case(column_name))
 }
 
 pub(crate) fn and_expr(left: Expr, right: Expr) -> Expr {
@@ -490,19 +614,114 @@ pub(crate) fn is_sqlite_schema_name(name: &ObjectName) -> bool {
 pub(crate) fn is_sqlite_temp_schema_name(name: &ObjectName) -> bool {
     match name.0.as_slice() {
         [part] => object_name_part_to_string(part)
-            .map(|s| s.eq_ignore_ascii_case("sqlite_temp_schema"))
+            .map(|s| {
+                s.eq_ignore_ascii_case("sqlite_temp_schema")
+                    || s.eq_ignore_ascii_case("sqlite_temp_master")
+            })
             .unwrap_or(false),
         [schema, table] => {
             let schema = object_name_part_to_string(schema).ok();
             let table = object_name_part_to_string(table).ok();
             matches!(
                 (schema.as_deref(), table.as_deref()),
-                (Some(schema), Some("sqlite_schema")) | (Some(schema), Some("sqlite_temp_schema"))
+                (Some(schema), Some("sqlite_schema"))
+                    | (Some(schema), Some("sqlite_master"))
+                    | (Some(schema), Some("sqlite_temp_schema"))
+                    | (Some(schema), Some("sqlite_temp_master"))
                     if schema.eq_ignore_ascii_case(concat!("te", "mp"))
             )
         }
         _ => false,
     }
+}
+
+fn is_sqlite_stat1_name(name: &ObjectName) -> bool {
+    match name.0.as_slice() {
+        [part] => object_name_part_to_string(part)
+            .map(|s| s.eq_ignore_ascii_case("sqlite_stat1"))
+            .unwrap_or(false),
+        [schema, table] => {
+            let schema = object_name_part_to_string(schema).ok();
+            let table = object_name_part_to_string(table).ok();
+            matches!(
+                (schema.as_deref(), table.as_deref()),
+                (Some("main"), Some("sqlite_stat1"))
+            )
+        }
+        _ => false,
+    }
+}
+
+fn sqlite_stat1_source(
+    conn: &crate::connection::Connection,
+    schema: &SchemaSnapshot,
+    alias: Option<Arc<str>>,
+) -> SelectSource {
+    SelectSource::Cte {
+        name: Arc::from("sqlite_stat1"),
+        alias,
+        columns: Arc::<[String]>::from(vec!["tbl".to_owned(), "idx".to_owned(), "stat".to_owned()]),
+        rows: Arc::from(sqlite_stat1_rows(conn, schema)),
+    }
+}
+
+fn sqlite_stat1_rows(
+    conn: &crate::connection::Connection,
+    schema: &SchemaSnapshot,
+) -> Vec<Vec<SqlValue>> {
+    let stats = conn.stats_snapshot();
+    let mut rows = Vec::new();
+    for table in &schema.tables {
+        let Some(table_stats) = stats.tables.get(&table.table_id) else {
+            continue;
+        };
+        let mut added_index_row = false;
+        for index in &table.indexes {
+            if index.primary
+                && matches!(
+                    index.origin,
+                    redlinedb_kernel::catalog::IndexOrigin::PrimaryKey
+                )
+                && table.rowid_alias_column.is_some()
+            {
+                continue;
+            }
+            let Some(index_stats) = stats.indexes.get(&index.index_id) else {
+                continue;
+            };
+            added_index_row = true;
+            rows.push(vec![
+                SqlValue::Text(Arc::from(table.name.as_ref())),
+                SqlValue::Text(Arc::from(index.name.as_ref())),
+                SqlValue::Text(Arc::from(sqlite_stat1_index_stat(
+                    index_stats.entries,
+                    &index_stats.distinct_prefix_counts,
+                ))),
+            ]);
+        }
+        if !added_index_row {
+            rows.push(vec![
+                SqlValue::Text(Arc::from(table.name.as_ref())),
+                SqlValue::Null,
+                SqlValue::Text(Arc::from(table_stats.row_count.to_string())),
+            ]);
+        }
+    }
+    rows
+}
+
+fn sqlite_stat1_index_stat(entries: u64, distinct_prefix_counts: &[f64]) -> String {
+    let mut parts = Vec::with_capacity(distinct_prefix_counts.len() + 1);
+    parts.push(entries.to_string());
+    for distinct in distinct_prefix_counts {
+        let avg = if entries == 0 || *distinct <= 0.0 {
+            0
+        } else {
+            (entries as f64 / *distinct).ceil() as u64
+        };
+        parts.push(avg.to_string());
+    }
+    parts.join(" ")
 }
 
 /// Pre-pass for [`bind_select_from`]: walk the FROM list, materialise
@@ -587,6 +806,87 @@ fn try_rewrite_tvf_factor(
         });
     }
     Ok(())
+}
+
+/// SQLite-parity bare-name pragma TVF resolution.
+///
+/// SQLite lets callers query `pragma_database_list`, `pragma_function_list`,
+/// `pragma_collation_list`, etc. without parentheses — as if they were
+/// regular tables. We translate the bare reference into a zero-arg TVF
+/// call against the existing registry so both surfaces share one row
+/// source. Returns `Ok(None)` when the name does not resolve to a
+/// zero-arg TVF (caller continues with normal table lookup).
+fn try_resolve_zero_arg_pragma_tvf(
+    name: &ObjectName,
+    alias: Option<&Arc<str>>,
+) -> Result<Option<BoundTable>> {
+    let func_name = match name.0.as_slice() {
+        [part] => match object_name_part_to_string(part) {
+            Ok(s) => s,
+            Err(_) => return Ok(None),
+        },
+        _ => return Ok(None),
+    };
+    // Restrict to the `pragma_` family — these are the only TVFs SQLite
+    // accepts in bare-name form. The plain identifier form for other
+    // TVFs would shadow user tables in confusing ways.
+    if !func_name.to_ascii_lowercase().starts_with("pragma_") {
+        return Ok(None);
+    }
+    let Some(func) = crate::exec::table_valued::lookup(&func_name) else {
+        return Ok(None);
+    };
+    let Some(conn) = crate::exec::current_connection() else {
+        return Ok(None);
+    };
+    let schema = conn.schema_snapshot();
+    let result = match func.eval(conn, schema.as_ref(), &[]) {
+        Ok(r) => r,
+        Err(_) => {
+            // The TVF requires arguments — leave the name unresolved so
+            // the caller can produce a proper error.
+            return Ok(None);
+        }
+    };
+    let rel = crate::exec::cross_db::next_synth_relation_id();
+    let column_defs: Vec<redlinedb_kernel::catalog::ColumnDef> = result
+        .columns
+        .iter()
+        .enumerate()
+        .map(|(idx, col_name)| redlinedb_kernel::catalog::ColumnDef {
+            column_id: redlinedb_kernel::catalog::ColumnId((idx + 1) as u64),
+            ordinal: idx as u16,
+            name: Box::from(col_name.as_str()),
+            folded: Box::from(col_name.to_ascii_lowercase().as_str()),
+            declared_type: None,
+            affinity: redlinedb_kernel::catalog::Affinity::Blob,
+            not_null: false,
+            default_value: None,
+            default_expr: None,
+            generated: None,
+        })
+        .collect();
+    let table_def = Arc::new(redlinedb_kernel::catalog::TableDef {
+        table_id: redlinedb_kernel::catalog::TableId(rel.0),
+        schema_id: redlinedb_kernel::catalog::SchemaId(0),
+        relation_id: rel,
+        name: Box::from(func_name.as_str()),
+        folded: Box::from(func_name.to_ascii_lowercase().as_str()),
+        columns: column_defs,
+        indexes: Vec::new(),
+        constraints: Vec::new(),
+        checks: Vec::new(),
+        foreign_keys: Vec::new(),
+        rowid_alias_column: None,
+        flags: 0,
+        normalized_sql: None,
+    });
+    crate::exec::cte::register_external_rows(rel, Arc::new(result.rows));
+    Ok(Some(BoundTable {
+        table: table_def,
+        alias: alias.cloned(),
+        index_hint: None,
+    }))
 }
 
 /// If `name(args)` resolves to a registered table-valued function, evaluate

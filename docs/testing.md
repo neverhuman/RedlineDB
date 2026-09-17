@@ -16,7 +16,7 @@ readable repair receipts.
 | `test`                               | Fast workspace test proof.                                                                            |
 | `verify`                             | Alias for the root validation gate.                                                                   |
 | `fast`                               | Workspace fmt, file-size policy, type-check, and full unit/integration test sweep. Uses `scripts/sccache_wrapper.sh`, which falls back cleanly when local `sccache` is absent. Quick iteration lane, not the pre-push gate. |
-| `pr-ci`                              | Exact local mirror of `.github/workflows/ci.yml`: preflight, test shards, the verified `redline-testing-official` gate, and `official-evidence-guard`. Run with `scripts/ci-local.sh pr-ci`. |
+| `pr-ci`                              | Complete local engine/component/conformance/security/audit/package gates through `scripts/ci-local.sh pr-ci`; GitHub adds four native packaging targets. |
 | `fast-check`                         | Workspace compile proof for the default health lane.                                                  |
 | `fast-test`                          | Workspace test proof for the default health lane.                                                     |
 | `hygiene`                            | Format and file-size only; cheapest pre-commit gate.                                                  |
@@ -25,9 +25,9 @@ readable repair receipts.
 | `phase8-smoke`                       | Same as `medium`; pinned for phase-8 regression triage.                                               |
 | `kernel-cursor`                      | Cursor-specific kernel regression tests without the full workspace sweep.                             |
 | `cache-warm`                         | Prime the workspace build cache before a wider proof run.                                             |
-| `redline-testing-official`           | Verified external official conformance and benchmark gate; `neverhuman/redline-testing` is the sole official source. |
-| `official-evidence-guard`            | Fails if RedlineDB reintroduces official metric/report generation outside the verified external runner or its processed evidence bundle. |
-| `sqlite-parity-report-update`        | Regenerates official SQLite parity report and README data through the verified external `redline-testing` artifact and processed evidence bundle. |
+| `redline-testing-official`           | Official conformance and benchmark gate built from `subrepos/redline-testing` at the same parent commit as the engine. |
+| `official-evidence-guard`            | Fails if RedlineDB reintroduces official metric/report generation outside the included, hash-verified runner or its processed evidence bundle. |
+| `sqlite-parity-report-update`        | Regenerates official SQLite parity report and README data through the included `redline-testing` runner and processed evidence bundle. |
 | `ffi-abi`                            | C ABI compatibility tests for the SQLite shim surface.                                                |
 | `cli-shell`                          | CLI compatibility tests for the shell/batch front end.                                                |
 | `kernel-check`                       | Targeted `redlinedb-kernel` compile proof.                                                            |
@@ -75,16 +75,18 @@ SQLite parity boundary: the official evidence flow lives in
 is the only lane that produces committed parity evidence. RedlineDB does not
 expose a local SQLite parity coverage/benchmark/report/sentinel producer; the
 in-tree `sqlite_parity` commands and prior parity bundle workflows fail closed.
+The retired quick/medium replay, case-list, and local diff helpers are not
+release lanes; performance measurements use `perf-full` or the official report
+workflow through the included, hash-verified runner.
 The proof-lane definitions and audit policy remain pinned in
 `.jankurai/proof-lanes.toml` and `agent/audit-policy.toml`.
 
-To test a locally built `redline-testing` tarball without editing CI pins, point
-the installer at `file://` URLs:
+The official lane builds `subrepos/redline-testing` with its preserved lockfile,
+stages its corpus and metadata, and binds evidence to the runner binary digest.
+No separately released runner or sibling checkout is required. Run it with:
 
-```
-  CI_REDLINE_TESTING_URL=file:///home/ubuntu/redline-testing/dist/redline-testing-0.1.3-linux-x86_64.tar.gz \
-  CI_REDLINE_TESTING_SHA256_URL=file:///home/ubuntu/redline-testing/dist/redline-testing-0.1.3-linux-x86_64.tar.gz.sha256 \
-  rtk just redline-testing-official
+```bash
+just redline-testing-official
 ```
 
 Set `REDLINEDB_SQLITE_PARITY_SQLITE_BIN=/path/to/sqlite3` to run

@@ -545,6 +545,17 @@ where
         return Ok(None);
     };
     let rowid_col = |name: &str| {
+        // SQLite shadowing: if the table has a real column whose name
+        // matches `name`, that column wins over the rowid alias. So
+        // `WHERE oid = 1` on `CREATE TABLE t(oid INTEGER, ...)` reads
+        // the `oid` column, not the synthetic rowid.
+        let shadowed = table
+            .columns
+            .iter()
+            .any(|column| column.folded.as_ref().eq_ignore_ascii_case(name));
+        if shadowed {
+            return table.rowid_alias_column_name_matches(name);
+        }
         table.is_public_rowid_name(name) || table.rowid_alias_column_name_matches(name)
     };
     let Expr::BinaryOp { left, op, right } = expr else {
@@ -553,18 +564,22 @@ where
     if !matches!(op, BinaryOperator::Eq) {
         return Ok(None);
     }
-    let expr_rowid =
-        if let Some(value) = rowid_eq_side(left, right, bindings, &rowid_col, &eval_value)? {
-            value
-        } else if let Some(value) = rowid_eq_side(right, left, bindings, &rowid_col, &eval_value)? {
-            value
-        } else {
-            return Ok(None);
-        };
+    let expr_rowid = if let Some(value) =
+        rowid_eq_side(table, left, right, bindings, &rowid_col, &eval_value)?
+    {
+        value
+    } else if let Some(value) =
+        rowid_eq_side(table, right, left, bindings, &rowid_col, &eval_value)?
+    {
+        value
+    } else {
+        return Ok(None);
+    };
     Ok(Some(expr_rowid))
 }
 
 fn rowid_eq_side<F>(
+    table: &TableDef,
     ident_side: &Expr,
     value_side: &Expr,
     bindings: &[Option<SqlValue>],
@@ -577,7 +592,9 @@ where
     let name = match ident_side {
         Expr::Identifier(ident) if rowid_col(&ident.value) => Some(ident.value.as_str()),
         Expr::CompoundIdentifier(parts) => parts.last().and_then(|ident| {
-            if rowid_col(&ident.value) {
+            if rowid_col(&ident.value)
+                && rowid_qualifier_matches_table(table, &parts[..parts.len() - 1])
+            {
                 Some(ident.value.as_str())
             } else {
                 None
@@ -594,5 +611,16 @@ where
         SqlValue::Real(v) if v >= 0.0 && v.fract() == 0.0 => Ok(Some(RowId::new(v as u64))),
         SqlValue::Null => Ok(None),
         _ => Err(Error::DatatypeMismatch),
+    }
+}
+
+fn rowid_qualifier_matches_table(table: &TableDef, qualifiers: &[sqlparser::ast::Ident]) -> bool {
+    match qualifiers {
+        [table_name] => table_name.value.eq_ignore_ascii_case(table.name.as_ref()),
+        [schema, table_name] => {
+            schema.value.eq_ignore_ascii_case("main")
+                && table_name.value.eq_ignore_ascii_case(table.name.as_ref())
+        }
+        _ => false,
     }
 }

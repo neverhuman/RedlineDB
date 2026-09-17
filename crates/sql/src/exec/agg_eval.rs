@@ -1,9 +1,12 @@
 use super::*;
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 thread_local! {
-    static GROUP_EVAL_CACHE: RefCell<Option<HashMap<usize, SqlValue>>> = const {
+    static GROUP_EVAL_CACHE: RefCell<Option<ahash::AHashMap<usize, SqlValue>>> = const {
+        RefCell::new(None)
+    };
+    static GROUP_AGG_CACHE: RefCell<Option<ahash::AHashMap<String, SqlValue>>> = const {
         RefCell::new(None)
     };
 }
@@ -16,6 +19,33 @@ impl Drop for GroupEvalCacheGuard {
             *cache.borrow_mut() = None;
         });
     }
+}
+
+struct GroupEvalScope {
+    eval_prev: Option<ahash::AHashMap<usize, SqlValue>>,
+    agg_prev: Option<ahash::AHashMap<String, SqlValue>>,
+}
+
+impl Drop for GroupEvalScope {
+    fn drop(&mut self) {
+        GROUP_EVAL_CACHE.with(|cache| {
+            *cache.borrow_mut() = self.eval_prev.take();
+        });
+        GROUP_AGG_CACHE.with(|cache| {
+            *cache.borrow_mut() = self.agg_prev.take();
+        });
+    }
+}
+
+pub(super) fn with_group_eval_cache<T>(f: impl FnOnce() -> T) -> T {
+    let eval_prev =
+        GROUP_EVAL_CACHE.with(|cache| cache.borrow_mut().replace(ahash::AHashMap::new()));
+    let agg_prev = GROUP_AGG_CACHE.with(|cache| cache.borrow_mut().replace(ahash::AHashMap::new()));
+    let _scope = GroupEvalScope {
+        eval_prev,
+        agg_prev,
+    };
+    f()
 }
 
 struct GroupCaseEvaluator<'group, 'ctx> {
@@ -73,7 +103,7 @@ pub(super) fn eval_group_scalar_with_ctx(
     let cached = GROUP_EVAL_CACHE.with(|cache| {
         let mut slot = cache.borrow_mut();
         if slot.is_none() {
-            *slot = Some(HashMap::new());
+            *slot = Some(ahash::AHashMap::new());
             cache_guard = Some(GroupEvalCacheGuard);
         }
         slot.as_ref()
@@ -194,10 +224,14 @@ pub(super) fn eval_group_scalar_with_ctx(
             }
             Expr::Nested(expr) => eval_group_scalar_with_ctx(expr, group, first_context, bindings),
             Expr::Cast {
-                expr, data_type, ..
+                kind,
+                expr,
+                data_type,
+                ..
             } => cast_value(
                 eval_group_scalar_with_ctx(expr, group, first_context, bindings)?,
                 data_type,
+                kind.clone(),
             ),
             Expr::Between {
                 expr,
@@ -497,13 +531,89 @@ fn row_passes_aggregate_filter(
     Ok(is_truthy(&eval_scalar(filter, &ctx, bindings)?))
 }
 
+/// True if the function call is `<name>(DISTINCT ...)`.
+fn is_distinct_call(func: &sqlparser::ast::Function) -> bool {
+    if let FunctionArguments::List(list) = &func.args {
+        matches!(
+            list.duplicate_treatment,
+            Some(sqlparser::ast::DuplicateTreatment::Distinct)
+        )
+    } else {
+        false
+    }
+}
+
+/// If `expr` is a `COLLATE` wrapper, return the named collation.
+fn expr_collation(expr: &Expr) -> Option<crate::collation::Collation> {
+    if let Expr::Collate { collation, .. } = expr {
+        let name = collation.to_string();
+        crate::collation::Collation::parse(&name)
+    } else {
+        None
+    }
+}
+
+/// Build a deduplication key for a single aggregate value, honoring a
+/// collation (e.g. `count(DISTINCT x COLLATE NOCASE)` should treat
+/// `'a'` and `'A'` as equal). Returns `None` for NULL.
+fn distinct_key(
+    value: &SqlValue,
+    collation: Option<&crate::collation::Collation>,
+) -> Result<Option<Vec<u8>>> {
+    if matches!(value, SqlValue::Null) {
+        return Ok(None);
+    }
+    let normalised = match (value, collation) {
+        (SqlValue::Text(s), Some(crate::collation::Collation::NoCase)) => {
+            SqlValue::Text(Arc::from(s.to_ascii_lowercase()))
+        }
+        (SqlValue::Text(s), Some(crate::collation::Collation::RTrim)) => {
+            SqlValue::Text(Arc::from(s.trim_end_matches(' ').to_owned()))
+        }
+        _ => value.clone(),
+    };
+    let key = vec::hash_agg::encode_group_key_bytes(&[normalised])?;
+    Ok(Some(key))
+}
+
 fn eval_group_function(
     func: &sqlparser::ast::Function,
     group: &[SqlRow],
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
-    let name = func.name.to_string().to_ascii_lowercase();
-    match name.as_str() {
+    // Phase 4.2: borrow the function name into a stack buffer for the
+    // dispatch match instead of allocating + lowercasing the full
+    // ObjectName Display form. Mirrors the Phase 1.3 fast path in
+    // scalar function dispatch.
+    let mut name_scratch = [0u8; crate::exec::expr::json_dispatch::FN_NAME_STACK];
+    let borrowed_name =
+        crate::exec::expr::json_dispatch::simple_function_name_lower(func, &mut name_scratch);
+    let owned_name;
+    let name: &str = match borrowed_name {
+        Some(s) => s,
+        None => {
+            owned_name = func.name.to_string().to_ascii_lowercase();
+            owned_name.as_str()
+        }
+    };
+
+    // Phase 4.2: aggregate_cache_key renders the full function AST
+    // exactly once, lowercases it in place, and uses the same lowercased
+    // String as both the volatility check input and the cache key.
+    // Replaces the prior double-render (cacheable check + cache_key
+    // each called `func.to_string()` separately).
+    let cache_key = aggregate_cache_key(func);
+    if let Some(cache_key) = &cache_key
+        && let Some(value) = GROUP_AGG_CACHE.with(|cache| {
+            cache
+                .borrow()
+                .as_ref()
+                .and_then(|cache| cache.get(cache_key).cloned())
+        })
+    {
+        return Ok(value);
+    }
+    let result = match name {
         "count" => {
             if let FunctionArguments::List(list) = &func.args {
                 if list.args.len() == 1
@@ -518,42 +628,76 @@ fn eval_group_function(
                             count += 1;
                         }
                     }
-                    return Ok(SqlValue::Integer(count));
-                }
-                let distinct = matches!(
-                    list.duplicate_treatment,
-                    Some(sqlparser::ast::DuplicateTreatment::Distinct)
-                );
-                let mut seen = HashSet::new();
-                let mut count = 0i64;
-                for row in group {
-                    if !row_passes_aggregate_filter(func, row, bindings)? {
-                        continue;
-                    }
-                    let ctx = row.context();
-                    let mut include = true;
-                    let mut values = Vec::new();
-                    for arg in &list.args {
-                        if let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = arg {
-                            let value = eval_scalar(expr, &ctx, bindings)?;
-                            if matches!(value, SqlValue::Null) {
-                                include = false;
-                            } else {
-                                values.push(value);
+                    Ok(SqlValue::Integer(count))
+                } else {
+                    let distinct = matches!(
+                        list.duplicate_treatment,
+                        Some(sqlparser::ast::DuplicateTreatment::Distinct)
+                    );
+                    // Per-argument collation: `count(DISTINCT x COLLATE NOCASE)`
+                    // dedupes by case-insensitive text key.
+                    let collations: Vec<Option<crate::collation::Collation>> = list
+                        .args
+                        .iter()
+                        .map(|a| match a {
+                            FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => {
+                                expr_collation(expr)
+                            }
+                            _ => None,
+                        })
+                        .collect();
+                    let mut seen = HashSet::new();
+                    let mut count = 0i64;
+                    for row in group {
+                        if !row_passes_aggregate_filter(func, row, bindings)? {
+                            continue;
+                        }
+                        let ctx = row.context();
+                        let mut include = true;
+                        let mut values = Vec::new();
+                        for arg in &list.args {
+                            if let FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) = arg {
+                                let value = eval_scalar(expr, &ctx, bindings)?;
+                                if matches!(value, SqlValue::Null) {
+                                    include = false;
+                                } else {
+                                    values.push(value);
+                                }
                             }
                         }
-                    }
-                    if include {
-                        if distinct {
-                            let key = vec::hash_agg::encode_group_key_bytes(&values)?;
-                            if !seen.insert(key) {
-                                continue;
+                        if include {
+                            if distinct {
+                                // Build a per-arg dedup key honoring each
+                                // argument's collation wrapper.
+                                let mut normalised: Vec<SqlValue> =
+                                    Vec::with_capacity(values.len());
+                                for (idx, val) in values.iter().enumerate() {
+                                    normalised.push(
+                                        match (val, collations.get(idx).and_then(|c| c.as_ref())) {
+                                            (
+                                                SqlValue::Text(s),
+                                                Some(crate::collation::Collation::NoCase),
+                                            ) => SqlValue::Text(Arc::from(s.to_ascii_lowercase())),
+                                            (
+                                                SqlValue::Text(s),
+                                                Some(crate::collation::Collation::RTrim),
+                                            ) => SqlValue::Text(Arc::from(
+                                                s.trim_end_matches(' ').to_owned(),
+                                            )),
+                                            _ => val.clone(),
+                                        },
+                                    );
+                                }
+                                let key = vec::hash_agg::encode_group_key_bytes(&normalised)?;
+                                if !seen.insert(key) {
+                                    continue;
+                                }
                             }
+                            count += 1;
                         }
-                        count += 1;
                     }
+                    Ok(SqlValue::Integer(count))
                 }
-                Ok(SqlValue::Integer(count))
             } else {
                 let mut count = 0i64;
                 for row in group {
@@ -569,6 +713,16 @@ fn eval_group_function(
             let mut total_r: f64 = 0.0;
             let mut saw_real = false;
             let mut saw_value = false;
+            let distinct = is_distinct_call(func);
+            let mut seen: HashSet<Vec<u8>> = HashSet::new();
+            let collation = if let FunctionArguments::List(list) = &func.args {
+                list.args.first().and_then(|a| match a {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                    _ => None,
+                })
+            } else {
+                None
+            };
             for row in group {
                 if !row_passes_aggregate_filter(func, row, bindings)? {
                     continue;
@@ -578,7 +732,18 @@ fn eval_group_function(
                     && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
                         list.args.first()
                 {
-                    match eval_scalar(expr, &ctx, bindings)? {
+                    let value = eval_scalar(expr, &ctx, bindings)?;
+                    if distinct {
+                        match distinct_key(&value, collation.as_ref())? {
+                            None => continue,
+                            Some(key) => {
+                                if !seen.insert(key) {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    match value {
                         SqlValue::Null => {}
                         SqlValue::Integer(v) if !saw_real => {
                             total_i += v;
@@ -622,6 +787,16 @@ fn eval_group_function(
         "avg" => {
             let mut count = 0i64;
             let mut sum = 0.0f64;
+            let distinct = is_distinct_call(func);
+            let mut seen: HashSet<Vec<u8>> = HashSet::new();
+            let collation = if let FunctionArguments::List(list) = &func.args {
+                list.args.first().and_then(|a| match a {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                    _ => None,
+                })
+            } else {
+                None
+            };
             for row in group {
                 if !row_passes_aggregate_filter(func, row, bindings)? {
                     continue;
@@ -631,7 +806,18 @@ fn eval_group_function(
                     && let Some(FunctionArg::Unnamed(FunctionArgExpr::Expr(expr))) =
                         list.args.first()
                 {
-                    match eval_scalar(expr, &ctx, bindings)? {
+                    let value = eval_scalar(expr, &ctx, bindings)?;
+                    if distinct {
+                        match distinct_key(&value, collation.as_ref())? {
+                            None => continue,
+                            Some(key) => {
+                                if !seen.insert(key) {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    match value {
                         SqlValue::Null => {}
                         SqlValue::Integer(v) => {
                             sum += v as f64;
@@ -776,6 +962,16 @@ fn eval_group_function(
                 ",".to_owned()
             };
             let mut parts: Vec<String> = Vec::new();
+            let distinct = is_distinct_call(func);
+            let mut seen: HashSet<Vec<u8>> = HashSet::new();
+            let collation = if let FunctionArguments::List(list) = &func.args {
+                list.args.first().and_then(|a| match a {
+                    FunctionArg::Unnamed(FunctionArgExpr::Expr(expr)) => expr_collation(expr),
+                    _ => None,
+                })
+            } else {
+                None
+            };
             for row in rows_in_aggregate_order(func, group, bindings)? {
                 let ctx = row.context();
                 if let FunctionArguments::List(list) = &func.args
@@ -783,9 +979,20 @@ fn eval_group_function(
                         list.args.first()
                 {
                     let val = eval_scalar(expr, &ctx, bindings)?;
-                    if !matches!(val, SqlValue::Null) {
-                        parts.push(value_to_string(&val));
+                    if matches!(val, SqlValue::Null) {
+                        continue;
                     }
+                    if distinct {
+                        match distinct_key(&val, collation.as_ref())? {
+                            None => continue,
+                            Some(key) => {
+                                if !seen.insert(key) {
+                                    continue;
+                                }
+                            }
+                        }
+                    }
+                    parts.push(value_to_string(&val));
                 }
             }
             if parts.is_empty() {
@@ -805,7 +1012,7 @@ fn eval_group_function(
                         list.args.first()
                 {
                     let val = eval_scalar(expr, &ctx, bindings)?;
-                    arr.push(sql_to_json_value(&val));
+                    arr.push(sql_to_json_value(&val)?);
                 }
             }
             let json = serde_json::Value::Array(arr);
@@ -834,7 +1041,7 @@ fn eval_group_function(
                         SqlValue::Null
                     };
                     if !matches!(key, SqlValue::Null) {
-                        obj.insert(value_to_string(&key), sql_to_json_value(&val));
+                        obj.insert(value_to_string(&key), sql_to_json_value(&val)?);
                     }
                 }
             }
@@ -874,7 +1081,7 @@ fn eval_group_function(
                 out
             };
             let db = crate::udf::current_db();
-            match crate::udf::call_registered_aggregate(db, name.as_str(), &rows) {
+            match crate::udf::call_registered_aggregate(db, name, &rows) {
                 Some(Ok(v)) => Ok(v),
                 Some(Err(msg)) => Err(Error::UnsupportedSql(msg)),
                 None => Err(Error::UnsupportedSql(format!(
@@ -882,7 +1089,42 @@ fn eval_group_function(
                 ))),
             }
         }
+    }?;
+    if let Some(cache_key) = cache_key {
+        GROUP_AGG_CACHE.with(|cache| {
+            if let Some(cache) = cache.borrow_mut().as_mut() {
+                cache.insert(cache_key, result.clone());
+            }
+        });
     }
+    Ok(result)
+}
+
+/// Phase 4.2: single-render cache-key + cacheability check.
+///
+/// Old shape allocated `func.to_string()` once in `aggregate_cacheable`
+/// (for the volatility check) and again in `eval_group_function` (for
+/// the cache key), then lowercased one of them. Both renders walk the
+/// full Function AST.
+///
+/// New shape: render once into a single String, lowercase in place via
+/// `make_ascii_lowercase`, then both decide cacheability AND use the
+/// lowercased form as the cache key. Returns `None` for any volatile
+/// function (random/randomblob/last_insert_rowid/changes/total_changes
+/// /current_date/current_time/current_timestamp), `Some(lowercased)`
+/// otherwise.
+fn aggregate_cache_key(func: &sqlparser::ast::Function) -> Option<String> {
+    let mut rendered = func.to_string();
+    rendered.make_ascii_lowercase();
+    let is_volatile = rendered.contains("random(")
+        || rendered.contains("randomblob(")
+        || rendered.contains("last_insert_rowid")
+        || rendered.contains("changes(")
+        || rendered.contains("total_changes(")
+        || rendered.contains("current_date")
+        || rendered.contains("current_time")
+        || rendered.contains("current_timestamp");
+    if is_volatile { None } else { Some(rendered) }
 }
 
 fn percentile_argument(

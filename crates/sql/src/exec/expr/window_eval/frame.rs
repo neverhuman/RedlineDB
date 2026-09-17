@@ -7,6 +7,20 @@ pub(super) struct ResolvedFrame {
     pub(super) units: WindowFrameUnits,
     pub(super) start: ResolvedBound,
     pub(super) end: ResolvedBound,
+    pub(super) exclude: ExcludeMode,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) enum ExcludeMode {
+    /// EXCLUDE NO OTHERS (the default).
+    #[default]
+    NoOthers,
+    /// EXCLUDE CURRENT ROW.
+    CurrentRow,
+    /// EXCLUDE GROUP.
+    Group,
+    /// EXCLUDE TIES.
+    Ties,
 }
 
 #[derive(Clone, Debug)]
@@ -19,6 +33,7 @@ pub(super) enum ResolvedBound {
 }
 
 pub(super) fn resolve_frame(window: &WindowSpec) -> ResolvedFrame {
+    let exclude = exclude_from_partition(&window.partition_by);
     match &window.window_frame {
         Some(frame) => ResolvedFrame {
             units: frame.units,
@@ -27,6 +42,7 @@ pub(super) fn resolve_frame(window: &WindowSpec) -> ResolvedFrame {
                 Some(end) => resolve_bound(end),
                 None => ResolvedBound::CurrentRow,
             },
+            exclude,
         },
         None => {
             if window.order_by.is_empty() {
@@ -35,6 +51,7 @@ pub(super) fn resolve_frame(window: &WindowSpec) -> ResolvedFrame {
                     units: WindowFrameUnits::Range,
                     start: ResolvedBound::UnboundedPreceding,
                     end: ResolvedBound::UnboundedFollowing,
+                    exclude,
                 }
             } else {
                 // ORDER BY present: RANGE UNBOUNDED PRECEDING -> CURRENT ROW.
@@ -42,10 +59,47 @@ pub(super) fn resolve_frame(window: &WindowSpec) -> ResolvedFrame {
                     units: WindowFrameUnits::Range,
                     start: ResolvedBound::UnboundedPreceding,
                     end: ResolvedBound::CurrentRow,
+                    exclude,
                 }
             }
         }
     }
+}
+
+/// Inspects PARTITION BY exprs for the magic EXCLUDE-mode marker
+/// injected by `parser::rewrite_window_exclude`. Returns the implied
+/// `ExcludeMode` (or `NoOthers` if no marker is present).
+pub(super) fn exclude_from_partition(partition_by: &[Expr]) -> ExcludeMode {
+    for expr in partition_by {
+        if let Some(mode) = marker_to_mode(expr) {
+            return mode;
+        }
+    }
+    ExcludeMode::NoOthers
+}
+
+fn marker_to_mode(expr: &Expr) -> Option<ExcludeMode> {
+    let lit = match expr {
+        Expr::Value(v) => match &v.value {
+            sqlparser::ast::Value::SingleQuotedString(s)
+            | sqlparser::ast::Value::DoubleQuotedString(s) => s.as_str(),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    match lit {
+        "__redline_exc_current_row__" => Some(ExcludeMode::CurrentRow),
+        "__redline_exc_group__" => Some(ExcludeMode::Group),
+        "__redline_exc_ties__" => Some(ExcludeMode::Ties),
+        "__redline_exc_no_others__" => Some(ExcludeMode::NoOthers),
+        _ => None,
+    }
+}
+
+/// True if this expression is a EXCLUDE-mode marker literal injected by
+/// the parser preprocessor.
+pub(super) fn is_exclude_marker(expr: &Expr) -> bool {
+    marker_to_mode(expr).is_some()
 }
 
 fn resolve_bound(bound: &WindowFrameBound) -> ResolvedBound {

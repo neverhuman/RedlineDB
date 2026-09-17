@@ -41,6 +41,10 @@ pub struct Phase11Counters {
     pub prefetch_hits: AtomicU64,
     /// Bumped on a prefetch that issued an actual page read.
     pub prefetch_misses: AtomicU64,
+    /// Bumped when the background prefetch worker queue is full and a
+    /// hint is dropped on the floor. WS-C4: the prefetch path is now
+    /// async — see `BufferPool::try_prefetch`.
+    pub prefetch_dropped: AtomicU64,
     /// Bumped each time a heap visibility recheck has to rerun
     /// because a tuple version moved underneath the cursor.
     pub heap_rechecks: AtomicU64,
@@ -88,6 +92,7 @@ impl Default for Phase11Counters {
             leaf_visits: AtomicU64::new(0),
             prefetch_hits: AtomicU64::new(0),
             prefetch_misses: AtomicU64::new(0),
+            prefetch_dropped: AtomicU64::new(0),
             heap_rechecks: AtomicU64::new(0),
             cursor_batches_emitted: AtomicU64::new(0),
             ordered_limit_path_hits: AtomicU64::new(0),
@@ -129,6 +134,7 @@ impl Phase11Counters {
             leaf_visits: self.leaf_visits.load(Relaxed),
             prefetch_hits: self.prefetch_hits.load(Relaxed),
             prefetch_misses: self.prefetch_misses.load(Relaxed),
+            prefetch_dropped: self.prefetch_dropped.load(Relaxed),
             heap_rechecks: self.heap_rechecks.load(Relaxed),
             cursor_batches_emitted: self.cursor_batches_emitted.load(Relaxed),
             ordered_limit_path_hits: self.ordered_limit_path_hits.load(Relaxed),
@@ -154,6 +160,7 @@ impl Phase11Counters {
         self.leaf_visits.store(0, Relaxed);
         self.prefetch_hits.store(0, Relaxed);
         self.prefetch_misses.store(0, Relaxed);
+        self.prefetch_dropped.store(0, Relaxed);
         self.heap_rechecks.store(0, Relaxed);
         self.cursor_batches_emitted.store(0, Relaxed);
         self.ordered_limit_path_hits.store(0, Relaxed);
@@ -188,6 +195,8 @@ pub struct Phase11CountersSnapshot {
     pub prefetch_hits: u64,
     #[serde(default)]
     pub prefetch_misses: u64,
+    #[serde(default)]
+    pub prefetch_dropped: u64,
     #[serde(default)]
     pub heap_rechecks: u64,
     #[serde(default)]
@@ -263,6 +272,7 @@ mod tests {
         assert_eq!(snap.leaf_visits, 0);
         assert_eq!(snap.prefetch_hits, 0);
         assert_eq!(snap.prefetch_misses, 0);
+        assert_eq!(snap.prefetch_dropped, 0);
         assert_eq!(snap.heap_rechecks, 0);
         assert_eq!(snap.cursor_batches_emitted, 0);
         assert_eq!(snap.ordered_limit_path_hits, 0);
@@ -317,6 +327,7 @@ mod tests {
         counters.leaf_visits.store(7, Relaxed);
         counters.prefetch_hits.store(8, Relaxed);
         counters.prefetch_misses.store(9, Relaxed);
+        counters.prefetch_dropped.store(99, Relaxed);
         counters.heap_rechecks.store(10, Relaxed);
         counters.cursor_batches_emitted.store(11, Relaxed);
         counters.ordered_limit_path_hits.store(12, Relaxed);

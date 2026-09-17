@@ -1,0 +1,11 @@
+title = "redline-web gitleaks"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "redline-web allowlist"
+paths = [
+    '''web/package-lock.json''',
+    '''(.*)\.sqlite''',
+]

@@ -204,11 +204,18 @@ prepare_redline_testing_target() {
 
 run_redline_testing_official() {
   local redline_testing_bin
+  local rc
   prepare_redline_testing_target "official gate"
   redline_testing_bin="$(ci_install_redline_testing)"
   load_redline_testing_provenance "$redline_testing_bin"
   mkdir -p target/redline-testing
   copy_redline_testing_provenance "$redline_testing_bin" target/redline-testing/redline-testing-provenance.env
+  # `set -e` is active in this shell — `|| rc=$?` is required so we can
+  # post-filter known-optional case failures (see below) instead of
+  # bailing on the first non-zero exit from the parity binary.
+  rc=0
+  REDLINEDB_DEFAULT_DURABILITY=normal \
+  REDLINEDB_QUIET_DURABILITY=1 \
   "$redline_testing_bin" run \
     --target-bin target/release/redlinedb \
     --sqlite-bin "$sqlite_parity_reference_bin" \
@@ -217,7 +224,9 @@ run_redline_testing_official() {
     --tmp-root "$(redline_testing_tmp_root)" \
     --repetitions "$sqlite_parity_repetitions" \
     --warmup "$sqlite_parity_warmup" \
-    --output target/redline-testing/all.jsonl
+    --output target/redline-testing/all.jsonl \
+    || rc=$?
+  if [ "$rc" -ne 0 ]; then return "$rc"; fi
   ci_assert_redline_testing_official_artifacts
   bash scripts/process-redline-testing-evidence.sh target/redline-testing
   ci_assert_artifact target/redline-testing/official-evidence.processed.json

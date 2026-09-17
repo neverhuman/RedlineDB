@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs;
 use std::fs::File;
 use std::hash::{Hash, Hasher};
@@ -39,8 +39,13 @@ pub struct Database {
     pub(super) temp_dir: Option<PathBuf>,
     pub(super) optimizer: OptimizerConfig,
     pub(super) user_version: Mutex<i64>,
+    sqlite_sequences: Mutex<BTreeMap<String, i64>>,
     metadata_sync_policy: MetadataSyncPolicy,
     _ephemeral_root: Option<Arc<EphemeralRoot>>,
+    /// True for `:memory:` / private-memory databases. SQLite-parity
+    /// surfaces (PRAGMA journal_mode, database_list path) consult this
+    /// flag rather than the raw on-disk path, which is a tmpfs sidecar.
+    private_memory: bool,
 }
 
 impl Database {
@@ -145,7 +150,27 @@ impl Database {
         } else {
             Engine::create(base, opts.engine)?
         };
-        save_user_version(base, 0, metadata_sync_policy)?;
+        // A6-b: Only initialise user_version for *fresh* databases.  The
+        // old code called save_user_version(0) unconditionally, which
+        // (a) silently reset any existing user_version to 0 every time
+        //     the CLI reopened an existing database, and
+        // (b) paid a write + optional fsync on every open even when the
+        //     value was already 0.
+        // Now we load the existing value when the sidecar is present, and
+        // write 0 only for brand-new databases.
+        let user_version_init = if private_memory {
+            0
+        } else {
+            let uv_path = path.join(USER_VERSION_FILE);
+            if uv_path.exists() {
+                // Existing database: load current value, skip the write.
+                load_user_version(base)?
+            } else {
+                // New database: persist the initial value of 0.
+                save_user_version(base, 0, metadata_sync_policy)?;
+                0
+            }
+        };
         let stats_store = StatsStore::new(base);
         let stats = if private_memory {
             Arc::new(StatsSnapshot::default())
@@ -168,13 +193,11 @@ impl Database {
             query_memory: opts.query_memory,
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
-            user_version: Mutex::new(if private_memory {
-                0
-            } else {
-                load_user_version(base)?
-            }),
+            user_version: Mutex::new(user_version_init),
+            sqlite_sequences: Mutex::new(BTreeMap::new()),
             metadata_sync_policy,
             _ephemeral_root: ephemeral_root,
+            private_memory,
         }))
     }
 
@@ -203,8 +226,10 @@ impl Database {
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(user_version),
+            sqlite_sequences: Mutex::new(BTreeMap::new()),
             metadata_sync_policy,
             _ephemeral_root: None,
+            private_memory: false,
         }))
     }
 
@@ -237,18 +262,51 @@ impl Database {
             temp_dir: opts.temp_dir.clone(),
             optimizer: opts.optimizer,
             user_version: Mutex::new(user_version),
+            sqlite_sequences: Mutex::new(BTreeMap::new()),
             metadata_sync_policy,
             _ephemeral_root: None,
+            private_memory: false,
         }))
     }
 
     pub fn connect(self: &Arc<Self>) -> Arc<Connection> {
+        let mut session = SessionState::default();
+        session.sqlite_sequences = self.sqlite_sequence_snapshot();
         Arc::new(Connection {
             db: Arc::clone(self),
-            session: Mutex::new(SessionState::default()),
+            session: Mutex::new(session),
             local_cache: StatementCache::with_capacity(self.stmt_cache.capacity()),
+            rql_stats: Default::default(),
             attach_map: crate::exec::attach::AttachMap::new(),
         })
+    }
+
+    pub(crate) fn sqlite_sequence_snapshot(&self) -> BTreeMap<String, i64> {
+        self.sqlite_sequences
+            .lock()
+            .expect("sqlite_sequence lock poisoned")
+            .clone()
+    }
+
+    pub(crate) fn publish_sqlite_sequence_entries(
+        &self,
+        sequences: &BTreeMap<String, i64>,
+        dirty: &std::collections::BTreeSet<String>,
+    ) {
+        let mut committed = self
+            .sqlite_sequences
+            .lock()
+            .expect("sqlite_sequence lock poisoned");
+        for name in dirty {
+            match sequences.get(name) {
+                Some(seq) => {
+                    committed.insert(name.clone(), *seq);
+                }
+                None => {
+                    committed.remove(name);
+                }
+            }
+        }
     }
 
     pub(crate) fn stats_epoch(&self) -> StatsEpoch {
@@ -324,8 +382,25 @@ impl Database {
         self.engine.config().clone()
     }
 
+    /// Current commit durability for this database. Reflects runtime mutations
+    /// made by `PRAGMA synchronous = …` (A1 wiring); the open-time intent is
+    /// frozen in `engine_config().commit_durability`.
+    pub fn commit_durability(&self) -> CommitDurability {
+        self.engine.commit_durability()
+    }
+
     pub fn path(&self) -> &Path {
         self.path.as_ref()
+    }
+
+    /// True when this database is backed by a private/in-memory engine.
+    /// The `redlinedb` registry routes `:memory:` to
+    /// `create_private_in_memory_at` (which sets `private_memory = true`
+    /// on construction) — the ephemeral root may live on the registry
+    /// rather than on this struct, so we flag the private-memory mode
+    /// explicitly rather than relying on `_ephemeral_root`.
+    pub(crate) fn is_in_memory(&self) -> bool {
+        self.private_memory
     }
 
     pub(crate) fn user_version(&self) -> i64 {
@@ -349,8 +424,11 @@ enum MetadataSyncPolicy {
 impl MetadataSyncPolicy {
     fn from_commit_durability(commit_durability: CommitDurability) -> Self {
         match commit_durability {
-            CommitDurability::Strict | CommitDurability::Normal => Self::Durable,
-            CommitDurability::UnsafeDev => Self::Volatile,
+            // A6-b: Normal durability means write but do NOT fsync metadata
+            // (same policy as WAL commits under Normal: OS-buffered writes).
+            // Only Strict requires an fsync to survive a power failure.
+            CommitDurability::Strict => Self::Durable,
+            CommitDurability::Normal | CommitDurability::UnsafeDev => Self::Volatile,
         }
     }
 
@@ -373,8 +451,16 @@ fn volatile_db_options(mut opts: DbOptions) -> DbOptions {
 
 const SHARED_MEMORY_EPHEMERAL_ROOT: &str = "/dev/shm/redlinedb-ephemeral";
 
+static VOLATILE_ROOT_CACHE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
 fn standard_volatile_root() -> PathBuf {
-    volatile_root_from_candidate(Path::new(SHARED_MEMORY_EPHEMERAL_ROOT))
+    // Phase 1.4: cache + lighten the probe. Mirrors the same change in
+    // crates/redlinedb/src/registry.rs. Together these eliminate the
+    // 8-12 syscalls each in-memory open previously incurred when the
+    // two duplicate probes both ran a create+write+unlink dance.
+    VOLATILE_ROOT_CACHE
+        .get_or_init(|| volatile_root_from_candidate(Path::new(SHARED_MEMORY_EPHEMERAL_ROOT)))
+        .clone()
 }
 
 fn volatile_root_from_candidate(candidate: &Path) -> PathBuf {
@@ -394,20 +480,10 @@ fn ensure_writable_volatile_root(root: &Path) -> bool {
         ".redlinedb-volatile-probe-{}-{probe_id}",
         std::process::id()
     ));
-    let result = (|| -> std::io::Result<()> {
-        let mut file = fs::OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&probe)?;
-        file.write_all(b"ok")?;
-        drop(file);
-        fs::remove_file(&probe)?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&probe);
+    if fs::create_dir(&probe).is_err() {
+        return false;
     }
-    result.is_ok()
+    fs::remove_dir(&probe).is_ok()
 }
 
 #[derive(Debug)]
@@ -565,6 +641,43 @@ mod volatile_root_tests {
         assert_eq!(
             volatile_root_from_candidate(&file_path),
             std::env::temp_dir()
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn existing_unwritable_candidate_uses_process_scratch_without_residue() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = tempfile::tempdir().expect("scratch dir");
+        let candidate = root.path().join("existing-shared-root");
+        fs::create_dir(&candidate).expect("candidate dir");
+        fs::set_permissions(&candidate, fs::Permissions::from_mode(0o555))
+            .expect("candidate permissions");
+
+        let selected = volatile_root_from_candidate(&candidate);
+        let residue = fs::read_dir(&candidate)
+            .expect("candidate remains readable")
+            .count();
+        fs::set_permissions(&candidate, fs::Permissions::from_mode(0o700))
+            .expect("restore candidate permissions");
+
+        assert_eq!(selected, std::env::temp_dir());
+        assert_eq!(residue, 0, "failed probes must leave no child custody");
+    }
+
+    #[test]
+    fn writable_candidate_is_selected_and_probe_is_removed() {
+        let root = tempfile::tempdir().expect("scratch dir");
+        let candidate = root.path().join("writable-shared-root");
+
+        assert_eq!(volatile_root_from_candidate(&candidate), candidate);
+        assert_eq!(
+            fs::read_dir(&candidate)
+                .expect("selected candidate remains readable")
+                .count(),
+            0,
+            "successful probe must remove its child custody"
         );
     }
 }

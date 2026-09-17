@@ -1,0 +1,19 @@
+{
+  "schema_version": "v0/summary/1",
+  "total_cases": 1127,
+  "median_latency_ratio": 1.8653,
+  "p75": 1.9306,
+  "p90": 1.9891,
+  "p95": 2.0295,
+  "max": 2.5047,
+  "min": 0.0387,
+  "faster_than_sqlite": 8,
+  "latency_buckets": {
+    "<1.0x": 8,
+    "1.0-1.2x": 2,
+    "1.2-1.5x": 35,
+    "1.5-2.0x": 985,
+    "2.0-3.0x": 97,
+    ">=3.0x": 0
+  }
+}

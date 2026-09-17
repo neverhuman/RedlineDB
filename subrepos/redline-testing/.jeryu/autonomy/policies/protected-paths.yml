@@ -1,0 +1,29 @@
+# Protected paths for redline-testing — part of the safety floor.
+#
+# Edits to these paths are classified R5 (human_required: true) regardless of
+# the otherwise full-auto autonomy grant. This keeps governance, autonomy
+# policy, CI transport config, generated zones, and the protected-branch /
+# protected-tag surfaces fail-closed.
+schema_version: "1"
+
+protected_paths:
+  - ".jeryu/policy.toml"
+  - ".jeryu/ci.toml"
+  - ".jeryu/repo.toml"
+  - ".jeryu/autonomy/**"
+  - ".jankurai/generated-zones.toml"
+  - ".jankurai/audit-policy.toml"
+  - ".github/workflows/**"
+  - ".gitlab-ci.yml"
+
+protect_main: true
+protected_branches:
+  - "main"
+protected_tags:
+  - "v*"
+
+# Editing a protected path escalates to R5 and is fail-closed.
+on_protected_path_change:
+  tier: R5
+  human_required: true
+  fail_closed: true

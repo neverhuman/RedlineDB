@@ -168,10 +168,15 @@ fn recursive_trigger_terminates_at_cap() {
         "CREATE TRIGGER recur AFTER INSERT ON t FOR EACH ROW \
          BEGIN INSERT INTO t VALUES (NEW.a + 1); END",
     );
-    // Enable SQLite's recursive triggers so the comparison is fair.
+    // Enable recursive triggers on both engines so the comparison is
+    // fair — RedlineDB now defaults the bit OFF (SQLite-parity), so
+    // the test has to flip it explicitly to exercise the cap.
     lab.sqlite
         .execute("PRAGMA recursive_triggers = ON", ())
         .expect("sqlite pragma");
+    lab.redline
+        .execute("PRAGMA recursive_triggers = ON")
+        .expect("redline pragma");
     let ru_err = lab.sqlite.execute("INSERT INTO t VALUES (1)", ()).err();
     let rl_err = lab.redline.execute("INSERT INTO t VALUES (1)").err();
     assert!(ru_err.is_some(), "sqlite expected recursion cap error");

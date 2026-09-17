@@ -1,0 +1,23 @@
+version = 1
+
+[[source]]
+id = "rust-control-tests"
+kind = "jankurai_artifact"
+format = "generic-json-summary"
+mode = "required"
+owner = "tools"
+lane = "required"
+artifacts = ["target/jankurai/coverage/rust-tests.json"]
+applies_to = ["tools/redline-proof/**/*.rs"]
+rules = ["HLT-008-FALSE-GREEN-RISK"]
+
+[[source]]
+id = "security-evidence"
+kind = "supply_chain"
+format = "generic-json-summary"
+mode = "required"
+owner = "ops"
+lane = "security"
+artifacts = ["target/security/evidence.json"]
+applies_to = [".github/**", "Cargo.toml", "Cargo.lock", "tools/**/*.rs"]
+rules = ["HLT-016-SUPPLY-CHAIN-DRIFT"]

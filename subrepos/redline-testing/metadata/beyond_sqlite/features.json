@@ -1,0 +1,98 @@
+[
+  {
+    "rank": 1,
+    "title": "Multi-writer / row-locking / queue semantics: FOR UPDATE, SKIP LOCKED, concurrent row reservations",
+    "owner": "sql-parser-planner-executor",
+    "proof_lane": "phase11-sql-contracts",
+    "source_tips": ["tip1.txt", "tip3.txt", "tip4.txt", "tip5.txt", "tip6.txt", "tip7.txt", "tip8.txt", "tip9.txt"],
+    "status": "manifest_backlog"
+  },
+  {
+    "rank": 2,
+    "title": "Migration ergonomics: ALTER COLUMN, defaults, constraint add/drop, safer table evolution",
+    "owner": "sql-parser-planner-executor",
+    "proof_lane": "sql-test",
+    "source_tips": ["tip1.txt", "tip2.txt", "tip3.txt", "tip4.txt", "tip5.txt", "tip6.txt", "tip7.txt", "tip8.txt", "tip9.txt"],
+    "status": "passing_reference"
+  },
+  {
+    "rank": 3,
+    "title": "Stored SQL routines: SQL functions/procedures, variables, reusable DB-side logic",
+    "owner": "sql-parser-planner-executor",
+    "proof_lane": "sql-check",
+    "source_tips": ["tip1.txt", "tip2.txt", "tip3.txt", "tip4.txt"],
+    "status": "manifest_backlog"
+  },
+  {
+    "rank": 4,
+    "title": "Replication / sync / CDC: manifest first; executable tests wait for a RedlineDB API",
+    "owner": "replication-streams",
+    "proof_lane": "beyond-sqlite-manifest",
+    "source_tips": ["tip1.txt", "tip2.txt", "tip3.txt", "tip4.txt"],
+    "status": "manifest_backlog"
+  },
+  {
+    "rank": 5,
+    "title": "LISTEN / NOTIFY: Postgres reference, RedlineDB event contract later",
+    "owner": "sql-parser-planner-executor",
+    "proof_lane": "beyond-postgres-reference",
+    "source_tips": ["tip2.txt", "tip3.txt", "tip4.txt"],
+    "status": "manifest_backlog"
+  },
+  {
+    "rank": 6,
+    "title": "Materialized views: create, refresh, indexed refresh targets",
+    "owner": "sql-parser-planner-executor",
+    "proof_lane": "sql-check",
+    "source_tips": ["tip1.txt", "tip2.txt", "tip3.txt", "tip4.txt"],
+    "status": "manifest_backlog"
+  },
+  {
+    "rank": 7,
+    "title": "Richer typing: decimal, UUID, boolean, timestamps, stricter mode",
+    "owner": "sql-parser-planner-executor",
+    "proof_lane": "sql-test",
+    "source_tips": ["tip1.txt", "tip2.txt", "tip3.txt", "tip4.txt"],
+    "status": "passing_reference"
+  },
+  {
+    "rank": 8,
+    "title": "Unicode/collation/ILIKE: start with active Postgres-vs-RedlineDB ILIKE tests because RedlineDB already has partial support",
+    "owner": "phase10-collations",
+    "proof_lane": "beyond-postgres-reference",
+    "source_tips": ["tip1.txt", "tip2.txt", "tip3.txt", "tip4.txt"],
+    "status": "passing_reference"
+  },
+  {
+    "rank": 9,
+    "title": "JSONB/document indexing: containment, path lookup, indexed generated path cases",
+    "owner": "phase10-jsonb-binary-format",
+    "proof_lane": "sql-test",
+    "source_tips": ["tip1.txt", "tip2.txt", "tip3.txt"],
+    "status": "manifest_backlog"
+  },
+  {
+    "rank": 10,
+    "title": "Schemas/sequences/identity: namespaces, sequence objects, identity syntax",
+    "owner": "storage-and-catalog",
+    "proof_lane": "sql-check",
+    "source_tips": ["tip1.txt", "tip2.txt"],
+    "status": "manifest_backlog"
+  },
+  {
+    "rank": 11,
+    "title": "SQL portability syntax: MERGE, LATERAL, data-modifying CTEs, DISTINCT ON, DEFAULT in values",
+    "owner": "sql-parser-planner-executor",
+    "proof_lane": "sql-check",
+    "source_tips": ["tip1.txt", "tip2.txt", "tip3.txt"],
+    "status": "passing_reference"
+  },
+  {
+    "rank": 12,
+    "title": "Advanced indexes/search/vector: manifest entries first unless existing implementations already pass",
+    "owner": "phase10-vector-flat-and-simd",
+    "proof_lane": "sql-test",
+    "source_tips": ["tip1.txt", "tip2.txt", "tip3.txt"],
+    "status": "manifest_backlog"
+  }
+]

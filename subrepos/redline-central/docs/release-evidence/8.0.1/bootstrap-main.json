@@ -1,0 +1,19 @@
+{
+  "action": "created",
+  "after": {
+    "remote_main": "afe38ef6be397d930b9871661f7b8908da81b51d"
+  },
+  "before": {
+    "remote_main": null
+  },
+  "mode": "apply",
+  "operation": "bootstrap-main",
+  "remote": "http://127.0.0.1:8787/git/jeryu/redline-central.git",
+  "repository": "/home/ubuntu/jain-split/redline-split/redline-central",
+  "reviewed_commit": "afe38ef6be397d930b9871661f7b8908da81b51d",
+  "reviewed_commit_input": "afe38ef6be397d930b9871661f7b8908da81b51d",
+  "schema_version": "jain.bootstrap-main/v1",
+  "status": "pass",
+  "timestamp_unix": 1784182285,
+  "transport": "local-jeryu-server-update-ref-cas"
+}

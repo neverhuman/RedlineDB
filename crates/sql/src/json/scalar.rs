@@ -8,12 +8,115 @@
 //! operation specifically defines another rule (e.g. `json_object` keys
 //! must not be NULL).
 
+use std::cell::RefCell;
+
 use serde_json::{Map, Value};
 
 use crate::error::{Error, Result};
 use crate::value::SqlValue;
 
 use super::path::{JsonPath, MutationMode, PathError, mutate, remove, resolve};
+
+use redlinedb_kernel::json::wire::{NodeKind, node_span, parse_preamble, read_varint, tag};
+use redlinedb_kernel::json::{FORMAT_VERSION, MAGIC, compile_path, decode_node, path_eval};
+
+const JSON_CACHE_CAP: usize = 64;
+
+#[derive(Default)]
+struct JsonScalarCaches {
+    docs: Vec<(String, Value)>,
+    paths: Vec<(String, JsonPath)>,
+}
+
+thread_local! {
+    static JSON_SCALAR_CACHES: RefCell<JsonScalarCaches> =
+        RefCell::new(JsonScalarCaches::default());
+}
+
+pub(crate) fn clear_json_caches() {
+    JSON_SCALAR_CACHES.with(|cache| {
+        let mut cache = cache.borrow_mut();
+        cache.docs.clear();
+        cache.paths.clear();
+    });
+}
+
+// ---------------------------------------------------------------------------
+// JSONB fast path (WS-B7)
+//
+// When the input `SqlValue::Blob` already carries the JSONB preamble we can
+// walk the bytes directly via the kernel's path bytecode instead of
+// inflating to `serde_json::Value`. Only the read scalars participate;
+// mutators (`json_set`/`json_remove`/...) keep using the `serde_json` path.
+// ---------------------------------------------------------------------------
+
+#[inline]
+fn jsonb_bytes(value: &SqlValue) -> Option<&[u8]> {
+    if let SqlValue::Blob(b) = value
+        && b.len() >= 2
+        && b[0] == MAGIC
+        && b[1] == FORMAT_VERSION
+    {
+        return Some(b.as_ref());
+    }
+    None
+}
+
+#[inline]
+fn path_text<'a>(value: &'a SqlValue) -> Option<&'a str> {
+    if let SqlValue::Text(s) = value {
+        Some(s.as_ref())
+    } else {
+        None
+    }
+}
+
+/// Convert a matched JSONB node slice into the `SqlValue` `json_extract`
+/// would return for a single-path call (scalars unwrap, composites render
+/// as JSON text).
+fn jsonb_node_to_sql(slice: &[u8]) -> Result<SqlValue> {
+    let (val, _) = decode_node(slice, 0).map_err(|e| Error::Parse(e.to_string()))?;
+    Ok(json_to_sql(&val))
+}
+
+/// Return the SQLite type name (`"array"`, `"object"`, `"integer"`, ...)
+/// for a JSONB node slice, without allocating.
+fn jsonb_node_type_name(slice: &[u8]) -> Result<&'static str> {
+    let (_, kind) = node_span(slice, 0).map_err(|e| Error::Parse(e.to_string()))?;
+    Ok(match kind {
+        NodeKind::Null => "null",
+        NodeKind::Bool(true) => "true",
+        NodeKind::Bool(false) => "false",
+        NodeKind::Integer => "integer",
+        NodeKind::Real => "real",
+        NodeKind::Text => "text",
+        NodeKind::Array => "array",
+        NodeKind::Object => "object",
+        NodeKind::Blob => "text",
+    })
+}
+
+/// Read the array element count from a JSONB ARRAY node slice (offset 0).
+/// Returns 0 for non-array nodes (matches SQLite's `json_array_length`).
+fn jsonb_array_count(slice: &[u8]) -> Result<i64> {
+    if slice.is_empty() || slice[0] & tag::TYPE_MASK != tag::ARRAY {
+        return Ok(0);
+    }
+    let (count, _) = read_varint(slice, 1).map_err(|e| Error::Parse(e.to_string()))?;
+    Ok(count as i64)
+}
+
+/// Best-effort JSONB validation: preamble + a single node that consumes the
+/// rest of the buffer. Returns false on any structural problem.
+fn jsonb_is_valid(bytes: &[u8]) -> bool {
+    let Ok(off) = parse_preamble(bytes) else {
+        return false;
+    };
+    match node_span(bytes, off) {
+        Ok((span, _)) => off + span == bytes.len(),
+        Err(_) => false,
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Type adapters
@@ -24,25 +127,23 @@ use super::path::{JsonPath, MutationMode, PathError, mutate, remove, resolve};
 ///
 /// Per SQLite docs: text arguments are taken as **JSON values** if they
 /// parse as valid JSON, otherwise as quoted JSON strings. INTEGER/REAL go
-/// straight to numbers, NULL → null, BLOB → quoted base16 string (we use
-/// a straight string repr for simplicity, matching SQLite's behaviour for
-/// text-affinity).
+/// straight to numbers, NULL → null, and BLOBs are rejected.
 ///
 /// `as_json_argument`: text is *always* a JSON string (used by the input
 /// arg of json/json_extract, where the whole text is the JSON document).
-pub(crate) fn sql_to_json_value(value: &SqlValue) -> Value {
+pub(crate) fn sql_to_json_value(value: &SqlValue) -> Result<Value> {
     match value {
-        SqlValue::Null => Value::Null,
-        SqlValue::Integer(n) => Value::Number((*n).into()),
-        SqlValue::Real(f) => serde_json::Number::from_f64(*f)
+        SqlValue::Null => Ok(Value::Null),
+        SqlValue::Integer(n) => Ok(Value::Number((*n).into())),
+        SqlValue::Real(f) => Ok(serde_json::Number::from_f64(*f)
             .map(Value::Number)
-            .unwrap_or(Value::Null),
-        SqlValue::Text(s) => match serde_json::from_str::<Value>(s.as_ref()) {
+            .unwrap_or(Value::Null)),
+        SqlValue::Text(s) => Ok(match serde_json::from_str::<Value>(s.as_ref()) {
             Ok(Value::Array(values)) => Value::Array(values),
             Ok(Value::Object(values)) => Value::Object(values),
             _ => Value::String(s.to_string()),
-        },
-        SqlValue::Blob(b) => Value::String(String::from_utf8_lossy(b).into_owned()),
+        }),
+        SqlValue::Blob(_) => Err(Error::Parse("JSON cannot hold BLOB values".into())),
     }
 }
 
@@ -56,17 +157,11 @@ pub(crate) fn parse_json_arg(value: &SqlValue) -> Result<Option<Value>> {
                 .map(Value::Number)
                 .unwrap_or(Value::Null),
         )),
-        SqlValue::Text(s) => match serde_json::from_str(s.as_ref()) {
-            Ok(v) => Ok(Some(v)),
-            Err(e) => Err(Error::Parse(format!("malformed JSON: {e}"))),
-        },
+        SqlValue::Text(s) => parse_json_text_cached(s.as_ref()).map(Some),
         SqlValue::Blob(b) => {
             let s = std::str::from_utf8(b)
                 .map_err(|e| Error::Parse(format!("invalid UTF-8 in JSON blob: {e}")))?;
-            match serde_json::from_str(s) {
-                Ok(v) => Ok(Some(v)),
-                Err(e) => Err(Error::Parse(format!("malformed JSON: {e}"))),
-            }
+            parse_json_text_cached(s).map(Some)
         }
     }
 }
@@ -105,7 +200,72 @@ fn parse_path(value: &SqlValue) -> Result<JsonPath> {
     let SqlValue::Text(s) = value else {
         return Err(Error::Parse("JSON path must be TEXT".into()));
     };
-    JsonPath::parse(s.as_ref()).map_err(path_error)
+    parse_path_cached(s.as_ref())
+}
+
+fn parse_json_text_cached(text: &str) -> Result<Value> {
+    JSON_SCALAR_CACHES.with(|cache| {
+        if let Some(value) = cache
+            .borrow()
+            .docs
+            .iter()
+            .find_map(|(cached, value)| (cached == text).then(|| value.clone()))
+        {
+            return Ok(value);
+        }
+        let parsed = serde_json::from_str::<Value>(text)
+            .map_err(|e| Error::Parse(format!("malformed JSON: {e}")))?;
+        insert_bounded(
+            &mut cache.borrow_mut().docs,
+            text.to_owned(),
+            parsed.clone(),
+        );
+        Ok(parsed)
+    })
+}
+
+fn json_text_valid_cached(text: &str) -> bool {
+    JSON_SCALAR_CACHES.with(|cache| {
+        let cached = {
+            let cache = cache.borrow();
+            cache.docs.iter().any(|(cached, _)| cached == text)
+        };
+        if cached {
+            return true;
+        }
+        let Ok(parsed) = serde_json::from_str::<Value>(text) else {
+            return false;
+        };
+        insert_bounded(&mut cache.borrow_mut().docs, text.to_owned(), parsed);
+        true
+    })
+}
+
+fn parse_path_cached(text: &str) -> Result<JsonPath> {
+    JSON_SCALAR_CACHES.with(|cache| {
+        if let Some(path) = cache
+            .borrow()
+            .paths
+            .iter()
+            .find_map(|(cached, path)| (cached == text).then(|| path.clone()))
+        {
+            return Ok(path);
+        }
+        let parsed = JsonPath::parse(text).map_err(path_error)?;
+        insert_bounded(
+            &mut cache.borrow_mut().paths,
+            text.to_owned(),
+            parsed.clone(),
+        );
+        Ok(parsed)
+    })
+}
+
+fn insert_bounded<T>(items: &mut Vec<(String, T)>, key: String, value: T) {
+    if items.len() >= JSON_CACHE_CAP {
+        items.remove(0);
+    }
+    items.push((key, value));
 }
 
 fn path_error(e: PathError) -> Error {
@@ -128,8 +288,8 @@ pub fn json_func(values: &[SqlValue]) -> Result<SqlValue> {
 }
 
 pub fn json_array(values: &[SqlValue]) -> Result<SqlValue> {
-    let arr: Vec<Value> = values.iter().map(sql_to_json_value).collect();
-    Ok(render_json(&Value::Array(arr)))
+    let arr: Result<Vec<Value>> = values.iter().map(sql_to_json_value).collect();
+    Ok(render_json(&Value::Array(arr?)))
 }
 
 pub fn json_array_length(values: &[SqlValue]) -> Result<SqlValue> {
@@ -137,6 +297,28 @@ pub fn json_array_length(values: &[SqlValue]) -> Result<SqlValue> {
         return Err(Error::UnsupportedSql(
             "json_array_length requires at least one argument".into(),
         ));
+    }
+    // JSONB fast path: walk byte slice, no serde_json inflation.
+    if let Some(bytes) = jsonb_bytes(&values[0]) {
+        let slice_opt: Option<&[u8]> = if values.len() >= 2 {
+            let Some(p) = path_text(&values[1]) else {
+                return Err(Error::Parse("JSON path must be TEXT".into()));
+            };
+            match compile_path(p) {
+                Ok(compiled) => match path_eval(bytes, &compiled) {
+                    Ok(Some(s)) => Some(s),
+                    Ok(None) => return Ok(SqlValue::Null),
+                    Err(_) => None, // fall through to serde_json path
+                },
+                Err(_) => None, // unsupported path feature → fall back
+            }
+        } else {
+            let off = parse_preamble(bytes).map_err(|e| Error::Parse(e.to_string()))?;
+            Some(&bytes[off..])
+        };
+        if let Some(slice) = slice_opt {
+            return Ok(SqlValue::Integer(jsonb_array_count(slice)?));
+        }
     }
     let Some(json) = parse_json_arg(&values[0])? else {
         return Ok(SqlValue::Null);
@@ -173,7 +355,7 @@ pub fn json_object(values: &[SqlValue]) -> Result<SqlValue> {
             SqlValue::Real(f) => crate::exec::expr::scalar::value::format_real_sqlite(*f),
             SqlValue::Blob(b) => String::from_utf8_lossy(b).into_owned(),
         };
-        map.insert(key, sql_to_json_value(&pair[1]));
+        map.insert(key, sql_to_json_value(&pair[1])?);
     }
     Ok(render_json(&Value::Object(map)))
 }
@@ -183,6 +365,21 @@ pub fn json_extract(values: &[SqlValue]) -> Result<SqlValue> {
         return Err(Error::UnsupportedSql(
             "json_extract requires at least 2 arguments".into(),
         ));
+    }
+    // JSONB fast path: single-path call against an already-encoded blob walks
+    // the byte image directly via the kernel's path bytecode. Multi-path
+    // calls fall through to the serde_json path so the returned JSON array
+    // text exactly matches the existing renderer.
+    if values.len() == 2
+        && let Some(bytes) = jsonb_bytes(&values[0])
+        && let Some(p) = path_text(&values[1])
+        && let Ok(compiled) = compile_path(p)
+    {
+        match path_eval(bytes, &compiled) {
+            Ok(Some(slice)) => return jsonb_node_to_sql(slice),
+            Ok(None) => return Ok(SqlValue::Null),
+            Err(_) => { /* fall through to serde_json path */ }
+        }
     }
     let Some(doc) = parse_json_arg(&values[0])? else {
         return Ok(SqlValue::Null);
@@ -233,7 +430,7 @@ fn apply_mutation(values: &[SqlValue], mode: MutationMode, name: &str) -> Result
     let mut i = 1usize;
     while i + 1 < values.len() {
         let path = parse_path(&values[i])?;
-        let value = sql_to_json_value(&values[i + 1]);
+        let value = sql_to_json_value(&values[i + 1])?;
         mutate(&mut doc, &path, value, mode).map_err(path_error)?;
         i += 2;
     }
@@ -302,6 +499,28 @@ pub fn json_type(values: &[SqlValue]) -> Result<SqlValue> {
             "json_type requires at least 1 argument".into(),
         ));
     }
+    // JSONB fast path.
+    if let Some(bytes) = jsonb_bytes(&values[0]) {
+        let slice_opt: Option<&[u8]> = if values.len() >= 2 {
+            let Some(p) = path_text(&values[1]) else {
+                return Err(Error::Parse("JSON path must be TEXT".into()));
+            };
+            match compile_path(p) {
+                Ok(compiled) => match path_eval(bytes, &compiled) {
+                    Ok(Some(s)) => Some(s),
+                    Ok(None) => return Ok(SqlValue::Null),
+                    Err(_) => None,
+                },
+                Err(_) => None,
+            }
+        } else {
+            let off = parse_preamble(bytes).map_err(|e| Error::Parse(e.to_string()))?;
+            Some(&bytes[off..])
+        };
+        if let Some(slice) = slice_opt {
+            return Ok(SqlValue::Text(jsonb_node_type_name(slice)?.into()));
+        }
+    }
     let Some(doc) = parse_json_arg(&values[0])? else {
         return Ok(SqlValue::Null);
     };
@@ -344,17 +563,24 @@ pub fn json_valid(values: &[SqlValue]) -> Result<SqlValue> {
             ));
         }
     };
-    let s = match arg {
+    let ok = match arg {
         SqlValue::Null => return Ok(SqlValue::Null),
-        SqlValue::Text(s) => s.to_string(),
-        SqlValue::Blob(b) => match std::str::from_utf8(b) {
-            Ok(s) => s.to_owned(),
-            Err(_) => return Ok(SqlValue::Integer(0)),
-        },
+        SqlValue::Text(s) => json_text_valid_cached(s.as_ref()),
+        SqlValue::Blob(b) => {
+            // JSONB blobs validate via the wire-format walker rather than a
+            // UTF-8 reinterpretation; this preserves SQLite semantics for
+            // text-shaped blobs while accepting our native binary form.
+            if b.len() >= 2 && b[0] == MAGIC && b[1] == FORMAT_VERSION {
+                return Ok(SqlValue::Integer(if jsonb_is_valid(b) { 1 } else { 0 }));
+            }
+            match std::str::from_utf8(b) {
+                Ok(s) => json_text_valid_cached(s),
+                Err(_) => return Ok(SqlValue::Integer(0)),
+            }
+        }
         // Per SQLite: numerics are valid JSON.
         SqlValue::Integer(_) | SqlValue::Real(_) => return Ok(SqlValue::Integer(1)),
     };
-    let ok = serde_json::from_str::<Value>(&s).is_ok();
     Ok(SqlValue::Integer(if ok { 1 } else { 0 }))
 }
 
@@ -367,7 +593,7 @@ pub fn json_quote(values: &[SqlValue]) -> Result<SqlValue> {
             ));
         }
     };
-    Ok(render_json(&sql_to_json_value(arg)))
+    Ok(render_json(&sql_to_json_value(arg)?))
 }
 
 /// Re-export `json_func` under the alias `json_minify` for symmetry with
@@ -485,6 +711,28 @@ mod tests {
     }
 
     #[test]
+    fn json_extract_jsonb_fast_path_scalar() {
+        // SqlValue::Blob carrying the JSONB preamble must walk byte-image
+        // rather than reparsing.
+        let blob = redlinedb_kernel::json::encode(&serde_json::json!({"a": 42}));
+        let v = json_extract(&[SqlValue::Blob(Arc::from(blob.as_slice())), t("$.a")]).unwrap();
+        assert_eq!(v, SqlValue::Integer(42));
+    }
+
+    #[test]
+    fn json_extract_jsonb_matches_text() {
+        let doc = serde_json::json!({"a": [1, 2, {"b": "yo"}]});
+        let blob = redlinedb_kernel::json::encode(&doc);
+        let text = serde_json::to_string(&doc).unwrap();
+        for path in ["$.a[0]", "$.a[2].b", "$.missing"] {
+            let from_blob =
+                json_extract(&[SqlValue::Blob(Arc::from(blob.as_slice())), t(path)]).unwrap();
+            let from_text = json_extract(&[t(&text), t(path)]).unwrap();
+            assert_eq!(from_blob, from_text, "diverged for {path}");
+        }
+    }
+
+    #[test]
     fn json_set_overwrites() {
         let v = json_set(&[t(r#"{"a":1}"#), t("$.a"), SqlValue::Integer(2)]).unwrap();
         assert_eq!(v, t(r#"{"a":2}"#));
@@ -533,6 +781,12 @@ mod tests {
     #[test]
     fn json_quote_quotes_text() {
         assert_eq!(json_quote(&[t("hi")]).unwrap(), t("\"hi\""));
+    }
+
+    #[test]
+    fn json_quote_rejects_blob_values() {
+        let err = json_quote(&[SqlValue::Blob(Arc::from([0x01_u8, 0xab_u8]))]).unwrap_err();
+        assert!(format!("{err:?}").contains("JSON cannot hold BLOB values"));
     }
 
     #[test]

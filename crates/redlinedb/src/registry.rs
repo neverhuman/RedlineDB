@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions as FsOpenOptions};
-use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, Weak};
@@ -25,6 +24,7 @@ pub(crate) struct OpenFingerprint {
     pub statement_cache_capacity: usize,
     pub process_owner_lock: bool,
     pub temp_dir: Option<PathBuf>,
+    pub lean_ephemeral: bool,
 }
 
 impl OpenFingerprint {
@@ -39,6 +39,12 @@ impl OpenFingerprint {
             statement_cache_capacity: options.statement_cache_capacity,
             process_owner_lock: options.process_owner_lock,
             temp_dir: options.temp_dir.clone(),
+            // Wave-6b: by the time we land here, `volatile_open_options`
+            // has already promoted `None` to `Some(true)` for in-memory /
+            // ephemeral opens, so `effective_lean_ephemeral(false)` returns
+            // the right value for both the file-backed and the volatile
+            // paths.
+            lean_ephemeral: options.effective_lean_ephemeral(false),
         }
     }
 
@@ -51,6 +57,7 @@ impl OpenFingerprint {
             && self.statement_cache_capacity == other.statement_cache_capacity
             && self.process_owner_lock == other.process_owner_lock
             && self.temp_dir == other.temp_dir
+            && self.lean_ephemeral == other.lean_ephemeral
     }
 }
 
@@ -63,6 +70,35 @@ impl OwnedTempRoot {
     fn new(path: PathBuf) -> Result<Self> {
         fs::create_dir_all(&path)?;
         Ok(Self { path })
+    }
+
+    /// A24 fast-path: when the caller has guaranteed the parent directory
+    /// already exists (e.g. `:memory:` opens, where the parent is
+    /// `standard_volatile_root()` cached process-wide on first use), a
+    /// single-level `fs::create_dir(path)` is enough. `create_dir_all`
+    /// walks every path component with a separate statx — 3-4 syscalls on
+    /// `/dev/shm/redlinedb-ephemeral/redlinedb-ephemeral-…/`. Skipping
+    /// those is worth a noticeable chunk of process-startup time when
+    /// multiplied by 1127 fresh subprocesses in the parity corpus.
+    ///
+    /// Falls back to `create_dir_all` on `NotFound` so caller-supplied
+    /// `temp_dir` paths that haven't been seeded still work.
+    fn new_with_seeded_parent(path: PathBuf) -> Result<Self> {
+        match fs::create_dir(&path) {
+            Ok(()) => Ok(Self { path }),
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir_all(&path)?;
+                Ok(Self { path })
+            }
+            Err(err) if err.kind() == std::io::ErrorKind::AlreadyExists => {
+                // Defensive: a previous session with the same counter-derived
+                // name wasn't cleaned up. Fall back to the slow path which
+                // tolerates pre-existing dirs.
+                fs::create_dir_all(&path)?;
+                Ok(Self { path })
+            }
+            Err(err) => Err(err.into()),
+        }
     }
 }
 
@@ -80,6 +116,12 @@ pub(crate) struct DatabaseEntry {
     pub path: PathBuf,
     pub interrupt: Arc<AtomicBool>,
     pub busy_timeout: Mutex<Duration>,
+    /// Per-database Rayon pool for future intra-query parallel operators.
+    /// `None` when the caller opted out (`rayon_threads = Some(0|1)`) so
+    /// operators take the serial path. The pool is built with `.build()`
+    /// (non-global): embedding `redlinedb` never installs a global Rayon
+    /// pool that would pollute the host process's existing parallelism.
+    pub rayon_pool: Option<Arc<rayon::ThreadPool>>,
 }
 
 #[derive(Default)]
@@ -122,6 +164,40 @@ fn open_lock_for_path(registry: &mut Registry, path: &Path) -> Arc<Mutex<()>> {
         .open_locks
         .insert(path.to_path_buf(), Arc::downgrade(&lock));
     lock
+}
+
+/// Build the per-database Rayon pool, honouring `OpenOptions::rayon_threads`.
+///
+/// **Default policy (Phase 5 hot-fix)**: `None` => NO pool (serial path).
+/// Spawning 8 worker threads at every Database::open paid a ~1.5 ms startup
+/// tax for ZERO benefit until intra-query parallel operators are wired
+/// (Phase 6 Morsel/Vector). The parity harness spawns ~1127 fresh processes,
+/// so the cost was ~1.7 seconds spread across the corpus and inflated the
+/// median latency ratio by ~40%.
+///
+/// `Some(0|1)` => no pool (serial path; same as default).
+/// `Some(n)` for n >= 2 => `n`-thread non-global pool. The build is
+/// non-global: it must never call `build_global`, otherwise hosts that
+/// already own a Rayon pool (axum, sqlx, an embedder's own analytics stack)
+/// would see their pool pre-empted by `redlinedb`.
+fn build_rayon_pool(options: &OpenOptions) -> Result<Option<Arc<rayon::ThreadPool>>> {
+    let Some(n) = options.rayon_threads else {
+        return Ok(None);
+    };
+    if n <= 1 {
+        return Ok(None);
+    }
+    let pool = rayon::ThreadPoolBuilder::new()
+        .num_threads(n)
+        .thread_name(|i| format!("redlinedb-rayon-{i}"))
+        .build()
+        .map_err(|err| {
+            Error::new(
+                ErrorCode::Internal,
+                format!("rayon pool build failed: {err}"),
+            )
+        })?;
+    Ok(Some(Arc::new(pool)))
 }
 
 fn validate_existing_entry(
@@ -181,10 +257,21 @@ fn create_ephemeral_database_inner(
         }
     }
 
-    if path.exists() {
-        fs::remove_dir_all(&path)?;
-    }
-    let temp_root = OwnedTempRoot::new(path.clone())?;
+    // A24: skip the pre-existence statx for `:memory:` opens. Their session
+    // names are counter-derived (`memory-{pid}-{id}`) so they can never
+    // collide with a prior session in the same process, and the inner
+    // `OwnedTempRoot::new_with_seeded_parent` falls back gracefully if a
+    // stale dir from a crashed prior process is still there. Named
+    // ephemeral sessions keep the cleanup behaviour because they CAN
+    // collide (e.g. a previous run of the same harness).
+    let temp_root = if private_memory {
+        OwnedTempRoot::new_with_seeded_parent(path.clone())?
+    } else {
+        if path.exists() {
+            fs::remove_dir_all(&path)?;
+        }
+        OwnedTempRoot::new(path.clone())?
+    };
     let db = if private_memory {
         redlinedb_sql::Database::create_private_in_memory_at(
             &path,
@@ -199,6 +286,7 @@ fn create_ephemeral_database_inner(
         None
     };
 
+    let rayon_pool = build_rayon_pool(options)?;
     let entry = Arc::new(DatabaseEntry {
         db,
         fingerprint,
@@ -207,6 +295,7 @@ fn create_ephemeral_database_inner(
         path: path.clone(),
         interrupt: Arc::new(AtomicBool::new(false)),
         busy_timeout: Mutex::new(options.busy_timeout),
+        rayon_pool,
     });
     let mut registry = registry().lock().expect("registry poisoned");
     registry.entries.insert(path, Arc::downgrade(&entry));
@@ -284,7 +373,13 @@ fn open_database_at(
     }
 
     let sql_options = crate::sql_options(options);
-    let db = if create {
+    // `OpenOptions::create` means "create when absent", not "replace an
+    // existing image". `normalize_path` creates a missing directory before
+    // the path lock is acquired, so decide from the directory contents while
+    // holding that lock. A non-empty directory must go through recovery and
+    // fail closed if its durable image is incomplete or corrupt.
+    let create_new = create && fs::read_dir(&path)?.next().transpose()?.is_none();
+    let db = if create_new {
         redlinedb_sql::Database::create(&path, sql_options)?
     } else {
         redlinedb_sql::Database::open(&path, sql_options)?
@@ -296,6 +391,7 @@ fn open_database_at(
         None
     };
 
+    let rayon_pool = build_rayon_pool(options)?;
     let entry = Arc::new(DatabaseEntry {
         db,
         fingerprint,
@@ -304,6 +400,7 @@ fn open_database_at(
         path: path.clone(),
         interrupt: Arc::new(AtomicBool::new(false)),
         busy_timeout: Mutex::new(options.busy_timeout),
+        rayon_pool,
     });
     let mut registry = registry().lock().expect("registry poisoned");
     registry.entries.insert(path, Arc::downgrade(&entry));
@@ -312,8 +409,18 @@ fn open_database_at(
 
 const SHARED_MEMORY_EPHEMERAL_ROOT: &str = "/dev/shm/redlinedb-ephemeral";
 
+static VOLATILE_ROOT_CACHE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
 pub(crate) fn standard_volatile_root() -> PathBuf {
-    volatile_root_from_candidate(Path::new(SHARED_MEMORY_EPHEMERAL_ROOT))
+    // Phase 1.4: cache the resolved volatile root across the process
+    // lifetime. The old code ran a create+write+unlink probe on every
+    // call (4-6 syscalls) AND the same probe ran in
+    // crates/sql/src/connection/database.rs, so an in-memory open paid
+    // 8-12 syscalls. With the cache and the lighter probe below the
+    // first open pays 1-2 syscalls and subsequent opens pay zero.
+    VOLATILE_ROOT_CACHE
+        .get_or_init(|| volatile_root_from_candidate(Path::new(SHARED_MEMORY_EPHEMERAL_ROOT)))
+        .clone()
 }
 
 fn volatile_root_from_candidate(candidate: &Path) -> PathBuf {
@@ -324,6 +431,11 @@ fn volatile_root_from_candidate(candidate: &Path) -> PathBuf {
     }
 }
 
+/// Probe whether `root` is usable as our shared-memory ephemeral store.
+/// `create_dir_all` alone is insufficient: it succeeds when an existing
+/// directory is searchable but not writable by the current identity. The
+/// cached caller pays one create/remove pair so a later session directory
+/// cannot fail after we have selected this root.
 fn ensure_writable_volatile_root(root: &Path) -> bool {
     if fs::create_dir_all(root).is_err() {
         return false;
@@ -333,20 +445,10 @@ fn ensure_writable_volatile_root(root: &Path) -> bool {
         ".redlinedb-volatile-probe-{}-{probe_id}",
         std::process::id()
     ));
-    let result = (|| -> io::Result<()> {
-        let mut file = FsOpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&probe)?;
-        file.write_all(b"ok")?;
-        drop(file);
-        fs::remove_file(&probe)?;
-        Ok(())
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&probe);
+    if fs::create_dir(&probe).is_err() {
+        return false;
     }
-    result.is_ok()
+    fs::remove_dir(&probe).is_ok()
 }
 
 fn ephemeral_session_path(temp_dir: Option<&Path>, session_name: &str) -> PathBuf {
@@ -389,7 +491,7 @@ fn lock_owner_file(file: &File) -> Result<()> {
     } else {
         Err(Error::new(
             ErrorCode::Busy,
-            format!("database already open: {}", io::Error::last_os_error()),
+            format!("database already open: {}", std::io::Error::last_os_error()),
         ))
     }
 }

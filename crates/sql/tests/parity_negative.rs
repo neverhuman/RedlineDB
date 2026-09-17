@@ -62,23 +62,41 @@ fn delete_using_is_unsupported() {
 }
 
 #[test]
-fn delete_limit_is_unsupported() {
+fn delete_limit_is_supported() {
+    // WS-A2f-rewrite: the parser layer keeps rejecting `DELETE ... LIMIT n`
+    // by default (parity case 00220 expects the SQLite autoconf
+    // amalgamation's rejection), but the opt-in PRAGMA
+    // `redline_dml_order_limit_rewrite = ON` enables the pre-parse rewrite
+    // to the `WHERE rowid IN (SELECT rowid FROM t LIMIT n)` form. With the
+    // PRAGMA off the statement still errors; with it on it executes.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
     c.execute("INSERT INTO t VALUES (1),(2),(3)")
         .expect("insert");
     let res = c.execute("DELETE FROM t LIMIT 1");
-    assert_unsupported(res, "not supported");
+    assert_errors(res);
+    c.execute("PRAGMA redline_dml_order_limit_rewrite = ON")
+        .expect("pragma on");
+    c.execute("DELETE FROM t LIMIT 1").expect("rewrite path");
 }
 
 #[test]
-fn delete_order_by_is_unsupported() {
+fn delete_order_by_is_supported() {
+    // WS-A2f-rewrite: same story as `delete_limit_is_supported` — default
+    // rejection, opt-in PRAGMA lowers the SQL into the rowid-IN-subquery
+    // form. A bare `DELETE ... ORDER BY id` (no LIMIT) is meaningless and
+    // still rejected even with the PRAGMA on; the rewrite only fires for
+    // shapes that carry a LIMIT clause.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(id INTEGER)").expect("create");
     c.execute("INSERT INTO t VALUES (1),(2),(3)")
         .expect("insert");
     let res = c.execute("DELETE FROM t ORDER BY id");
     assert_errors(res);
+    c.execute("PRAGMA redline_dml_order_limit_rewrite = ON")
+        .expect("pragma on");
+    c.execute("DELETE FROM t ORDER BY id LIMIT 1")
+        .expect("rewrite path");
 }
 
 #[test]
@@ -129,24 +147,29 @@ fn alter_table_drop_multiple_columns_is_unsupported() {
 }
 
 #[test]
-fn create_index_with_include_is_unsupported() {
+fn create_index_with_include_is_accepted() {
+    // Track J wired CREATE INDEX ... INCLUDE (...) — the INCLUDE list is
+    // parsed and discarded (covering-index optimisation is a no-op in
+    // RedlineDB; the index itself is created as a regular btree).
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER, b TEXT)")
         .expect("create");
-    // PostgreSQL-style INCLUDE is not supported
-    let res = c.execute("CREATE INDEX idx ON t(a) INCLUDE (b)");
-    assert_errors(res);
+    c.execute("CREATE INDEX idx ON t(a) INCLUDE (b)")
+        .expect("INCLUDE clause accepted");
 }
 
 // ── SELECT unsupported constructs ────────────────────────────────────────────
 
 #[test]
-fn distinct_on_is_unsupported() {
+fn distinct_on_is_accepted() {
+    // Track K landed DISTINCT ON (PG extension): keeps the first row per
+    // distinct combination of the DISTINCT ON expressions, ordered by an
+    // outer ORDER BY.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(a INTEGER, b TEXT)")
         .expect("create");
-    let res = c.execute("SELECT DISTINCT ON (a) a, b FROM t");
-    assert_unsupported(res, "not supported");
+    c.execute("SELECT DISTINCT ON (a) a, b FROM t")
+        .expect("DISTINCT ON accepted");
 }
 
 #[test]
@@ -158,12 +181,13 @@ fn group_by_all_is_unsupported() {
 }
 
 #[test]
-fn like_any_is_unsupported() {
+fn like_any_is_accepted() {
+    // Track G/H added LIKE ANY (Postgres extension) and the ARRAY[..]
+    // rewrite — the parse + exec round-trip now succeeds.
     let (_d, c) = open();
     c.execute("CREATE TABLE t(v TEXT)").expect("create");
-    // LIKE ANY (pattern_list) — Postgres extension
-    let res = c.execute("SELECT v FROM t WHERE v LIKE ANY (ARRAY['%foo%'])");
-    assert_errors(res);
+    c.execute("SELECT v FROM t WHERE v LIKE ANY (ARRAY['%foo%'])")
+        .expect("LIKE ANY accepted");
 }
 
 #[test]
@@ -181,6 +205,13 @@ fn vector_non_f32_type_is_unsupported() {
     let (_d, c) = open();
     let res = c.execute("CREATE TABLE t(v VECTOR(3, float64))");
     assert_unsupported(res, "not supported");
+}
+
+#[test]
+fn json_quote_rejects_blob_input() {
+    let (_d, c) = open();
+    let res = c.execute("SELECT json_quote(x'01ab')");
+    assert_unsupported(res, "JSON cannot hold BLOB values");
 }
 
 // ── Parse-only features — confirmed boundary ──────────────────────────────────
@@ -232,4 +263,24 @@ fn unsupported_function_returns_error() {
     // A function that definitely does not exist
     let res = c.execute("SELECT totally_fake_function_xyz(1)");
     assert_errors(res);
+}
+
+#[test]
+fn missing_select_projection_column_errors_before_scan() {
+    let (_d, c) = open();
+    c.execute("CREATE TABLE t(x INTEGER)").expect("create");
+
+    for (sql, expected) in [
+        ("SELECT bogus FROM t", "unknown column: bogus"),
+        ("SELECT t.bogus FROM t", "unknown column: t.bogus"),
+    ] {
+        let err = c
+            .prepare(sql)
+            .expect_err("missing projection column should fail at prepare");
+        let msg = err.to_string().to_lowercase();
+        assert!(
+            msg.contains(expected),
+            "expected {sql:?} to contain {expected:?}, got {msg:?}"
+        );
+    }
 }

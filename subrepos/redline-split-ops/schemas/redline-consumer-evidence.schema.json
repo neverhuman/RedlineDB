@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/redline-consumer-evidence.schema.json",
+  "title": "Redline consumer evidence",
+  "description": "Fail-closed 18-field evidence contract binding each Jain or Jeryu consumer test log to the exact Redline family receipt, engine identity, manifests, policies, source commit, and producer version.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "consumer", "family", "generated_at", "status", "source_commit", "required_check", "engine_tag", "engine_commit", "proof_lock_id", "family_ci_receipt_sha256", "manifest_sha256", "policy_sha256", "consumer_manifest_sha256", "consumer_policy_sha256", "test_log", "test_log_sha256", "tool_version"],
+  "properties": {
+    "schema_version": {"const": "redline.consumer-evidence/v1"},
+    "consumer": {"enum": ["jain-split", "jeryu-split"]},
+    "family": {"const": "redline-split"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "status": {"const": "pass"},
+    "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "required_check": {"type": "string", "pattern": "^(jain|jeryu)-split/redline-consumer$"},
+    "engine_tag": {"type": "string", "pattern": "^redline-core-v[0-9]+\\.[0-9]+\\.[0-9]+-jain\\.[0-9]+$"},
+    "engine_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "proof_lock_id": {"type": "string", "minLength": 1},
+    "family_ci_receipt_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "consumer_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "consumer_policy_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "test_log": {"type": "string", "pattern": "^[^/]+$"},
+    "test_log_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "tool_version": {"enum": ["jain-redline-consumer/v1", "jeryu-redline-consumer/v1"]}
+  }
+}

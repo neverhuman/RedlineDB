@@ -132,6 +132,35 @@ pub enum CombineOutcome {
     Enqueue,
 }
 
+/// WS-C6: cross-lane flush combiner helper. Consumes a stream of
+/// `(lane_idx, target_lsn)` flush requests and emits the per-lane
+/// union — the maximum LSN any waiter on that lane requested. Used
+/// by the cross-lane coalescer worker to collapse a burst of N
+/// concurrent flush requests into at most `lane_count` per-lane
+/// fsync barriers. Free function so the hot path performs zero
+/// allocations beyond the caller's scratch slice. Returns the count
+/// of distinct lanes touched.
+pub fn cross_lane_union<I>(requests: I, per_lane_target: &mut [u64]) -> usize
+where
+    I: IntoIterator<Item = (usize, u64)>,
+{
+    for slot in per_lane_target.iter_mut() {
+        *slot = 0;
+    }
+    let mut touched = 0_usize;
+    for (lane_idx, target) in requests {
+        if let Some(slot) = per_lane_target.get_mut(lane_idx) {
+            if *slot == 0 {
+                touched += 1;
+            }
+            if target > *slot {
+                *slot = target;
+            }
+        }
+    }
+    touched
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -179,6 +208,25 @@ mod tests {
                 )
                 .is_none()
         );
+    }
+
+    #[test]
+    fn cross_lane_union_picks_max_per_lane() {
+        let mut scratch = [0_u64; 4];
+        let touched = cross_lane_union(
+            [(0, 100), (1, 50), (0, 200), (3, 10), (1, 30), (9, 7)],
+            &mut scratch,
+        );
+        assert_eq!(touched, 3);
+        assert_eq!(scratch, [200, 50, 0, 10]);
+    }
+
+    #[test]
+    fn cross_lane_union_empty_input() {
+        let mut scratch = [0_u64; 2];
+        let touched = cross_lane_union(std::iter::empty(), &mut scratch);
+        assert_eq!(touched, 0);
+        assert_eq!(scratch, [0, 0]);
     }
 
     #[test]

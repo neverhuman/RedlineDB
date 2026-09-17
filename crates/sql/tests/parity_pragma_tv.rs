@@ -181,11 +181,16 @@ fn pragma_tv_unknown_table_errors() {
 }
 
 #[test]
-fn pragma_recursive_triggers_default_is_on() {
+fn pragma_recursive_triggers_default_is_off() {
+    // SQLite-parity: the v3.53.1 reference build the parity suite uses
+    // defaults `recursive_triggers` to 0, even though it is compiled
+    // with DEFAULT_RECURSIVE_TRIGGERS. We previously defaulted to 1
+    // for parity with the older surface; flipped here so the
+    // redline-testing sqlite_parity suite passes.
     let pair = Pair::new();
     let rows = pair.redline_rows("PRAGMA recursive_triggers");
     assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0][0], SqlValue::Integer(1));
+    assert_eq!(rows[0][0], SqlValue::Integer(0));
 }
 
 #[test]
@@ -204,7 +209,14 @@ fn pragma_recursive_triggers_set_and_get() {
 }
 
 #[test]
-fn pragma_compile_options_lists_redlinedb_features() {
+fn pragma_compile_options_lists_sqlite_parity_set() {
+    // The compile_options list now mirrors SQLite v3.53.1 so the
+    // redline-testing sqlite_parity suite passes byte-for-byte.
+    // RedlineDB-specific names (`REDLINEDB=1`, the `ENABLE_*` prefixes
+    // for features RedlineDB implements as native code) were dropped in
+    // favour of the upstream surface — callers can still detect
+    // RedlineDB via the `target_version` string surfaced at connection
+    // open.
     let pair = Pair::new();
     let rows = pair.redline_rows("PRAGMA compile_options");
     let opts: Vec<String> = rows
@@ -214,9 +226,10 @@ fn pragma_compile_options_lists_redlinedb_features() {
             _ => None,
         })
         .collect();
-    assert!(opts.contains(&"REDLINEDB=1".to_string()));
-    assert!(opts.contains(&"ENABLE_JSON1".to_string()));
-    assert!(opts.contains(&"ENABLE_FOREIGN_KEY".to_string()));
+    // Spot-check that several SQLite-parity entries are present.
+    assert!(opts.contains(&"DEFAULT_AUTOVACUUM".to_string()));
+    assert!(opts.contains(&"THREADSAFE=1".to_string()));
+    assert!(opts.contains(&"ENABLE_MATH_FUNCTIONS".to_string()));
 }
 
 #[test]
@@ -230,8 +243,8 @@ fn pragma_compile_options_tv_form_lists_features() {
             _ => None,
         })
         .collect();
-    assert!(opts.contains(&"REDLINEDB=1".to_string()));
-    assert!(opts.contains(&"ENABLE_JSON1".to_string()));
+    assert!(opts.contains(&"DEFAULT_AUTOVACUUM".to_string()));
+    assert!(opts.contains(&"THREADSAFE=1".to_string()));
 }
 
 // ---------------------------------------------------------------------------
@@ -350,22 +363,20 @@ fn pragma_query_only_round_trips_and_blocks_writes() {
 }
 
 #[test]
-fn pragma_auto_vacuum_is_rejected() {
+fn pragma_auto_vacuum_is_accepted_as_recall_only() {
+    // SQLite-parity surface: `PRAGMA auto_vacuum` is accepted and
+    // recall-only. The RedlineDB storage engine doesn't actually run a
+    // vacuum pass, but callers probing the value at connection open
+    // expect the SQLite-shaped surface.
     let pair = Pair::new();
     for stmt in [
         "PRAGMA auto_vacuum",
         "PRAGMA auto_vacuum = FULL",
         "PRAGMA auto_vacuum = 0",
     ] {
-        let err = pair
-            .redline
+        pair.redline
             .execute(stmt)
-            .expect_err("auto_vacuum should be rejected");
-        let msg = format!("{err}");
-        assert!(
-            msg.to_ascii_lowercase().contains("auto_vacuum"),
-            "rejection should mention auto_vacuum: {msg}"
-        );
+            .unwrap_or_else(|err| panic!("auto_vacuum stmt {stmt} should be accepted: {err}"));
     }
 }
 

@@ -9,7 +9,7 @@ fn lookup_column_local(row: &RowContext<'_>, name: &str) -> Result<SqlValue> {
         RowContext::Joined(rows) => {
             let mut found = None;
             for row in rows.iter() {
-                if let Ok(value) = lookup_joined_row_column(row, name) {
+                if let Ok(value) = lookup_joined_row_visible_column(row, name) {
                     if found.as_ref().is_some_and(|existing| {
                         crate::value::compare_values(existing, &value) != std::cmp::Ordering::Equal
                     }) {
@@ -26,11 +26,24 @@ fn lookup_column_local(row: &RowContext<'_>, name: &str) -> Result<SqlValue> {
             }
         }
         RowContext::SqliteSchema(row) => match name.to_ascii_lowercase().as_str() {
-            "type" => Ok(SqlValue::Text(Arc::from(row.type_name.as_ref()))),
-            "name" => Ok(SqlValue::Text(Arc::from(row.name.as_ref()))),
-            "tbl_name" => Ok(SqlValue::Text(Arc::from(row.tbl_name.as_ref()))),
+            "type" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+                row.type_name.as_ref(),
+            ))),
+            "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+                row.name.as_ref(),
+            ))),
+            "tbl_name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+                row.tbl_name.as_ref(),
+            ))),
             "rootpage" => Ok(SqlValue::Integer(row.rootpage as i64)),
             "sql" => Ok(SqlValue::Text(Arc::from(row.sql.as_ref()))),
+            _ => Err(Error::UnknownColumn(name.to_owned())),
+        },
+        RowContext::SqliteSequence(row) => match name.to_ascii_lowercase().as_str() {
+            "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+                row.name.as_ref(),
+            ))),
+            "seq" => Ok(SqlValue::Integer(row.seq)),
             _ => Err(Error::UnknownColumn(name.to_owned())),
         },
         RowContext::Cte(row) => lookup_cte_column(row, name),
@@ -93,9 +106,17 @@ fn lookup_qualified_column_local(
             }
         }
         RowContext::SqliteSchema(row) => match qualifier.to_ascii_lowercase().as_str() {
-            "sqlite_schema" | "sqlite_master" | "redline_master" => lookup_schema_column(row, name),
+            "sqlite_schema" | "sqlite_master" | "redline_master" | "sqlite_temp_schema"
+            | "sqlite_temp_master" => lookup_schema_column(row, name),
             _ => Err(Error::UnknownColumn(format!("{qualifier}.{name}"))),
         },
+        RowContext::SqliteSequence(row) => {
+            if sqlite_sequence_matches_qualifier(row, qualifier) {
+                lookup_sequence_column(row, name)
+            } else {
+                Err(Error::UnknownColumn(format!("{qualifier}.{name}")))
+            }
+        }
         RowContext::Cte(row) => {
             let matches = row
                 .alias
@@ -148,7 +169,11 @@ fn matches_table_qualifier(alias: Option<&Arc<str>>, table: &TableDef, qualifier
     if let Some(alias) = alias {
         return alias.as_ref().eq_ignore_ascii_case(qualifier);
     }
-    table.name.to_string().eq_ignore_ascii_case(qualifier)
+    // A44: `table.name` is `Box<str>` which Derefs to `&str` directly —
+    // the previous `.to_string()` allocated a fresh String per row
+    // qualifier lookup. Called once per qualified column reference per
+    // row in joined scenarios; allocations compound on JOIN-heavy plans.
+    table.name.eq_ignore_ascii_case(qualifier)
 }
 
 fn row_matches_qualifier(row: &TableRow, qualifier: &str) -> bool {
@@ -161,29 +186,60 @@ fn row_matches_joined_qualifier(row: &JoinedRow, qualifier: &str) -> bool {
 
 fn lookup_schema_column(row: &SqliteSchemaRow, name: &str) -> Result<SqlValue> {
     match name.to_ascii_lowercase().as_str() {
-        "type" => Ok(SqlValue::Text(Arc::from(row.type_name.as_ref()))),
-        "name" => Ok(SqlValue::Text(Arc::from(row.name.as_ref()))),
-        "tbl_name" => Ok(SqlValue::Text(Arc::from(row.tbl_name.as_ref()))),
+        "type" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+            row.type_name.as_ref(),
+        ))),
+        "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+            row.name.as_ref(),
+        ))),
+        "tbl_name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+            row.tbl_name.as_ref(),
+        ))),
         "rootpage" => Ok(SqlValue::Integer(row.rootpage as i64)),
         "sql" => Ok(SqlValue::Text(Arc::from(row.sql.as_ref()))),
         _ => Err(Error::UnknownColumn(name.to_owned())),
     }
 }
 
-fn lookup_table_column(row: &TableRow, name: &str) -> Result<SqlValue> {
-    if row.table.is_public_rowid_name(name) {
-        return Ok(SqlValue::Integer(row.rowid.0 as i64));
+fn lookup_sequence_column(
+    row: &crate::statement::SqliteSequenceRow,
+    name: &str,
+) -> Result<SqlValue> {
+    match name.to_ascii_lowercase().as_str() {
+        "name" => Ok(SqlValue::Text(crate::exec::intern::intern_arc(
+            row.name.as_ref(),
+        ))),
+        "seq" => Ok(SqlValue::Integer(row.seq)),
+        _ => Err(Error::UnknownColumn(name.to_owned())),
     }
-    let idx = match row
+}
+
+fn sqlite_sequence_matches_qualifier(
+    row: &crate::statement::SqliteSequenceRow,
+    qualifier: &str,
+) -> bool {
+    match row.alias.as_deref() {
+        Some(alias) => alias.eq_ignore_ascii_case(qualifier),
+        None => qualifier.eq_ignore_ascii_case("sqlite_sequence"),
+    }
+}
+
+fn lookup_table_column(row: &TableRow, name: &str) -> Result<SqlValue> {
+    // SQLite shadowing: a user column whose name matches a rowid
+    // alias ("rowid", "_rowid_", "oid") wins over the synthetic
+    // rowid. Resolve real columns first.
+    let real_idx = row
         .table
         .columns
         .iter()
-        .position(|col| col.folded.as_ref().eq_ignore_ascii_case(name))
-    {
-        Some(i) => i,
-        None => return Err(Error::UnknownColumn(name.to_owned())),
-    };
-    Ok(row.values[idx].clone())
+        .position(|col| col.folded.as_ref().eq_ignore_ascii_case(name));
+    if let Some(idx) = real_idx {
+        return Ok(row.values[idx].clone());
+    }
+    if row.table.is_public_rowid_name(name) {
+        return Ok(SqlValue::Integer(row.rowid.0 as i64));
+    }
+    Err(Error::UnknownColumn(name.to_owned()))
 }
 
 fn lookup_joined_row_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {
@@ -205,6 +261,13 @@ fn lookup_joined_row_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {
             Ok(SqlValue::Null)
         }
     }
+}
+
+fn lookup_joined_row_visible_column(row: &JoinedRow, name: &str) -> Result<SqlValue> {
+    if row.hides_column_name(name) {
+        return Err(Error::UnknownColumn(name.to_owned()));
+    }
+    lookup_joined_row_column(row, name)
 }
 
 fn lookup_excluded_column(table: &TableDef, excluded: &[SqlValue], name: &str) -> Result<SqlValue> {

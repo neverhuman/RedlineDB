@@ -32,6 +32,9 @@ impl<'row, 'bindings> CaseEvaluator for ScalarCaseEvaluator<'row, 'bindings> {
 pub(crate) mod coerce;
 pub(crate) mod json_dispatch;
 mod predicate;
+// Phase 6 R1-C: Two-tier ScalarProgram VM (Tier 0). Parallel module —
+// the AST→bytecode fallback wiring lands in a later round.
+pub(crate) mod program;
 pub(crate) mod scalar;
 pub(crate) mod window;
 pub(crate) mod window_eval;
@@ -55,7 +58,11 @@ pub(crate) fn project_row(
         return row.values();
     }
 
-    let mut out = Vec::new();
+    // Phase 4.3: project_row is called per-row in every materialized
+    // scan/agg/cte/window pipeline. Hinting capacity eliminates the
+    // grow-by-doubling reallocation cascade for projections with >0
+    // items (the dominant case).
+    let mut out = Vec::with_capacity(projection.len());
     for item in projection {
         match item {
             SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _) => {
@@ -76,9 +83,29 @@ pub(crate) fn selection_passes(
     bindings: &[Option<SqlValue>],
 ) -> Result<bool> {
     match selection {
-        Some(expr) => Ok(is_truthy(&eval_scalar(expr, &row.context(), bindings)?)),
+        Some(expr) => {
+            let value = eval_scalar(expr, &row.context(), bindings)?;
+            Ok(pg_bool_or_truthy(&value))
+        }
         None => Ok(true),
     }
+}
+
+/// SQLite truthiness + PostgreSQL `boolean` literal recognition. JSONB
+/// operators in this crate return the textual tokens `"t"`/`"f"` to
+/// match psql's unaligned output; treat those (and the spelled-out
+/// `"true"`/`"false"`) as boolean values inside WHERE / CASE.
+pub(crate) fn pg_bool_or_truthy(value: &SqlValue) -> bool {
+    if let SqlValue::Text(s) = value {
+        let trimmed = s.as_ref().trim();
+        if trimmed.eq_ignore_ascii_case("t") || trimmed.eq_ignore_ascii_case("true") {
+            return true;
+        }
+        if trimmed.eq_ignore_ascii_case("f") || trimmed.eq_ignore_ascii_case("false") {
+            return false;
+        }
+    }
+    is_truthy(value)
 }
 
 pub(crate) fn compare_rows(left: &[SqlValue], right: &[SqlValue]) -> Ordering {
@@ -96,6 +123,18 @@ pub(crate) fn eval_scalar(
     row: &RowContext<'_>,
     bindings: &[Option<SqlValue>],
 ) -> Result<SqlValue> {
+    // Phase 6 R2-A: opt-in ScalarProgram VM dispatch.
+    //
+    // When the process-wide toggle is OFF (default), `try_eval_scalar_via_vm`
+    // short-circuits to `None` with zero overhead and the AST walker
+    // below runs unchanged. When the toggle is ON, the helper attempts
+    // to compile + evaluate via the Tier-0 bytecode VM. `None` indicates
+    // an unsupported shape — we fall through and let the AST walker
+    // handle it (the VM compile-failure counter is bumped from inside
+    // the helper so the corpus diff can audit silent fall-backs).
+    if let Some(result) = try_eval_scalar_via_vm(expr, row, bindings) {
+        return result;
+    }
     if let Expr::Value(v) = expr {
         if let Some(name) = crate::parser::bind::as_bind_name(&v.value) {
             return resolve_binding(name, bindings);
@@ -134,6 +173,14 @@ pub(crate) fn eval_scalar(
         Expr::CompoundIdentifier(parts) => match parts.as_slice() {
             [ident] => lookup_column(row, &ident.value)?,
             [qualifier, ident] => lookup_qualified_column(row, &qualifier.value, &ident.value)?,
+            // 3-part: `schema.table.column`. We collapse to the
+            // `table.column` form: SQLite-parity callers reference an
+            // attached database via the table alias, and the row binder
+            // already keyed cross-DB tables under the unqualified
+            // table name, so the schema qualifier is non-load-bearing
+            // at this surface. The case is rare enough that we don't
+            // distinguish `main.foo.col` from `aux.foo.col` here.
+            [_schema, table, ident] => lookup_qualified_column(row, &table.value, &ident.value)?,
             _ => {
                 return Err(Error::UnsupportedSql(format!(
                     "unsupported identifier: {parts:?}"
@@ -212,18 +259,20 @@ pub(crate) fn eval_scalar(
         Expr::Collate { expr, collation } => {
             // The COLLATE wrapper is transparent for value evaluation; the
             // collation only affects comparisons performed in eval_binary or
-            // ORDER BY. Validate the name here so unknown collations error.
+            // ORDER BY. Reject unknown collation names with SQLite's
+            // wording so callers can match the error text.
             let name = collation.to_string();
-            if crate::collation::Collation::parse(&name).is_none() {
-                return Err(Error::UnsupportedSql(format!(
-                    "unsupported collation: {name}"
-                )));
+            if !crate::collation::Collation::is_known(&name) {
+                return Err(Error::Bind(format!("no such collation sequence: {name}")));
             }
             eval_scalar(expr, row, bindings)?
         }
         Expr::Cast {
-            expr, data_type, ..
-        } => cast_value(eval_scalar(expr, row, bindings)?, data_type)?,
+            kind,
+            expr,
+            data_type,
+            ..
+        } => cast_value(eval_scalar(expr, row, bindings)?, data_type, kind.clone())?,
         Expr::Ceil { expr, .. } => match eval_scalar(expr, row, bindings)? {
             SqlValue::Null => SqlValue::Null,
             value => SqlValue::Real(numeric_value(&value)?.ceil()),
@@ -250,8 +299,8 @@ pub(crate) fn eval_scalar(
             let case_insensitive =
                 crate::exec::current_connection().is_none_or(|conn| !conn.case_sensitive_like());
             like_result(
-                value,
-                pattern,
+                &value,
+                &pattern,
                 *negated,
                 escape_char.clone(),
                 case_insensitive,
@@ -271,7 +320,33 @@ pub(crate) fn eval_scalar(
             }
             let value = eval_scalar(expr, row, bindings)?;
             let pattern = eval_scalar(pattern, row, bindings)?;
-            ilike_result(value, pattern, *negated, escape_char.clone())?
+            ilike_result(&value, &pattern, *negated, escape_char.clone())?
+        }
+        // `SIMILAR TO` (https://www.postgresql.org/docs/16/functions-matching.html
+        // #FUNCTIONS-SIMILARTO-REGEXP) is the SQL-standard regex flavour
+        // — `%` matches any run, `_` matches one char, the pattern is
+        // anchored at both ends, character classes are POSIX-style. We
+        // translate it to a POSIX regex via `similar_to_regex` and then
+        // delegate to the existing regex engine. Escape support mirrors
+        // the LIKE escape (any single-char literal).
+        Expr::SimilarTo {
+            negated,
+            expr,
+            pattern,
+            escape_char,
+        } => {
+            let value = eval_scalar(expr, row, bindings)?;
+            let pattern_value = eval_scalar(pattern, row, bindings)?;
+            similar_to_result(value, pattern_value, *negated, escape_char.clone())?
+        }
+        // `POSITION(sub IN str)` returns a 1-based index of the first
+        // occurrence (0 if not found, NULL on NULL inputs). Same semantic
+        // as SQLite's `instr(str, sub)` with swapped arg order; we re-use
+        // that helper to keep behaviour aligned.
+        Expr::Position { expr, r#in } => {
+            let sub = eval_scalar(expr, row, bindings)?;
+            let haystack = eval_scalar(r#in, row, bindings)?;
+            position_result(sub, haystack)?
         }
         Expr::Between {
             expr,

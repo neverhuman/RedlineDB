@@ -66,6 +66,33 @@ fn without_rowid_schema_persists_clause() {
 }
 
 #[test]
+fn strict_without_rowid_combo_accepts_sqlite_option_orders() {
+    for create_sql in [
+        "CREATE TABLE t(a INT, b TEXT, PRIMARY KEY(a,b)) STRICT, WITHOUT ROWID;",
+        "CREATE TABLE t(a INT, b TEXT, PRIMARY KEY(a,b)) WITHOUT ROWID, STRICT;",
+    ] {
+        assert_parity(&format!(
+            "
+            {create_sql}
+            INSERT INTO t VALUES(1,'a'),(2,'b');
+            SELECT * FROM t ORDER BY a;
+            SELECT typeof(a), typeof(b) FROM t LIMIT 1;
+            "
+        ));
+    }
+}
+
+#[test]
+fn without_rowid_rewrite_ignores_strict_inside_literals() {
+    assert_parity(
+        "
+        CREATE TABLE t(a TEXT CHECK(a <> 'STRICT, WITHOUT ROWID'), PRIMARY KEY(a)) WITHOUT ROWID;
+        SELECT strict FROM pragma_table_list WHERE name='t';
+        ",
+    );
+}
+
+#[test]
 fn without_rowid_hides_implicit_rowid_aliases() {
     assert_parity(
         "

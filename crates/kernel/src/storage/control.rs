@@ -35,6 +35,15 @@ impl ControlStore {
         })
     }
 
+    /// Like [`new`] but skips the `create_dir_all` call.  Use for volatile
+    /// in-memory databases where the caller has already created the directory
+    /// (saves 2–3 redundant syscalls per process start).
+    pub(crate) fn new_volatile(dir: impl AsRef<Path>) -> Self {
+        Self {
+            dir: dir.as_ref().to_path_buf(),
+        }
+    }
+
     pub fn load_latest(&self) -> Result<Option<ControlFile>> {
         let a = self.read_named(CONTROL_A);
         let b = self.read_named(CONTROL_B);

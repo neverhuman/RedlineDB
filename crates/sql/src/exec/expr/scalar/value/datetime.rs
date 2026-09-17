@@ -10,7 +10,15 @@ pub(crate) enum DateTimeKind {
 }
 
 pub(crate) fn datetime_function(values: &[SqlValue], kind: DateTimeKind) -> Result<SqlValue> {
+    if values.iter().any(|v| matches!(v, SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
     let dt = parse_dt_args(values)?;
+    if !dt.is_formattable() {
+        // SQLite-style NULL for out-of-range julian-day input or for
+        // arithmetic that overflowed the [-4713-11-24..9999-12-31] window.
+        return Ok(SqlValue::Null);
+    }
     Ok(match kind {
         DateTimeKind::Date => SqlValue::Text(Arc::from(dt.format_date())),
         DateTimeKind::Time => SqlValue::Text(Arc::from(dt.format_time())),
@@ -24,8 +32,14 @@ pub(crate) fn strftime_function(values: &[SqlValue]) -> Result<SqlValue> {
     if values.is_empty() {
         return Err(Error::UnsupportedSql("strftime requires format".to_owned()));
     }
+    if values.iter().any(|v| matches!(v, SqlValue::Null)) {
+        return Ok(SqlValue::Null);
+    }
     let format = value_to_string(&values[0]);
     let dt = parse_dt_args(&values[1..])?;
+    if !dt.is_formattable() {
+        return Ok(SqlValue::Null);
+    }
     Ok(SqlValue::Text(Arc::from(crate::datetime::strftime(
         &format, &dt,
     ))))
@@ -40,9 +54,15 @@ fn parse_dt_args(values: &[SqlValue]) -> Result<crate::datetime::DateTime> {
     if values.len() <= 1 {
         return Ok(dt);
     }
+    // A35: pass the owned-String vec directly. `apply_modifiers` is now
+    // generic over `&[impl AsRef<str>]` so the intermediate `Vec<&str>`
+    // adapter is gone — one heap allocation per `datetime()` /
+    // `strftime()` call instead of two. Targets the SQL_DATETIME
+    // worst-tail cluster (DATETIME_DATETIME_Y2K_*,
+    // DATETIME_STRFTIME_ISO_DATE_*) where multi-modifier shapes
+    // dominate the call cost.
     let mods: Vec<String> = values[1..].iter().map(value_to_string).collect();
-    let refs: Vec<&str> = mods.iter().map(String::as_str).collect();
-    crate::datetime::apply_modifiers(dt, &refs)
+    crate::datetime::apply_modifiers(dt, &mods)
 }
 
 /// SQLite-compatible `printf`/`format` implementation.
@@ -236,18 +256,41 @@ fn apply_width(value: String, width: Option<usize>, left_align: bool, zero_pad: 
         return value;
     }
     let pad = width - len;
+    // A45: build the padded result in a single pre-sized String instead
+    // of `format!("{}{}", " ".repeat(pad), value)` which allocates BOTH
+    // the padding String (`repeat`) AND the format! result (a second
+    // String). Per sqlite_printf width spec — fires once per `%Nd`/`%Ns`
+    // etc. format slot.
+    let mut out = String::with_capacity(value.len() + pad);
     if left_align {
-        return format!("{value}{}", " ".repeat(pad));
+        out.push_str(&value);
+        for _ in 0..pad {
+            out.push(' ');
+        }
+        return out;
     }
     if zero_pad {
         let mut chars = value.chars();
-        if let Some(sign) = chars.next() {
-            if matches!(sign, '+' | '-') {
-                let rest: String = chars.collect();
-                return format!("{sign}{}{}", "0".repeat(pad), rest);
+        if let Some(sign) = chars.next()
+            && matches!(sign, '+' | '-')
+        {
+            out.push(sign);
+            for _ in 0..pad {
+                out.push('0');
             }
+            // Append the rest of the chars from `value` (post-sign).
+            out.extend(chars);
+            return out;
         }
-        return format!("{}{}", "0".repeat(pad), value);
+        for _ in 0..pad {
+            out.push('0');
+        }
+        out.push_str(&value);
+        return out;
     }
-    format!("{}{}", " ".repeat(pad), value)
+    for _ in 0..pad {
+        out.push(' ');
+    }
+    out.push_str(&value);
+    out
 }

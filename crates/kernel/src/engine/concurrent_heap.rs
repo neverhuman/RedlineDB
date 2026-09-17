@@ -5,6 +5,7 @@ use crate::{Error, Result};
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, RwLock};
+use std::thread;
 
 #[derive(Debug)]
 pub struct ConcurrentHeap {
@@ -287,6 +288,135 @@ impl ConcurrentHeap {
 
     fn row_dir_shard(&self, row_id: RowId) -> &RwLock<HashMap<RowId, TuplePtr>> {
         &self.row_dir[row_id.0 as usize % self.row_dir.len()]
+    }
+
+    /// WS-C3 (kernel half): partition the heap's lane vector across
+    /// `worker_count` threads, gather every row visible to `snapshot`
+    /// concurrently, and return the materialised payloads. The lane
+    /// vectors are themselves protected by per-lane `Mutex`es so each
+    /// worker holds a disjoint set of locks and contention stays
+    /// confined to lane boundaries.
+    ///
+    /// Result ordering is **not** stable across runs — callers that
+    /// depend on `(row_id, payload)` order must sort the result.
+    /// Callers that feed an unordered hash aggregator or spill sort
+    /// can consume the iterator directly.
+    ///
+    /// The SQL-side gate that decides whether to dispatch through
+    /// this API is deferred (see WS-C3 round-2): the production
+    /// table path goes through `PageBackedHeap`, not `ConcurrentHeap`,
+    /// so this kernel API is wired but not yet consumed by the
+    /// executor. Adding the API + tests now keeps the kernel surface
+    /// ready for the round-2 SQL change.
+    pub fn parallel_scan(
+        &self,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+        worker_count: usize,
+    ) -> Result<Vec<(RowId, Vec<u8>)>> {
+        let workers = worker_count.max(1).min(self.lanes.len().max(1));
+        if workers <= 1 {
+            return self.serial_scan(tx_status, snapshot, owner);
+        }
+
+        let lane_count = self.lanes.len();
+        let mut buckets: Vec<Vec<(RowId, Vec<u8>)>> = Vec::with_capacity(workers);
+        thread::scope(|scope| -> Result<()> {
+            let mut handles = Vec::with_capacity(workers);
+            for worker_idx in 0..workers {
+                let heap = &*self;
+                let handle = scope.spawn(move || -> Result<Vec<(RowId, Vec<u8>)>> {
+                    let mut out = Vec::new();
+                    let mut lane = worker_idx;
+                    while lane < lane_count {
+                        heap.collect_lane_visible(tx_status, snapshot, owner, lane, &mut out)?;
+                        lane += workers;
+                    }
+                    Ok(out)
+                });
+                handles.push(handle);
+            }
+            for handle in handles {
+                let part = handle
+                    .join()
+                    .map_err(|_| Error::CorruptPage("parallel_scan worker panicked"))??;
+                buckets.push(part);
+            }
+            Ok(())
+        })?;
+        let total: usize = buckets.iter().map(|b| b.len()).sum();
+        let mut merged = Vec::with_capacity(total);
+        for bucket in buckets {
+            merged.extend(bucket);
+        }
+        Ok(merged)
+    }
+
+    /// Serial reference scan used by `parallel_scan` when only one
+    /// worker is requested. Mirrors `parallel_scan`'s visibility logic
+    /// so tests can assert set-equality between the two paths.
+    pub fn serial_scan(
+        &self,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+    ) -> Result<Vec<(RowId, Vec<u8>)>> {
+        let mut out = Vec::new();
+        for lane in 0..self.lanes.len() {
+            self.collect_lane_visible(tx_status, snapshot, owner, lane, &mut out)?;
+        }
+        Ok(out)
+    }
+
+    fn collect_lane_visible(
+        &self,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+        lane_idx: usize,
+        out: &mut Vec<(RowId, Vec<u8>)>,
+    ) -> Result<()> {
+        // Snapshot the live (row_id, head_ptr) pairs from the matching
+        // row-dir shards under the read lock, then drop the lock before
+        // walking undo chains. This keeps the per-row work outside the
+        // shard write path so writers are not blocked by scanners.
+        let mut heads: Vec<(RowId, TuplePtr)> = Vec::new();
+        for (shard_idx, shard) in self.row_dir.iter().enumerate() {
+            if shard_idx % self.lanes.len() != lane_idx {
+                continue;
+            }
+            let guard = shard
+                .read()
+                .map_err(|_| Error::CorruptPage("row dir shard poisoned"))?;
+            heads.extend(guard.iter().map(|(r, p)| (*r, *p)));
+        }
+        for (row_id, _ptr) in heads {
+            if let Some(payload) = self.visible_payload(tx_status, snapshot, owner, row_id)? {
+                out.push((row_id, payload));
+            }
+        }
+        Ok(())
+    }
+
+    fn visible_payload(
+        &self,
+        tx_status: &ConcurrentTxStatus,
+        snapshot: &Snapshot,
+        owner: Option<TxId>,
+        row_id: RowId,
+    ) -> Result<Option<Vec<u8>>> {
+        let Some(ptr) = self.head(row_id)? else {
+            return Ok(None);
+        };
+        let current = self.read_tuple(ptr)?;
+        match current.visibility_concurrent(tx_status, snapshot, owner) {
+            TupleVisibility::Visible => Ok(Some(current.payload)),
+            TupleVisibility::Deleted => Ok(None),
+            TupleVisibility::Invisible => {
+                self.get_from_undo(tx_status, snapshot, owner, current.undo_head)
+            }
+        }
     }
 }
 

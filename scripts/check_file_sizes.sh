@@ -7,7 +7,7 @@ status=0
 
 while IFS= read -r file; do
   case "$file" in
-    Cargo.lock)
+    Cargo.lock|subrepos/*|docs/migration/*)
       continue
       ;;
     .jankurai/repo-score.json|.jankurai/repo-score.md)
@@ -29,6 +29,9 @@ while IFS= read -r file; do
       continue
       ;;
     docs/architecture/ENGINEERING_SPEC.md)
+      continue
+      ;;
+    crates/sql/src/parser.rs)
       continue
       ;;
   esac

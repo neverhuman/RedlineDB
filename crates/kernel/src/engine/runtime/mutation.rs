@@ -49,6 +49,10 @@ impl Engine {
         self.heap.reserve_row_id()
     }
 
+    pub fn lower_next_row(&self, next_row: u64) {
+        self.heap.lower_next_row(next_row)
+    }
+
     pub fn insert_with_row_id(&self, tx: &mut Txn, row_id: RowId, payload: Vec<u8>) -> Result<()> {
         tx.ensure_open()?;
         self.refresh_read_committed(tx);

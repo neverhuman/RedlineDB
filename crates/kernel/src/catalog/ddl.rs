@@ -156,10 +156,74 @@ pub enum AlterTableOperationSpec {
     AddColumn {
         column: ColumnSpec,
         if_not_exists: bool,
+        table_constraints: Vec<TableConstraintSpec>,
     },
     DropColumn {
         column_name: DbName,
         if_exists: bool,
+    },
+    /// Track J — Postgres `ALTER COLUMN <c> SET DEFAULT <expr>`. Only
+    /// constant defaults are accepted today (the binder rejects
+    /// non-constant expressions before reaching the kernel).
+    SetColumnDefault {
+        column_name: DbName,
+        default_value: Option<OwnedValue>,
+    },
+    /// Track J — `ALTER COLUMN <c> DROP DEFAULT`. Clears the recorded
+    /// default; future INSERTs that omit the column see NULL.
+    DropColumnDefault {
+        column_name: DbName,
+    },
+    /// Track J — `ALTER COLUMN <c> DROP NOT NULL`. Flips the flag off so
+    /// callers can insert NULL.
+    DropColumnNotNull {
+        column_name: DbName,
+    },
+    /// Track J — `ALTER COLUMN <c> SET NOT NULL`. Used by migration
+    /// tools; performs the in-place flag flip but does not validate
+    /// existing rows.
+    SetColumnNotNull {
+        column_name: DbName,
+    },
+    /// Track J — `ALTER TABLE ... ADD CONSTRAINT <name> {CHECK|UNIQUE|
+    /// FOREIGN KEY}`. The named constraint is appended to the table so
+    /// `DROP CONSTRAINT <name>` can later remove it.
+    AddNamedConstraint {
+        constraint: TableConstraintSpec,
+        if_not_exists: bool,
+    },
+    /// Track J — `ALTER TABLE ... DROP CONSTRAINT <name> [IF EXISTS]`.
+    /// Removes the named CHECK / UNIQUE / FK; constraints created without
+    /// a name are not matchable.
+    DropConstraint {
+        name: DbName,
+        if_exists: bool,
+    },
+    /// Track J — `ALTER TABLE ... RENAME CONSTRAINT old TO new`. Updates
+    /// the stored name on the matching constraint.
+    RenameConstraint {
+        old_name: DbName,
+        new_name: DbName,
+    },
+    /// Track J — `ALTER COLUMN <c> ADD GENERATED { ALWAYS | BY DEFAULT }
+    /// AS IDENTITY [( ... )]`. Marks the column as auto-increment. The
+    /// nextval generation is left to INSERT-time AUTOINCREMENT semantics.
+    AddColumnIdentity {
+        column_name: DbName,
+        always: bool,
+    },
+    /// Track J — `ALTER COLUMN <c> DROP IDENTITY [IF EXISTS]`. Clears
+    /// the marker; future INSERTs must specify a value.
+    DropColumnIdentity {
+        column_name: DbName,
+        if_exists: bool,
+    },
+    /// Track J — `ALTER COLUMN <c> SET DATA TYPE <type> [USING <expr>]`.
+    /// Updates the declared type / affinity; the USING clause is parsed
+    /// but ignored (no row rewrite).
+    SetColumnType {
+        column_name: DbName,
+        declared_type: String,
     },
 }
 
@@ -170,6 +234,7 @@ pub struct ColumnSpec {
     pub constraints: Vec<ColumnConstraintSpec>,
     pub collation: Option<String>,
     pub default_value: Option<OwnedValue>,
+    pub autoincrement: bool,
     /// A6 SQL-D: GENERATED ALWAYS AS (expr) [STORED|VIRTUAL]. None for
     /// ordinary columns.
     pub generated: Option<super::schema::GeneratedColumnSpec>,

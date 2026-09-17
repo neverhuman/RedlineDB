@@ -1,0 +1,442 @@
+diff --git a/crates/redlinedb/src/options.rs b/crates/redlinedb/src/options.rs
+index 989d765..b8b5e35 100644
+--- a/crates/redlinedb/src/options.rs
++++ b/crates/redlinedb/src/options.rs
+@@ -13,6 +13,14 @@ impl Default for MemoryOptions {
+     }
+ }
+ 
++impl MemoryOptions {
++    /// Lean profile for private `:memory:` / shell ephemeral databases.
++    /// 1 MiB still leaves 64 default 16 KiB pages, but avoids carrying the
++    /// full 16 MiB default buffer-pool budget into one-shot SQLite-parity CLI
++    /// cases that execute a handful of scalar statements.
++    pub const fn lean_ephemeral() -> Self { Self { cache_bytes: 1024 * 1024 } }
++}
++
+ // Batch D3: the optimizer / query-memory / analyze option structs are owned by
+ // the SQL crate (`redlinedb_sql`). The public `redlinedb` API keeps its
+ // historical type names by re-aliasing the canonical definitions so existing
+@@ -112,6 +120,37 @@ impl OpenOptions {
+         self.temp_dir = Some(temp_dir.into());
+         self
+     }
++
++    /// Aggressive low-fixed-cost profile for short-lived `:memory:` databases.
++    ///
++    /// This is intentionally not the default for persistent databases. It is
++    /// designed for SQLite shell parity cases and embedded callers that create
++    /// a transient database for a small batch, then immediately drop it.
++    #[must_use]
++    pub fn lean_ephemeral() -> Self {
++        let mut options = Self::default();
++        options.durability = Durability::UnsafeDev;
++        options.process_owner_lock = false;
++        options.memory = MemoryOptions::lean_ephemeral();
++        options.query_memory = QueryMemoryOptions::lean_ephemeral();
++        options.stats.exact_analyze_row_threshold = 4096;
++        options.stats.sample_rows = 1024;
++        options.stats.mcv_capacity = 16;
++        options.stats.histogram_buckets = 16;
++        options.statement_cache_capacity = 32;
++        options.busy_timeout = Duration::from_millis(50);
++        options
++    }
++
++    /// Apply the lean profile only to fields that are still at public defaults.
++    /// Explicit caller tuning wins.
++    pub(crate) fn apply_ephemeral_default_overrides(&mut self) {
++        let defaults = Self::default();
++        if self.memory == defaults.memory { self.memory = MemoryOptions::lean_ephemeral(); }
++        if self.query_memory == defaults.query_memory { self.query_memory = QueryMemoryOptions::lean_ephemeral(); }
++        if self.statement_cache_capacity == defaults.statement_cache_capacity { self.statement_cache_capacity = 32; }
++        if self.busy_timeout == defaults.busy_timeout { self.busy_timeout = Duration::from_millis(50); }
++    }
+ }
+ 
+ #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+diff --git a/crates/redlinedb/src/handle.rs b/crates/redlinedb/src/handle.rs
+index 4a3ef77..2eecbf8 100644
+--- a/crates/redlinedb/src/handle.rs
++++ b/crates/redlinedb/src/handle.rs
+@@ -262,6 +262,11 @@ fn volatile_open_options(mut options: OpenOptions) -> OpenOptions {
+     options.create = true;
+     options.durability = Durability::UnsafeDev;
+     options.process_owner_lock = false;
++    // Private in-memory databases currently dominate SQLite-parity fixed-cost
++    // outliers. Preserve explicit caller tuning, but when a caller passes the
++    // public defaults, swap in the lean shell profile so opening `:memory:`
++    // does not allocate/initialise resources sized for a long-lived OLTP DB.
++    options.apply_ephemeral_default_overrides();
+     if options.temp_dir.is_none() {
+         options.temp_dir = Some(registry::standard_volatile_root());
+     }
+@@ -313,7 +321,14 @@ pub(crate) fn private_in_memory_sql_options(options: &OpenOptions) -> redlinedb_s
+     let mut db = sql_options(options);
+     db.engine.lock_shards = db.engine.lock_shards.clamp(1, 4);
+     db.engine.heap_lanes = 1;
+-    db.engine.buffer_pool_pages = db.engine.buffer_pool_pages.clamp(16, 1024);
++    db.engine.buffer_pool_pages = db.engine.buffer_pool_pages.clamp(16, 64);
+     db.unique_lock_shards = db.unique_lock_shards.clamp(1, 16);
++    db.statement_cache_capacity = db.statement_cache_capacity.clamp(1, 32);
++    db.query_memory.work_mem_bytes = db.query_memory.work_mem_bytes.min(256 * 1024);
++    db.query_memory.max_spill_bytes = db.query_memory.max_spill_bytes.min(64 * 1024 * 1024);
++    db.query_memory.batch_rows = db.query_memory.batch_rows.clamp(16, 128);
++    db.stats.sample_rows = db.stats.sample_rows.min(1024);
++    db.stats.mcv_capacity = db.stats.mcv_capacity.min(16);
++    db.stats.histogram_buckets = db.stats.histogram_buckets.min(16);
+     db
+ }
+diff --git a/crates/sql/src/connection/options.rs b/crates/sql/src/connection/options.rs
+index 64cd775..078cc91 100644
+--- a/crates/sql/src/connection/options.rs
++++ b/crates/sql/src/connection/options.rs
+@@ -71,6 +71,26 @@ impl Default for QueryMemoryConfig {
+     }
+ }
+ 
++impl QueryMemoryConfig {
++    /// Fixed-cost-minimised query-memory profile for short-lived shell and
++    /// private-memory sessions. The broker remains spill-capable, but avoids
++    /// advertising an 8 MiB in-memory budget for queries whose entire working
++    /// set is usually a few rows.
++    pub const fn lean_ephemeral() -> Self {
++        Self {
++            work_mem_bytes: 256 * 1024,
++            max_spill_bytes: 64 * 1024 * 1024,
++            batch_rows: 128,
++        }
++    }
++
++    pub fn clamp_to_lean_ephemeral(&mut self) {
++        self.work_mem_bytes = self.work_mem_bytes.min(256 * 1024);
++        self.max_spill_bytes = self.max_spill_bytes.min(64 * 1024 * 1024);
++        self.batch_rows = self.batch_rows.clamp(16, 128);
++    }
++}
++
+ #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+ pub struct StatsConfig {
+     pub exact_analyze_row_threshold: usize,
+diff --git a/crates/cli/src/dot/mod.rs b/crates/cli/src/dot/mod.rs
+index 6d6be97..c0ffdf0 100644
+--- a/crates/cli/src/dot/mod.rs
++++ b/crates/cli/src/dot/mod.rs
+@@ -16,5 +16,9 @@ pub mod parameter;
+ pub mod schema;
+ 
++/// Match SQLite shell behaviour for many tiny writes while avoiding one syscall
++/// per cell/newline when `.output FILE` is active.
++pub const FILE_OUTPUT_BUFFER_BYTES: usize = 64 * 1024;
++
+ /// Output formatting modes accepted by `.mode` and the flag parser.
+ #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+ pub enum OutputMode {
+@@ -116,6 +120,6 @@ pub enum OutputTarget {
+     Stdout(BufWriter<io::Stdout>),
+     Null,
+-    File { path: PathBuf, writer: File },
++    File { path: PathBuf, writer: BufWriter<File> },
+ }
+ 
+ impl OutputTarget {
+diff --git a/crates/cli/src/dot/io_cmd.rs b/crates/cli/src/dot/io_cmd.rs
+index 25e2edc..0d1583f 100644
+--- a/crates/cli/src/dot/io_cmd.rs
++++ b/crates/cli/src/dot/io_cmd.rs
+@@ -4,10 +4,10 @@
+ 
+ use std::fs::{File, OpenOptions};
+-use std::io::Write;
++use std::io::{BufWriter, Write};
+ use std::path::PathBuf;
+ 
+ use redlinedb::{
+     BackupOptions, Database, OpenOptions as DbOpenOptions, RestoreOptions, Step, ValueRef,
+ };
+ 
+-use super::{CliState, DotOutcome, OutputTarget};
++use super::{CliState, DotOutcome, OutputTarget, FILE_OUTPUT_BUFFER_BYTES};
+@@ -29,13 +29,13 @@ pub fn output(state: &mut CliState, args: &[&str]) -> Result<DotOutcome, String>
+                 .write(true)
+                 .create(true)
+                 .truncate(true)
+                 .open(&path_buf)
+                 .map_err(|err| format!("Error: cannot open {path}: {err}"))?;
+             state.output = OutputTarget::File {
+                 path: path_buf,
+-                writer,
++                writer: BufWriter::with_capacity(FILE_OUTPUT_BUFFER_BYTES, writer),
+             };
+         }
+     }
+     Ok(DotOutcome::Ok)
+ }
+diff --git a/crates/cli/src/lib.rs b/crates/cli/src/lib.rs
+index c6cf3fb..0d99fb4 100644
+--- a/crates/cli/src/lib.rs
++++ b/crates/cli/src/lib.rs
+@@ -281,6 +281,6 @@ pub fn run() {
+         && readonly_sidecar_path(std::path::Path::new(&filename)).exists();
+     let db_res = if filename == ":memory:" || filename.is_empty() || use_deserialize_sidecar {
+-        Database::create_in_memory(OpenOptions::default())
++        Database::create_in_memory(OpenOptions::lean_ephemeral())
+     } else if cli.readonly {
+         Database::open_with_options(
+             &filename,
+@@ -682,7 +682,7 @@ fn write_readonly_sidecar(state: &mut CliState) -> Result<(), String> {
+     let previous = std::mem::replace(
+         &mut state.output,
+         OutputTarget::File {
+             path: sidecar,
+-            writer,
++            writer: io::BufWriter::with_capacity(dot::FILE_OUTPUT_BUFFER_BYTES, writer),
+         },
+     );
+diff --git a/crates/sql/src/batch.rs b/crates/sql/src/batch.rs
+index 6f7e7bb..214a6b9 100644
+--- a/crates/sql/src/batch.rs
++++ b/crates/sql/src/batch.rs
+@@ -86,7 +86,8 @@ impl QueryMemoryBroker {
+             Some(dir) => dir,
+             None => std::env::temp_dir(),
+         };
+-        let _ = fs::create_dir_all(&spill_root);
++        // Do not touch the filesystem until a query actually spills. The
++        // previous eager create_dir_all sat on every SELECT fixed-cost path.
+         Self {
+             work_mem_bytes,
+             max_spill_bytes,
+@@ -119,6 +120,8 @@ impl QueryMemoryBroker {
+         if self.spill_path.is_some() {
+             return Ok(());
+         }
++        fs::create_dir_all(&self.spill_root)
++            .map_err(|err| crate::error::Error::ConstraintViolation(err.to_string()))?;
+         let stamp = match SystemTime::now().duration_since(UNIX_EPOCH) {
+             Ok(d) => d,
+             Err(_) => Duration::default(),
+diff --git a/crates/sql/src/exec/expr/window_eval/partition.rs b/crates/sql/src/exec/expr/window_eval/partition.rs
+index 783f66d..c5a4af2 100644
+--- a/crates/sql/src/exec/expr/window_eval/partition.rs
++++ b/crates/sql/src/exec/expr/window_eval/partition.rs
+@@ -19,23 +19,21 @@ pub(super) fn partition_rows(
+     if partition_by.is_empty() {
+         return Ok(vec![(0..rows.len()).collect()]);
+     }
+-    let mut keys: Vec<Vec<SqlValue>> = Vec::with_capacity(rows.len());
+-    for row in rows {
+-        let mut key = Vec::with_capacity(partition_by.len());
+-        for expr in partition_by {
+-            key.push(eval_scalar(expr, &row.context(), bindings)?);
+-        }
+-        keys.push(key);
+-    }
+-    let mut group_by_key: HashMap<Vec<u8>, usize> = HashMap::with_capacity(keys.len());
++    let mut group_by_key: HashMap<Vec<u8>, usize> = HashMap::with_capacity(rows.len());
+     let mut groups: Vec<Vec<usize>> = Vec::new();
+-    // Phase 4.5: reuse a single scratch buffer across rows. The
+-    // HashMap key is borrowed for lookup (`get(scratch.as_slice())`)
+-    // so we only pay the clone allocation on cache miss — the hot
+-    // hit path is zero-allocation.
++    // Encode each partition key once, directly from the row. The old path
++    // first built `Vec<Vec<SqlValue>>` for every row, then encoded those keys;
++    // high-partition window tests paid both allocations even though only the
++    // encoded hash key is needed after grouping.
+     let mut scratch: Vec<u8> = Vec::with_capacity(64);
+-    for (i, key) in keys.iter().enumerate() {
++    let mut key: Vec<SqlValue> = Vec::with_capacity(partition_by.len());
++    for (i, row) in rows.iter().enumerate() {
++        key.clear();
++        let ctx = row.context();
++        for expr in partition_by {
++            key.push(eval_scalar(expr, &ctx, bindings)?);
++        }
+         crate::exec::vec::hash_agg::encode_group_key_bytes_into(&key, &mut scratch)?;
+         match group_by_key.get(scratch.as_slice()) {
+             Some(&group_idx) => groups[group_idx].push(i),
+             None => {
+diff --git a/crates/sql/src/exec/expr/window_eval.rs b/crates/sql/src/exec/expr/window_eval.rs
+index 67e420f..83b67a1 100644
+--- a/crates/sql/src/exec/expr/window_eval.rs
++++ b/crates/sql/src/exec/expr/window_eval.rs
+@@ -350,6 +347,69 @@ fn enumerate_frame_positions(
+     out
+ }
+ 
++fn first_frame_position(
++    frame: &ResolvedFrame,
++    bounds: (usize, usize),
++    sorted_pos: usize,
++    peer_ids: &[usize],
++    total: usize,
++) -> Option<usize> {
++    if bounds.0 > bounds.1 || total == 0 {
++        return None;
++    }
++    let end = bounds.1.min(total.saturating_sub(1));
++    for pos in bounds.0..=end {
++        if !position_excluded(frame, pos, sorted_pos, peer_ids) {
++            return Some(pos);
++        }
++    }
++    None
++}
++
++fn last_frame_position(
++    frame: &ResolvedFrame,
++    bounds: (usize, usize),
++    sorted_pos: usize,
++    peer_ids: &[usize],
++    total: usize,
++) -> Option<usize> {
++    if bounds.0 > bounds.1 || total == 0 {
++        return None;
++    }
++    let end = bounds.1.min(total.saturating_sub(1));
++    for pos in (bounds.0..=end).rev() {
++        if !position_excluded(frame, pos, sorted_pos, peer_ids) {
++            return Some(pos);
++        }
++    }
++    None
++}
++
++fn nth_frame_position(
++    frame: &ResolvedFrame,
++    bounds: (usize, usize),
++    sorted_pos: usize,
++    peer_ids: &[usize],
++    total: usize,
++    nth: usize,
++) -> Option<usize> {
++    if nth == 0 || bounds.0 > bounds.1 || total == 0 {
++        return None;
++    }
++    let end = bounds.1.min(total.saturating_sub(1));
++    let mut remaining = nth;
++    for pos in bounds.0..=end {
++        if position_excluded(frame, pos, sorted_pos, peer_ids) {
++            continue;
++        }
++        remaining -= 1;
++        if remaining == 0 {
++            return Some(pos);
++        }
++    }
++    None
++}
++
+ struct WindowLayoutCache<'a> {
+     rows: &'a [SqlRow],
+     bindings: &'a [Option<SqlValue>],
+@@ -449,17 +449,16 @@ fn compute_function_for_row(
+                 peer_ranges,
+                 order_index_map.len(),
+             );
+-            let positions = enumerate_frame_positions(
++            let Some(first) = first_frame_position(
+                 frame,
+                 bounds,
+                 sorted_pos,
+                 peer_ids,
+                 order_index_map.len(),
+-            );
+-            let Some(first) = positions.first() else {
++            ) else {
+                 return Ok(SqlValue::Null);
+             };
+-            let row_idx = order_index_map[*first];
++            let row_idx = order_index_map[first];
+             match args.first() {
+                 Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
+                 None => Ok(SqlValue::Null),
+@@ -472,17 +471,16 @@ fn compute_function_for_row(
+                 peer_ranges,
+                 order_index_map.len(),
+             );
+-            let positions = enumerate_frame_positions(
++            let Some(last) = last_frame_position(
+                 frame,
+                 bounds,
+                 sorted_pos,
+                 peer_ids,
+                 order_index_map.len(),
+-            );
+-            let Some(last) = positions.last() else {
++            ) else {
+                 return Ok(SqlValue::Null);
+             };
+-            let row_idx = order_index_map[*last];
++            let row_idx = order_index_map[last];
+             match args.first() {
+                 Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
+                 None => Ok(SqlValue::Null),
+@@ -500,17 +498,17 @@ fn compute_function_for_row(
+                 peer_ranges,
+                 order_index_map.len(),
+             );
+-            let positions = enumerate_frame_positions(
++            let Some(target) = nth_frame_position(
+                 frame,
+                 bounds,
+                 sorted_pos,
+                 peer_ids,
+                 order_index_map.len(),
+-            );
+-            let Some(target) = positions.get(n - 1) else {
++                n,
++            ) else {
+                 return Ok(SqlValue::Null);
+             };
+-            let row_idx = order_index_map[*target];
++            let row_idx = order_index_map[target];
+             match args.first() {
+                 Some(expr) => eval_scalar(expr, &rows[row_idx].context(), bindings),
+                 None => Ok(SqlValue::Null),
+diff --git a/crates/sql/src/exec/select_top.rs b/crates/sql/src/exec/select_top.rs
+index 3a07246..1cc662d 100644
+--- a/crates/sql/src/exec/select_top.rs
++++ b/crates/sql/src/exec/select_top.rs
+@@ -696,28 +696,18 @@ pub(super) fn order_and_project_rows_with_distinct_on(
+             }
+             std::cmp::Ordering::Equal
+         });
+-        let mut seen: Vec<Vec<SqlValue>> = Vec::with_capacity(keyed.len());
++        let mut seen: ahash::AHashSet<Vec<u8>> = ahash::AHashSet::with_capacity(keyed.len());
+         let mut deduped: Vec<SqlRow> = Vec::with_capacity(keyed.len());
++        let mut scratch = Vec::with_capacity(64);
+         for (_keys, row) in keyed {
+             let mut on_key = Vec::with_capacity(distinct_on.len());
+             for expr in distinct_on {
+                 on_key.push(eval_scalar(expr, &row.context(), bindings)?);
+             }
+-            let mut already = false;
+-            for prev in &seen {
+-                if prev.len() == on_key.len()
+-                    && prev.iter().zip(on_key.iter()).all(|(a, b)| {
+-                        crate::value::compare_values(a, b) == std::cmp::Ordering::Equal
+-                    })
+-                {
+-                    already = true;
+-                    break;
+-                }
+-            }
+-            if !already {
+-                seen.push(on_key);
++            crate::exec::vec::hash_agg::encode_group_key_bytes_into(&on_key, &mut scratch)?;
++            if seen.insert(scratch.clone()) {
+                 deduped.push(row);
+             }
+         }
+         // Now project + apply LIMIT/OFFSET. The rows are already in the
+         // requested order so no further sort is needed.
+@@ -819,7 +807,7 @@ pub(super) fn order_and_project_rows_with_distinct_on(
+             row.values().map(|values| acc + row_width(&values))
+         })?;
+         memory.request(memory_bytes)?;
+-        let mut out = Vec::new();
++        let mut out = Vec::with_capacity(limit.min(filtered.len().saturating_sub(offset)));
+         for row in filtered.into_iter().skip(offset).take(limit) {
+             out.push(project_row(projection, &row, bindings)?);
+         }

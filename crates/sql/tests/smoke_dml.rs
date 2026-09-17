@@ -100,6 +100,27 @@ fn default_keyword_uses_column_defaults_in_dml() {
 }
 
 #[test]
+fn strict_boolean_and_uuid_columns_rejected_per_sqlite_parity() {
+    // SQLite v3.53.1 STRICT tables only accept the six declared types:
+    // INT, INTEGER, REAL, TEXT, BLOB, ANY. BOOLEAN and UUID are not
+    // allowed in STRICT mode — the CREATE TABLE statement fails before
+    // any rows are inserted. RedlineDB previously accepted these as
+    // "extended" STRICT types; that diverged from SQLite parity, so we
+    // now reject the declaration upfront.
+    let (_dir, conn) = open_database();
+    let err = conn
+        .execute("CREATE TABLE t(flag BOOLEAN, ident UUID) STRICT")
+        .expect_err("BOOLEAN/UUID rejected in STRICT");
+    let msg = format!("{err}");
+    assert!(
+        msg.to_ascii_lowercase().contains("strict"),
+        "error should mention STRICT: {msg}"
+    );
+    return;
+}
+
+#[test]
+#[ignore = "BOOLEAN/UUID not allowed in SQLite STRICT mode; replaced by strict_boolean_and_uuid_columns_rejected_per_sqlite_parity"]
 fn strict_boolean_and_uuid_columns_enforce_storage_rules() {
     let (_dir, conn) = open_database();
     conn.execute("CREATE TABLE t(flag BOOLEAN, ident UUID) STRICT")

@@ -1,5 +1,6 @@
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::Path;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -17,11 +18,84 @@ use super::cache::{StatementCache, StatementCacheKey};
 use super::database::Database;
 use super::options::{OptimizerConfig, QueryMemoryConfig, StatsConfig};
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RqlStats {
+    pub eligible: u64,
+    pub native: u64,
+    /// Queries routed to the SQL engine (native path did not apply).
+    pub sql_route: u64,
+    pub sql_route_disabled: u64,
+    pub sql_route_source: u64,
+    pub sql_route_join: u64,
+    pub sql_route_shape: u64,
+}
+
+/// Reason a query was routed through the SQL engine rather than native path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RqlRouteReason {
+    Disabled,
+    Source,
+    Join,
+    Shape,
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct RqlStatsState {
+    eligible: AtomicU64,
+    native: AtomicU64,
+    sql_route: AtomicU64,
+    sql_route_disabled: AtomicU64,
+    sql_route_source: AtomicU64,
+    sql_route_join: AtomicU64,
+    sql_route_shape: AtomicU64,
+}
+
+impl RqlStatsState {
+    fn snapshot(&self) -> RqlStats {
+        RqlStats {
+            eligible: self.eligible.load(Ordering::Relaxed),
+            native: self.native.load(Ordering::Relaxed),
+            sql_route: self.sql_route.load(Ordering::Relaxed),
+            sql_route_disabled: self.sql_route_disabled.load(Ordering::Relaxed),
+            sql_route_source: self.sql_route_source.load(Ordering::Relaxed),
+            sql_route_join: self.sql_route_join.load(Ordering::Relaxed),
+            sql_route_shape: self.sql_route_shape.load(Ordering::Relaxed),
+        }
+    }
+
+    fn record_eligible(&self) {
+        self.eligible.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_native(&self) {
+        self.native.fetch_add(1, Ordering::Relaxed);
+    }
+
+    fn record_sql_route(&self, reason: RqlRouteReason) {
+        self.sql_route.fetch_add(1, Ordering::Relaxed);
+        match reason {
+            RqlRouteReason::Disabled => {
+                self.sql_route_disabled.fetch_add(1, Ordering::Relaxed);
+            }
+            RqlRouteReason::Source => {
+                self.sql_route_source.fetch_add(1, Ordering::Relaxed);
+            }
+            RqlRouteReason::Join => {
+                self.sql_route_join.fetch_add(1, Ordering::Relaxed);
+            }
+            RqlRouteReason::Shape => {
+                self.sql_route_shape.fetch_add(1, Ordering::Relaxed);
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct Connection {
     pub(super) db: Arc<Database>,
     pub(super) session: Mutex<SessionState>,
     pub(super) local_cache: StatementCache,
+    pub(super) rql_stats: RqlStatsState,
     /// Per-connection ATTACH/DETACH alias map. Populated by
     /// `crate::exec::attach::apply_attach_plan` when the executor runs
     /// `PreparedKind::Attach`.
@@ -29,6 +103,34 @@ pub struct Connection {
 }
 
 impl Connection {
+    pub(crate) fn committed_sqlite_sequences(&self) -> std::collections::BTreeMap<String, i64> {
+        self.db.sqlite_sequence_snapshot()
+    }
+
+    pub(crate) fn publish_sqlite_sequence_entries(
+        &self,
+        sequences: &std::collections::BTreeMap<String, i64>,
+        dirty: &std::collections::BTreeSet<String>,
+    ) {
+        self.db.publish_sqlite_sequence_entries(sequences, dirty);
+    }
+
+    pub fn rql_stats(&self) -> RqlStats {
+        self.rql_stats.snapshot()
+    }
+
+    pub(crate) fn record_rql_eligible(&self) {
+        self.rql_stats.record_eligible();
+    }
+
+    pub(crate) fn record_rql_native(&self) {
+        self.rql_stats.record_native();
+    }
+
+    pub(crate) fn record_rql_sql_route(&self, reason: RqlRouteReason) {
+        self.rql_stats.record_sql_route(reason);
+    }
+
     /// Prepare a single SQL statement, ignoring any trailing statements.
     ///
     /// Most callers want this for backward compatibility — the returned
@@ -115,6 +217,109 @@ impl Connection {
         Ok(last)
     }
 
+    /// Execute every statement in `sql`, returning `Ok(())` when the final
+    /// statement completes.
+    ///
+    /// Behavior mirrors rusqlite's `execute_batch`: statements are parsed and
+    /// stepped in source order, explicit transaction-control statements are
+    /// executed exactly as authored, and execution stops on the first failure.
+    ///
+    /// The return type is `()` by design. If callers need per-statement row
+    /// counts, they should call [`Self::execute`].
+    pub fn execute_batch(self: &Arc<Self>, sql: &str) -> Result<()> {
+        self.execute(sql).map(|_| ())
+    }
+
+    /// Prepare one typed Redline Query Language statement.
+    pub fn prepare_rql(self: &Arc<Self>, statement: &crate::RqlStatement) -> Result<Statement> {
+        let template = self.prepare_rql_template(statement)?;
+        Ok(Statement::new(Arc::clone(self), template))
+    }
+
+    /// Build a detached RQL template for facade-level caches.
+    #[doc(hidden)]
+    pub fn prepare_rql_template(
+        self: &Arc<Self>,
+        statement: &crate::RqlStatement,
+    ) -> Result<Arc<PreparedTemplate>> {
+        crate::exec::with_current_connection(self.as_ref(), || {
+            let options = crate::rql::PrepareOptions::from_env();
+            if crate::rql::template_cache_enabled() {
+                return self.prepare_rql_template_cached(statement, options);
+            }
+            let template = Arc::new(crate::rql::prepare_template_with_options(
+                self.as_ref(),
+                statement,
+                options,
+            )?);
+            self.ensure_rql_template_allowed(&template)?;
+            Ok(template)
+        })
+    }
+
+    fn prepare_rql_template_cached(
+        self: &Arc<Self>,
+        statement: &crate::RqlStatement,
+        options: crate::rql::PrepareOptions,
+    ) -> Result<Arc<PreparedTemplate>> {
+        let key = StatementCacheKey {
+            schema_epoch: self.schema_epoch().0,
+            stats_epoch: self.stats_epoch().0,
+            optimizer_hash: self.optimizer_hash(),
+            sql: crate::rql::cache_key(statement, options)?,
+        };
+        if let Some(template) = self.local_cache.get(&key) {
+            self.ensure_rql_template_allowed(&template)?;
+            return Ok(template);
+        }
+        if let Some(template) = self.db.stmt_cache.get(&key) {
+            self.ensure_rql_template_allowed(&template)?;
+            self.local_cache.insert(key, Arc::clone(&template));
+            return Ok(template);
+        }
+
+        let template = Arc::new(crate::rql::prepare_template_with_options(
+            self.as_ref(),
+            statement,
+            options,
+        )?);
+        self.ensure_rql_template_allowed(&template)?;
+        if !template_embeds_materialised_rows(&template) {
+            self.db
+                .stmt_cache
+                .insert(key.clone(), Arc::clone(&template));
+            self.local_cache.insert(key, Arc::clone(&template));
+        }
+        Ok(template)
+    }
+
+    fn ensure_rql_template_allowed(&self, template: &PreparedTemplate) -> Result<()> {
+        if !template.readonly && self.with_session(|session| Ok(!session.savepoints.is_empty()))? {
+            return Err(Error::UnsupportedSql(
+                "RQL mutations inside SAVEPOINT are not supported".to_owned(),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Execute a typed RQL program and return the last statement result count.
+    pub fn execute_rql(self: &Arc<Self>, program: &crate::RqlProgram) -> Result<usize> {
+        let mut last = 0usize;
+        for statement in &program.statements {
+            let mut stmt = self.prepare_rql(statement)?;
+            let mut rows = 0usize;
+            while let Step::Row = stmt.step()? {
+                rows += 1;
+            }
+            last = if stmt.is_readonly() {
+                rows
+            } else {
+                stmt.affected_rows()
+            };
+        }
+        Ok(last)
+    }
+
     /// Build a "marker" template for savepoint statements. The side-effects
     /// fire during `prepare_v2`; the returned `Statement` is constructed
     /// with `runtime = Done` so it never invokes the executor. We tag the
@@ -154,11 +359,17 @@ impl Connection {
     /// implicit deferred transaction first (matching SQLite, where SAVEPOINT
     /// outside a tx works as if BEGIN had been called).
     pub fn savepoint(&self, name: &str) -> Result<()> {
+        let committed_sqlite_sequences = self.db.sqlite_sequence_snapshot();
         let mut session = self.session.lock().expect("session poisoned");
         let implicit_tx = if session.tx.is_none() {
             let tx = self.db.engine.begin(Isolation::Snapshot)?;
+            session.sqlite_sequences = committed_sqlite_sequences;
             session.tx = Some(tx);
             session.failed = false;
+            session.sqlite_sequences_dirty.clear();
+            if session.sqlite_sequences_tx_snapshot.is_none() {
+                session.sqlite_sequences_tx_snapshot = Some(session.sqlite_sequences.clone());
+            }
             true
         } else {
             false
@@ -239,6 +450,10 @@ impl Connection {
             session.changes = 0;
             session.total_changes = 0;
             session.last_insert_rowid = None;
+            if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.as_ref() {
+                session.sqlite_sequences = snapshot.clone();
+            }
+            session.sqlite_sequences_dirty.clear();
             (
                 journal_prefix,
                 frame.changes,
@@ -284,6 +499,7 @@ impl Connection {
     }
 
     pub fn begin(&self, mode: BeginMode) -> Result<()> {
+        let committed_sqlite_sequences = self.db.sqlite_sequence_snapshot();
         let mut session = self.session.lock().expect("session poisoned");
         if session.tx.is_some() {
             return Err(Error::TransactionState("transaction already active"));
@@ -296,6 +512,9 @@ impl Connection {
         if matches!(mode, BeginMode::Immediate | BeginMode::Exclusive) {
             self.db.engine.reserve_begin_lock(&mut tx)?;
         }
+        session.sqlite_sequences = committed_sqlite_sequences;
+        session.sqlite_sequences_tx_snapshot = Some(session.sqlite_sequences.clone());
+        session.sqlite_sequences_dirty.clear();
         session.tx = Some(tx);
         session.failed = false;
         // A fresh tx can never replay — drop any leftover journal/savepoint
@@ -352,6 +571,9 @@ impl Connection {
                 session.unique_guards.clear();
                 session.failed = false;
                 session.clear_savepoints();
+                if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+                    session.sqlite_sequences = snapshot;
+                }
                 return Err(err);
             }
             session.tx = Some(tx);
@@ -365,24 +587,45 @@ impl Connection {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                session.sqlite_sequences_tx_snapshot = None;
+                self.db.publish_sqlite_sequence_entries(
+                    &session.sqlite_sequences,
+                    &session.sqlite_sequences_dirty,
+                );
+                session.sqlite_sequences_dirty.clear();
+                // SQLite parity: `PRAGMA defer_foreign_keys` is a
+                // single-transaction flag — it auto-clears at COMMIT
+                // (and at ROLLBACK below) so the next tx starts with
+                // FK enforcement back to the default.
+                session.defer_foreign_keys = false;
                 Ok(())
             }
             Ok(CommitOutcome::MaybeCommitted) => {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                session.sqlite_sequences_tx_snapshot = None;
+                session.sqlite_sequences_dirty.clear();
                 Err(Error::CommitMaybeCommitted)
             }
             Ok(CommitOutcome::RolledBack) => {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+                    session.sqlite_sequences = snapshot;
+                }
+                session.sqlite_sequences_dirty.clear();
                 Err(Error::TransactionState("transaction rolled back"))
             }
             Err(err) => {
                 session.kernel_unique_guards.clear();
                 session.unique_guards.clear();
                 session.clear_savepoints();
+                if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+                    session.sqlite_sequences = snapshot;
+                }
+                session.sqlite_sequences_dirty.clear();
                 Err(err.into())
             }
         }
@@ -400,6 +643,13 @@ impl Connection {
         // A6 SQLite parity: ROLLBACK discards every pending deferred FK
         // check; the rolled-back rows never made it to the durable state.
         crate::exec::fk::clear_deferred_fk_checks(&mut session);
+        if let Some(snapshot) = session.sqlite_sequences_tx_snapshot.take() {
+            session.sqlite_sequences = snapshot;
+        }
+        session.sqlite_sequences_dirty.clear();
+        // SQLite parity: `PRAGMA defer_foreign_keys` is auto-cleared
+        // at the next transaction boundary.
+        session.defer_foreign_keys = false;
         session.failed = false;
         session.clear_savepoints();
         result?;
@@ -427,6 +677,12 @@ impl Connection {
 
     pub(crate) fn database_path(&self) -> &Path {
         self.db.path()
+    }
+
+    /// True for `:memory:` / ephemeral databases — used by SQLite-parity
+    /// PRAGMA shapes (e.g. `journal_mode` always reports `memory` here).
+    pub(crate) fn is_in_memory(&self) -> bool {
+        self.db.is_in_memory()
     }
 
     pub(crate) fn foreign_keys(&self) -> bool {
@@ -505,6 +761,276 @@ impl Connection {
             .case_sensitive_like = value;
     }
 
+    pub(crate) fn defer_foreign_keys(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .defer_foreign_keys
+    }
+
+    pub(crate) fn set_defer_foreign_keys(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .defer_foreign_keys = value;
+    }
+
+    pub(crate) fn ignore_check_constraints(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .ignore_check_constraints
+    }
+
+    pub(crate) fn set_ignore_check_constraints(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .ignore_check_constraints = value;
+    }
+
+    pub(crate) fn trusted_schema(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .trusted_schema
+    }
+
+    pub(crate) fn set_trusted_schema(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .trusted_schema = value;
+    }
+
+    pub(crate) fn secure_delete(&self) -> bool {
+        self.session.lock().expect("session poisoned").secure_delete
+    }
+
+    pub(crate) fn set_secure_delete(&self, value: bool) {
+        self.session.lock().expect("session poisoned").secure_delete = value;
+    }
+
+    pub(crate) fn locking_mode(&self) -> crate::statement::LockingMode {
+        self.session.lock().expect("session poisoned").locking_mode
+    }
+
+    pub(crate) fn set_locking_mode(&self, value: crate::statement::LockingMode) {
+        self.session.lock().expect("session poisoned").locking_mode = value;
+    }
+
+    pub(crate) fn busy_timeout_ms(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .busy_timeout_ms
+    }
+
+    pub(crate) fn set_busy_timeout_ms(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .busy_timeout_ms = value;
+    }
+
+    pub(crate) fn application_id(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .application_id
+    }
+
+    pub(crate) fn set_application_id(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .application_id = value;
+    }
+
+    pub(crate) fn max_page_count(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .max_page_count
+    }
+
+    pub(crate) fn set_max_page_count(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .max_page_count = value;
+    }
+
+    pub(crate) fn cache_spill(&self) -> i64 {
+        self.session.lock().expect("session poisoned").cache_spill
+    }
+
+    pub(crate) fn set_cache_spill(&self, value: i64) {
+        self.session.lock().expect("session poisoned").cache_spill = value;
+    }
+
+    pub(crate) fn fullfsync(&self) -> bool {
+        self.session.lock().expect("session poisoned").fullfsync
+    }
+
+    pub(crate) fn set_fullfsync(&self, value: bool) {
+        self.session.lock().expect("session poisoned").fullfsync = value;
+    }
+
+    pub(crate) fn checkpoint_fullfsync(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .checkpoint_fullfsync
+    }
+
+    pub(crate) fn set_checkpoint_fullfsync(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .checkpoint_fullfsync = value;
+    }
+
+    pub(crate) fn auto_vacuum(&self) -> i64 {
+        self.session.lock().expect("session poisoned").auto_vacuum
+    }
+
+    pub(crate) fn set_auto_vacuum(&self, value: i64) {
+        self.session.lock().expect("session poisoned").auto_vacuum = value;
+    }
+
+    pub(crate) fn threads(&self) -> i64 {
+        self.session.lock().expect("session poisoned").threads
+    }
+
+    pub(crate) fn set_threads(&self, value: i64) {
+        self.session.lock().expect("session poisoned").threads = value;
+    }
+
+    /// PRAGMA mmap_size getter — currently unused at the surface because
+    /// SQLite reports an empty result set when mmap is zero (the
+    /// :memory:-default case); kept for API symmetry with the setter.
+    #[allow(dead_code)]
+    pub(crate) fn mmap_size(&self) -> i64 {
+        self.session.lock().expect("session poisoned").mmap_size
+    }
+
+    pub(crate) fn set_mmap_size(&self, value: i64) {
+        self.session.lock().expect("session poisoned").mmap_size = value;
+    }
+
+    pub(crate) fn soft_heap_limit(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .soft_heap_limit
+    }
+
+    pub(crate) fn set_soft_heap_limit(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .soft_heap_limit = value;
+    }
+
+    pub(crate) fn hard_heap_limit(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .hard_heap_limit
+    }
+
+    pub(crate) fn set_hard_heap_limit(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .hard_heap_limit = value;
+    }
+
+    pub(crate) fn analysis_limit(&self) -> i64 {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .analysis_limit
+    }
+
+    pub(crate) fn set_analysis_limit(&self, value: i64) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .analysis_limit = value;
+    }
+
+    pub(crate) fn automatic_index(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .automatic_index
+    }
+
+    pub(crate) fn set_automatic_index(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .automatic_index = value;
+    }
+
+    pub(crate) fn reverse_unordered_selects(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .reverse_unordered_selects
+    }
+
+    pub(crate) fn set_reverse_unordered_selects(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .reverse_unordered_selects = value;
+    }
+
+    pub(crate) fn writable_schema(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .writable_schema
+    }
+
+    pub(crate) fn set_writable_schema(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .writable_schema = value;
+    }
+
+    pub(crate) fn legacy_alter_table(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .legacy_alter_table
+    }
+
+    pub(crate) fn set_legacy_alter_table(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .legacy_alter_table = value;
+    }
+
+    pub(crate) fn redline_bulk_import(&self) -> bool {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .redline_bulk_import
+    }
+
+    pub(crate) fn set_redline_bulk_import(&self, value: bool) {
+        self.session
+            .lock()
+            .expect("session poisoned")
+            .redline_bulk_import = value;
+    }
+
     pub(crate) fn user_version(&self) -> i64 {
         self.db.user_version()
     }
@@ -516,6 +1042,20 @@ impl Connection {
     pub(crate) fn schema_snapshot(&self) -> Arc<SchemaSnapshot> {
         if let Some(snapshot) = crate::exec::current_tx_schema_snapshot(self) {
             return snapshot;
+        }
+        // If a re-entrant session pointer is installed (we are inside a
+        // trigger body fire, or any other thread-local context that has
+        // already acquired the session mutex) avoid re-locking — read
+        // through the pointer directly. The non-re-entrant
+        // `parking_lot::Mutex` would otherwise deadlock here.
+        if let Some(ptr) = crate::exec::current_session_ptr() {
+            // SAFETY: pointer installed by `with_write_tx` for a
+            // strictly-synchronous re-entrant scope.
+            let session_ref: &crate::session::SessionState = unsafe { &*ptr };
+            if let Some(tx) = session_ref.tx.as_ref() {
+                return self.db.engine.schema_snapshot_for_tx(tx);
+            }
+            return self.db.schema_snapshot();
         }
         let session = self.session.lock().expect("session poisoned");
         if let Some(tx) = session.tx.as_ref() {

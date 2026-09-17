@@ -1,0 +1,121 @@
+{
+  "workspace": "redline-testing",
+  "tests": {
+    ".github/": {
+      "command": "rtk scripts/ci-local.sh doctor && rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/security.sh",
+      "purpose": "verify GitHub workflows delegate to blocking local lanes and pass workflow security lint"
+    },
+    ".gitlab-ci.yml": {
+      "command": "rtk cargo test --locked --test ci_fail_closed",
+      "purpose": "verify the retired GitLab pipeline remains absent after the GitHub cutover"
+    },
+    ".jankurai/": {
+      "command": "rtk cargo test --locked --test ci_fail_closed",
+      "purpose": "verify mirrored control-plane proof routing remains consistent"
+    },
+    ".jeryu/": {
+      "command": "rtk scripts/ci-local.sh doctor",
+      "purpose": "verify local-Jeryu policy changes retain the canonical CI entrypoints"
+    },
+    ".gitignore": {
+      "command": "rtk scripts/ci-local.sh doctor",
+      "purpose": "verify ignored CI and release outputs remain bounded"
+    },
+    "AGENTS.md": {
+      "command": "rtk cargo test --locked",
+      "purpose": "verify agent-routing changes retain the Rust proof surface"
+    },
+    "Cargo.lock": {
+      "command": "rtk cargo check --locked",
+      "purpose": "verify the locked dependency graph"
+    },
+    "Cargo.toml": {
+      "command": "rtk cargo check --locked",
+      "purpose": "verify dependency and crate metadata"
+    },
+    "CHANGELOG.md": {
+      "command": "rtk bash ops/ci/release-readiness.sh",
+      "purpose": "verify release notes remain aligned with release readiness"
+    },
+    "README.md": {
+      "command": "rtk bash ops/ci/release-readiness.sh",
+      "purpose": "verify public release and proof documentation remains complete"
+    },
+    "agent/": {
+      "command": "rtk cargo test --locked --test ci_fail_closed",
+      "purpose": "verify mirrored control-plane proof routing remains consistent"
+    },
+    "build.rs": {
+      "command": "rtk cargo test --locked",
+      "purpose": "verify embedded corpus generation remains build-addressable"
+    },
+    "corpus/beyond_sqlite/": {
+      "command": "rtk cargo test --locked --features pg-embedded -p redline-testing beyond_sqlite::oracle::tests::postgres_self_compare_all_published_cases -- --ignored --exact",
+      "purpose": "verify every beyond-SQLite case passes psql↔psql self-compare before shipping"
+    },
+    "corpus/sqlite_parity/cases/": {
+      "command": "rtk cargo run --locked -p xtask -- ship-gate",
+      "purpose": "verify every SQLite-parity case passes sqlite3↔sqlite3 self-compare before shipping"
+    },
+    "corpus/sqlite_parity/generated_manifest.json": {
+      "command": "rtk cargo test --locked",
+      "purpose": "verify the embedded pinned SQLite parity manifest parses and matches expected counts"
+    },
+    "corpus/sqlite_parity/rules/": {
+      "command": "rtk cargo run --locked -p xtask -- generate --check",
+      "purpose": "verify generated shards match their rule files"
+    },
+    "deny.toml": {
+      "command": "rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/security.sh",
+      "purpose": "verify Rust dependency policy remains fail closed"
+    },
+    "docs/": {
+      "command": "rtk bash ops/ci/release-readiness.sh",
+      "purpose": "verify release, rollback, monitoring, and proof documentation"
+    },
+    "gitleaks.toml": {
+      "command": "rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/security.sh",
+      "purpose": "verify secret scanning remains fail closed"
+    },
+    "justfile": {
+      "command": "rtk just release-local",
+      "purpose": "verify the local release tarball and checksum"
+    },
+    "metadata/": {
+      "command": "rtk cargo test --locked",
+      "purpose": "verify the packaged beyond-SQLite metadata parses"
+    },
+    "ops/": {
+      "command": "rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/pr-ci.sh",
+      "purpose": "verify required, security, and release evidence lanes"
+    },
+    "rust-toolchain.toml": {
+      "command": "rtk cargo check --locked",
+      "purpose": "verify the pinned Rust toolchain builds the locked graph"
+    },
+    "schemas/": {
+      "command": "rtk cargo test --locked --test release_manifest_integrity",
+      "purpose": "verify packaged JSON contracts and release hashes"
+    },
+    "scripts/": {
+      "command": "rtk env REDLINE_STRICT_TOOLS=1 bash ops/ci/pr-ci.sh",
+      "purpose": "verify local CI and release scripts remain executable"
+    },
+    "src/": {
+      "command": "rtk cargo test --locked",
+      "purpose": "verify the runner logic and CLI contract"
+    },
+    "templates/": {
+      "command": "rtk just release-local",
+      "purpose": "verify report templates remain packaged and hashed"
+    },
+    "tests/": {
+      "command": "rtk cargo test --locked",
+      "purpose": "verify Rust integration tests for parity, release integrity, timing, and CI contracts"
+    },
+    "xtask/": {
+      "command": "rtk cargo run --locked -p xtask -- generate --check",
+      "purpose": "verify the corpus generator builds and produces drift-free shards"
+    }
+  }
+}

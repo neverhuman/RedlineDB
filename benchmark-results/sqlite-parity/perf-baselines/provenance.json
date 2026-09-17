@@ -1,0 +1,29 @@
+{
+  "schema_version": "perf-baseline-provenance-v1",
+  "captured_at": "2026-05-25",
+  "captured_against": {
+    "git_commit": "bf7733e perf(infra): Phase 0 measurement scaffolding",
+    "target_binary": "target/release/redlinedb",
+    "target_profile": "release",
+    "rustflags": "(none; mold via .cargo/config.toml)",
+    "sqlite_reference": "/home/ubuntu/redlineDB/target/sqlite-reference/3.53.1/bin/sqlite3"
+  },
+  "files": {
+    "quick-baseline.jsonl": {
+      "case_count": 34,
+      "samples_per_case": "2 warmup + 5 measured",
+      "median_ratio": 1.893,
+      "p90_ratio": 2.125,
+      "purpose": "retained historical quick-subset baseline; not current release evidence"
+    },
+    "medium-baseline.jsonl": {
+      "case_count": 294,
+      "samples_per_case": "1 warmup + 3 measured",
+      "median_ratio": 1.663,
+      "p90_ratio": 2.259,
+      "purpose": "retained historical medium-subset baseline; not a current PR gate"
+    }
+  },
+  "regeneration_status": "retired after the external-only evidence cutover",
+  "current_evidence_lane": "just redline-testing-official"
+}

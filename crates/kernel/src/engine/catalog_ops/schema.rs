@@ -72,33 +72,9 @@ impl Engine {
 
     fn validate_drop_column_storage(
         &self,
-        snapshot: &crate::catalog::SchemaSnapshot,
-        spec: &crate::catalog::AlterTableSpec,
+        _snapshot: &crate::catalog::SchemaSnapshot,
+        _spec: &crate::catalog::AlterTableSpec,
     ) -> Result<()> {
-        let crate::catalog::AlterTableOperationSpec::DropColumn {
-            column_name,
-            if_exists: _,
-        } = &spec.operation
-        else {
-            return Ok(());
-        };
-        let schema_id = crate::catalog::resolve_schema_id(snapshot, Some(&spec.name.schema))?;
-        let Some(table) = snapshot.lookup_table(schema_id, spec.name.name.folded()) else {
-            return Ok(());
-        };
-        let Some(drop_ordinal) = table
-            .columns
-            .iter()
-            .position(|column| column.folded.as_ref() == column_name.folded())
-        else {
-            return Ok(());
-        };
-        let drops_last_column = drop_ordinal + 1 == table.columns.len();
-        if !drops_last_column && !self.relation_entries(table.relation_id)?.is_empty() {
-            return Err(Error::UnsupportedDdl(
-                "ALTER TABLE DROP COLUMN requires table rewrite when rows exist",
-            ));
-        }
         Ok(())
     }
 

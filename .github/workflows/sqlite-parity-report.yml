@@ -34,6 +34,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+      - run: bash ops/ci/install-github-tools.sh
       - name: Publish generated SQLite parity report PR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

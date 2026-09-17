@@ -88,7 +88,13 @@ pub(crate) fn convert_column_def(
                 });
             }
             ColumnOption::Collation(name) => {
-                collation = Some(name.to_string());
+                let collation_name = name.to_string();
+                if !crate::collation::Collation::is_known(&collation_name) {
+                    return Err(Error::Bind(format!(
+                        "no such collation sequence: {collation_name}"
+                    )));
+                }
+                collation = Some(collation_name);
             }
             ColumnOption::ForeignKey(fk) => {
                 // A6 SQLite-parity: column-level REFERENCES is normalised
@@ -112,9 +118,17 @@ pub(crate) fn convert_column_def(
                 let expr_text = match &generation_expr {
                     Some(e) => e.to_string(),
                     None => {
-                        return Err(Error::UnsupportedSql(
-                            "GENERATED column requires an expression".to_owned(),
-                        ));
+                        // Track J — `GENERATED { ALWAYS | BY DEFAULT } AS
+                        // IDENTITY` (Postgres). No expression: treat the
+                        // column as an INTEGER PRIMARY KEY auto-increment
+                        // (SQLite's nearest equivalent). The kernel will
+                        // pick up an auto-assigned rowid on INSERT, matching
+                        // the Postgres surface result for ordered output.
+                        constraints.push(ColumnConstraintSpec::PrimaryKey {
+                            sort_dir: SortDir::Asc,
+                            conflict: ConflictAction::Abort,
+                        });
+                        continue;
                     }
                 };
                 let kind = match generation_expr_mode {
@@ -156,6 +170,7 @@ pub(crate) fn convert_column_def(
         constraints,
         collation,
         default_value,
+        autoincrement: has_autoincrement,
         generated,
     })
 }
@@ -297,13 +312,27 @@ pub(crate) fn table_level_foreign_key(fk: ForeignKeyConstraint) -> TableConstrai
 }
 
 pub(crate) fn convert_index_column(column: IndexColumn) -> Result<IndexColumnSpec> {
+    let mut column = column;
+    let collation = match column.column.expr.clone() {
+        Expr::Collate { expr, collation } => {
+            let collation_name = collation.to_string();
+            if !crate::collation::Collation::is_known(&collation_name) {
+                return Err(Error::Bind(format!(
+                    "no such collation sequence: {collation_name}"
+                )));
+            }
+            column.column.expr = *expr;
+            Some(collation_name)
+        }
+        _ => None,
+    };
     Ok(IndexColumnSpec {
         name: DbName::new(index_column_name(&column)?),
         sort_dir: match column.column.options.asc {
             Some(false) => SortDir::Desc,
             _ => SortDir::Asc,
         },
-        collation: None,
+        collation,
         expr_sql: None,
         expr_referenced_cols: Vec::new(),
     })

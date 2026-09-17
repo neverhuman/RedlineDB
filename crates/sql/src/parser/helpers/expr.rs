@@ -90,6 +90,25 @@ pub(crate) fn expr_to_kernel_ast(
                 )));
             }
         },
+        Expr::Like {
+            negated,
+            any,
+            expr,
+            pattern,
+            escape_char,
+        } => {
+            if *any {
+                return Err(Error::UnsupportedSql(
+                    "LIKE ANY is not supported in DDL".to_owned(),
+                ));
+            }
+            ExprAst::Like {
+                negated: *negated,
+                value: Box::new(expr_to_kernel_ast(expr, column_lookup)?),
+                pattern: Box::new(expr_to_kernel_ast(pattern, column_lookup)?),
+                escape: ddl_like_escape_char(escape_char.as_ref())?,
+            }
+        }
         Expr::IsNull(expr) => ExprAst::Eq(
             Box::new(expr_to_kernel_ast(expr, column_lookup)?),
             Box::new(ExprAst::Const(OwnedValue::Null)),
@@ -116,6 +135,30 @@ pub(crate) fn expr_to_kernel_ast(
             )));
         }
     })
+}
+
+fn ddl_like_escape_char(escape_char: Option<&sqlparser::ast::Value>) -> Result<Option<char>> {
+    match escape_char {
+        Some(sqlparser::ast::Value::SingleQuotedString(s))
+        | Some(sqlparser::ast::Value::DoubleQuotedString(s))
+        | Some(sqlparser::ast::Value::SingleQuotedRawStringLiteral(s))
+        | Some(sqlparser::ast::Value::DoubleQuotedRawStringLiteral(s))
+        | Some(sqlparser::ast::Value::TripleSingleQuotedString(s))
+        | Some(sqlparser::ast::Value::TripleDoubleQuotedString(s))
+        | Some(sqlparser::ast::Value::EscapedStringLiteral(s))
+        | Some(sqlparser::ast::Value::UnicodeStringLiteral(s))
+            if s.chars().count() == 1 =>
+        {
+            Ok(Some(s.chars().next().unwrap()))
+        }
+        Some(sqlparser::ast::Value::DollarQuotedString(s)) if s.value.chars().count() == 1 => {
+            Ok(Some(s.value.chars().next().unwrap()))
+        }
+        None => Ok(None),
+        Some(other) => Err(Error::UnsupportedSql(format!(
+            "unsupported LIKE escape literal in DDL: {other:?}"
+        ))),
+    }
 }
 
 fn current_datetime_default_ast(expr: &Expr) -> Option<ExprAst> {
@@ -304,14 +347,25 @@ pub(crate) fn resolve_column_ordinal_in_table(
     table: &Arc<redlinedb_kernel::catalog::TableDef>,
     name: &str,
 ) -> Result<usize> {
-    match table
+    if let Some(v) = table
         .columns
         .iter()
         .position(|column| column.folded.as_ref().eq_ignore_ascii_case(name))
     {
-        Some(v) => Ok(v),
-        None => Err(Error::UnknownColumn(name.to_owned())),
+        return Ok(v);
     }
+    // SQLite parity: a rowid-style table accepts the implicit `rowid`
+    // / `_rowid_` / `oid` aliases as column names in INSERT / UPDATE
+    // column lists. When the table also has an INTEGER PRIMARY KEY
+    // alias the rowid value is routed to that column ordinal so the
+    // existing dispatch (which honours rowid_alias_column) takes
+    // effect.
+    if table.is_public_rowid_name(name) {
+        if let Some(ord) = table.rowid_alias_column {
+            return Ok(ord as usize);
+        }
+    }
+    Err(Error::UnknownColumn(name.to_owned()))
 }
 
 pub(crate) fn resolve_column_ordinal_in_object_name(

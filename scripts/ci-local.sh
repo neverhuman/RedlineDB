@@ -6,10 +6,14 @@
 # Audit reference: HLT-042 ci-local-parity.lib-missing.
 #
 # Usage:
+#   scripts/ci-local.sh required           # canonical host-required PR CI lane
 #   scripts/ci-local.sh pr-ci              # exact local mirror of .github/workflows/ci.yml
 #   scripts/ci-local.sh fast               # quick iteration lane
 #   scripts/ci-local.sh security           # cargo audit + cargo deny + gitleaks
 #   scripts/ci-local.sh audit              # full jankurai audit lane
+#   scripts/ci-local.sh score              # release score lane
+#   scripts/ci-local.sh contract-drift     # governed contract-drift lane
+#   scripts/ci-local.sh artifact-support   # release artifact smoke lane
 #   scripts/ci-local.sh dependency-review  # local dependency-review mirror
 #   scripts/ci-local.sh sqlite-parity-report # local SQLite parity report update
 #   scripts/ci-local.sh pr-gate            # PR freshness + staged jankurai gate
@@ -23,12 +27,16 @@ cd "$ROOT"
 
 usage() {
     cat >&2 <<'USAGE'
-usage: scripts/ci-local.sh {pr-ci|fast|security|audit|dependency-review|sqlite-parity-report|jankurai-tools|pr-gate|all}
+usage: scripts/ci-local.sh {required|pr-ci|fast|security|audit|score|contract-drift|artifact-support|dependency-review|sqlite-parity-report|jankurai-tools|pr-gate|all}
 
+  required            run ops/ci/pr-ci.sh                 (canonical host-required lane)
   pr-ci              run the exact local mirror of .github/workflows/ci.yml
   fast                run scripts/just/fast.sh          (quick iteration lane)
   security            run ops/ci/security.sh            (cargo audit + deny + gitleaks)
   audit               run ops/ci/jankurai-audit.sh      (full jankurai audit lane)
+  score               run scripts/just/run.sh score    (release score lane)
+  contract-drift      run the governed Jankurai contract-drift lane
+  artifact-support    build, checksum, install, and smoke-test release artifacts
   dependency-review   run ops/ci/dependency-review.sh   (cargo deny advisories/bans/licenses/sources)
   sqlite-parity-report run ops/ci/sqlite-parity-report.sh update
   jankurai-tools      run every jankurai-tools matrix lane plus input-boundary cross-check
@@ -42,46 +50,31 @@ if [ "$#" -ne 1 ]; then
     exit 64
 fi
 
-run_ci_yml_pr_mirror() {
-    local stage
-
-    printf 'ci-local pr-ci: preflight\n' >&2
-    CI_FAST_STAGE=preflight bash "$ROOT/ops/ci/fast.sh"
-
-    for stage in \
-        core \
-        kernel \
-        sql-unit \
-        sql-contracts \
-        bench
-    do
-        printf 'ci-local pr-ci: tests/%s\n' "$stage" >&2
-        CI_FAST_STAGE="$stage" bash "$ROOT/ops/ci/fast.sh"
-    done
-
-    for stage in \
-        redline-testing-official
-    do
-        printf 'ci-local pr-ci: parity/%s\n' "$stage" >&2
-        CI_PARITY_STAGE="$stage" bash "$ROOT/ops/ci/parity.sh"
-    done
-
-    printf 'ci-local pr-ci: official-evidence-guard\n' >&2
-    bash "$ROOT/scripts/guard-official-evidence.sh"
-}
 
 case "$1" in
+    required)
+        bash "$ROOT/ops/ci/pr-ci.sh"
+        ;;
     pr-ci)
-        run_ci_yml_pr_mirror
+        bash "$ROOT/ops/ci/pr-ci.sh"
         ;;
     fast)
         bash "$ROOT/scripts/just/fast.sh"
         ;;
     security)
-        bash "$ROOT/ops/ci/security.sh"
+        bash "$ROOT/ops/ci/security-family.sh"
         ;;
     audit)
-        bash "$ROOT/ops/ci/jankurai-audit.sh"
+        bash "$ROOT/ops/ci/audit-family.sh"
+        ;;
+    score)
+        bash "$ROOT/scripts/just/run.sh" score
+        ;;
+    contract-drift)
+        bash "$ROOT/ops/ci/jankurai-tools.sh" contract-drift
+        ;;
+    artifact-support)
+        bash "$ROOT/scripts/just/run.sh" release-binary-smoke
         ;;
     dependency-review)
         bash "$ROOT/ops/ci/dependency-review.sh"
@@ -118,12 +111,7 @@ case "$1" in
             bash "$ROOT/ops/ci/jankurai-staged-gate.sh"
         ;;
     all)
-        bash "$ROOT/scripts/ci-local.sh" pr-ci
-        bash "$ROOT/ops/ci/security.sh"
-        bash "$ROOT/ops/ci/dependency-review.sh"
-        bash "$ROOT/ops/ci/jankurai-audit.sh"
-        bash "$ROOT/scripts/ci-local.sh" jankurai-tools
-        bash "$ROOT/scripts/ci-local.sh" pr-gate
+        bash "$ROOT/ops/ci/pr-ci.sh"
         ;;
     -h|--help|help)
         usage

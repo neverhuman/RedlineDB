@@ -1,0 +1,29 @@
+schema_version = "1"
+
+[lanes.required]
+commands = ["bash ops/ci/required.sh"]
+blocking = true
+
+[lanes.security]
+commands = ["bash ops/ci/security.sh"]
+blocking = true
+
+[lanes.score]
+commands = ["bash ops/ci/jankurai.sh"]
+blocking = true
+
+[lanes.contract_drift]
+commands = ["bash ops/ci/contract-drift.sh"]
+blocking = true
+
+[lanes.artifact_support]
+commands = ["bash ops/ci/artifact-support.sh"]
+blocking = true
+
+[lanes.family_release]
+commands = ["bash ops/ci/family-release.sh"]
+blocking = true
+
+[lanes.coverage]
+commands = ["bash ops/ci/coverage.sh"]
+blocking = true

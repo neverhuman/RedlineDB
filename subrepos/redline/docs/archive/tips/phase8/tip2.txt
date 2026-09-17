@@ -1,0 +1,2843 @@
+Below is how I would build **Phase 8: Replication, Backup, and Operational Durability** for RedlineDB in pure Rust, assuming your Phase 1 kernel already has durable WAL, page checksums, idempotent recovery, checkpoint metadata, MVCC, CSN ordering, and safe WAL-before-data enforcement.
+
+The central design principle is:
+
+> **Operational durability is not a separate subsystem. It is a set of durable readers over the same WAL, page, checkpoint, CSN, and retention machinery.**
+
+Do not build “backup code,” “replication code,” and “restore code” as three independent systems. Build one operational layer around these primitives:
+
+```text
+WAL segments     -> archive, physical replica, restore, logical decoder
+Page files       -> online base backup
+Commit records   -> logical replication, point-in-time recovery, CSN restore
+Retention pins   -> backup, slots, snapshots, vacuum, checkpoint safety
+Manifests        -> backup integrity, restore integrity, timeline history
+```
+
+SQLite WAL mode already allows readers and a writer to run concurrently, but its own documentation states that because there is only one WAL file, there can only be one writer at a time. It also documents checkpoint starvation scenarios where long or overlapping readers can prevent checkpoints from completing and cause WAL growth. RedlineDB’s Phase 8 must not reintroduce a global operational bottleneck around archiving, backup, slots, or checkpoint cleanup. The operational layer should exploit RedlineDB’s intended single-owner-process, multi-session architecture instead of copying SQLite’s cross-process WAL-index design. ([SQLite][1])
+
+---
+
+# Phase 8 target architecture
+
+Add a new crate or module family:
+
+```text
+redlinedb_ops/
+  archive/
+    mod.rs
+    local.rs
+    manifest.rs
+    segment_catalog.rs
+
+  backup/
+    mod.rs
+    manifest.rs
+    online.rs
+    page_source.rs
+    sink.rs
+
+  restore/
+    mod.rs
+    planner.rs
+    apply.rs
+    timeline.rs
+
+  physical_repl/
+    mod.rs
+    protocol.rs
+    slot.rs
+    wal_stream.rs
+
+  logical_repl/
+    mod.rs
+    codec.rs
+    decoder.rs
+    output.rs
+    slot.rs
+
+  retention/
+    mod.rs
+    horizon.rs
+    pin.rs
+
+  worker/
+    archiver.rs
+    backup.rs
+    wal_fanout.rs
+    logical_dispatcher.rs
+
+  metrics.rs
+  config.rs
+```
+
+The kernel should expose only narrow interfaces:
+
+```rust
+pub trait WalControl {
+    fn current_lsn(&self) -> Lsn;
+    fn flushed_lsn(&self) -> Lsn;
+    fn durable_commit_lsn(&self) -> Lsn;
+    fn append_control_record(&self, rec: ControlWalRecord) -> Result<Lsn>;
+    fn force_rotate_segment(&self) -> Result<SegmentId>;
+    fn wait_flushed(&self, lsn: Lsn) -> Result<()>;
+    fn read_wal_range(&self, from: Lsn, to: Option<Lsn>) -> Result<WalRangeReader>;
+}
+
+pub trait CheckpointControl {
+    fn latest_checkpoint(&self) -> CheckpointRef;
+    fn request_checkpoint(&self, reason: CheckpointReason) -> Result<()>;
+}
+
+pub trait PageBackupSource {
+    fn begin_backup_scan(&self, backup_lsn: Lsn) -> Result<BackupScan>;
+    fn read_page_for_backup(&self, page_id: PageId, dst: &mut [u8]) -> Result<PageBackupMeta>;
+}
+
+pub trait RetentionControl {
+    fn acquire_pin(&self, pin: RetentionPin) -> Result<PinGuard>;
+    fn update_slot_lsn(&self, slot: SlotId, restart_lsn: Lsn, confirmed_lsn: Lsn) -> Result<()>;
+    fn current_horizon(&self) -> RetentionHorizon;
+}
+```
+
+Everything else should be built on top.
+
+---
+
+# Non-negotiable invariants
+
+## 1. Backup consistency invariant
+
+A restored backup must reach a transactionally consistent database state after WAL replay.
+
+For an online fuzzy backup:
+
+```text
+base pages copied during [backup_begin_lsn, backup_end_lsn]
++
+WAL replay through backup_end_lsn
+=
+consistent database at backup_end_lsn
+```
+
+The restored backup does **not** have to be consistent before `backup_end_lsn`.
+
+This is important. If pages are copied while writers continue, the base backup may contain some page versions from before, during, and after individual commits. WAL replay brings the whole image to a single consistent point.
+
+PostgreSQL’s continuous archiving model has the same core idea: successful recovery requires a continuous sequence of archived WAL files extending back at least as far as the start of the backup. ([PostgreSQL][2])
+
+## 2. WAL archive invariant
+
+A WAL segment is archived only after it is sealed, durable, immutable, and checksum-verified.
+
+```text
+sealed segment -> archive upload -> archive verify -> archived_contiguous_lsn advances
+```
+
+A segment may be uploaded twice if the same bytes and same hash already exist. A different hash for the same segment identity is a fatal integrity error.
+
+## 3. Retention invariant
+
+No WAL segment, undo record, dead tuple, relation file, dropped page, or truncated extent may be physically removed while any registered horizon still needs it.
+
+The retention horizon is:
+
+```text
+min(
+  latest_checkpoint.redo_lsn,
+  oldest_active_snapshot.required_lsn,
+  oldest_backup_pin.begin_lsn,
+  oldest_physical_slot.restart_lsn,
+  oldest_logical_slot.restart_lsn,
+  oldest_unarchived_segment.start_lsn,
+  oldest_restore_or_replica_need_lsn
+)
+```
+
+The CSN horizon is:
+
+```text
+min(
+  oldest_active_snapshot.csn,
+  oldest_logical_slot.required_csn,
+  oldest_backup_pin.begin_csn,
+  oldest_replica_visibility_csn
+)
+```
+
+Vacuum uses the CSN horizon. WAL recycling uses the LSN horizon. Physical file deletion uses both.
+
+## 4. Slot invariant
+
+A replication slot is a durable promise:
+
+```text
+“I will retain, archive, or be able to reconstruct the data needed to continue this stream.”
+```
+
+If that promise cannot be kept because configured disk limits are exceeded, the slot must be explicitly invalidated. Silent slot data loss is forbidden.
+
+## 5. Writer fast-path invariant
+
+User commits must not wait for backup copying, logical decoding, archive upload, or replica apply unless the user explicitly configured synchronous operational durability.
+
+Default:
+
+```text
+commit waits for local WAL durability only
+archiver runs async
+backup runs async
+replication runs async
+retention protects required files
+```
+
+Optional strict modes may wait for archive or replica flush.
+
+---
+
+# File layout
+
+Use a database directory like this:
+
+```text
+db/
+  CURRENT
+  CONTROL
+  MANIFEST
+
+  data/
+    rel/
+      0000000000000001.rlf
+      0000000000000002.rlf
+    free/
+    catalog/
+
+  wal/
+    00000001_0000000000000000.rwal
+    00000001_0000000001000000.rwal
+    00000001_0000000002000000.rwal
+
+  wal_index/
+    segment_catalog.redline
+
+  slots/
+    physical/
+      replica_a.slot
+    logical/
+      cdc_main.slot
+
+  archive_state/
+    pending/
+    archived/
+    failed/
+
+  backup_state/
+    in_progress/
+    completed/
+
+  timelines/
+    00000001.history
+```
+
+WAL segment name:
+
+```text
+{timeline_id:08x}_{first_lsn:016x}.rwal
+```
+
+Example:
+
+```text
+00000001_0000000004000000.rwal
+```
+
+Keep timeline in the name from the beginning. Do not add it later. Timeline support makes point-in-time recovery, restore, and promotion much cleaner.
+
+---
+
+# Core types
+
+```rust
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Lsn(pub u64);
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct Csn(pub u64);
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct TimelineId(pub u32);
+
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SegmentNo(pub u64);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SegmentId {
+    pub timeline: TimelineId,
+    pub no: SegmentNo,
+    pub first_lsn: Lsn,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct BackupId(pub [u8; 16]);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct SlotId(pub u64);
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct DbUuid(pub [u8; 16]);
+```
+
+Keep these as small POD-style types. They should be cheap to copy, cheap to atomically store as `u64` where possible, and strongly typed enough to avoid mixing CSN and LSN by accident.
+
+---
+
+# WAL segment format
+
+You want WAL segments that are independently verifiable, streamable, archivable, and replayable.
+
+```rust
+#[repr(C)]
+pub struct WalSegmentHeader {
+    pub magic: [u8; 8],        // b"RLWAL001"
+    pub version: u16,
+    pub header_len: u16,
+    pub flags: u32,
+
+    pub db_uuid: [u8; 16],
+    pub timeline: u32,
+    pub segment_no: u64,
+    pub first_lsn: u64,
+    pub segment_size: u32,
+    pub page_size: u32,
+
+    pub prev_segment_hash: [u8; 32],
+    pub header_crc32c: u32,
+}
+
+#[repr(C)]
+pub struct WalRecordHeader {
+    pub magic: u32,            // 0xDDBB_AA11
+    pub header_len: u16,
+    pub record_type: u16,
+    pub flags: u32,
+
+    pub lsn: u64,
+    pub prev_lsn: u64,
+    pub txid: u64,
+    pub csn: u64,              // 0 for non-commit or pre-CSN records
+
+    pub payload_len: u32,
+    pub payload_crc32c: u32,
+    pub header_crc32c: u32,
+}
+
+#[repr(C)]
+pub struct WalSegmentFooter {
+    pub magic: [u8; 8],         // b"RLSEAL01"
+    pub valid_end_lsn: u64,
+    pub record_count: u64,
+    pub segment_crc32c: u32,
+    pub segment_hash: [u8; 32],
+    pub footer_crc32c: u32,
+}
+```
+
+Record types:
+
+```rust
+#[repr(u16)]
+pub enum WalRecordType {
+    HeapInsert        = 1,
+    HeapUpdate        = 2,
+    HeapDelete        = 3,
+    PageImage         = 4,
+    PageAlloc         = 5,
+    PageFree          = 6,
+    RelationCreate    = 7,
+    RelationDrop      = 8,
+    RelationTruncate  = 9,
+    Checkpoint        = 10,
+
+    TxnBegin          = 20,
+    TxnCommit         = 21,
+    TxnAbort          = 22,
+
+    BackupBegin       = 40,
+    BackupEnd         = 41,
+    RestorePoint      = 42,
+
+    LogicalBegin      = 60,
+    LogicalChange     = 61,
+    LogicalCommit     = 62,
+    LogicalAbort      = 63,
+}
+```
+
+Use `crc32c` for fast accidental corruption detection. Use a stronger segment hash, such as BLAKE3 or SHA-256, for archive identity and manifest verification.
+
+Phase 1 full-page images or doublewrite protection matter here. PostgreSQL’s docs describe why full-page images after checkpoints are needed: a crash can leave a page partly old and partly new, and row-level WAL alone may not reconstruct it. RedlineDB Phase 8 can rely on your Phase 1 solution, but backup and restore should explicitly verify page LSNs and page checksums. ([PostgreSQL][3])
+
+---
+
+# Segment catalog
+
+Create a durable segment catalog independent of the WAL files themselves.
+
+```rust
+#[derive(Clone, Debug)]
+pub enum SegmentState {
+    Open,
+    Sealed {
+        valid_end_lsn: Lsn,
+        segment_hash: [u8; 32],
+        record_count: u64,
+    },
+    ArchivePending {
+        valid_end_lsn: Lsn,
+        segment_hash: [u8; 32],
+    },
+    Archived {
+        valid_end_lsn: Lsn,
+        segment_hash: [u8; 32],
+        archived_at_unix_nanos: u128,
+    },
+    Recyclable,
+    Recycled,
+    FailedArchive {
+        error_code: u32,
+        attempts: u32,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct SegmentCatalogEntry {
+    pub id: SegmentId,
+    pub path: std::path::PathBuf,
+    pub state: SegmentState,
+    pub created_at_unix_nanos: u128,
+}
+```
+
+On startup:
+
+1. Scan `wal/`.
+2. Verify headers.
+3. Verify sealed footers.
+4. Rebuild missing segment catalog entries.
+5. Treat sealed-but-not-archived segments as `ArchivePending`.
+6. Ignore torn tail only for the open segment.
+7. Fail loudly for corruption in a non-tail sealed segment.
+
+This keeps recovery, archiving, and retention resilient to crashes in the middle of catalog updates.
+
+---
+
+# Archive subsystem
+
+## Archive modes
+
+```rust
+#[derive(Clone, Copy, Debug)]
+pub enum ArchiveMode {
+    Off,
+
+    /// Commit does not wait for archive.
+    Async,
+
+    /// Backup finalization waits for required WAL to archive.
+    RequiredForBackup,
+
+    /// Commit waits until its WAL segment or WAL range is archived.
+    /// Expensive, but useful for strict remote durability.
+    SyncCommit,
+}
+```
+
+Default should be:
+
+```rust
+ArchiveMode::Async
+```
+
+Do not make normal commits wait for object storage, cloud APIs, network filesystems, or compression.
+
+PostgreSQL’s configuration uses archiving of completed WAL segments and an archive timeout to force segment switches when low traffic would otherwise delay archiving. That pattern is worth copying conceptually: RedlineDB should archive sealed segments asynchronously, and optionally force-rotate WAL after an `archive_timeout` to bound operational RPO under low write volume. ([PostgreSQL][3])
+
+## Archive store trait
+
+```rust
+pub trait ArchiveStore: Send + Sync + 'static {
+    fn put_segment(
+        &self,
+        id: SegmentId,
+        local_path: &std::path::Path,
+        expected_hash: [u8; 32],
+        expected_len: u64,
+    ) -> Result<ArchivePutResult>;
+
+    fn get_segment(
+        &self,
+        id: SegmentId,
+        dst_path: &std::path::Path,
+    ) -> Result<ArchiveGetResult>;
+
+    fn has_segment(
+        &self,
+        id: SegmentId,
+        expected_hash: Option<[u8; 32]>,
+    ) -> Result<bool>;
+
+    fn delete_segment(&self, id: SegmentId) -> Result<()>;
+}
+
+pub struct ArchivePutResult {
+    pub already_existed: bool,
+    pub bytes_written: u64,
+    pub verified_hash: [u8; 32],
+}
+
+pub struct ArchiveGetResult {
+    pub bytes_read: u64,
+    pub verified_hash: [u8; 32],
+}
+```
+
+Start with a local archive implementation:
+
+```text
+archive/
+  segments/
+    00000001_0000000000000000.rwal
+    00000001_0000000001000000.rwal
+  manifests/
+  tmp/
+```
+
+Local archive write algorithm:
+
+```rust
+fn put_segment_local(
+    archive_dir: &Path,
+    id: SegmentId,
+    local_path: &Path,
+    expected_hash: [u8; 32],
+    expected_len: u64,
+) -> Result<ArchivePutResult> {
+    let final_path = archive_dir
+        .join("segments")
+        .join(format_segment_name(id));
+
+    if final_path.exists() {
+        let hash = hash_file(&final_path)?;
+        if hash == expected_hash {
+            return Ok(ArchivePutResult {
+                already_existed: true,
+                bytes_written: 0,
+                verified_hash: hash,
+            });
+        }
+
+        return Err(Error::ArchiveHashMismatch {
+            segment: id,
+            expected: expected_hash,
+            actual: hash,
+        });
+    }
+
+    let tmp_path = archive_dir
+        .join("tmp")
+        .join(format!("{}.tmp.{}", format_segment_name(id), std::process::id()));
+
+    let mut src = std::fs::File::open(local_path)?;
+    let mut dst = std::fs::OpenOptions::new()
+        .create_new(true)
+        .write(true)
+        .open(&tmp_path)?;
+
+    let mut buf = vec![0u8; 1024 * 1024];
+    let mut written = 0u64;
+
+    loop {
+        let n = std::io::Read::read(&mut src, &mut buf)?;
+        if n == 0 {
+            break;
+        }
+        std::io::Write::write_all(&mut dst, &buf[..n])?;
+        written += n as u64;
+    }
+
+    if written != expected_len {
+        return Err(Error::ArchiveLengthMismatch {
+            segment: id,
+            expected: expected_len,
+            actual: written,
+        });
+    }
+
+    dst.sync_all()?;
+    drop(dst);
+
+    let actual_hash = hash_file(&tmp_path)?;
+    if actual_hash != expected_hash {
+        let _ = std::fs::remove_file(&tmp_path);
+        return Err(Error::ArchiveHashMismatch {
+            segment: id,
+            expected: expected_hash,
+            actual: actual_hash,
+        });
+    }
+
+    std::fs::rename(&tmp_path, &final_path)?;
+    fsync_parent_dir(&final_path)?;
+
+    Ok(ArchivePutResult {
+        already_existed: false,
+        bytes_written: written,
+        verified_hash: actual_hash,
+    })
+}
+```
+
+Do not read entire WAL segments into memory. Stream with pooled buffers.
+
+---
+
+# Archiver worker
+
+Use a dedicated archiver with bounded queueing.
+
+```rust
+pub struct ArchiverConfig {
+    pub parallelism: usize,
+    pub max_queue_bytes: u64,
+    pub retry_base_millis: u64,
+    pub retry_max_millis: u64,
+    pub force_rotate_after_millis: Option<u64>,
+}
+
+pub struct Archiver {
+    catalog: Arc<SegmentCatalog>,
+    archive: Arc<dyn ArchiveStore>,
+    metrics: Arc<OpsMetrics>,
+    config: ArchiverConfig,
+}
+```
+
+Algorithm:
+
+```text
+loop:
+  wait for sealed segment or periodic wake
+  find sealed segments not archived
+  schedule uploads, bounded by parallelism and queue bytes
+  after each successful upload:
+      mark segment archived
+      advance archived_contiguous_lsn if all prior segments archived
+      notify retention manager
+  after failure:
+      mark failed
+      retry with exponential backoff
+      do not recycle segment
+```
+
+Important detail: parallel upload is allowed, but `archived_contiguous_lsn` advances only in order.
+
+```text
+seg 10 archived
+seg 11 failed
+seg 12 archived
+
+archived_contiguous_lsn remains at end(seg 10)
+```
+
+This makes backup and restore correctness simple.
+
+---
+
+# Retention manager
+
+This is the most important Phase 8 component.
+
+Without a correct retention manager, backup and replication will randomly work in tests and fail in production.
+
+## Retention sources
+
+```rust
+#[derive(Clone, Debug)]
+pub enum RetentionSourceKind {
+    Checkpoint,
+    ActiveSnapshot,
+    OnlineBackup { backup_id: BackupId },
+    PhysicalSlot { slot_id: SlotId },
+    LogicalSlot { slot_id: SlotId },
+    ArchivePending,
+    Restore,
+    AdminPin,
+}
+
+#[derive(Clone, Debug)]
+pub struct RetentionSource {
+    pub kind: RetentionSourceKind,
+    pub required_lsn: Option<Lsn>,
+    pub required_csn: Option<Csn>,
+    pub reason: String,
+    pub created_at_unix_nanos: u128,
+    pub expires_at_unix_nanos: Option<u128>,
+}
+```
+
+## Horizon calculation
+
+```rust
+#[derive(Clone, Copy, Debug)]
+pub struct RetentionHorizon {
+    pub min_required_lsn: Lsn,
+    pub min_required_csn: Csn,
+    pub oldest_backup_lsn: Option<Lsn>,
+    pub oldest_slot_lsn: Option<Lsn>,
+    pub oldest_archive_lsn: Option<Lsn>,
+}
+```
+
+Implementation:
+
+```rust
+pub struct RetentionManager {
+    sources: parking_lot::RwLock<Vec<RetentionSource>>,
+    cached_lsn: std::sync::atomic::AtomicU64,
+    cached_csn: std::sync::atomic::AtomicU64,
+}
+
+impl RetentionManager {
+    pub fn recompute(&self) -> RetentionHorizon {
+        let sources = self.sources.read();
+
+        let mut min_lsn = Lsn(u64::MAX);
+        let mut min_csn = Csn(u64::MAX);
+
+        let mut oldest_backup_lsn = None;
+        let mut oldest_slot_lsn = None;
+        let mut oldest_archive_lsn = None;
+
+        for src in sources.iter() {
+            if let Some(lsn) = src.required_lsn {
+                min_lsn = min_lsn.min(lsn);
+
+                match src.kind {
+                    RetentionSourceKind::OnlineBackup { .. } => {
+                        oldest_backup_lsn = Some(oldest_backup_lsn.map_or(lsn, |x: Lsn| x.min(lsn)));
+                    }
+                    RetentionSourceKind::PhysicalSlot { .. }
+                    | RetentionSourceKind::LogicalSlot { .. } => {
+                        oldest_slot_lsn = Some(oldest_slot_lsn.map_or(lsn, |x: Lsn| x.min(lsn)));
+                    }
+                    RetentionSourceKind::ArchivePending => {
+                        oldest_archive_lsn = Some(oldest_archive_lsn.map_or(lsn, |x: Lsn| x.min(lsn)));
+                    }
+                    _ => {}
+                }
+            }
+
+            if let Some(csn) = src.required_csn {
+                min_csn = min_csn.min(csn);
+            }
+        }
+
+        if min_lsn.0 == u64::MAX {
+            min_lsn = Lsn(0);
+        }
+        if min_csn.0 == u64::MAX {
+            min_csn = Csn(0);
+        }
+
+        self.cached_lsn.store(min_lsn.0, std::sync::atomic::Ordering::Release);
+        self.cached_csn.store(min_csn.0, std::sync::atomic::Ordering::Release);
+
+        RetentionHorizon {
+            min_required_lsn: min_lsn,
+            min_required_csn: min_csn,
+            oldest_backup_lsn,
+            oldest_slot_lsn,
+            oldest_archive_lsn,
+        }
+    }
+
+    pub fn fast_min_lsn(&self) -> Lsn {
+        Lsn(self.cached_lsn.load(std::sync::atomic::Ordering::Acquire))
+    }
+
+    pub fn fast_min_csn(&self) -> Csn {
+        Csn(self.cached_csn.load(std::sync::atomic::Ordering::Acquire))
+    }
+}
+```
+
+The hot path should not acquire the retention lock. Workers update sources. Checkpoint/vacuum reads cached atomics.
+
+## Slot overflow policy
+
+```rust
+#[derive(Clone, Copy, Debug)]
+pub enum SlotOverflowPolicy {
+    /// Preserve slot correctness even if commits slow down.
+    BlockWriters,
+
+    /// Invalidate lagging async slots once they exceed configured retention.
+    InvalidateSlot,
+
+    /// Keep growing WAL/archive until disk limit hard-fails.
+    ExtendUntilDiskFull,
+
+    /// Keep local WAL small if archive can serve old segments.
+    PreferArchiveFallback,
+}
+```
+
+Recommended defaults:
+
+```text
+physical async slot: PreferArchiveFallback, else InvalidateSlot
+logical async slot:  PreferArchiveFallback, else InvalidateSlot
+sync replica slot:   BlockWriters
+backup pin:          BlockCleanup, not writers
+```
+
+---
+
+# Online backup
+
+## Two backup modes
+
+### 1. Fuzzy physical backup
+
+Default.
+
+```text
+copy pages while writers continue
+record backup_begin_lsn
+record backup_end_lsn
+restore by applying WAL through backup_end_lsn
+```
+
+Fast, online, minimal writer interference.
+
+### 2. Checkpointed physical backup
+
+Optional simpler mode.
+
+```text
+request checkpoint
+wait until checkpoint durable
+copy files/pages
+WAL required from checkpoint_lsn
+```
+
+This is easier to reason about but can add checkpoint I/O pressure. Do not make it the only mode.
+
+---
+
+# Fuzzy backup correctness
+
+The backup must never copy a torn or stale page while a dirty in-memory version exists.
+
+This is the key implementation detail.
+
+Do **not** implement online backup as naive filesystem copy.
+
+Bad:
+
+```text
+copy db/data directory with std::fs::copy while writers/checkpointer run
+```
+
+Why bad?
+
+A data file page on disk may be older than the dirty buffer pool page. If you copy the old disk page and do not include the earlier WAL needed to reconstruct the dirty change, restore can lose data.
+
+Instead, implement a buffer-aware page source:
+
+```rust
+pub trait PageBackupSource {
+    fn begin_backup_scan(&self, backup_lsn: Lsn) -> Result<BackupScan>;
+
+    /// Copies a stable page image into dst.
+    ///
+    /// Must return bytes protected against:
+    /// - concurrent page mutation
+    /// - concurrent flush tearing
+    /// - dirty buffer vs stale disk mismatch
+    fn read_page_for_backup(
+        &self,
+        page_id: PageId,
+        dst: &mut [u8],
+    ) -> Result<PageBackupMeta>;
+}
+
+pub struct PageBackupMeta {
+    pub page_id: PageId,
+    pub page_lsn: Lsn,
+    pub checksum: u32,
+    pub all_zero: bool,
+}
+```
+
+The page source should:
+
+```text
+1. Acquire the page's striped I/O latch.
+2. If page is resident in buffer pool:
+      latch frame briefly
+      copy frame bytes into backup buffer
+      read page_lsn/checksum
+      unlatch frame
+3. Else:
+      pread page from data file
+      verify checksum
+4. Release I/O latch.
+```
+
+The checkpointer and data-file flusher must use the same page I/O latch. That prevents backup from reading a page while the checkpointer writes half of it.
+
+## Backup lifecycle
+
+```text
+begin_online_backup()
+  generate backup_id
+  write WAL BackupBegin
+  flush BackupBegin record
+  acquire retention pin at backup_begin_lsn
+  snapshot relation file list and file sizes
+  create temp backup manifest
+
+copy phase
+  copy pages from begin-time file list and begin-time sizes
+  use bounded worker pool and bounded memory
+  compute chunk checksums
+  emit file/chunk entries
+
+end_online_backup()
+  write WAL BackupEnd
+  flush BackupEnd record
+  set backup_end_lsn
+  optionally wait until required WAL is archived
+  optionally bundle required WAL segments
+  write final manifest
+  fsync manifest
+  commit backup atomically
+  release retention pin
+```
+
+## Backup manifest
+
+Use a manifest that is deterministic and versioned.
+
+```rust
+#[derive(Clone, Debug)]
+pub struct BackupManifest {
+    pub magic: String,              // "RLDB_BACKUP_MANIFEST"
+    pub manifest_version: u32,
+
+    pub db_uuid: DbUuid,
+    pub backup_id: BackupId,
+    pub timeline: TimelineId,
+
+    pub backup_begin_lsn: Lsn,
+    pub backup_end_lsn: Lsn,
+    pub min_consistent_lsn: Lsn,
+
+    pub begin_csn: Csn,
+    pub end_csn: Csn,
+
+    pub page_size: u32,
+    pub database_format_version: u32,
+    pub wal_format_version: u32,
+
+    pub created_at_unix_nanos: u128,
+
+    pub files: Vec<BackupFileEntry>,
+    pub wal: Vec<BackupWalEntry>,
+
+    pub manifest_hash: [u8; 32],
+}
+
+#[derive(Clone, Debug)]
+pub struct BackupFileEntry {
+    pub logical_path: String,
+    pub file_kind: BackupFileKind,
+    pub original_size_bytes: u64,
+    pub copied_size_bytes: u64,
+    pub chunk_size: u32,
+    pub chunks: Vec<BackupChunkEntry>,
+    pub file_hash: [u8; 32],
+}
+
+#[derive(Clone, Debug)]
+pub enum BackupFileKind {
+    Relation,
+    Catalog,
+    FreeMap,
+    Control,
+}
+
+#[derive(Clone, Debug)]
+pub struct BackupChunkEntry {
+    pub offset: u64,
+    pub len: u32,
+    pub hash: [u8; 32],
+    pub max_page_lsn: Lsn,
+}
+
+#[derive(Clone, Debug)]
+pub struct BackupWalEntry {
+    pub segment: SegmentId,
+    pub first_lsn: Lsn,
+    pub last_lsn: Lsn,
+    pub hash: [u8; 32],
+    pub bundled: bool,
+    pub archive_required: bool,
+}
+```
+
+`min_consistent_lsn` should normally equal `backup_end_lsn`.
+
+That means:
+
+```text
+restore target must be >= min_consistent_lsn
+```
+
+This avoids a subtle PITR bug. A fuzzy backup may contain page versions copied after a user-requested target time. You cannot safely restore to a time before the backup’s consistency point unless your backup format supports undoing future copied page images, which you should not do.
+
+## Backup sink trait
+
+```rust
+pub trait BackupSink: Send + Sync {
+    fn begin(&self, backup_id: BackupId) -> Result<()>;
+
+    fn put_file_chunk(
+        &self,
+        logical_path: &str,
+        offset: u64,
+        bytes: &[u8],
+    ) -> Result<()>;
+
+    fn put_wal_segment(
+        &self,
+        id: SegmentId,
+        bytes: &mut dyn std::io::Read,
+        expected_hash: [u8; 32],
+    ) -> Result<()>;
+
+    fn put_manifest(&self, manifest: &BackupManifest) -> Result<()>;
+
+    fn commit(&self) -> Result<()>;
+    fn abort(&self) -> Result<()>;
+}
+```
+
+Start with:
+
+```text
+LocalDirectoryBackupSink
+```
+
+Later:
+
+```text
+ObjectStoreBackupSink
+StreamingBackupSink
+EncryptedBackupSink
+CompressedBackupSink
+```
+
+But keep the kernel unaware of those.
+
+---
+
+# Online backup coordinator skeleton
+
+```rust
+pub struct OnlineBackupConfig {
+    pub copy_workers: usize,
+    pub chunk_size: usize,
+    pub max_inflight_chunks: usize,
+    pub max_read_bytes_per_sec: Option<u64>,
+    pub bundle_required_wal: bool,
+    pub require_archive_through_end_lsn: bool,
+}
+
+pub struct OnlineBackup {
+    wal: Arc<dyn WalControl>,
+    pages: Arc<dyn PageBackupSource>,
+    retention: Arc<RetentionManager>,
+    archive_catalog: Arc<SegmentCatalog>,
+    metrics: Arc<OpsMetrics>,
+    config: OnlineBackupConfig,
+}
+
+impl OnlineBackup {
+    pub fn run(&self, sink: Arc<dyn BackupSink>) -> Result<BackupManifest> {
+        let backup_id = BackupId(new_random_128());
+
+        sink.begin(backup_id)?;
+
+        let begin_lsn = self.wal.append_control_record(
+            ControlWalRecord::BackupBegin { backup_id }
+        )?;
+        self.wal.wait_flushed(begin_lsn)?;
+
+        let begin_csn = current_committed_csn();
+
+        let _pin = self.retention.acquire_pin(RetentionPin {
+            kind: RetentionSourceKind::OnlineBackup { backup_id },
+            required_lsn: Some(begin_lsn),
+            required_csn: Some(begin_csn),
+            reason: "online backup".to_string(),
+        })?;
+
+        let scan = self.pages.begin_backup_scan(begin_lsn)?;
+
+        let mut builder = BackupManifestBuilder::new(
+            backup_id,
+            begin_lsn,
+            begin_csn,
+            scan.db_uuid,
+            scan.timeline,
+            scan.page_size,
+        );
+
+        self.copy_scan(&scan, sink.as_ref(), &mut builder)?;
+
+        let end_lsn = self.wal.append_control_record(
+            ControlWalRecord::BackupEnd {
+                backup_id,
+                begin_lsn,
+            }
+        )?;
+        self.wal.wait_flushed(end_lsn)?;
+
+        let end_csn = current_committed_csn();
+
+        builder.set_end(end_lsn, end_csn);
+
+        let required_wal = self.archive_catalog
+            .segments_covering(begin_lsn, end_lsn)?;
+
+        if self.config.require_archive_through_end_lsn {
+            self.archive_catalog.wait_archived_through(end_lsn)?;
+        }
+
+        if self.config.bundle_required_wal {
+            self.bundle_wal(&required_wal, sink.as_ref(), &mut builder)?;
+        } else {
+            builder.require_archive_wal(required_wal);
+        }
+
+        let manifest = builder.finish()?;
+
+        sink.put_manifest(&manifest)?;
+        sink.commit()?;
+
+        Ok(manifest)
+    }
+
+    fn copy_scan(
+        &self,
+        scan: &BackupScan,
+        sink: &dyn BackupSink,
+        builder: &mut BackupManifestBuilder,
+    ) -> Result<()> {
+        // Simplest correct version: one worker.
+        // Later: split page ranges across workers using bounded queues.
+        let mut page_buf = vec![0u8; scan.page_size as usize];
+
+        for file in scan.files.iter() {
+            let mut file_hasher = HashBuilder::new();
+
+            for page_id in file.pages() {
+                self.pages.read_page_for_backup(page_id, &mut page_buf)?;
+
+                let offset = file.offset_of(page_id);
+                sink.put_file_chunk(&file.logical_path, offset, &page_buf)?;
+
+                file_hasher.update(&page_buf);
+
+                builder.add_page_chunk(
+                    &file.logical_path,
+                    offset,
+                    &page_buf,
+                    extract_page_lsn(&page_buf)?,
+                )?;
+            }
+
+            builder.finish_file(&file.logical_path, file_hasher.finalize())?;
+        }
+
+        Ok(())
+    }
+}
+```
+
+The real version should parallelize by file extents:
+
+```text
+coordinator thread:
+  enumerates page ranges
+  sends ranges into bounded channel
+
+copy workers:
+  read pages with page I/O latch
+  write chunks to sink
+  return chunk metadata
+
+manifest thread:
+  consumes chunk metadata in deterministic order
+  writes manifest entries
+```
+
+Do not let backup allocate unbounded memory. Use:
+
+```text
+copy_workers * chunk_size * 2
+```
+
+as the rough upper bound.
+
+---
+
+# Relation drops and truncation during backup
+
+This is a common hidden bug.
+
+During an online backup, you must not physically unlink or truncate files that may be needed by the backup’s begin-time scan.
+
+Rules:
+
+```text
+DROP TABLE:
+  write RelationDrop WAL
+  remove catalog visibility transactionally
+  defer physical unlink until retention_lsn > drop_lsn
+
+TRUNCATE:
+  write RelationTruncate WAL
+  update logical size transactionally
+  defer physical truncation until retention_lsn > truncate_lsn
+
+PAGE FREE:
+  write PageFree WAL
+  put page on reusable list only when CSN/LSN horizons permit
+```
+
+Backup reads a begin-time file list and begin-time sizes.
+
+If a relation is dropped during the backup, WAL replay will drop it during restore. The physical file must remain copyable until the backup pin is released.
+
+---
+
+# Restore
+
+Restore should be boring, deterministic, and paranoid.
+
+## Restore modes
+
+```rust
+pub enum RestoreTarget {
+    Latest,
+    Lsn(Lsn),
+    Csn(Csn),
+    TimestampUnixNanos(u128),
+    NamedRestorePoint(String),
+}
+
+pub struct RestorePlan {
+    pub manifest: BackupManifest,
+    pub target: RestoreTarget,
+    pub required_wal: Vec<BackupWalEntry>,
+    pub target_lsn: Lsn,
+    pub new_timeline: Option<TimelineId>,
+}
+```
+
+## Restore algorithm
+
+```text
+restore(manifest, target):
+  verify manifest hash
+  verify db_uuid/timeline/page_size/format compatibility
+  require target_lsn >= manifest.min_consistent_lsn
+  create temp restore directory
+  copy base files from backup sink
+  verify every file chunk hash
+  write RESTORE_IN_PROGRESS marker
+  fetch required WAL from bundled backup, archive, or local source
+  verify every WAL segment hash
+  initialize recovery control file
+  replay WAL from manifest.backup_begin_lsn through target_lsn
+  stop only at commit boundary / restore target
+  write new CONTROL file
+  fsync files and parent directories
+  if target is not end-of-timeline:
+      create new timeline history file
+  atomically publish restored directory
+  remove RESTORE_IN_PROGRESS
+```
+
+Never restore destructively into a live database directory.
+
+Use:
+
+```text
+db.restore.tmp/
+db.restored/
+```
+
+Then rename.
+
+## Restore target semantics
+
+For fuzzy backup:
+
+```text
+target_lsn must be >= manifest.min_consistent_lsn
+```
+
+For `RestoreTarget::TimestampUnixNanos`, find the latest commit record with:
+
+```text
+commit_ts <= target_timestamp
+```
+
+For `RestoreTarget::Csn`, stop after the commit with that CSN.
+
+Commit WAL record should include:
+
+```rust
+pub struct TxnCommitRecord {
+    pub txid: u64,
+    pub csn: Csn,
+    pub commit_ts_unix_nanos: u128,
+    pub logical_change_start_lsn: Option<Lsn>,
+    pub logical_change_count: u32,
+}
+```
+
+## Restore and timelines
+
+After point-in-time restore, the restored database is no longer on the same history if it accepts new writes.
+
+```text
+timeline 1:
+  LSN 0 ------ 100 ------ 200 ------ 300
+
+restore to 200 and promote:
+
+timeline 2:
+  LSN 0 ------ 100 ------ 200 ------ 201 ------ 202
+```
+
+Write:
+
+```text
+timelines/00000002.history
+```
+
+containing:
+
+```text
+parent_timeline = 1
+fork_lsn = 200
+reason = "point-in-time restore"
+```
+
+Every WAL record and segment after promotion uses the new timeline.
+
+---
+
+# Physical replication
+
+Physical replication should stream WAL bytes. It is the fastest path and should not decode SQL or rows.
+
+Use it for:
+
+```text
+read replicas
+fast failover replicas
+physical base snapshot + WAL catch-up
+same-version restore
+```
+
+Physical replicas require compatible:
+
+```text
+page format
+WAL format
+database format
+endianness assumptions, if any
+checksum algorithm
+compression settings
+```
+
+## Physical slot
+
+```rust
+#[derive(Clone, Debug)]
+pub struct PhysicalSlot {
+    pub slot_id: SlotId,
+    pub name: String,
+
+    pub db_uuid: DbUuid,
+    pub timeline: TimelineId,
+
+    pub restart_lsn: Lsn,
+    pub confirmed_flush_lsn: Lsn,
+    pub confirmed_apply_lsn: Lsn,
+
+    pub created_at_unix_nanos: u128,
+    pub updated_at_unix_nanos: u128,
+
+    pub active: bool,
+    pub invalidated: bool,
+    pub invalidation_reason: Option<String>,
+
+    pub max_retained_bytes: Option<u64>,
+}
+```
+
+Persist slots as small atomic files:
+
+```text
+slots/physical/replica_a.slot.tmp
+slots/physical/replica_a.slot
+```
+
+Write temp, fsync, rename, fsync parent.
+
+## Physical replication protocol
+
+Even before a full server exists, define a transport-independent protocol.
+
+```rust
+pub enum PhysicalClientMsg {
+    IdentifySystem,
+    CreateSlot {
+        name: String,
+    },
+    StartReplication {
+        slot: String,
+        timeline: TimelineId,
+        start_lsn: Lsn,
+    },
+    StandbyStatusUpdate {
+        flushed_lsn: Lsn,
+        applied_lsn: Lsn,
+        reply_timestamp_unix_nanos: u128,
+    },
+}
+
+pub enum PhysicalServerMsg {
+    SystemInfo {
+        db_uuid: DbUuid,
+        timeline: TimelineId,
+        current_lsn: Lsn,
+        flushed_lsn: Lsn,
+    },
+    SlotCreated {
+        slot: String,
+        restart_lsn: Lsn,
+    },
+    WalData {
+        start_lsn: Lsn,
+        end_lsn: Lsn,
+        bytes: bytes::Bytes,
+    },
+    Keepalive {
+        server_lsn: Lsn,
+        timestamp_unix_nanos: u128,
+        reply_requested: bool,
+    },
+    Error {
+        code: u32,
+        message: String,
+    },
+}
+```
+
+Transport options:
+
+```text
+in-process channel
+Unix domain socket
+TCP
+future Postgres-wire-ish server
+```
+
+Keep the protocol independent of transport.
+
+## WAL streaming source
+
+A physical stream should read from three places in order of preference:
+
+```text
+1. in-memory WAL publish ring
+2. local wal/ segment files
+3. archive store
+```
+
+This lets slow replicas catch up from archive without forcing local WAL to grow forever.
+
+```rust
+pub struct WalStreamSource {
+    hub: Arc<WalPublishHub>,
+    local: Arc<SegmentCatalog>,
+    archive: Option<Arc<dyn ArchiveStore>>,
+}
+
+impl WalStreamSource {
+    pub fn read_from(&self, lsn: Lsn, max_bytes: usize) -> Result<bytes::Bytes> {
+        if let Some(bytes) = self.hub.try_read(lsn, max_bytes)? {
+            return Ok(bytes);
+        }
+
+        if let Some(bytes) = self.local.try_read(lsn, max_bytes)? {
+            return Ok(bytes);
+        }
+
+        if let Some(archive) = &self.archive {
+            return read_from_archive(archive.as_ref(), lsn, max_bytes);
+        }
+
+        Err(Error::WalNoLongerAvailable { lsn })
+    }
+}
+```
+
+## WAL publish hub
+
+The WAL writer should publish durable WAL ranges to a bounded ring after append/flush. The hub must not block the WAL writer on slow consumers.
+
+```rust
+pub struct WalPublishHub {
+    ring: parking_lot::Mutex<WalRing>,
+    available: std::sync::Condvar,
+    latest_lsn: std::sync::atomic::AtomicU64,
+}
+
+pub struct WalRing {
+    base_lsn: Lsn,
+    bytes: Vec<u8>,
+    capacity: usize,
+    write_pos: usize,
+}
+```
+
+If a replica falls behind the ring, it reads from local WAL or archive.
+
+---
+
+# Creating a physical replica
+
+Process:
+
+```text
+primary:
+  create physical slot "replica_a"
+  begin online backup with backup pin tied to slot
+  stream/copy base backup to replica
+  ensure WAL from backup_begin_lsn onward is retained or archived
+
+replica:
+  restore base backup
+  apply bundled/archive WAL through backup_end_lsn
+  connect to primary
+  START_REPLICATION slot=replica_a start_lsn=backup_end_lsn
+  receive WAL
+  flush WAL locally
+  replay WAL
+  send flushed/applied ACKs
+
+primary:
+  update slot confirmed_flush_lsn / confirmed_apply_lsn
+  retention manager advances slot restart_lsn
+```
+
+For a physical replica, `restart_lsn` should be the earliest WAL the replica may need after a crash. Usually:
+
+```text
+restart_lsn = replica's last durable checkpoint redo_lsn
+```
+
+not merely latest applied LSN.
+
+---
+
+# Synchronous replication mode
+
+Optional but valuable.
+
+```rust
+#[derive(Clone, Debug)]
+pub enum SyncReplication {
+    Off,
+    FlushToAny { replicas: usize },
+    FlushToNamed { names: Vec<String> },
+    ApplyToAny { replicas: usize },
+    ApplyToNamed { names: Vec<String> },
+}
+```
+
+Commit behavior:
+
+```text
+local strict commit:
+  wait for local WAL fsync
+
+sync flush:
+  wait for local WAL fsync
+  wait for N replicas to report flushed_lsn >= commit_lsn
+
+sync apply:
+  wait for local WAL fsync
+  wait for N replicas to report applied_lsn >= commit_lsn
+```
+
+Do not enable by default. It adds latency.
+
+---
+
+# Logical replication
+
+Physical replication is fast, but logical replication is the durable change stream.
+
+Use it for:
+
+```text
+CDC
+application subscriptions
+future cross-version upgrades
+future external connectors
+audit streams
+selective table replication
+```
+
+PostgreSQL’s logical decoding docs are a useful conceptual reference: logical decoding extracts persistent table changes from WAL into an understandable format, and logical replication slots represent ordered streams of changes. PostgreSQL also notes that after crash a slot may resend recent changes, so clients need idempotence. RedlineDB should make idempotence explicit by including `commit_lsn`, `csn`, and per-transaction change sequence numbers in every logical message. ([PostgreSQL][4])
+
+## Do not decode logical changes from arbitrary physical page diffs
+
+That is hard, slow, and brittle.
+
+Instead, add compact logical WAL records at commit time.
+
+During transaction execution:
+
+```text
+physical changes:
+  heap/index/page WAL records
+
+logical changes:
+  table_id, op, primary key/row id, old key if needed, new values/changed columns
+```
+
+At commit:
+
+```text
+LogicalBegin
+LogicalChange*
+LogicalCommit
+TxnCommit
+```
+
+Or:
+
+```text
+TxnCommit contains pointer to logical range
+```
+
+Large transactions can spill logical changes to temp files before commit, then stream them into WAL during commit.
+
+## Logical record model
+
+```rust
+#[derive(Clone, Debug)]
+pub enum LogicalChange {
+    Insert {
+        table_id: u64,
+        row_id: u64,
+        values: Vec<LogicalValue>,
+    },
+    Update {
+        table_id: u64,
+        row_id: u64,
+        old_key: Option<Vec<LogicalValue>>,
+        changed_columns: Vec<u32>,
+        new_values: Vec<LogicalValue>,
+    },
+    Delete {
+        table_id: u64,
+        row_id: u64,
+        old_key: Option<Vec<LogicalValue>>,
+    },
+    Ddl {
+        schema_version: u64,
+        sql: String,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum LogicalValue {
+    Null,
+    Integer(i64),
+    Real(f64),
+    Text(String),
+    Blob(Vec<u8>),
+}
+```
+
+For performance, the actual wire format should not allocate `String` and `Vec` for every decoded value unless the consumer asks for a materialized representation.
+
+Use a binary format internally:
+
+```text
+message header
+table_id varint
+op byte
+column count varint
+column id varint
+type tag byte
+value length varint
+value bytes
+```
+
+## Logical commit message
+
+```rust
+#[derive(Clone, Debug)]
+pub struct LogicalCommit {
+    pub db_uuid: DbUuid,
+    pub timeline: TimelineId,
+    pub txid: u64,
+    pub csn: Csn,
+    pub commit_lsn: Lsn,
+    pub commit_ts_unix_nanos: u128,
+    pub schema_version: u64,
+    pub change_count: u32,
+}
+```
+
+Every logical change message should include enough identity to deduplicate:
+
+```text
+stream_id
+timeline
+commit_lsn
+csn
+txid
+change_index
+```
+
+A client can then safely ignore duplicates after reconnect.
+
+## Logical slot
+
+```rust
+#[derive(Clone, Debug)]
+pub struct LogicalSlot {
+    pub slot_id: SlotId,
+    pub name: String,
+
+    pub db_uuid: DbUuid,
+    pub timeline: TimelineId,
+
+    pub restart_lsn: Lsn,
+    pub confirmed_flush_lsn: Lsn,
+    pub confirmed_csn: Csn,
+
+    pub required_catalog_csn: Csn,
+
+    pub output_format: LogicalOutputFormat,
+
+    pub active: bool,
+    pub invalidated: bool,
+    pub invalidation_reason: Option<String>,
+
+    pub created_at_unix_nanos: u128,
+    pub updated_at_unix_nanos: u128,
+}
+
+#[derive(Clone, Debug)]
+pub enum LogicalOutputFormat {
+    RedlineBinaryV1,
+    JsonLinesV1,
+}
+```
+
+`restart_lsn` is not necessarily equal to `confirmed_flush_lsn`. It may need to point earlier if decoding needs transaction begin records, schema records, or large transaction chunks.
+
+## Logical replication protocol
+
+```rust
+pub enum LogicalClientMsg {
+    CreateSlot {
+        name: String,
+        output: LogicalOutputFormat,
+    },
+    Start {
+        slot: String,
+        start_lsn: Option<Lsn>,
+        start_csn: Option<Csn>,
+    },
+    Ack {
+        confirmed_flush_lsn: Lsn,
+        confirmed_csn: Csn,
+    },
+}
+
+pub enum LogicalServerMsg {
+    SlotCreated {
+        slot: String,
+        consistent_lsn: Lsn,
+        consistent_csn: Csn,
+    },
+    Begin {
+        txid: u64,
+        csn: Csn,
+        commit_lsn: Lsn,
+        commit_ts_unix_nanos: u128,
+    },
+    Change {
+        txid: u64,
+        change_index: u32,
+        payload: bytes::Bytes,
+    },
+    Commit {
+        txid: u64,
+        csn: Csn,
+        commit_lsn: Lsn,
+    },
+    Keepalive {
+        server_lsn: Lsn,
+        server_csn: Csn,
+        reply_requested: bool,
+    },
+    Error {
+        code: u32,
+        message: String,
+    },
+}
+```
+
+## Logical dispatcher
+
+Avoid decoding separately for every slot when possible.
+
+Architecture:
+
+```text
+WAL writer
+  appends logical WAL bytes
+
+logical dispatcher
+  tails durable WAL
+  decodes committed logical transactions once
+  publishes to logical ring
+
+logical slot consumers
+  read from logical ring if current
+  fall back to WAL/archive decode if lagging
+```
+
+```rust
+pub struct LogicalDispatcher {
+    wal: Arc<dyn WalControl>,
+    slots: Arc<LogicalSlotRegistry>,
+    ring: Arc<LogicalRing>,
+    retention: Arc<RetentionManager>,
+}
+
+impl LogicalDispatcher {
+    pub fn run(&self) -> Result<()> {
+        let mut decode_lsn = self.slots.min_restart_lsn();
+
+        loop {
+            let batch = self.wal.read_wal_range(decode_lsn, None)?;
+
+            for record in batch {
+                match record.record_type {
+                    WalRecordType::LogicalBegin => { /* start txn buffer */ }
+                    WalRecordType::LogicalChange => { /* append change */ }
+                    WalRecordType::LogicalCommit => {
+                        let msg = decode_committed_txn(record)?;
+                        self.ring.publish(msg)?;
+                    }
+                    _ => {}
+                }
+
+                decode_lsn = record.next_lsn();
+            }
+
+            self.wait_for_more_wal(decode_lsn)?;
+        }
+    }
+}
+```
+
+For very large transactions:
+
+```text
+if txn logical bytes <= logical_txn_memory_limit:
+    keep in memory
+else:
+    spill to temp logical decode file
+```
+
+Use bounded memory.
+
+---
+
+# Backup + archive + physical replica integration
+
+A replica bootstrap should use one API:
+
+```rust
+pub struct ReplicaBootstrapConfig {
+    pub slot_name: String,
+    pub backup_config: OnlineBackupConfig,
+    pub include_wal: bool,
+}
+
+pub fn create_replica_basebackup(
+    db: &Database,
+    sink: Arc<dyn BackupSink>,
+    config: ReplicaBootstrapConfig,
+) -> Result<BackupManifest> {
+    let slot = db.physical_slots().create_or_get(&config.slot_name)?;
+
+    let manifest = db.backup().run_with_slot_pin(
+        sink,
+        config.backup_config,
+        slot.slot_id,
+    )?;
+
+    db.physical_slots().set_restart_lsn(
+        slot.slot_id,
+        manifest.backup_begin_lsn,
+    )?;
+
+    Ok(manifest)
+}
+```
+
+The slot must exist before the backup starts. Otherwise WAL can be recycled between backup start and replica connection.
+
+---
+
+# WAL archiving and backup finalization
+
+Two valid backup policies:
+
+## Policy A: bundle WAL
+
+```text
+backup includes base files
+backup includes required WAL segments
+restore needs no archive
+```
+
+Best for user-friendly backup files.
+
+## Policy B: require archive
+
+```text
+backup includes base files
+manifest references required WAL
+restore fetches WAL from archive
+```
+
+Best for continuous archiving and PITR.
+
+## Policy C: both
+
+```text
+backup bundles immediate required WAL
+archive continues beyond backup_end_lsn
+restore can recover backup_end_lsn or later
+```
+
+Best default for serious deployments.
+
+```rust
+#[derive(Clone, Copy, Debug)]
+pub enum BackupWalPolicy {
+    BundleRequired,
+    RequireArchive,
+    BundleAndRequireArchive,
+}
+```
+
+---
+
+# Restore from archive
+
+Archive restore should not trust filenames alone.
+
+For each segment:
+
+```text
+read header
+verify db_uuid
+verify timeline
+verify first_lsn
+verify segment_no
+verify footer
+verify hash from manifest or archive catalog
+```
+
+If restoring to latest:
+
+```text
+fetch consecutive WAL segments until archive gap
+apply through last complete commit
+```
+
+If restoring to target:
+
+```text
+fetch until target_lsn / target_csn / target_time reached
+```
+
+---
+
+# WAL retention and recycling
+
+Segment can be recycled only when:
+
+```text
+segment.valid_end_lsn < retention.min_required_lsn
+AND segment.archived == true if archive mode requires archive
+AND no physical slot needs it locally
+AND no logical slot needs it locally/archive fallback unavailable
+AND not part of active backup required WAL
+```
+
+Use a function like:
+
+```rust
+pub fn can_recycle_segment(
+    seg: &SegmentCatalogEntry,
+    horizon: RetentionHorizon,
+    archive_required: bool,
+    archive_available: bool,
+) -> bool {
+    let valid_end = match &seg.state {
+        SegmentState::Sealed { valid_end_lsn, .. }
+        | SegmentState::ArchivePending { valid_end_lsn, .. }
+        | SegmentState::Archived { valid_end_lsn, .. } => *valid_end_lsn,
+        _ => return false,
+    };
+
+    if valid_end >= horizon.min_required_lsn {
+        return false;
+    }
+
+    if archive_required {
+        match seg.state {
+            SegmentState::Archived { .. } => {}
+            _ => return false,
+        }
+    }
+
+    if !archive_available && valid_end >= horizon.min_required_lsn {
+        return false;
+    }
+
+    true
+}
+```
+
+In practice, include segment start/end range and per-slot constraints.
+
+---
+
+# Memory strategy
+
+Phase 8 must be memory-boring.
+
+## Fixed memory pools
+
+Use explicit memory budgets:
+
+```rust
+pub struct OpsMemoryConfig {
+    pub wal_publish_ring_bytes: usize,
+    pub logical_ring_bytes: usize,
+    pub backup_chunk_bytes: usize,
+    pub backup_max_inflight_chunks: usize,
+    pub archive_buffer_bytes_per_worker: usize,
+    pub logical_txn_memory_limit_bytes: usize,
+}
+```
+
+Total approximate memory:
+
+```text
+wal_publish_ring_bytes
++ logical_ring_bytes
++ backup_chunk_bytes * backup_max_inflight_chunks
++ archive_buffer_bytes_per_worker * archive_parallelism
++ logical_txn_memory_limit_bytes * active_logical_decoders
+```
+
+Expose it in stats.
+
+## Backup memory
+
+Default:
+
+```text
+copy_workers = min(2, available_parallelism)
+chunk_size = 1 MiB
+max_inflight_chunks = 4
+```
+
+Memory:
+
+```text
+2 * 1 MiB * 4 = 8 MiB
+```
+
+## Archive memory
+
+Default:
+
+```text
+archive_parallelism = 1 or 2
+archive_buffer = 1 MiB
+```
+
+## Logical decoding memory
+
+Default:
+
+```text
+logical_txn_memory_limit = 8 MiB
+large txns spill to temp files
+```
+
+No unbounded Vec growth.
+
+---
+
+# Threading strategy
+
+Use dedicated blocking threads for core operational I/O.
+
+Avoid forcing `tokio` into the embedded core. A database kernel is better served by explicit worker threads, atomics, condition variables, and bounded queues.
+
+Recommended workers:
+
+```text
+WAL writer                  already exists
+checkpoint worker           already exists / Phase 2
+vacuum worker               already exists / Phase 2
+archiver worker pool        new
+backup copy worker pool     new, only active during backup
+physical replication tasks  new
+logical dispatcher          new
+logical slot tasks          new
+retention coordinator       new lightweight event-driven worker
+```
+
+## Locking rules
+
+```text
+WAL writer:
+  never waits on archive upload
+  never waits on backup copy
+  never waits on logical decoding
+  may wait on sync replica only if configured
+
+backup worker:
+  briefly takes page I/O latch
+  briefly takes page frame latch
+  never holds page latch while writing to backup sink
+
+archiver:
+  never holds segment catalog write lock while copying bytes
+  mark state before/after copy only
+
+logical decoder:
+  reads WAL sequentially
+  does not hold slot registry lock while decoding
+
+retention manager:
+  updates slot/pin state briefly
+  exposes cached atomic horizons
+```
+
+## Hot atomics
+
+```rust
+pub struct OpsAtomics {
+    pub current_lsn: AtomicU64,
+    pub flushed_lsn: AtomicU64,
+    pub archived_contiguous_lsn: AtomicU64,
+    pub min_retained_lsn: AtomicU64,
+    pub min_retained_csn: AtomicU64,
+    pub oldest_physical_slot_lsn: AtomicU64,
+    pub oldest_logical_slot_lsn: AtomicU64,
+}
+```
+
+---
+
+# Configuration
+
+```rust
+#[derive(Clone, Debug)]
+pub struct OpsConfig {
+    pub archive: ArchiveConfig,
+    pub backup: OnlineBackupConfig,
+    pub replication: ReplicationConfig,
+    pub retention: RetentionConfig,
+    pub memory: OpsMemoryConfig,
+}
+
+#[derive(Clone, Debug)]
+pub struct ArchiveConfig {
+    pub mode: ArchiveMode,
+    pub parallelism: usize,
+    pub archive_timeout_millis: Option<u64>,
+    pub max_retry_millis: u64,
+}
+
+#[derive(Clone, Debug)]
+pub struct ReplicationConfig {
+    pub sync_replication: SyncReplication,
+    pub physical_keepalive_millis: u64,
+    pub logical_keepalive_millis: u64,
+    pub max_slot_lag_bytes: Option<u64>,
+    pub slot_overflow_policy: SlotOverflowPolicy,
+}
+
+#[derive(Clone, Debug)]
+pub struct RetentionConfig {
+    pub max_local_wal_bytes: u64,
+    pub min_local_wal_bytes: u64,
+    pub prefer_archive_fallback: bool,
+    pub orphan_backup_pin_timeout_millis: u64,
+}
+```
+
+---
+
+# Public embedded API
+
+Eventually Phase 7 exposes user APIs, but Phase 8 can define them internally now.
+
+```rust
+impl Database {
+    pub fn backup_to_directory(
+        &self,
+        path: impl AsRef<Path>,
+        options: BackupOptions,
+    ) -> Result<BackupManifest>;
+
+    pub fn restore_from_directory(
+        source: impl AsRef<Path>,
+        dest: impl AsRef<Path>,
+        options: RestoreOptions,
+    ) -> Result<()>;
+
+    pub fn create_physical_slot(&self, name: &str) -> Result<PhysicalSlotInfo>;
+
+    pub fn create_logical_slot(
+        &self,
+        name: &str,
+        format: LogicalOutputFormat,
+    ) -> Result<LogicalSlotInfo>;
+
+    pub fn start_physical_replication(
+        &self,
+        slot: &str,
+        start_lsn: Lsn,
+    ) -> Result<PhysicalReplicationStream>;
+
+    pub fn start_logical_replication(
+        &self,
+        slot: &str,
+        start: LogicalStart,
+    ) -> Result<LogicalReplicationStream>;
+
+    pub fn archive_status(&self) -> ArchiveStatus;
+    pub fn retention_status(&self) -> RetentionStatus;
+    pub fn replication_status(&self) -> Vec<SlotStatus>;
+}
+```
+
+---
+
+# Metrics
+
+Expose these from day one.
+
+```text
+WAL:
+  redline_wal_current_lsn
+  redline_wal_flushed_lsn
+  redline_wal_archived_contiguous_lsn
+  redline_wal_local_bytes
+  redline_wal_retained_bytes
+  redline_wal_recycled_segments_total
+
+Archive:
+  redline_archive_pending_segments
+  redline_archive_failed_segments
+  redline_archive_lag_bytes
+  redline_archive_upload_bytes_total
+  redline_archive_upload_seconds
+  redline_archive_retries_total
+
+Backup:
+  redline_backup_active
+  redline_backup_begin_lsn
+  redline_backup_bytes_copied_total
+  redline_backup_pages_copied_total
+  redline_backup_seconds
+  redline_backup_required_wal_bytes
+  redline_backup_throttle_seconds_total
+
+Physical replication:
+  redline_physical_slots
+  redline_physical_slot_flush_lag_bytes
+  redline_physical_slot_apply_lag_bytes
+  redline_physical_stream_bytes_total
+
+Logical replication:
+  redline_logical_slots
+  redline_logical_slot_lag_bytes
+  redline_logical_slot_lag_csn
+  redline_logical_decoded_txns_total
+  redline_logical_decoded_changes_total
+  redline_logical_spill_bytes_total
+
+Retention:
+  redline_retention_min_lsn
+  redline_retention_min_csn
+  redline_retention_oldest_backup_lsn
+  redline_retention_oldest_slot_lsn
+  redline_retention_blocked_cleanup_total
+```
+
+---
+
+# Crash safety cases
+
+## Archive crash
+
+Case:
+
+```text
+copy segment to archive tmp
+crash before rename
+```
+
+Recovery:
+
+```text
+tmp ignored or cleaned
+segment remains ArchivePending
+retry
+```
+
+Case:
+
+```text
+rename complete
+crash before catalog says Archived
+```
+
+Recovery:
+
+```text
+archiver sees segment pending
+archive has same hash
+mark Archived
+```
+
+Case:
+
+```text
+archive has same segment name but different hash
+```
+
+Recovery:
+
+```text
+fatal archive corruption error
+```
+
+## Backup crash
+
+Case:
+
+```text
+crash before manifest commit
+```
+
+Recovery:
+
+```text
+backup is incomplete
+delete/ignore temp backup
+release orphan backup pin
+```
+
+Case:
+
+```text
+manifest committed
+crash before pin release
+```
+
+Recovery:
+
+```text
+manifest valid
+backup completed
+release stale completed pin
+```
+
+Use backup state files:
+
+```text
+backup_state/in_progress/{backup_id}
+backup_state/completed/{backup_id}
+```
+
+## Slot crash
+
+Case:
+
+```text
+client ACK received
+crash before slot state fsync
+```
+
+Recovery:
+
+```text
+slot restarts from older LSN
+client may receive duplicates
+duplicates identifiable by commit_lsn/csn/change_index
+```
+
+This is acceptable and common. The stream must be idempotent.
+
+## Restore crash
+
+Case:
+
+```text
+restore dies halfway
+```
+
+Recovery:
+
+```text
+RESTORE_IN_PROGRESS marker remains in temp dir
+delete temp dir or resume only after full verification
+never expose partial restore as live database
+```
+
+---
+
+# Test plan
+
+Phase 8 needs its own certification suite.
+
+## 1. Online backup correctness property test
+
+Generate random workload:
+
+```text
+create tables
+insert/update/delete rows
+allocate/free pages
+checkpoint sometimes
+vacuum sometimes
+start backup at random times
+continue writes during backup
+finish backup
+restore backup
+compare restored database at backup_end_csn with primary historical snapshot
+```
+
+Property:
+
+```text
+restored rows == primary rows visible at backup_end_csn
+```
+
+## 2. WAL archive property test
+
+Randomly inject failures:
+
+```text
+before tmp create
+after tmp write
+after tmp fsync
+after rename
+after catalog update
+```
+
+Property:
+
+```text
+archived_contiguous_lsn never skips a missing segment
+same segment name with different hash is rejected
+restore never uses corrupt segment
+```
+
+## 3. Retention model test
+
+Model sources:
+
+```text
+checkpoint
+backup pins
+physical slots
+logical slots
+archive pending
+active snapshots
+```
+
+Randomly advance/remove sources.
+
+Property:
+
+```text
+no segment with end_lsn >= min_required_lsn is recyclable
+no undo/page/relation with csn >= min_required_csn is reclaimable
+```
+
+## 4. Physical replication test
+
+```text
+primary writes random txns
+replica receives WAL
+replica crashes randomly
+replica restarts from slot restart_lsn
+primary archives/recycles local WAL
+replica catches up from archive fallback
+```
+
+Property:
+
+```text
+replica state == primary state at acknowledged apply_lsn
+```
+
+## 5. Logical replication test
+
+```text
+random committed txns
+random aborted txns
+large txns
+schema changes
+slot disconnect/reconnect
+crash after ACK sometimes
+```
+
+Properties:
+
+```text
+no aborted transaction appears
+commits appear in CSN order
+duplicates are possible only after crash/reconnect
+duplicates have same identity
+consumer can deduplicate to exact final state
+```
+
+## 6. Restore target tests
+
+```text
+restore latest
+restore to LSN
+restore to CSN
+restore to timestamp
+restore to named restore point
+restore before backup_end_lsn should fail
+```
+
+Property:
+
+```text
+restored state matches primary historical state at target
+```
+
+## 7. Long-running backup test
+
+```text
+start backup
+run heavy writes
+drop/truncate relations
+vacuum aggressively
+checkpoint aggressively
+finish backup
+restore
+```
+
+Properties:
+
+```text
+dropped files were not physically unlinked too early
+truncated extents were not removed too early
+restore succeeds
+```
+
+---
+
+# Performance design choices
+
+## Keep commit path clean
+
+Commit path should do:
+
+```text
+assign CSN
+append physical WAL
+append compact logical WAL if logical enabled
+group commit fsync
+publish durable WAL range
+return
+```
+
+Commit path should not:
+
+```text
+upload archive
+copy backup pages
+decode logical changes
+wait for async replicas
+serialize JSON
+scan slot maps
+```
+
+## Use binary logical format internally
+
+JSON logical output is useful, but do not make it the internal format.
+
+Internal:
+
+```text
+RedlineLogicalBinaryV1
+```
+
+Optional output:
+
+```text
+JsonLinesV1
+```
+
+JSON serialization happens in consumer task, not commit path.
+
+## Prefer archive fallback over local WAL bloat
+
+For embedded systems, disk usage matters.
+
+If archive is enabled:
+
+```text
+slow physical replica can fetch old segments from archive
+slow logical slot can decode from archived WAL
+local WAL can stay bounded
+```
+
+If archive is disabled:
+
+```text
+slow slots either block cleanup, block writers, or get invalidated
+```
+
+Make that policy explicit.
+
+## Separate physical and logical backpressure
+
+A slow logical consumer should not slow physical replication.
+
+A slow physical replica should not slow logical CDC.
+
+Both affect retention, but neither should hold the WAL writer lock.
+
+---
+
+# Minimal implementation order
+
+To “finish Phase 8” cleanly, implement in this order.
+
+## Step 1: Segment catalog
+
+Deliverables:
+
+```text
+durable segment states
+startup scan/rebuild
+sealed segment verification
+archived_contiguous_lsn
+safe recycle decision
+```
+
+Do this first. Everything else depends on knowing which WAL exists, which is sealed, and which is archived.
+
+## Step 2: Local WAL archive
+
+Deliverables:
+
+```text
+ArchiveStore trait
+LocalDirectoryArchiveStore
+archiver worker
+idempotent upload
+hash verification
+archive retry
+archive metrics
+```
+
+No cloud yet.
+
+## Step 3: Retention manager
+
+Deliverables:
+
+```text
+retention sources
+backup pins
+slot pins
+archive pending source
+cached atomic horizons
+checkpoint/vacuum integration
+segment recycling gate
+```
+
+This must land before online backup or slots become real.
+
+## Step 4: Online backup
+
+Deliverables:
+
+```text
+BackupSink trait
+LocalDirectoryBackupSink
+BackupBegin/BackupEnd WAL records
+buffer-aware page backup source
+manifest
+bundle required WAL
+restore from backup_end_lsn
+```
+
+At this point, RedlineDB can do online backups safely.
+
+## Step 5: Restore
+
+Deliverables:
+
+```text
+manifest verification
+base file restore
+WAL fetch from bundled/local archive
+redo to target LSN/CSN/time
+timeline creation on PITR
+restore crash safety
+```
+
+Now backup is meaningful.
+
+## Step 6: Physical slots and streaming
+
+Deliverables:
+
+```text
+physical slot durable state
+WalStreamSource
+in-process physical stream
+ACK handling
+slot retention integration
+replica basebackup bootstrap
+```
+
+Networking can come later; get in-process correctness first.
+
+## Step 7: Logical WAL records and logical slots
+
+Deliverables:
+
+```text
+logical records at commit
+logical slot state
+logical decoder
+logical output binary format
+JSON-lines optional
+ACK handling
+large txn spill
+logical retention integration
+```
+
+## Step 8: Certification tests
+
+Deliverables:
+
+```text
+crash injection
+property tests
+restore equivalence tests
+replication catch-up tests
+slot overflow tests
+archive corruption tests
+```
+
+---
+
+# “Brilliant simplicity” version
+
+If I had to compress the whole Phase 8 design into one sentence:
+
+> **Make WAL immutable, segment-addressable, archived, streamable, and retained by explicit durable pins; make backup a fuzzy page copy plus WAL range; make restore deterministic WAL replay; make replication durable slots over that same WAL.**
+
+That gives you:
+
+```text
+online backup without writer blocking
+archive and restore without special cases
+physical replication from the same WAL bytes
+logical replication from committed CSN-ordered WAL records
+bounded local WAL via archive fallback
+bounded memory via streaming and fixed rings
+clear crash recovery
+clean future C ABI / CLI / server integration
+```
+
+The biggest mistakes to avoid are:
+
+```text
+naive filesystem backup
+unbounded slot retention
+commit-path archive upload
+logical JSON serialization during commit
+slot state that is not crash-safe
+physical unlink/truncate while backup pins exist
+WAL recycling based only on checkpoint state
+restore without timeline support
+```
+
+Build the Phase 8 subsystem around those avoided failures, and RedlineDB will have operational durability that supports the long-term goal: SQLite-like embeddability, but with stronger concurrent-writer architecture and operational features that do not collapse into a single global bottleneck.
+
+[1]: https://www.sqlite.org/wal.html "Write-Ahead Logging"
+[2]: https://www.postgresql.org/docs/current/continuous-archiving.html "PostgreSQL: Documentation: 18: 25.3. Continuous Archiving and Point-in-Time Recovery (PITR)"
+[3]: https://www.postgresql.org/docs/current/runtime-config-wal.html "PostgreSQL: Documentation: 18: 19.5. Write Ahead Log"
+[4]: https://www.postgresql.org/docs/current/logicaldecoding-explanation.html "PostgreSQL: Documentation: 18: 47.2. Logical Decoding Concepts"
+

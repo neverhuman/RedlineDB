@@ -1,5 +1,6 @@
 pub mod buffer;
 pub mod control;
+pub mod numa;
 pub mod page_file;
 pub(crate) mod policy;
 pub mod tx_status_checkpoint;

@@ -1,0 +1,12 @@
+[policy]
+active_source_max_loc = 2000
+preferred_active_source_max_loc = 1500
+warning_loc = 1500
+hard_fail_loc = 2000
+binary_safe = true
+
+[exclusions]
+paths = [
+  "docs/archive/**",
+  "target/**",
+]

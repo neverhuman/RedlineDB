@@ -1,0 +1,56 @@
+schema_version = 1
+repository = "https://github.com/neverhuman/RedlineDB"
+authority = "single-checkout"
+
+[migration]
+github_base = "0f831a2bb719479bc2390ce29fbc5987fd556303"
+inventory = "docs/migration/inventory.json"
+
+[[component]]
+name = "redline-core"
+path = "."
+source_commit = "d0de59930141baffcfa2b514480e75b14627f24d"
+source_tree = "333cd8aeffd0755547c0ecaa65e1d750ddd6d260"
+import_commit = "0f831a2bb719479bc2390ce29fbc5987fd556303"
+role = "engine"
+
+[[component]]
+name = "redline-testing"
+path = "subrepos/redline-testing"
+source_commit = "d25d6a9cfef3e117c9d5e35f9337fe5dec41f7d3"
+source_tree = "481f3a7c1ca3d15da20f83278a412819aea98c55"
+import_commit = "77cd222ea48162cb714bcdec0ba82b0539b1eeae"
+role = "conformance"
+
+[[component]]
+name = "redline-web"
+path = "subrepos/redline-web"
+source_commit = "215fd9fc9008e4943973598754d591d39c621598"
+source_tree = "310d2e82939705804325bb751458717f67bcd129"
+import_commit = "0765a18a8825c527f63019512d8dc8137413cf8c"
+role = "console"
+
+[[component]]
+name = "redline-central"
+path = "subrepos/redline-central"
+source_commit = "87e8d350e80c7e7996f8336c8294e82ee7585ba1"
+source_tree = "ce527ca02a48d1e536b51b38049ff84620615335"
+import_commit = "39e47bb5e476231d29b37fa4ae25270e21ee87fd"
+role = "client"
+
+[[component]]
+name = "redline-split-ops"
+path = "subrepos/redline-split-ops"
+source_commit = "66ac165a3e1546457763c0e77b5835784b19111b"
+source_tree = "2d8ab9a26b05005fbf1a24a02a53ba05d55249c9"
+import_commit = "800b85f1ffcc6e16e703084cd251390156afed04"
+role = "release"
+
+[[component]]
+name = "redline"
+path = "subrepos/redline"
+source_commit = "4b549cef9eefe5b44664dfde8b598fc80befb495"
+source_tree = "ddff073a9525214c469dd6e96193cd7a537dc23f"
+import_commit = "f7781b806365790c2d9c1a066fcd118784b640cb"
+role = "historical-hub"
+

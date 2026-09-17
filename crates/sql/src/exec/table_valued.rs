@@ -137,7 +137,6 @@ fn tv_int(arg: &TvArg) -> Result<i64> {
 /// would have to thread through param bindings the parser doesn't have
 /// at this stage.
 pub(crate) fn lower_args(args: &TableFunctionArgs) -> Result<Vec<TvArg>> {
-    use sqlparser::ast::{Expr, Value};
     let mut out = Vec::with_capacity(args.args.len());
     for arg in &args.args {
         let expr = match arg {
@@ -152,46 +151,50 @@ pub(crate) fn lower_args(args: &TableFunctionArgs) -> Result<Vec<TvArg>> {
                 ));
             }
         };
-        out.push(match expr {
-            Expr::Value(value) => match &value.value {
-                Value::SingleQuotedString(s)
-                | Value::DoubleQuotedString(s)
-                | Value::EscapedStringLiteral(s)
-                | Value::TripleSingleQuotedString(s)
-                | Value::TripleDoubleQuotedString(s)
-                | Value::UnicodeStringLiteral(s) => TvArg::Text(Arc::from(s.as_str())),
-                Value::Number(n, _) => match n.parse::<i64>() {
-                    Ok(v) => TvArg::Integer(v),
-                    Err(_) => {
-                        return Err(Error::UnsupportedSql(format!(
-                            "table-valued function expected integer literal, got: {n}"
-                        )));
-                    }
-                },
-                Value::Null => TvArg::Null,
-                other => {
-                    return Err(Error::UnsupportedSql(format!(
-                        "unsupported table-valued function argument: {other:?}"
-                    )));
-                }
-            },
-            // Allow `pragma_table_info(t)` where `t` is an unquoted
-            // identifier. SQLite treats this as the table name string.
-            Expr::Identifier(ident) => TvArg::Text(Arc::from(ident.value.as_str())),
-            Expr::CompoundIdentifier(parts) => {
-                let joined = parts
-                    .iter()
-                    .map(|p| p.value.as_str())
-                    .collect::<Vec<_>>()
-                    .join(".");
-                TvArg::Text(Arc::from(joined.as_str()))
-            }
-            other => {
-                return Err(Error::UnsupportedSql(format!(
-                    "unsupported table-valued function argument: {other:?}"
-                )));
-            }
-        });
+        out.push(lower_expr(expr)?);
     }
     Ok(out)
+}
+
+fn lower_expr(expr: &sqlparser::ast::Expr) -> Result<TvArg> {
+    use sqlparser::ast::{Expr, Value};
+    match expr {
+        Expr::Value(value) => match &value.value {
+            Value::SingleQuotedString(s)
+            | Value::DoubleQuotedString(s)
+            | Value::EscapedStringLiteral(s)
+            | Value::TripleSingleQuotedString(s)
+            | Value::TripleDoubleQuotedString(s)
+            | Value::UnicodeStringLiteral(s) => Ok(TvArg::Text(Arc::from(s.as_str()))),
+            Value::Number(n, _) => match n.parse::<i64>() {
+                Ok(v) => Ok(TvArg::Integer(v)),
+                Err(_) => Err(Error::UnsupportedSql(format!(
+                    "table-valued function expected integer literal, got: {n}"
+                ))),
+            },
+            Value::Null => Ok(TvArg::Null),
+            other => Err(Error::UnsupportedSql(format!(
+                "unsupported table-valued function argument: {other:?}"
+            ))),
+        },
+        // Allow `pragma_table_info(t)` where `t` is an unquoted
+        // identifier. SQLite treats this as the table name string.
+        Expr::Identifier(ident) => Ok(TvArg::Text(Arc::from(ident.value.as_str()))),
+        Expr::CompoundIdentifier(parts) => {
+            let joined = parts
+                .iter()
+                .map(|p| p.value.as_str())
+                .collect::<Vec<_>>()
+                .join(".");
+            Ok(TvArg::Text(Arc::from(joined.as_str())))
+        }
+        // Postgres `'…'::jsonb` style casts are transparent at the TVF
+        // boundary — we read the underlying literal and let the function
+        // body parse the JSON / int / text as needed.
+        Expr::Cast { expr, .. } => lower_expr(expr),
+        Expr::Nested(inner) => lower_expr(inner),
+        other => Err(Error::UnsupportedSql(format!(
+            "unsupported table-valued function argument: {other:?}"
+        ))),
+    }
 }

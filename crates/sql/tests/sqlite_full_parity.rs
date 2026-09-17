@@ -379,10 +379,23 @@ fn reference_build_pragma_rows_match_for_supported_surfaces() {
 #[test]
 fn known_full_sqlite_parity_gaps_are_explicit_failures() {
     let harness = Harness::new();
-    harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA auto_vacuum = FULL");
-    harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA page_size = 4096");
-    harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA encoding = 'UTF-8'");
-    harness.assert_sqlite_accepts_redline_rejects(&[], "PRAGMA application_id = 42");
+    // Track C closed these PRAGMAs (auto_vacuum, page_size, encoding,
+    // application_id) — they are now accepted recall-only surfaces.
+    // Asserting acceptance here keeps the ledger honest: any
+    // regression that re-rejects them will trip the assertion above.
+    harness.execute_both("PRAGMA auto_vacuum = FULL");
+    harness.execute_both("PRAGMA application_id = 42");
+    // page_size and encoding accept the value but don't produce rows;
+    // execute through redline directly so a stray future surface
+    // change shows up here.
+    harness
+        .redline
+        .execute("PRAGMA page_size = 4096")
+        .expect("page_size accepted");
+    harness
+        .redline
+        .execute("PRAGMA encoding = 'UTF-8'")
+        .expect("encoding accepted");
     harness.assert_sqlite_result_diff_or_redline_rejects(
         &["PRAGMA journal_mode=WAL"],
         "PRAGMA wal_checkpoint(FULL)",
@@ -394,11 +407,13 @@ fn known_full_sqlite_parity_gaps_are_explicit_failures() {
         ],
         "PRAGMA index_xinfo('t_name_idx')",
     );
-    harness.assert_sqlite_result_diff_or_redline_rejects(
-        &[
-            "CREATE TABLE parent(id INTEGER PRIMARY KEY, label TEXT)",
-            "CREATE TABLE child(id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parent(id), label TEXT)",
-        ],
+    // pragma_foreign_key_list closed in Track C — both engines now
+    // return identical rows.
+    harness.execute_both("CREATE TABLE parent(id INTEGER PRIMARY KEY, label TEXT)");
+    harness.execute_both(
+        "CREATE TABLE child(id INTEGER PRIMARY KEY, parent_id INTEGER REFERENCES parent(id), label TEXT)",
+    );
+    harness.assert_query_matches(
         "SELECT id, seq, \"table\", \"from\", \"to\", on_update, on_delete, \"match\" \
          FROM pragma_foreign_key_list('child') ORDER BY id, seq",
     );

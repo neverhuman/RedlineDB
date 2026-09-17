@@ -4,6 +4,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
+#[cfg(unix)]
+use std::{fs::Permissions, os::unix::fs::PermissionsExt};
 
 /// Concurrency proof for the `OnceLock<Mutex<Registry>>` global: spawn
 /// several threads that simultaneously create and reuse the same
@@ -160,4 +162,30 @@ fn volatile_root_from_unusable_candidate_uses_process_scratch() {
         volatile_root_from_candidate(&file_path),
         std::env::temp_dir()
     );
+}
+
+#[cfg(unix)]
+#[test]
+fn volatile_root_from_existing_unwritable_candidate_uses_process_scratch() {
+    let root = tempfile::tempdir().expect("scratch dir");
+    let candidate = root.path().join("existing-shared-root");
+    std::fs::create_dir(&candidate).expect("candidate dir");
+    std::fs::set_permissions(&candidate, Permissions::from_mode(0o555))
+        .expect("candidate permissions");
+
+    assert_eq!(
+        volatile_root_from_candidate(&candidate),
+        std::env::temp_dir(),
+        "an existing directory without write authority must not be selected"
+    );
+    assert_eq!(
+        std::fs::read_dir(&candidate)
+            .expect("candidate remains readable")
+            .count(),
+        0,
+        "failed probes must leave no child custody"
+    );
+
+    std::fs::set_permissions(&candidate, Permissions::from_mode(0o700))
+        .expect("restore candidate permissions");
 }

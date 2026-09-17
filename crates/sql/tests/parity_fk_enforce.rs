@@ -146,6 +146,20 @@ fn delete_parent_cascade_removes_children() {
     );
 }
 
+#[test]
+fn delete_self_referential_cascade_removes_descendants() {
+    assert_parity(
+        "PRAGMA foreign_keys = ON;\
+         CREATE TABLE node(\
+             id INTEGER PRIMARY KEY,\
+             parent INTEGER REFERENCES node(id) ON DELETE CASCADE\
+         );\
+         INSERT INTO node VALUES (1, NULL),(2, 1),(3, 2),(4, 1),(5, NULL);\
+         DELETE FROM node WHERE id = 1;\
+         SELECT id, parent FROM node ORDER BY id",
+    );
+}
+
 // -- ON DELETE SET NULL ------------------------------------------------------
 
 #[test]

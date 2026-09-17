@@ -1,0 +1,1407 @@
+$ bash scripts/ci-local.sh all
+ci-local pr-ci: preflight
+warning:   1550 crates/kernel/src/catalog/ops.rs
+warning:   1743 crates/sql/src/exec/mod.rs
+warning:   1935 crates/sql/src/exec/select_top.rs
+warning:   1509 crates/sql/src/json/jsonb.rs
+warning:   1951 crates/sql/src/parser/pragma.rs
+warning:   1770 crates/sql/src/parser/select.rs
+warning:   1696 crates/sql/src/rql.rs
+warning:   1777 crates/sql/tests/rql_native_select.rs
+warning:   1623 tips/evolve/redlinedb_engineered_intelligence_stages(2).diff
+warning:   1705 tips/evolve/redlinedb_stage_genome_patch.diff
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling proc-macro2 v1.0.106
+   Compiling shlex v1.3.0
+   Compiling quote v1.0.45
+   Compiling unicode-ident v1.0.24
+   Compiling find-msvc-tools v0.1.9
+   Compiling version_check v0.9.5
+   Compiling object v0.37.3
+   Compiling memchr v2.8.0
+   Compiling crossbeam-utils v0.8.21
+   Compiling smallvec v1.15.1
+   Compiling serde_core v1.0.228
+   Compiling bitflags v2.11.1
+   Compiling rustix v1.1.4
+   Compiling log v0.4.29
+   Compiling crossbeam-epoch v0.9.20
+   Compiling parking_lot_core v0.9.12
+   Compiling getrandom v0.3.4
+   Compiling zmij v1.0.21
+   Compiling rustversion v1.0.22
+   Compiling linux-raw-sys v0.12.1
+   Compiling typenum v1.20.0
+   Compiling scopeguard v1.2.0
+   Compiling zerocopy v0.8.48
+   Compiling hashbrown v0.17.1
+   Compiling utf8parse v0.2.2
+   Compiling crc32fast v1.5.0
+   Compiling thiserror v2.0.18
+   Compiling itoa v1.0.18
+   Compiling serde_json v1.0.150
+   Compiling once_cell v1.21.4
+   Compiling serde v1.0.228
+   Compiling rayon-core v1.13.0
+   Compiling equivalent v1.0.2
+   Compiling cfg_aliases v0.1.1
+   Compiling libm v0.2.16
+   Compiling signal-hook v0.3.18
+   Compiling regex-syntax v0.8.10
+   Compiling anstyle v1.0.14
+   Compiling either v1.16.0
+   Compiling fastrand v2.4.1
+   Compiling colorchoice v1.0.5
+   Compiling anstyle-query v1.1.5
+   Compiling redlinedb-domain v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/domain)
+   Compiling bumpalo v3.20.3
+   Compiling is_terminal_polyfill v1.70.2
+   Compiling strsim v0.11.1
+   Compiling clap_lex v1.1.0
+   Compiling heck v0.5.0
+   Compiling lock_api v0.4.14
+   Compiling cpufeatures v0.2.17
+   Compiling endian-type v0.1.2
+   Compiling cc v1.2.62
+   Compiling anstyle-parse v1.0.0
+   Compiling ryu v1.0.23
+   Compiling unicode-segmentation v1.13.2
+   Compiling home v0.5.12
+   Compiling nix v0.28.0
+   Compiling unicode-width v0.1.14
+   Compiling nibble_vec v0.1.0
+   Compiling generic-array v0.14.7
+   Compiling ahash v0.8.12
+   Compiling aho-corasick v1.1.4
+   Compiling csv-core v0.1.13
+   Compiling anstream v1.0.0
+   Compiling radix_trie v0.2.1
+   Compiling clap_builder v4.6.0
+   Compiling arc-swap v1.9.1
+   Compiling indexmap v2.14.0
+   Compiling syn v2.0.117
+   Compiling crossbeam-queue v0.3.12
+   Compiling crypto-common v0.1.7
+   Compiling block-buffer v0.10.4
+   Compiling digest v0.10.7
+   Compiling regex-automata v0.4.14
+   Compiling stacker v0.1.24
+   Compiling libmimalloc-sys v0.1.49
+   Compiling sha2 v0.10.9
+   Compiling crossbeam-deque v0.8.6
+   Compiling rayon v1.12.0
+   Compiling errno v0.3.14
+   Compiling mio v0.8.11
+   Compiling num_cpus v1.17.0
+   Compiling memmap2 v0.9.11
+   Compiling csv v1.4.0
+   Compiling signal-hook-registry v1.4.8
+   Compiling parking_lot v0.12.5
+   Compiling signal-hook-mio v0.2.5
+   Compiling crossterm v0.27.0
+   Compiling tempfile v3.27.0
+   Compiling fd-lock v4.0.4
+   Compiling thiserror-impl v2.0.18
+   Compiling serde_derive v1.0.228
+   Compiling recursive-proc-macro-impl v0.1.1
+   Compiling clap_derive v4.6.1
+   Compiling rustyline v14.0.0
+   Compiling ar_archive_writer v0.5.1
+   Compiling psm v0.1.31
+   Compiling regex v1.12.3
+   Compiling mimalloc v0.1.52
+   Compiling recursive v0.1.1
+   Compiling sqlparser v0.61.0
+   Compiling clap v4.6.1
+   Compiling redlinedb-kernel v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/kernel)
+   Compiling redlinedb-sql v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/sql)
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4772:18
+     |
+4772 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4775:22
+     |
+4775 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+
+   Compiling redlinedb v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/redlinedb)
+   Compiling redlinedb-cli v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/cli)
+warning: `redlinedb-sql` (lib) generated 2 warnings
+    Finished `release` profile [optimized] target(s) in 4m 35s
+   Compiling libc v0.2.186
+   Compiling cfg-if v1.0.4
+   Compiling memchr v2.8.0
+   Compiling serde_core v1.0.228
+   Compiling once_cell v1.21.4
+   Compiling equivalent v1.0.2
+   Compiling hashbrown v0.17.1
+   Compiling scopeguard v1.2.0
+   Compiling smallvec v1.15.1
+   Compiling bitflags v2.11.1
+   Compiling linux-raw-sys v0.12.1
+   Compiling regex-syntax v0.8.10
+   Compiling itoa v1.0.18
+   Compiling fastrand v2.4.1
+   Compiling either v1.16.0
+   Compiling redlinedb-domain v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/domain)
+   Compiling log v0.4.29
+   Compiling bumpalo v3.20.3
+   Compiling crossbeam-utils v0.8.21
+   Compiling zerocopy v0.8.48
+   Compiling lock_api v0.4.14
+   Compiling zmij v1.0.21
+   Compiling crc32fast v1.5.0
+   Compiling libm v0.2.16
+   Compiling arc-swap v1.9.1
+   Compiling thiserror v2.0.18
+   Compiling psm v0.1.31
+   Compiling rustix v1.1.4
+   Compiling aho-corasick v1.1.4
+   Compiling indexmap v2.14.0
+   Compiling crossbeam-epoch v0.9.20
+   Compiling crossbeam-queue v0.3.12
+   Compiling crossbeam-deque v0.8.6
+   Compiling rayon-core v1.13.0
+   Compiling getrandom v0.3.4
+   Compiling stacker v0.1.24
+   Compiling parking_lot_core v0.9.12
+   Compiling regex-automata v0.4.14
+   Compiling recursive v0.1.1
+   Compiling rayon v1.12.0
+   Compiling sqlparser v0.61.0
+   Compiling parking_lot v0.12.5
+   Compiling tempfile v3.27.0
+   Compiling serde_json v1.0.150
+   Compiling serde v1.0.228
+   Compiling regex v1.12.3
+   Compiling ahash v0.8.12
+   Compiling redlinedb-kernel v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/kernel)
+   Compiling redlinedb-sql v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/sql)
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4772:18
+     |
+4772 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4775:22
+     |
+4775 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+
+warning: `redlinedb-sql` (lib) generated 2 warnings
+   Compiling redlinedb-ffi v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/ffi)
+    Finished `release` profile [optimized] target(s) in 2m 23s
+/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/target/ci/redlinedb-release-smoke/redlinedb-v2.0.6-linux-x86_64.tar.gz: OK
+RedlineDB release asset verified: file:///home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/target/ci/redlinedb-release-smoke/redlinedb-v2.0.6-linux-x86_64.tar.gz
+RedlineDB installed: /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/target/ci/redlinedb-release/v2.0.6-linux-x86_64/bin/redlinedb (redlinedb v4.1.0 (SQLite 3.45.1 compatibility))
+RedlineDB release smoke passed: /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/target/ci/redlinedb-release/v2.0.6-linux-x86_64/bin/redlinedb
+   Compiling unicode-ident v1.0.24
+    Checking cfg-if v1.0.4
+   Compiling shlex v1.3.0
+   Compiling find-msvc-tools v0.1.9
+    Checking smallvec v1.15.1
+    Checking memchr v2.8.0
+   Compiling zerocopy v0.8.48
+   Compiling serde_core v1.0.228
+    Checking log v0.4.29
+    Checking equivalent v1.0.2
+   Compiling object v0.37.3
+   Compiling getrandom v0.3.4
+    Checking once_cell v1.21.4
+   Compiling parking_lot_core v0.9.12
+    Checking bitflags v2.11.1
+    Checking hashbrown v0.17.1
+    Checking scopeguard v1.2.0
+   Compiling crossbeam-epoch v0.9.20
+   Compiling crc32fast v1.5.0
+   Compiling rustversion v1.0.22
+    Checking linux-raw-sys v0.12.1
+   Compiling serde_json v1.0.150
+    Checking typenum v1.20.0
+    Checking itoa v1.0.18
+   Compiling libm v0.2.16
+    Checking either v1.16.0
+    Checking regex-syntax v0.8.10
+    Checking bumpalo v3.20.3
+    Checking redlinedb-domain v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/domain)
+    Checking fastrand v2.4.1
+    Checking utf8parse v0.2.2
+    Checking stable_deref_trait v1.2.1
+    Checking cpufeatures v0.2.17
+    Checking is_terminal_polyfill v1.70.2
+    Checking colorchoice v1.0.5
+    Checking anstyle-query v1.1.5
+    Checking anstyle v1.0.14
+    Checking allocator-api2 v0.2.21
+    Checking clap_lex v1.1.0
+   Compiling quote v1.0.45
+   Compiling proc-macro2 v1.0.106
+    Checking lock_api v0.4.14
+   Compiling ahash v0.8.12
+    Checking strsim v0.11.1
+    Checking libc v0.2.186
+    Checking crossbeam-utils v0.8.21
+    Checking zmij v1.0.21
+    Checking foldhash v0.1.5
+   Compiling vcpkg v0.2.15
+   Compiling pkg-config v0.3.33
+   Compiling autocfg v1.5.1
+    Checking adler2 v2.0.1
+    Checking simd-adler32 v0.3.9
+    Checking winnow v0.7.15
+   Compiling anyhow v1.0.103
+    Checking litemap v0.8.2
+    Checking toml_write v0.1.2
+   Compiling cc v1.2.62
+    Checking minimal-lexical v0.2.1
+    Checking writeable v0.6.3
+    Checking anstyle-parse v1.0.0
+    Checking fallible-streaming-iterator v0.1.9
+    Checking utf8_iter v1.0.4
+    Checking byteorder v1.5.0
+    Checking same-file v1.0.6
+    Checking pin-project-lite v0.2.17
+    Checking base64 v0.21.7
+    Checking fallible-iterator v0.3.0
+    Checking aho-corasick v1.1.4
+    Checking walkdir v2.5.0
+    Checking hashbrown v0.15.5
+   Compiling signal-hook v0.3.18
+    Checking icu_normalizer_data v2.2.0
+    Checking icu_properties_data v2.2.0
+    Checking nibble_vec v0.1.0
+    Checking futures-core v0.3.32
+    Checking endian-type v0.1.2
+    Checking bytes v1.11.1
+    Checking csv-core v0.1.13
+    Checking percent-encoding v2.3.2
+    Checking miniz_oxide v0.8.9
+   Compiling nix v0.28.0
+    Checking home v0.5.12
+    Checking unicode-width v0.1.14
+    Checking unicode-segmentation v1.13.2
+    Checking ryu v1.0.23
+    Checking tracing-core v0.1.36
+    Checking futures-io v0.3.32
+    Checking nom v7.1.3
+    Checking futures-sink v0.3.32
+    Checking futures-task v0.3.32
+    Checking crossbeam-queue v0.3.12
+    Checking anstream v1.0.0
+    Checking crossbeam-channel v0.5.15
+    Checking concurrent-queue v2.5.0
+    Checking indexmap v2.14.0
+    Checking rustix v1.1.4
+    Checking slab v0.4.12
+    Checking parking v2.2.1
+    Checking base64 v0.22.1
+    Checking radix_trie v0.2.1
+    Checking form_urlencoded v1.2.2
+    Checking redlinedb-lite v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/redlinedb-lite)
+   Compiling num-traits v0.2.19
+    Checking flate2 v1.1.9
+    Checking crossbeam-deque v0.8.6
+   Compiling syn v2.0.117
+    Checking clap_builder v4.6.0
+    Checking hashlink v0.10.0
+    Checking rayon-core v1.13.0
+    Checking event-listener v5.4.1
+    Checking arc-swap v1.9.1
+    Checking generic-array v0.14.7
+    Checking regex-automata v0.4.14
+    Checking rayon v1.12.0
+   Compiling stacker v0.1.24
+   Compiling libsqlite3-sys v0.35.0
+   Compiling libmimalloc-sys v0.1.49
+    Checking getrandom v0.2.17
+    Checking num_cpus v1.17.0
+    Checking errno v0.3.14
+    Checking socket2 v0.6.3
+    Checking mio v1.2.0
+    Checking mio v0.8.11
+    Checking memmap2 v0.9.11
+    Checking signal-hook-registry v1.4.8
+    Checking rand_core v0.9.5
+    Checking parking_lot v0.12.5
+    Checking rand_core v0.6.4
+    Checking block-buffer v0.10.4
+    Checking crypto-common v0.1.7
+    Checking futures-intrusive v0.5.0
+    Checking digest v0.10.7
+    Checking signal-hook-mio v0.2.5
+    Checking crossterm v0.27.0
+    Checking sha2 v0.10.9
+    Checking hdrhistogram v7.5.4
+    Checking tempfile v3.27.0
+    Checking fd-lock v4.0.4
+    Checking csv v1.4.0
+    Checking mimalloc v0.1.52
+    Checking regex v1.12.3
+    Checking rustyline v14.0.0
+    Checking ppv-lite86 v0.2.21
+   Compiling ar_archive_writer v0.5.1
+    Checking rand_chacha v0.3.1
+    Checking rand_chacha v0.9.0
+    Checking rand v0.9.4
+    Checking rand v0.8.6
+   Compiling psm v0.1.31
+   Compiling synstructure v0.13.2
+    Checking fail v0.5.1
+   Compiling serde_derive v1.0.228
+   Compiling thiserror-impl v2.0.18
+   Compiling recursive-proc-macro-impl v0.1.1
+   Compiling zerofrom-derive v0.1.7
+   Compiling yoke-derive v0.8.2
+   Compiling zerovec-derive v0.11.3
+   Compiling displaydoc v0.2.5
+   Compiling clap_derive v4.6.1
+   Compiling tokio-macros v2.7.0
+   Compiling futures-macro v0.3.32
+   Compiling tracing-attributes v0.1.31
+    Checking recursive v0.1.1
+    Checking sqlparser v0.61.0
+    Checking tokio v1.52.3
+    Checking futures-util v0.3.32
+    Checking zerofrom v0.1.8
+    Checking yoke v0.8.2
+    Checking tracing v0.1.44
+    Checking thiserror v2.0.18
+    Checking zerovec v0.11.6
+    Checking zerotrie v0.2.4
+    Checking tinystr v0.8.3
+    Checking potential_utf v0.1.5
+    Checking icu_collections v2.2.0
+    Checking clap v4.6.1
+    Checking icu_locale_core v2.2.0
+    Checking icu_provider v2.2.0
+    Checking serde v1.0.228
+    Checking icu_properties v2.2.0
+    Checking icu_normalizer v2.2.0
+    Checking redlinedb-kernel v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/kernel)
+    Checking toml_datetime v0.6.11
+    Checking serde_spanned v0.6.9
+    Checking toml_edit v0.22.27
+    Checking idna_adapter v1.2.2
+    Checking idna v1.1.0
+    Checking url v2.5.8
+    Checking rusqlite v0.37.0
+    Checking toml v0.8.23
+    Checking tokio-stream v0.1.18
+    Checking sqlx-core v0.8.6
+    Checking redlinedb-sql v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/sql)
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4772:18
+     |
+4772 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4775:22
+     |
+4775 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+
+warning: `redlinedb-sql` (lib) generated 2 warnings
+    Checking redlinedb v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/redlinedb)
+    Checking redlinedb-ffi v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/ffi)
+    Checking redlinedb-bench v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/bench)
+    Checking redlinedb-cli v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/cli)
+    Checking redlinedb-tokio v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/redlinedb-tokio)
+    Checking redlinedb-sqlx v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/redlinedb-sqlx)
+    Checking redlinedb-server v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/server)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 40.73s
+ci-local pr-ci: tests/core
+   Compiling scopeguard v1.2.0
+   Compiling getrandom v0.3.4
+   Compiling regex-syntax v0.8.10
+   Compiling hashbrown v0.17.1
+   Compiling either v1.16.0
+   Compiling redlinedb-domain v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/domain)
+   Compiling bumpalo v3.20.3
+   Compiling pin-project-lite v0.2.17
+   Compiling bytes v1.11.1
+   Compiling aho-corasick v1.1.4
+   Compiling nibble_vec v0.1.0
+   Compiling endian-type v0.1.2
+   Compiling csv-core v0.1.13
+   Compiling unicode-segmentation v1.13.2
+   Compiling home v0.5.12
+   Compiling lock_api v0.4.14
+   Compiling serde_core v1.0.228
+   Compiling zerocopy v0.8.48
+   Compiling crc32fast v1.5.0
+   Compiling libm v0.2.16
+   Compiling unicode-width v0.1.14
+   Compiling predicates-core v1.0.10
+   Compiling termtree v0.5.1
+   Compiling futures-core v0.3.32
+   Compiling difflib v0.4.0
+   Compiling assert_cmd v2.2.2
+   Compiling percent-encoding v2.3.2
+   Compiling allocator-api2 v0.2.21
+   Compiling foldhash v0.1.5
+   Compiling tracing-core v0.1.36
+   Compiling futures-task v0.3.32
+   Compiling slab v0.4.12
+   Compiling futures-io v0.3.32
+   Compiling parking v2.2.1
+   Compiling futures-sink v0.3.32
+   Compiling parking_lot_core v0.9.12
+   Compiling crossbeam-epoch v0.9.20
+   Compiling crossbeam-queue v0.3.12
+   Compiling arc-swap v1.9.1
+   Compiling num_cpus v1.17.0
+   Compiling errno v0.3.14
+   Compiling socket2 v0.6.3
+   Compiling mio v1.2.0
+   Compiling mio v0.8.11
+   Compiling nix v0.28.0
+   Compiling thiserror v2.0.18
+   Compiling psm v0.1.31
+   Compiling radix_trie v0.2.1
+   Compiling libmimalloc-sys v0.1.49
+   Compiling fd-lock v4.0.4
+   Compiling memmap2 v0.9.11
+   Compiling zerofrom v0.1.8
+   Compiling clap v4.6.1
+   Compiling wait-timeout v0.2.1
+   Compiling concurrent-queue v2.5.0
+   Compiling base64 v0.22.1
+   Compiling predicates-tree v1.0.13
+   Compiling form_urlencoded v1.2.2
+   Compiling signal-hook-registry v1.4.8
+   Compiling mimalloc v0.1.52
+   Compiling parking_lot v0.12.5
+   Compiling futures-util v0.3.32
+   Compiling predicates v3.1.4
+   Compiling stacker v0.1.24
+   Compiling hashbrown v0.15.5
+   Compiling signal-hook v0.3.18
+   Compiling yoke v0.8.2
+   Compiling futures-intrusive v0.5.0
+   Compiling recursive v0.1.1
+   Compiling event-listener v5.4.1
+   Compiling tracing v0.1.44
+   Compiling tempfile v3.27.0
+   Compiling zerovec v0.11.6
+   Compiling zerotrie v0.2.4
+   Compiling indexmap v2.14.0
+   Compiling sqlparser v0.61.0
+   Compiling signal-hook-mio v0.2.5
+   Compiling tokio v1.52.3
+   Compiling crossterm v0.27.0
+   Compiling crossbeam-deque v0.8.6
+   Compiling rayon-core v1.13.0
+   Compiling regex-automata v0.4.14
+   Compiling hashlink v0.10.0
+   Compiling tinystr v0.8.3
+   Compiling potential_utf v0.1.5
+   Compiling icu_collections v2.2.0
+   Compiling icu_locale_core v2.2.0
+   Compiling rayon v1.12.0
+   Compiling rustyline v14.0.0
+   Compiling serde v1.0.228
+   Compiling serde_json v1.0.150
+   Compiling csv v1.4.0
+   Compiling icu_provider v2.2.0
+   Compiling icu_properties v2.2.0
+   Compiling icu_normalizer v2.2.0
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling regex v1.12.3
+   Compiling bstr v1.12.1
+   Compiling ahash v0.8.12
+   Compiling url v2.5.8
+   Compiling redlinedb-kernel v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/kernel)
+   Compiling tokio-stream v0.1.18
+   Compiling sqlx-core v0.8.6
+   Compiling redlinedb-sql v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/sql)
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4772:18
+     |
+4772 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4775:22
+     |
+4775 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+
+   Compiling redlinedb v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/redlinedb)
+   Compiling redlinedb-cli v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/cli)
+   Compiling redlinedb-tokio v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/redlinedb-tokio)
+   Compiling redlinedb-sqlx v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/redlinedb-sqlx)
+warning: `redlinedb-sql` (lib) generated 2 warnings
+   Compiling redlinedb-ffi v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/ffi)
+   Compiling redlinedb-server v4.1.0 (/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/crates/server)
+warning: unused import: `super::*`
+  --> crates/cli/src/dot/display.rs:80:9
+   |
+80 |     use super::*;
+   |         ^^^^^^^^
+   |
+   = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+warning: `redlinedb-cli` (lib test) generated 1 warning (run `cargo fix --lib -p redlinedb-cli --tests` to apply 1 suggestion)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 52.25s
+────────────
+ Nextest run ID 43e733a7-f253-4d0e-8d95-f46f675b6081 with nextest profile: default
+    Starting 304 tests across 49 binaries (4 tests skipped)
+        PASS [   0.019s] (  1/304) redlinedb::phase11_ephemeral in_memory_database_uses_default_volatile_root
+        PASS [   0.021s] (  2/304) redlinedb registry::tests::volatile_session_path_keeps_explicit_root
+        PASS [   0.021s] (  3/304) redlinedb registry::tests::registry_open_locks_are_scoped_per_path
+        PASS [   0.021s] (  4/304) redlinedb value::tests::option_none_is_null
+        PASS [   0.021s] (  5/304) redlinedb value::tests::f32_widens_to_real
+        PASS [   0.021s] (  6/304) redlinedb value::tests::signed_widening
+        PASS [   0.021s] (  7/304) redlinedb value::tests::system_time_preserves_fractional_microseconds_from_text
+        PASS [   0.022s] (  8/304) redlinedb value::tests::as_accessors_mismatch
+        PASS [   0.022s] (  9/304) redlinedb value::tests::try_from_unsigned_narrowing
+        PASS [   0.022s] ( 10/304) redlinedb value::tests::system_time_normalizes_offset_datetime_text_to_utc
+        PASS [   0.022s] ( 11/304) redlinedb value::tests::system_time_invalid_datetime_text_returns_mismatch
+        PASS [   0.022s] ( 12/304) redlinedb value::tests::system_time_accepts_pre_epoch_datetime_text
+        PASS [   0.023s] ( 13/304) redlinedb value::tests::try_from_usize_ok
+        PASS [   0.024s] ( 14/304) redlinedb::env_default_durability invalid_value_panics_loudly
+        PASS [   0.023s] ( 15/304) redlinedb value::tests::option_some_delegates_to_inner
+        PASS [   0.024s] ( 16/304) redlinedb value::tests::string_ref_to_text
+        PASS [   0.024s] ( 17/304) redlinedb value::tests::try_from_u64_overflow
+        PASS [   0.024s] ( 18/304) redlinedb value::tests::vec_ref_to_blob
+        PASS [   0.024s] ( 19/304) redlinedb value::tests::system_time_accepts_rfc3339_z_datetime_text
+        PASS [   0.026s] ( 20/304) redlinedb registry::tests::registry_concurrent_open_returns_shared_handles
+        PASS [   0.030s] ( 21/304) redlinedb value::tests::try_from_owned_string_and_vec
+        PASS [   0.032s] ( 22/304) redlinedb value::tests::unsigned_widening
+        PASS [   0.031s] ( 23/304) redlinedb value::tests::system_time_accepts_sqlite_datetime_text_as_utc
+        PASS [   0.031s] ( 24/304) redlinedb::env_default_durability explicit_with_durability_still_overrides_env
+        PASS [   0.031s] ( 25/304) redlinedb value::tests::is_null_matches_only_null
+        PASS [   0.032s] ( 26/304) redlinedb tests::open_options_builder_chains_match_field_init
+        PASS [   0.033s] ( 27/304) redlinedb registry::tests::registry_concurrent_distinct_sessions_are_independent
+        PASS [   0.032s] ( 28/304) redlinedb value::tests::as_accessors_typed
+        PASS [   0.031s] ( 29/304) redlinedb::env_default_durability env_var_drives_default_durability
+        PASS [   0.031s] ( 30/304) redlinedb value::tests::system_time_integer_epoch_micros_round_trips
+        PASS [   0.032s] ( 31/304) redlinedb tests::public_handle_thread_contracts_compile
+        PASS [   0.031s] ( 32/304) redlinedb value::tests::bool_to_integer
+        PASS [   0.032s] ( 33/304) redlinedb value::tests::try_from_signed_narrowing
+        PASS [   0.014s] ( 34/304) redlinedb::wave6b_defaults explicit_false_overrides_auto_default_for_memory
+        PASS [   0.014s] ( 35/304) redlinedb::ws_c9_lean_defaults lean_constant_matches_one_megabyte_at_four_kib_pages
+        PASS [   0.032s] ( 36/304) redlinedb value::tests::system_time_round_trips_through_value
+        PASS [   0.015s] ( 37/304) redlinedb::wave6b_defaults explicit_false_overrides_auto_default_for_ephemeral
+        PASS [   0.016s] ( 38/304) redlinedb::ws_c7_rayon_pool default_pool_is_opt_in_zero
+        PASS [   0.034s] ( 39/304) redlinedb value::tests::try_from_bool
+        PASS [   0.035s] ( 40/304) redlinedb value::tests::try_from_u64_ok
+        PASS [   0.016s] ( 41/304) redlinedb::ws_c7_rayon_pool explicit_thread_count_is_honoured
+        PASS [   0.017s] ( 42/304) redlinedb::ws_c9_lean_defaults default_in_memory_open_is_lean_by_default
+        PASS [   0.037s] ( 43/304) redlinedb::pragma_synchronous_propagation pragma_full_returns_to_strict
+        PASS [   0.030s] ( 44/304) redlinedb::pragma_synchronous_propagation pragma_normal_flips_engine_to_normal
+        PASS [   0.031s] ( 45/304) redlinedb::pragma_synchronous_propagation pragma_extra_maps_to_strict
+        PASS [   0.031s] ( 46/304) redlinedb::pragma_synchronous_propagation pragma_off_flips_engine_to_normal
+        PASS [   0.019s] ( 47/304) redlinedb::ws_c9_lean_defaults lean_ephemeral_shrinks_buffer_pool_to_one_meg
+        PASS [   0.021s] ( 48/304) redlinedb::ws_c9_lean_defaults explicit_false_overrides_in_memory_auto_default
+        PASS [   0.033s] ( 49/304) redlinedb::wave6b_defaults ephemeral_default_is_lean
+        PASS [   0.020s] ( 50/304) redlinedb-cli dot::tests::split_quoted_tokens
+        PASS [   0.020s] ( 51/304) redlinedb-cli dot::tests::mode_parses_aliases
+        PASS [   0.022s] ( 52/304) redlinedb::ws_c7_rayon_pool explicit_single_thread_disables_pool
+        PASS [   0.025s] ( 53/304) redlinedb::wave6b_defaults in_memory_default_is_lean
+        PASS [   0.025s] ( 54/304) redlinedb-cli dot::display::tests::separator_is_literal
+        PASS [   0.024s] ( 55/304) redlinedb-cli dot::tests::split_simple_tokens
+        PASS [   0.024s] ( 56/304) redlinedb::ws_c9_lean_defaults open_with_and_without_lean_uses_separate_registry_entries
+        PASS [   0.037s] ( 57/304) redlinedb::pragma_synchronous_propagation unsafe_dev_open_unaffected_by_pragma_full
+        PASS [   0.024s] ( 58/304) redlinedb-cli dot::parameter::tests::parse_parameter_values_preserves_storage_class
+        PASS [   0.025s] ( 59/304) redlinedb-cli dot::tests::split_args_double_quoted_escapes
+        PASS [   0.026s] ( 60/304) redlinedb::ws_c9_lean_defaults lean_setting_does_not_change_other_databases
+        PASS [   0.025s] ( 61/304) redlinedb-cli dot::parameter::tests::normalize_strips_sigil_and_canonicalises_to_colon
+        PASS [   0.026s] ( 62/304) redlinedb::ws_c7_rayon_pool each_database_owns_its_own_pool
+        PASS [   0.044s] ( 63/304) redlinedb::pragma_synchronous_propagation writes_still_succeed_after_normal_demote
+        PASS [   0.039s] ( 64/304) redlinedb::ws_c7_rayon_pool pool_is_not_installed_as_rayon_global
+        PASS [   0.074s] ( 65/304) redlinedb registry::tests::volatile_root_from_existing_unwritable_candidate_uses_process_scratch
+        PASS [   0.026s] ( 66/304) redlinedb-cli::ws_b4_allocator_features allocator_feature_smoke_alloc_and_drop
+        PASS [   0.106s] ( 67/304) redlinedb registry::tests::volatile_root_from_unusable_candidate_uses_process_scratch
+        PASS [   0.032s] ( 68/304) redlinedb-cli::ws_b4_allocator_features allocator_feature_string_churn
+        PASS [   0.114s] ( 69/304) redlinedb::env_default_durability env_var_propagates_to_open_engine
+        PASS [   0.051s] ( 70/304) redlinedb-cli::integrity cli_source_has_no_sqlite_parity_replay_fastpath
+        PASS [   0.017s] ( 71/304) redlinedb-ffi tests::sqlite3_metadata_helpers_return_values
+        PASS [   0.057s] ( 72/304) redlinedb-ffi tests::sqlite3_open_v2_requires_create_for_missing_path
+        PASS [   0.324s] ( 73/304) redlinedb::phase11_ephemeral named_ephemeral_sessions_are_reused_while_compatible
+        PASS [   0.575s] ( 74/304) redlinedb-cli::shellzero_smoke shellzero_print_arg
+        PASS [   0.610s] ( 75/304) redlinedb-cli::dot_commands sql_transaction_state_persists_across_input_lines
+        PASS [   0.610s] ( 76/304) redlinedb-cli::shellzero_smoke shellzero_falls_through_on_from_clause
+        PASS [   0.610s] ( 77/304) redlinedb-cli::dot_commands sql_savepoint_state_persists_across_input_lines
+        PASS [   0.611s] ( 78/304) redlinedb-cli::dot_commands mode_box_uses_unicode_line_drawing
+        PASS [   0.611s] ( 79/304) redlinedb-cli::rql cli_rql_json_uses_existing_render_modes
+        PASS [   0.611s] ( 80/304) redlinedb-cli::dot_commands mode_html_omits_table_wrapper_and_uses_single_open_tags
+        PASS [   0.607s] ( 81/304) redlinedb-cli::shellzero_smoke without_shellzero_select_still_works
+        PASS [   0.610s] ( 82/304) redlinedb-cli::dot_commands mode_quote_renders_blob_with_lowercase_x_literal
+        PASS [   0.607s] ( 83/304) redlinedb-cli::shellzero_smoke shellzero_version_emits_version_line
+        PASS [   0.611s] ( 84/304) redlinedb-cli::dot_commands mode_line_wraps_multiline_values_with_indent
+        PASS [   0.611s] ( 85/304) redlinedb-cli::dot_commands mode_table_uses_ascii_pluses_only_around_header
+        PASS [   0.611s] ( 86/304) redlinedb-cli::shellzero_smoke shellzero_string_concat
+        PASS [   0.612s] ( 87/304) redlinedb-cli::dot_commands dot_tables_lists_user_tables
+        PASS [   0.611s] ( 88/304) redlinedb-cli::shellzero_smoke shellzero_help_exits_zero
+        PASS [   0.610s] ( 89/304) redlinedb-cli::dot_commands unknown_dot_command_reports_error_without_terminating
+        PASS [   0.611s] ( 90/304) redlinedb-cli::dot_commands mode_flag_after_separator_resets_separator
+        PASS [   0.612s] ( 91/304) redlinedb-cli::dot_commands dot_recover_emits_dump_sql
+        PASS [   0.611s] ( 92/304) redlinedb-cli::dot_commands dot_print_emits_literal_text
+        PASS [   0.611s] ( 93/304) redlinedb-cli::dot_commands mode_insert_default_table_name_is_tab
+        PASS [   0.612s] ( 94/304) redlinedb-cli::dot_commands dot_schema_prints_create_statements
+        PASS [   0.610s] ( 95/304) redlinedb-cli::dot_commands sql_rollback_state_persists_across_input_lines
+        PASS [   0.612s] ( 96/304) redlinedb-cli::dot_commands dot_parameter_set_binds_named_placeholders
+        PASS [   0.026s] ( 97/304) redlinedb-ffi::blob_io null_pointers_to_blob_api_return_misuse_or_noop
+        PASS [   0.611s] ( 98/304) redlinedb-cli::dot_commands mode_tcl_renders_strings_with_octal_escapes
+        PASS [   0.611s] ( 99/304) redlinedb-cli::dot_commands mode_markdown_separator_uses_three_dashes_per_cell
+        PASS [   0.613s] (100/304) redlinedb-cli::dot_commands dot_nullvalue_and_headers_apply_to_list_output
+        PASS [   0.668s] (101/304) redlinedb-cli::dot_commands batch_bail_memory_mode_is_cwd_clean_and_output_exact
+        PASS [   0.620s] (102/304) redlinedb-cli::dot_commands dot_once_redirects_only_the_next_query
+        PASS [   0.657s] (103/304) redlinedb-cli::dot_commands dot_dump_round_trips_through_sqlite3
+        PASS [   0.619s] (104/304) redlinedb-cli::dot_commands mode_line_uses_colon_and_aligns_names
+        PASS [   0.618s] (105/304) redlinedb-cli::dot_import_smoke dot_import_loads_csv_rows_inside_transaction
+        PASS [   0.620s] (106/304) redlinedb-cli::dot_commands dot_read_executes_file_contents
+        PASS [   0.618s] (107/304) redlinedb-cli::dot_commands memory_mode_query_leaves_working_directory_clean
+        PASS [   0.658s] (108/304) redlinedb-cli::dot_commands cli_ifexists_rejects_missing_database
+        PASS [   0.021s] (109/304) redlinedb-ffi::error_paths null_path_to_open_v2_returns_misuse_with_valid_out_slot
+        PASS [   0.024s] (110/304) redlinedb-ffi::error_paths config_surface_null_db_sentinels
+        PASS [   0.037s] (111/304) redlinedb-ffi::error_paths backup_lifecycle_funcs_reject_null_backup
+        PASS [   0.038s] (112/304) redlinedb-ffi::collation_register null_db_to_create_collation_returns_misuse
+        PASS [   0.040s] (113/304) redlinedb-ffi::error_paths prepare_with_null_db_returns_misuse_and_leaves_out_stmt_null
+        PASS [   0.058s] (114/304) redlinedb-ffi::error_paths close_on_never_opened_handle_is_safe
+        PASS [   0.049s] (115/304) redlinedb-ffi::hooks hook_registration_on_null_db_returns_null_or_misuse
+        PASS [   0.068s] (116/304) redlinedb-ffi::error_paths open_v2_on_path_that_is_a_regular_file_returns_error_without_panic
+        PASS [   0.021s] (117/304) redlinedb-ffi::safety_invariants null_db_pointer_returns_misuse_for_every_public_function
+        PASS [   0.023s] (118/304) redlinedb-ffi::safety_invariants null_open_args_return_misuse
+        PASS [   0.021s] (119/304) redlinedb-ffi::safety_invariants null_stmt_column_accessors_return_sentinels
+        PASS [   0.807s] (120/304) redlinedb::pragma_synchronous_propagation default_on_disk_open_sees_strict_until_pragma_fires
+        PASS [   0.734s] (121/304) redlinedb-ffi tests::sqlite3_autocommit_tracks_transaction_state
+        PASS [   0.794s] (122/304) redlinedb::wave6b_defaults file_backed_default_stays_non_lean
+        PASS [   0.823s] (123/304) redlinedb tests::open_options_builder_opens_database_with_custom_busy_timeout
+        PASS [   0.802s] (124/304) redlinedb::ws_c9_lean_defaults lean_ephemeral_on_disk_open_honours_the_flavor
+        PASS [   0.823s] (125/304) redlinedb tests::execute_batch_honors_prearmed_interrupt_before_execution
+        PASS [   0.823s] (126/304) redlinedb tests::commented_virtual_table_prefix_is_typed_unsupported_on_every_facade_path
+        PASS [   0.823s] (127/304) redlinedb tests::pool_metrics_hook_fires_on_acquire
+        PASS [   0.803s] (128/304) redlinedb::wave6b_defaults explicit_true_still_works_for_file_backed_open
+        PASS [   0.824s] (129/304) redlinedb machine::tests::query_spec_rejects_stale_schema_epoch
+        PASS [   0.743s] (130/304) redlinedb-ffi tests::sqlite3_exec_errmsg_is_null_terminated_and_freeable
+        PASS [   0.831s] (131/304) redlinedb tests::create_virtual_table_fails_closed_with_unsupported_code
+        PASS [   0.015s] (132/304) redlinedb-ffi::value_result null_value_reports_null_type_and_zero_accessors
+        PASS [   0.018s] (133/304) redlinedb-ffi::value_result null_pointers_to_result_setters_are_no_op
+        PASS [   0.021s] (134/304) redlinedb-ffi::value_result integer_value_round_trips_and_promotes_to_double
+        PASS [   0.021s] (135/304) redlinedb-ffi::value_result null_pointers_to_value_accessors_are_safe
+        PASS [   0.018s] (136/304) redlinedb-ffi::value_result result_setters_populate_context_slot
+        PASS [   0.032s] (137/304) redlinedb-ffi::safety_invariants rldb_free_null_is_noop
+        PASS [   0.026s] (138/304) redlinedb-ffi::value_result blob_value_returns_pointer_and_length
+        PASS [   0.028s] (139/304) redlinedb-ffi::udf_register null_db_returns_misuse
+        PASS [   0.013s] (140/304) redlinedb-ffi::value_result text_value_returns_nul_terminated_pointer
+        PASS [   0.034s] (141/304) redlinedb-sqlx bridge::tests::ro_is_rejected_for_in_memory_urls
+        PASS [   0.037s] (142/304) redlinedb-sqlx bridge::tests::ro_attach_is_rejected_for_in_memory_urls
+        PASS [   0.045s] (143/304) redlinedb-sqlx bridge::options::tests::mode_ro_disables_owner_lock_and_creation
+        PASS [   0.718s] (144/304) redlinedb-ffi tests::sqlite3_prepare_v3_is_compatible_with_prepare_v2
+        PASS [   0.041s] (145/304) redlinedb-sqlx bridge::options::tests::ro_is_rejected_for_in_memory_url
+        PASS [   0.767s] (146/304) redlinedb-ffi tests::sqlite3_prepare_v2_blank_input_returns_null_stmt
+        PASS [   0.822s] (147/304) redlinedb-cli::dot_commands mode_flag_after_nullvalue_resets_nullvalue
+        PASS [   0.042s] (148/304) redlinedb-sqlx bridge::tests::mode_ro_disables_owner_lock_and_creation
+        PASS [   0.051s] (149/304) redlinedb-ffi::value_result value_dup_and_free_round_trip_owned_copy
+        PASS [   0.826s] (150/304) redlinedb-cli::dot_commands dot_filectrl_lists_available_controls_for_empty_command
+        PASS [   0.863s] (151/304) redlinedb-cli::dot_commands dot_databases_uses_quoted_path_for_memory_db
+        PASS [   0.863s] (152/304) redlinedb-cli::dot_commands delimited_modes_stream_headers_nulls_and_escaping
+        PASS [   0.863s] (153/304) redlinedb-cli::dot_commands dot_crlf_toggles_row_separator
+        PASS [   0.827s] (154/304) redlinedb-cli::dot_commands mode_column_honours_width_and_wraps_long_values
+        PASS [   0.869s] (155/304) redlinedb-cli::dot_commands dot_dbtotxt_prints_pipe_separated_catalog_rows
+        PASS [   0.832s] (156/304) redlinedb-cli::dot_commands version_identifies_redlinedb_release_and_sqlite_compatibility
+        PASS [   0.835s] (157/304) redlinedb-cli::dot_commands dot_tables_pattern_filters_results
+        PASS [   0.836s] (158/304) redlinedb-cli::dot_commands dot_mode_and_headers_apply_to_following_query
+        PASS [   0.836s] (159/304) redlinedb-cli::dot_commands dot_indexes_lists_index_names
+        PASS [   0.840s] (160/304) redlinedb-cli::dot_commands dot_parameter_list_and_clear_round_trip
+        PASS [   0.843s] (161/304) redlinedb-cli::dot_commands dot_schema_sqlite_master_returns_canonical_schema
+        PASS [   0.847s] (162/304) redlinedb-cli::dot_commands dot_tables_columns_use_five_space_separator_column_major
+        PASS [   0.848s] (163/304) redlinedb-cli::dot_commands mode_html_renders_null_as_literal_null
+        PASS [   0.849s] (164/304) redlinedb-cli::dot_commands foreign_keys_pragma_persists_across_input_lines
+        PASS [   0.853s] (165/304) redlinedb-cli::dot_commands dot_separator_single_quoted_argument_is_literal
+        PASS [   0.893s] (166/304) redlinedb-cli::dot_commands dot_bail_terminates_on_error
+        PASS [   0.020s] (167/304) redlinedb-sqlx tests::attach_mode_ro_is_rejected_for_memory_urls
+        PASS [   0.020s] (168/304) redlinedb-sqlx tests::attach_mode_ro_is_read_only_and_ownerless
+        PASS [   0.020s] (169/304) redlinedb-tokio tests::pool_is_send_sync
+        PASS [   0.020s] (170/304) redlinedb-tokio tests::async_row_is_send_sync
+        PASS [   0.024s] (171/304) redlinedb-tokio::builder_settings_applied builder_without_database_errors
+        PASS [   0.874s] (172/304) redlinedb-cli::dot_commands mode_markdown_respects_headers_off
+        PASS [   0.024s] (173/304) redlinedb-sqlx::install_order upstream_install_blocks_late_redline_install
+        PASS [   0.024s] (174/304) redlinedb-tokio::builder_settings_applied zero_max_connections_panics
+        PASS [   0.025s] (175/304) redlinedb-sqlx tests::ro_attach_is_rejected_for_in_memory_urls
+        PASS [   0.030s] (176/304) redlinedb-sqlx::attach_mode ro_attach_is_rejected_for_in_memory_urls
+        PASS [   0.031s] (177/304) redlinedb-sqlx::driver_registration mixed_case_redlinedb_scheme_is_normalized
+        PASS [   0.033s] (178/304) redlinedb-sqlx::driver_registration repeated_install_is_harmless
+        PASS [   0.035s] (179/304) redlinedb-sqlx::driver_registration redlinedb_memory_url_connects
+        PASS [   0.037s] (180/304) redlinedb-sqlx::sqlx_smoke parameterized_recursive_cte_uses_bound_values
+        PASS [   0.038s] (181/304) redlinedb-sqlx::driver_registration redline_memory_url_connects
+        PASS [   0.020s] (182/304) redlinedb-tokio::error_propagation_across_await errors_are_send_sync_compatible
+        PASS [   0.037s] (183/304) redlinedb-tokio::clone_shares_database clone_writes_visible_to_original
+        PASS [   0.046s] (184/304) redlinedb-tokio::builder_settings_applied builder_constructs_pool_with_custom_settings
+        PASS [   0.049s] (185/304) redlinedb-sqlx::jeryu_schema any_pool_runs_jeryu_shaped_append_only_schema
+        PASS [   0.030s] (186/304) redlinedb-tokio::error_propagation_across_await error_returned_to_caller_with_code
+        PASS [   0.031s] (187/304) redlinedb-tokio::open_in_memory_smoke round_trips_single_row
+        PASS [   0.033s] (188/304) redlinedb-tokio::error_propagation_across_await fetch_one_on_empty_returns_not_found
+        PASS [   0.030s] (189/304) redlinedb-tokio::transaction_commit_rollback commits_on_ok
+        PASS [   0.083s] (190/304) redlinedb-tokio::transaction_commit_rollback rolls_back_on_inner_db_error
+        PASS [   0.084s] (191/304) redlinedb-tokio::params_binding_all_value_types round_trips_all_value_variants
+        PASS [   0.078s] (192/304) redlinedb-tokio::with_connection_multistep multistep_state_is_visible_within_closure
+        PASS [   0.084s] (193/304) redlinedb-tokio::transaction_commit_rollback rolls_back_on_err
+        PASS [   0.961s] (194/304) redlinedb-cli::dot_commands dot_show_dumps_current_settings
+        PASS [   0.999s] (195/304) redlinedb-cli::dot_commands dot_changes_skips_ddl_and_runs_total_for_dml
+        PASS [   0.963s] (196/304) redlinedb-cli::dot_commands mode_csv_quotes_apostrophes_and_uses_crlf_terminators
+        PASS [   1.045s] (197/304) redlinedb::phase11_ephemeral in_memory_database_shares_state_and_cleans_up
+        PASS [   0.983s] (198/304) redlinedb-cli::dot_commands dot_schema_accepts_indent_and_nosys_flags
+        PASS [   1.001s] (199/304) redlinedb-cli::dot_commands mode_flag_after_header_resets_header_to_mode_default
+        PASS [   1.006s] (200/304) redlinedb-cli::shellzero_smoke shellzero_select_one_plus_one
+        PASS [   1.050s] (201/304) redlinedb-cli::dot_commands deserialize_memory_mode_runs_silently
+        PASS [   1.015s] (202/304) redlinedb-cli::dot_commands dot_lint_fkey_indexes_emits_create_index_per_reference
+        PASS [   1.016s] (203/304) redlinedb-cli::dot_commands dot_separator_double_quoted_argument_expands_escapes
+        PASS [   1.016s] (204/304) redlinedb-cli::dot_commands mode_insert_with_blob_uses_lowercase_x_literal
+        PASS [   1.018s] (205/304) redlinedb-cli::dot_commands dot_list_renders_blob_text_symbolically
+        PASS [   1.055s] (206/304) redlinedb-cli::dot_commands dot_echo_off_is_still_echoed_when_echo_was_on
+        PASS [   1.055s] (207/304) redlinedb-cli::dot_commands dot_dbinfo_prints_page_size
+        PASS [   1.057s] (208/304) redlinedb-cli::dot_commands dot_fullschema_emits_schema_and_sqlite_master_section
+        PASS [   1.022s] (209/304) redlinedb-cli::dot_commands mode_column_centres_headers_and_right_aligns_numerics
+        PASS [   1.024s] (210/304) redlinedb-cli::dot_commands dot_mode_markdown_renders_pipe_table
+        PASS [   1.080s] (211/304) redlinedb-cli::dot_commands cli_escape_symbol_renders_control_characters_symbolically
+        PASS [   1.185s] (212/304) redlinedb-cli::dot_commands cmd_flag_repeated_runs_each_command
+        PASS [   1.137s] (213/304) redlinedb-cli::dot_commands dot_list_renders_zeroblob_as_blank
+        PASS [   1.186s] (214/304) redlinedb-cli::dot_commands batch_autoincrement_exposes_sqlite_sequence
+        PASS [   1.199s] (215/304) redlinedb-cli::dot_commands cli_flags_select_the_expected_renderers
+        PASS [   1.166s] (216/304) redlinedb-cli::dot_commands mode_json_emits_one_row_per_line_with_blob_escapes
+        PASS [   1.175s] (217/304) redlinedb-cli::dot_commands dot_mode_quote_renders_sql_literals
+        PASS [   1.182s] (218/304) redlinedb-cli::dot_commands sql_multiline_trigger_body_is_one_statement
+        PASS [   0.602s] (219/304) redlinedb-ffi::collation_register collation_needed_fires_when_invoked
+        PASS [   0.602s] (220/304) redlinedb-ffi::hooks busy_handler_retry_decision
+        PASS [   0.598s] (221/304) redlinedb-ffi::hooks commit_hook_fires_and_can_veto
+        PASS [   1.255s] (222/304) redlinedb-cli::dot_commands dot_databases_reports_main
+        PASS [   0.603s] (223/304) redlinedb-ffi::error_paths step_after_finalize_then_null_returns_misuse
+        PASS [   0.688s] (224/304) redlinedb-ffi::error_paths prepare_empty_sql_returns_ok_with_null_stmt
+        PASS [   0.684s] (225/304) redlinedb-ffi::hooks authorizer_returns_decision_code
+        PASS [   0.677s] (226/304) redlinedb-ffi::hooks rollback_hook_fires
+        PASS [   0.677s] (227/304) redlinedb-ffi::hooks trace_hook_fires_with_sql_string
+        PASS [   0.687s] (228/304) redlinedb-ffi::error_paths backup_init_with_null_args_returns_misuse
+        PASS [   0.657s] (229/304) redlinedb-ffi::safety_invariants double_close_via_null_after_close_is_safe
+        PASS [   0.620s] (230/304) redlinedb-ffi::safety_invariants null_sql_pointer_returns_misuse
+        PASS [   0.651s] (231/304) redlinedb-ffi::safety_invariants invalid_utf8_in_sql_returns_error_not_panic
+        PASS [   0.677s] (232/304) redlinedb-ffi::hooks update_hook_fires_with_table_and_rowid
+        PASS [   0.689s] (233/304) redlinedb-ffi::error_paths errmsg_after_failed_prepare_returns_human_readable_message
+        PASS [   0.678s] (234/304) redlinedb-ffi::hooks profile_hook_captures_nanoseconds
+        PASS [   1.430s] (235/304) redlinedb tests::execute_batch_enforces_read_only_for_each_statement
+        PASS [   1.432s] (236/304) redlinedb tests::pool_busy_timeout_applies_to_handed_out_connections
+        PASS [   1.442s] (237/304) redlinedb tests::connection_set_busy_timeout_applies_to_future_lock_conflicts
+        PASS [   1.381s] (238/304) redlinedb-cli::dot_import_bulk bulk_import_pragma_handles_partial_trailing_chunk
+        PASS [   0.659s] (239/304) redlinedb-ffi::udf_register times_two_scalar_udf_invoked_from_select
+        PASS [   0.660s] (240/304) redlinedb-ffi::udf_register arity_any_matches_when_exact_arity_missing
+        PASS [   1.424s] (241/304) redlinedb-ffi tests::sqlite3_exec_savepoint_release_round_trip
+        PASS [   1.418s] (242/304) redlinedb-ffi tests::sqlite3_exec_stops_at_first_error_and_sets_errmsg
+        PASS [   1.423s] (243/304) redlinedb-ffi tests::sqlite3_exec_savepoint_rollback_to_drops_postsaved_rows
+        PASS [   1.525s] (244/304) redlinedb tests::execute_batch_stops_on_error_and_preserves_prior_statements
+        PASS [   1.525s] (245/304) redlinedb tests::row_get_dispatches_to_typed_from_value_impls
+        PASS [   1.525s] (246/304) redlinedb tests::execute_batch_preserves_savepoints_and_comment_only_noops
+        PASS [   1.525s] (247/304) redlinedb tests::from_value_narrowing_overflow_returns_mismatch
+        PASS [   1.525s] (248/304) redlinedb tests::owned_and_borrowed_statements_return_the_same_row
+        PASS [   1.525s] (249/304) redlinedb tests::query_map_callback_error_and_early_drop_leave_statement_ordered
+        PASS [   1.526s] (250/304) redlinedb tests::pool_get_returns_connection_and_drop_returns_it
+        PASS [   1.561s] (251/304) redlinedb tests::query_row_returns_first_row_mapped
+        PASS [   1.265s] (252/304) redlinedb-ffi tests::sqlite3_surface_executes_bind_and_query
+        PASS [   1.543s] (253/304) redlinedb-ffi tests::sqlite3_exec_callback_fires_for_each_row_in_multi_stmt
+        PASS [   1.626s] (254/304) redlinedb tests::tuple_params_bind_heterogeneous_types_directly
+        PASS [   1.627s] (255/304) redlinedb tests::borrowed_statement_query_map_maps_rows_with_order
+        PASS [   1.625s] (256/304) redlinedb-cli::dot_commands dot_databases_lists_attached_aliases
+        PASS [   1.659s] (257/304) redlinedb tests::execute_batch_runs_script_in_order_without_row_counts
+        PASS [   0.992s] (258/304) redlinedb-ffi::error_paths bind_parameter_index_with_null_name_returns_misuse
+        PASS [   1.553s] (259/304) redlinedb-ffi tests::sqlite3_prepare_v2_sets_pztail_after_first_statement
+        PASS [   0.908s] (260/304) redlinedb-ffi::safety_invariants null_value_pointer_on_bind_returns_misuse
+        PASS [   1.651s] (261/304) redlinedb-cli::dot_import_bulk bulk_import_pragma_loads_5000_rows
+        PASS [   1.632s] (262/304) redlinedb-ffi tests::sqlite3_exec_runs_multiple_statements
+        PASS [   1.050s] (263/304) redlinedb-ffi::blob_io write_past_cell_length_is_rejected
+        PASS [   1.735s] (264/304) redlinedb machine::tests::query_spec_round_trip_select_insert_update_delete
+        PASS [   1.047s] (265/304) redlinedb-ffi::exec_input_boundary null_byte_in_bound_parameter
+        PASS [   1.052s] (266/304) redlinedb-ffi::error_paths oversize_sql_via_exec_populates_errmsg
+        PASS [   1.092s] (267/304) redlinedb-ffi::collation_register reverse_nocase_orders_descending
+        PASS [   1.777s] (268/304) redlinedb::phase8 archive_and_retention_stats_are_available
+        PASS [   1.778s] (269/304) redlinedb tests::benchmark_stats_surface_current_storage_counters
+        PASS [   1.091s] (270/304) redlinedb-ffi::safety_invariants exec_callback_failure_round_trips_errmsg_ownership
+        PASS [   1.005s] (271/304) redlinedb-ffi::safety_invariants parameter_index_out_of_range_returns_range
+        PASS [   1.066s] (272/304) redlinedb-ffi::safety_invariants nul_byte_mid_string_truncates_at_nul_without_ub
+        PASS [   1.144s] (273/304) redlinedb-ffi::exec_input_boundary sql_injection_stacked_statement_executes_per_documented_contract
+        PASS [   1.117s] (274/304) redlinedb-ffi::safety_invariants backup_init_step_close_round_trips_box_ownership
+        PASS [   1.137s] (275/304) redlinedb-ffi::hooks exec_walk_invokes_trace_profile_commit_hooks
+        PASS [   1.327s] (276/304) redlinedb-ffi::blob_io open_read_write_close_round_trip
+        PASS [   1.328s] (277/304) redlinedb-ffi::blob_io reopen_changes_rowid
+        PASS [   1.327s] (278/304) redlinedb-ffi::error_paths bind_then_reset_then_rebind_does_not_panic
+        PASS [   1.142s] (279/304) redlinedb-sqlx::sqlx_smoke mode_rwc_accepts_existing_empty_file_path
+        PASS [   1.379s] (280/304) redlinedb-ffi::exec_input_boundary sql_injection_classic_quote_escape
+        PASS [   1.146s] (281/304) redlinedb-sqlx::datetime_round_trip datetime_text_round_trips_through_sqlx
+        PASS [   1.145s] (282/304) redlinedb-sqlx::sqlx_smoke creates_inserts_and_reads_rows
+        PASS [   2.125s] (283/304) redlinedb value::tests::datetime_text_insert_select_keeps_text_and_system_time_accepts_it
+        PASS [   1.305s] (284/304) redlinedb-ffi::udf_register aggregate_udf_sum_squares_invoked_per_group
+        PASS [   1.204s] (285/304) redlinedb-sqlx::attach_mode mode_rwc_still_opens_and_writes
+        PASS [   1.213s] (286/304) redlinedb-sqlx::attach_mode mode_ro_attaches_to_live_database_and_blocks_writes
+        PASS [   1.454s] (287/304) redlinedb-ffi::hooks update_hook_fires_per_row
+        PASS [   1.467s] (288/304) redlinedb-ffi::exec_input_boundary multi_byte_utf8_handled
+        PASS [   1.326s] (289/304) redlinedb-sqlx bridge::tests::mode_ro_attaches_to_live_database_and_blocks_writes
+        PASS [   1.263s] (290/304) redlinedb-sqlx tests::mode_ro_attaches_to_live_database_and_blocks_writes
+        PASS [   2.242s] (291/304) redlinedb::rql rql_program_covers_core_relational_flow
+        PASS [   1.579s] (292/304) redlinedb-ffi::hooks set_authorizer_denies_table_access
+        PASS [   2.379s] (293/304) redlinedb::phase8 slots_are_persisted_and_listed
+        PASS [   2.381s] (294/304) redlinedb::durable_reopen committed_autocommit_row_survives_checkpoint_and_reopen
+        PASS [   2.484s] (295/304) redlinedb::durable_reopen committed_transaction_survives_rollback_checkpoint_and_reopen
+        PASS [   1.803s] (296/304) redlinedb-sqlx::driver_registration file_backed_jeryu_autonomy_ledger_url_connects
+        PASS [   1.787s] (297/304) redlinedb-tokio::persistent_file_path file_backed_round_trip
+        PASS [   2.027s] (298/304) redlinedb-server::bin/redlinedb-server tests::framed_protocol_executes_statements
+        PASS [   3.084s] (299/304) redlinedb::oversized_row public_text_row_boundary_accepts_max_minus_one_and_max_but_rejects_max_plus_one
+        PASS [   2.457s] (300/304) redlinedb-sqlx::jeryu_schema any_pool_file_schema_sees_ddl_across_connections
+        PASS [   3.592s] (301/304) redlinedb::oversized_row repeated_oversized_inserts_and_updates_leave_storage_and_wal_unchanged_after_reopen
+        PASS [   3.745s] (302/304) redlinedb::phase8 physical_backup_restore_roundtrip
+        PASS [   2.845s] (303/304) redlinedb-tokio::concurrent_writes_no_corruption sixteen_writers_no_lost_rows
+        PASS [   2.989s] (304/304) redlinedb-ffi::safety_invariants oversize_sql_is_rejected_gracefully
+────────────
+     Summary [   3.782s] 304 tests run: 304 passed, 4 skipped
+ci-local pr-ci: tests/kernel
+warning: unused import: `std::cmp::Ordering`
+ --> crates/kernel/tests/index_keycmp_simd.rs:8:5
+  |
+8 | use std::cmp::Ordering;
+  |     ^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` (part of `#[warn(unused)]`) on by default
+
+
+running 93 tests
+....................................................................................... 87/93
+......
+test result: ok. 93 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.30s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.22s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.36s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.12s
+
+
+running 1 test
+i
+test result: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+test: recall_at_10_meets_bar, ignore_message: 10k-vector recall benchmark; run with --include-ignored
+
+
+running 24 tests
+........................
+test result: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.54s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 16 tests
+................
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 2.25s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 8 tests
+........
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.84s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 4 tests
+i...
+test result: ok. 3 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 4.76s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.80s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.91s
+
+
+running 12 tests
+............
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.33s
+
+
+running 15 tests
+...............
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.50s
+
+
+running 6 tests
+.....test iter_all_entries_walks_ten_thousand_keys has been running for over 60 seconds
+.
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 114.09s
+
+
+running 4 tests
+....
+test result: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 29 tests
+.............................
+test result: ok. 29 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 12 tests
+............
+test result: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 26 tests
+..........................
+test result: ok. 26 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 14.59s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.03s
+
+
+running 17 tests
+.................
+test result: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.09s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 6 tests
+......
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 15 tests
+...............
+test result: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+
+
+running 9 tests
+.........
+test result: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.62s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 16 tests
+................
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+ci-local pr-ci: tests/sql-unit
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4772:18
+     |
+4772 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4775:22
+     |
+4775 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+
+
+running 213 tests
+....................................................................................... 87/213
+....................................................................................... 174/213
+.......................................
+test result: ok. 213 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.53s
+
+ci-local pr-ci: tests/sql-contracts
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4772:18
+     |
+4772 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4775:22
+     |
+4775 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 5.97s
+
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4772:18
+     |
+4772 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4775:22
+     |
+4775 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.69s
+
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4772:18
+     |
+4772 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4775:22
+     |
+4775 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.46s
+
+ci-local pr-ci: tests/bench
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4772:18
+     |
+4772 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4775:22
+     |
+4775 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+
+
+running 55 tests
+.......................................................
+test result: ok. 55 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.61s
+
+
+running 10 tests
+..........
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+
+running 8 tests
+........
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.08s
+
+
+running 1 test
+.
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.85s
+
+
+running 11 tests
+...........
+test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+
+running 10 tests
+..........
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.68s
+
+
+running 2 tests
+..
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.06s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.47s
+
+
+running 3 tests
+...
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.24s
+
+
+running 5 tests
+.....
+test result: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.65s
+
+
+running 0 tests
+
+test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+ci-local pr-ci: parity/redline-testing-official
+Configuring SQLite version 3.53.1
+Host System...x86_64-pc-linux-gnu
+Build System...x86_64-pc-linux-gnu
+Source dir = /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/target/sqlite-reference/source/sqlite-autoconf-3530100
+Build dir  = /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/target/sqlite-reference/build/3530100
+C compiler... cc -O2 -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_COLUMN_METADATA -DSQLITE_ENABLE_DBPAGE_VTAB -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_ENABLE_EXPLAIN_COMMENTS -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_MATH_FUNCTIONS -DSQLITE_ENABLE_OFFSET_SQL_FUNC -DSQLITE_ENABLE_PERCENTILE -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_VFSTRACE -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_STMT_SCANSTATUS -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION -DSQLITE_HAVE_ZLIB=1 
+C++ compiler... c++ -O2 -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_COLUMN_METADATA -DSQLITE_ENABLE_DBPAGE_VTAB -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_ENABLE_EXPLAIN_COMMENTS -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_MATH_FUNCTIONS -DSQLITE_ENABLE_OFFSET_SQL_FUNC -DSQLITE_ENABLE_PERCENTILE -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_VFSTRACE -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_STMT_SCANSTATUS -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION -DSQLITE_HAVE_ZLIB=1 
+Build C compiler...cc
+Checking for stdlib.h...ok
+Checking for sys/types.h...ok
+Checking if -D_FILE_OFFSET_BITS=64 is needed...no
+SQLITE_DEBUG build? no
+Looking for install ... /usr/bin/install
+Checking for int8_t...ok
+Checking for int16_t...ok
+Checking for int32_t...ok
+Checking for int64_t...ok
+Checking for intptr_t...ok
+Checking for uint8_t...ok
+Checking for uint16_t...ok
+Checking for uint32_t...ok
+Checking for uint64_t...ok
+Checking for uintptr_t...ok
+Checking for gmtime_r...ok
+Checking for isnan...ok
+Checking for localtime_r...ok
+Checking for localtime_s...not found
+Checking for usleep...ok
+Checking for utime...ok
+Checking for pread...ok
+Checking for pread64...ok
+Checking for pwrite...ok
+Checking for pwrite64...ok
+Checking libs for fdatasync...none needed
+Checking libs for nanosleep...none needed
+Checking for sys/types.h...(cached) ok
+Checking for sys/stat.h...ok
+Checking for dlfcn.h...ok
+Checking for unistd.h...ok
+Checking for stdlib.h...ok
+Checking for malloc.h...ok
+Checking for memory.h...ok
+Checking for string.h...ok
+Checking for strings.h...ok
+Checking for inttypes.h...ok
+Checking for zlib.h...ok
+Checking libs for deflate...-lz
+Link library statically into the CLI shell? yes
+Statically link CLI shell? no
+Checking whether the C compiler accepts -rpath /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/target/sqlite-reference/3.53.1/lib...no
+Checking whether the C compiler accepts -Wl,-rpath,/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/target/sqlite-reference/3.53.1/lib...yes
+Support threadsafe operation? Checking for libs...
+Checking libs for pthread_create...none needed
+Checking libs for pthread_mutexattr_init...none needed
+Checking libs for dlopen...none needed
+Loadable extension support enabled. 
+Checking libs for ceil...-lm
+Enabling math SQL functions
+ICU support is disabled.
+Checking for line-editing capability...
+Line-editing support for the sqlite3 shell: none
+Build shared library? no
+Build static library? yes
+Feature flags...
+  - fts3
+  - fts4
+  - fts5
+  - geopoly
+  - rtree
+  - session
+  - update-limit
+  - memsys5
+  - memsys3
+  - scanstatus
+  - dbpage
+  - dbstat
+  - carray
+  + json
+Library feature flags: -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_COLUMN_METADATA -DSQLITE_ENABLE_DBPAGE_VTAB -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_ENABLE_EXPLAIN_COMMENTS -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_MATH_FUNCTIONS -DSQLITE_ENABLE_OFFSET_SQL_FUNC -DSQLITE_ENABLE_PERCENTILE -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_STMT_SCANSTATUS -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT -DSQLITE_ENABLE_VFSTRACE -DSQLITE_HAVE_ZLIB=1 -DSQLITE_THREADSAFE=1
+Shell options: -DSQLITE_DQS=0 -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_DBPAGE_VTAB -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_EXPLAIN_COMMENTS -DSQLITE_ENABLE_FTS4 -DSQLITE_ENABLE_OFFSET_SQL_FUNC -DSQLITE_ENABLE_PERCENTILE -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION -DSQLITE_HAVE_ZLIB=1 -DSQLITE_STRICT_SUBTYPE=1
+Created Makefile from ../../source/sqlite-autoconf-3530100/Makefile.in
+Created sqlite3.pc from ../../source/sqlite-autoconf-3530100/sqlite3.pc.in
+Created sqlite_cfg.h
+cc -o sqlite3 \
+	/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/target/sqlite-reference/source/sqlite-autoconf-3530100/shell.c /home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/target/sqlite-reference/source/sqlite-autoconf-3530100/sqlite3.c  -Wl,-rpath,/home/ubuntu/jain-split/target/redline-proof-txn-171.JH7lYN/tmp/redline-family-ci-1179681-1785225544767078602/redline-core/target/sqlite-reference/3.53.1/lib  -lm  -lz   -lz -lm -ldl -lpthread \
+	 \
+	-I. -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_COLUMN_METADATA -DSQLITE_ENABLE_DBPAGE_VTAB -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_DESERIALIZE -DSQLITE_ENABLE_EXPLAIN_COMMENTS -DSQLITE_ENABLE_FTS5 -DSQLITE_ENABLE_MATH_FUNCTIONS -DSQLITE_ENABLE_OFFSET_SQL_FUNC -DSQLITE_ENABLE_PERCENTILE -DSQLITE_ENABLE_PREUPDATE_HOOK -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_STMT_SCANSTATUS -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION -DSQLITE_ENABLE_UPDATE_DELETE_LIMIT -DSQLITE_ENABLE_VFSTRACE -DSQLITE_HAVE_ZLIB=1 -DSQLITE_THREADSAFE=1 -DSQLITE_DQS=0 -DSQLITE_ENABLE_BYTECODE_VTAB -DSQLITE_ENABLE_DBPAGE_VTAB -DSQLITE_ENABLE_DBSTAT_VTAB -DSQLITE_ENABLE_EXPLAIN_COMMENTS -DSQLITE_ENABLE_FTS4 -DSQLITE_ENABLE_OFFSET_SQL_FUNC -DSQLITE_ENABLE_PERCENTILE -DSQLITE_ENABLE_RTREE -DSQLITE_ENABLE_STMTVTAB -DSQLITE_ENABLE_UNKNOWN_SQL_FUNCTION -DSQLITE_HAVE_ZLIB=1 -DSQLITE_STRICT_SUBTYPE=1 \
+	-O2 -DSQLITE_HAVE_ZLIB=1    \
+	
+warning: field `name` is never read
+    --> crates/sql/src/parser.rs:4772:18
+     |
+4772 |     InlineExpr { name: String, body: String },
+     |     ----------   ^^^^
+     |     |
+     |     field in this variant
+     |
+     = note: `#[warn(dead_code)]` (part of `#[warn(unused)]`) on by default
+warning: field `single_col_name` is never read
+    --> crates/sql/src/parser.rs:4775:22
+     |
+4775 |     ScalarSubquery { single_col_name: String },
+     |     --------------   ^^^^^^^^^^^^^^^
+     |     |
+     |     field in this variant
+═══════════════════════════════════════
+cargo build: 0 errors, 2 warnings (108 crates)
+expected release binary missing: target/release/redlinedb

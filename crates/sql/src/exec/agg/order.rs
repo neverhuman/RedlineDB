@@ -3,7 +3,7 @@ use super::super::expr::eval_scalar;
 use super::super::*;
 
 pub(crate) fn sort_groups_by_order_by(
-    projected: &mut [Vec<SqlValue>],
+    projected: &mut Vec<Vec<SqlValue>>,
     groups: &[&[SqlRow]],
     projection: &[SelectItem],
     order_by: &[OrderByExpr],
@@ -26,10 +26,11 @@ pub(crate) fn sort_groups_by_order_by(
         }
         keys.push(row_keys);
     }
-    let mut indices: Vec<usize> = (0..projected.len()).collect();
-    indices.sort_by(|&a, &b| {
+    let mut rows: Vec<(usize, Vec<SqlValue>)> =
+        std::mem::take(projected).into_iter().enumerate().collect();
+    rows.sort_by(|(a, _), (b, _)| {
         for (idx, order) in order_by.iter().enumerate() {
-            let mut ord = compare_values(&keys[a][idx], &keys[b][idx]);
+            let mut ord = compare_values(&keys[*a][idx], &keys[*b][idx]);
             if matches!(order.options.asc, Some(false)) {
                 ord = ord.reverse();
             }
@@ -39,11 +40,7 @@ pub(crate) fn sort_groups_by_order_by(
         }
         Ordering::Equal
     });
-    let mut sorted: Vec<Vec<SqlValue>> = Vec::with_capacity(projected.len());
-    for idx in indices {
-        sorted.push(projected[idx].clone());
-    }
-    projected.clone_from_slice(&sorted);
+    projected.extend(rows.into_iter().map(|(_, row)| row));
     Ok(())
 }
 

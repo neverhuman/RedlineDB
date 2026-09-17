@@ -36,6 +36,15 @@ impl TxStatusStore {
         })
     }
 
+    /// Like [`new`] but skips the `create_dir_all` call.  Use for volatile
+    /// in-memory databases where the caller has already created the directory
+    /// (saves 2–3 redundant syscalls per process start).
+    pub(crate) fn new_volatile(dir: impl AsRef<Path>) -> Self {
+        Self {
+            dir: dir.as_ref().to_path_buf(),
+        }
+    }
+
     pub fn load(&self, generation: u64) -> Result<TxStatusCheckpoint> {
         let bytes = fs::read(self.path_for_generation(generation))?;
         TxStatusCheckpoint::decode(&bytes)

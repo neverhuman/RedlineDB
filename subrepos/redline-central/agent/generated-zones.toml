@@ -1,0 +1,3 @@
+# This repository currently checks Rust public API drift and has no generated
+# source directory. Any future generated contract must be registered here.
+zone = []

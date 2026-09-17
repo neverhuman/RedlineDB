@@ -1,0 +1,12 @@
+{
+  "bundle": "/home/ubuntu/jain-split/redline-split/redline-central/.bundles/legacy-custody/redline-central-all-refs-afe38ef6-20260716T055459Z.bundle",
+  "bundle_sha256": "070ca0813aefae0f598f5ed305c38636cf46b76b57d3723cade65c6a8086ab60",
+  "commit_count": 2,
+  "head": "afe38ef6be397d930b9871661f7b8908da81b51d",
+  "head_parent": "353300a8728b01607337c334b76cd966b3744141",
+  "head_tree": "ef3df93d29130f62dda6e54b34e53c2f025cf97b",
+  "independent_clone_fsck": "pass",
+  "schema_version": "redline-central.custody-verification/v1",
+  "source_fsck": "pass",
+  "status": "pass"
+}

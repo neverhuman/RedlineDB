@@ -16,6 +16,13 @@ use crate::exec::execute_prepared;
 use crate::session::BeginMode;
 use crate::value::SqlValue;
 
+#[derive(Debug, Clone)]
+pub(crate) struct SqliteSequenceRow {
+    pub(crate) name: Arc<str>,
+    pub(crate) seq: i64,
+    pub(crate) alias: Option<Arc<str>>,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct ParamLayout {
     pub(crate) slots: Vec<Option<String>>,
@@ -117,7 +124,81 @@ pub enum PreparedKind {
     /// alias-map maintenance executed by [`crate::exec::attach::AttachPlan`].
     Attach(crate::exec::attach::AttachPlan),
     CrossDbSql(CrossDbSqlPlan),
+    CrossDbInsertSelect(CrossDbInsertSelectPlan),
     CreateVirtualTable(CreateVirtualTablePlan),
+    /// Track J — `CREATE SCHEMA <name> [IF NOT EXISTS]`. Records the
+    /// namespace name on the session so `<schema>.<table>` qualifier
+    /// checks and `pg_namespace` introspection resolve.
+    CreateSchema {
+        name: Arc<str>,
+        if_not_exists: bool,
+    },
+    /// Track J — `DROP SCHEMA <name> [CASCADE]`. Removes a registered
+    /// namespace.
+    DropSchema {
+        name: Arc<str>,
+        if_exists: bool,
+        cascade: bool,
+    },
+    /// Track J — `CREATE SEQUENCE`. Stored as a sqlite_sequence-style row
+    /// keyed by sequence name; `nextval`/`currval`/`setval` scalar
+    /// functions read/write it.
+    CreateSequence {
+        name: Arc<str>,
+        if_not_exists: bool,
+        start_with: Option<i64>,
+        increment_by: Option<i64>,
+    },
+    /// Track J — `DROP SEQUENCE <name>`.
+    DropSequence {
+        name: Arc<str>,
+        if_exists: bool,
+    },
+    /// Track J — `SET TRANSACTION ISOLATION LEVEL <level>`. Recall-only
+    /// store on the session.
+    SetTransactionIsolation {
+        level: TransactionIsolationLevel,
+    },
+    /// Track J — `SHOW <name>` for session-state introspection. Today
+    /// returns the recalled `transaction_isolation`; other names return
+    /// empty string.
+    ShowVariable {
+        name: Arc<str>,
+    },
+    /// Track J — `ALTER INDEX <name> RENAME TO <new_name>`.
+    AlterIndex {
+        old_name: Arc<str>,
+        new_name: Arc<str>,
+    },
+    /// Track K — SQL:2003 `MERGE INTO target USING source ON ... WHEN ...`
+    /// dispatches to per-clause UPDATE / DELETE / INSERT actions against
+    /// the target table.
+    Merge(MergePlan),
+}
+
+/// Track J — SQL-standard transaction isolation levels accepted via
+/// `SET TRANSACTION ISOLATION LEVEL ...`. The recorded value survives
+/// `SHOW transaction_isolation`; RedlineDB's engine continues to use its
+/// fixed snapshot isolation for reads and read-committed for writes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TransactionIsolationLevel {
+    ReadUncommitted,
+    ReadCommitted,
+    RepeatableRead,
+    Serializable,
+}
+
+impl TransactionIsolationLevel {
+    /// Postgres surface string for the value (`read committed`, `serializable`,
+    /// etc). Used by `SHOW transaction_isolation`.
+    pub fn as_pg_str(self) -> &'static str {
+        match self {
+            TransactionIsolationLevel::ReadUncommitted => "read uncommitted",
+            TransactionIsolationLevel::ReadCommitted => "read committed",
+            TransactionIsolationLevel::RepeatableRead => "repeatable read",
+            TransactionIsolationLevel::Serializable => "serializable",
+        }
+    }
 }
 
 /// Sentinel SQL prefix used to tag `PreparedTemplate`s built for
@@ -127,12 +208,17 @@ pub enum PreparedKind {
 /// prefix lets `Statement::step` short-circuit even if the caller resets and
 /// re-steps it.
 pub(crate) const SAVEPOINT_MARKER_SQL_PREFIX: &str = "\u{0}__redline_savepoint_marker__:";
+pub(crate) const RQL_MARKER_SQL_PREFIX: &str = "\u{0}__redline_rql__:";
 
 /// True if `template` was produced by `Connection::prepare_v2` for a
 /// savepoint command. We tag it via a SQL prefix because `PreparedKind` is a
 /// closed enum that we cannot extend (lane SQL-A owns `exec.rs`).
 pub(crate) fn is_savepoint_marker_template(template: &PreparedTemplate) -> bool {
     template.sql.starts_with(SAVEPOINT_MARKER_SQL_PREFIX)
+}
+
+pub(crate) fn is_rql_template(template: &PreparedTemplate) -> bool {
+    template.sql.starts_with(RQL_MARKER_SQL_PREFIX)
 }
 
 #[derive(Debug, Clone)]
@@ -150,6 +236,15 @@ pub struct CreateTableAsSelectSpec {
 pub struct CrossDbSqlPlan {
     pub alias: Arc<str>,
     pub sql: Arc<str>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CrossDbInsertSelectPlan {
+    pub alias: Arc<str>,
+    pub table: Arc<str>,
+    pub columns: Arc<[String]>,
+    pub source: Box<SelectPlan>,
+    pub source_arity: usize,
 }
 
 #[derive(Debug, Clone)]
@@ -176,7 +271,7 @@ pub struct ExplainPlan {
 #[derive(Debug, Clone)]
 pub enum PragmaPlan {
     SetForeignKeys(bool),
-    SetUserVersion(i64),
+    SetUserVersion { alias: Option<Arc<str>>, value: i64 },
     SetRecursiveTriggers(bool),
     SetJournalMode(JournalMode),
     SetSynchronous(SynchronousLevel),
@@ -185,6 +280,28 @@ pub enum PragmaPlan {
     SetQueryOnly(bool),
     SetCaseSensitiveLike(bool),
     WalCheckpoint,
+    SetAnalysisLimit(i64),
+    SetApplicationId(i64),
+    SetAutoVacuum(i64),
+    SetAutomaticIndex(bool),
+    SetBusyTimeout(i64),
+    SetCacheSpill(i64),
+    SetCheckpointFullfsync(bool),
+    SetDeferForeignKeys(bool),
+    SetFullfsync(bool),
+    SetHardHeapLimit(i64),
+    SetIgnoreCheckConstraints(bool),
+    SetLegacyAlterTable(bool),
+    SetLockingMode(LockingMode),
+    SetMaxPageCount(i64),
+    SetMmapSize(i64),
+    SetReverseUnorderedSelects(bool),
+    SetSecureDelete(bool),
+    SetSoftHeapLimit(i64),
+    SetThreads(i64),
+    SetTrustedSchema(bool),
+    SetWritableSchema(bool),
+    SetRedlineBulkImport(bool),
 }
 
 /// SQLite-compatible `PRAGMA journal_mode` values. RedlineDB stores the
@@ -232,6 +349,26 @@ pub enum TempStoreMode {
     Memory = 2,
 }
 
+/// SQLite-compatible `PRAGMA locking_mode` values. RedlineDB does not
+/// implement a literal file-locking surface — concurrency is handled by
+/// the kernel transaction layer — but we accept and recall the value so
+/// callers probing it (ORMs, migration tooling) see the SQLite-expected
+/// strings.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LockingMode {
+    Normal,
+    Exclusive,
+}
+
+impl LockingMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LockingMode::Normal => "normal",
+            LockingMode::Exclusive => "exclusive",
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ConflictAlgorithm {
     Abort,
@@ -255,6 +392,11 @@ pub enum DmlValue {
 
 #[derive(Debug, Clone)]
 pub struct UpsertPlan {
+    pub arms: Arc<[UpsertArm]>,
+}
+
+#[derive(Debug, Clone)]
+pub struct UpsertArm {
     pub target: Option<UpsertTarget>,
     pub action: UpsertAction,
 }
@@ -291,6 +433,9 @@ pub enum SelectSource {
         branches: Vec<SelectPlan>,
     },
     SqliteSchema,
+    SqliteSequence {
+        alias: Option<Arc<str>>,
+    },
     SqliteTempSchema,
     StaticRows {
         rows: Arc<[Vec<crate::value::SqlValue>]>,
@@ -317,10 +462,29 @@ pub enum CompoundSetOp {
     Except,
 }
 
+/// Phase 5 WS-A2e/A2g: SQLite-parity table-access hint attached to a FROM
+/// item via `INDEXED BY <name>` or `NOT INDEXED`. The planner consults
+/// the hint inside `index_access::try_match_index_access`:
+///   - `NotIndexed`        → never advertise an index path (TableScan).
+///   - `IndexedBy(name)`   → only match when the chosen index name (case-
+///                           insensitively) equals `name`; otherwise fall
+///                           through to TableScan (permissive: SQLite does
+///                           the same when the named index does not apply).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TableAccessHint {
+    NotIndexed,
+    IndexedBy(Arc<str>),
+}
+
 #[derive(Debug, Clone)]
 pub struct BoundTable {
     pub table: Arc<TableDef>,
     pub alias: Option<Arc<str>>,
+    /// Phase 5 WS-A2e: SQLite-parity table-access hint (`INDEXED BY` /
+    /// `NOT INDEXED`) captured during parse; `None` when no hint is
+    /// supplied. Consumed by the planner via
+    /// `index_access::try_match_index_access`.
+    pub index_hint: Option<TableAccessHint>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -336,6 +500,7 @@ pub struct JoinStep {
     pub right: BoundTable,
     pub kind: JoinKind,
     pub selection: Option<Expr>,
+    pub hidden_right_columns: Arc<[usize]>,
 }
 
 #[derive(Debug, Clone)]
@@ -348,6 +513,11 @@ pub struct JoinSource {
 pub struct SelectPlan {
     pub source: SelectSource,
     pub distinct: bool,
+    /// Track K — Postgres `SELECT DISTINCT ON (exprs) ...` keeps the first
+    /// row per distinct combination of `exprs`, where "first" is decided by
+    /// any outer `ORDER BY`. Empty when no DISTINCT ON is requested. Holds
+    /// at most one entry per logical "ON" expression.
+    pub distinct_on: Vec<Expr>,
     pub projection: Vec<SelectItem>,
     pub selection: Option<Expr>,
     pub group_by: Vec<Expr>,
@@ -355,6 +525,12 @@ pub struct SelectPlan {
     pub order_by: Vec<OrderByExpr>,
     pub limit: Option<Expr>,
     pub offset: Option<Expr>,
+    /// Phase 5 WS-A2e: hint for the single-table source. Mirrors the
+    /// `index_hint` carried on the `BoundTable` of joined sources so the
+    /// planner can resolve hints whether the source is
+    /// `SelectSource::Table(Arc<TableDef>)` or `SelectSource::Tables(..)`.
+    /// `None` when no hint is attached.
+    pub table_hint: Option<TableAccessHint>,
 }
 
 #[derive(Debug, Clone)]
@@ -381,6 +557,17 @@ pub struct UpdatePlan {
     pub assignments: Vec<(usize, DmlValue)>,
     pub selection: Option<Expr>,
     pub returning: Option<Vec<SelectItem>>,
+    /// Phase 5 WS-A2f: optional `ORDER BY` keys to deterministically pick
+    /// which rows participate when `limit` is set. sqlparser 0.61 does NOT
+    /// parse `UPDATE ... ORDER BY` in SQLite dialect, so this stays empty
+    /// today; populated only if a future parser pre-rewrite teaches it.
+    pub order_by: Vec<OrderByExpr>,
+    /// Phase 5 WS-A2f: optional `LIMIT n`. When `Some`, at most `n` rows
+    /// are updated (after applying `order_by` and `offset`).
+    pub limit: Option<Expr>,
+    /// Phase 5 WS-A2f: optional `OFFSET n`. sqlparser does not emit OFFSET
+    /// for UPDATE; kept for symmetry with `DeletePlan`.
+    pub offset: Option<Expr>,
 }
 
 #[derive(Debug, Clone)]
@@ -388,6 +575,50 @@ pub struct DeletePlan {
     pub table: Arc<TableDef>,
     pub selection: Option<Expr>,
     pub returning: Option<Vec<SelectItem>>,
+    /// Phase 5 WS-A2f: optional `ORDER BY` keys. Empty when DELETE has no
+    /// ORDER BY clause; existing fast paths remain unchanged in that case.
+    pub order_by: Vec<OrderByExpr>,
+    /// Phase 5 WS-A2f: optional `LIMIT n`.
+    pub limit: Option<Expr>,
+    /// Phase 5 WS-A2f: optional `OFFSET n`. sqlparser 0.61 does not parse
+    /// OFFSET on DELETE; reserved for a future parser pre-rewrite.
+    pub offset: Option<Expr>,
+}
+
+/// Track K — Lowered plan for SQL:2003 `MERGE INTO target USING source ON ...`.
+/// At execute time the dispatcher iterates source rows, looks for matching
+/// target rows under the ON predicate, and applies the first WHEN-clause
+/// whose AND-predicate holds.
+#[derive(Debug, Clone)]
+pub struct MergePlan {
+    pub target: Arc<TableDef>,
+    pub target_alias: Option<Arc<str>>,
+    pub source: Arc<TableDef>,
+    pub source_alias: Option<Arc<str>>,
+    pub on: Expr,
+    pub clauses: Vec<MergeClausePlan>,
+}
+
+/// Track K — A single `WHEN [NOT] MATCHED [AND pred] THEN <action>` clause
+/// in a [`MergePlan`].
+#[derive(Debug, Clone)]
+pub enum MergeClausePlan {
+    /// `WHEN MATCHED [AND pred] THEN UPDATE SET col = expr, ...`
+    MatchedUpdate {
+        predicate: Option<Expr>,
+        assignments: Vec<(usize, DmlValue)>,
+    },
+    /// `WHEN MATCHED [AND pred] THEN DELETE`
+    MatchedDelete { predicate: Option<Expr> },
+    /// `WHEN NOT MATCHED [AND pred] THEN INSERT (col, ...) VALUES (expr, ...)`
+    /// — `columns` lists target column ordinals; `values` lists exprs in the
+    /// same order. Implicit columns (no list) expand to all non-generated
+    /// columns at bind time.
+    NotMatchedInsert {
+        predicate: Option<Expr>,
+        columns: Vec<usize>,
+        values: Vec<DmlValue>,
+    },
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -471,6 +702,10 @@ pub(crate) enum SelectRuntimeSource {
         rows: Vec<SqliteSchemaRow>,
         cursor: usize,
     },
+    SqliteSequence {
+        rows: Vec<SqliteSequenceRow>,
+        cursor: usize,
+    },
     StaticRows {
         rows: Arc<[Vec<crate::value::SqlValue>]>,
         cursor: usize,
@@ -492,6 +727,18 @@ pub struct Statement {
     runtime: RuntimeState,
     current_row: Option<Vec<SqlValue>>,
     affected_rows: usize,
+}
+
+/// Iterator produced by [`Statement::query_map`]. It evaluates one mapped row
+/// at a time via a user callback and stops when the statement is done or
+/// stepping fails.
+pub struct QueryMap<'stmt, T, F>
+where
+    F: FnMut(&Statement) -> Result<T>,
+{
+    stmt: &'stmt mut Statement,
+    f: F,
+    done: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -575,6 +822,19 @@ impl Statement {
         Ok(())
     }
 
+    /// Iterate mapped rows lazily, matching the rusqlite ordering and stepping
+    /// semantics.
+    pub fn query_map<T, F>(&mut self, f: F) -> QueryMap<'_, T, F>
+    where
+        F: FnMut(&Statement) -> Result<T>,
+    {
+        QueryMap {
+            stmt: self,
+            f,
+            done: false,
+        }
+    }
+
     pub fn step(&mut self) -> Result<Step> {
         // Hoist `&Connection` out so the closure body retains exclusive
         // access to `self` for runtime mutation.
@@ -602,6 +862,9 @@ impl Statement {
                     || self.template.stats_epoch != self.conn.stats_epoch().0
                     || self.template.optimizer_hash != self.conn.optimizer_hash()
                 {
+                    if is_rql_template(&self.template) {
+                        return Err(Error::SchemaChanged);
+                    }
                     let new_template = self.conn.prepare_cached(self.template.sql.as_ref())?;
                     let mut new_bindings =
                         Vec::with_capacity(new_template.param_layout.count() + 1);
@@ -614,6 +877,15 @@ impl Statement {
                     self.template = new_template;
                     self.bindings = new_bindings;
                 }
+                // Phase 6 R3-B: scope the per-thread ScalarProgram VM
+                // compile cache to this statement's execution. The
+                // cache is cleared on entry so we never reuse a
+                // previous statement's fingerprints (column mappings
+                // differ across queries). `execute_prepared` builds
+                // the runtime that subsequent `step()` calls iterate;
+                // the cache persists across those iterations because
+                // the thread-local scope only resets on a fresh
+                // `execute_prepared` call.
                 let result = execute_prepared(conn, &self.template, &self.bindings)?;
                 self.affected_rows = result.affected_rows;
                 self.runtime = result.runtime;
@@ -651,6 +923,9 @@ impl Statement {
 
     fn maybe_journal(&self) {
         if self.template.readonly {
+            return;
+        }
+        if is_rql_template(&self.template) {
             return;
         }
         // Skip kernel transaction-control statements — they are tracked by
@@ -755,6 +1030,31 @@ impl Statement {
         }
         self.bindings[index] = Some(value);
         Ok(())
+    }
+}
+
+impl<'stmt, T, F> Iterator for QueryMap<'stmt, T, F>
+where
+    F: FnMut(&Statement) -> Result<T>,
+{
+    type Item = Result<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done {
+            return None;
+        }
+
+        match self.stmt.step() {
+            Ok(Step::Row) => Some((self.f)(self.stmt)),
+            Ok(Step::Done) => {
+                self.done = true;
+                None
+            }
+            Err(err) => {
+                self.done = true;
+                Some(Err(err))
+            }
+        }
     }
 }
 

@@ -57,7 +57,12 @@ fn pragma_introspection_and_state_round_trips_work() {
             .iter()
             .any(|row| row.1 == "t_b_idx" && row.2 == 0 && row.3 == "c")
     );
-    assert!(index_rows.iter().any(|row| row.3 == "pk"));
+    // SQLite-parity: PRAGMA index_list hides the implicit `sqlite_autoindex_*`
+    // entry generated for an INTEGER PRIMARY KEY rowid alias. The PK
+    // is encoded by the rowid itself, so the user-visible index list
+    // contains only user-defined indexes (the single `c`-origin entry
+    // above).
+    assert!(!index_rows.iter().any(|row| row.3 == "pk"));
 
     let mut index_info = conn
         .prepare("PRAGMA index_info(t_b_idx)")
@@ -190,6 +195,41 @@ fn pragma_table_list_reports_without_rowid_and_strict_bits_separately() {
 
     assert!(rows.iter().any(|row| row == &("wr".to_owned(), 1, 0)));
     assert!(rows.iter().any(|row| row == &("strict_t".to_owned(), 0, 1)));
+}
+
+#[test]
+fn pragma_table_list_and_temp_master_report_temp_tables() {
+    let (_dir, conn) = open_database();
+    conn.execute("CREATE TEMP TABLE tmp_t(x)")
+        .expect("create temp table");
+
+    let mut table_list = conn
+        .prepare("SELECT schema, name FROM pragma_table_list WHERE schema='temp' ORDER BY name")
+        .expect("select temp table_list rows");
+    let mut table_list_rows = Vec::new();
+    while let Step::Row = table_list.step().expect("step table_list") {
+        table_list_rows.push((
+            table_list.column_text(0).expect("schema").to_owned(),
+            table_list.column_text(1).expect("name").to_owned(),
+        ));
+    }
+    assert_eq!(
+        table_list_rows,
+        vec![
+            ("temp".to_owned(), "sqlite_temp_schema".to_owned()),
+            ("temp".to_owned(), "tmp_t".to_owned()),
+        ]
+    );
+
+    for sql in [
+        "SELECT name FROM sqlite_temp_master ORDER BY name",
+        "SELECT name FROM temp.sqlite_master ORDER BY name",
+    ] {
+        let mut stmt = conn.prepare(sql).expect("select temp schema alias");
+        assert_eq!(stmt.step().expect("temp row"), Step::Row);
+        assert_eq!(stmt.column_text(0).expect("name"), "tmp_t");
+        assert_eq!(stmt.step().expect("done"), Step::Done);
+    }
 }
 
 #[test]

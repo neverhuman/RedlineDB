@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -67,18 +66,18 @@ pub struct IndexStats {
 #[derive(Debug, Clone, PartialEq)]
 pub struct StatsSnapshot {
     pub epoch: StatsEpoch,
-    pub tables: HashMap<TableId, TableStats>,
-    pub columns: HashMap<(TableId, ColumnId), ColumnStats>,
-    pub indexes: HashMap<IndexId, IndexStats>,
+    pub tables: ahash::AHashMap<TableId, TableStats>,
+    pub columns: ahash::AHashMap<(TableId, ColumnId), ColumnStats>,
+    pub indexes: ahash::AHashMap<IndexId, IndexStats>,
 }
 
 impl StatsSnapshot {
     pub fn empty(epoch: StatsEpoch) -> Self {
         Self {
             epoch,
-            tables: HashMap::new(),
-            columns: HashMap::new(),
-            indexes: HashMap::new(),
+            tables: ahash::AHashMap::new(),
+            columns: ahash::AHashMap::new(),
+            indexes: ahash::AHashMap::new(),
         }
     }
 }

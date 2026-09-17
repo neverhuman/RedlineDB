@@ -28,11 +28,14 @@ pub(crate) mod math;
 pub(crate) mod pattern;
 pub(crate) mod row;
 pub(crate) mod value;
+// Phase 6 R2-A: opt-in ScalarProgram VM hot-path dispatch.
+pub(crate) mod vm_dispatch;
 
 pub(crate) use math::*;
 pub(crate) use pattern::*;
 pub(crate) use row::*;
 pub(crate) use value::*;
+pub(crate) use vm_dispatch::try_eval_scalar_via_vm;
 
 #[cfg(test)]
 mod tests;

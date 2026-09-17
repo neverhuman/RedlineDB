@@ -6,7 +6,7 @@ use std::os::raw::{c_char, c_int};
 use std::path::PathBuf;
 
 use crate::types::*;
-use crate::util::{api, flatten_code, io, recursive_copy};
+use crate::util::{api, flatten_code, io, reclaim_box, recursive_copy};
 
 #[unsafe(no_mangle)]
 pub extern "C" fn rldb_backup_init(
@@ -92,7 +92,9 @@ pub extern "C" fn rldb_backup_close(backup: *mut rldb_backup) -> c_int {
     // detector=rust.unsafe.raw-parts); proof:
     // crates/ffi/tests/safety_invariants.rs::backup_init_step_close_round_trips_box_ownership.
     unsafe {
-        drop(Box::from_raw(backup));
+        // SAFETY: reclaim and drop the leaked Box; matching destructor for the
+        // Box::into_raw at rldb_backup_init (see invariant above).
+        drop(reclaim_box(backup));
     }
     RLDB_OK
 }

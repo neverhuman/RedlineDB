@@ -51,6 +51,54 @@ pub trait FromRow: Sized {
     fn from_row(row: &Row<'_>) -> Result<Self>;
 }
 
+/// Lazy row iterator returned by `Statement::query_map`.
+pub struct QueryMap<'stmt, 'conn, T, F>
+where
+    F: for<'row> FnMut(&Row<'row>) -> Result<T>,
+{
+    stmt: &'stmt mut Statement<'conn>,
+    f: F,
+    done: bool,
+}
+
+impl<'stmt, 'conn, T, F> Iterator for QueryMap<'stmt, 'conn, T, F>
+where
+    F: for<'row> FnMut(&Row<'row>) -> Result<T>,
+{
+    type Item = Result<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.done {
+            return None;
+        }
+
+        match self.stmt.step() {
+            Ok(Step::Row(row)) => Some((self.f)(&row)),
+            Ok(Step::Done) => {
+                self.done = true;
+                None
+            }
+            Err(err) => {
+                self.done = true;
+                Some(Err(err))
+            }
+        }
+    }
+}
+
+impl<'stmt, 'conn, T, F> QueryMap<'stmt, 'conn, T, F>
+where
+    F: for<'row> FnMut(&Row<'row>) -> Result<T>,
+{
+    pub(crate) fn new(stmt: &'stmt mut Statement<'conn>, f: F) -> Self {
+        Self {
+            stmt,
+            f,
+            done: false,
+        }
+    }
+}
+
 impl<T: FromValue> FromRow for T {
     fn from_row(row: &Row<'_>) -> Result<Self> {
         row.get::<T>(0)

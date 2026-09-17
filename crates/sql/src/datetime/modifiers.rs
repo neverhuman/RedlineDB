@@ -4,18 +4,65 @@ use super::DateTime;
 
 /// Apply a sequence of SQLite modifiers (`'+1 day'`, `'start of month'`, etc.)
 /// to a DateTime. Unrecognized modifiers are reported as errors.
-pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
+///
+/// When `dt` is flagged out-of-range (set by `parse_timestring` for numeric
+/// inputs outside the valid julian-day window), the rules mirror SQLite:
+///
+/// * `'utc'` clears the flag and the value becomes julian-day 0
+///   (`-4713-11-24 12:00:00`).
+/// * `'localtime'` clears the flag and the value resets to Y2K
+///   (`2000-01-01 12:00:00`), matching SQLite's behaviour for failed
+///   timezone lookups on bogus baselines.
+/// * `'unixepoch'` reinterprets the original numeric input as unix
+///   seconds.
+/// * `'auto'` reinterprets large finite values as unix seconds, the
+///   documented SQLite heuristic.
+/// * `'julianday'` / `'subsec'` / `'subsecond'` keep the flag (the value
+///   is still out of range).
+/// * Any other modifier (arithmetic, `start of *`, `weekday N`) preserves
+///   the flag, so the eventual `format_*`/`julian_day` call returns NULL.
+pub fn apply_modifiers<S: AsRef<str>>(mut dt: DateTime, mods: &[S]) -> Result<DateTime> {
     for raw in mods {
-        let m = raw.trim().to_ascii_lowercase();
+        let m = raw.as_ref().trim().to_ascii_lowercase();
         if m == "utc" {
             dt.is_local = false;
+            if dt.out_of_range.is_some() {
+                dt = super::DateTime::from_unix(-210_866_760_000, 0);
+            }
             continue;
         }
         if m == "localtime" {
             dt.is_local = true;
+            if dt.out_of_range.is_some() {
+                dt = super::DateTime::from_unix(946_684_800 + 43_200, 0);
+            }
             continue;
         }
-        if m == "unixepoch" || m == "julianday" || m == "auto" {
+        if m == "unixepoch" {
+            if let Some(raw_val) = dt.out_of_range
+                && raw_val.is_finite()
+            {
+                let secs = raw_val.trunc() as i64;
+                let micro = ((raw_val.fract().abs()) * 1_000_000.0) as u32;
+                dt = super::DateTime::from_unix(secs, micro);
+            }
+            continue;
+        }
+        if m == "auto" {
+            if let Some(raw_val) = dt.out_of_range
+                && raw_val.is_finite()
+            {
+                dt = super::DateTime::from_unix(raw_val as i64, 0);
+            }
+            continue;
+        }
+        if m == "julianday" || m == "subsec" || m == "subsecond" {
+            continue;
+        }
+        if dt.out_of_range.is_some() {
+            // Arithmetic and start-of/weekday modifiers cannot apply to an
+            // out-of-range value. SQLite reports the result as NULL; we
+            // surface that by preserving the flag through to the caller.
             continue;
         }
         if m == "start of month" {
@@ -43,13 +90,13 @@ pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
             continue;
         }
         if let Some(weekday) = m.strip_prefix("weekday ") {
-            let target: u32 = weekday
-                .trim()
-                .parse()
-                .map_err(|_| Error::UnsupportedSql(format!("invalid weekday modifier: {raw}")))?;
+            let target: u32 = weekday.trim().parse().map_err(|_| {
+                Error::UnsupportedSql(format!("invalid weekday modifier: {}", raw.as_ref()))
+            })?;
             if target > 6 {
                 return Err(Error::UnsupportedSql(format!(
-                    "weekday must be in 0..=6: {raw}"
+                    "weekday must be in 0..=6: {}",
+                    raw.as_ref()
                 )));
             }
             dt = advance_to_weekday(dt, target);
@@ -60,7 +107,8 @@ pub fn apply_modifiers(mut dt: DateTime, mods: &[&str]) -> Result<DateTime> {
             continue;
         }
         return Err(Error::UnsupportedSql(format!(
-            "unsupported datetime modifier: {raw}"
+            "unsupported datetime modifier: {}",
+            raw.as_ref()
         )));
     }
     Ok(dt)

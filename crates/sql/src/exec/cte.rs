@@ -81,6 +81,32 @@ thread_local! {
     /// statement's thread. Reset before every top-level `bind_with_query`
     /// call so ids are stable per query plan.
     static CTE_REL_COUNTER: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+    /// Per-thread name → CteDef registry that survives scope teardown.
+    /// `bind_with_query` populates this when it materializes CTEs so
+    /// subqueries that bind at exec time (after the scope stack has
+    /// been popped) can still resolve CTE references by name. Cleared
+    /// at the start of every new top-level `bind_with_query` call.
+    static CTE_PERMANENT: std::cell::RefCell<HashMap<String, CteDef>> =
+        std::cell::RefCell::new(HashMap::new());
+}
+
+fn register_permanent_cte(name: String, def: CteDef) {
+    CTE_PERMANENT.with(|cell| {
+        cell.borrow_mut().insert(name.to_ascii_lowercase(), def);
+    });
+}
+
+fn clear_permanent_ctes() {
+    CTE_PERMANENT.with(|cell| cell.borrow_mut().clear());
+}
+
+fn lookup_permanent_cte(name: &str) -> Option<CteDef> {
+    CTE_PERMANENT.with(|cell| {
+        let map = cell.borrow();
+        map.iter()
+            .find(|(k, _)| k.eq_ignore_ascii_case(name))
+            .map(|(_, v)| v.clone())
+    })
 }
 
 fn next_cte_rel_id() -> RelId {
@@ -100,14 +126,32 @@ pub(crate) fn synth_table_def(
     columns: &[String],
     rows: &[Vec<SqlValue>],
 ) -> Arc<TableDef> {
+    let folded_name = name.to_ascii_lowercase();
+    let folded_columns: Vec<String> = columns.iter().map(|n| n.to_ascii_lowercase()).collect();
+    synth_table_def_with_folded(name, columns, &folded_name, &folded_columns, rows)
+}
+
+/// Phase 4.4: variant of `synth_table_def` that accepts pre-computed
+/// lowercase forms of the name + columns. Called per recursive CTE
+/// iteration from `cte_recursive::materialize_cte` to skip
+/// `to_ascii_lowercase` allocations on every iteration when the names
+/// don't change.
+pub(crate) fn synth_table_def_with_folded(
+    name: &str,
+    columns: &[String],
+    folded_name: &str,
+    folded_columns: &[String],
+    rows: &[Vec<SqlValue>],
+) -> Arc<TableDef> {
+    debug_assert_eq!(folded_columns.len(), columns.len());
     let column_defs: Vec<ColumnDef> = columns
         .iter()
         .enumerate()
-        .map(|(idx, name)| ColumnDef {
+        .map(|(idx, col_name)| ColumnDef {
             column_id: ColumnId((idx + 1) as u64),
             ordinal: idx as u16,
-            name: Box::from(name.as_str()),
-            folded: Box::from(name.to_ascii_lowercase().as_str()),
+            name: Box::from(col_name.as_str()),
+            folded: Box::from(folded_columns[idx].as_str()),
             declared_type: None,
             affinity: infer_affinity(rows, idx),
             not_null: false,
@@ -122,7 +166,7 @@ pub(crate) fn synth_table_def(
         schema_id: SchemaId(0),
         relation_id: rel,
         name: Box::from(name),
-        folded: Box::from(name.to_ascii_lowercase().as_str()),
+        folded: Box::from(folded_name),
         columns: column_defs,
         indexes: Vec::new(),
         constraints: Vec::new(),
@@ -201,7 +245,10 @@ pub(crate) fn scope_active() -> bool {
 
 /// Bind a `WITH ... query` form. Pre-executes each CTE body (handling
 /// recursive references) and pushes a CTE scope before binding the
-/// trailing query. The scope is popped before returning.
+/// trailing query. The scope is popped before returning; we *also*
+/// publish each CTE's name into `CTE_PERMANENT_NAMES` so subqueries
+/// that bind at exec time (after the scope stack has been torn down)
+/// can still resolve the name to its pre-materialized rows.
 pub(crate) fn bind_with_query(
     conn: &Connection,
     schema: Arc<SchemaSnapshot>,
@@ -217,8 +264,13 @@ pub(crate) fn bind_with_query(
     } = with;
 
     CTE_REL_COUNTER.with(|cell| cell.set(0));
+    // Clear stale permanent entries from any previous top-level
+    // statement before binding the new one.
+    clear_permanent_ctes();
     let mut pushed_scopes = 0usize;
     for cte in cte_tables {
+        let cte_alias = cte.alias.name.value.clone();
+        let row_cap = derive_cte_row_cap(&body_query, &cte_alias);
         let def = recursive::materialize_cte(
             conn,
             Arc::clone(&schema),
@@ -226,7 +278,9 @@ pub(crate) fn bind_with_query(
             sql,
             &cte,
             recursive,
+            row_cap,
         )?;
+        register_permanent_cte(def.name.to_string(), def.clone());
         let mut single = HashMap::new();
         single.insert(def.name.to_string(), def);
         push_scope(single);
@@ -259,21 +313,21 @@ pub(crate) fn run_query_to_rows(
 }
 
 /// Try to interpret a FROM table reference as a CTE. Returns a
-/// `SelectSource::Cte` if the name matches a CTE in the active scope.
+/// `SelectSource::Cte` if the name matches a CTE in the active scope
+/// or, failing that, in the per-thread permanent CTE registry (for
+/// subqueries that bind at exec time after the scope stack has been
+/// torn down).
 pub(crate) fn try_resolve_cte_source(
     name: &sqlparser::ast::ObjectName,
     alias: Option<&Arc<str>>,
     _params: &mut ParamLayout,
 ) -> Option<SelectSource> {
-    if !scope_active() {
-        return None;
-    }
     let last = name.0.last()?;
     let ident_name = match last {
         sqlparser::ast::ObjectNamePart::Identifier(ident) => &ident.value,
         _ => return None,
     };
-    let def = lookup(ident_name)?;
+    let def = resolve_cte_def(ident_name)?;
     Some(SelectSource::Cte {
         name: def.name,
         alias: alias.cloned(),
@@ -289,20 +343,32 @@ pub(crate) fn try_resolve_cte_bound_table(
     name: &sqlparser::ast::ObjectName,
     alias: Option<&Arc<str>>,
 ) -> Option<BoundTable> {
-    if !scope_active() {
-        return None;
-    }
     let last = name.0.last()?;
     let ident_name = match last {
         sqlparser::ast::ObjectNamePart::Identifier(ident) => &ident.value,
         _ => return None,
     };
-    let def = lookup(ident_name)?;
+    let def = resolve_cte_def(ident_name)?;
     let table = def.table_def?;
     Some(BoundTable {
         table,
         alias: alias.cloned(),
+        index_hint: None,
     })
+}
+
+/// Single resolution point that consults both scope tiers in a
+/// deterministic order: active scope (the local `WITH` we are
+/// currently binding) wins over the permanent registry (an enclosing
+/// `WITH` whose scope has already been popped — used by subqueries
+/// that bind at exec time).
+fn resolve_cte_def(ident_name: &str) -> Option<CteDef> {
+    if scope_active() {
+        if let Some(def) = lookup(ident_name) {
+            return Some(def);
+        }
+    }
+    lookup_permanent_cte(ident_name)
 }
 
 #[allow(dead_code)]
@@ -320,6 +386,7 @@ pub(crate) fn from_static(
             rows: Arc::from(rows),
         },
         distinct: false,
+        distinct_on: Vec::new(),
         projection: Vec::new(),
         selection: None,
         group_by: Vec::new(),
@@ -327,6 +394,7 @@ pub(crate) fn from_static(
         order_by: Vec::new(),
         limit: None,
         offset: None,
+        table_hint: None,
     }
 }
 
@@ -348,6 +416,7 @@ pub(crate) fn template_from_static(
         kind: PreparedKind::Select(SelectPlan {
             source: SelectSource::StaticRows { rows },
             distinct: false,
+            distinct_on: Vec::new(),
             projection: Vec::new(),
             selection: None,
             group_by: Vec::new(),
@@ -355,6 +424,7 @@ pub(crate) fn template_from_static(
             order_by: Vec::new(),
             limit: None,
             offset: None,
+            table_hint: None,
         }),
     }
 }
@@ -362,3 +432,90 @@ pub(crate) fn template_from_static(
 // Re-export Distinct so the parser scope picks it up if needed.
 #[allow(unused_imports)]
 use sqlparser::ast::Distinct;
+
+/// WS-A7: derive an upper bound on the number of CTE rows the outer
+/// query needs. Returns `Some(limit + offset)` only when the outer
+/// query has a shape that lets us safely truncate the recursion early.
+///
+/// Conservative shape requirements:
+/// - body is a single `SELECT ... FROM <cte>` (no joins),
+/// - no `WHERE` (a filter could reject rows; we'd need more than
+///   `limit` to satisfy it),
+/// - no `GROUP BY` / `HAVING` / `ORDER BY` / `DISTINCT` (each can
+///   require the full recursion result),
+/// - `LIMIT` and (optional) `OFFSET` are literal non-negative integers.
+///
+/// The cap is `limit + offset` so the trailing query can still apply
+/// its OFFSET to the truncated set. If we cannot prove safety we
+/// return `None` and fall back to the existing full-materialization
+/// path.
+fn derive_cte_row_cap(body_query: &Query, cte_name: &str) -> Option<usize> {
+    use sqlparser::ast::{GroupByExpr, LimitClause, SetExpr, TableFactor};
+
+    if body_query.with.is_some() {
+        return None;
+    }
+    if body_query.order_by.is_some() {
+        return None;
+    }
+
+    let select = match body_query.body.as_ref() {
+        SetExpr::Select(select) => select.as_ref(),
+        _ => return None,
+    };
+
+    if select.distinct.is_some()
+        || select.selection.is_some()
+        || select.having.is_some()
+        || !matches!(&select.group_by, GroupByExpr::Expressions(exprs, _) if exprs.is_empty())
+        || select.from.len() != 1
+        || !select.from[0].joins.is_empty()
+    {
+        return None;
+    }
+
+    // Confirm the single FROM source is exactly the recursive CTE.
+    let factor = &select.from[0].relation;
+    let from_name = match factor {
+        TableFactor::Table { name, .. } => name.0.last().and_then(|part| match part {
+            sqlparser::ast::ObjectNamePart::Identifier(ident) => Some(&ident.value),
+            _ => None,
+        })?,
+        _ => return None,
+    };
+    if !from_name.eq_ignore_ascii_case(cte_name) {
+        return None;
+    }
+
+    // Extract numeric LIMIT + OFFSET from a `LimitOffset` form.
+    let (limit_expr, offset_expr) = match body_query.limit_clause.as_ref()? {
+        LimitClause::LimitOffset {
+            limit,
+            offset,
+            limit_by,
+        } if limit_by.is_empty() => (limit.as_ref(), offset.as_ref().map(|o| &o.value)),
+        LimitClause::OffsetCommaLimit { offset, limit } => (Some(limit), Some(offset)),
+        _ => return None,
+    };
+
+    let limit_value = literal_u64(limit_expr?)?;
+    let offset_value = match offset_expr {
+        Some(expr) => literal_u64(expr)?,
+        None => 0,
+    };
+
+    let cap = limit_value.checked_add(offset_value)?;
+    // Saturate to usize to avoid pathological cap values on 32-bit.
+    usize::try_from(cap).ok()
+}
+
+fn literal_u64(expr: &sqlparser::ast::Expr) -> Option<u64> {
+    use sqlparser::ast::{Expr, Value, ValueWithSpan};
+    match expr {
+        Expr::Value(ValueWithSpan { value, .. }) => match value {
+            Value::Number(text, _) => text.parse::<u64>().ok(),
+            _ => None,
+        },
+        _ => None,
+    }
+}

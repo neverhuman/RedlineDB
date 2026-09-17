@@ -62,32 +62,22 @@ fn collect_unique_conflicts(
             None => Some(Arc::from(index.name.as_ref())),
         };
         // SQLite NULL parity: a NULL anywhere in the unique-key tuple
-        // disables the conflict check entirely. We compute this once from
-        // the SQL-side values so both index and default paths agree.
-        let key_values: Vec<SqlValue> = index
-            .keys
-            .iter()
-            .map(|key| {
-                values
-                    .get(key.ordinal as usize)
-                    .cloned()
-                    .unwrap_or(SqlValue::Null)
-            })
-            .collect();
-        if key_values
-            .iter()
-            .any(|value| matches!(value, SqlValue::Null))
-        {
+        // disables the conflict check entirely. Build through the same
+        // SQL-side key adapter used by DML maintenance so expression-source
+        // indexes evaluate their stored key SQL before conflict probing.
+        let built = crate::exec::index_dml::build_index_key_with_values(table, index, values)?;
+        if built.key.contains_null {
             continue;
         }
-        if let Some(handle) = crate::exec::index_dml::open_index_handle(conn.engine(), index) {
-            let key = crate::exec::index_dml::build_index_key(index, values);
+        if let Some(handle) =
+            crate::exec::index_dml::open_index_handle_for_tx(conn.engine(), tx, index)
+        {
             let (kernel_guard, hit) = crate::exec::index_dml::probe_unique_for_conflict(
                 conn.engine(),
                 &handle,
                 tx,
                 skip_rowid,
-                &key,
+                &built.key,
             )?;
             if let Some(rowid) = hit {
                 conflicts.push(UniqueConflict {
@@ -108,7 +98,7 @@ fn collect_unique_conflicts(
             // `unique_locks()` continue to serialize against this key. The
             // dual locking is harmless and matches the default path below;
             // the SQL guard is also released on commit/rollback.
-            let sql_lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &key_values)?;
+            let sql_lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &built.values)?;
             let sql_guard = conn.unique_locks().lock(sql_lock_key, tx.id().0)?;
             session.unique_guards.push(sql_guard);
             continue;
@@ -122,40 +112,20 @@ fn collect_unique_conflicts(
     }
     let rows = collect_table_rows(conn.engine(), tx, table)?;
     for index in pending_indexes {
-        let key_values: Vec<SqlValue> = index
-            .keys
-            .iter()
-            .map(|key| {
-                values
-                    .get(key.ordinal as usize)
-                    .cloned()
-                    .unwrap_or(SqlValue::Null)
-            })
-            .collect();
-        if key_values
-            .iter()
-            .any(|value| matches!(value, SqlValue::Null))
-        {
+        let built = crate::exec::index_dml::build_index_key_with_values(table, index, values)?;
+        if built.key.contains_null {
             continue;
         }
-        let key = unique_key_bytes(table.table_id.0, index.index_id.0, &key_values)?;
-        let guard = conn.unique_locks().lock(key, tx.id().0)?;
+        let lock_key = unique_key_bytes(table.table_id.0, index.index_id.0, &built.values)?;
+        let guard = conn.unique_locks().lock(lock_key, tx.id().0)?;
         session.unique_guards.push(guard);
         for row in &rows {
             if skip_rowid == Some(row.rowid) {
                 continue;
             }
-            let other: Vec<SqlValue> = index
-                .keys
-                .iter()
-                .map(|key| {
-                    row.values
-                        .get(key.ordinal as usize)
-                        .cloned()
-                        .unwrap_or(SqlValue::Null)
-                })
-                .collect();
-            if key_values_equal(&key_values, &other) {
+            let other =
+                crate::exec::index_dml::build_index_key_with_values(table, index, &row.values)?;
+            if key_values_equal(&built.values, &other.values) {
                 let constraint_name = match table
                     .constraints
                     .iter()
@@ -384,7 +354,7 @@ pub(in crate::exec) fn insert_row_with_resolution(
     // (idempotent if already computed by a build_row* path) before any
     // constraint validation or unique-conflict checks observe the row.
     *values = compute_stored_generated_columns(table, std::mem::take(values))?;
-    let rowid = choose_rowid_for_insert(conn.engine(), table, values)?;
+    let rowid = choose_rowid_for_insert(session, conn.engine(), tx, table, values)?;
 
     let action = conflict_action_for(conflict);
     if apply_constraints_with_action(table, values, action)? {
@@ -415,6 +385,7 @@ pub(in crate::exec) fn insert_row_with_resolution(
         // Deferred constraints are queued for COMMIT; immediate ones must
         // resolve right now.
         crate::exec::fk::enforce_fk_on_insert(conn, session, tx, table, values, rowid)?;
+        super::record_sqlite_sequence_rowid(session, table, rowid);
         session.last_insert_rowid = Some(rowid.0 as i64);
         return Ok(InsertOutcome::Inserted {
             rowid,
@@ -530,6 +501,7 @@ fn apply_unique_conflict_resolution(
                 )?;
                 crate::exec::fk::enforce_fk_on_insert(conn, session, tx, table, values, rowid)?;
             }
+            super::record_sqlite_sequence_rowid(session, table, rowid);
             session.last_insert_rowid = Some(rowid.0 as i64);
             Ok(InsertOutcome::Inserted {
                 rowid,
@@ -557,34 +529,37 @@ fn apply_upsert_branch(
     upsert: &crate::statement::UpsertPlan,
     bindings: &[Option<SqlValue>],
 ) -> Result<InsertOutcome> {
-    let hit = if let Some(target) = &upsert.target {
-        conflicts
-            .iter()
-            .find(|conflict| unique_conflict_matches_target(conflict, target))
-    } else {
-        conflicts.first()
-    };
-    let Some(hit) = hit else {
-        return Err(Error::ConstraintViolation(format!(
-            "UNIQUE constraint failed: {}",
-            table.name
-        )));
-    };
-    match &upsert.action {
-        crate::statement::UpsertAction::DoNothing => Ok(InsertOutcome::Ignored),
-        crate::statement::UpsertAction::DoUpdate(update) => apply_upsert_update(
-            UpsertUpdateContext {
-                conn,
-                session,
-                tx,
-                table,
-                excluded: values,
-                conflict: hit,
-                bindings,
-            },
-            update,
-        ),
+    for arm in upsert.arms.iter() {
+        let hit = if let Some(target) = &arm.target {
+            conflicts
+                .iter()
+                .find(|conflict| unique_conflict_matches_target(conflict, target))
+        } else {
+            conflicts.first()
+        };
+        let Some(hit) = hit else {
+            continue;
+        };
+        return match &arm.action {
+            crate::statement::UpsertAction::DoNothing => Ok(InsertOutcome::Ignored),
+            crate::statement::UpsertAction::DoUpdate(update) => apply_upsert_update(
+                UpsertUpdateContext {
+                    conn,
+                    session,
+                    tx,
+                    table,
+                    excluded: values,
+                    conflict: hit,
+                    bindings,
+                },
+                update,
+            ),
+        };
     }
+    Err(Error::ConstraintViolation(format!(
+        "UNIQUE constraint failed: {}",
+        table.name
+    )))
 }
 
 pub(crate) fn ensure_unique_constraints(

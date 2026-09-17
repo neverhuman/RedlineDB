@@ -5,7 +5,12 @@ pub(crate) fn unique_key_bytes(
     constraint_id: u64,
     values: &[SqlValue],
 ) -> Result<Vec<u8>> {
-    let mut out = Vec::new();
+    // Phase 4.3: hint capacity. Table-id + constraint-id are 16 bytes;
+    // the record encoding adds 1-9 bytes header + ~5 bytes per value
+    // depending on type. 32 bytes per value is a safe upper bound for
+    // most typical INTEGER/REAL/short-TEXT keys, and reserving here
+    // eliminates the grow-by-doubling reallocation cascade.
+    let mut out = Vec::with_capacity(16 + values.len() * 32);
     out.extend_from_slice(&table_id.to_le_bytes());
     out.extend_from_slice(&constraint_id.to_le_bytes());
     let refs = values.iter().map(|v| v.as_ref()).collect::<Vec<_>>();
@@ -22,7 +27,9 @@ pub(crate) fn key_values_equal(left: &[SqlValue], right: &[SqlValue]) -> bool {
 }
 
 pub(crate) fn encode_sql_row(table_id: u64, values: &[SqlValue]) -> Result<Vec<u8>> {
-    let mut out = Vec::new();
+    // Phase 4.3: hint capacity. Called per-row in DML
+    // (INSERT/UPDATE/DELETE) heap encoding.
+    let mut out = Vec::with_capacity(16 + values.len() * 32);
     let mut refs = Vec::with_capacity(values.len() + 1);
     refs.push(ValueRef::Integer(table_id as i64));
     refs.extend(values.iter().map(|value| value.as_ref()));

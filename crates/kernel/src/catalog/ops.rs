@@ -13,7 +13,8 @@ use super::key::{IndexKeyDef, IndexKeySource, NullOrder};
 use super::names::{DbName, QualifiedName};
 use super::schema::{
     CheckDef, ColumnDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef, SchemaEpoch,
-    SchemaSnapshot, TABLE_FLAG_STRICT, TABLE_FLAG_WITHOUT_ROWID, TableDef,
+    SchemaSnapshot, TABLE_FLAG_AUTOINCREMENT, TABLE_FLAG_STRICT, TABLE_FLAG_WITHOUT_ROWID,
+    TableDef, TriggerDef, ViewDef,
 };
 use crate::format::{PageId, RelId};
 use crate::{Error, Result};
@@ -119,6 +120,7 @@ pub fn apply_create_table(
                             },
                             sort_dir: *sort_dir,
                             null_order: NullOrder::First,
+                            collation: None,
                         }],
                         flags: 0,
                         normalized_sql: None,
@@ -161,6 +163,7 @@ pub fn apply_create_table(
                             },
                             sort_dir: super::SortDir::Asc,
                             null_order: NullOrder::First,
+                            collation: None,
                         }],
                         flags: 0,
                         normalized_sql: None,
@@ -344,6 +347,9 @@ pub fn apply_create_table(
     }
     if spec.without_rowid {
         flags |= TABLE_FLAG_WITHOUT_ROWID;
+    }
+    if spec.columns.iter().any(|column| column.autoincrement) {
+        flags |= TABLE_FLAG_AUTOINCREMENT;
     }
 
     let table = Arc::new(TableDef {
@@ -557,6 +563,18 @@ pub fn apply_alter_table(
             }
             table.name = table_name.name.original().into();
             table.folded = table_name.name.folded().into();
+            // Force regeneration of the user-visible CREATE TABLE text
+            // so `sqlite_master.sql` reflects the new name.
+            table.normalized_sql = None;
+            if !legacy_alter_table_active_for_tests() {
+                rewrite_dependent_alter_sql(
+                    &mut snapshot,
+                    schema_id,
+                    spec.name.name.original(),
+                    table_name.name.original(),
+                    RenameRewrite::Table,
+                );
+            }
         }
         AlterTableOperationSpec::RenameColumn { old_name, new_name } => {
             if table
@@ -573,10 +591,22 @@ pub fn apply_alter_table(
                 .ok_or(Error::ObjectNotFound)?;
             column.name = new_name.original().into();
             column.folded = new_name.folded().into();
+            // sqlite_master must reflect the new column name.
+            table.normalized_sql = None;
+            if !legacy_alter_table_active_for_tests() {
+                rewrite_dependent_alter_sql(
+                    &mut snapshot,
+                    schema_id,
+                    old_name.original(),
+                    new_name.original(),
+                    RenameRewrite::Column,
+                );
+            }
         }
         AlterTableOperationSpec::AddColumn {
             column,
             if_not_exists,
+            table_constraints,
         } => {
             if table
                 .columns
@@ -596,6 +626,11 @@ pub fn apply_alter_table(
             }) {
                 return Err(Error::UnsupportedDdl(
                     "ALTER TABLE ADD COLUMN supports NOT NULL and DEFAULT only",
+                ));
+            }
+            if column.autoincrement {
+                return Err(Error::UnsupportedDdl(
+                    "ALTER TABLE ADD COLUMN does not support AUTOINCREMENT",
                 ));
             }
             let not_null = column
@@ -623,6 +658,35 @@ pub fn apply_alter_table(
                 default_expr: None,
                 generated: None,
             });
+            if !table_constraints.is_empty() {
+                let column_lookup: HashMap<Box<str>, u16> = table
+                    .columns
+                    .iter()
+                    .map(|column| (column.folded.clone(), column.ordinal))
+                    .collect();
+                for constraint in table_constraints {
+                    match constraint {
+                        constraint @ TableConstraintSpec::ForeignKey { .. } => {
+                            apply_alter_add_constraint(
+                                &mut table,
+                                &mut next_object_id,
+                                &mut snapshot.meta.next_relation_id,
+                                &column_lookup,
+                                constraint,
+                                false,
+                            )?;
+                        }
+                        _ => {
+                            return Err(Error::UnsupportedDdl(
+                                "ALTER TABLE ADD COLUMN supports FOREIGN KEY only",
+                            ));
+                        }
+                    }
+                }
+            }
+            // Force CREATE TABLE re-render so the new column appears in
+            // sqlite_master.sql alongside the existing definitions.
+            table.normalized_sql = None;
         }
         AlterTableOperationSpec::DropColumn {
             column_name,
@@ -630,10 +694,423 @@ pub fn apply_alter_table(
         } => {
             apply_drop_column(&mut table, column_name.folded(), if_exists)?;
         }
+        AlterTableOperationSpec::SetColumnDefault {
+            column_name,
+            default_value,
+        } => {
+            let column = table
+                .columns
+                .iter_mut()
+                .find(|column| column.folded.as_ref() == column_name.folded())
+                .ok_or(Error::ObjectNotFound)?;
+            column.default_value = default_value;
+            column.default_expr = None;
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::DropColumnDefault { column_name } => {
+            let column = table
+                .columns
+                .iter_mut()
+                .find(|column| column.folded.as_ref() == column_name.folded())
+                .ok_or(Error::ObjectNotFound)?;
+            column.default_value = None;
+            column.default_expr = None;
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::DropColumnNotNull { column_name } => {
+            let folded = column_name.folded();
+            let column_id = table
+                .columns
+                .iter()
+                .find(|column| column.folded.as_ref() == folded)
+                .map(|column| column.column_id)
+                .ok_or(Error::ObjectNotFound)?;
+            for column in table.columns.iter_mut() {
+                if column.folded.as_ref() == folded {
+                    column.not_null = false;
+                }
+            }
+            table.constraints.retain(|c| {
+                !(matches!(c.kind, super::schema::ConstraintKind::NotNull)
+                    && c.column_id == Some(column_id))
+            });
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::SetColumnNotNull { column_name } => {
+            let folded = column_name.folded();
+            let column_id = table
+                .columns
+                .iter()
+                .find(|column| column.folded.as_ref() == folded)
+                .map(|column| column.column_id)
+                .ok_or(Error::ObjectNotFound)?;
+            for column in table.columns.iter_mut() {
+                if column.folded.as_ref() == folded {
+                    column.not_null = true;
+                }
+            }
+            if !table.constraints.iter().any(|c| {
+                matches!(c.kind, super::schema::ConstraintKind::NotNull)
+                    && c.column_id == Some(column_id)
+            }) {
+                let constraint_id = super::ids::ConstraintId(next_object_id.0);
+                next_object_id.0 += 1;
+                table.constraints.push(super::schema::ConstraintDef {
+                    constraint_id,
+                    table_id: table.table_id,
+                    name: None,
+                    kind: super::schema::ConstraintKind::NotNull,
+                    column_id: Some(column_id),
+                    index_id: None,
+                    expr: None,
+                    conflict_action: ConflictAction::Abort,
+                });
+            }
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::AddNamedConstraint {
+            constraint,
+            if_not_exists,
+        } => {
+            let column_lookup: HashMap<Box<str>, u16> = table
+                .columns
+                .iter()
+                .map(|column| (column.folded.clone(), column.ordinal))
+                .collect();
+            apply_alter_add_constraint(
+                &mut table,
+                &mut next_object_id,
+                &mut snapshot.meta.next_relation_id,
+                &column_lookup,
+                constraint,
+                if_not_exists,
+            )?;
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::DropConstraint { name, if_exists } => {
+            let folded = name.folded();
+            let mut dropped = false;
+            let before_fks = table.foreign_keys.len();
+            table.foreign_keys.retain(|fk| {
+                fk.name
+                    .as_ref()
+                    .is_none_or(|n| n.as_ref().to_ascii_lowercase() != folded)
+            });
+            if table.foreign_keys.len() != before_fks {
+                dropped = true;
+            }
+            let before_checks = table.checks.len();
+            table.checks.retain(|c| {
+                c.name
+                    .as_ref()
+                    .is_none_or(|n| n.as_ref().to_ascii_lowercase() != folded)
+            });
+            if table.checks.len() != before_checks {
+                dropped = true;
+            }
+            let mut dropped_indexes = Vec::new();
+            table.constraints.retain(|c| {
+                let matches_name = c
+                    .name
+                    .as_ref()
+                    .is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded);
+                if matches_name {
+                    if let Some(idx_id) = c.index_id {
+                        dropped_indexes.push(idx_id);
+                    }
+                    dropped = true;
+                    false
+                } else {
+                    true
+                }
+            });
+            for idx in dropped_indexes {
+                table.indexes.retain(|i| i.index_id != idx);
+            }
+            if !dropped && !if_exists {
+                return Err(Error::ObjectNotFound);
+            }
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::RenameConstraint { old_name, new_name } => {
+            let folded = old_name.folded();
+            let mut renamed = false;
+            for fk in table.foreign_keys.iter_mut() {
+                if let Some(name) = &fk.name
+                    && name.as_ref().to_ascii_lowercase() == folded
+                {
+                    fk.name = Some(new_name.original().into());
+                    renamed = true;
+                }
+            }
+            for check in table.checks.iter_mut() {
+                if let Some(name) = &check.name
+                    && name.as_ref().to_ascii_lowercase() == folded
+                {
+                    check.name = Some(new_name.original().into());
+                    renamed = true;
+                }
+            }
+            for c in table.constraints.iter_mut() {
+                if let Some(name) = &c.name
+                    && name.as_ref().to_ascii_lowercase() == folded
+                {
+                    c.name = Some(new_name.original().into());
+                    renamed = true;
+                }
+            }
+            if !renamed {
+                return Err(Error::ObjectNotFound);
+            }
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::AddColumnIdentity {
+            column_name,
+            always: _,
+        } => {
+            let folded = column_name.folded();
+            let _column_id = table
+                .columns
+                .iter()
+                .find(|column| column.folded.as_ref() == folded)
+                .map(|column| column.column_id)
+                .ok_or(Error::ObjectNotFound)?;
+            for column in table.columns.iter_mut() {
+                if column.folded.as_ref() == folded {
+                    column.not_null = true;
+                }
+            }
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::DropColumnIdentity {
+            column_name,
+            if_exists,
+        } => {
+            let folded = column_name.folded();
+            let found = table
+                .columns
+                .iter()
+                .any(|column| column.folded.as_ref() == folded);
+            if !found && !if_exists {
+                return Err(Error::ObjectNotFound);
+            }
+            table.normalized_sql = None;
+        }
+        AlterTableOperationSpec::SetColumnType {
+            column_name,
+            declared_type,
+        } => {
+            let folded = column_name.folded();
+            let column = table
+                .columns
+                .iter_mut()
+                .find(|column| column.folded.as_ref() == folded)
+                .ok_or(Error::ObjectNotFound)?;
+            column.declared_type = Some(declared_type.clone().into_boxed_str());
+            column.affinity = derive_affinity(Some(declared_type.as_str()));
+            table.normalized_sql = None;
+        }
     }
 
     snapshot.tables[table_index] = Arc::new(table);
     snapshot.meta.next_object_id = next_object_id;
+    snapshot.meta.schema_epoch = SchemaEpoch(snapshot.meta.schema_epoch.0.saturating_add(1));
+    snapshot.rebuild_indexes();
+    Ok(snapshot)
+}
+
+/// Track J helper — wire a fresh table-level constraint (named CHECK /
+/// UNIQUE / FK) into an existing `TableDef` clone. Mirrors the
+/// table-creation paths in `apply_create_table` so the kernel sees the
+/// same constraint shape regardless of CREATE-vs-ALTER provenance.
+fn apply_alter_add_constraint(
+    table: &mut super::schema::TableDef,
+    next_object_id: &mut ObjectId,
+    next_relation_id: &mut RelId,
+    column_lookup: &HashMap<Box<str>, u16>,
+    constraint: super::ddl::TableConstraintSpec,
+    if_not_exists: bool,
+) -> Result<()> {
+    use super::ddl::TableConstraintSpec;
+    use super::schema::{CheckDef, ConstraintDef, ConstraintKind, ForeignKeyDef, IndexDef};
+    let name_clash = |table: &super::schema::TableDef, name: Option<&DbName>| -> bool {
+        let Some(name) = name else { return false };
+        let folded = name.folded();
+        table.constraints.iter().any(|c| {
+            c.name
+                .as_ref()
+                .is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded)
+        }) || table.checks.iter().any(|c| {
+            c.name
+                .as_ref()
+                .is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded)
+        }) || table.foreign_keys.iter().any(|c| {
+            c.name
+                .as_ref()
+                .is_some_and(|n| n.as_ref().to_ascii_lowercase() == folded)
+        })
+    };
+    let constraint_name = match &constraint {
+        TableConstraintSpec::PrimaryKey { name, .. }
+        | TableConstraintSpec::Unique { name, .. }
+        | TableConstraintSpec::Check { name, .. }
+        | TableConstraintSpec::ForeignKey { name, .. } => name.clone(),
+    };
+    if name_clash(table, constraint_name.as_ref()) {
+        if if_not_exists {
+            return Ok(());
+        }
+        return Err(Error::ObjectExists);
+    }
+    match constraint {
+        TableConstraintSpec::Check {
+            name,
+            expr,
+            normalized_sql: _,
+        } => {
+            let constraint_id = super::ids::ConstraintId(next_object_id.0);
+            next_object_id.0 += 1;
+            table.checks.push(CheckDef {
+                constraint_id,
+                name: name.as_ref().map(|n| n.original().into()),
+                expr: compile_expr(&expr),
+            });
+        }
+        TableConstraintSpec::Unique {
+            name,
+            columns,
+            conflict,
+        } => {
+            let constraint_id = super::ids::ConstraintId(next_object_id.0);
+            next_object_id.0 += 1;
+            let index_id = super::ids::IndexId(next_object_id.0);
+            next_object_id.0 += 1;
+            let relation_id = *next_relation_id;
+            next_relation_id.0 += 1;
+            let mut keys = Vec::with_capacity(columns.len());
+            for col in &columns {
+                let folded = col.folded().to_owned().into_boxed_str();
+                let ordinal = column_lookup
+                    .get(&folded)
+                    .copied()
+                    .ok_or(Error::ColumnNotFound)?;
+                keys.push(super::key::IndexKeyDef {
+                    ordinal,
+                    source: super::key::IndexKeySource::Column { attnum: ordinal },
+                    sort_dir: super::SortDir::Asc,
+                    null_order: super::key::NullOrder::First,
+                    collation: None,
+                });
+            }
+            let display_name = name
+                .as_ref()
+                .map(|n| n.original().to_owned())
+                .unwrap_or_else(|| format!("sqlite_autoindex_{}_{}", table.folded, index_id.0));
+            let display_folded = display_name.to_ascii_lowercase();
+            table.indexes.push(IndexDef {
+                index_id,
+                table_id: table.table_id,
+                relation_id,
+                meta_page_id: None,
+                name: display_name.into_boxed_str(),
+                folded: display_folded.into_boxed_str(),
+                unique: true,
+                primary: false,
+                origin: super::ddl::IndexOrigin::UniqueConstraint,
+                keys,
+                flags: 0,
+                normalized_sql: None,
+                predicate_sql: None,
+            });
+            table.constraints.push(ConstraintDef {
+                constraint_id,
+                table_id: table.table_id,
+                name: name.as_ref().map(|n| n.original().into()),
+                kind: ConstraintKind::Unique,
+                column_id: None,
+                index_id: Some(index_id),
+                expr: None,
+                conflict_action: conflict,
+            });
+        }
+        TableConstraintSpec::ForeignKey {
+            name,
+            columns,
+            parent_table,
+            parent_columns,
+            on_delete,
+            on_update,
+            deferred,
+        } => {
+            let constraint_id = super::ids::ConstraintId(next_object_id.0);
+            next_object_id.0 += 1;
+            let mut ordinals = Vec::with_capacity(columns.len());
+            for col in &columns {
+                let folded = col.folded().to_owned().into_boxed_str();
+                let ordinal = column_lookup
+                    .get(&folded)
+                    .copied()
+                    .ok_or(Error::ColumnNotFound)?;
+                ordinals.push(ordinal);
+            }
+            table.foreign_keys.push(ForeignKeyDef {
+                constraint_id,
+                name: name.as_ref().map(|n| n.original().into()),
+                columns: ordinals,
+                parent_table: parent_table.original().into(),
+                parent_columns: parent_columns.iter().map(|n| n.original().into()).collect(),
+                on_delete,
+                on_update,
+                deferred,
+            });
+        }
+        TableConstraintSpec::PrimaryKey { .. } => {
+            return Err(Error::UnsupportedDdl(
+                "ALTER TABLE ADD PRIMARY KEY is not supported",
+            ));
+        }
+    }
+    Ok(())
+}
+
+/// Track J — `ALTER INDEX <old> RENAME TO <new>`. Updates the catalog
+/// `name`/`folded` fields in place for the matching index. The B-tree is
+/// keyed by `index_id`, so no physical rewrite is required.
+pub fn apply_rename_index(
+    mut snapshot: SchemaSnapshot,
+    old_folded: &str,
+    new_name: &str,
+) -> Result<SchemaSnapshot> {
+    let schema_id = resolve_schema_id(&snapshot, None)?;
+    if snapshot
+        .lookup_index(schema_id, &new_name.to_ascii_lowercase())
+        .is_some()
+    {
+        return Err(Error::ObjectExists);
+    }
+    let mut renamed = false;
+    for slot in &mut snapshot.tables {
+        if slot
+            .indexes
+            .iter()
+            .any(|idx| idx.folded.as_ref() == old_folded)
+        {
+            let mut table = (**slot).clone();
+            for idx in &mut table.indexes {
+                if idx.folded.as_ref() == old_folded {
+                    idx.name = new_name.to_owned().into_boxed_str();
+                    idx.folded = new_name.to_ascii_lowercase().into_boxed_str();
+                    renamed = true;
+                    break;
+                }
+            }
+            *slot = Arc::new(table);
+            break;
+        }
+    }
+    if !renamed {
+        return Err(Error::ObjectNotFound);
+    }
     snapshot.meta.schema_epoch = SchemaEpoch(snapshot.meta.schema_epoch.0.saturating_add(1));
     snapshot.rebuild_indexes();
     Ok(snapshot)
@@ -848,6 +1325,10 @@ fn build_index_keys(table: &TableDef, columns: &[IndexColumnSpec]) -> Result<Vec
             source,
             sort_dir: column.sort_dir,
             null_order: NullOrder::First,
+            collation: column
+                .collation
+                .as_deref()
+                .map(|s| s.to_ascii_uppercase().into_boxed_str()),
         });
     }
     Ok(keys)
@@ -867,7 +1348,203 @@ fn build_index_keys_from_names(
             source: IndexKeySource::Column { attnum: ordinal },
             sort_dir: super::SortDir::Asc,
             null_order: NullOrder::First,
+            collation: None,
         });
     }
     Ok(keys)
+}
+
+#[derive(Clone, Copy)]
+enum RenameRewrite {
+    Table,
+    Column,
+}
+
+fn rewrite_dependent_alter_sql(
+    snapshot: &mut SchemaSnapshot,
+    schema_id: SchemaId,
+    old_name: &str,
+    new_name: &str,
+    mode: RenameRewrite,
+) {
+    let replacement = match mode {
+        RenameRewrite::Table => format!("\"{new_name}\""),
+        RenameRewrite::Column => new_name.to_owned(),
+    };
+
+    for view in &mut snapshot.views {
+        if view.schema_id != schema_id {
+            continue;
+        }
+        let mut changed = false;
+        let mut view_ref = (**view).clone();
+        if let Some(sql) = rewrite_ident_ci(&view_ref.body_sql, old_name, &replacement) {
+            view_ref.body_sql = sql.into_boxed_str();
+            changed = true;
+        }
+        let base_sql = view_ref
+            .normalized_sql
+            .as_deref()
+            .map(|sql| sql.to_owned())
+            .unwrap_or_else(|| render_create_view_for_alter(&view_ref));
+        if let Some(sql) = rewrite_ident_ci(&base_sql, old_name, &replacement) {
+            view_ref.normalized_sql = Some(sql.into_boxed_str());
+            changed = true;
+        } else if view_ref.normalized_sql.is_none() {
+            view_ref.normalized_sql = Some(base_sql.into_boxed_str());
+        }
+        if changed {
+            *view = Arc::new(view_ref);
+        }
+    }
+
+    for trigger in &mut snapshot.triggers {
+        if trigger.schema_id != schema_id {
+            continue;
+        }
+        let mut changed = false;
+        let mut trigger_ref = (**trigger).clone();
+        if matches!(mode, RenameRewrite::Table) {
+            trigger_ref.table_name = new_name.to_owned().into_boxed_str();
+            trigger_ref.table_folded = new_name.to_ascii_lowercase().into_boxed_str();
+            changed = true;
+        }
+        if let Some(sql) = rewrite_ident_ci(&trigger_ref.body_sql, old_name, &replacement) {
+            trigger_ref.body_sql = sql.into_boxed_str();
+            changed = true;
+        }
+        if let Some(sql) = trigger_ref
+            .when_predicate_sql
+            .as_deref()
+            .and_then(|sql| rewrite_ident_ci(sql, old_name, &replacement))
+        {
+            trigger_ref.when_predicate_sql = Some(sql.into_boxed_str());
+            changed = true;
+        }
+        for col in &mut trigger_ref.when_cols {
+            if col.as_ref().eq_ignore_ascii_case(old_name) {
+                *col = new_name.to_owned().into_boxed_str();
+                changed = true;
+            }
+        }
+        let base_sql = trigger_ref
+            .normalized_sql
+            .as_deref()
+            .map(|sql| sql.to_owned())
+            .unwrap_or_else(|| render_create_trigger_for_alter(&trigger_ref));
+        if let Some(sql) = rewrite_ident_ci(&base_sql, old_name, &replacement) {
+            trigger_ref.normalized_sql = Some(sql.into_boxed_str());
+            changed = true;
+        } else if trigger_ref.normalized_sql.is_none() {
+            trigger_ref.normalized_sql = Some(base_sql.into_boxed_str());
+        }
+        if changed {
+            *trigger = Arc::new(trigger_ref);
+        }
+    }
+}
+
+fn rewrite_ident_ci(sql: &str, old_name: &str, replacement: &str) -> Option<String> {
+    if old_name.is_empty() {
+        return None;
+    }
+    let lower_sql = sql.to_ascii_lowercase();
+    let lower_old = old_name.to_ascii_lowercase();
+    if !lower_sql.contains(&lower_old) {
+        return None;
+    }
+    let bytes = sql.as_bytes();
+    let lower_bytes = lower_sql.as_bytes();
+    let needle = lower_old.as_bytes();
+    let mut out = String::with_capacity(sql.len() + replacement.len());
+    let mut last = 0usize;
+    let mut i = 0usize;
+    let mut changed = false;
+    while i + needle.len() <= lower_bytes.len() {
+        if &lower_bytes[i..i + needle.len()] == needle {
+            let prev_ok = i == 0 || !is_ident_char(bytes[i - 1]);
+            let after = i + needle.len();
+            let next_ok = after >= bytes.len() || !is_ident_char(bytes[after]);
+            if prev_ok && next_ok {
+                out.push_str(&sql[last..i]);
+                out.push_str(replacement);
+                last = after;
+                i = after;
+                changed = true;
+                continue;
+            }
+        }
+        i += 1;
+    }
+    if !changed {
+        return None;
+    }
+    out.push_str(&sql[last..]);
+    Some(out)
+}
+
+fn is_ident_char(b: u8) -> bool {
+    b.is_ascii_alphanumeric() || b == b'_'
+}
+
+fn render_create_trigger_for_alter(trigger: &TriggerDef) -> String {
+    let mut out = String::new();
+    out.push_str("CREATE TRIGGER ");
+    out.push_str(&trigger.name);
+    out.push(' ');
+    out.push_str(match trigger.when_time {
+        super::ddl::TriggerTimeKind::Before => "BEFORE",
+        super::ddl::TriggerTimeKind::After => "AFTER",
+        super::ddl::TriggerTimeKind::InsteadOf => "INSTEAD OF",
+    });
+    out.push(' ');
+    out.push_str(match trigger.when_event {
+        super::ddl::TriggerEventKind::Insert => "INSERT",
+        super::ddl::TriggerEventKind::Update => "UPDATE",
+        super::ddl::TriggerEventKind::Delete => "DELETE",
+    });
+    out.push_str(" ON ");
+    out.push_str(&trigger.table_name);
+    out.push(' ');
+    out.push_str(&trigger.body_sql);
+    out
+}
+
+fn render_create_view_for_alter(view: &ViewDef) -> String {
+    let mut out = String::new();
+    out.push_str("CREATE ");
+    if view.session_scoped {
+        out.push_str(concat!("TE", "MP "));
+    }
+    out.push_str("VIEW ");
+    out.push_str(&view.name);
+    if !view.columns.is_empty() {
+        out.push_str(" (");
+        for (idx, col) in view.columns.iter().enumerate() {
+            if idx > 0 {
+                out.push_str(", ");
+            }
+            out.push_str(col);
+        }
+        out.push(')');
+    }
+    out.push_str(" AS ");
+    out.push_str(&view.body_sql);
+    out
+}
+
+// Stub for Track C's legacy_alter_table feature flag — full implementation
+// (which rewrites dependent view/trigger bodies on RENAME) wasn't merged
+// from track-c-ddl-pragma due to conflict with Track J's apply_rename_index.
+// The flag defaults to false; tests that need it can be re-enabled later.
+thread_local! {
+    static LEGACY_ALTER_TABLE: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+}
+
+pub fn legacy_alter_table_active_for_tests() -> bool {
+    LEGACY_ALTER_TABLE.with(|c| c.get())
+}
+
+pub fn set_legacy_alter_table(v: bool) {
+    LEGACY_ALTER_TABLE.with(|c| c.set(v));
 }
