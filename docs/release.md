@@ -92,3 +92,7 @@ acceptance process. Consumers can select a previous verified release with
 installed versions. Release automation does not roll back or replace databases.
 
 Candidate rc.1 exposed an absolute macOS dylib load identity during published-archive verification. Candidate rc.2 corrects the identity and adds extracted-package C consumer relocation tests before stable qualification. The rc.1 tag and assets remain preserved with a known-issue notice.
+
+Candidate rc.3 additionally fixes report generation for declared conformance
+skips. Every executed case still needs its configured warmups; required parity
+CI now generates a report from the complete evidence before release acceptance.

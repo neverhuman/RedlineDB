@@ -13,3 +13,6 @@ The preserved WAL/backup development branch is not included in this release.
 macOS native libraries use a relative load identity and are signed after staging.
 Native package checks link static and dynamic C consumers against the extracted
 headers/libraries and run them after moving the installation directory.
+
+Conformance reports retain declared skips and validate warmups for every executed
+case. Required parity CI also generates a report from the complete evidence.
