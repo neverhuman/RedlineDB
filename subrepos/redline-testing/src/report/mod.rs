@@ -25,7 +25,7 @@ use render::{
     render_report_block, replace_block,
 };
 use svg::build_svg_artifacts;
-use types::{ManifestJson, ProvenanceJson, RenderedReport, SummaryJson};
+use types::{ManifestJson, ProvenanceJson, RawRecord, RenderedReport, SummaryJson};
 use utils::{
     canonical_display, git_dirty, git_sha, normalized_command_line, sha256_file, sha256_hex,
     verify_existing, write_text,
@@ -37,6 +37,23 @@ const METRICS_BEGIN: &str = "<!-- sqlite-parity-metrics:begin -->";
 const METRICS_END: &str = "<!-- sqlite-parity-metrics:end -->";
 const JANKURAI_BREAKDOWN_BEGIN: &str = "<!-- sqlite-jankurai-breakdown:begin -->";
 const JANKURAI_BREAKDOWN_END: &str = "<!-- sqlite-jankurai-breakdown:end -->";
+
+fn validate_warmups(records: &[RawRecord], expected_warmup: usize) -> Result<()> {
+    let mut cases = BTreeMap::<&str, (bool, usize)>::new();
+    for record in records {
+        let (executed, warmups) = cases.entry(&record.case_id).or_default();
+        *executed |= record.status != "skipped";
+        *warmups += usize::from(record.sample_role == "warmup");
+    }
+    for (case_id, (executed, warmups)) in cases {
+        // A declared skip is one placeholder record, with no benchmark samples.
+        let expected = if executed { expected_warmup } else { 0 };
+        if warmups != expected {
+            bail!("case {case_id}: expected {expected} warmup samples but found {warmups}");
+        }
+    }
+    Ok(())
+}
 
 pub fn generate(options: ReportOptions) -> Result<()> {
     let raw_text = fs::read_to_string(&options.input)
@@ -69,25 +86,7 @@ pub fn generate(options: ReportOptions) -> Result<()> {
         }
     }
     if let Some(expected_warmup) = options.expected_warmup {
-        let warmups = raw_records
-            .iter()
-            .filter(|record| record.sample_role == "warmup")
-            .count();
-        let expected_total_warmups = expected_warmup.saturating_mul(
-            raw_records
-                .iter()
-                .map(|record| record.case_id.clone())
-                .collect::<BTreeSet<_>>()
-                .len(),
-        );
-        if warmups != expected_total_warmups {
-            bail!(
-                "expected {} warmup samples ({} per case) but found {}",
-                expected_total_warmups,
-                expected_warmup,
-                warmups
-            );
-        }
+        validate_warmups(&raw_records, expected_warmup)?;
     }
 
     let ranked = rank_cases(&raw_records);
