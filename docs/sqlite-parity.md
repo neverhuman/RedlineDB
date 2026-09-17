@@ -6,15 +6,15 @@ harness. RedlineDB-side parity tests are local regression checks only; they do
 not produce SQLite parity coverage, benchmark, report, sentinel, or proof
 evidence artifacts.
 
-The official corpus and gate now live in `neverhuman/redline-testing`; that
-runner is the sole official source for parity evidence. The ledger below is the
-RedlineDB-side compatibility snapshot that consumes that external suite.
-Official README metrics and charts are accepted only from the verified external
-release artifact. The report generator requires
+The official corpus and gate live in `subrepos/redline-testing` in this checkout.
+That runner is the sole official producer of parity evidence; engine-local
+regression tests do not produce public parity reports. CI builds the runner and
+engine from the same parent commit, stages corpus/metadata/schema/template files,
+and verifies binary and evidence hashes before accepting the processed bundle.
+The report generator requires
 `benchmark-results/sqlite-parity/latest/provenance.json` before regenerating
-README/chart outputs, and CI verifies the release tarball SHA-256 from the
-sidecar, binary SHA-256, release manifest, and GitHub artifact attestation
-before any official suite runs.
+README/chart outputs. Older committed reports retain their original release
+artifact provenance and dates; migration does not rewrite historical measurements.
 
 The provenance schema accepted by the RedlineDB report gate is deliberately
 small and hash-first:
@@ -115,36 +115,15 @@ Status values are deliberately narrow:
 
 ## Evidence Boundary
 
-For any official SQLite parity evidence change, use the pinned
-`neverhuman/redline-testing` release artifact through
-`redline-testing-official` or `sqlite-parity-report-update`. Do not create
-local RedlineDB receipts or public lanes for SQLite parity coverage, benchmark,
-report, sentinel, or proof data; legacy receipt scripts, local parity bundle
-lanes, and in-tree `sqlite_parity` producer commands fail closed.
+Use `just redline-testing-official` or `just sqlite-parity-report-update`.
+The canonical `ci_install_redline_testing` builds the included workspace with
+`--locked`, stages the runner and its source data, verifies its SHA-256 and version,
+and writes the provenance sidecar consumed by the evidence processor. The source
+manifest records `local-bin` to distinguish this checkout build from older release
+artifacts. This is the normal GitHub CI path after consolidation.
 
-### Local-bin escape hatch (unreleased corpora)
-
-The `redline-testing-official` lane normally downloads a tagged GitHub release
-from `neverhuman/redline-testing`. To drive the lane against a locally-built
-`redline-testing` binary plus its source tree (for example, to validate a
-not-yet-tagged corpus before publishing it), set both of the following before
-running the lane:
-
-| Env var | Meaning |
-|---|---|
-| `CI_REDLINE_TESTING_LOCAL_BIN` | Absolute path to the `redline-testing` executable, e.g. `~/redline-testing/target/release/redline-testing`. |
-| `CI_REDLINE_TESTING_LOCAL_SOURCE` | Absolute path to a `redline-testing` source checkout that contains `corpus/`, `metadata/`, `schemas/`, and `templates/`. |
-
-When `CI_REDLINE_TESTING_LOCAL_BIN` is set, `ci_install_redline_testing`
-short-circuits the download, sha256-against-URL, attestation, and
-pinned-version-against-manifest gates and stages the local binary and source
-tree under `target/ci/redline-testing/local-<binary-sha256-prefix>/`. The
-packaged-file checks, manifest schema fields, binary `--version` round-trip,
-and `redline-testing-provenance.env` sidecar still run, so downstream consumers
-(report generator, evidence processor) behave identically. The synthesized
-manifest carries `"source": "local-bin"` so the install is greppable as
-non-release.
-
-This is a developer / pre-release escape hatch only. CI lanes that publish
-parity evidence must leave `CI_REDLINE_TESTING_LOCAL_BIN` unset so they pin to
-a verified tagged release.
+All four declared suites are required: `sqlite_parity`, `sqlite_parity_memory`,
+`rql_phase1`, and `beyond_sqlite`. Missing evidence and baseline regressions fail.
+Historical release-download support remains for historical report verification;
+it is not required to build or validate the current checkout. The retired engine
+`sqlite_parity` producer commands remain disabled so evidence has one owner.

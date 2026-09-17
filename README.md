@@ -230,15 +230,16 @@ metadata that point a fix at the narrowest lawful surface.
 
 ### Rust library
 
-Pin the release in `Cargo.toml`:
+Use the engine library from the same source release:
 
 ```toml
 [dependencies]
-  redlinedb = "=4.0.0"
+redlinedb = { git = "https://github.com/neverhuman/RedlineDB", tag = "v4.1.0" }
 ```
 
-For libraries, `redlinedb = "1"` is usually fine. For binaries, keep the exact
-pin and commit `Cargo.lock`.
+Commit `Cargo.lock` for reproducible application builds. Existing crates.io
+versions remain available; GitHub package publication does not publish new
+crates.io versions.
 
 ### Install binaries
 
@@ -336,15 +337,12 @@ rtk just sqlite-parity-report-check
 
 ## SQLite Parity Status
 
-The official parity lane is sourced only from the verified external
-`neverhuman/redline-testing` release artifact, which is the sole official
-evidence source. Missing, skipped, failed, or unmeasured cases are hard
-report-check failures rather than excluded from the denominator. The live report
-below is generated only from `benchmark-results/sqlite-parity/latest/` after
-`official-evidence.processed.json` validates `raw.jsonl` against the
-hash-bound upstream official evidence chain, including the verified release
-tarball SHA-256, the `redline-testing` binary SHA-256, the release manifest, and
-the GitHub artifact attestation.
+The official parity lane builds `subrepos/redline-testing` and the engine from
+this same checkout. Its processed evidence binds raw results to the runner's
+SHA-256 and enforces the declared suites and compatibility baselines. The report
+below is a dated historical measurement from
+`benchmark-results/sqlite-parity/latest/`; its original provenance is preserved.
+Current acceptance evidence is attached to the GitHub CI run.
 
 <!-- sqlite-parity-report:begin -->
 **SQLite parity coverage:** **1123 / 1127** cases passed in CI. Failed: **0**. Skipped: **4**. Updated 2026-05-26.
@@ -485,7 +483,7 @@ RedlineDB is a layered Rust workspace:
 - `crates/ffi` exports the SQLite-shaped C ABI for compatibility testing.
 - `crates/cli` provides the shell and administrative commands.
 - `crates/bench` keeps engine-local tests and non-official harness code only.
-- The official conformance corpus, memory suite, beyond-SQLite coverage, benchmark gate, and report authority live in `neverhuman/redline-testing`.
+- The official conformance corpus, memory suite, beyond-SQLite coverage, benchmark gate, and report authority live in `subrepos/redline-testing`.
 
 The dependency graph stays one-way: lower layers do not depend on higher layers.
 That keeps the engine testable, replaceable, and easy to reason about in the
@@ -502,7 +500,7 @@ agent routing model used by this repository.
 | `crates/cli/` | Command-line shell |
 | `crates/server/` | Optional framed server |
 | `crates/bench/` | Engine-local tests and non-official harness code; not a parity evidence producer |
-| `benchmark-results/sqlite-parity/latest/` | Current external-suite report artifacts and processed official evidence |
+| `benchmark-results/sqlite-parity/latest/` | Dated official report artifacts and processed evidence |
 | `docs/` | Architecture, testing, and audit guidance |
 | `paper/` | Evaluation writeup and reproducibility assets |
 
@@ -511,8 +509,8 @@ agent routing model used by this repository.
 - `just fast` is the default local proof lane for ordinary edits.
 - `just required` runs the exact protected lane: fast tests followed by the
   hard security, full-graph dependency-review, and Jankurai ratchet gates.
-- `just redline-testing-official` runs the verified external official suite wrapper.
-- `just official-evidence-guard` fails if official metrics can be regenerated without the verified external runner.
+- `just redline-testing-official` runs the included official suite wrapper.
+- `just official-evidence-guard` fails if official metrics can be regenerated without the included official runner.
 - `just sqlite-parity-report-update` refreshes the generated parity report from the latest processed official evidence bundle.
 - `just sqlite-parity-report-check` verifies the README report block matches the committed processed official evidence bundle.
 - `just sqlite-parity-report-publish-pr` is the CI entrypoint that regenerates the report and opens or updates the draft report PR after main CI succeeds.
@@ -523,11 +521,9 @@ The agent-readable proof map lives in [`AGENTS.md`](AGENTS.md). Use
 [`docs/testing.md`](docs/testing.md) for test routing, and
 [`docs/release.md`](docs/release.md) for the gated release and rollback runbook.
 
-The repository does not expose local SQLite parity coverage, benchmark, report,
-or sentinel producers. The sole source for SQLite, memory, beyond-SQLite,
-latency, chart, README, Jankurai, and score evidence is the verified
-`neverhuman/redline-testing` release artifact and its processed evidence
-bundle.
+Official SQLite, memory, RQL and beyond-SQLite evidence is produced only by
+`subrepos/redline-testing` and its processed evidence bundle. Engine-local tests
+remain regression checks, while the runner owns the conformance corpus and reports.
 
 ## Contributing
 
