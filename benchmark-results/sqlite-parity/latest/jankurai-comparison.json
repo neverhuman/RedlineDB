@@ -2,9 +2,9 @@
   "generated_by": "redline-testing jankurai-compare",
   "redlinedb_score": 85,
   "redlinedb_status": "unknown",
-  "score_delta": 65,
+  "score_delta": 63,
   "sqlite_ref": "version-3.53.1",
-  "sqlite_score": 20,
+  "sqlite_score": 22,
   "sqlite_status": "unknown",
-  "updated_date": "2026-05-26"
+  "updated_date": "2026-09-17"
 }

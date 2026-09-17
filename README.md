@@ -345,11 +345,11 @@ below is a dated historical measurement from
 Current acceptance evidence is attached to the GitHub CI run.
 
 <!-- sqlite-parity-report:begin -->
-**SQLite parity coverage:** **1123 / 1127** cases passed in CI. Failed: **0**. Skipped: **4**. Updated 2026-05-26.
+**SQLite parity coverage:** **2441 / 2445** cases passed in CI. Failed: **0**. Skipped: **4**. Updated 2026-09-17.
 
-**SQLite parity latency:** median gap **-22.12%**, worst gap **-287.85%**, faster cases **255**.
+**SQLite parity latency:** median gap **-18.64%**, worst gap **-186.80%**, faster cases **658**.
 
-**Benchmark metadata:** RedlineDB target version **redlinedb v4.0.1 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.0**.
+**Benchmark metadata:** RedlineDB target version **redlinedb v4.1.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.1**.
 
 ![SQLite parity latency improvement plot](assets/sqlite-parity-latency-gap.svg)
 
@@ -360,31 +360,31 @@ Current acceptance evidence is attached to the GitHub CI run.
 
 | Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Improvement |
 | ---: | --- | --- | --- | --- | ---: | ---: | ---: |
-| 1 | DOT_SAVE_RESTORE_TEMPFILE | P1 | tempfile | CLI_TEMPFILE | 3678752 | 14267881 | -287.85% |
-| 2 | INDEX_SCHEMA_PRAGMA_044 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 2951125 | 10090366 | -236.35% |
-| 3 | SCALAR_ARITH_018 | P1 | memory | GEN_SQL_SCALAR | 3745318 | 11646570 | -210.96% |
-| 4 | SCHEMA_SQLITE_SCHEMA | P0 | memory | SQL_SCHEMA | 4032532 | 12337838 | -205.96% |
-| 5 | CTE_RECURSIVE_MATRIX_077 | P1 | memory | GEN_SQL_CTE | 6849262 | 19504391 | -184.77% |
-| 6 | INDEX_SCHEMA_PRAGMA_011 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 4339903 | 11996974 | -176.43% |
-| 7 | AGG_GROUP_HAVING_011 | P1 | memory | GEN_SQL_AGGREGATE | 6634425 | 18072260 | -172.40% |
-| 8 | CTE_RECURSIVE_MATRIX_038 | P1 | memory | GEN_SQL_CTE | 7148588 | 19401436 | -171.40% |
-| 9 | JOIN_SUBQUERY_EXISTS_020 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 5282957 | 14250929 | -169.75% |
-| 10 | AGG_GROUP_HAVING_010 | P1 | memory | GEN_SQL_AGGREGATE | 6904626 | 18086868 | -161.95% |
-| 11 | CONSTRAINT_FK_SAVEPOINT_013 | P2 | memory | GEN_SQL_CONSTRAINT_TX | 5744381 | 14965471 | -160.52% |
-| 12 | DOT_EXIT_CODE | P0 | memory | CLI_DOT_COMMAND | 4854657 | 12603581 | -159.62% |
-| 13 | INDEX_SCHEMA_PRAGMA_015 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 6127135 | 15664043 | -155.65% |
-| 14 | INDEX_SCHEMA_PRAGMA_023 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 4847253 | 12191983 | -151.52% |
-| 15 | DOT_CHANGES | P0 | memory | CLI_DOT_COMMAND | 3739767 | 9397665 | -151.29% |
-| 16 | JOIN_SUBQUERY_EXISTS_037 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 4455211 | 11192561 | -151.22% |
-| 17 | CONSTRAINT_FK_SAVEPOINT_018 | P2 | memory | GEN_SQL_CONSTRAINT_TX | 5843308 | 14482267 | -147.84% |
-| 18 | JOIN_SUBQUERY_EXISTS_074 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 6465997 | 15809278 | -144.50% |
-| 19 | DETACH_DATABASE_SYNTAX | P0 | memory | SQL_ATTACH | 5199330 | 12630302 | -142.92% |
-| 20 | DOT_MODE_CSV_AND_QUOTE | P0 | memory | CLI_DOT_COMMAND | 4455972 | 10734374 | -140.90% |
-| 21 | DOT_EXPERT_OPTIONAL | P3 | memory | CLI_DOT_COMMAND_OPTIONAL | 5225178 | 12499204 | -139.21% |
-| 22 | DML_WHERE_ORDER_LIMIT_056 | P1 | memory | GEN_SQL_DML | 6317776 | 14829845 | -134.73% |
-| 23 | CTE_RECURSIVE_MATRIX_045 | P1 | memory | GEN_SQL_CTE | 6545347 | 15189095 | -132.06% |
-| 24 | DML_WHERE_ORDER_LIMIT_037 | P1 | memory | GEN_SQL_DML | 5569621 | 12902958 | -131.67% |
-| 25 | ON_CONFLICT_ALGORITHMS | P0 | memory | SQL_CONFLICT | 5169253 | 11923444 | -130.66% |
+| 1 | DML_WHERE_ORDER_LIMIT_063 | P1 | memory | GEN_SQL_DML | 2555268 | 8604049 | -186.80% |
+| 2 | AGG_GROUP_HAVING_064 | P1 | memory | GEN_SQL_AGGREGATE | 3399663 | 9006238 | -164.92% |
+| 3 | DML_WHERE_ORDER_LIMIT_054 | P1 | memory | GEN_SQL_DML | 2781347 | 7659454 | -155.32% |
+| 4 | INDEX_SCHEMA_PRAGMA_030 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 1886853 | 7588148 | -152.94% |
+| 5 | AGG_GROUP_HAVING_005 | P1 | memory | GEN_SQL_AGGREGATE | 1778754 | 7502564 | -150.09% |
+| 6 | AFFINITY_VARCHAR_8_REAL_HALF | P0 | memory | SQL_TYPE_AFFINITY | 2762428 | 7344547 | -144.82% |
+| 7 | JOIN_SUBQUERY_EXISTS_064 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1850838 | 7287813 | -142.93% |
+| 8 | SELECT_WHERE_ORDER_LIMIT_OFFSET | P0 | memory | SQL_SELECT | 2775056 | 7265122 | -142.17% |
+| 9 | AGG_GROUP_HAVING_057 | P1 | memory | GEN_SQL_AGGREGATE | 1808219 | 7231469 | -141.05% |
+| 10 | JOIN_SUBQUERY_EXISTS_023 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 2409041 | 7142055 | -138.07% |
+| 11 | AGG_GROUP_HAVING_094 | P1 | memory | GEN_SQL_AGGREGATE | 3458843 | 8213326 | -137.46% |
+| 12 | JOIN_LATERAL_LIKE_CORRELATED | P0 | memory | SQL_JOIN | 2986710 | 7093013 | -136.43% |
+| 13 | DML_WHERE_ORDER_LIMIT_032 | P1 | memory | GEN_SQL_DML | 2259322 | 7082415 | -136.08% |
+| 14 | DATETIME_TIME_Y2K_BASE | P0 | memory | SQL_DATETIME | 2629333 | 6949077 | -131.64% |
+| 15 | INDEX_SCHEMA_PRAGMA_043 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 1990765 | 6929553 | -130.99% |
+| 16 | CTE_RECURSIVE_MATRIX_020 | P1 | memory | GEN_SQL_CTE | 2988734 | 6925410 | -130.85% |
+| 17 | JOIN_SUBQUERY_EXISTS_068 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1824576 | 6911742 | -130.39% |
+| 18 | REC_COUNTER_UNION_DEDUPES | P0 | memory | SQL_RECURSIVE_CTE | 3007139 | 6903068 | -129.56% |
+| 19 | CTE_RECURSIVE_MATRIX_022 | P1 | memory | GEN_SQL_CTE | 2934633 | 6880687 | -129.36% |
+| 20 | DML_WHERE_ORDER_LIMIT_024 | P1 | memory | GEN_SQL_DML | 2479506 | 6842998 | -128.10% |
+| 21 | DATETIME_DATETIME_Y2K_PLUS_1_YEAR | P0 | memory | SQL_DATETIME | 2461245 | 6826416 | -127.55% |
+| 22 | JSON_EXTRACT_SET_002 | P2 | memory | GEN_SQL_JSON | 3069746 | 6980543 | -127.40% |
+| 23 | JOIN_SUBQUERY_EXISTS_058 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 2474834 | 6740124 | -124.67% |
+| 24 | SCALAR_SUBQUERY_SELECT_LIST | P0 | memory | SQL_SUBQUERY | 3057564 | 6801843 | -122.46% |
+| 25 | DML_WHERE_ORDER_LIMIT_057 | P1 | memory | GEN_SQL_DML | 3053731 | 6775812 | -121.89% |
 
 </details>
 <!-- sqlite-parity-report:end -->
@@ -457,11 +457,11 @@ the parser elimination benefit directly:
   "generated_by": "redline-testing jankurai-compare",
   "redlinedb_score": 85,
   "redlinedb_status": "unknown",
-  "score_delta": 65,
+  "score_delta": 63,
   "sqlite_ref": "version-3.53.1",
-  "sqlite_score": 20,
+  "sqlite_score": 22,
   "sqlite_status": "unknown",
-  "updated_date": "2026-05-26"
+  "updated_date": "2026-09-17"
 }
 <!-- sqlite-jankurai-breakdown:end -->
 
