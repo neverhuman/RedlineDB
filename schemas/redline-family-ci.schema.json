@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://jain.local/schemas/redline-family-ci.schema.json",
+  "title": "Redline family CI receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "family", "generated_at", "started_at", "manifest", "manifest_sha256", "strict_tools", "status", "repositories"],
+  "properties": {
+    "schema_version": {"const": "redline.family-ci/v1"},
+    "family": {"const": "redline-split"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "started_at": {"type": "string", "format": "date-time"},
+    "manifest": {"type": "string", "minLength": 1},
+    "manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "strict_tools": {"const": true},
+    "status": {"enum": ["pass", "fail"]},
+    "repositories": {
+      "type": "array",
+      "minItems": 4,
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "required": ["name", "required_check", "product_version", "tag_revision", "tag", "release_commit", "release_checksum_sha256", "protection_policy", "dependency_artifacts", "commands", "status", "failure"],
+        "properties": {
+          "name": {"enum": ["redline", "redline-core", "redline-testing", "redline-web"]},
+          "path": {"type": "string"},
+          "branch": {"type": "string"},
+          "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+          "forge_main": {"type": ["string", "null"]},
+          "origin": {"type": "string"},
+          "required_check": {"type": "string"},
+          "product_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+          "tag_revision": {"type": "integer", "minimum": 0},
+          "tag": {"type": "string"},
+          "release_commit": {"anyOf": [{"const": "PENDING"}, {"type": "string", "pattern": "^[0-9a-f]{40}$"}]},
+          "release_checksum_sha256": {"anyOf": [{"const": "PENDING"}, {"type": "string", "pattern": "^[0-9a-f]{64}$"}]},
+          "protection_policy": {"const": "immutable-main-v1"},
+          "tag_state": {"enum": ["absent", "verified"]},
+          "tag_metadata": {"type": ["object", "null"]},
+          "dependency_artifacts": {
+            "type": "array",
+            "maxItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["name", "source_repo", "source_commit", "source_tree_checksum_sha256", "product_version", "release_tag", "tag_revision", "artifact", "artifact_sha256", "checksum_sha256", "binary_sha256", "release_manifest", "release_manifest_sha256", "build_command", "build_log", "build_log_sha256", "transport"],
+              "properties": {
+                "name": {"const": "redline-testing-release"},
+                "source_repo": {"const": "redline-testing"},
+                "source_commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+                "source_tree_checksum_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "product_version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+                "release_tag": {"type": "string", "minLength": 1},
+                "tag_revision": {"type": "integer", "minimum": 1},
+                "artifact": {"type": "string", "pattern": "^redline-testing-[0-9]+\\.[0-9]+\\.[0-9]+-linux-x86_64\\.tar\\.gz$"},
+                "artifact_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "checksum_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "binary_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "release_manifest": {"const": "release-manifest.json"},
+                "release_manifest_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "build_command": {"const": ["bash", "scripts/ci-local.sh", "release"]},
+                "build_log": {"type": "string", "minLength": 1},
+                "build_log_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+                "transport": {"const": "file"}
+              }
+            }
+          },
+          "commands": {"type": "array"},
+          "log": {"type": ["string", "null"]},
+          "log_sha256": {"type": ["string", "null"]},
+          "status": {"enum": ["pass", "fail", "blocked"]},
+          "failure": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

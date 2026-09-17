@@ -1,0 +1,175 @@
+# Redline split operations
+
+[![jankurai score](https://img.shields.io/badge/jankurai-ratcheted-blue)](agent/jankurai-baseline.json)
+
+[Agent entrypoint](AGENTS.md) · Candidate status: CI and cutover evidence are
+reported by the protected `redline-split-ops/required` lane and checksummed
+receipts; no production promotion is claimed.
+
+## Quick start
+
+With Rust 1.96.0 and the pinned local security tools installed, run:
+
+```bash
+just required
+just check
+just security
+just score
+```
+
+Use [`docs/architecture.md`](docs/architecture.md) for control-plane boundaries,
+[`docs/testing.md`](docs/testing.md) for proof routing and rerun commands, and
+[`docs/release-process.md`](docs/release-process.md) for the gated release and
+rollback sequence.
+
+`redline-split-ops` owns the nested Redline family manifest, lock verification,
+clone/update delegation, bounded family CI, and diagnostics. The four child
+repositories remain independent Git repositories and are never included in an
+umbrella Cargo workspace.
+
+`redline-central` has a separate protected onboarding review, but it is not an
+accepted family identity yet. It is intentionally absent from this manifest
+and lock until its release commit and checksum can be added without changing
+the meaning of the accepted four-repository proof.
+
+The manifest is the sole release-identity authority. Each repository declares
+its product version, corrective tag revision, exact tag, Jeryu remote,
+release commit/tree checksum binding, and protection policy. Commit/checksum
+pairs may both be `PENDING` while review is underway; `proof-refresh` refuses
+them until both are exact.
+
+```text
+jain-redline/
+├── redline-split-ops/                 # this repository
+│   ├── repos.manifest.toml            # canonical child manifest
+│   └── redline.lock.toml              # authoritative child pins and proof lock
+├── redline{,-core,-testing,-web}/     # physical standalone repositories
+├── redline-central/                   # onboarded separately; not accepted here
+└── redline.lock.toml                  # transactional compatibility mirror
+```
+
+The commands accept `REDLINE_SPLIT_ROOT` for copied or relocated checkouts:
+
+```bash
+REDLINE_SPLIT_ROOT="$PWD" ./redlinectl validate
+./redlinectl clone --dry-run
+./redlinectl family-ci --receipt target/release-evidence/redline-family-ci.json
+```
+
+`redlinectl` is a small shell launcher for the standalone Rust control-plane
+binary in `tools/redline-proof/src/main.rs`. This repository is a Rust package for operational
+tooling, but it is deliberately not a Cargo workspace and is never a Redline
+product or dependency member. All proof, lock, receipt, and safety tests run as
+Rust tests with `cargo test --locked`; Python is reserved for cross-language
+parity harnesses and is not used by this control plane.
+
+Jain and Jeryu delegate here through their nested-family commands. Redline
+remains an independent family; both consumers must pin the same engine commit
+and proof-lock identity. The cutover command fails closed while parity or
+consumer evidence is historical.
+
+## Receipt-driven cutover
+
+`family-ci` refuses dirty or non-`main` checkouts and requires every local head
+to equal the forge `main` head. It runs each repository's strict CI from a
+temporary standalone `git clone --no-local` checked out at the exact reviewed
+SHA, and writes a JSON receipt, per-repository logs, and a `<receipt>.sha256`
+sidecar. Clone roots and Git directories must be physical, independent, full
+history repositories with no object alternates or linked-checkout metadata.
+Cleanup is marker-bound and refuses a symlinked root. A present tag that points
+anywhere other than the reviewed head is an immutable-tag conflict; a tag may
+be absent during this CI step, but `proof-refresh` requires it locally and on
+Jeryu.
+
+The runner removes inherited release, base-ref, Cargo-target, Rust
+flag/wrapper/target, profile, and control-plane toolchain overrides from every
+child command. Web alone receives a governed base after its prior immutable
+tag, commit, archive checksum, and strict ancestry are authenticated. The
+runner also builds Redline Testing from its reviewed commit and feeds Core only
+the staged `file://` release package, checksum, and manifest. The Core row binds
+that package, binary, manifest, source commit, and build log by SHA-256.
+
+Jain and Jeryu each provide a fresh checksummed JSON object with exactly these
+fields (replace the values with their reviewed consumer check output):
+
+```json
+{
+  "schema_version": "redline.consumer-evidence/v1",
+  "consumer": "jain-split",
+  "family": "redline-split",
+  "generated_at": "2026-07-12T12:00:00Z",
+  "status": "pass",
+  "source_commit": "0123456789abcdef0123456789abcdef01234567",
+  "required_check": "jain-split/redline-consumer",
+  "engine_tag": "redline-core-v4.1.0-jain.6",
+  "engine_commit": "<family-ci redline-core commit>",
+  "proof_lock_id": "redline-proof/v2/4.1.0/<family-ci redline-core commit>",
+  "family_ci_receipt_sha256": "<family-ci receipt SHA256>",
+  "manifest_sha256": "<canonical Redline manifest SHA256>",
+  "policy_sha256": "<canonical Redline policy SHA256>",
+  "consumer_manifest_sha256": "<consumer manifest SHA256>",
+  "consumer_policy_sha256": "<consumer CI policy SHA256>",
+  "test_log": "redline-consumer-jain-split.test.log",
+  "test_log_sha256": "<fresh consumer test-log SHA256>",
+  "tool_version": "jain-redline-consumer/v1"
+}
+```
+
+The Jeryu receipt uses `consumer: "jeryu-split"` and required check
+`jeryu-split/redline-consumer`, plus tool version
+`jeryu-redline-consumer/v1`. The manifest, policy, and fresh test-log hashes are
+binding inputs rather than descriptive metadata. Each evidence file must have a standard
+`<file>.sha256` sidecar containing `<digest>  <basename>`. Evidence older than
+24 hours, future-dated evidence, unknown fields, manual booleans, mismatched
+commits, stale logs, or changed checksums are rejected.
+
+```bash
+./redlinectl proof-refresh \
+  --family-ci target/release-evidence/redline-family-ci.json \
+  --jain-evidence /path/to/jain-redline-consumer.json \
+  --jeryu-evidence /path/to/jeryu-redline-consumer.json \
+  --receipt target/release-evidence/redline-proof-refresh.json
+./redlinectl cutover-verify
+```
+
+`proof-refresh` accepts no eligibility flag. It derives the proof hashes,
+proof-lock identity, tag metadata, and `cutover_eligible` value, then safely
+replaces the authoritative lock and its compatibility mirror with identical
+bytes. `cutover-verify` reconstructs the lock from the still-fresh receipts and
+live immutable tag readback; a manual lock edit cannot make cutover pass.
+
+The tracked Jain.4 successor receipts document the completed historical
+transition tooling:
+
+```bash
+./redlinectl proof-refresh --prepare-successor \
+  --receipt release-evidence/8.0.0/redline-proof-successor-jain4-prepared.json
+```
+
+`successor-receipt-verify` continues to checksum-verify those closed Jain.4
+artifacts and identities, but required and release-readiness gates do not
+require them for Jain.6. Current candidate readiness accepts the authoritative
+historical lock without a compatibility mirror only while it is valid and
+explicitly ineligible; the transition state is
+`authoritative-only-historical`. Partial, mismatched, malformed, or eligible
+mirror-absent states fail. Normal two-consumer `proof-refresh` is the sole
+writer of the lock pair and sidecars. Generated-evidence ownership and
+merge-audit acceptance are documented in `docs/generated-zones.md` and
+`docs/audit-rubric.md`.
+
+The historical reconciler command was:
+
+```bash
+./redlinectl proof-refresh --reconcile-successor \
+  --receipt release-evidence/8.0.0/redline-proof-successor-jain4-reconciled.json
+```
+
+That receipt remains historical evidence; it does not require or recreate the
+now-absent mirror. Only a normal two-consumer `proof-refresh` can create the
+current lock pair and restore cutover eligibility.
+
+Reviewed cutover inputs live under `release-evidence/<release>/`, alongside
+their checksum sidecars and the family-CI logs named by the receipt. The proof
+lock records paths relative to this repository so a clean reviewed checkout can
+reconstruct the decision. Temporary or ignored evidence paths are not valid
+release inputs.

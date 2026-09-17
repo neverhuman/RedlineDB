@@ -1,0 +1,4 @@
+/target/
+/.jankurai/score-history.jsonl
+__pycache__/
+*.pyc

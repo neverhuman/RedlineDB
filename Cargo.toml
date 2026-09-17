@@ -1,0 +1,17 @@
+[package]
+name = "redline-split-ops"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+pathdiff = "0.2"
+serde_json = "1"
+sha2 = "0.10"
+toml = "0.8"
+
+[[bin]]
+name = "redline-proof"
+path = "tools/redline-proof/src/main.rs"

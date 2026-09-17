@@ -1,0 +1,77 @@
+$ bash scripts/ci-local.sh pr-ci
+[redline-ci] pr-ci: fast lane
+[redline-ci] fast: checking shell syntax
+[redline-ci] fast: governed Jankurai hostile identity tests
+governed-Jankurai must be an executable regular non-symlink: /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-governed-jankurai.VrVJ8R/missing
+governed-Jankurai must be an executable regular non-symlink: /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-governed-jankurai.VrVJ8R/linked-jankurai
+governed-Jankurai digest mismatch: /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-governed-jankurai.VrVJ8R/jankurai
+governed Jankurai version mismatch: jankurai fixture-1
+governed Jankurai hostile identity tests passed
+[redline-ci] proofbind: exact-head non-deleted surface evidence passed
+[redline-ci] proofbind: exact-head non-deleted surface evidence passed
+[redline-ci] proof-base-contract: governed no-remote base routing passed
+[redline-ci] contract-drift: checking OpenAPI <-> Rust DTOs <-> TS DTOs
+[redline-ci] contract-drift: ok: 16 schemas, 10 paths in sync
+[redline-ci] contract-drift: complete
+[redline-ci] release-dispatch-contract: complete
+[redline-ci] fast: cargo-deny locked archive cache hostile tests
+refusing scratch cleanup: directory custody changed
+refusing scratch cleanup: directory custody changed
+refusing scratch retention: directory custody changed
+refusing scratch cleanup: directory custody changed
+refusing scratch retention: directory custody changed
+[redline-ci] security: seeded locked Cargo archive valuable-0.1.1.crate sha256=a6e3d83185113052ba3e705746c8ef1a5a69955063e16049e6d549bfed59749e
+[redline-ci] security: seeded locked Cargo archive anstyle-wincon-3.0.11.crate sha256=fb9cb9435c8721b80b1164e8eae3fbf3a992cdaed9aced6a1d447615f18b9d16
+[redline-ci] security: seeded locked Cargo archive anstyle-wincon-3.0.11.crate sha256=fb9cb9435c8721b80b1164e8eae3fbf3a992cdaed9aced6a1d447615f18b9d16
+[redline-ci] security: seeded locked Cargo archive valuable-0.1.1.crate sha256=a6e3d83185113052ba3e705746c8ef1a5a69955063e16049e6d549bfed59749e
+[redline-ci] security: verified exact Cargo.lock registry closure packages=2 manifest=7c8f4ccbf8713d8420b42ebfb2adddc888ad64bce9b078e696207e7d70478209
+[redline-ci] security: seeded locked Cargo archive valuable-0.1.1.crate sha256=a6e3d83185113052ba3e705746c8ef1a5a69955063e16049e6d549bfed59749e
+[redline-ci] security: seeded locked Cargo archive anstyle-wincon-3.0.11.crate sha256=fb9cb9435c8721b80b1164e8eae3fbf3a992cdaed9aced6a1d447615f18b9d16
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/home-success/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at bae025f second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=bae025f6c6ff8966e31af00389e2447ebb4390a0 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/home-inherited-hooks-disabled/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at bae025f second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=bae025f6c6ff8966e31af00389e2447ebb4390a0 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/home-advanced-source/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at 6745016 first fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=674501607f9e3ceaa8e9e75a5019fe56db81123e tree=32e3cd1f78df1991c164b7e794dc1392bbfb7928
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/home-fetch-head/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at bae025f second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=bae025f6c6ff8966e31af00389e2447ebb4390a0 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/home-destination-link/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at bae025f second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=bae025f6c6ff8966e31af00389e2447ebb4390a0 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/home-alternates/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at bae025f second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=bae025f6c6ff8966e31af00389e2447ebb4390a0 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/home-local-hooks/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at bae025f second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=bae025f6c6ff8966e31af00389e2447ebb4390a0 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/home-unexpected-ref/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at bae025f second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=bae025f6c6ff8966e31af00389e2447ebb4390a0 tree=f0aff5b92e52942ee52138348a60211f145da103
+Cloning into '/home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/home-nonclean/advisory-dbs/advisory-db-3157b0e258782691'...
+From /home/ubuntu/jain-split/target/redline-proof-r2-172.S7ZQvs/tmp/redline-family-ci-2579347-1785230496672565760/redline-web/target/ci-tmp/redline-web-cargo-deny-cache.mxUBBm/advisory/source-db
+ * branch            main       -> FETCH_HEAD
+HEAD is now at bae025f second fixture
+[redline-ci] security: materialized isolated cargo-deny advisory DB commit=bae025f6c6ff8966e31af00389e2447ebb4390a0 tree=f0aff5b92e52942ee52138348a60211f145da103
+cargo-deny locked archive and advisory DB hostile tests passed
+release RustSec snapshot exports are missing or mismatched
+[redline-ci][error] no-index test: release RustSec authority is invalid

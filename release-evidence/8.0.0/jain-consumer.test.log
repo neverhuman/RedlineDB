@@ -1,0 +1,9 @@
+   Compiling jain-redline-consumer-contract v8.0.0 (/home/ubuntu/jain-split/jain-web/ops/ci/redline-consumer)
+    Finished `test` profile [unoptimized + debuginfo] target(s) in 0.73s
+     Running tests/durable_contract.rs (ops/ci/redline-consumer/target/debug/deps/durable_contract-bf4be5bd1ce6a573)
+
+running 1 test
+test jain_model_and_release_state_survives_transaction_checkpoint_and_reopen ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.02s
+

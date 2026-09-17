@@ -1,0 +1,207 @@
+{
+  "family": "redline-split",
+  "generated_at": "2026-07-28T10:09:48Z",
+  "manifest": "../../repos.manifest.toml",
+  "manifest_sha256": "8bf751974627dec5fa81f7e471b514bf8e6539cb2867e336e07ba9016314fd4a",
+  "repositories": [
+    {
+      "branch": "main",
+      "commands": [
+        [
+          "bash",
+          "scripts/ci-local.sh",
+          "required"
+        ],
+        [
+          "bash",
+          "ops/ci/security.sh"
+        ],
+        [
+          "bash",
+          "ops/ci/jankurai-audit.sh"
+        ]
+      ],
+      "commit": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "dependency_artifacts": [],
+      "failure": null,
+      "forge_main": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "log": "redline-family-ci-jain6-web2-r2.d/redline.log",
+      "log_sha256": "b77083c0b32770903c97aa6c1a18ad4f24b0f1a98ced44c0bb49dd936c7a5ce4",
+      "name": "redline",
+      "origin": "http://127.0.0.1:8787/git/jeryu/redlineDB.git",
+      "path": "../redline",
+      "product_version": "4.1.0",
+      "protection_policy": "immutable-main-v1",
+      "release_checksum_sha256": "13c0ed0f2bf25cd4eb99cd141155a67b0c01c10564e9557d076d071a0eb1bd82",
+      "release_commit": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+      "required_check": "redline/required",
+      "status": "pass",
+      "tag": "redline-v4.1.0-jain.2",
+      "tag_metadata": {
+        "commit": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+        "object": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+        "object_type": "commit",
+        "remote_commit": null,
+        "remote_object": "cdb1c5a4d4629ff555cfca9d8994c818e070c571",
+        "subject": "release(redline): bind corrective hub version",
+        "tagger_date": null
+      },
+      "tag_revision": 2,
+      "tag_state": "verified"
+    },
+    {
+      "branch": "main",
+      "commands": [
+        [
+          "bash",
+          "scripts/ci-local.sh",
+          "all"
+        ]
+      ],
+      "commit": "d0de59930141baffcfa2b514480e75b14627f24d",
+      "dependency_artifacts": [
+        {
+          "artifact": "redline-testing-1.0.1-linux-x86_64.tar.gz",
+          "artifact_sha256": "ea553273d52029a3133724d360ad481552db7e3e23c348c746ddeb5d2b79aab5",
+          "binary_sha256": "39a045aabbb04c324aaea24b685705101e48ef9247128b57b72243dcbad315ca",
+          "build_command": [
+            "bash",
+            "scripts/ci-local.sh",
+            "release"
+          ],
+          "build_log": "redline-family-ci-jain6-web2-r2.d/redline-testing-artifact.log",
+          "build_log_sha256": "94d81fbd0366cee741a0c6b344ac56e37fb115b7047d89232149a6b163fc6345",
+          "checksum_sha256": "718494a8ca645d106220efecb21e8d1c770309b84d81bbf012e8b8efaee692ba",
+          "name": "redline-testing-release",
+          "product_version": "1.0.1",
+          "release_manifest": "release-manifest.json",
+          "release_manifest_sha256": "41d94978143e890637752d20bb5a658816809cb553bd55e7c098086d6429f1bf",
+          "release_tag": "redline-testing-v1.0.1-jain.1",
+          "source_commit": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+          "source_repo": "redline-testing",
+          "source_tree_checksum_sha256": "825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac",
+          "tag_revision": 1,
+          "transport": "file"
+        }
+      ],
+      "failure": null,
+      "forge_main": "d0de59930141baffcfa2b514480e75b14627f24d",
+      "log": "redline-family-ci-jain6-web2-r2.d/redline-core.log",
+      "log_sha256": "8d06e57d2fdd2a4b0c603e62361eedd648d77ca8d1db9ade283b0e3971a49609",
+      "name": "redline-core",
+      "origin": "http://127.0.0.1:8787/git/jeryu/redline-core.git",
+      "path": "../redline-core",
+      "product_version": "4.1.0",
+      "protection_policy": "immutable-main-v1",
+      "release_checksum_sha256": "6dfd1a6d4fa160643b901b633f1a613c78fa51eed83c7e0b5360309ae1fcab2f",
+      "release_commit": "d0de59930141baffcfa2b514480e75b14627f24d",
+      "required_check": "redline-core/required",
+      "status": "pass",
+      "tag": "redline-core-v4.1.0-jain.6",
+      "tag_metadata": {
+        "commit": "d0de59930141baffcfa2b514480e75b14627f24d",
+        "object": "d0de59930141baffcfa2b514480e75b14627f24d",
+        "object_type": "commit",
+        "remote_commit": null,
+        "remote_object": "d0de59930141baffcfa2b514480e75b14627f24d",
+        "subject": "ci: complete release hook surface",
+        "tagger_date": null
+      },
+      "tag_revision": 6,
+      "tag_state": "verified"
+    },
+    {
+      "branch": "main",
+      "commands": [
+        [
+          "bash",
+          "scripts/ci-local.sh",
+          "pr-ci"
+        ],
+        [
+          "bash",
+          "scripts/ci-local.sh",
+          "jankurai"
+        ],
+        [
+          "bash",
+          "scripts/ci-local.sh",
+          "audit"
+        ],
+        [
+          "bash",
+          "scripts/ci-local.sh",
+          "release"
+        ]
+      ],
+      "commit": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "dependency_artifacts": [],
+      "failure": null,
+      "forge_main": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "log": "redline-family-ci-jain6-web2-r2.d/redline-testing.log",
+      "log_sha256": "f405ffc790c7ed4b25a043cc52834728e8981ea8acb1d6a3faf1d30090388b7b",
+      "name": "redline-testing",
+      "origin": "http://127.0.0.1:8787/git/jeryu/redline-testing.git",
+      "path": "../redline-testing",
+      "product_version": "1.0.1",
+      "protection_policy": "immutable-main-v1",
+      "release_checksum_sha256": "825c8322794796edd7c9d8aab77438ae64549ea8ee2bf9d08bf698daeca30fac",
+      "release_commit": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+      "required_check": "redline-testing/required",
+      "status": "pass",
+      "tag": "redline-testing-v1.0.1-jain.1",
+      "tag_metadata": {
+        "commit": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+        "object": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+        "object_type": "commit",
+        "remote_commit": null,
+        "remote_object": "4a449d8de05c8a0ced5cb2d29c76e4718a0041ea",
+        "subject": "release(testing): bind xtask package identity to v1.0.1",
+        "tagger_date": null
+      },
+      "tag_revision": 1,
+      "tag_state": "verified"
+    },
+    {
+      "branch": "main",
+      "commands": [
+        [
+          "bash",
+          "scripts/ci-local.sh",
+          "pr-ci"
+        ]
+      ],
+      "commit": "215fd9fc9008e4943973598754d591d39c621598",
+      "dependency_artifacts": [],
+      "failure": "purpose=validate Redline release evidence and derived controls; reason=CI command exited Some(1): bash scripts/ci-local.sh pr-ci; common_fixes=regenerate the producer receipt and checksum together | preserve immutable tags and stop on identity mismatch | use a clean forge-equal main checkout for release verification; repair_hint=rerun the owning command from agent/test-map.json; docs_url=docs/testing.md",
+      "forge_main": "215fd9fc9008e4943973598754d591d39c621598",
+      "log": "redline-family-ci-jain6-web2-r2.d/redline-web.log",
+      "log_sha256": "cc15c8bb06ed554458df63e7fa2077ead586586ba1a3a0feb69c2ab13f70af3d",
+      "name": "redline-web",
+      "origin": "http://127.0.0.1:8787/git/jeryu/redline-web.git",
+      "path": "../redline-web",
+      "product_version": "0.1.0",
+      "protection_policy": "immutable-main-v1",
+      "release_checksum_sha256": "0aa807a7d8f13bdbfbc33cf7cb1c94deda98ca6c6516eae12ab9313a3b9b5082",
+      "release_commit": "215fd9fc9008e4943973598754d591d39c621598",
+      "required_check": "redline-web/required",
+      "status": "fail",
+      "tag": "redline-web-v0.1.0-jain.2",
+      "tag_metadata": {
+        "commit": "215fd9fc9008e4943973598754d591d39c621598",
+        "object": "215fd9fc9008e4943973598754d591d39c621598",
+        "object_type": "commit",
+        "remote_commit": null,
+        "remote_object": "215fd9fc9008e4943973598754d591d39c621598",
+        "subject": "fix(ci): expose sealed release lanes",
+        "tagger_date": null
+      },
+      "tag_revision": 2,
+      "tag_state": "verified"
+    }
+  ],
+  "schema_version": "redline.family-ci/v1",
+  "started_at": "2026-07-28T09:21:13Z",
+  "status": "fail",
+  "strict_tools": true
+}
