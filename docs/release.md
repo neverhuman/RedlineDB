@@ -53,7 +53,7 @@ move an existing tag or replace a published archive. The current publisher accep
 
 ## Packages and provenance
 
-`bash scripts/package-release.sh` with `TAG=v4.1.0-rc.1` produces three archives
+`bash scripts/package-release.sh` with `TAG=v4.1.0-rc.2` produces three archives
 for the current native platform. The root `packages.yml` matrix covers Linux
 x86_64/ARM64 (glibc 2.35+) and macOS Intel/Apple Silicon (macOS 15+).
 
@@ -66,6 +66,11 @@ a CycloneDX SBOM and `share/redlinedb/build-provenance.json` recording its paren
 commit, tag, platform and compiler. The web archive includes a frontend SBOM;
 the testing SBOM includes the bundled client. GitHub release attestations bind
 the uploaded archive bytes to the workflow identity and source commit.
+
+Native packaging also links C consumers against the extracted static and dynamic
+libraries, relocates their installation tree, and runs both consumers. macOS
+libraries use a relative load identity and are signed again after installation.
+CI stages release archives outside the Cargo cache to keep versions separate.
 
 The binary installer defaults to `~/.local`, honors `VERSION` and `PREFIX`,
 and fails if a checksum is absent or incorrect. `REDLINEDB_SHA256` adds an
@@ -85,3 +90,5 @@ superseded in release notes, and publish a corrected version through the same
 acceptance process. Consumers can select a previous verified release with
 `VERSION`; back up their data and review format compatibility before changing
 installed versions. Release automation does not roll back or replace databases.
+
+Candidate rc.1 exposed an absolute macOS dylib load identity during published-archive verification. Candidate rc.2 corrects the identity and adds extracted-package C consumer relocation tests before stable qualification. The rc.1 tag and assets remain preserved with a known-issue notice.
