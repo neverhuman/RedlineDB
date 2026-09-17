@@ -285,11 +285,16 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with: {node-version: '22'}
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
-      - run: cargo install cargo-audit --locked --version 0.21.2
+      - run: cargo install cargo-audit --locked --version 0.22.1
       - run: cargo install cargo-deny --locked --version 0.19.8
       - run: bash ops/ci/install-github-tools.sh
-      - run: jankurai security run . --strict --profile ci --script ops/ci/security-family.sh --out target/jankurai/security/evidence.json
+      - run: |
+          jankurai security run . --strict --profile ci --script ops/ci/security-family.sh --out target/jankurai/security/evidence.json || {
+            cat target/jankurai/security/security-lane-*.log
+            exit 1
+          }
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
         with: {name: security-evidence, path: target/jankurai/security, if-no-files-found: error}
 
   packaging:

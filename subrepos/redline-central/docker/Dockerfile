@@ -7,7 +7,7 @@ COPY crates ./crates
 RUN cargo build --locked --release -p redlinedb-server
 
 FROM debian:bookworm-slim
-RUN useradd --create-home --uid 10001 redline
+RUN useradd --create-home --uid 10001 redline && mkdir /data && chown redline:redline /data
 COPY --from=build /src/target/release/redlinedb-server /usr/local/bin/redlinedb-server
 USER redline
 VOLUME ["/data"]

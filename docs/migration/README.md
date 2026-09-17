@@ -53,3 +53,5 @@ follows verified publication; installed Jain/Jeryu consumer locks and databases
 are outside this migration and remain historical records here.
 
 The GitHub audit baseline retains the historical engine and hub scores (85), caps, and findings. Only its policy fingerprint is qualified for the pinned Jankurai 1.6.11 release and the separately audited component layout. The original baseline and its SHA-256 remain recorded; future policy changes still fail the ratchet.
+
+Security uses cargo-audit 0.22.1: 0.21.2 cannot parse the current RustSec CVSS 4 advisory records. Cargo-deny remains pinned at 0.19.8. The high-severity npm gate passes; the existing Vitest 3 development toolchain still reports two moderate advisories requiring a separate major-version upgrade.

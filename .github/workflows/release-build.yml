@@ -11,6 +11,9 @@ jobs:
   acceptance:
     uses: ./.github/workflows/ci.yml
     with: {tag: '${{ github.ref_name }}'}
+    permissions:
+      contents: read
+      attestations: read
   publish:
     needs: acceptance
     runs-on: ubuntu-24.04

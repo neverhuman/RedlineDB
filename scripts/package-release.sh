@@ -34,6 +34,11 @@ for package in redlinedb redline-web redline-testing; do
     *) manifest=subrepos/$package/Cargo.toml ;;
   esac
   cargo metadata --locked --format-version 1 --manifest-path "$manifest" > "$stage/metadata.json"
+  if [[ $package == redline-testing ]]; then
+    cargo metadata --locked --format-version 1 --manifest-path subrepos/redline-central/Cargo.toml > "$stage/client-metadata.json"
+    jq -s '{packages: ([.[].packages[]] | unique_by(.id))}' "$stage/metadata.json" "$stage/client-metadata.json" > "$stage/combined-metadata.json"
+    mv "$stage/combined-metadata.json" "$stage/metadata.json"
+  fi
   jq '{bomFormat:"CycloneDX",specVersion:"1.5",version:1,components:[.packages[]|{type:"library",name,version,purl:("pkg:cargo/"+.name+"@"+.version),licenses:(if .license then [{expression:.license}] else [] end)}]}' "$stage/metadata.json" > "$stage/$package/share/redlinedb/sbom.cdx.json"
   jq -r '.packages[]|[.name,.version,(.license // "UNKNOWN"),(.repository // "")]|@tsv' "$stage/metadata.json" > "$stage/$package/share/redlinedb/DEPENDENCIES.tsv"
   while IFS=$'\t' read -r name manifest_path; do

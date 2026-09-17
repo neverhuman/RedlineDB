@@ -55068,6 +55068,210 @@
           "disposition": "history-only; import identities are separately pinned in subrepos.toml"
         }
       ]
+    },
+    {
+      "host": "github.com",
+      "repos": [
+        {
+          "path": "https://github.com/neverhuman/redline-core.git",
+          "head": "11c72660892277db68d40a18f6805a02a4503c23",
+          "tree": "73a319b5e674e19fd08b3c2ae532608b99ff4216",
+          "refs": [
+            [
+              "refs/heads/main",
+              "11c72660892277db68d40a18f6805a02a4503c23"
+            ],
+            [
+              "refs/tags/redline-core-v4.1.0-jain.2",
+              "53642c877e6e474b6d5815b7407a7397852f661a"
+            ],
+            [
+              "refs/tags/redline-core-v4.1.0-jain.6",
+              "d0de59930141baffcfa2b514480e75b14627f24d"
+            ]
+          ],
+          "preserved_refs": [
+            [
+              "refs/tags/recovery/20260917/github/redline-core/heads/main",
+              "11c72660892277db68d40a18f6805a02a4503c23"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-core/tags/redline-core-v4.1.0-jain.2",
+              "53642c877e6e474b6d5815b7407a7397852f661a"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-core/tags/redline-core-v4.1.0-jain.6",
+              "d0de59930141baffcfa2b514480e75b14627f24d"
+            ]
+          ],
+          "disposition": "Historical public split repository; all refs preserved separately from released monorepo code."
+        },
+        {
+          "path": "https://github.com/neverhuman/redline-testing.git",
+          "head": "9935b36ed2cbd273a0021afad0ab689e740012b9",
+          "tree": "1d7a23df9db823321953525f5aa944e23080c3d8",
+          "refs": [
+            [
+              "refs/heads/claude/redline-split-onboard",
+              "eb74f2fb9dc9c3379d4103c078673beea622af93"
+            ],
+            [
+              "refs/heads/codex/redline-testing-ci-report-control-plane",
+              "168b4d6b89f8b8b0a832ce752dbcb629ad456e14"
+            ],
+            [
+              "refs/heads/codex/redline-testing-github-cutover-doctor",
+              "0adf38a1f4d961cfd1337ef499d1e02562712b71"
+            ],
+            [
+              "refs/heads/codex/rql-phase1-release-all",
+              "3d17676b7f4ffc927829af1ebbde03986f32eef5"
+            ],
+            [
+              "refs/heads/exhaustive",
+              "e94903883ad6f6bbbbed6d5049f851d45d548154"
+            ],
+            [
+              "refs/heads/main",
+              "9935b36ed2cbd273a0021afad0ab689e740012b9"
+            ],
+            [
+              "refs/pull/1/head",
+              "168b4d6b89f8b8b0a832ce752dbcb629ad456e14"
+            ],
+            [
+              "refs/pull/2/head",
+              "e94903883ad6f6bbbbed6d5049f851d45d548154"
+            ],
+            [
+              "refs/pull/3/head",
+              "0adf38a1f4d961cfd1337ef499d1e02562712b71"
+            ],
+            [
+              "refs/pull/3/merge",
+              "99848c71070ff6a82d8ed0bc2e05c398acc71d8c"
+            ],
+            [
+              "refs/pull/4/head",
+              "eb74f2fb9dc9c3379d4103c078673beea622af93"
+            ],
+            [
+              "refs/pull/4/merge",
+              "8b443293df989991fca4c9f78c34106610cd12c3"
+            ],
+            [
+              "refs/tags/v0.1.1",
+              "c5a040e5dca4f024fafdda9fc83fae86677def60"
+            ],
+            [
+              "refs/tags/v0.1.2",
+              "a8b6579344f8b8f6df03818fac6594b6e8efcd66"
+            ],
+            [
+              "refs/tags/v0.1.3",
+              "a0c2b612b89664e4d10559c5e97fe9cc262304e8"
+            ],
+            [
+              "refs/tags/v1.0.0",
+              "9d501b3fb2a76e8c2f981a18f7bd809887ca83a0"
+            ],
+            [
+              "refs/tags/v1.0.1",
+              "49c3f4fb008319c9defa75454a1c73a5deb3f22d"
+            ]
+          ],
+          "preserved_refs": [
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/heads/claude/redline-split-onboard",
+              "eb74f2fb9dc9c3379d4103c078673beea622af93"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/heads/codex/redline-testing-ci-report-control-plane",
+              "168b4d6b89f8b8b0a832ce752dbcb629ad456e14"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/heads/codex/redline-testing-github-cutover-doctor",
+              "0adf38a1f4d961cfd1337ef499d1e02562712b71"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/heads/codex/rql-phase1-release-all",
+              "3d17676b7f4ffc927829af1ebbde03986f32eef5"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/heads/exhaustive",
+              "e94903883ad6f6bbbbed6d5049f851d45d548154"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/heads/main",
+              "9935b36ed2cbd273a0021afad0ab689e740012b9"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/pull/1/head",
+              "168b4d6b89f8b8b0a832ce752dbcb629ad456e14"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/pull/2/head",
+              "e94903883ad6f6bbbbed6d5049f851d45d548154"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/pull/3/head",
+              "0adf38a1f4d961cfd1337ef499d1e02562712b71"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/pull/3/merge",
+              "99848c71070ff6a82d8ed0bc2e05c398acc71d8c"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/pull/4/head",
+              "eb74f2fb9dc9c3379d4103c078673beea622af93"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/pull/4/merge",
+              "8b443293df989991fca4c9f78c34106610cd12c3"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/tags/v0.1.1",
+              "c5a040e5dca4f024fafdda9fc83fae86677def60"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/tags/v0.1.2",
+              "a8b6579344f8b8f6df03818fac6594b6e8efcd66"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/tags/v0.1.3",
+              "a0c2b612b89664e4d10559c5e97fe9cc262304e8"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/tags/v1.0.0",
+              "9d501b3fb2a76e8c2f981a18f7bd809887ca83a0"
+            ],
+            [
+              "refs/tags/recovery/20260917/github/redline-testing/tags/v1.0.1",
+              "49c3f4fb008319c9defa75454a1c73a5deb3f22d"
+            ]
+          ],
+          "disposition": "Historical public split repository; all refs preserved separately from released monorepo code."
+        },
+        {
+          "path": "https://github.com/neverhuman/redline-web.git",
+          "head": "7b893f0d75df8d0ccf45855584d09c03576a0450",
+          "tree": "4fd1e1c39cd399db54730612a35c25be9780bc20",
+          "refs": [
+            [
+              "refs/heads/main",
+              "7b893f0d75df8d0ccf45855584d09c03576a0450"
+            ]
+          ],
+          "preserved_refs": [
+            [
+              "refs/tags/recovery/20260917/github/redline-web/heads/main",
+              "7b893f0d75df8d0ccf45855584d09c03576a0450"
+            ]
+          ],
+          "disposition": "Historical public split repository; all refs preserved separately from released monorepo code."
+        }
+      ],
+      "bundles": []
     }
   ],
   "snapshots": [
