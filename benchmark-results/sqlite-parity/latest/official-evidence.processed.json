@@ -1,9 +1,9 @@
 {
   "schema_version": "redline-testing-official-evidence-processed-v1",
   "source_path": "target/redline-testing/official-evidence.json",
-  "source_sha256": "22446fb74e276a0315a0d94ebdd8047ed9686a13569e9a32c229b1868d83a932",
-  "validated_at_unix_ms": 1789681807501,
-  "generated_at_unix_ms": 1789681704688,
+  "source_sha256": "69d8c8d6dc54906a43fdcd28c70129f27c84f42be725464430be269ff72c71cc",
+  "validated_at_unix_ms": 1789682413013,
+  "generated_at_unix_ms": 1789682312975,
   "command_line": [
     "/home/runner/work/RedlineDB/RedlineDB/target/ci/redline-testing/local-1bb0bb0ec2ad/bin/redline-testing",
     "run",
@@ -26,7 +26,7 @@
   ],
   "target": {
     "path": "/home/runner/work/RedlineDB/RedlineDB/target/release/redlinedb",
-    "sha256": "3c00d77b5b17252d434ca1726ea57628e6257aa15d831a3243c3e5abe413a792",
+    "sha256": "2d9a22335176a0486225963d125b0cfca3dc77c988ee1d3ebeae7a8cf31db180",
     "version": "redlinedb v4.1.0 (SQLite 3.45.1 compatibility)"
   },
   "sqlite": {
@@ -48,11 +48,11 @@
       "ranked_path": "beyond-sqlite-ranked.csv",
       "manifest_path": "beyond-sqlite-manifest.json",
       "provenance_path": "beyond-sqlite-provenance.json",
-      "raw_sha256": "518223a667ec7b698de41bb3af1d5d426e744cac2185e4d2ada7cee8c2976edb",
-      "summary_sha256": "15b474e6fe63eec2f69fef0dcdb4a2acc2598cf93a8d94dc61b504c5b0b45240",
+      "raw_sha256": "331249d3269ee0bbfa3197e37489eb4c7f078104d8aa64d814b585ab69bf24ce",
+      "summary_sha256": "5e78ee45ba252163817a81e621d7a352458b12ccbaca679a177164f454bda89b",
       "ranked_sha256": "93558dc075a70c7398c20ad0485a737b35789c5f18660180872488f87f77a67b",
       "manifest_sha256": "5bda383732808aa9a056d9e51653568f6e8e2880ea843ede6d95da9d3a57a954",
-      "provenance_sha256": "c17ae995df8620da3c41e4d36f71399aa2fdb245c96f032b5473daf0beca1fe8"
+      "provenance_sha256": "6c37b5acb911d933675fe4bf4db77cd8e7a18ae203800ebf13c4c7624712f892"
     },
     "memory": {
       "total": 2445,
@@ -64,11 +64,11 @@
       "ranked_path": "memory-ranked.csv",
       "manifest_path": "memory-manifest.json",
       "provenance_path": "memory-provenance.json",
-      "raw_sha256": "60597bfe178b8f5b7ce0d181e42d2a72059db93660ac24fbab0a1bb30d3c4245",
-      "summary_sha256": "3c94706443f7e229241a3a1a82651634255b251b79872301ce42f798970fa5c8",
-      "ranked_sha256": "dd008ea1d090c3651ef1e551c683808c2300b040950a8fcb211ede753953adfc",
+      "raw_sha256": "81d6b04a7587b71c4544f5a0a77a930169d12a6c9ae634307c368eb13316e36c",
+      "summary_sha256": "a64ace5af6331d680b1adea151352231e1a465494fad8d5639e32719b599ef8c",
+      "ranked_sha256": "5a8f819b020166af4b1b2e8141c3d82b2fd5a8c712aed31616a390cbda04398c",
       "manifest_sha256": "8ed18338704bf19cccd3789624d49e4c2aa2cda89bb22cece8dd0ecfc57e4314",
-      "provenance_sha256": "ba3741375f4286cc4d0c48c43c65431d720ec911ace2cb1cc883acc10511e735"
+      "provenance_sha256": "3677503b8839ca090e1e10efa2efa219baa63e97a145c136be79ee8c4da24a53"
     },
     "rql_phase1": {
       "total": 1385,
@@ -80,11 +80,11 @@
       "ranked_path": "rql-phase1-ranked.csv",
       "manifest_path": "rql-phase1-manifest.json",
       "provenance_path": "rql-phase1-provenance.json",
-      "raw_sha256": "8fbe3e8df4247b82da2cbd954d7897b5cdcd3e35989e595a042d5764692ea24f",
-      "summary_sha256": "3209ce3a5d9f5f465499088c394c2bffeb6cb27f7ec06eb29cc3824a45b133f9",
-      "ranked_sha256": "9fe8ce22d61109d959fdba8df656339f9f082fb904ada7e49028fb272d3475a0",
+      "raw_sha256": "9d6caef5bffef39243edd048e91e4e95513d933b220b3e024e5b04e86e657557",
+      "summary_sha256": "f5bd08dc0f2989f5c106436fa64d2f1aed5bc2ddc2c989e78238ffbc00c8663b",
+      "ranked_sha256": "e0a447af5cb7a908919a024e410d880a44b95b673eac86ab0baf2da6696d1920",
       "manifest_sha256": "50ed4286ece0dd0fd9a0e93522c65c000cc798cfb6a4350cbdaf17a084bea8c6",
-      "provenance_sha256": "c8e6abd0e9d21a7b73174e7b418cc0fbda53ab7e7e594b6e0789aef1753dd2f5"
+      "provenance_sha256": "ed9bba51306fd0c50287094af65fdf4521aabfc15738c7b110a7d682095800d1"
     },
     "sqlite_parity": {
       "total": 2445,
@@ -96,36 +96,36 @@
       "ranked_path": "ranked.csv",
       "manifest_path": "manifest.json",
       "provenance_path": "provenance.json",
-      "raw_sha256": "8feb0c4baf8bee50e26bd0d0cb3dfcccede523765307e4b06e8c161bfe1a6a59",
-      "summary_sha256": "b607375f2220a9b286661744d3414b21257bbb6de14fd910056531f035d76862",
-      "ranked_sha256": "112ec3ab835dda48ff5262b89edc646e3e18a1dd6670c0bdeaa180eae4170d53",
+      "raw_sha256": "8f152f7a192b76a060bf7e627c1be2196c07229c24d71da509510ff348a92bc6",
+      "summary_sha256": "039bb26637a811aa61eec4b7e286843a5e78771c63ff7d2e92cae2a9a2d863b5",
+      "ranked_sha256": "e3f6fe02e0242d51ef61079c32e0791119d07eb629b31dbe2193fd300bfd6f26",
       "manifest_sha256": "79d49ba5cf488be8793f90e443f8b147b5ff74166689a6c50a1102094c1b9241",
-      "provenance_sha256": "0ed8d5364c797a3d931622bf3ad4c51aae4cc0d81cd6beb41a5bce815934db6b"
+      "provenance_sha256": "e7765d6dba93457c224c74d4e782184c49c8709612585ca78684cbfa3eacebb0"
     }
   },
   "output_file_hashes": {
     "all-manifest.json": "6f187b57590cd42f08a924f97bae5cb165be416477e8e61996aade5084b8bf6b",
-    "all.jsonl": "61b97302f6a4ff6e83d63a9e9757f77cdd52e6db95f842d55127bf08a515775a",
+    "all.jsonl": "fda74892c328769ed4bd43d7b5d0ed3c047c48d184ca0504fb2bed29207973bb",
     "beyond-sqlite-manifest.json": "5bda383732808aa9a056d9e51653568f6e8e2880ea843ede6d95da9d3a57a954",
-    "beyond-sqlite-provenance.json": "c17ae995df8620da3c41e4d36f71399aa2fdb245c96f032b5473daf0beca1fe8",
+    "beyond-sqlite-provenance.json": "6c37b5acb911d933675fe4bf4db77cd8e7a18ae203800ebf13c4c7624712f892",
     "beyond-sqlite-ranked.csv": "93558dc075a70c7398c20ad0485a737b35789c5f18660180872488f87f77a67b",
-    "beyond-sqlite-summary.json": "15b474e6fe63eec2f69fef0dcdb4a2acc2598cf93a8d94dc61b504c5b0b45240",
-    "beyond_sqlite.raw.jsonl": "518223a667ec7b698de41bb3af1d5d426e744cac2185e4d2ada7cee8c2976edb",
+    "beyond-sqlite-summary.json": "5e78ee45ba252163817a81e621d7a352458b12ccbaca679a177164f454bda89b",
+    "beyond_sqlite.raw.jsonl": "331249d3269ee0bbfa3197e37489eb4c7f078104d8aa64d814b585ab69bf24ce",
     "manifest.json": "79d49ba5cf488be8793f90e443f8b147b5ff74166689a6c50a1102094c1b9241",
     "memory-manifest.json": "8ed18338704bf19cccd3789624d49e4c2aa2cda89bb22cece8dd0ecfc57e4314",
-    "memory-provenance.json": "ba3741375f4286cc4d0c48c43c65431d720ec911ace2cb1cc883acc10511e735",
-    "memory-ranked.csv": "dd008ea1d090c3651ef1e551c683808c2300b040950a8fcb211ede753953adfc",
-    "memory-summary.json": "3c94706443f7e229241a3a1a82651634255b251b79872301ce42f798970fa5c8",
-    "memory.raw.jsonl": "60597bfe178b8f5b7ce0d181e42d2a72059db93660ac24fbab0a1bb30d3c4245",
-    "provenance.json": "0ed8d5364c797a3d931622bf3ad4c51aae4cc0d81cd6beb41a5bce815934db6b",
-    "ranked.csv": "112ec3ab835dda48ff5262b89edc646e3e18a1dd6670c0bdeaa180eae4170d53",
+    "memory-provenance.json": "3677503b8839ca090e1e10efa2efa219baa63e97a145c136be79ee8c4da24a53",
+    "memory-ranked.csv": "5a8f819b020166af4b1b2e8141c3d82b2fd5a8c712aed31616a390cbda04398c",
+    "memory-summary.json": "a64ace5af6331d680b1adea151352231e1a465494fad8d5639e32719b599ef8c",
+    "memory.raw.jsonl": "81d6b04a7587b71c4544f5a0a77a930169d12a6c9ae634307c368eb13316e36c",
+    "provenance.json": "e7765d6dba93457c224c74d4e782184c49c8709612585ca78684cbfa3eacebb0",
+    "ranked.csv": "e3f6fe02e0242d51ef61079c32e0791119d07eb629b31dbe2193fd300bfd6f26",
     "rql-phase1-manifest.json": "50ed4286ece0dd0fd9a0e93522c65c000cc798cfb6a4350cbdaf17a084bea8c6",
-    "rql-phase1-provenance.json": "c8e6abd0e9d21a7b73174e7b418cc0fbda53ab7e7e594b6e0789aef1753dd2f5",
-    "rql-phase1-ranked.csv": "9fe8ce22d61109d959fdba8df656339f9f082fb904ada7e49028fb272d3475a0",
-    "rql-phase1-summary.json": "3209ce3a5d9f5f465499088c394c2bffeb6cb27f7ec06eb29cc3824a45b133f9",
-    "rql_phase1.raw.jsonl": "8fbe3e8df4247b82da2cbd954d7897b5cdcd3e35989e595a042d5764692ea24f",
-    "sqlite_parity.raw.jsonl": "8feb0c4baf8bee50e26bd0d0cb3dfcccede523765307e4b06e8c161bfe1a6a59",
-    "summary.json": "b607375f2220a9b286661744d3414b21257bbb6de14fd910056531f035d76862"
+    "rql-phase1-provenance.json": "ed9bba51306fd0c50287094af65fdf4521aabfc15738c7b110a7d682095800d1",
+    "rql-phase1-ranked.csv": "e0a447af5cb7a908919a024e410d880a44b95b673eac86ab0baf2da6696d1920",
+    "rql-phase1-summary.json": "f5bd08dc0f2989f5c106436fa64d2f1aed5bc2ddc2c989e78238ffbc00c8663b",
+    "rql_phase1.raw.jsonl": "9d6caef5bffef39243edd048e91e4e95513d933b220b3e024e5b04e86e657557",
+    "sqlite_parity.raw.jsonl": "8f152f7a192b76a060bf7e627c1be2196c07229c24d71da509510ff348a92bc6",
+    "summary.json": "039bb26637a811aa61eec4b7e286843a5e78771c63ff7d2e92cae2a9a2d863b5"
   },
   "official_evidence": {
     "schema_version": "redline-testing-official-evidence-v1",
@@ -138,7 +138,7 @@
     },
     "target": {
       "path": "/home/runner/work/RedlineDB/RedlineDB/target/release/redlinedb",
-      "sha256": "3c00d77b5b17252d434ca1726ea57628e6257aa15d831a3243c3e5abe413a792",
+      "sha256": "2d9a22335176a0486225963d125b0cfca3dc77c988ee1d3ebeae7a8cf31db180",
       "version": "redlinedb v4.1.0 (SQLite 3.45.1 compatibility)"
     },
     "sqlite": {
@@ -217,30 +217,30 @@
       "--output",
       "target/redline-testing/all.jsonl"
     ],
-    "generated_at_unix_ms": 1789681704688,
+    "generated_at_unix_ms": 1789682312975,
     "output_file_hashes": {
       "all-manifest.json": "6f187b57590cd42f08a924f97bae5cb165be416477e8e61996aade5084b8bf6b",
-      "all.jsonl": "61b97302f6a4ff6e83d63a9e9757f77cdd52e6db95f842d55127bf08a515775a",
+      "all.jsonl": "fda74892c328769ed4bd43d7b5d0ed3c047c48d184ca0504fb2bed29207973bb",
       "beyond-sqlite-manifest.json": "5bda383732808aa9a056d9e51653568f6e8e2880ea843ede6d95da9d3a57a954",
-      "beyond-sqlite-provenance.json": "c17ae995df8620da3c41e4d36f71399aa2fdb245c96f032b5473daf0beca1fe8",
+      "beyond-sqlite-provenance.json": "6c37b5acb911d933675fe4bf4db77cd8e7a18ae203800ebf13c4c7624712f892",
       "beyond-sqlite-ranked.csv": "93558dc075a70c7398c20ad0485a737b35789c5f18660180872488f87f77a67b",
-      "beyond-sqlite-summary.json": "15b474e6fe63eec2f69fef0dcdb4a2acc2598cf93a8d94dc61b504c5b0b45240",
-      "beyond_sqlite.raw.jsonl": "518223a667ec7b698de41bb3af1d5d426e744cac2185e4d2ada7cee8c2976edb",
+      "beyond-sqlite-summary.json": "5e78ee45ba252163817a81e621d7a352458b12ccbaca679a177164f454bda89b",
+      "beyond_sqlite.raw.jsonl": "331249d3269ee0bbfa3197e37489eb4c7f078104d8aa64d814b585ab69bf24ce",
       "manifest.json": "79d49ba5cf488be8793f90e443f8b147b5ff74166689a6c50a1102094c1b9241",
       "memory-manifest.json": "8ed18338704bf19cccd3789624d49e4c2aa2cda89bb22cece8dd0ecfc57e4314",
-      "memory-provenance.json": "ba3741375f4286cc4d0c48c43c65431d720ec911ace2cb1cc883acc10511e735",
-      "memory-ranked.csv": "dd008ea1d090c3651ef1e551c683808c2300b040950a8fcb211ede753953adfc",
-      "memory-summary.json": "3c94706443f7e229241a3a1a82651634255b251b79872301ce42f798970fa5c8",
-      "memory.raw.jsonl": "60597bfe178b8f5b7ce0d181e42d2a72059db93660ac24fbab0a1bb30d3c4245",
-      "provenance.json": "0ed8d5364c797a3d931622bf3ad4c51aae4cc0d81cd6beb41a5bce815934db6b",
-      "ranked.csv": "112ec3ab835dda48ff5262b89edc646e3e18a1dd6670c0bdeaa180eae4170d53",
+      "memory-provenance.json": "3677503b8839ca090e1e10efa2efa219baa63e97a145c136be79ee8c4da24a53",
+      "memory-ranked.csv": "5a8f819b020166af4b1b2e8141c3d82b2fd5a8c712aed31616a390cbda04398c",
+      "memory-summary.json": "a64ace5af6331d680b1adea151352231e1a465494fad8d5639e32719b599ef8c",
+      "memory.raw.jsonl": "81d6b04a7587b71c4544f5a0a77a930169d12a6c9ae634307c368eb13316e36c",
+      "provenance.json": "e7765d6dba93457c224c74d4e782184c49c8709612585ca78684cbfa3eacebb0",
+      "ranked.csv": "e3f6fe02e0242d51ef61079c32e0791119d07eb629b31dbe2193fd300bfd6f26",
       "rql-phase1-manifest.json": "50ed4286ece0dd0fd9a0e93522c65c000cc798cfb6a4350cbdaf17a084bea8c6",
-      "rql-phase1-provenance.json": "c8e6abd0e9d21a7b73174e7b418cc0fbda53ab7e7e594b6e0789aef1753dd2f5",
-      "rql-phase1-ranked.csv": "9fe8ce22d61109d959fdba8df656339f9f082fb904ada7e49028fb272d3475a0",
-      "rql-phase1-summary.json": "3209ce3a5d9f5f465499088c394c2bffeb6cb27f7ec06eb29cc3824a45b133f9",
-      "rql_phase1.raw.jsonl": "8fbe3e8df4247b82da2cbd954d7897b5cdcd3e35989e595a042d5764692ea24f",
-      "sqlite_parity.raw.jsonl": "8feb0c4baf8bee50e26bd0d0cb3dfcccede523765307e4b06e8c161bfe1a6a59",
-      "summary.json": "b607375f2220a9b286661744d3414b21257bbb6de14fd910056531f035d76862"
+      "rql-phase1-provenance.json": "ed9bba51306fd0c50287094af65fdf4521aabfc15738c7b110a7d682095800d1",
+      "rql-phase1-ranked.csv": "e0a447af5cb7a908919a024e410d880a44b95b673eac86ab0baf2da6696d1920",
+      "rql-phase1-summary.json": "f5bd08dc0f2989f5c106436fa64d2f1aed5bc2ddc2c989e78238ffbc00c8663b",
+      "rql_phase1.raw.jsonl": "9d6caef5bffef39243edd048e91e4e95513d933b220b3e024e5b04e86e657557",
+      "sqlite_parity.raw.jsonl": "8f152f7a192b76a060bf7e627c1be2196c07229c24d71da509510ff348a92bc6",
+      "summary.json": "039bb26637a811aa61eec4b7e286843a5e78771c63ff7d2e92cae2a9a2d863b5"
     },
     "workers": "4",
     "repetitions": 3,

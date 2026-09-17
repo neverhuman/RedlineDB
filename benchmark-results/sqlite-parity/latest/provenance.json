@@ -4,7 +4,7 @@
   "redline_testing_binary_path": "/home/runner/work/RedlineDB/RedlineDB/target/release/redline-testing",
   "redline_testing_binary_sha256": "1bb0bb0ec2ad9f8dd9b0dd45aa787cd184dc1c38e1e869dcb0f1e9a82e732f6c",
   "target_binary_path": "/home/runner/work/RedlineDB/RedlineDB/target/release/redlinedb",
-  "target_binary_sha256": "3c00d77b5b17252d434ca1726ea57628e6257aa15d831a3243c3e5abe413a792",
+  "target_binary_sha256": "2d9a22335176a0486225963d125b0cfca3dc77c988ee1d3ebeae7a8cf31db180",
   "target_version": "redlinedb v4.1.0 (SQLite 3.45.1 compatibility)",
   "sqlite_binary_path": "sqlite3",
   "sqlite_binary_sha256": "<unknown>",
@@ -55,13 +55,13 @@
   "repetitions": 3,
   "warmup": 1,
   "updated_date": "2026-09-17",
-  "git_sha": "788d9185bd811230f2bc4ae398a3bf87529916f8",
+  "git_sha": "85a9772d38615a00bf8d388251712ed356abbefa",
   "git_dirty": true,
   "output_file_hashes": {
-    "README.md": "13eee835890510c88aba7c9ae8d861017eab0638a725a6e94e85f25b65fb28d2",
+    "README.md": "cc82e9f26afbeff10c6cadc3eb62d0738e39ee8561631ebe063fc45604736b1d",
     "ksloc.csv": "de68c2b0d6e66372404e68f3a67f008ce0f054144d2c3c41ddd284044eb8d6c4",
-    "ranked.csv": "112ec3ab835dda48ff5262b89edc646e3e18a1dd6670c0bdeaa180eae4170d53",
-    "raw.jsonl": "8feb0c4baf8bee50e26bd0d0cb3dfcccede523765307e4b06e8c161bfe1a6a59",
+    "ranked.csv": "e3f6fe02e0242d51ef61079c32e0791119d07eb629b31dbe2193fd300bfd6f26",
+    "raw.jsonl": "8f152f7a192b76a060bf7e627c1be2196c07229c24d71da509510ff348a92bc6",
     "summary.json": "7ded60bf44e861195abb9a2cf253e855c588be953d062823f3366671e706b7af"
   }
 }
