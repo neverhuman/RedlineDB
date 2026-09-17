@@ -217,7 +217,7 @@
       "command": "bash ops/ci/security-family.sh",
       "purpose": "source-distribution and dependency security"
     },
-    ".gitleaksignore": {"commands": ["bash ops/ci/security-family.sh"]},
+    ".gitleaksignore": {"command": "bash ops/ci/security-family.sh", "purpose": "reviewed historical false positives"},
     ".gitleaks.toml": {
       "command": "bash ops/ci/security-family.sh",
       "purpose": "source-distribution and dependency security"
