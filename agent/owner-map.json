@@ -49,6 +49,13 @@
     "speed_up_workplan_pending.md": "control-plane",
     "super_tasks.md": "control-plane",
     "tips/": "docs",
-    "tools/": "tools"
+    "tools/": "tools",
+    "PUBLIC_MONOREPO.toml": "workspace",
+    "subrepos.toml": "workspace",
+    "subrepos/": "component-maintainers",
+    "docs/migration/": "release",
+    ".dockerignore": "workspace",
+    ".gitleaks.toml": "security",
+    ".gitleaksignore": "security"
   }
 }

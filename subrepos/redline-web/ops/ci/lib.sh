@@ -44,7 +44,7 @@ JAIN_GOVERNED_JANKURAI_BIN="$(jain_first_present_path \
   /home/ubuntu/.jeryu/bin/jankurai || true)"
 readonly JAIN_GOVERNED_JANKURAI_BIN
 readonly JAIN_GOVERNED_JANKURAI_VERSION="jankurai 1.6.11"
-readonly JAIN_GOVERNED_JANKURAI_SHA256="96d99e6e7d8dc9cf23df1081edd1f975231456592f81d9405385219a2c7298aa"
+readonly JAIN_GOVERNED_JANKURAI_SHA256="9e6b8857a26f6004d4c74e510e13b06d880f2e2ae0c89502698889ed690c5d6c"
 
 # Tool version pins (documented for ci-doctor / supply-chain parity).
 NODE_PIN="${REDLINE_NODE_PIN:-22}"

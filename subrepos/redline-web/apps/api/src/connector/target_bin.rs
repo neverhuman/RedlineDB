@@ -37,8 +37,11 @@ impl TargetBinConnector {
     /// followed by whitespace-separated arguments.
     pub fn new(spec: &str, read_only: bool, timeout: Duration) -> Self {
         let mut parts = spec.split_whitespace().map(str::to_string);
-        let program = parts.next().unwrap_or_default();
-        let args = parts.collect();
+        let (program, args) = if std::path::Path::new(spec).is_file() {
+            (spec.to_owned(), Vec::new())
+        } else {
+            (parts.next().unwrap_or_default(), parts.collect())
+        };
         Self {
             program,
             args,
@@ -85,7 +88,8 @@ impl TargetBinConnector {
 
     /// Run a single statement in tab-separated, header-on mode.
     async fn run_tabs(&self, sql: &str) -> Result<String, ConnectorError> {
-        let script = format!(".headers on\n.mode tabs\n{}\n", ensure_semicolon(sql));
+        // Mode selection can reset the shell's header setting.
+        let script = format!(".mode tabs\n.headers on\n{}\n", ensure_semicolon(sql));
         self.run_script(&script).await
     }
 
@@ -265,6 +269,17 @@ fn parse_kind(kind: &str) -> SchemaObjectKind {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn executable_path_can_contain_spaces() {
+        let directory = tempfile::tempdir().expect("temporary directory");
+        let path = directory.path().join("database shell");
+        std::fs::write(&path, "").expect("executable fixture");
+        let connector =
+            TargetBinConnector::new(path.to_str().unwrap(), false, Duration::from_secs(1));
+        assert_eq!(connector.program, path.to_str().unwrap());
+        assert!(connector.args.is_empty());
+    }
 
     #[test]
     fn parses_tab_output() {

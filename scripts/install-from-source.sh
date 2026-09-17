@@ -12,7 +12,7 @@ prefix=${PREFIX:-$HOME/.local}
 dest=${JERYU_INSTALL_DIR:-${REDLINEDB_INSTALL_DIR:-$prefix/bin}}
 target_dir=${CARGO_TARGET_DIR:-$root/target}
 bins=(redlinedb redlinedb-cli redlinedb-server)
-if "$all"; then bins+=(redline-testing redline-web redline-proof); fi
+if "$all"; then bins+=(redline-testing redline-web redline-proof redlinedb-client-smoke db-shim-parity); fi
 for bin in "${bins[@]}"; do
   [[ -x $target_dir/release/$bin ]] || { printf 'missing %s; run ./scripts/build-from-source.sh first\n' "$target_dir/release/$bin" >&2; exit 1; }
 done
@@ -21,5 +21,5 @@ for bin in "${bins[@]}"; do install -m 755 "$target_dir/release/$bin" "$dest/$bi
 for lib in "$target_dir"/release/libredlinedb.{a,so,dylib}; do
   [[ ! -f $lib ]] || install -m 644 "$lib" "$prefix/lib/"
 done
-install -m 644 contracts/c-abi/redlinedb.h "$prefix/include/"
+install -m 644 contracts/c-abi/redlinedb.h contracts/c-abi/sqlite3.h "$prefix/include/"
 printf 'Installed binaries in %s, libraries and headers in %s\n' "$dest" "$prefix"

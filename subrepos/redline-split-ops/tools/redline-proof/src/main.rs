@@ -1,3 +1,4 @@
+mod monorepo;
 use chrono::{DateTime, Duration, SecondsFormat, Utc};
 use serde_json::{json, Map as JsonMap, Value as JsonValue};
 use sha2::{Digest, Sha256};
@@ -4509,6 +4510,9 @@ fn parse_consumer_assignments(values: Vec<String>) -> Result<BTreeMap<String, Pa
 }
 
 fn real_main() -> Result<()> {
+    if let Some(root) = monorepo::root() {
+        return monorepo::run(&root);
+    }
     let paths = default_paths();
     let mut args: Vec<String> = env::args().skip(1).collect();
     let command = if args.is_empty() {

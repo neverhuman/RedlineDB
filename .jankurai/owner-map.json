@@ -132,7 +132,14 @@
     "tips/": "standard",
     "tips/beyond/": "standard",
     "install.sh": "workspace",
-    "tools/": "tools"
+    "tools/": "tools",
+    "PUBLIC_MONOREPO.toml": "workspace",
+    "subrepos.toml": "workspace",
+    "subrepos/": "component-maintainers",
+    "docs/migration/": "release",
+    ".dockerignore": "workspace",
+    ".gitleaks.toml": "security",
+    ".gitleaksignore": "security"
   },
   "workspace": "crates/*"
 }

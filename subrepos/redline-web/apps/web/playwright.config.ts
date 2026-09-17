@@ -24,7 +24,7 @@ export default defineConfig({
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
   ],
   webServer: {
-    command: `${serverBinaryPath(process.env.CARGO_TARGET_DIR)} --db /tmp/rw-e2e.sqlite --bind 127.0.0.1:${PORT}`,
+    command: `"${serverBinaryPath(process.env.CARGO_TARGET_DIR)}" --target-bin "${process.env.REDLINE_WEB_TARGET_BIN || "../../../../target/release/redlinedb"}" --bind 127.0.0.1:${PORT}`,
     url: `${BASE_URL}/api/health`,
     timeout: 60_000,
     reuseExistingServer: !process.env.CI,

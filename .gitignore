@@ -70,3 +70,6 @@ FUCKIT.md
 # Compiled baseline binaries in benchmark-results — these are ELF executables
 # that jankurai cannot read as UTF-8 text. Store raw.jsonl/summary.json only.
 benchmark-results/sqlite-parity/baselines/**/redlinedb-*
+
+# Volatile CLI backing directories created by memory-mode integration tests.
+:memory:/

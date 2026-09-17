@@ -37,12 +37,12 @@ CI_REDLINE_TESTING_EXPECTED_TARBALL_SHA256="${CI_REDLINE_TESTING_EXPECTED_TARBAL
 CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256="${CI_REDLINE_TESTING_EXPECTED_BINARY_SHA256:-}"
 readonly CI_REDLINE_TESTING_ATTESTATION_REPO="${CI_REDLINE_TESTING_ATTESTATION_REPO:-neverhuman/redline-testing}"
 readonly CI_JANKURAI_VERSION="1.6.11"
-readonly CI_JANKURAI_SHA256="96d99e6e7d8dc9cf23df1081edd1f975231456592f81d9405385219a2c7298aa"
+readonly CI_JANKURAI_SHA256="9e6b8857a26f6004d4c74e510e13b06d880f2e2ae0c89502698889ed690c5d6c"
 
 # The release sandbox owns PATH. Freeze its selected executable before the
 # wrapper below shadows the command name; every use still validates the exact
 # physical path, version, and digest.
-CI_JANKURAI_BIN="$(type -P jankurai 2>/dev/null || true)"
+CI_JANKURAI_BIN="${REDLINE_JANKURAI_BIN:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)/target/ci/tools/jankurai}"
 readonly CI_JANKURAI_BIN
 
 # Keep literal `jankurai` commands visible to the adoption auditor without
@@ -210,6 +210,9 @@ ci_assert_redline_testing_official_artifacts() {
         target/redline-testing/memory-ranked.csv \
         target/redline-testing/memory-manifest.json \
         target/redline-testing/memory-provenance.json \
+        target/redline-testing/rql-phase1-summary.json \
+        target/redline-testing/rql-phase1-manifest.json \
+        target/redline-testing/rql-phase1-provenance.json \
         target/redline-testing/beyond-sqlite-summary.json \
         target/redline-testing/beyond-sqlite-ranked.csv \
         target/redline-testing/beyond-sqlite-manifest.json \
@@ -272,19 +275,19 @@ ci_install_redline_testing_local() {
     local local_bin="${CI_REDLINE_TESTING_LOCAL_BIN:?CI_REDLINE_TESTING_LOCAL_BIN is required}"
     local local_source="${CI_REDLINE_TESTING_LOCAL_SOURCE:?CI_REDLINE_TESTING_LOCAL_SOURCE is required}"
     if [ ! -x "$local_bin" ]; then
-        printf 'redline-testing local-bin escape hatch: CI_REDLINE_TESTING_LOCAL_BIN is not executable: %s\n' \
+        printf 'redline-testing local-bin checkout runner: CI_REDLINE_TESTING_LOCAL_BIN is not executable: %s\n' \
             "$local_bin" >&2
         return 1
     fi
     if [ ! -d "$local_source" ]; then
-        printf 'redline-testing local-bin escape hatch: CI_REDLINE_TESTING_LOCAL_SOURCE is not a directory: %s\n' \
+        printf 'redline-testing local-bin checkout runner: CI_REDLINE_TESTING_LOCAL_SOURCE is not a directory: %s\n' \
             "$local_source" >&2
         return 1
     fi
     local required_dir
     for required_dir in corpus metadata schemas templates; do
         if [ ! -d "$local_source/$required_dir" ]; then
-            printf 'redline-testing local-bin escape hatch: CI_REDLINE_TESTING_LOCAL_SOURCE missing %s/: %s\n' \
+            printf 'redline-testing local-bin checkout runner: CI_REDLINE_TESTING_LOCAL_SOURCE missing %s/: %s\n' \
                 "$required_dir" "$local_source" >&2
             return 1
         fi
@@ -297,14 +300,14 @@ ci_install_redline_testing_local() {
 
     local version_output
     if ! version_output="$("$local_bin_abs" --version)"; then
-        printf 'redline-testing local-bin escape hatch: --version failed: %s\n' \
+        printf 'redline-testing local-bin checkout runner: --version failed: %s\n' \
             "$local_bin_abs" >&2
         return 1
     fi
     local version
     version="${version_output#redline-testing }"
     if [ -z "$version" ] || [ "$version" = "$version_output" ]; then
-        printf 'redline-testing local-bin escape hatch: unable to parse version from --version output: %q\n' \
+        printf 'redline-testing local-bin checkout runner: unable to parse version from --version output: %q\n' \
             "$version_output" >&2
         return 1
     fi
@@ -355,7 +358,7 @@ ci_install_redline_testing_local() {
   "binary_sha256": "$binary_sha256",
   "artifact_hashes": {},
   "generated_by": "ops/ci/lib.sh:ci_install_redline_testing_local",
-  "source": "local-bin",
+  "source": "single-checkout",
   "local_bin_path": "$local_bin_abs",
   "local_source_path": "$local_source_abs"
 }
@@ -371,7 +374,7 @@ EOF
         templates/README.sqlite-parity.md
     do
         if [ ! -s "$install_root/$path" ]; then
-            printf 'redline-testing local-bin escape hatch: missing packaged file: %s\n' \
+            printf 'redline-testing local-bin checkout runner: missing packaged file: %s\n' \
                 "$install_root/$path" >&2
             return 1
         fi
@@ -380,12 +383,12 @@ EOF
     # Re-run the version round-trip against the staged path so the rest of the
     # function only depends on install_root.
     if ! version_output="$("$install_root/bin/redline-testing" --version)"; then
-        printf 'redline-testing local-bin escape hatch: staged --version failed: %s\n' \
+        printf 'redline-testing local-bin checkout runner: staged --version failed: %s\n' \
             "$install_root/bin/redline-testing" >&2
         return 1
     fi
     if [ "$version_output" != "redline-testing $version" ]; then
-        printf 'redline-testing local-bin escape hatch: version round-trip mismatch: expected %q, got %q\n' \
+        printf 'redline-testing local-bin checkout runner: version round-trip mismatch: expected %q, got %q\n' \
             "redline-testing $version" "$version_output" >&2
         return 1
     fi
@@ -406,7 +409,7 @@ EOF
 
     ci_verify_redline_testing_manifest "$install_root" "$binary_sha256"
 
-    printf 'redline-testing local-bin escape hatch active: %s\n' "$local_bin_abs" >&2
+    printf 'redline-testing local-bin checkout build: %s\n' "$local_bin_abs" >&2
     printf 'redline-testing local-bin source tree: %s\n' "$local_source_abs" >&2
     printf 'redline-testing local-bin binary sha256: %s\n' "$binary_sha256" >&2
     printf 'redline-testing installed: %s (%s)\n' \
@@ -438,7 +441,19 @@ EOF
     printf '%s\n' "$install_root/bin/redline-testing"
 }
 
+# Build the included runner from the same checkout as the engine.
 ci_install_redline_testing() {
+    local root
+    root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    export CARGO_TARGET_DIR="$root/target"
+    cargo build --locked --release --manifest-path "$root/subrepos/redline-testing/Cargo.toml" --bin redline-testing >&2
+    CI_REDLINE_TESTING_LOCAL_BIN="$root/target/release/redline-testing"
+    CI_REDLINE_TESTING_LOCAL_SOURCE="$root/subrepos/redline-testing"
+    ci_install_redline_testing_local
+}
+
+# Historical report reproduction can explicitly select a published runner.
+ci_install_redline_testing_release() {
     if [ -n "${CI_REDLINE_TESTING_LOCAL_BIN:-}" ]; then
         ci_install_redline_testing_local
         return $?
@@ -693,7 +708,7 @@ ci_prepare_redlinedb_release_smoke() {
 
 ci_install_gitleaks() {
     local install_dir
-    install_dir="${CARGO_HOME:-$HOME/.cargo}/bin"
+    install_dir="${CI_GITLEAKS_INSTALL_DIR:-${CARGO_HOME:-$HOME/.cargo}/bin}"
     mkdir -p "$install_dir"
     export PATH="$install_dir:$PATH"
     if [ -n "${GITHUB_PATH:-}" ]; then

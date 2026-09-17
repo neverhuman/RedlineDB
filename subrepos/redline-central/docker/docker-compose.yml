@@ -3,8 +3,8 @@
 services:
   central-db:
     build:
-      context: ../..                              # redline-split/ (to access redline-core)
-      dockerfile: redline-central/docker/Dockerfile
+      context: ../../..                           # primary RedlineDB checkout
+      dockerfile: subrepos/redline-central/docker/Dockerfile
     image: redline-central-db:4.1.0
     container_name: redline-central-db
     ports:

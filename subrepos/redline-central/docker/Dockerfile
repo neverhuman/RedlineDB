@@ -1,13 +1,14 @@
 # Central RedlineDB server. Multi-stage: build redlinedb-server from redline-core, run it slim.
-# Build context must be redline-split/ (so redline-core is visible); see docker-compose.yml.
-FROM rust:1-bookworm AS build
+# Build context is the primary RedlineDB checkout; see docker-compose.yml.
+FROM rust:1.95-bookworm AS build
 WORKDIR /src
-COPY redline-core ./redline-core
-RUN cd redline-core && cargo build --release -p redlinedb-server
+COPY Cargo.toml Cargo.lock rust-toolchain.toml ./
+COPY crates ./crates
+RUN cargo build --locked --release -p redlinedb-server
 
 FROM debian:bookworm-slim
 RUN useradd --create-home --uid 10001 redline
-COPY --from=build /src/redline-core/target/release/redlinedb-server /usr/local/bin/redlinedb-server
+COPY --from=build /src/target/release/redlinedb-server /usr/local/bin/redlinedb-server
 USER redline
 VOLUME ["/data"]
 EXPOSE 6033

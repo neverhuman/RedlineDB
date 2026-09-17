@@ -240,53 +240,64 @@ Pin the release in `Cargo.toml`:
 For libraries, `redlinedb = "1"` is usually fine. For binaries, keep the exact
 pin and commit `Cargo.lock`.
 
-### CLI binary
+### Install binaries
 
-Install the published shell on Linux or macOS:
-
-```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | bash
-```
-
-Pin a specific release when you need reproducible installs:
+Linux x86_64/ARM64 and macOS Intel/Apple Silicon packages include the CLI,
+server, native libraries and C headers. Rust and Node are not needed to run them.
+Linux packages require glibc 2.35 or newer; macOS packages require macOS 15 or newer.
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | VERSION=v4.0.8 bash
+curl -fsSL https://raw.githubusercontent.com/neverhuman/RedlineDB/main/install.sh | bash
 ```
 
-Lock the exact tarball digest in CI or release automation:
+The installer verifies the release checksum and defaults to `~/.local`. To select
+a release and an installation directory:
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/neverhuman/RedlineDB/main/scripts/install.sh | \
-  VERSION=v4.1.0 REDLINEDB_SHA256=<sha256> bash
+curl -fsSL https://raw.githubusercontent.com/neverhuman/RedlineDB/main/install.sh | \
+  VERSION=v4.1.0 PREFIX="$HOME/redline install" bash
 ```
+
+It installs `redlinedb` and `redlinedb-server`; it never replaces `sqlite3`.
+Set `REDLINEDB_SHA256` to additionally require a particular archive digest.
 
 ### Build from source
 
-```bash
-cargo install redlinedb-cli --version 4.1.0 --locked
-```
-
-Or install from the tagged repository release:
+Install Rust 1.95, a C/C++ compiler and pkg-config, then run:
 
 ```bash
-cargo install --git https://github.com/neverhuman/RedlineDB.git --tag v4.1.0 --package redlinedb-cli --locked
+git clone https://github.com/neverhuman/redlineDB
+cd redlineDB
+./scripts/build-from-source.sh
+./scripts/install-from-source.sh
 ```
 
-### Direct download
+The source archive from GitHub works with the same scripts. An ordinary clone
+contains the engine and all supporting components; no private forge or sibling
+checkout is needed. Add `--all` to both scripts to include the testing runner,
+release tools and web console (building the console also requires Node 22/npm).
+Use `PREFIX` for the installation root and `CARGO_BUILD_JOBS` to limit build jobs.
 
-Release tarballs are published on the [releases page](https://github.com/neverhuman/RedlineDB/releases):
+### Components and downloads
 
-| Platform | File |
-|---|---|
-| Linux x86_64 | `redlinedb-v4.1.0-linux-x86_64.tar.gz` |
-| macOS Apple Silicon | `redlinedb-v4.1.0-macos-arm64.tar.gz` |
-| macOS Intel | `redlinedb-v4.1.0-macos-x86_64.tar.gz` |
+| Component | Source | Release package |
+|---|---|---|
+| Engine, CLI, server, adapters, FFI | `crates/` | `redlinedb-v4.1.0-<platform>.tar.gz` |
+| Conformance runner | `subrepos/redline-testing` | `redline-testing-v4.1.0-<platform>.tar.gz` |
+| Embedded web console | `subrepos/redline-web` | `redline-web-v4.1.0-<platform>.tar.gz` |
+| Rust client and database shim | `subrepos/redline-central` | source |
+| Release tooling | `subrepos/redline-split-ops` | source |
+| Historical public hub | `subrepos/redline` | source |
 
-Each tarball ships with a matching `.sha256` checksum and contains the CLI,
-shared libraries, and public headers.
+Download packages and checksums from [GitHub Releases](https://github.com/neverhuman/RedlineDB/releases).
+Platform names are `linux-x86_64`, `linux-arm64`, `macos-x86_64`, and `macos-arm64`.
+Optional packages extract alongside the core package. Start the console with
+`redline-web --target-bin /path/to/redlinedb`.
 
-## Quick Start
+Each package includes dependency notices, an SBOM and parent-commit build metadata.
+GitHub Releases also attach build provenance attestations. [subrepos.toml](subrepos.toml)
+records the initial component identities; [migration records](docs/migration/README.md)
+explain preserved histories and the unfinished work kept outside the release.
 
 ### Embedded use
 

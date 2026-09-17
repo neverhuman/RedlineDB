@@ -2,7 +2,7 @@
 # Noninteractive GitHub binary installer. No Rust, Node, sudo or sqlite3 alias.
 set -euo pipefail
 die() { printf 'redlinedb install: %s\n' "$*" >&2; exit 1; }
-[[ $# == 0 ]] || { printf 'Usage: VERSION=v4.1.0 PREFIX="$HOME/.local" bash install.sh\n' >&2; exit 64; }
+[[ $# == 0 ]] || { printf 'Usage: VERSION=v4.1.0 PREFIX=/installation/path bash install.sh\n' >&2; exit 64; }
 repo=https://github.com/neverhuman/RedlineDB
 prefix=${PREFIX:-$HOME/.local}
 case "$(uname -s)/$(uname -m)" in
@@ -35,6 +35,7 @@ else
   die 'sha256sum or shasum is required'
 fi
 [[ $actual == "$expected" ]] || die "checksum mismatch for $asset"
+[[ -z ${REDLINEDB_SHA256:-} || $actual == "$REDLINEDB_SHA256" ]] || die "pinned checksum mismatch for $asset"
 tar -tzf "$tmp/$asset" > "$tmp/members"
 while IFS= read -r member; do
   case "$member" in /*|../*|*/../*|*/..) die 'unsafe archive member' ;; esac

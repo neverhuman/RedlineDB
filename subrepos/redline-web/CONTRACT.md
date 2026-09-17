@@ -103,7 +103,7 @@ Health { status: "ok", version: string, engine: "sqlite" | "redline" }
 | Flag | Env | Default | Meaning |
 |---|---|---|---|
 | `--db <PATH>` | `REDLINE_WEB_DB` | `:memory:` (seeded demo) | SQLite file to open |
-| `--target-bin <PATH>` | `REDLINE_WEB_TARGET_BIN` | — | external redline/SQLite CLI |
+| `--target-bin <PATH>` | `REDLINE_WEB_TARGET_BIN` | — | external redline/SQLite CLI (an existing executable path may contain spaces) |
 | `--bind <ADDR>` | `REDLINE_WEB_BIND` | `127.0.0.1:7788` | listen address |
 | `--read-only` | `REDLINE_WEB_READ_ONLY` | false | reject writes |
 | `--max-rows <N>` | `REDLINE_WEB_MAX_ROWS` | 1000 | result cap |
