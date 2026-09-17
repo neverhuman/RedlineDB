@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/neverhuman/redline-testing/schemas/release-manifest.schema.json",
+  "title": "redline-testing release manifest",
+  "type": "object",
+  "required": [
+    "name",
+    "version",
+    "target",
+    "release_commit",
+    "release_tag",
+    "tag_revision",
+    "binary",
+    "binary_sha256",
+    "artifact_hashes",
+    "generated_by"
+  ],
+  "properties": {
+    "name": { "const": "redline-testing" },
+    "version": { "type": "string" },
+    "target": { "type": "string" },
+    "release_commit": { "type": "string" },
+    "release_tag": { "type": "string" },
+    "tag_revision": { "type": "integer", "minimum": 1 },
+    "binary": { "type": "string" },
+    "binary_sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+    "artifact_hashes": {
+      "type": "object",
+      "additionalProperties": { "type": "string", "pattern": "^[0-9a-f]{64}$" }
+    },
+    "generated_by": { "type": "string" }
+  },
+  "additionalProperties": true
+}

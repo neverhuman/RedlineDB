@@ -1,0 +1,20 @@
+title = "redline-testing gitleaks configuration"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Repository-local false positives"
+paths = [
+  '''^target/''',
+  '''^dist/''',
+  # CI deliberately uses a checkout-local CARGO_HOME. Scan first-party source,
+  # not the downloaded third-party registry/cache populated by locked builds.
+  '''^\.cargo/''',
+  '''Cargo\.lock$''',
+  # Corpus / fixture SQL and reference data carry adversarial literals, hashes,
+  # and error-message text that are proof inputs, not credentials.
+  '''^corpus/''',
+  '''^tests/''',
+  '''^metadata/''',
+]
