@@ -9,3 +9,7 @@ Checksums, dependency notices, SBOMs and parent-commit provenance accompany buil
 The binary installer is noninteractive, defaults to ~/.local, accepts VERSION and
 PREFIX, and never replaces sqlite3. Source builds use portable compiler defaults.
 The preserved WAL/backup development branch is not included in this release.
+
+macOS native libraries use a relative load identity and are signed after staging.
+Native package checks link static and dynamic C consumers against the extracted
+headers/libraries and run them after moving the installation directory.
