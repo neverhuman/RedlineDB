@@ -13,6 +13,7 @@ members = [
     "crates/redlinedb-lite",
 ]
 resolver = "3"
+exclude = ["subrepos/redline-testing", "subrepos/redline-web", "subrepos/redline-central", "subrepos/redline-split-ops", "subrepos/redline"]
 
 [workspace.package]
 edition = "2024"
@@ -30,10 +31,7 @@ debug-assertions = false
 overflow-checks = false
 incremental = false
 
-# release-native inherits release; per-host CPU specialization is applied via
-# .cargo/config.toml on Linux targets. Build artifacts produced under this
-# profile are NOT portable across CPU classes — they target the build host.
-# By project policy users compile from source for their CPU.
+# Local CPU specialization requires an explicit RUSTFLAGS override.
 [profile.release-native]
 inherits = "release"
 
