@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Made installed macOS native libraries relocatable and added extracted-package
+  dynamic/static C consumer tests before release publication.
+
 - Consolidated the supporting runner, web console, client and release tooling into
   the complete GitHub checkout, with portable source builds, four-platform binary
   packages, pinned audit tooling, and a required aggregate CI gate. Original source

@@ -4,7 +4,10 @@ root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$root"
 case "${1:?package lane required}" in
   build) exec bash scripts/package-release.sh ;;
-  smoke) exec bash scripts/test-binaries.sh ;;
+  smoke)
+    bash scripts/test-binaries.sh
+    exec bash scripts/test-package-ffi.sh
+    ;;
   installer) exec bash scripts/test-installer.sh ;;
   runtime) exec bash scripts/test-packages.sh ;;
   *) exit 64 ;;

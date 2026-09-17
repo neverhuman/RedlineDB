@@ -19,7 +19,13 @@ done
 mkdir -p "$dest" "$prefix/lib" "$prefix/include"
 for bin in "${bins[@]}"; do install -m 755 "$target_dir/release/$bin" "$dest/$bin"; done
 for lib in "$target_dir"/release/libredlinedb.{a,so,dylib}; do
-  [[ ! -f $lib ]] || install -m 644 "$lib" "$prefix/lib/"
+  if [[ -f $lib ]]; then
+    install -m 644 "$lib" "$prefix/lib/"
+    if [[ $lib == *.dylib ]]; then
+      install_name_tool -id '@rpath/libredlinedb.dylib' "$prefix/lib/libredlinedb.dylib"
+      codesign --force --sign - "$prefix/lib/libredlinedb.dylib"
+    fi
+  fi
 done
 install -m 644 contracts/c-abi/redlinedb.h contracts/c-abi/sqlite3.h "$prefix/include/"
 printf 'Installed binaries in %s, libraries and headers in %s\n' "$dest" "$prefix"

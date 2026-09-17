@@ -29,7 +29,15 @@ case "${1:-all}" in
     (cd subrepos/redline-web/apps/web; npx --no-install playwright install chromium; REDLINE_WEB_TARGET_BIN="$root/target/release/redlinedb" npx --no-install playwright test)
     ;;
   parity) bash ops/ci/parity.sh ;;
-  packaging) TAG=${TAG:-v4.1.0-rc.1} bash scripts/package-release.sh; bash scripts/test-installer.sh ;;
+  packaging)
+    OUTPUT_DIR=$(mktemp -d)
+    export OUTPUT_DIR
+    trap 'rm -rf "$OUTPUT_DIR"' EXIT
+    TAG=${TAG:-v4.1.0-rc.2} bash scripts/package-release.sh
+    bash scripts/test-package-ffi.sh
+    bash scripts/test-installer.sh
+    bash scripts/test-packages.sh "$OUTPUT_DIR"
+    ;;
   all)
     for lane in engine testing central web release-tools integration parity packaging; do "$0" "$lane"; done
     ;;

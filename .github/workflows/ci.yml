@@ -5,7 +5,7 @@ on:
     inputs:
       tag:
         type: string
-        default: v4.1.0-rc.1
+        default: v4.1.0-rc.2
   push:
     branches: [main]
   pull_request:
@@ -300,7 +300,7 @@ jobs:
   packaging:
     uses: ./.github/workflows/packages.yml
     with:
-      tag: ${{ inputs.tag || 'v4.1.0-rc.1' }}
+      tag: ${{ inputs.tag || 'v4.1.0-rc.2' }}
     permissions:
       contents: read
 
