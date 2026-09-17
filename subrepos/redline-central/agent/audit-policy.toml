@@ -1,0 +1,21 @@
+schema_version = "1.0.0"
+workspace = "redline-central"
+minimum_score = 85
+hard_findings_allowed = 0
+required_tool = "jankurai"
+required_tool_version = "1.6.11"
+
+# Host-local Rust builds and scans have no paid API or unbounded spend surface.
+cost_surface = []
+
+[dead_language]
+# `db-shim` is the stable public crate and repository vocabulary for the
+# switchable SQLite/Redline adapter, not a temporary or abandoned path.
+allow_terms = ["shim"]
+
+[scan]
+excluded_paths = [
+  "agent/repo-score.json",
+  "agent/repo-score.md",
+  "target/",
+]
