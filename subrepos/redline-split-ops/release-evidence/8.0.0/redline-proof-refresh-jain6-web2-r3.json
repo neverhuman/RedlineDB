@@ -1,0 +1,19 @@
+{
+  "authoritative_lock": "../../redline.lock.toml",
+  "compatibility_mirror": "../../../redline.lock.toml",
+  "consumer_evidence_sha256": {
+    "jain-split": "83a4a4e24654f9790d122a9c8f3e9fa44ee3b8eada8083446292b292438f3ad3",
+    "jeryu-split": "01ab3da7d09cb799d0a31004cfc20b98d114e42d1e5ea2973b47000d1b3e6a33"
+  },
+  "cutover_eligible": true,
+  "engine_commit": "d0de59930141baffcfa2b514480e75b14627f24d",
+  "engine_tag": "redline-core-v4.1.0-jain.6",
+  "family": "redline-split",
+  "family_ci_receipt": "redline-family-ci-jain6-web2-r3.json",
+  "family_ci_receipt_sha256": "c61221a861e3be5d47758b5d1386f1124b21e5eae4b809ba7c46f836e526ae36",
+  "generated_at": "2026-07-28T12:07:10Z",
+  "lock_sha256": "72647e57b0dd42c217a5e82033a036800d5694e8ab6f5f28c788991e1dcd2320",
+  "proof_lock_id": "redline-proof/v2/4.1.0/d0de59930141baffcfa2b514480e75b14627f24d",
+  "schema_version": "redline.proof-refresh/v1",
+  "status": "pass"
+}

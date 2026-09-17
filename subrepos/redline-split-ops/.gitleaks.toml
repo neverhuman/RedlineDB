@@ -1,0 +1,13 @@
+title = "redline-split-ops secret scanning"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Generated evidence and build outputs"
+paths = [
+  '''^target/''',
+  '''^\.jankurai/''',
+  '''^release-evidence/8\.0\.0/redline-family-ci-jain6-web2\.d/redline-web\.log$''',
+  '''^release-evidence/8\.0\.0/redline-family-ci-jain6-web2-r3\.d/redline-web\.log$''',
+]

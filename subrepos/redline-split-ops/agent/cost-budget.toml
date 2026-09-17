@@ -1,0 +1,6 @@
+schema_version = "1.0.0"
+workspace = "redline-split-ops"
+default_external_spend_usd = 0
+default_network_spend_usd = 0
+stop_condition = "fail before any unapproved external or production write"
+kill_switch = "ATOMICSOUL_PUSH=0"
