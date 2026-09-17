@@ -12,7 +12,8 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$repo_root"
 
 if [ -z "${REDLINEDB_BENCH_GIT_SHA:-}" ]; then
-    export REDLINEDB_BENCH_GIT_SHA="$(git rev-parse HEAD)"
+    REDLINEDB_BENCH_GIT_SHA="$(git rev-parse HEAD)"
+    export REDLINEDB_BENCH_GIT_SHA
 fi
 
 run_just_lane() {
@@ -28,6 +29,7 @@ run_stage() {
     case "$1" in
         redline-testing-official)
             run_just_lane redline-testing-official
+            bash ops/ci/check-report.sh
             ;;
         sql-parity-all-tests)
             reject_local_parity_stage "$1"

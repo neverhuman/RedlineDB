@@ -4,6 +4,9 @@
 
 ### Changed
 
+- Validate report warmups per executed case while retaining declared skips, and
+  require full-corpus report generation in the conformance CI gate.
+
 - Made installed macOS native libraries relocatable and added extracted-package
   dynamic/static C consumer tests before release publication.
 

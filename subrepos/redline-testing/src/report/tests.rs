@@ -42,6 +42,48 @@ fn sample_raw_record() -> String {
     .to_string()
 }
 
+fn warmup_fixture(case_id: &str, role: &str, status: &str) -> super::types::RawRecord {
+    let mut value: serde_json::Value = serde_json::from_str(&sample_raw_record()).unwrap();
+    value["case_id"] = case_id.into();
+    value["sample_role"] = role.into();
+    value["status"] = status.into();
+    serde_json::from_value(value).unwrap()
+}
+
+#[test]
+fn warmup_validation_accepts_declared_skips_without_samples() {
+    let records = [
+        warmup_fixture("executed", "warmup", "passed"),
+        warmup_fixture("executed", "measured:1", "passed"),
+        warmup_fixture("skipped", "skipped", "skipped"),
+    ];
+    super::validate_warmups(&records, 1).unwrap();
+}
+
+#[test]
+fn warmup_validation_rejects_missing_samples_even_with_declared_skips() {
+    let records = [
+        warmup_fixture("executed", "measured:1", "passed"),
+        warmup_fixture("skipped", "skipped", "skipped"),
+    ];
+    let err = super::validate_warmups(&records, 1).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("case executed: expected 1 warmup samples but found 0")
+    );
+}
+
+#[test]
+fn warmup_validation_rejects_balanced_missing_and_duplicate_samples() {
+    let records = [
+        warmup_fixture("missing", "measured:1", "passed"),
+        warmup_fixture("extra", "warmup", "passed"),
+        warmup_fixture("extra", "warmup", "passed"),
+        warmup_fixture("extra", "measured:1", "passed"),
+    ];
+    assert!(super::validate_warmups(&records, 1).is_err());
+}
+
 fn sample_official_evidence_raw(
     raw_sha256: &str,
     runner_version: &str,
