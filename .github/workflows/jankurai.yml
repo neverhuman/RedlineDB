@@ -1,0 +1,61 @@
+name: redline-hub-jankurai
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: redline-hub-jankurai-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Thin-hub audit
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      security-events: write # publish generated SARIF to the code-scanning feed
+    steps:
+      - name: Check out exact revision
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Pin Rust toolchain for Jankurai
+        run: |
+          rustup toolchain install 1.95.0 --profile minimal
+          rustup default 1.95.0
+      - name: Run canonical thin-hub audit
+        run: bash ops/ci/jankurai-audit.sh
+      - name: Upload SARIF to code scanning
+        if: always() && hashFiles('.jankurai/jankurai.sarif') != ''
+        uses: github/codeql-action/upload-sarif@78ed0c7291d93e40c51b085850dc669a4c3ab73b
+        with:
+          sarif_file: .jankurai/jankurai.sarif
+      - name: Upload exact-head audit evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: redline-hub-jankurai-evidence
+          retention-days: 14
+          if-no-files-found: error
+          path: |
+            .jankurai/repo-score.json
+            .jankurai/repo-score.md
+            .jankurai/jankurai.sarif
+            .jankurai/jankurai-install.log
+            target/jankurai/accepted-baseline.json
+            target/jankurai/repo-score.json
+            target/jankurai/repo-score.md
+            target/jankurai/repair-queue.jsonl
+            target/jankurai/security/evidence.json
+            target/jankurai/proofbind/surface-witness.json
+            target/jankurai/proofbind/obligations.json
+            target/jankurai/proofmark/not-applicable.json
+            target/jankurai/rust/not-applicable.json
+            target/jankurai/language-bad-behavior.log
