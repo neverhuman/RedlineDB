@@ -18,6 +18,7 @@
     "EXTERNAL_REVIEW_MASTER_PROMPT.md": "agent",
     "EXTERNAL_REVIEW_SUPERPROMPT.md": "agent",
     "FEATURE_GAPS.md": "agent",
+    "GROK_GAPS.md": "agent",
     "GEMINI.md": "agent",
     "LICENSE": "workspace",
     "README-jankurai-scaffold.md": "agent",

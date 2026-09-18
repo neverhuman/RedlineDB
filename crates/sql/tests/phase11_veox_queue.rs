@@ -42,7 +42,11 @@ fn seed_queue(db: &Arc<redlinedb_sql::Database>, rows: &[(i64, i64, i64)]) {
 }
 
 fn is_retryable_claim_error(err: &Error) -> bool {
-    matches!(err, Error::Kernel(_)) && format!("{err:?}").contains("SerializationFailure")
+    // Concurrent claimers contend on the same row. Strict commit now holds
+    // row locks until the WAL durability barrier returns, so the waiter can
+    // see LockTimeout as well as SerializationFailure.
+    let debug = format!("{err:?}");
+    debug.contains("SerializationFailure") || debug.contains("LockTimeout")
 }
 
 fn claim_one(conn: &Arc<redlinedb_sql::Connection>) -> Option<(i64, i64, i64)> {

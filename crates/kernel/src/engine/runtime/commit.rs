@@ -71,33 +71,10 @@ impl Engine {
             }
         };
 
-        // A1: read live commit durability (atomic, mutable via PRAGMA synchronous)
-        // rather than the open-time `EngineConfig.commit_durability` snapshot.
+        // Durability barrier runs before publish so a failed fsync cannot
+        // leave a CSN visible to other snapshots. The previous Strict fast
+        // path published, released locks, then panicked on flush failure.
         let live_durability = self.commit_durability();
-        if live_durability == CommitDurability::Strict
-            && pending_schema.is_none()
-            && tx.pending_index_handles().is_empty()
-        {
-            self.txs.publish_commit(tx.id(), csn);
-            self.release_locks(&mut tx);
-            tx.close();
-            if let Err(err) = self.wal.flush_until(append.end_lsn) {
-                panic!("strict WAL flush failed after commit publish: {err}");
-            }
-            crate::fail_point!("engine::commit::before_publish", |arg: Option<String>| {
-                if !commit_failure_armed_for_thread() {
-                    let _ = arg;
-                    return Ok(CommitOutcome::Committed(csn));
-                }
-                let _detail = match arg {
-                    Some(detail) => detail,
-                    None => "engine::commit::before_publish injected fault".to_string(),
-                };
-                Ok(CommitOutcome::MaybeCommitted)
-            });
-            return Ok(CommitOutcome::Committed(csn));
-        }
-
         let commit_barrier = match live_durability {
             CommitDurability::Strict => self.wal.flush_until(append.end_lsn),
             CommitDurability::Normal => self.wal.write_until(append.end_lsn),
