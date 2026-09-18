@@ -196,6 +196,10 @@
       "command": "just score",
       "purpose": "verify gap tracker stays visible to the audit"
     },
+    "GROK_GAPS.md": {
+      "command": "just score",
+      "purpose": "verify gap-close plan stays visible to the audit"
+    },
     "GEMINI.md": {
       "command": "just score",
       "purpose": "verify Gemini IDE adapter stays routed to the agent standard"

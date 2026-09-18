@@ -57,6 +57,37 @@ else
     --replace
 fi
 
+HOOK_DIR="$(cd "${DIR}/.." && pwd)"
+HOOK="${HOOK_DIR}/job-started.sh"
+cat > "${HOOK}" <<'EOS'
+#!/usr/bin/env bash
+# GitHub Actions job_started hook. Self-hosted workdirs persist; tests
+# may chmod 0444 directories that actions/checkout cannot unlink.
+set +e
+if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+  chmod -R u+rwx "${GITHUB_WORKSPACE}"
+fi
+if [ -n "${RUNNER_TOOL_CACHE}" ] && [ -d "${RUNNER_TOOL_CACHE}/redlinedb-target" ]; then
+  chmod -R u+rwx "${RUNNER_TOOL_CACHE}/redlinedb-target"
+fi
+exit 0
+EOS
+chmod 0755 "${HOOK}"
+if [[ -f .env ]]; then
+  if ! grep -q '^ACTIONS_RUNNER_HOOK_JOB_STARTED=' .env; then
+    printf '\nACTIONS_RUNNER_HOOK_JOB_STARTED=%s\n' "${HOOK}" >> .env
+  fi
+else
+  printf 'ACTIONS_RUNNER_HOOK_JOB_STARTED=%s\n' "${HOOK}" > .env
+fi
+
+sudo mkdir -p "/etc/systemd/system/actions.runner.neverhuman-RedlineDB.${RUNNER_NAME}.service.d"
+sudo tee "/etc/systemd/system/actions.runner.neverhuman-RedlineDB.${RUNNER_NAME}.service.d/path.conf" >/dev/null <<'EOS'
+[Service]
+Environment=PATH=/home/ubuntu/.cargo/bin:/home/ubuntu/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+EOS
+
 sudo ./svc.sh install "${USER}"
+sudo systemctl daemon-reload
 sudo ./svc.sh start
 sudo ./svc.sh status

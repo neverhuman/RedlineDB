@@ -23,6 +23,13 @@ jobs:
       id-token: write
       attestations: write
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: {fetch-depth: 0}
       - name: Verify stable release ancestry

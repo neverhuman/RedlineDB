@@ -77,6 +77,10 @@
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify feature-gap documentation through the canonical host-required lane"
     },
+    "GROK_GAPS.md": {
+      "command": "rtk bash scripts/ci-local.sh required",
+      "purpose": "verify gap-close plan stays visible to the audit"
+    },
     "GEMINI.md": {
       "command": "rtk bash scripts/ci-local.sh required",
       "purpose": "verify agent instructions through the canonical host-required lane"

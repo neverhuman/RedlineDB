@@ -11,5 +11,12 @@ jobs:
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - run: bash ops/ci/audit-family.sh

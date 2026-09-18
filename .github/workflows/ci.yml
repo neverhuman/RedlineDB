@@ -14,11 +14,13 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# Isolate cargo homes per runner workdir so concurrent self-hosted
-# jobs on xbabe2/xbabe3 do not clobber ~/.cargo/bin (ETXTBSY / missing cargo).
+# Isolate cargo/target per self-hosted runner, outside the git workdir.
+# Shared ~/.cargo across concurrent jobs deleted rustup (ETXTBSY). Putting
+# target/ inside github.workspace made checkout fail on leftover 0444
+# readonly-database fixtures from a previous job.
 env:
-  CARGO_HOME: ${{ github.workspace }}/.ci-cargo
-  CARGO_TARGET_DIR: ${{ github.workspace }}/target
+  CARGO_HOME: ${{ runner.tool_cache }}/redlinedb-cargo
+  CARGO_TARGET_DIR: ${{ runner.tool_cache }}/redlinedb-target
 
 jobs:
   preflight:
@@ -30,6 +32,17 @@ jobs:
     steps:
       # v4.2.2 uses direct local git auth config. The newer pinned checkout
       # SHA intermittently failed before lane logic while fetching PR merge refs.
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -69,6 +82,17 @@ jobs:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -101,6 +125,17 @@ jobs:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -131,6 +166,17 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -146,6 +192,17 @@ jobs:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -168,6 +225,17 @@ jobs:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -188,6 +256,17 @@ jobs:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -205,6 +284,17 @@ jobs:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -225,6 +315,17 @@ jobs:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -248,6 +349,17 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with: {toolchain: 1.95.0, components: rustfmt}
@@ -264,6 +376,17 @@ jobs:
     timeout-minutes: 30
     permissions: {contents: read}
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: {fetch-depth: 0}
       - run: bash ops/ci/install-github-tools.sh
@@ -281,6 +404,17 @@ jobs:
     timeout-minutes: 45
     permissions: {contents: read}
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${CARGO_HOME:-${RUNNER_TOOL_CACHE}/redlinedb-cargo}"
+          cargo_target="${CARGO_TARGET_DIR:-${RUNNER_TOOL_CACHE}/redlinedb-target}"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with: {toolchain: 1.95.0}

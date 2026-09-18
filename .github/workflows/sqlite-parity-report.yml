@@ -12,8 +12,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  CARGO_HOME: ${{ github.workspace }}/.ci-cargo
-  CARGO_TARGET_DIR: ${{ github.workspace }}/target
+  CARGO_HOME: ${{ runner.tool_cache }}/redlinedb-cargo
+  CARGO_TARGET_DIR: ${{ runner.tool_cache }}/redlinedb-target
 
 jobs:
   publish-pr:
@@ -25,6 +25,15 @@ jobs:
       pull-requests: write
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          mkdir -p "${CARGO_HOME}/bin" "${CARGO_TARGET_DIR}"
+          echo "${CARGO_HOME}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: main
