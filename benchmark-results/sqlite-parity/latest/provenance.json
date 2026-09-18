@@ -1,16 +1,16 @@
 {
   "schema_version": "redline-testing-provenance-v1",
   "suite": "sqlite_parity",
-  "redline_testing_binary_path": "/home/runner/work/RedlineDB/RedlineDB/target/release/redline-testing",
-  "redline_testing_binary_sha256": "1bb0bb0ec2ad9f8dd9b0dd45aa787cd184dc1c38e1e869dcb0f1e9a82e732f6c",
-  "target_binary_path": "/home/runner/work/RedlineDB/RedlineDB/target/release/redlinedb",
-  "target_binary_sha256": "2d9a22335176a0486225963d125b0cfca3dc77c988ee1d3ebeae7a8cf31db180",
+  "redline_testing_binary_path": "/home/ubuntu/actions-runners/xbabe2-4/_work/RedlineDB/RedlineDB/target/release/redline-testing",
+  "redline_testing_binary_sha256": "b7adaa4f5fb80a937c8ad047ee47448907dfc5c543c9f6752072814fe4490c52",
+  "target_binary_path": "/home/ubuntu/actions-runners/xbabe2-4/_work/RedlineDB/RedlineDB/target/release/redlinedb",
+  "target_binary_sha256": "5694c12dfea1befdede40f270485cbc747729aaba0420f3b61f0661940bd5ae7",
   "target_version": "redlinedb v4.1.0 (SQLite 3.45.1 compatibility)",
   "sqlite_binary_path": "sqlite3",
   "sqlite_binary_sha256": "<unknown>",
   "sqlite_version": "3.45.1 2024-01-30 16:01:20 e876e51a0ed5c5b3126f52e532044363a014bc594cfefa87ffb5b82257ccalt1 (64-bit)",
   "command_line": [
-    "/home/runner/work/RedlineDB/RedlineDB/target/ci/redline-testing/local-1bb0bb0ec2ad/bin/redline-testing",
+    "/home/ubuntu/actions-runners/xbabe2-4/_work/RedlineDB/RedlineDB/target/ci/redline-testing/local-b7adaa4f5fb8/bin/redline-testing",
     "report",
     "--suite",
     "sqlite_parity",
@@ -55,13 +55,13 @@
   "repetitions": 3,
   "warmup": 1,
   "updated_date": "2026-09-18",
-  "git_sha": "0a1abd4cb4d41eaa12e838cbc040478c0f022ac9",
+  "git_sha": "e5e86a053399267799ab0e3a2c92ba4a27fd2771",
   "git_dirty": true,
   "output_file_hashes": {
-    "README.md": "5bc6f97384956f60696ac3a59c376f6609561f2e5706abc3fefad485c7625999",
+    "README.md": "b79b55c4e12390604ca070b791b652eccef6d70c28ffe6f40381bbcff638daa2",
     "ksloc.csv": "de68c2b0d6e66372404e68f3a67f008ce0f054144d2c3c41ddd284044eb8d6c4",
-    "ranked.csv": "169418db9e421baaf9624819f49238207af2a7bce51f60aadde6183d100e351a",
-    "raw.jsonl": "fcc6e64841babec7b3d05335c5bfef6eba4e5d0a64e01a57c80570b0c6305cee",
+    "ranked.csv": "90ee05005cc813499fe2485fce9667c3cf5051a7d17de26eb63060f0120bccb0",
+    "raw.jsonl": "c530e21c60c8c17cad4137eddc263ff75e0c1a63ca4866db3ee45c3fc1e0bf0f",
     "summary.json": "7ded60bf44e861195abb9a2cf253e855c588be953d062823f3366671e706b7af"
   }
 }

@@ -2,7 +2,7 @@
   "schema_version": "redline-testing-manifest-v1",
   "suite": "sqlite_parity",
   "command_line": [
-    "/home/runner/work/RedlineDB/RedlineDB/target/ci/redline-testing/local-1bb0bb0ec2ad/bin/redline-testing",
+    "/home/ubuntu/actions-runners/xbabe2-4/_work/RedlineDB/RedlineDB/target/ci/redline-testing/local-b7adaa4f5fb8/bin/redline-testing",
     "report",
     "--suite",
     "sqlite_parity",
