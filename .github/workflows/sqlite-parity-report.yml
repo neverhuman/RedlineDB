@@ -11,6 +11,10 @@ concurrency:
   group: redline-testing-report
   cancel-in-progress: false
 
+env:
+  CARGO_HOME: ${{ github.workspace }}/.ci-cargo
+  CARGO_TARGET_DIR: ${{ github.workspace }}/target
+
 jobs:
   publish-pr:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
