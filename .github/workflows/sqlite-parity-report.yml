@@ -32,8 +32,7 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          bash ops/ci/apt-install.sh build-essential mold openssl sqlite3 zlib1g-dev
       - run: bash ops/ci/install-github-tools.sh
       - name: Publish generated SQLite parity report PR
         env:
