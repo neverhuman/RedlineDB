@@ -345,9 +345,9 @@ below is a dated historical measurement from
 Current acceptance evidence is attached to the GitHub CI run.
 
 <!-- sqlite-parity-report:begin -->
-**SQLite parity coverage:** **2441 / 2445** cases passed in CI. Failed: **0**. Skipped: **4**. Updated 2026-09-17.
+**SQLite parity coverage:** **2441 / 2445** cases passed in CI. Failed: **0**. Skipped: **4**. Updated 2026-09-18.
 
-**SQLite parity latency:** median gap **-16.13%**, worst gap **-172.59%**, faster cases **723**.
+**SQLite parity latency:** median gap **-384.80%**, worst gap **-25975.17%**, faster cases **126**.
 
 **Benchmark metadata:** RedlineDB target version **redlinedb v4.1.0 (SQLite 3.45.1 compatibility)**, SQLite reference version **3.53.1 2026-05-05 10:34:17 c88b22011a54b4f6fbd149e9f8e4de77658ce58143a1af0e3785e4e6475127e9 (64-bit)**, redline-testing runner version **redline-testing 1.0.1**.
 
@@ -360,31 +360,31 @@ Current acceptance evidence is attached to the GitHub CI run.
 
 | Rank | Case | Priority | Profile | Category | SQLite median ns | RedlineDB median ns | Improvement |
 | ---: | --- | --- | --- | --- | ---: | ---: | ---: |
-| 1 | DML_WHERE_ORDER_LIMIT_033 | P1 | memory | GEN_SQL_DML | 1855483 | 8177741 | -172.59% |
-| 2 | INDEX_SCHEMA_PRAGMA_059 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 2636325 | 8116523 | -170.55% |
-| 3 | JOIN_SUBQUERY_EXISTS_013 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 3354458 | 8505448 | -153.56% |
-| 4 | CLI_FLAG_TABS | P0 | memory | CLI_OUTPUT_MODE | 2362335 | 7543240 | -151.44% |
-| 5 | JOIN_SUBQUERY_EXISTS_085 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 1687073 | 7486409 | -149.55% |
-| 6 | REPLACE_INTO_LEGACY_FORM | P0 | memory | SQL_UPSERT | 2824017 | 7405387 | -146.85% |
-| 7 | PRAGMA_STATS | P1 | memory | SQL_PRAGMA | 1693437 | 7339834 | -144.66% |
-| 8 | DML_WHERE_ORDER_LIMIT_064 | P1 | memory | GEN_SQL_DML | 1856460 | 7333440 | -144.45% |
-| 9 | VIEW_TRIGGER_GENERATED_047 | P2 | memory | GEN_SQL_VIEW_TRIGGER | 2050301 | 7094130 | -136.47% |
-| 10 | DML_WHERE_ORDER_LIMIT_109 | P1 | memory | GEN_SQL_DML | 2800005 | 6804260 | -126.81% |
-| 11 | INDEX_SCHEMA_PRAGMA_020 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 3090141 | 6984653 | -126.03% |
-| 12 | CASE_WHEN_NULL_MATCH | P0 | memory | SQL_NULL_SEMANTICS | 3282272 | 7412391 | -125.83% |
-| 13 | AVG_TYPEOF_REAL_WITH_NULLS | P0 | memory | SQL_AGGREGATE_NULL | 2656317 | 6732058 | -124.40% |
-| 14 | AGG_GROUP_HAVING_033 | P1 | memory | GEN_SQL_AGGREGATE | 2453151 | 6729649 | -124.32% |
-| 15 | DML_WHERE_ORDER_LIMIT_010 | P1 | memory | GEN_SQL_DML | 3163236 | 7050933 | -122.90% |
-| 16 | CTE_RECURSIVE_MATRIX_009 | P1 | memory | GEN_SQL_CTE | 2471260 | 6665273 | -122.18% |
-| 17 | DML_WHERE_ORDER_LIMIT_009 | P1 | memory | GEN_SQL_DML | 1723980 | 6660314 | -122.01% |
-| 18 | DML_WHERE_ORDER_LIMIT_098 | P1 | memory | GEN_SQL_DML | 3193403 | 7059840 | -121.08% |
-| 19 | INSTEAD_OF_TRIGGER_ON_VIEW | P0 | memory | SQL_TRIGGER | 2443282 | 6613793 | -120.46% |
-| 20 | JOIN_SUBQUERY_EXISTS_058 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 2878577 | 6587674 | -119.59% |
-| 21 | INDEX_SCHEMA_PRAGMA_032 | P2 | memory | GEN_SQL_INDEX_PRAGMA | 3618225 | 7924387 | -119.01% |
-| 22 | WINDOW_PARTITION_SUM_069 | P2 | memory | GEN_SQL_WINDOW | 1713657 | 6559034 | -118.63% |
-| 23 | GLOB_CASE_SENSITIVE_ALWAYS | P0 | memory | SQL_PATTERN | 2438092 | 6539850 | -118.00% |
-| 24 | VIEW_TRIGGER_GENERATED_030 | P2 | memory | GEN_SQL_VIEW_TRIGGER | 2795701 | 6480626 | -116.02% |
-| 25 | COMPOUND_COLUMN_NAMES_FROM_LEFTMOST | P0 | memory | SQL_COMPOUND | 2941368 | 6465330 | -115.51% |
+| 1 | DETACH_DATABASE_SYNTAX | P0 | memory | SQL_ATTACH | 3185536 | 830634001 | -25975.17% |
+| 2 | SCALAR_CAST_TYPEOF_037 | P1 | memory | GEN_SQL_SCALAR | 5235974 | 1007289829 | -19137.87% |
+| 3 | SCALAR_STRING_028 | P1 | memory | GEN_SQL_SCALAR | 6722787 | 1202870034 | -17792.43% |
+| 4 | JOIN_SUBQUERY_EXISTS_020 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 3974277 | 647664400 | -16196.41% |
+| 5 | SCALAR_CAST_TYPEOF_024 | P1 | memory | GEN_SQL_SCALAR | 5734427 | 781815261 | -13533.71% |
+| 6 | TRANSACTION_COMMIT | P0 | memory | SQL_TRANSACTION | 2977923 | 354721273 | -11724.04% |
+| 7 | JOIN_SUBQUERY_EXISTS_006 | P1 | memory | GEN_SQL_JOIN_SUBQUERY | 4450699 | 525527667 | -11707.76% |
+| 8 | SCALAR_STRING_020 | P1 | memory | GEN_SQL_SCALAR | 7523060 | 885067083 | -11664.72% |
+| 9 | AGG_GROUP_HAVING_013 | P1 | memory | GEN_SQL_AGGREGATE | 5582690 | 608168874 | -10793.83% |
+| 10 | SCALAR_CAST_TYPEOF_019 | P1 | memory | GEN_SQL_SCALAR | 9336861 | 1003817712 | -10651.13% |
+| 11 | OPT_MAXSIZE_DESERIALIZE_TEMPFILE | P3 | tempfile | CLI_OPTION_TEMPFILE | 16040861 | 1635276379 | -10094.44% |
+| 12 | DOT_DBINFO_TEMPFILE | P3 | tempfile | CLI_TEMPFILE_DIAGNOSTIC | 4489673 | 446466430 | -9844.30% |
+| 13 | DML_WHERE_ORDER_LIMIT_040 | P1 | memory | GEN_SQL_DML | 4419639 | 436203288 | -9769.66% |
+| 14 | DOT_BAIL_OFF | P0 | memory | CLI_DOT_COMMAND_NEGATIVE | 6214935 | 594947385 | -9472.87% |
+| 15 | OPT_VERSION | P1 | memory | CLI_OPTION | 3258283 | 307924796 | -9350.52% |
+| 16 | OPT_MODE_HTML | P0 | memory | CLI_OPTION | 2901779 | 279173864 | -9205.80% |
+| 17 | AGG_GROUP_HAVING_031 | P1 | memory | GEN_SQL_AGGREGATE | 5318179 | 489924693 | -9112.26% |
+| 18 | SCALAR_NULL_COALESCE_025 | P1 | memory | GEN_SQL_SCALAR | 5301838 | 429069975 | -7992.85% |
+| 19 | SCALAR_ARITH_029 | P1 | memory | GEN_SQL_SCALAR | 12659596 | 1015208248 | -7919.28% |
+| 20 | DML_WHERE_ORDER_LIMIT_105 | P1 | memory | GEN_SQL_DML | 6517047 | 498898377 | -7555.28% |
+| 21 | SCALAR_ARITH_027 | P1 | memory | GEN_SQL_SCALAR | 14039015 | 1040876278 | -7314.17% |
+| 22 | SCALAR_STRING_009 | P1 | memory | GEN_SQL_SCALAR | 9046722 | 660717250 | -7203.39% |
+| 23 | OPT_JSON_MODE | P1 | memory | CLI_OPTION | 7134455 | 510900918 | -7061.04% |
+| 24 | DELETE_BASIC | P0 | memory | SQL_DELETE | 9104131 | 618765637 | -6696.54% |
+| 25 | SCALAR_ARITH_031 | P1 | memory | GEN_SQL_SCALAR | 5948421 | 400370269 | -6630.70% |
 
 </details>
 <!-- sqlite-parity-report:end -->
@@ -461,7 +461,7 @@ the parser elimination benefit directly:
   "sqlite_ref": "version-3.53.1",
   "sqlite_score": 22,
   "sqlite_status": "unknown",
-  "updated_date": "2026-09-17"
+  "updated_date": "2026-09-18"
 }
 <!-- sqlite-jankurai-breakdown:end -->
 

@@ -7,9 +7,9 @@
 - Target stack ID: `rust-ts-vite-react-postgres-bounded-python`
 - Target stack: `Rust core + TypeScript/React/Vite + PostgreSQL + generated contracts + exception-only Python AI/data service`
 - Repo: `.`
-- Run ID: `1789681986`
-- Started at: `1789681986`
-- Elapsed: `22933` ms
+- Run ID: `1789741847`
+- Started at: `1789741847`
+- Elapsed: `21818` ms
 - Scope: `full`
 - Raw score: `85`
 - Final score: `85`
@@ -70,15 +70,15 @@
 
 ## Copy-Code Redundancy
 
-- Status: `review` hard=`0` warning=`168` files=`448`
+- Status: `review` hard=`0` warning=`165` files=`455`
 - Policy: min-lines=`10` min-tokens=`100` max-findings=`50` include-tests=`false` strict=`false`
-- Duplicate volume: lines=`302` tokens=`947` bytes=`8702`
+- Duplicate volume: lines=`308` tokens=`955` bytes=`8835`
 
 - Notes:
   - hard classes are limited to exact active-source file matches and substantial exact same-name units
   - warning classes include same-body different-name units and token/block duplication
   - tests, fixtures, stories, config, Docker, and migrations are omitted unless --include-tests is set
-  - showing the top 50 classes and omitting 118 lower-ranked classes
+  - showing the top 50 classes and omitting 115 lower-ranked classes
 
 | Kind | Severity | Language | Lines | Tokens | Instances | Reason |
 | --- | --- | --- | ---: | ---: | --- | --- |
@@ -88,19 +88,20 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 7 | 16 | `crates/cli/src/render.rs:472-479, crates/cli/src/render.rs:591-598, crates/cli/src/render.rs:652-659, crates/cli/src/render.rs:726-733` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 5 | 9 | `crates/sql/src/exec/pragma_tv.rs:76-81, crates/sql/src/exec/pragma_tv.rs:108-113, crates/sql/src/exec/pragma_tv.rs:134-139, crates/sql/src/exec/pragma_tv.rs:429-434, crates/sql/src/exec/pragma_tv.rs:463-468` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 16 | 37 | `crates/sql/src/exec/agg/select.rs:85-101, crates/sql/src/planner/access/projection.rs:153-169` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/kernel/src/catalog/store.rs:557-558, crates/sql/src/parser.rs:582-583, crates/sql/src/parser.rs:1888-1889, crates/sql/src/parser.rs:1993-1994, crates/sql/src/parser.rs:2092-2093, crates/sql/src/parser.rs:2568-2569, crates/sql/src/parser.rs:2720-2721, crates/sql/src/parser.rs:2763-2764, crates/sql/src/parser.rs:2908-2909, crates/sql/src/parser.rs:3218-3219, crates/sql/src/parser.rs:3266-3267, crates/sql/src/parser/split.rs:33-34, crates/sql/src/parser/split.rs:171-172` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 3 | `crates/cli/src/dot/control.rs:112-114, crates/cli/src/dot/control.rs:116-118, crates/cli/src/dot/control.rs:120-122, crates/cli/src/dot/control.rs:124-126, crates/cli/src/dot/control.rs:137-139, crates/cli/src/dot/control.rs:291-293, crates/cli/src/dot/control.rs:374-376` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 11 | 57 | `crates/sql/src/datetime/format.rs:75-86, crates/sql/src/datetime/modifiers.rs:193-204` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 2 | `crates/bench/src/config.rs:413-414, crates/bench/src/config.rs:434-435, crates/redlinedb/src/value.rs:43-44, crates/redlinedb/src/value.rs:57-58, crates/redlinedb/src/value.rs:64-65, crates/redlinedb/src/value.rs:71-72, crates/redlinedb/src/value.rs:78-79, crates/sql/src/exec/expr/scalar/row/model.rs:67-68, crates/sql/src/exec/expr/scalar/row/model.rs:81-82, crates/sql/src/exec/expr/scalar/row/model.rs:92-93, crates/sql/src/statement.rs:364-365, crates/sql/src/statement.rs:661-662` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 10 | 24 | `crates/sql/src/exec/expr/predicate.rs:336-346, crates/sql/src/parser/rewrite/pg_ddl.rs:278-288` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 7 | 15 | `crates/sql/src/parser/select.rs:1625-1632, crates/sql/src/parser/select.rs:1696-1703` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 7 | 12 | `crates/kernel/src/engine/page_heap/policy.rs:78-85, crates/kernel/src/engine/page_heap/policy.rs:108-115` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 0 | `crates/kernel/src/catalog/ddl.rs:313-313, crates/kernel/src/failpoints/mod.rs:41-42, crates/kernel/src/integrity/equivalence.rs:214-214, crates/kernel/src/integrity/page_csum.rs:107-107, crates/redlinedb-sqlx/src/bridge/options.rs:253-254, crates/redlinedb-sqlx/src/bridge/runtime.rs:127-128, crates/sql/src/connection/session.rs:1240-1240, crates/sql/src/exec/merge.rs:278-278` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/bridge/options.rs:223-224, crates/redlinedb-sqlx/src/bridge/runtime.rs:52-53, crates/redlinedb-sqlx/src/bridge/runtime.rs:57-58, crates/redlinedb-sqlx/src/bridge/runtime.rs:81-82, crates/redlinedb-sqlx/src/bridge/runtime.rs:96-97, crates/redlinedb-sqlx/src/bridge/runtime.rs:111-112, crates/redlinedb-sqlx/src/bridge/runtime.rs:201-202` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 21 | `crates/cli/src/shellzero.rs:217-223, crates/redlinedb-lite/src/shellzero.rs:216-222` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 20 | `crates/sql/src/exec/agg/select.rs:9-15, crates/sql/src/planner/access/projection.rs:94-100` | `same-name semantic unit copied across multiple files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 5 | `crates/kernel/src/json/path_bytecode.rs:138-140, crates/sql/src/json/jsonb.rs:1062-1064, crates/sql/src/parser/rewrite/pg_ddl.rs:320-322, crates/sql/src/parser/rewrite/pg_ddl.rs:1325-1327` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 6 | 12 | `crates/sql/src/exec/policy.rs:32-38, crates/sql/src/exec/policy.rs:57-63` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 2 | 1 | `crates/kernel/src/failpoints/mod.rs:65-67, crates/kernel/src/failpoints/mod.rs:109-111, crates/kernel/src/storage/numa.rs:59-61, crates/kernel/src/storage/numa.rs:64-66` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/sql/src/parser.rs:696-697, crates/sql/src/parser.rs:877-878, crates/sql/src/parser.rs:965-966, crates/sql/src/parser.rs:1174-1175, crates/sql/src/parser.rs:3122-3123, crates/sql/src/parser.rs:3186-3187` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 4 | `crates/kernel/src/catalog/store.rs:557-558, crates/sql/src/parser/rewrite/sqlite_shape.rs:1178-1179, crates/sql/src/parser/rewrite/sqlite_shape.rs:1283-1284, crates/sql/src/parser/rewrite/sqlite_shape.rs:1382-1383, crates/sql/src/parser/split.rs:33-34, crates/sql/src/parser/split.rs:171-172` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 15 | `crates/sql/src/exec/mod.rs:1546-1551, crates/sql/src/exec/mod.rs:1561-1566` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 5 | 13 | `crates/sql/src/exec/agg/select.rs:103-108, crates/sql/src/planner/access/projection.rs:171-176` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 5 | 12 | `crates/cli/src/render.rs:979-984, crates/cli/src/render.rs:1003-1008` | `same body appears under different names across files` |
@@ -119,17 +120,16 @@
 | `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 10 | `crates/sql/src/exec/index_batch.rs:530-533, crates/sql/src/exec/index_batch.rs:538-541` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 3 | `crates/sql/src/rql.rs:1334-1335, crates/sql/src/rql.rs:1419-1420, crates/sql/src/rql.rs:1558-1559, crates/sql/src/rql.rs:1582-1583` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 7 | `crates/sql/src/exec/expr/scalar/value.rs:321-324, crates/sql/src/exec/expr/scalar/value.rs:369-372` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 6 | `crates/sql/src/parser.rs:1397-1400, crates/sql/src/parser.rs:1418-1421` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 3 | 6 | `crates/sql/src/parser.rs:295-298, crates/sql/src/parser.rs:316-319` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 3 | 5 | `crates/ffi/src/sqlite3_api/hooks.rs:72-75, crates/ffi/src/sqlite3_api/hooks_fire.rs:37-40` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 3 | 4 | `crates/kernel/src/vector/flat.rs:57-60, crates/kernel/src/vector/hnsw/searcher.rs:47-50` | `same-name semantic unit copied across multiple files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 1 | `crates/cli/src/dot/mod.rs:499-500, crates/sql/src/exec/expr/program.rs:1187-1188, crates/sql/src/json/scalar.rs:766-767, crates/sql/src/parser.rs:1518-1519` | `same body appears under different names across files` |
 | `ExactUnitSameName` | `Warning` | `rust` | 3 | 2 | `crates/kernel/src/engine/tx/status.rs:306-309, crates/sql/src/exec/hot_row.rs:576-579` | `same-name semantic unit copied across multiple files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/sql/src/connection/database.rs:622-623, crates/sql/src/connection/database.rs:636-637, crates/sql/src/connection/database.rs:670-671` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 7 | `crates/sql/src/exec/expr/json_dispatch.rs:960-961, crates/sql/src/exec/expr/json_dispatch.rs:972-973, crates/sql/src/exec/expr/json_dispatch.rs:985-986` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/redlinedb-sqlx/src/driver.rs:399-400, crates/redlinedb-sqlx/src/driver.rs:414-415, crates/redlinedb-sqlx/src/driver.rs:429-430` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 6 | `crates/sql/src/json/path.rs:543-544, crates/sql/src/json/path.rs:551-552, crates/sql/src/json/path.rs:559-560` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/cli/src/render.rs:410-411, crates/cli/src/render.rs:430-431, crates/cli/src/render.rs:444-445` | `same body appears under different names across files` |
-| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/kernel/src/catalog/ops.rs:1486-1487, crates/sql/src/parser.rs:1712-1713, crates/sql/src/parser/split.rs:164-165` | `same body appears under different names across files` |
+| `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/kernel/src/catalog/ops.rs:1486-1487, crates/sql/src/parser/rewrite/sqlite_shape.rs:1002-1003, crates/sql/src/parser/split.rs:164-165` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/sql/src/json/scalar.rs:279-280, crates/sql/src/json/scalar.rs:557-558, crates/sql/src/json/scalar.rs:587-588` | `same body appears under different names across files` |
 | `ExactUnitDifferentName` | `Warning` | `rust` | 1 | 5 | `crates/cli/src/render.rs:641-642, crates/cli/src/render.rs:766-767, crates/cli/src/render.rs:777-778` | `same body appears under different names across files` |
 
@@ -141,7 +141,7 @@
 | Contract and boundary integrity | 13 | 98 | 12.74 | contract surface found; generated contract artifacts found |
 | Proof lanes and test routing | 12 | 100 | 12.00 | one-command setup/validation lane found; deterministic fast lane found |
 | Security and supply-chain posture | 12 | 70 | 8.40 | lockfile present; secret or dependency scan tooling found |
-| Code shape and semantic surface | 12 | 45 | 5.40 | largest authored code file: crates/sql/src/parser.rs (5337 LOC); code file exceeds 500 LOC |
+| Code shape and semantic surface | 12 | 45 | 5.40 | largest authored code file: crates/sql/src/parser/pragma.rs (1951 LOC); code file exceeds 500 LOC |
 | Data truth and workflow safety | 8 | 100 | 8.00 | database surface present; structured db boundary manifest present |
 | Observability and repair evidence | 8 | 98 | 7.84 | observability libraries or patterns found; diagnostic shaping hints found |
 | Context economy and agent instructions | 7 | 100 | 7.00 | root `AGENTS.md` present; root `AGENTS.md` stays short |
@@ -226,8 +226,8 @@ No audited runtime boundary reclassifications declared.
    Reason: `Code shape and semantic surface` scored 45 below the standard floor of 85
    Fix: split large or ambiguous authored code into smaller semantic modules with focused tests
    Rerun: `just fast`
-   Fingerprint: `sha256:8bc2da848d6beffc37278dfb97ed4b224170b47be5337db933e5143e2d5f5721`
-   Evidence: largest authored code file: crates/sql/src/parser.rs (5337 LOC), code file exceeds 500 LOC, code file exceeds 1000 LOC, most code files stay under 300 LOC
+   Fingerprint: `sha256:30b9addb1c90686f81395eea308052f5ce7ef8c5cd91e200059881474d643438`
+   Evidence: largest authored code file: crates/sql/src/parser/pragma.rs (1951 LOC), code file exceeds 500 LOC, code file exceeds 1000 LOC, most code files stay under 300 LOC
 2. `medium` `security` `.github/workflows/jankurai.yml`
    Rule: `HLT-016-SUPPLY-CHAIN-DRIFT`
    Check: `HLT-016-SUPPLY-CHAIN-DRIFT:security` `soft` confidence `0.76`
