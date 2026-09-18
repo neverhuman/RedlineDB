@@ -11,10 +11,6 @@ concurrency:
   group: redline-testing-report
   cancel-in-progress: false
 
-env:
-  CARGO_HOME: ${{ runner.tool_cache }}/redlinedb-cargo
-  CARGO_TARGET_DIR: ${{ runner.tool_cache }}/redlinedb-target
-
 jobs:
   publish-pr:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
@@ -31,8 +27,12 @@ jobs:
           if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
-          mkdir -p "${CARGO_HOME}/bin" "${CARGO_TARGET_DIR}"
-          echo "${CARGO_HOME}/bin" >> "${GITHUB_PATH}"
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
+          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
