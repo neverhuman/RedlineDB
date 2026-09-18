@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   preflight:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     permissions:
       contents: read
@@ -54,9 +54,14 @@ jobs:
           - core
           - kernel
           - sql-unit
-          - sql-contracts
+          - sqlite-oracle
+          - sqlite-evidence
+          - sql-integration-1
+          - sql-integration-2
+          - sql-integration-3
+          - sql-integration-4
           - bench
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     permissions:
       contents: read
@@ -81,6 +86,19 @@ jobs:
         env:
           REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
         run: CI_FAST_STAGE=${{ matrix.stage }} bash ops/ci/fast.sh
+      - name: Retain compatibility diagnostics
+        if: always() && (matrix.stage == 'sqlite-evidence' || matrix.stage == 'sqlite-oracle')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: compatibility-${{ matrix.stage }}
+          if-no-files-found: error
+          path: |
+            target/compatibility-ci/**
+            target/sqlite-reference/build-*.log
+            target/sqlite-reference/*/oracle-identity.json
+            target/sqlite-reference/*/compile-options.txt
+            subrepos/redline-testing/target/sqlite-parity/failures/**
+            subrepos/redline-testing/target/sqlite-parity/skips/**
 
   parity:
     strategy:
@@ -88,7 +106,7 @@ jobs:
       matrix:
         stage:
           - redline-testing-official
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 180
     permissions:
       contents: read
@@ -120,7 +138,7 @@ jobs:
             target/redline-testing/**
 
   official-evidence-guard:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     permissions:
       contents: read
@@ -134,7 +152,7 @@ jobs:
   # Branch ruleset requires these exact job names. They run real engine
   # work and must not wait on the official parity shard.
   test:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     permissions:
       contents: read
@@ -157,7 +175,7 @@ jobs:
           cargo test --locked -p redlinedb-cli
 
   build:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     permissions:
       contents: read
@@ -178,7 +196,7 @@ jobs:
         run: cargo build --locked --release -p redlinedb-cli
 
   lint:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     permissions:
       contents: read
@@ -195,7 +213,7 @@ jobs:
         run: cargo fmt --check
 
   typecheck:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     permissions:
       contents: read
@@ -216,7 +234,7 @@ jobs:
         run: cargo check --workspace --locked
 
   cli:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     permissions:
       contents: read
@@ -241,7 +259,7 @@ jobs:
       fail-fast: false
       matrix:
         lane: [testing, central, web, release-tools, integration]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
     permissions:
       contents: read
@@ -258,7 +276,7 @@ jobs:
 
   audit:
     needs: security
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     permissions: {contents: read}
     steps:
@@ -275,7 +293,7 @@ jobs:
         with: {name: audit-family, path: target/audit-family, if-no-files-found: error}
 
   security:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     permissions: {contents: read}
     steps:
@@ -308,7 +326,7 @@ jobs:
     name: RedlineDB/required
     if: always()
     needs: [preflight, tests, parity, official-evidence-guard, test, build, lint, typecheck, cli, components, audit, security, packaging]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 5
     permissions: {contents: read}
     steps:

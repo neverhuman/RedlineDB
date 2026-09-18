@@ -378,20 +378,9 @@ impl TvFunc for PragmaModuleList {
                 "pragma_module_list takes no arguments".to_owned(),
             ));
         }
-        // SQLite's vtab module registry. RedlineDB does not actually
-        // implement these modules — we surface the SQLite-spec names so
-        // callers probing the list see the standard FTS / RTree /
-        // table-info module entries. Each row is a single text column.
+        // Modules that actually have a Redline evaluator. FTS/RTree/dbstat
+        // stay off this list until those native modules ship.
         const MODULES: &[&str] = &[
-            "bytecode",
-            "dbpage",
-            "dbstat",
-            "fts3",
-            "fts3tokenize",
-            "fts4",
-            "fts4aux",
-            "fts5",
-            "fts5vocab",
             "generate_series",
             "json_each",
             "json_tree",
@@ -407,8 +396,6 @@ impl TvFunc for PragmaModuleList {
             "pragma_table_info",
             "pragma_table_list",
             "pragma_table_xinfo",
-            "rtree",
-            "rtree_i32",
         ];
         let rows = MODULES
             .iter()

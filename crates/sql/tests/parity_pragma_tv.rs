@@ -210,13 +210,6 @@ fn pragma_recursive_triggers_set_and_get() {
 
 #[test]
 fn pragma_compile_options_lists_sqlite_parity_set() {
-    // The compile_options list now mirrors SQLite v3.53.1 so the
-    // redline-testing sqlite_parity suite passes byte-for-byte.
-    // RedlineDB-specific names (`REDLINEDB=1`, the `ENABLE_*` prefixes
-    // for features RedlineDB implements as native code) were dropped in
-    // favour of the upstream surface — callers can still detect
-    // RedlineDB via the `target_version` string surfaced at connection
-    // open.
     let pair = Pair::new();
     let rows = pair.redline_rows("PRAGMA compile_options");
     let opts: Vec<String> = rows
@@ -226,10 +219,16 @@ fn pragma_compile_options_lists_sqlite_parity_set() {
             _ => None,
         })
         .collect();
-    // Spot-check that several SQLite-parity entries are present.
-    assert!(opts.contains(&"DEFAULT_AUTOVACUUM".to_string()));
     assert!(opts.contains(&"THREADSAFE=1".to_string()));
     assert!(opts.contains(&"ENABLE_MATH_FUNCTIONS".to_string()));
+    assert!(opts.contains(&"ENABLE_JSON1".to_string()));
+    assert!(opts.contains(&"REDLINEDB=1".to_string()));
+    assert!(
+        !opts
+            .iter()
+            .any(|o| o.contains("FTS5") || o.contains("RTREE") || o.contains("SESSION")),
+        "compile_options must not advertise unimplemented modules: {opts:?}"
+    );
 }
 
 #[test]
@@ -243,8 +242,8 @@ fn pragma_compile_options_tv_form_lists_features() {
             _ => None,
         })
         .collect();
-    assert!(opts.contains(&"DEFAULT_AUTOVACUUM".to_string()));
     assert!(opts.contains(&"THREADSAFE=1".to_string()));
+    assert!(opts.contains(&"REDLINEDB=1".to_string()));
 }
 
 // ---------------------------------------------------------------------------

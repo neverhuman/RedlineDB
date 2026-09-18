@@ -42,9 +42,10 @@ ensure_sqlite_parity_reference() {
 
 default_sqlite_score_ref() {
   local version
-  version="$(sed -n 's/^version="\([^"]*\)"/\1/p' scripts/sqlite/build-reference.sh | head -n 1)"
-  if [ -z "$version" ]; then
-    printf 'unable to resolve SQLite reference version from scripts/sqlite/build-reference.sh\n' >&2
+  ensure_sqlite_parity_reference
+  version="$("$sqlite_parity_reference_bin" -batch :memory: 'SELECT sqlite_version();')"
+  if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    printf 'unable to resolve SQLite reference version from qualified CLI\n' >&2
     exit 1
   fi
   printf 'version-%s\n' "$version"

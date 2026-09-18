@@ -1368,7 +1368,7 @@ fn rewrite_dependent_alter_sql(
     mode: RenameRewrite,
 ) {
     let replacement = match mode {
-        RenameRewrite::Table => format!("\"{new_name}\""),
+        RenameRewrite::Table => format!("\"{}\"", new_name.replace('"', "\"\"")),
         RenameRewrite::Column => new_name.to_owned(),
     };
 
@@ -1404,7 +1404,9 @@ fn rewrite_dependent_alter_sql(
         }
         let mut changed = false;
         let mut trigger_ref = (**trigger).clone();
-        if matches!(mode, RenameRewrite::Table) {
+        if matches!(mode, RenameRewrite::Table)
+            && trigger_ref.table_folded.eq_ignore_ascii_case(old_name)
+        {
             trigger_ref.table_name = new_name.to_owned().into_boxed_str();
             trigger_ref.table_folded = new_name.to_ascii_lowercase().into_boxed_str();
             changed = true;
@@ -1461,6 +1463,69 @@ fn rewrite_ident_ci(sql: &str, old_name: &str, replacement: &str) -> Option<Stri
     let mut i = 0usize;
     let mut changed = false;
     while i + needle.len() <= lower_bytes.len() {
+        // Quoted identifiers are complete tokens: punctuation inside them
+        // must not start a string or comment, or match a partial identifier.
+        if matches!(bytes[i], b'"' | b'`' | b'[') {
+            let start = i;
+            let close = if bytes[i] == b'[' { b']' } else { bytes[i] };
+            i += 1;
+            let content_start = i;
+            let mut end = None;
+            while i < bytes.len() {
+                if bytes[i] == close {
+                    if close != b']' && bytes.get(i + 1) == Some(&close) {
+                        i += 2;
+                        continue;
+                    }
+                    end = Some(i);
+                    i += 1;
+                    break;
+                }
+                i += 1;
+            }
+            if let Some(end) = end {
+                let delimiter = char::from(close).to_string();
+                let identifier = sql[content_start..end].replace(&delimiter.repeat(2), &delimiter);
+                if identifier.eq_ignore_ascii_case(old_name) {
+                    out.push_str(&sql[last..start]);
+                    out.push_str(replacement);
+                    last = i;
+                    changed = true;
+                }
+            }
+            continue;
+        }
+        // String contents and comments are not identifiers. Preserve escaped
+        // quotes as part of the literal, including SQLite's doubled apostrophe.
+        if bytes[i] == b'\'' {
+            i += 1;
+            while i < bytes.len() {
+                if bytes[i] == b'\'' {
+                    i += 1;
+                    if i < bytes.len() && bytes[i] == b'\'' {
+                        i += 1;
+                        continue;
+                    }
+                    break;
+                }
+                i += 1;
+            }
+            continue;
+        }
+        if bytes[i..].starts_with(b"--") {
+            while i < bytes.len() && bytes[i] != b'\n' {
+                i += 1;
+            }
+            continue;
+        }
+        if bytes[i..].starts_with(b"/*") {
+            i += 2;
+            while i < bytes.len() && !bytes[i..].starts_with(b"*/") {
+                i += 1;
+            }
+            i = (i + 2).min(bytes.len());
+            continue;
+        }
         if &lower_bytes[i..i + needle.len()] == needle {
             let prev_ok = i == 0 || !is_ident_char(bytes[i - 1]);
             let after = i + needle.len();
@@ -1547,4 +1612,50 @@ pub fn legacy_alter_table_active_for_tests() -> bool {
 
 pub fn set_legacy_alter_table(v: bool) {
     LEGACY_ALTER_TABLE.with(|c| c.set(v));
+}
+
+#[cfg(test)]
+mod alter_rewrite_regressions {
+    use super::rewrite_ident_ci;
+
+    #[test]
+    fn quoted_identifiers_do_not_start_literals_or_comments() {
+        for identifier in ["\"q'r\"", "`q'r`", "[q'r]", "\"q--r\"", "`q/*r`", "[q/*r]"] {
+            let sql = format!("SELECT {identifier} FROM a");
+            assert_eq!(
+                rewrite_ident_ci(&sql, "a", "\"renamed_a\"").unwrap(),
+                format!("SELECT {identifier} FROM \"renamed_a\"")
+            );
+        }
+        for (sql, expected) in [
+            ("SELECT x FROM \"a\"", "SELECT x FROM \"renamed_a\""),
+            ("SELECT x FROM `a`", "SELECT x FROM \"renamed_a\""),
+            ("SELECT x FROM [a]", "SELECT x FROM \"renamed_a\""),
+        ] {
+            assert_eq!(
+                rewrite_ident_ci(sql, "a", "\"renamed_a\"").as_deref(),
+                Some(expected)
+            );
+        }
+    }
+
+    #[test]
+    fn quoted_target_uses_replacement_without_reescaping() {
+        for sql in ["SELECT x FROM [a]", "SELECT x FROM \"a\""] {
+            assert_eq!(
+                rewrite_ident_ci(sql, "a", "\"a\"\"b]\"").as_deref(),
+                Some("SELECT x FROM \"a\"\"b]\"")
+            );
+        }
+    }
+
+    #[test]
+    fn literals_and_comments_are_not_rename_targets() {
+        let sql = "SELECT 'a', 'it''s a', x /* a */ FROM a -- a\n";
+        assert_eq!(
+            rewrite_ident_ci(sql, "a", "renamed_a").as_deref(),
+            Some("SELECT 'a', 'it''s a', x /* a */ FROM renamed_a -- a\n")
+        );
+        assert_eq!(rewrite_ident_ci("SELECT 'a' /* a */ -- a", "a", "b"), None);
+    }
 }

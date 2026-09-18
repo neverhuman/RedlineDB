@@ -77,7 +77,12 @@ fn storage_stats_snapshot_reports_core_counters() {
 
     let stats = engine.storage_stats().unwrap();
     assert!(stats.wal_written_lsn.0 > 0);
-    assert!(stats.wal_durable_lsn.0 > 0);
+    assert!(
+        stats.wal_durable_lsn.0 >= stats.wal_written_lsn.0,
+        "strict commit must fsync before returning (durable {} < written {})",
+        stats.wal_durable_lsn.0,
+        stats.wal_written_lsn.0
+    );
     assert!(stats.buffer.resident_pages >= 1);
     assert!(stats.tx.committed_states >= 1);
 }

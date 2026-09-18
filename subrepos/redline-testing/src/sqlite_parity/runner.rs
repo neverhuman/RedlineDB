@@ -38,6 +38,7 @@ pub fn compare_cases(
     progress: bool,
     memory_samples: bool,
 ) -> Result<RunSummary> {
+    validate_case_set(cases, skipped, repetitions)?;
     let tmp_root = tmp_root.as_ref();
     let started = Instant::now();
     let mut summary = RunSummary::default();
@@ -265,23 +266,87 @@ fn run_one_case(
     })
 }
 
-fn validate_compare(case: &Case, reference: &EngineOutput, target: &EngineOutput) -> Result<()> {
-    if reference.status_code != target.status_code {
+fn validate_case_set(cases: &[Case], skipped: &[SkippedCase], repetitions: usize) -> Result<()> {
+    if cases.is_empty() && skipped.is_empty() {
+        bail!("infrastructure: empty case selection");
+    }
+    if repetitions == 0 {
+        bail!("infrastructure: at least one measured repetition is required");
+    }
+    let mut ids = std::collections::HashSet::new();
+    for case in cases.iter().chain(skipped.iter().map(|skip| &skip.case)) {
+        if !ids.insert(case.id) {
+            bail!("infrastructure: duplicate case {}", case.display_id());
+        }
+        for token in &case.required_capabilities {
+            if super::engine::Capability::from_token(token).is_none() {
+                bail!(
+                    "infrastructure: unknown capability {token} for {}",
+                    case.display_id()
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Qualify the oracle against the authored fixture before considering parity.
+/// A matching SQL error is not evidence that a positive fixture succeeded.
+fn validate_fixture(case: &Case, output: &EngineOutput) -> Result<()> {
+    if output.status_code != Some(case.expected_exit) {
         bail!(
-            "exit mismatch: reference {:?}, target {:?}",
-            reference.status_code,
-            target.status_code
+            "expected exit {}, got {:?}",
+            case.expected_exit,
+            output.status_code
         );
     }
+    let stdout = normalize_compare_output(case, output, &output.stdout);
+    let stderr = normalize_compare_output(case, output, &output.stderr);
+    if let Some(expected) = &case.expected_stdout {
+        let expected = normalize_compare_output(case, output, expected);
+        if stdout != expected {
+            bail!("fixture stdout mismatch: expected `{expected}`, got `{stdout}`");
+        }
+    }
+    let combined = format!("{stdout}\n{stderr}");
+    for (label, actual, expected) in [
+        ("stdout", &stdout, &case.expected_stdout_contains),
+        ("stderr", &stderr, &case.expected_stderr_contains),
+        ("combined", &combined, &case.expected_combined_contains),
+    ] {
+        for needle in expected {
+            if !actual.contains(needle) {
+                bail!("fixture {label} missing `{needle}`");
+            }
+        }
+    }
+    Ok(())
+}
+
+fn validate_compare(case: &Case, reference: &EngineOutput, target: &EngineOutput) -> Result<()> {
+    validate_fixture(case, reference)
+        .map_err(|err| anyhow::anyhow!("oracle fixture invalid: {err}"))?;
+    validate_fixture(case, target)
+        .map_err(|err| anyhow::anyhow!("target fixture mismatch: {err}"))?;
     if !case.compare_stdout {
-        return Ok(());
+        // Legacy presence-only assertions are retained and checked above, but
+        // are insufficient to establish result/side-effect equivalence.
+        bail!(
+            "coverage missing: stdout comparison disabled; explicit comparison or side-effect checker required"
+        );
     }
     let reference_stdout = normalize_compare_output(case, reference, &reference.stdout);
     let target_stdout = normalize_compare_output(case, target, &target.stdout);
     if reference_stdout != target_stdout {
         bail!("stdout mismatch: reference `{reference_stdout}`, target `{target_stdout}`");
     }
-    if reference.status_code != Some(0) || case.status == "catalog_only" {
+    if case.expected_exit != 0 {
+        if case.expected_stderr_contains.is_empty() && case.expected_combined_contains.is_empty() {
+            bail!("coverage missing: negative fixture has no error assertion");
+        }
+        return Ok(());
+    }
+    if case.status == "catalog_only" {
         return Ok(());
     }
     let reference_stderr = normalize_compare_output(case, reference, &reference.stderr);
@@ -352,6 +417,12 @@ fn finish_summary(mut summary: RunSummary, progress: bool) -> Result<RunSummary>
         );
         eprintln!("sqlite_parity slowest={:?}", summary.slowest);
     }
+    if summary.skipped > 0 {
+        bail!(
+            "sqlite parity incomplete: {} required cases skipped",
+            summary.skipped
+        );
+    }
     if summary.failed > 0 {
         bail!(
             "sqlite parity failed {} of {} cases",
@@ -360,4 +431,131 @@ fn finish_summary(mut summary: RunSummary, progress: bool) -> Result<RunSummary>
         );
     }
     Ok(summary)
+}
+
+#[cfg(test)]
+mod integrity_tests {
+    use super::*;
+
+    fn fixture() -> Case {
+        let mut case = super::super::catalog::pinned_cases().unwrap().remove(0);
+        case.expected_exit = 0;
+        case.expected_stdout = Some("1".into());
+        case.expected_stdout_contains.clear();
+        case.expected_stderr_contains.clear();
+        case.expected_combined_contains.clear();
+        case.compare_stdout = true;
+        case.status = "active".into();
+        case
+    }
+
+    fn output(code: Option<i32>, stdout: &str, stderr: &str) -> EngineOutput {
+        EngineOutput {
+            engine: "fixture".into(),
+            executable_path: String::new(),
+            executable_sha256: String::new(),
+            version: String::new(),
+            status_code: code,
+            elapsed: Duration::ZERO,
+            stdout: stdout.into(),
+            stderr: stderr.into(),
+            memory_status: "disabled".into(),
+            peak_rss_kb: None,
+            rss_sampled_kb: None,
+        }
+    }
+
+    #[test]
+    fn matching_failure_cannot_pass_positive_fixture() {
+        let out = output(Some(1), "", "no such function");
+        assert!(
+            validate_compare(&fixture(), &out, &out)
+                .unwrap_err()
+                .to_string()
+                .contains("oracle fixture invalid")
+        );
+    }
+
+    #[test]
+    fn matching_wrong_output_cannot_qualify_oracle() {
+        let out = output(Some(0), "2", "");
+        assert!(validate_compare(&fixture(), &out, &out).is_err());
+        let out = output(Some(0), "1\n", "");
+        assert!(validate_compare(&fixture(), &out, &out).is_ok());
+    }
+
+    #[test]
+    fn matching_signals_fail_even_negative_fixture() {
+        let mut case = fixture();
+        case.expected_exit = 1;
+        let out = output(None, "1", "");
+        assert!(validate_compare(&case, &out, &out).is_err());
+    }
+
+    #[test]
+    fn negative_fixture_checks_error_on_both_engines() {
+        let mut case = fixture();
+        case.expected_exit = 1;
+        case.expected_stderr_contains = vec!["constraint failed".into()];
+        let good = output(Some(1), "1", "constraint failed");
+        let wrong = output(Some(1), "1", "syntax error");
+        assert!(validate_compare(&case, &good, &good).is_ok());
+        assert!(validate_compare(&case, &good, &wrong).is_err());
+        assert!(validate_compare(&case, &wrong, &good).is_err());
+        case.expected_stderr_contains.clear();
+        assert!(validate_compare(&case, &good, &good).is_err());
+    }
+
+    #[test]
+    fn disabled_output_is_unqualified_coverage() {
+        let mut case = fixture();
+        case.compare_stdout = false;
+        let out = output(Some(0), "1", "");
+        assert!(
+            validate_compare(&case, &out, &out)
+                .unwrap_err()
+                .to_string()
+                .contains("coverage missing")
+        );
+    }
+
+    #[test]
+    fn contains_assertions_apply_to_all_channels() {
+        for channel in 0..3 {
+            let mut case = fixture();
+            match channel {
+                0 => case.expected_stdout_contains.push("missing".into()),
+                1 => case.expected_stderr_contains.push("missing".into()),
+                _ => case.expected_combined_contains.push("missing".into()),
+            }
+            let out = output(Some(0), "1", "");
+            assert!(validate_compare(&case, &out, &out).is_err());
+        }
+    }
+
+    #[test]
+    fn empty_duplicate_unknown_capability_and_unmeasured_runs_fail() {
+        assert!(validate_case_set(&[], &[], 1).is_err());
+        assert!(validate_case_set(&[fixture()], &[], 0).is_err());
+        assert!(validate_case_set(&[fixture(), fixture()], &[], 1).is_err());
+        let mut case = fixture();
+        case.required_capabilities.push("typo".into());
+        assert!(validate_case_set(&[case], &[], 1).is_err());
+        assert!(validate_case_set(&[fixture()], &[], 1).is_ok());
+    }
+
+    #[test]
+    fn skips_fail_completion_gate() {
+        assert!(
+            finish_summary(
+                RunSummary {
+                    total: 1,
+                    skipped: 1,
+                    ..Default::default()
+                },
+                false
+            )
+            .is_err()
+        );
+    }
 }
