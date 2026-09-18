@@ -35,7 +35,7 @@ run_preflight() {
     cargo build --locked -p redlinedb-cli --bin redlinedb
     local smoke_directory smoke_binary
     smoke_directory=$(mktemp -d)
-    smoke_binary="$PWD/target/debug/redlinedb"
+    smoke_binary="${CARGO_TARGET_DIR:-$PWD/target}/debug/redlinedb"
     (cd "$smoke_directory"; test "$("$smoke_binary" -batch :memory: 'SELECT 1;')" = 1)
     rm -rf "$smoke_directory"
     cargo check --workspace --locked

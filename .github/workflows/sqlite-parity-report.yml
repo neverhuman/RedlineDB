@@ -28,10 +28,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd

@@ -187,17 +187,18 @@ load_redline_testing_report_provenance() {
 prepare_redline_testing_target() {
   local context="${1:?redline-testing context required}"
   ensure_sqlite_parity_reference
+  local target_dir="${CARGO_TARGET_DIR:-target}"
   rtk cargo build -p redlinedb-cli --release --bin redlinedb --locked
-  if [ ! -x target/release/redlinedb ]; then
-    printf 'expected release binary missing: %s\n' "target/release/redlinedb" >&2
+  if [ ! -x "$target_dir/release/redlinedb" ]; then
+    printf 'expected release binary missing: %s\n' "$target_dir/release/redlinedb" >&2
     return 1
   fi
   if [ ! -x "$sqlite_parity_reference_bin" ]; then
     printf 'expected SQLite reference binary missing: %s\n' "$sqlite_parity_reference_bin" >&2
     return 1
   fi
-  if [ "$(sha256sum target/release/redlinedb | awk '{print $1}')" = "$(sha256sum "$sqlite_parity_reference_bin" | awk '{print $1}')" ]; then
-    printf 'redline-testing %s target and SQLite reference unexpectedly hash-identical: %s\n' "$context" "target/release/redlinedb" >&2
+  if [ "$(sha256sum "$target_dir/release/redlinedb" | awk '{print $1}')" = "$(sha256sum "$sqlite_parity_reference_bin" | awk '{print $1}')" ]; then
+    printf 'redline-testing %s target and SQLite reference unexpectedly hash-identical: %s\n' "$context" "$target_dir/release/redlinedb" >&2
     return 1
   fi
 }
@@ -217,7 +218,7 @@ run_redline_testing_official() {
   REDLINEDB_DEFAULT_DURABILITY=normal \
   REDLINEDB_QUIET_DURABILITY=1 \
   "$redline_testing_bin" run \
-    --target-bin target/release/redlinedb \
+    --target-bin "${CARGO_TARGET_DIR:-target}/release/redlinedb" \
     --sqlite-bin "$sqlite_parity_reference_bin" \
     --suite all \
     --workers auto \

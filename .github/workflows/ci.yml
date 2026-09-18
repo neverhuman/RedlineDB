@@ -14,10 +14,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
-# CARGO_HOME / CARGO_TARGET_DIR cannot be set from ${{ runner.tool_cache }}
-# at workflow scope: the runner context is not available until a job
-# starts, and GitHub rejects the whole workflow. The unlock step below
-# exports them via GITHUB_ENV from $RUNNER_TOOL_CACHE.
+# CARGO_HOME is exported from $RUNNER_TOOL_CACHE in the unlock step
+# (workflow-level runner context is unavailable and rejects the file).
+# Leave CARGO_TARGET_DIR unset so cargo and scripts share $PWD/target;
+# artifact uploads and parity look for target/release and target/redline-testing.
 
 jobs:
   preflight:
@@ -36,10 +36,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -88,10 +86,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -133,10 +129,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -176,10 +170,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -204,10 +196,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -239,10 +229,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -272,10 +260,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -302,10 +288,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -335,10 +319,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -371,10 +353,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -400,10 +380,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
@@ -430,10 +408,8 @@ jobs:
             chmod -R u+rwx "${GITHUB_WORKSPACE}"
           fi
           cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
-          cargo_target="${RUNNER_TOOL_CACHE}/redlinedb-target"
-          mkdir -p "${cargo_home}/bin" "${cargo_target}"
+          mkdir -p "${cargo_home}/bin"
           echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
-          echo "CARGO_TARGET_DIR=${cargo_target}" >> "${GITHUB_ENV}"
           echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
           exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
