@@ -31,9 +31,6 @@ while IFS= read -r file; do
     docs/architecture/ENGINEERING_SPEC.md)
       continue
       ;;
-    crates/sql/src/parser.rs)
-      continue
-      ;;
   esac
   [[ -f "$file" ]] || continue
   if ! grep -Iq . "$file"; then

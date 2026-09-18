@@ -14,9 +14,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# CARGO_HOME is exported from $RUNNER_TOOL_CACHE in the unlock step
+# (workflow-level runner context is unavailable and rejects the file).
+# Leave CARGO_TARGET_DIR unset so cargo and scripts share $PWD/target;
+# artifact uploads and parity look for target/release and target/redline-testing.
+
 jobs:
   preflight:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     permissions:
       contents: read
@@ -24,6 +29,17 @@ jobs:
     steps:
       # v4.2.2 uses direct local git auth config. The newer pinned checkout
       # SHA intermittently failed before lane logic while fetching PR merge refs.
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -34,11 +50,12 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
+          bash ops/ci/apt-install.sh build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Install cargo-nextest
         run: |
-          curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+          if ! command -v cargo-nextest >/dev/null; then
+            curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+          fi
       # Thin dispatcher: all fast-lane logic lives in ops/ci/fast.sh so
       # CI and local (`scripts/ci-local.sh fast`, `just fast`, the
       # pre-push gate) run the same command set. The preflight stage is
@@ -56,12 +73,23 @@ jobs:
           - sql-unit
           - sql-contracts
           - bench
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     permissions:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -72,28 +100,39 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
+          bash ops/ci/apt-install.sh build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Install cargo-nextest
         run: |
-          curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+          if ! command -v cargo-nextest >/dev/null; then
+            curl -LsSf https://get.nexte.st/0.9.133/linux | tar zxf - -C "${CARGO_HOME:-$HOME/.cargo}/bin"
+          fi
       - name: Run fast test shard
         env:
           REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
         run: CI_FAST_STAGE=${{ matrix.stage }} bash ops/ci/fast.sh
-
   parity:
     strategy:
       fail-fast: false
       matrix:
         stage:
           - redline-testing-official
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 180
     permissions:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -104,8 +143,7 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
+          bash ops/ci/apt-install.sh build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Run parity shard
         env:
           REDLINEDB_BENCH_GIT_SHA: ${{ github.sha }}
@@ -120,11 +158,22 @@ jobs:
             target/redline-testing/**
 
   official-evidence-guard:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 10
     permissions:
       contents: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -134,12 +183,23 @@ jobs:
   # Branch ruleset requires these exact job names. They run real engine
   # work and must not wait on the official parity shard.
   test:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     permissions:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -149,20 +209,30 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
+          bash ops/ci/apt-install.sh build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Engine unit tests
         run: |
           cargo test --locked --workspace --lib
           cargo test --locked -p redlinedb-cli
 
   build:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     permissions:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -172,18 +242,28 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
+          bash ops/ci/apt-install.sh build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Release-build redlinedb-cli
         run: cargo build --locked --release -p redlinedb-cli
 
   lint:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 15
     permissions:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -195,12 +275,23 @@ jobs:
         run: cargo fmt --check
 
   typecheck:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     permissions:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -210,18 +301,28 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
+          bash ops/ci/apt-install.sh build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Workspace typecheck
         run: cargo check --workspace --locked
 
   cli:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     permissions:
       contents: read
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ github.ref }}
@@ -231,8 +332,7 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential pkg-config openssl sqlite3 zlib1g-dev
+          bash ops/ci/apt-install.sh build-essential pkg-config openssl sqlite3 zlib1g-dev
       - name: Release-build CLI package
         run: cargo build --locked --release -p redlinedb-cli
 
@@ -241,11 +341,22 @@ jobs:
       fail-fast: false
       matrix:
         lane: [testing, central, web, release-tools, integration]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 60
     permissions:
       contents: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with: {toolchain: 1.95.0, components: rustfmt}
@@ -253,15 +364,26 @@ jobs:
         with: {node-version: '22'}
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
         with: {key: '${{ matrix.lane }}'}
-      - run: sudo apt-get update && sudo apt-get install -y pkg-config sqlite3
+      - run: bash ops/ci/apt-install.sh pkg-config sqlite3
       - run: bash scripts/ci-family.sh "${{ matrix.lane }}"
 
   audit:
     needs: security
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 30
     permissions: {contents: read}
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with: {fetch-depth: 0}
       - run: bash ops/ci/install-github-tools.sh
@@ -275,10 +397,21 @@ jobs:
         with: {name: audit-family, path: target/audit-family, if-no-files-found: error}
 
   security:
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     permissions: {contents: read}
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
         with: {toolchain: 1.95.0}
@@ -308,7 +441,7 @@ jobs:
     name: RedlineDB/required
     if: always()
     needs: [preflight, tests, parity, official-evidence-guard, test, build, lint, typecheck, cli, components, audit, security, packaging]
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 5
     permissions: {contents: read}
     steps:

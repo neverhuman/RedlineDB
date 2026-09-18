@@ -14,13 +14,24 @@ concurrency:
 jobs:
   publish-pr:
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 240
     permissions:
       contents: write
       pull-requests: write
       attestations: read
     steps:
+      - name: Unlock leftover workspace files
+        run: |
+          set +e
+          if [ -n "${GITHUB_WORKSPACE}" ] && [ -d "${GITHUB_WORKSPACE}" ]; then
+            chmod -R u+rwx "${GITHUB_WORKSPACE}"
+          fi
+          cargo_home="${RUNNER_TOOL_CACHE}/redlinedb-cargo"
+          mkdir -p "${cargo_home}/bin"
+          echo "CARGO_HOME=${cargo_home}" >> "${GITHUB_ENV}"
+          echo "${cargo_home}/bin" >> "${GITHUB_PATH}"
+          exit 0
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: main
@@ -32,8 +43,7 @@ jobs:
       - uses: swatinem/rust-cache@42dc69e1aa15d09112580998cf2ef0119e2e91ae
       - name: Install system packages
         run: |
-          sudo apt-get update
-          sudo apt-get install -y build-essential mold openssl sqlite3 zlib1g-dev
+          bash ops/ci/apt-install.sh build-essential mold openssl sqlite3 zlib1g-dev
       - run: bash ops/ci/install-github-tools.sh
       - name: Publish generated SQLite parity report PR
         env:
