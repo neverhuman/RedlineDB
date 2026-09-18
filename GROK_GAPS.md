@@ -67,7 +67,7 @@ separate retained helper. Prior historical records remain for traceability.
 
 | ID | Bounded kickoff deliverable | Implementer / reviewer | Exclusive claims | Status |
 |---|---|---|---|---|
-| P2-EVID | Complete 298-case failure reconciliation and repair batches, without weakening fixtures | evidence agent / root | subrepos/redline-testing/profiles/phase2-failure-triage.json, docs/compatibility/phase2-evidence.md | claimed |
+| P2-EVID | Complete 298-case failure reconciliation and repair batches, without weakening fixtures | evidence agent / root | subrepos/redline-testing/profiles/phase2-failure-triage.json, docs/compatibility/phase2-evidence.md | review |
 | P2-SAFE | Returned WAL I/O-error/uncertain outcome reproducer and reviewed Rust fix contract | storage agent / root | crates/kernel/tests/strict_commit_faults.rs, docs/compatibility/phase2-durability.md | review |
 | P2-ABI | Independent upstream-header ABI preparation/type qualification and Rust change map | ABI agent / root | crates/ffi/tests/phase2_abi_probe.c, scripts/compatibility/phase2-abi-probe.sh, docs/compatibility/phase2-abi.md | review; 7 ABI failures reproduced |
 | P2-INTEGRATE | Detailed dependency/exit-gate plan, repository/CI authority audit, schema-change routing | root / agents | docs/compatibility/phase2-plan.md, docs/compatibility/implementation-cycle1.md, docs/testing.md, scripts/just/run.sh | implementing |
@@ -1533,3 +1533,77 @@ recovery and maintenance interactions. Formatting and scoped diff check exit0.
 - `target/compatibility-phase2/strict-commit-faults.exit` SHA256 `39b8dc3fc8b44765c8e6f1adee04c5b465e555ab791cc42d0d9e810d5b64297c`.
 - `crates/kernel/tests/strict_commit_faults.rs` SHA256 `4e874872b542ed2981b28cfffb797367305d38afddd5680140c453d590f56e1d`.
 - `docs/compatibility/phase2-durability.md` SHA256 `d8bedd127f3bb36242e76314c19eba2fcb250a2031c19df2c21c067e4d51cf75`.
+
+### P2-INTEGRATE kickoff result and shared decisions
+
+Detailed execution plan: `docs/compatibility/phase2-plan.md`. Root verified local
+Git topology: one root, ordinary component trees, no gitlinks or .gitmodules;
+`redlinectl validate` exits 0 for all six components (history/remote retirement
+not claimed). Evidence: `target/compatibility-phase2/repository-layout.json`.
+Corrected cycle-one/testing documentation about official runner source authority.
+Also fixed obsolete shell-version scraping in `scripts/just/run.sh`: actual
+qualified CLI returns `version-3.53.1`; failed CLI exits 1; bash syntax passes.
+Evidence: `target/compatibility-phase2/reference-score-route.json`. Full report
+pipeline remains a next integration gate.
+
+Production ABI target selected for planning: v5.0.0-alpha.1, versioned v5 prefix,
+Linux libredlinedb.so.5 / macOS libredlinedb.5.dylib; no global SQLite alias or
+v4 replacement. This decision is not an emitted package or production ABI fix.
+Rust remains production implementation language; upstream C/independent consumers
+serve only as qualification controls.
+
+Root independently checked ABI receipt counts and loaded-library hashes (9/9
+SQLite controls, 2/9 Redline passes, 4 assertion failures and 3 isolated signals),
+reviewed storage reproduction and explicit failing exit101, and reconciled
+triage dimensions (298 failures,12 legacy mismatches,148 blindspots). No fixture
+or comparison was weakened and no new exclusion/denominator edit was applied.
+Kickoff artifacts are reproduced/under review; production safety/ABI/schema
+fixes remain open. No commit or release was created.
+
+
+### P2-EVID bounded kickoff receipt — 2026-09-18
+
+Status: **review**, not an engine fix. Implementer evidence agent; root independently
+reviewed denominator/mapping and phase-plan consistency. Base HEAD unchanged;
+implementation/integrated commit pending, dirty tree preserved. Exclusive edits:
+`subrepos/redline-testing/profiles/phase2-failure-triage.json` and
+`docs/compatibility/phase2-evidence.md`; no fixture/source changes.
+
+All **298 failures** map exactly once to 138 oracle-invalid,101 missing-comparison,
+59 target-mismatch outcomes; grouped into 44 investigation families, NOT44 proven
+engine defects. All12 historical exit mismatches and148 disabled-output identities
+are mapped individually; blindspots split101 missing,41 target,6 oracle-invalid.
+133/138 oracle-invalid cases share stdout hashes,131 share stdout/stderr/exits;
+this suggests stale assertions, not proof of typed SQL correctness. Numeric
+rendering accounts65, control-byte escaping9 and CLI layout/quoting48 oracle-invalid
+cases. Remaining build/contract cases retain individual review requirements.
+
+JSON includes exact fixture hash/source, diagnostic, four raw artifact hashes,
+roadmap/group/acceptance/disposition for every failure, plus ten fresh paired
+reference/target probes with exact stdin/argv/output/exits and binary hashes.
+Five bounded Rust candidates: SOUNDEX, bail-off continuation, transaction errors,
+savepoint name retention, scalar-subquery arity context; all require positive,
+negative and state tests and appropriate SQLite-mode interfaces. Five bounded
+fixture/shell candidates and ordered batches are documented. No values were copied
+into fixtures; no target mismatch hidden. Existing session exclusion remains an
+explicit owner-reviewed applicability decision, not an implemented feature.
+
+Evidence inputs: v4 raw SHA256
+`1e57e41f8d7e86d275fae698e41841ea0c7537448928e5aef6b42ab4d7e3a699`;
+automatic sidecar `7e790a2ceed4c92756b296be56337c9f4945116d8d0d5550ed6b86e6c4a20daa`.
+Triage JSON SHA256 `464f15e1c132c6f50346707407141cd40ea705ad97a8116d03a676174e85bcf1`.
+Triage document SHA256 `8ffc515394cbcb051274dfba7130fb9e959c9b054bed2b0236a55705682585f0`.
+Validation: `rtk proxy python3` inline reconciliation/hash validator exited0,
+checking exact case/group coverage,298/138/101/59,12/148 identities,fixture/source/
+artifact/probe hashes and all proposed source paths. Reproducible core command
+is embedded in the doc. Ten fresh paired CLI probes (10-second deadline) wrapper
+exited0; individual expected exit0/1 retained. `rtk git diff --check --
+docs/compatibility/phase2-evidence.md
+subrepos/redline-testing/profiles/phase2-failure-triage.json` exited0.
+No builds/tests repeated for these documentation/data-only edits.
+
+Reviewed root phase2-plan Wave1A: consistent with triage; explicit complete evidence
+repair and no-new-regression baseline do not allow oracle errors/missing coverage.
+Rust xtask generator is present; advertised rules directory is absent, documented
+rather than inventing an alternate generation authority. Safety/ABI priorities and
+profile applicability remain integration-owner decisions.

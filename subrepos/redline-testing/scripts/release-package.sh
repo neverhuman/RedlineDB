@@ -28,7 +28,6 @@ mkdir -p "${pkg_dir}/corpus/sqlite_parity/cases"
 mkdir -p "${pkg_dir}/corpus/beyond_sqlite"
 mkdir -p "${pkg_dir}/metadata/beyond_sqlite"
 mkdir -p "${pkg_dir}/schemas"
-mkdir -p "${pkg_dir}/profiles"
 mkdir -p "${pkg_dir}/templates"
 
 # Binary first (hashed separately at the top level).
@@ -44,7 +43,6 @@ done
 cp corpus/beyond_sqlite/generated_manifest.json "${pkg_dir}/corpus/beyond_sqlite/generated_manifest.json"
 cp metadata/beyond_sqlite/features.json "${pkg_dir}/metadata/beyond_sqlite/features.json"
 cp schemas/*.json "${pkg_dir}/schemas/"
-cp profiles/*.json profiles/README.md "${pkg_dir}/profiles/"
 cp templates/*.md "${pkg_dir}/templates/"
 shopt -u nullglob
 

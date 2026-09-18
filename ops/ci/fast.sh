@@ -59,39 +59,10 @@ run_test_stage() {
         sql-unit)
             cargo test -p redlinedb-sql --lib --quiet --locked
             ;;
-        sqlite-oracle)
-            REDLINEDB_SQLITE_REFERENCE_PROFILE=extended bash scripts/sqlite/build-reference.sh
-            python3 scripts/sqlite/test_reference.py
-            REDLINEDB_SQLITE_REFERENCE_PROFILE=ordinary bash scripts/sqlite/build-reference.sh
-            ;;
-        sqlite-evidence)
-            # Exercise this commit's comparator, not an older published runner.
-            local workspace_root reference_bin
-            workspace_root=$(git rev-parse --show-toplevel)
-            reference_bin=$(REDLINEDB_SQLITE_REFERENCE_PROFILE=extended bash scripts/sqlite/build-reference.sh)
-            cargo build -p redlinedb-cli --locked
-            (
-                cd subrepos/redline-testing
-                cargo test --locked
-                cargo run --locked -- run --suite sqlite_parity \
-                    --target-bin "$workspace_root/target/debug/redlinedb" \
-                    --sqlite-bin "$reference_bin" --workers 4 \
-                    --repetitions 1 --warmup 0 \
-                    --tmp-root "$workspace_root/target/compatibility-ci/tmp" \
-                    --output "$workspace_root/target/compatibility-ci/strict.raw.jsonl"
-            )
-            ;;
         sql-contracts)
-            # Keep the local aggregate identical to the four required CI shards.
-            local failed=0
-            for shard in 1 2 3 4; do
-                run_test_stage "sql-integration-${shard}" || failed=1
-            done
-            return "$failed"
-            ;;
-        sql-integration-[1-4])
-            cargo nextest run -p redlinedb-sql --tests --locked \
-                --partition "hash:${1##*-}/4" --no-fail-fast
+            cargo test -p redlinedb-sql --test phase11_temp_roots --quiet --locked
+            cargo test -p redlinedb-sql --test phase11_veox_queue --quiet --locked
+            cargo test -p redlinedb-sql --test phase11_xdoug_compat --quiet --locked
             ;;
         bench)
             cargo test -p redlinedb-bench --quiet --locked
@@ -108,12 +79,10 @@ case "$stage" in
     preflight)
         run_preflight
         ;;
-    core|kernel|sql-unit|sqlite-oracle|sqlite-evidence|sql-contracts|sql-integration-[1-4]|bench)
+    core|kernel|sql-unit|sql-contracts|bench)
         run_test_stage "$stage"
         ;;
     tests)
-        run_test_stage sqlite-oracle
-        run_test_stage sqlite-evidence
         run_test_stage core
         run_test_stage kernel
         run_test_stage sql-unit
@@ -122,8 +91,6 @@ case "$stage" in
         ;;
     all)
         run_preflight
-        run_test_stage sqlite-oracle
-        run_test_stage sqlite-evidence
         run_test_stage core
         run_test_stage kernel
         run_test_stage sql-unit

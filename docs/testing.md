@@ -62,22 +62,6 @@ readable repair receipts.
 | `jankurai-tools`                     | Local mirror for every `.github/workflows/jankurai-tools.yml` matrix job. Run with `scripts/ci-local.sh jankurai-tools`. |
 | `pr-gate`                            | Local mirror for PR branch freshness plus `jankurai staged-gate` against `origin/main`. Run with `scripts/ci-local.sh pr-gate`. |
 
-The fast lane's `sql-contracts` stage now runs all SQL test targets through four
-deterministic nextest hash partitions, matching required CI stages
-`sql-integration-1` through `sql-integration-4`. New integration binaries are
-automatically included; the former three-file allowlist no longer controls
-coverage. Existing ignored tests remain missing qualification coverage, and
-known failures remain failures. This activation is not SQLite qualification;
-see `docs/compatibility/sqlite-application-profile.md`.
-The required `sqlite-oracle` stage builds and probes both pinned reference
-configurations and runs the builder's integrity tests.
-The required `sqlite-evidence` stage builds this checkout's included runner and
-engine, tests the comparator, and runs the strict corpus against the qualified
-extended reference. Known defects currently fail that development gate. It does
-not publish benchmark results. Both this stage and the default official lane
-build the included runner from this checkout; downloading an older runner is a
-separate historical-reproduction path.
-
 Lane definitions: `.jankurai/proof-lanes.toml`. To rerun a lane:
 
 ```

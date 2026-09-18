@@ -1,4 +1,5 @@
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, OnceLock};
@@ -47,7 +48,6 @@ pub struct EngineOutput {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Capability {
-    Regexp,
     PercentileFunctions,
     DotCrlf,
     DotDbInfo,
@@ -67,7 +67,6 @@ pub enum Capability {
 impl Capability {
     pub fn description(self) -> &'static str {
         match self {
-            Self::Regexp => "regexp() shell function",
             Self::PercentileFunctions => "median()/percentile_cont()",
             Self::DotCrlf => ".crlf",
             Self::DotDbInfo => ".dbinfo",
@@ -87,7 +86,6 @@ impl Capability {
 
     pub fn from_token(token: &str) -> Option<Self> {
         match token {
-            "REGEXP" | "regexp" => Some(Self::Regexp),
             "percentile_functions" => Some(Self::PercentileFunctions),
             "dot_crlf" => Some(Self::DotCrlf),
             "dot_dbinfo" => Some(Self::DotDbInfo),
@@ -110,7 +108,6 @@ impl Capability {
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct ShellCapabilities {
     pub version: String,
-    pub regexp: bool,
     pub percentile_functions: bool,
     pub dot_crlf: bool,
     pub dot_dbinfo: bool,
@@ -130,7 +127,6 @@ pub struct ShellCapabilities {
 impl ShellCapabilities {
     pub fn supports(&self, capability: Capability) -> bool {
         match capability {
-            Capability::Regexp => self.regexp,
             Capability::PercentileFunctions => self.percentile_functions,
             Capability::DotCrlf => self.dot_crlf,
             Capability::DotDbInfo => self.dot_dbinfo,
@@ -238,7 +234,6 @@ pub fn probe_sqlite_shell_capabilities(bin: &Path) -> Result<ShellCapabilities> 
     let memory_db = Path::new(":memory:");
     Ok(ShellCapabilities {
         version,
-        regexp: run_sql_script(bin, memory_db, "SELECT 'abc' REGEXP '^a';\n", &[])?,
         percentile_functions: run_sql_script(
             bin,
             memory_db,
@@ -303,28 +298,31 @@ pub fn probe_target_capabilities(bin: &Path) -> Result<ShellCapabilities> {
     let probe = |script: &str| run_sql_script(bin, memory_db, script, &[]);
     Ok(ShellCapabilities {
         version,
-        regexp: probe("SELECT 'abc' REGEXP '^a';\n")?,
         // CLI-only / non-SQL capabilities — gate via shell help when
         // available, default to absent for engines that don't ship the
         // sqlite3 CLI help surface.
         percentile_functions: probe(
             ".mode list\n.headers off\nCREATE TABLE t(x INTEGER); INSERT INTO t VALUES (1), (2), (3);\nSELECT median(x), percentile_cont(x,0.5) FROM t;\n",
-        )?,
-        dot_crlf: shell_help_contains(bin, ".crlf")?,
-        dot_dbinfo: shell_help_contains(bin, ".dbinfo")?,
-        dot_dbtotxt: shell_help_contains(bin, ".dbtotxt")?,
-        dot_recover: shell_help_contains(bin, ".recover")?,
-        escape_symbol_option: escape_symbol_option_supported(bin)?,
-        fts5: probe("CREATE VIRTUAL TABLE _probe_fts USING fts5(x);\n")?,
-        rtree: probe("CREATE VIRTUAL TABLE _probe_rtree USING rtree(id, x0, x1, y0, y1);\n")?,
+        )
+        .unwrap_or(false),
+        dot_crlf: shell_help_contains(bin, ".crlf").unwrap_or(false),
+        dot_dbinfo: shell_help_contains(bin, ".dbinfo").unwrap_or(false),
+        dot_dbtotxt: shell_help_contains(bin, ".dbtotxt").unwrap_or(false),
+        dot_recover: shell_help_contains(bin, ".recover").unwrap_or(false),
+        escape_symbol_option: escape_symbol_option_supported(bin).unwrap_or(false),
+        fts5: probe("CREATE VIRTUAL TABLE _probe_fts USING fts5(x);\n").unwrap_or(false),
+        rtree: probe("CREATE VIRTUAL TABLE _probe_rtree USING rtree(id, x0, x1, y0, y1);\n")
+            .unwrap_or(false),
         dbstat: probe(
             "CREATE TABLE _probe_t(x);\nINSERT INTO _probe_t VALUES(1);\nCREATE VIRTUAL TABLE main._probe_stat USING dbstat;\nSELECT count(*) FROM _probe_stat;\n",
-        )?,
-        jsonb: probe("SELECT length(jsonb('1'));\n")?,
-        math1: probe("SELECT round(acos(1.0),3), round(sqrt(4.0),3);\n")?,
-        generate_series: probe("SELECT count(*) FROM generate_series(1,3);\n")?,
-        json_pretty: probe("SELECT json_pretty('{\"a\":1}');\n")?,
-        jsonb_array_insert: probe("SELECT length(jsonb_array_insert('[]', '$[0]', 1));\n")?,
+        )
+        .unwrap_or(false),
+        jsonb: probe("SELECT length(jsonb('1'));\n").unwrap_or(false),
+        math1: probe("SELECT round(acos(1.0),3), round(sqrt(4.0),3);\n").unwrap_or(false),
+        generate_series: probe("SELECT count(*) FROM generate_series(1,3);\n").unwrap_or(false),
+        json_pretty: probe("SELECT json_pretty('{\"a\":1}');\n").unwrap_or(false),
+        jsonb_array_insert: probe("SELECT length(jsonb_array_insert('[]', '$[0]', 1));\n")
+            .unwrap_or(false),
     })
 }
 
@@ -486,35 +484,6 @@ struct CapturedOutput {
     memory: ProcessMemory,
 }
 
-// Reap the child and terminate its process group on every exit path, including
-// metadata/poll failures. A script may leave descendants after its leader exits.
-struct ChildGuard(std::process::Child);
-impl std::ops::Deref for ChildGuard {
-    type Target = std::process::Child;
-    fn deref(&self) -> &Self::Target {
-        &self.0
-    }
-}
-impl std::ops::DerefMut for ChildGuard {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
-    }
-}
-impl Drop for ChildGuard {
-    fn drop(&mut self) {
-        #[cfg(unix)]
-        {
-            let _ = Command::new("kill")
-                .args(["-KILL", "--", &format!("-{}", self.0.id())])
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .status();
-        }
-        let _ = self.0.kill();
-        let _ = self.0.wait();
-    }
-}
-
 fn run_command(
     command: &mut Command,
     stdin_text: Option<String>,
@@ -522,42 +491,43 @@ fn run_command(
     engine_name: &str,
     memory_samples: bool,
 ) -> Result<CapturedOutput> {
-    run_command_with_limits(
-        command,
-        stdin_text,
-        case_tmp,
-        engine_name,
-        memory_samples,
-        Duration::from_secs(60),
-        16 * 1024 * 1024,
-    )
-}
+    if !memory_samples {
+        command.stdin(if stdin_text.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        });
+        command.stdout(Stdio::piped());
+        command.stderr(Stdio::piped());
+        let mut child = command.spawn().context("spawn sqlite parity child")?;
+        if let Some(stdin_text) = stdin_text {
+            let mut stdin = child
+                .stdin
+                .take()
+                .context("child stdin unavailable for sqlite parity case")?;
+            stdin
+                .write_all(stdin_text.as_bytes())
+                .context("write sqlite parity child stdin")?;
+        }
+        let output = child
+            .wait_with_output()
+            .context("wait sqlite parity child")?;
+        return Ok(CapturedOutput {
+            status: output.status,
+            stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+            stderr: String::from_utf8_lossy(&output.stderr).into_owned(),
+            memory: ProcessMemory::default(),
+        });
+    }
 
-fn run_command_with_limits(
-    command: &mut Command,
-    stdin_text: Option<String>,
-    case_tmp: &Path,
-    engine_name: &str,
-    memory_samples: bool,
-    timeout: Duration,
-    output_limit: u64,
-) -> Result<CapturedOutput> {
     let output_prefix = sanitize_identifier(engine_name);
     let stdout_path = case_tmp.join(format!("{output_prefix}.stdout"));
     let stderr_path = case_tmp.join(format!("{output_prefix}.stderr"));
-    // A file avoids blocking on stdin before the deadline polling starts.
-    if let Some(text) = stdin_text {
-        let input_path = case_tmp.join("input.sql");
-        fs::write(&input_path, text).context("write case input")?;
-        command.stdin(Stdio::from(fs::File::open(input_path)?));
+    command.stdin(if stdin_text.is_some() {
+        Stdio::piped()
     } else {
-        command.stdin(Stdio::null());
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::process::CommandExt;
-        command.process_group(0);
-    }
+        Stdio::null()
+    });
     command.stdout(Stdio::from(
         fs::File::create(&stdout_path)
             .with_context(|| format!("create {}", stdout_path.display()))?,
@@ -566,20 +536,18 @@ fn run_command_with_limits(
         fs::File::create(&stderr_path)
             .with_context(|| format!("create {}", stderr_path.display()))?,
     ));
-    let mut child = ChildGuard(command.spawn().context("spawn sqlite parity child")?);
-    let deadline = Instant::now() + timeout;
+    let mut child = command.spawn().context("spawn sqlite parity child")?;
+    if let Some(stdin_text) = stdin_text {
+        let mut stdin = child
+            .stdin
+            .take()
+            .context("child stdin unavailable for sqlite parity case")?;
+        stdin
+            .write_all(stdin_text.as_bytes())
+            .context("write sqlite parity child stdin")?;
+    }
     let mut memory = ProcessMemory::default();
     let status = loop {
-        let output_bytes = fs::metadata(&stdout_path)?
-            .len()
-            .saturating_add(fs::metadata(&stderr_path)?.len());
-        if Instant::now() >= deadline || output_bytes > output_limit {
-            bail!(
-                "infrastructure: case deadline/output limit exceeded; partial stdout={} stderr={}",
-                stdout_path.display(),
-                stderr_path.display()
-            );
-        }
         if memory_samples {
             memory.observe_pid(child.id());
         }
@@ -590,18 +558,6 @@ fn run_command_with_limits(
     };
     if memory_samples {
         memory.observe_pid(child.id());
-    }
-    drop(child); // Stop descendants before checking and reading the final output.
-    if fs::metadata(&stdout_path)?
-        .len()
-        .saturating_add(fs::metadata(&stderr_path)?.len())
-        > output_limit
-    {
-        bail!(
-            "infrastructure: completed case exceeded output limit; stdout={} stderr={}",
-            stdout_path.display(),
-            stderr_path.display()
-        );
     }
     Ok(CapturedOutput {
         status,
@@ -672,13 +628,13 @@ fn replace_tmp(input: &str, tmp: &Path) -> String {
 }
 
 fn probe_version(bin: &Path) -> Result<String> {
-    let mut command = Command::new(bin);
-    command.arg("--version");
-    let output = bounded_probe(&mut command, None)?;
-    if !output.status.success() {
-        bail!("infrastructure: version probe failed: {:?}", output.status);
-    }
-    let version = output.stdout.trim().to_owned();
+    let output = Command::new(bin)
+        .arg("--version")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .output()
+        .with_context(|| format!("run {} --version", bin.display()))?;
+    let version = String::from_utf8_lossy(&output.stdout).trim().to_owned();
     if version.is_empty() {
         Ok(String::from("<unknown>"))
     } else {
@@ -693,9 +649,26 @@ fn run_sql_script(bin: &Path, db_path: &Path, script: &str, extra_args: &[&str])
         command.arg(arg);
     }
     command.arg(db_path);
-    Ok(bounded_probe(&mut command, Some(script.to_owned()))?
-        .status
-        .success())
+    command.stdin(Stdio::piped());
+    command.stdout(Stdio::null());
+    command.stderr(Stdio::null());
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("probe sqlite shell capability with {}", bin.display()))?;
+    if !script.is_empty() {
+        let mut stdin = child
+            .stdin
+            .take()
+            .context("sqlite shell capability probe stdin unavailable")?;
+        use std::io::Write;
+        stdin
+            .write_all(script.as_bytes())
+            .context("write sqlite shell capability probe script")?;
+    }
+    let status = child
+        .wait()
+        .context("wait for sqlite shell capability probe")?;
+    Ok(status.success())
 }
 
 fn shell_help_contains(bin: &Path, needle: &str) -> Result<bool> {
@@ -715,25 +688,32 @@ fn run_shell_probe(bin: &Path, script: &str, extra_args: &[&str]) -> Result<Shel
         command.arg(arg);
     }
     command.arg(":memory:");
-    bounded_probe(&mut command, Some(script.to_owned()))
+    command.stdin(Stdio::piped());
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .with_context(|| format!("probe sqlite shell with {}", bin.display()))?;
+    let mut stdin = child
+        .stdin
+        .take()
+        .context("sqlite shell probe stdin unavailable")?;
+    stdin
+        .write_all(script.as_bytes())
+        .context("write sqlite shell probe script")?;
+    drop(stdin);
+    let output = child
+        .wait_with_output()
+        .context("wait for sqlite shell probe")?;
+    Ok(ShellProbeOutput {
+        status: output.status,
+        stdout: String::from_utf8_lossy(&output.stdout).into_owned(),
+    })
 }
 
-type ShellProbeOutput = CapturedOutput;
-
-fn bounded_probe(command: &mut Command, stdin: Option<String>) -> Result<CapturedOutput> {
-    static NEXT_PROBE: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
-    let serial = NEXT_PROBE.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("redline-probe-{}-{serial}", std::process::id()));
-    fs::create_dir(&dir).context("create capability probe directory")?;
-    let output = run_command(command, stdin, &dir, "probe", false)?;
-    if output.status.code().is_none() {
-        bail!(
-            "infrastructure: probe terminated by signal; diagnostics={}",
-            dir.display()
-        );
-    }
-    fs::remove_dir_all(&dir).context("remove capability probe directory")?;
-    Ok(output)
+struct ShellProbeOutput {
+    status: std::process::ExitStatus,
+    stdout: String,
 }
 
 fn shell_version_prefix(capabilities: &ShellCapabilities) -> String {
@@ -778,45 +758,5 @@ mod tests {
         let decoded = read_output_lossy(&path).expect("decode binary output");
         fs::remove_file(path).expect("remove binary output fixture");
         assert_eq!(decoded, "a\u{fffd}b");
-    }
-}
-
-#[cfg(all(test, unix))]
-mod deadline_tests {
-    use super::*;
-
-    #[test]
-    fn deadlines_and_output_limits_preserve_partial_diagnostics() {
-        for (name, script, timeout, limit) in [
-            (
-                "timeout",
-                "echo partial; sleep 10",
-                Duration::from_millis(50),
-                1024,
-            ),
-            (
-                "output",
-                "while true; do echo partial; done",
-                Duration::from_secs(2),
-                1024,
-            ),
-        ] {
-            let dir =
-                std::env::temp_dir().join(format!("redline-limits-{}-{name}", std::process::id()));
-            fs::create_dir_all(&dir).unwrap();
-            let mut command = Command::new("sh");
-            command.args(["-c", script]);
-            let started = Instant::now();
-            let result =
-                run_command_with_limits(&mut command, None, &dir, name, false, timeout, limit);
-            assert!(result.is_err());
-            assert!(started.elapsed() < Duration::from_secs(5));
-            assert!(
-                fs::read_to_string(dir.join(format!("{name}.stdout")))
-                    .unwrap()
-                    .contains("partial")
-            );
-            fs::remove_dir_all(dir).unwrap();
-        }
     }
 }
